@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronicle</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- APP HEADER -->
+<div class="app-header">
+  <div class="app-logo">
+    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+  </div>
+  <span class="app-name">Chronicle</span>
+  <div class="app-header-right">
+    <span class="user-name" id="user-name"></span>
+    <button class="btn btn-sm btn-ghost" style="color:rgba(201,168,76,0.7);" id="logout-btn">Sign out</button>
+  </div>
+</div>
+
+<!-- API KEY BAR -->
+<div class="key-bar">
+  <span class="key-label">API Key</span>
+  <input class="key-input" id="api-key" type="password" placeholder="Paste your Anthropic API key (sk-ant-...)" autocomplete="off" />
+  <span class="key-status" id="key-status"></span>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navigation</div>
+      <div class="sidebar-item active" id="nav-campaigns" onclick="showView('campaigns')">
+        &#127956; My Campaigns
+      </div>
+    </div>
+    <div class="sidebar-section" id="campaign-nav" style="display:none;">
+      <div class="sidebar-label" id="sidebar-campaign-name">Campaign</div>
+      <div class="sidebar-item" id="nav-sessions" onclick="showCampaignTab('sessions')">
+        &#128203; Sessions
+      </div>
+      <div class="sidebar-item" id="nav-characters" onclick="showCampaignTab('characters')">
+        &#129464; Characters
+      </div>
+      <div class="sidebar-item" id="nav-novel" onclick="showCampaignTab('novel')">
+        &#128213; Graphic Novel
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+    <!-- ==================== CAMPAIGNS VIEW ==================== -->
+    <div id="view-campaigns">
+      <div class="page-header">
+        <div>
+          <div class="page-title">My Campaigns</div>
+          <div class="page-subtitle">Select a campaign or create a new one</div>
+        </div>
+        <button class="btn btn-primary" onclick="openCampaignModal()">+ New campaign</button>
+      </div>
+      <div class="campaigns-grid" id="campaigns-grid"></div>
+    </div>
+
+    <!-- ==================== CAMPAIGN DETAIL VIEW ==================== -->
+    <div id="view-campaign-detail" style="display:none;">
+
+      <!-- CAMPAIGN TABS -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;">
+        <div class="camp-tab active" id="ctab-sessions" onclick="showCampaignTab('sessions')">Sessions</div>
+        <div class="camp-tab" id="ctab-characters" onclick="showCampaignTab('characters')">Characters</div>
+        <div class="camp-tab" id="ctab-novel" onclick="showCampaignTab('novel')">Graphic Novel</div>
+      </div>
+
+      <!-- SESSIONS TAB -->
+      <div id="camp-tab-sessions">
+        <div class="page-header">
+          <div>
+            <div class="page-title" id="sessions-campaign-name">Sessions</div>
+            <div class="page-subtitle">Each session holds a transcript and storyboard</div>
+          </div>
+          <button class="btn btn-primary" onclick="openSessionModal()">+ New session</button>
+        </div>
+        <div class="sessions-list" id="sessions-list"></div>
+      </div>
+
+      <!-- CHARACTERS TAB -->
+      <div id="camp-tab-characters" style="display:none;">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Party Members</div>
+            <div class="page-subtitle">Characters appear in your storyboard panels</div>
+          </div>
+        </div>
+        <div class="char-grid" id="char-grid">
+          <div class="add-char-card" onclick="openCharModal()">
+            <div class="plus">+</div>
+            <span>Add character</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAPHIC NOVEL TAB -->
+      <div id="camp-tab-novel" style="display:none;">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Graphic Novel</div>
+            <div class="page-subtitle">All sessions combined into your campaign book</div>
+          </div>
+          <button class="btn btn-primary" onclick="showNovelPreview()" id="preview-novel-btn">&#128213; Preview graphic novel</button>
+        </div>
+
+        <!-- SESSION SUMMARY LIST -->
+        <div id="novel-summary-list"></div>
+
+        <!-- NOVEL PREVIEW (hidden until button clicked) -->
+        <div id="novel-preview-section" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div style="font-size:14px;font-weight:600;color:var(--text);">Full Campaign Preview</div>
+            <div class="flex gap-1">
+              <button class="btn btn-sm" onclick="hideNovelPreview()">&#8592; Back to summary</button>
+              <button class="btn btn-sm" onclick="alert('PDF export coming soon!')">&#8659; Export PDF</button>
+              <button class="btn btn-sm btn-primary" onclick="alert('Print on demand coming soon!')">&#128424; Print book</button>
+            </div>
+          </div>
+
+          <!-- NOVEL COVER -->
+          <div style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px;">
+            <div class="novel-cover">
+              <div class="novel-cover-eyebrow">Chronicle of</div>
+              <div class="novel-cover-title" id="novel-cover-title">Your Campaign</div>
+              <div class="novel-cover-divider"></div>
+              <div class="novel-cover-sub" id="novel-cover-sub"></div>
+            </div>
+            <div id="novel-all-panels"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==================== SESSION DETAIL VIEW ==================== -->
+    <div id="view-session-detail" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title" id="session-detail-name">Session</div>
+          <div class="page-subtitle" id="session-detail-date"></div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="backToCampaign()">&#8592; Back to campaign</button>
+          <button class="btn btn-primary btn-sm" onclick="saveTranscript()">Save transcript</button>
+        </div>
+      </div>
+
+      <!-- SESSION TABS - Transcript and Storyboard only -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;">
+        <div class="sess-tab active" id="stab-transcript" onclick="switchSessionTab('transcript')">Transcript</div>
+        <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
+      </div>
+
+      <!-- TRANSCRIPT TAB -->
+      <div id="session-tab-transcript">
+        <div class="form-group">
+          <label class="form-label">Session transcript</label>
+          <textarea class="transcript-box" id="transcript-input" placeholder="Paste your session transcript here..."></textarea>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#10022; Extract key moments</button>
+        </div>
+        <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
+        <div class="progress-wrap" id="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
+        </div>
+      </div>
+
+      <!-- STORYBOARD TAB -->
+      <div id="session-tab-storyboard" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Art style</label>
+          <div class="style-row">
+            <div class="chip sel" onclick="selStyle(this,'High fantasy illustration')">High fantasy</div>
+            <div class="chip" onclick="selStyle(this,'Dark gritty comic book')">Dark and gritty</div>
+            <div class="chip" onclick="selStyle(this,'Watercolor painterly')">Watercolor</div>
+            <div class="chip" onclick="selStyle(this,'Anime manga style')">Anime / manga</div>
+            <div class="chip" onclick="selStyle(this,'Classic pen and ink')">Pen and ink</div>
+          </div>
+        </div>
+        <div id="sb-empty" class="empty-state">
+          <div class="empty-state-icon">&#127912;</div>
+          <h3>No moments yet</h3>
+          <p>Go to the Transcript tab, paste your session transcript and click Extract key moments</p>
+          <button class="btn" onclick="switchSessionTab('transcript')">Go to transcript</button>
+        </div>
+        <div id="sb-content" style="display:none;">
+          <div class="storyboard-header">
+            <div style="font-size:13px;color:var(--text-muted);"><strong id="moment-count">0</strong> key moments</div>
+            <div class="flex gap-1">
+              <button class="btn btn-sm" onclick="alert('Session PDF export coming soon!')">&#8659; Export this session</button>
+            </div>
+          </div>
+          <div class="moments-grid" id="moments-grid"></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- CAMPAIGN MODAL -->
+<div class="modal-overlay hidden" id="campaign-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="campaign-modal-title">New Campaign</div>
+      <button class="modal-close" onclick="closeCampaignModal()">&times;</button>
+    </div>
+    <div id="campaign-modal-error" class="alert alert-error hidden"></div>
+    <input type="hidden" id="campaign-edit-id" />
+    <div class="form-group">
+      <label class="form-label">Campaign name</label>
+      <input class="form-input" id="campaign-name" placeholder="e.g. Curse of Strahd" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-textarea" id="campaign-desc" style="min-height:80px;" placeholder="A brief description of your campaign..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCampaignModal()">Cancel</button>
+      <button class="btn btn-primary" id="campaign-save-btn" onclick="saveCampaign()">Create campaign</button>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION MODAL -->
+<div class="modal-overlay hidden" id="session-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">New Session</div>
+      <button class="modal-close" onclick="closeSessionModal()">&times;</button>
+    </div>
+    <div id="session-modal-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">Session name</label>
+      <input class="form-input" id="session-name" placeholder="e.g. The Tomb of Valdris" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Session date</label>
+      <input class="form-input" type="date" id="session-date" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeSessionModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSession()">Create session</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHARACTER MODAL -->
+<div class="modal-overlay hidden" id="char-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="char-modal-title">Add Character</div>
+      <button class="modal-close" onclick="closeCharModal()">&times;</button>
+    </div>
+    <div id="char-modal-error" class="alert alert-error hidden"></div>
+    <input type="hidden" id="char-edit-id" />
+    <div class="form-group">
+      <label class="form-label">Character name</label>
+      <input class="form-input" id="char-name" placeholder="e.g. Theron Ashwood" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Race and class</label>
+      <input class="form-input" id="char-cls" placeholder="e.g. Half-elf Ranger" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Visual description</label>
+      <textarea class="form-textarea" id="char-desc" style="min-height:100px;" placeholder="Describe appearance in detail — hair, skin, clothing, weapons, distinctive features..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Portrait image (Hero Forge, fan art, etc.)</label>
+      <div class="image-upload-area" onclick="document.getElementById('char-image-input').click()">
+        <div style="font-size:28px;">&#128247;</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Click to upload portrait</div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:2px;">JPG, PNG or WebP up to 5MB</div>
+      </div>
+      <input type="file" id="char-image-input" accept="image/*" style="display:none;" />
+      <img id="char-image-preview" class="image-preview" alt="Preview" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCharModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveChar()">Save character</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.camp-tab{padding:10px 18px;font-size:13px;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color 0.15s;}
+.camp-tab:hover{color:var(--text);}
+.camp-tab.active{color:var(--crimson);border-bottom-color:var(--crimson);font-weight:500;}
+.sess-tab{padding:10px 18px;font-size:13px;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color 0.15s;}
+.sess-tab:hover{color:var(--text);}
+.sess-tab.active{color:var(--crimson);border-bottom-color:var(--crimson);font-weight:500;}
+
+/* NOVEL SUMMARY */
+.novel-session-block{border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden;background:var(--surface);}
+.novel-session-header{padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.novel-session-title{font-size:13px;font-weight:600;color:var(--text);}
+.novel-session-date{font-size:11px;color:var(--text-muted);}
+.novel-session-moments{padding:12px 16px;}
+.novel-moment-row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+.novel-moment-row:last-child{border-bottom:none;}
+.novel-moment-num{width:24px;height:24px;border-radius:4px;background:var(--ink);color:var(--gold);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.novel-moment-info{}
+.novel-moment-title{font-size:12px;font-weight:600;color:var(--text);}
+.novel-moment-desc{font-size:11px;color:var(--text-muted);margin-top:2px;line-height:1.5;}
+.novel-empty{text-align:center;padding:12px;font-size:12px;color:var(--text-light);font-style:italic;}
+
+/* NOVEL PANELS */
+.novel-chapter{margin-bottom:4px;}
+.novel-chapter-header{background:var(--ink);color:var(--gold);padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;}
+</style>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,109 +1,105 @@
 const express = require('express');
-const router = express.Router();
-const fs = require('fs');
-const path = require('path');
+const router = express.Router({ mergeParams: true });
+const { getDb } = require('../database/db');
+const { requireAuth } = require('../middleware/auth');
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
-const DATA_FILE = path.join(__dirname, '../data/characters.json');
 const UPLOADS_DIR = path.join(__dirname, '../uploads');
-
-// Make sure uploads folder exists
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// Multer config for image uploads
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) { cb(null, UPLOADS_DIR); },
-  filename: function (req, file, cb) {
+  destination: function(req, file, cb) { cb(null, UPLOADS_DIR); },
+  filename: function(req, file, cb) {
     const ext = path.extname(file.originalname);
     cb(null, 'char-' + Date.now() + ext);
   }
 });
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-  fileFilter: function (req, file, cb) {
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: function(req, file, cb) {
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('Only image files are allowed'));
+    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Images only'));
   }
 });
 
-function readCharacters() {
-  try {
-    const data = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (e) {
-    return [];
-  }
+// Verify campaign belongs to user
+function verifyCampaignOwner(req, res, next) {
+  const db = getDb();
+  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
+  if (!campaign) return res.status(403).json({ error: 'Access denied' });
+  req.campaign = campaign;
+  next();
 }
 
-function writeCharacters(characters) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(characters, null, 2));
-}
-
-function generateId() {
-  return Date.now().toString();
-}
-
-// GET all characters
-router.get('/', function(req, res) {
-  const characters = readCharacters();
+// GET all characters for a campaign
+router.get('/', requireAuth, verifyCampaignOwner, function(req, res) {
+  const db = getDb();
+  const characters = db.prepare('SELECT * FROM characters WHERE campaign_id = ? ORDER BY created_at ASC').all(req.params.campaignId);
   res.json(characters);
 });
 
-// POST create new character
-router.post('/', upload.single('image'), function(req, res) {
-  const characters = readCharacters();
-  const newChar = {
-    id: generateId(),
-    name: req.body.name || 'Unknown',
-    cls: req.body.cls || 'Adventurer',
-    desc: req.body.desc || '',
-    image: req.file ? '/uploads/' + req.file.filename : null
-  };
-  characters.push(newChar);
-  writeCharacters(characters);
-  res.json(newChar);
+// POST create character
+router.post('/', requireAuth, verifyCampaignOwner, upload.single('image'), function(req, res) {
+  const { name, cls, description } = req.body;
+  if (!name) return res.json({ error: 'Character name is required' });
+
+  const db = getDb();
+  const now = new Date().toISOString();
+  const image = req.file ? '/uploads/' + req.file.filename : null;
+
+  const result = db.prepare(
+    'INSERT INTO characters (campaign_id, name, cls, description, image, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(req.params.campaignId, name, cls || 'Adventurer', description || '', image, now, req.session.userId);
+
+  const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
+  res.json(character);
 });
 
 // PUT update character
-router.put('/:id', upload.single('image'), function(req, res) {
-  const characters = readCharacters();
-  const idx = characters.findIndex(function(c) { return c.id === req.params.id; });
-  if (idx === -1) return res.status(404).json({ error: 'Character not found' });
+router.put('/:id', requireAuth, verifyCampaignOwner, upload.single('image'), function(req, res) {
+  const db = getDb();
+  const char = db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+  if (!char) return res.status(404).json({ error: 'Character not found' });
 
-  // Update fields
-  characters[idx].name = req.body.name || characters[idx].name;
-  characters[idx].cls = req.body.cls || characters[idx].cls;
-  characters[idx].desc = req.body.desc || characters[idx].desc;
+  const now = new Date().toISOString();
+  let image = char.image;
 
-  // Update image if a new one was uploaded
   if (req.file) {
-    // Delete old image if it exists
-    if (characters[idx].image) {
-      const oldPath = path.join(__dirname, '..', characters[idx].image);
+    if (char.image) {
+      const oldPath = path.join(__dirname, '..', char.image);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
-    characters[idx].image = '/uploads/' + req.file.filename;
+    image = '/uploads/' + req.file.filename;
   }
 
-  writeCharacters(characters);
-  res.json(characters[idx]);
+  db.prepare(
+    'UPDATE characters SET name = ?, cls = ?, description = ?, image = ?, edited_at = ?, edited_by = ? WHERE id = ?'
+  ).run(
+    req.body.name || char.name,
+    req.body.cls || char.cls,
+    req.body.description || char.description,
+    image, now, req.session.userId, char.id
+  );
+
+  const updated = db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);
+  res.json(updated);
 });
 
 // DELETE character
-router.delete('/:id', function(req, res) {
-  var characters = readCharacters();
-  const char = characters.find(function(c) { return c.id === req.params.id; });
+router.delete('/:id', requireAuth, verifyCampaignOwner, function(req, res) {
+  const db = getDb();
+  const char = db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+  if (!char) return res.status(404).json({ error: 'Character not found' });
 
-  // Delete image file if exists
-  if (char && char.image) {
+  if (char.image) {
     const imgPath = path.join(__dirname, '..', char.image);
     if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
   }
 
-  characters = characters.filter(function(c) { return c.id !== req.params.id; });
-  writeCharacters(characters);
+  db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
   res.json({ success: true });
 });
 
