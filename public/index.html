@@ -50,22 +50,38 @@ textarea.transcript:focus{outline:none;border-color:var(--crimson);}
 .progress-fill{height:100%;background:var(--crimson);border-radius:2px;width:0%;transition:width 0.3s;}
 .progress-msg{font-size:12px;color:var(--text-muted);text-align:center;}
 .error-box{background:#fcebeb;border:1px solid #f09595;border-radius:7px;padding:10px 14px;font-size:13px;color:#a32d2d;margin-top:12px;display:none;}
-.char-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}
+
+/* CHARACTER CARDS */
+.char-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
 .char-card{border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface);}
-.char-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;margin-bottom:8px;}
+.char-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;}
+.char-avatar{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+.char-actions{display:flex;gap:4px;flex-direction:column;}
+.char-btn{padding:3px 8px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);white-space:nowrap;}
+.char-btn:hover{background:var(--border);}
+.char-btn-delete{color:#a32d2d;border-color:#f09595;}
+.char-btn-delete:hover{background:#fcebeb;}
 .char-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
 .char-desc{font-size:11px;color:var(--text-muted);line-height:1.5;}
 .char-badge{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;margin-top:6px;background:var(--bg);color:var(--text-muted);border:1px solid var(--border);}
-.add-card{border:1px dashed var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;min-height:108px;color:var(--text-muted);font-size:12px;}
+.add-card{border:1px dashed var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;min-height:120px;color:var(--text-muted);font-size:12px;}
 .add-card:hover{border-color:#b0a090;color:var(--text);}
-.char-form{border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:12px;background:var(--bg);display:none;}
+
+/* CHARACTER FORM */
+.char-form{border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:14px;background:var(--bg);display:none;}
 .char-form.open{display:block;}
 .form-row{margin-bottom:10px;}
 .form-lbl{font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;font-weight:500;}
 .form-input{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;}
 .form-input:focus{outline:none;border-color:var(--crimson);}
-.form-textarea{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;min-height:70px;resize:vertical;}
+.form-textarea{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;min-height:80px;resize:vertical;}
 .form-textarea:focus{outline:none;border-color:var(--crimson);}
+.image-upload-area{border:1px dashed var(--border);border-radius:8px;padding:12px;text-align:center;cursor:pointer;background:var(--surface);margin-bottom:4px;}
+.image-upload-area:hover{border-color:#b0a090;}
+.image-preview{width:80px;height:80px;border-radius:50%;object-fit:cover;display:none;margin:8px auto 0;border:2px solid var(--border);}
+.upload-hint{font-size:11px;color:var(--text-muted);margin-top:4px;}
+
+/* STORYBOARD */
 .sb-empty{text-align:center;padding:3rem 1rem;color:var(--text-muted);}
 .sb-empty .icon{font-size:48px;margin-bottom:12px;}
 .sb-empty h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;}
@@ -84,6 +100,8 @@ textarea.transcript:focus{outline:none;border-color:var(--crimson);}
 .type-drama{background:#eeedfe;color:#3c3489;}
 .type-discovery{background:#e1f5ee;color:#0f6e56;}
 .type-humor{background:#faeeda;color:#854f0b;}
+
+/* GRAPHIC NOVEL */
 .novel-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
 .novel-cover{padding:2rem 1.5rem;background:var(--ink);text-align:center;color:var(--gold);}
 .novel-cover-eyebrow{font-size:10px;opacity:0.5;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px;}
@@ -125,6 +143,7 @@ textarea.transcript:focus{outline:none;border-color:var(--crimson);}
   <div class="tab" id="tab-novel">Graphic Novel</div>
 </div>
 
+<!-- TRANSCRIPT -->
 <div class="pane active" id="pane-transcript">
   <div class="lbl">Session transcript</div>
   <textarea class="transcript" id="transcript-input" placeholder="Paste your session transcript here..."></textarea>
@@ -147,11 +166,17 @@ textarea.transcript:focus{outline:none;border-color:var(--crimson);}
   </div>
 </div>
 
+<!-- CHARACTERS -->
 <div class="pane" id="pane-characters">
   <div class="lbl">Party members</div>
-  <div class="char-grid" id="char-grid"></div>
+  <div class="char-grid" id="char-grid">
+    <div class="add-card" id="add-char-card"><div style="font-size:24px;">+</div><span>Add character</span></div>
+  </div>
+
   <div class="char-form" id="char-form">
-    <div class="lbl" style="margin-bottom:12px;">New character card</div>
+    <div class="lbl" id="char-form-title" style="margin-bottom:14px;">New character card</div>
+    <input type="hidden" id="form-char-id" />
+
     <div class="form-row">
       <label class="form-lbl">Character name</label>
       <input class="form-input" id="new-name" placeholder="e.g. Mira Thornwood" />
@@ -162,15 +187,27 @@ textarea.transcript:focus{outline:none;border-color:var(--crimson);}
     </div>
     <div class="form-row">
       <label class="form-lbl">Visual description</label>
-      <textarea class="form-textarea" id="new-desc" placeholder="Describe hair, skin, clothes, weapons, and any distinctive features..."></textarea>
+      <textarea class="form-textarea" id="new-desc" placeholder="Describe hair, skin, clothes, weapons, and distinctive features. The more detail the better for image generation..."></textarea>
     </div>
+    <div class="form-row">
+      <label class="form-lbl">Portrait image (Hero Forge screenshot, fan art, etc.)</label>
+      <div class="image-upload-area" onclick="document.getElementById('char-image-input').click()">
+        <div style="font-size:24px;">&#128247;</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Click to upload image</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">JPG, PNG, GIF or WebP up to 5MB</div>
+      </div>
+      <input type="file" id="char-image-input" accept="image/*" style="display:none;" />
+      <img id="image-preview" class="image-preview" alt="Character portrait preview" />
+    </div>
+
     <div style="display:flex;gap:8px;margin-top:6px;">
-      <button class="btn btn-primary btn-sm" id="add-char-btn">Add to party</button>
+      <button class="btn btn-primary btn-sm" id="add-char-btn">Save character</button>
       <button class="btn btn-sm" id="cancel-form-btn">Cancel</button>
     </div>
   </div>
 </div>
 
+<!-- STORYBOARD -->
 <div class="pane" id="pane-storyboard">
   <div id="sb-empty" class="sb-empty">
     <div class="icon">&#127912;</div>
@@ -187,6 +224,7 @@ textarea.transcript:focus{outline:none;border-color:var(--crimson);}
   </div>
 </div>
 
+<!-- GRAPHIC NOVEL -->
 <div class="pane" id="pane-novel">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
     <div class="lbl" style="margin:0;">Campaign graphic novel</div>
@@ -215,6 +253,7 @@ textarea.transcript:focus{outline:none;border-color:var(--crimson);}
 
 </div>
 
+<script src="characters.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,10 +1,5 @@
 var artStyle = 'High fantasy illustration';
 var moments = [];
-var characters = [
-  {name:'Theron', cls:'Ranger / Half-elf', desc:'Silver hair, green cloak, wolf companion named Shadow. Stoic expression, weathered face.', i:'TH', bg:'#EEEDFE', fg:'#534AB7'},
-  {name:'Zara', cls:'Rogue / Tiefling', desc:'Crimson skin, small black horns, always partially in shadow. Mischievous grin, twin daggers.', i:'ZA', bg:'#E1F5EE', fg:'#0F6E56'},
-  {name:'Ruk', cls:'Barbarian / Half-orc', desc:'Enormous build, ritual scars, bear skull pauldron, warhammer.', i:'RU', bg:'#FAECE7', fg:'#993C1D'}
-];
 
 var styleMap = {
   'chip-fantasy': 'High fantasy illustration',
@@ -26,28 +21,28 @@ function init() {
 
   // Style chips
   Object.keys(styleMap).forEach(function(id) {
-    document.getElementById(id).addEventListener('click', function() {
-      document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('sel'); });
-      this.classList.add('sel');
-      artStyle = styleMap[id];
-    });
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('click', function() {
+        document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('sel'); });
+        el.classList.add('sel');
+        artStyle = styleMap[id];
+      });
+    }
   });
 
   // Extract button
   document.getElementById('extract-btn').addEventListener('click', extractMoments);
 
-  // Character form buttons
-  document.getElementById('add-char-btn').addEventListener('click', addChar);
-  document.getElementById('cancel-form-btn').addEventListener('click', toggleForm);
-
-  // Nav buttons
-  document.getElementById('goto-transcript-btn').addEventListener('click', function() { switchTab('transcript'); });
-  document.getElementById('goto-novel-btn').addEventListener('click', function() { switchTab('novel'); });
+  // Novel buttons
   document.getElementById('print-btn').addEventListener('click', function() { alert('Print on demand coming soon!'); });
   document.getElementById('share-btn').addEventListener('click', function() { alert('Share link coming soon!'); });
   document.getElementById('pdf-btn').addEventListener('click', function() { alert('PDF export coming soon!'); });
+  document.getElementById('goto-transcript-btn').addEventListener('click', function() { switchTab('transcript'); });
+  document.getElementById('goto-novel-btn').addEventListener('click', function() { switchTab('novel'); });
 
-  renderChars();
+  // Init characters module
+  initCharacters();
 }
 
 function checkKey() {
@@ -71,41 +66,6 @@ function switchTab(t) {
   });
   document.getElementById('pane-' + t).classList.add('active');
   document.getElementById('tab-' + t).classList.add('active');
-}
-
-function toggleForm() {
-  document.getElementById('char-form').classList.toggle('open');
-}
-
-function renderChars() {
-  var html = characters.map(function(c) {
-    return '<div class="char-card">' +
-      '<div class="char-avatar" style="background:' + c.bg + ';color:' + c.fg + ';">' + c.i + '</div>' +
-      '<div class="char-name">' + c.name + '</div>' +
-      '<div class="char-desc">' + c.desc + '</div>' +
-      '<span class="char-badge">' + c.cls + '</span>' +
-    '</div>';
-  }).join('');
-  html += '<div class="add-card" id="add-char-card"><div style="font-size:24px;">+</div><span>Add character</span></div>';
-  document.getElementById('char-grid').innerHTML = html;
-  document.getElementById('add-char-card').addEventListener('click', toggleForm);
-}
-
-function addChar() {
-  var name = document.getElementById('new-name').value.trim();
-  var cls = document.getElementById('new-class').value.trim();
-  var desc = document.getElementById('new-desc').value.trim();
-  if (!name) { alert('Please enter a character name.'); return; }
-  var bgs = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
-  var fgs = ['#534AB7','#0F6E56','#993C1D','#185FA5','#854F0B'];
-  var idx = characters.length % bgs.length;
-  var initials = name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
-  characters.push({name:name, cls:cls||'Adventurer', desc:desc||'No description yet.', i:initials, bg:bgs[idx], fg:fgs[idx]});
-  renderChars();
-  document.getElementById('char-form').classList.remove('open');
-  document.getElementById('new-name').value = '';
-  document.getElementById('new-class').value = '';
-  document.getElementById('new-desc').value = '';
 }
 
 function showError(msg) {
@@ -148,9 +108,7 @@ function extractMoments() {
     fill.style.width = pct + '%';
   }, 400);
 
-  var charList = characters.map(function(c) {
-    return c.name + ' (' + c.cls + '): ' + c.desc;
-  }).join('\n');
+  var charList = getCharacterList();
 
   fetch('/api/extract', {
     method: 'POST',

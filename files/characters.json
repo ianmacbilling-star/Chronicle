@@ -1,0 +1,23 @@
+[
+  {
+    "id": "1",
+    "name": "Theron",
+    "cls": "Ranger / Half-elf",
+    "desc": "Silver hair, green cloak, wolf companion named Shadow. Stoic expression, weathered face.",
+    "image": null
+  },
+  {
+    "id": "2",
+    "name": "Zara",
+    "cls": "Rogue / Tiefling",
+    "desc": "Crimson skin, small black horns, always partially in shadow. Mischievous grin, twin daggers.",
+    "image": null
+  },
+  {
+    "id": "3",
+    "name": "Ruk",
+    "cls": "Barbarian / Half-orc",
+    "desc": "Enormous build, ritual scars, bear skull pauldron, warhammer.",
+    "image": null
+  }
+]
