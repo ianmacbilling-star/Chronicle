@@ -16,6 +16,11 @@ function getDb() {
     // Run schema
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
     db.exec(schema);
+
+    // Migrations — safely add new columns if they don't exist
+    try { db.exec('ALTER TABLE characters ADD COLUMN player_name TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE sessions ADD COLUMN session_notes TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE users ADD COLUMN api_key TEXT'); } catch(e) {}
   }
   return db;
 }

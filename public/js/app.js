@@ -9,7 +9,8 @@ var state = {
   characters: [],
   sessions: [],
   moments: [],
-  artStyle: 'High fantasy illustration'
+  artStyle: 'High fantasy illustration',
+  currentView: 'campaigns'
 };
 
 // ============================================================
@@ -17,10 +18,17 @@ var state = {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
   checkAuth();
-  document.getElementById('logout-btn').addEventListener('click', logout);
-  document.getElementById('api-key').addEventListener('input', checkKey);
   document.getElementById('char-image-input').addEventListener('change', previewCharImage);
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
+
+  // Close user menu when clicking outside
+  document.addEventListener('click', function(e) {
+    var menu = document.getElementById('user-menu');
+    var btn = document.querySelector('.user-menu-btn');
+    if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+      menu.classList.remove('open');
+    }
+  });
 });
 
 // ============================================================
@@ -33,6 +41,19 @@ function checkAuth() {
       if (!data.authenticated) { window.location.href = '/'; return; }
       state.user = data;
       document.getElementById('user-name').textContent = data.name;
+      document.getElementById('user-menu-email').textContent = data.email;
+      var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
+      document.getElementById('user-avatar').textContent = initials;
+
+      // Load saved API key into settings field
+      fetch('/api/auth/apikey')
+        .then(function(r) { return r.json(); })
+        .then(function(k) {
+          if (k.api_key) {
+            document.getElementById('settings-apikey').value = k.api_key;
+          }
+        });
+
       loadCampaigns();
     });
 }
@@ -42,37 +63,94 @@ function logout() {
     .then(function() { window.location.href = '/'; });
 }
 
-function checkKey() {
-  var k = document.getElementById('api-key').value.trim();
-  var s = document.getElementById('key-status');
-  if (!k) { s.textContent = ''; s.className = 'key-status'; return; }
-  if (k.indexOf('sk-ant-') === 0 && k.length > 20) {
-    s.textContent = 'Key looks good';
-    s.className = 'key-status ok';
-  } else {
-    s.textContent = 'Should start with sk-ant-';
-    s.className = 'key-status err';
-  }
+function toggleUserMenu() {
+  document.getElementById('user-menu').classList.toggle('open');
+}
+
+function closeUserMenu() {
+  document.getElementById('user-menu').classList.remove('open');
+}
+
+// Get API key — prefer settings field, fall back to nothing
+function getApiKey() {
+  return document.getElementById('settings-apikey').value.trim();
+}
+
+// ============================================================
+// BREADCRUMB
+// ============================================================
+function setBreadcrumb(items) {
+  var bc = document.getElementById('breadcrumb');
+  var html = '';
+  items.forEach(function(item, i) {
+    if (i > 0) html += '<span class="breadcrumb-sep">&#8250;</span>';
+    if (item.action && i < items.length - 1) {
+      html += '<span class="breadcrumb-link" onclick="' + item.action + '">' + item.label + '</span>';
+    } else {
+      html += '<span class="breadcrumb-current">' + item.label + '</span>';
+    }
+  });
+  bc.innerHTML = html;
 }
 
 // ============================================================
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns', 'campaign-detail', 'session-detail'];
+  var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
   views.forEach(function(v) {
-    document.getElementById('view-' + v).style.display = 'none';
+    var el = document.getElementById('view-' + v);
+    if (el) el.style.display = 'none';
   });
-  document.getElementById('view-' + view).style.display = 'block';
 
-  // Sidebar active state
+  var el = document.getElementById('view-' + view);
+  if (el) el.style.display = 'block';
+  state.currentView = view;
+
+  // Update sidebar active states
   document.querySelectorAll('.sidebar-item').forEach(function(el) { el.classList.remove('active'); });
+
   if (view === 'campaigns') {
-    document.getElementById('nav-campaigns').classList.add('active');
-    document.getElementById('campaign-nav').style.display = 'none';
+    document.getElementById('snav-campaigns').classList.add('active');
+    document.getElementById('campaign-subnav').style.display = 'none';
     state.currentCampaign = null;
     state.currentSession = null;
+    setBreadcrumb([{label:'My Campaigns'}]);
+    loadCampaigns();
+  } else if (view === 'settings') {
+    document.getElementById('snav-settings').classList.add('active');
+    document.getElementById('campaign-subnav').style.display = 'none';
+    setBreadcrumb([
+      {label:'My Campaigns', action:"showView('campaigns')"},
+      {label:'Settings'}
+    ]);
+    loadSettingsForm();
   }
+}
+
+function showCampaignSection(section) {
+  showView(section);
+
+  // Show campaign subnav
+  document.getElementById('campaign-subnav').style.display = 'block';
+  document.getElementById('sidebar-campaign-name').textContent = state.currentCampaign.name;
+
+  // Sidebar active
+  var navId = 'snav-' + section;
+  var el = document.getElementById(navId);
+  if (el) el.classList.add('active');
+
+  // Breadcrumb
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', novel:'Graphic Novel'}[section] || section;
+  setBreadcrumb([
+    {label:'My Campaigns', action:"showView('campaigns')"},
+    {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
+    {label:sectionLabel}
+  ]);
+
+  if (section === 'sessions') loadSessions();
+  if (section === 'characters') loadCharacters();
+  if (section === 'novel') loadNovelSummary();
 }
 
 // ============================================================
@@ -91,41 +169,22 @@ function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
   var html = state.campaigns.map(function(c) {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
-      '<div class="campaign-card-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>' +
+      '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>' +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
     '</div>';
   }).join('');
-  html += '<div class="add-campaign-card" onclick="openCampaignModal()">' +
-    '<div class="plus">+</div><span>New campaign</span></div>';
+  html += '<div class="add-campaign-card" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
   grid.innerHTML = html;
 }
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
-  document.getElementById('campaign-nav').style.display = 'block';
-  document.getElementById('sidebar-campaign-name').textContent = state.currentCampaign.name;
-  document.getElementById('sessions-campaign-name').textContent = state.currentCampaign.name;
+  document.getElementById('sessions-title').textContent = state.currentCampaign.name;
   document.getElementById('novel-cover-title').textContent = state.currentCampaign.name;
   document.getElementById('novel-cover-sub').textContent = state.currentCampaign.description || '';
-  showView('campaign-detail');
-  showCampaignTab('sessions');
-  loadSessions();
-}
-
-function showCampaignTab(tab) {
-  var tabs = ['sessions', 'characters', 'novel'];
-  tabs.forEach(function(t) {
-    document.getElementById('camp-tab-' + t).style.display = t === tab ? 'block' : 'none';
-    var el = document.getElementById('ctab-' + t);
-    if (el) el.classList.toggle('active', t === tab);
-    var nav = document.getElementById('nav-' + t);
-    if (nav) nav.classList.toggle('active', t === tab);
-  });
-
-  if (tab === 'characters') loadCharacters();
-  if (tab === 'novel') loadNovelSummary();
+  showCampaignSection('sessions');
 }
 
 function openCampaignModal(editId) {
@@ -138,9 +197,7 @@ function openCampaignModal(editId) {
   document.getElementById('campaign-modal').classList.remove('hidden');
 }
 
-function closeCampaignModal() {
-  document.getElementById('campaign-modal').classList.add('hidden');
-}
+function closeCampaignModal() { document.getElementById('campaign-modal').classList.add('hidden'); }
 
 function saveCampaign() {
   var name = document.getElementById('campaign-name').value.trim();
@@ -149,12 +206,10 @@ function saveCampaign() {
   if (!name) { showModalError('campaign-modal-error', 'Campaign name is required.'); return; }
 
   var url = editId ? '/api/campaigns/' + editId : '/api/campaigns';
-  var method = editId ? 'PUT' : 'POST';
-
   fetch(url, {
-    method: method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name, description: desc })
+    method: editId ? 'PUT' : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name:name, description:desc})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -180,8 +235,7 @@ function renderSessions() {
   var list = document.getElementById('sessions-list');
   if (!state.sessions.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
-      '<h3>No sessions yet</h3>' +
-      '<p>Create your first session to start uploading transcripts and generating storyboards</p>' +
+      '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
     return;
   }
@@ -191,7 +245,7 @@ function renderSessions() {
         '<div class="session-num">' + (state.sessions.length - i) + '</div>' +
         '<div>' +
           '<div class="session-name">' + s.name + '</div>' +
-          '<div class="session-date">' + new Date(s.session_date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) + '</div>' +
+          '<div class="session-date">' + new Date(s.session_date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="flex gap-1 items-center">' +
@@ -209,9 +263,7 @@ function openSessionModal() {
   document.getElementById('session-modal').classList.remove('hidden');
 }
 
-function closeSessionModal() {
-  document.getElementById('session-modal').classList.add('hidden');
-}
+function closeSessionModal() { document.getElementById('session-modal').classList.add('hidden'); }
 
 function saveSession() {
   var name = document.getElementById('session-name').value.trim();
@@ -220,8 +272,8 @@ function saveSession() {
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name, session_date: date })
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name:name, session_date:date})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -233,7 +285,7 @@ function saveSession() {
 
 function deleteSession(id) {
   if (!confirm('Delete this session and all its moments? This cannot be undone.')) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id, { method: 'DELETE' })
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id, {method:'DELETE'})
     .then(function() { loadSessions(); });
 }
 
@@ -244,29 +296,44 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
-      document.getElementById('session-detail-date').textContent = new Date(data.session_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      document.getElementById('session-detail-date').textContent = new Date(data.session_date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
       document.getElementById('transcript-input').value = data.transcript || '';
+      document.getElementById('session-notes-input').value = data.session_notes || '';
 
-      if (state.moments.length) {
-        renderStoryboard();
-      }
+      if (state.moments.length) renderStoryboard();
 
       switchSessionTab('transcript');
-      showView('session-detail');
-    });
-}
 
-function backToCampaign() {
-  showView('campaign-detail');
-  loadSessions();
+      // Show session detail view
+      var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
+      views.forEach(function(v) {
+        var el = document.getElementById('view-' + v);
+        if (el) el.style.display = 'none';
+      });
+      document.getElementById('view-session-detail').style.display = 'block';
+
+      // Update sidebar
+      document.querySelectorAll('.sidebar-item').forEach(function(el) { el.classList.remove('active'); });
+      document.getElementById('snav-sessions').classList.add('active');
+      document.getElementById('campaign-subnav').style.display = 'block';
+      document.getElementById('sidebar-campaign-name').textContent = state.currentCampaign.name;
+
+      // Breadcrumb
+      setBreadcrumb([
+        {label:'My Campaigns', action:"showView('campaigns')"},
+        {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
+        {label:'Sessions', action:"showCampaignSection('sessions')"},
+        {label:data.name}
+      ]);
+    });
 }
 
 function saveTranscript() {
   var transcript = document.getElementById('transcript-input').value.trim();
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transcript: transcript })
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({transcript:transcript})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -275,8 +342,24 @@ function saveTranscript() {
   });
 }
 
+function saveNotes() {
+  var notes = document.getElementById('session-notes-input').value.trim();
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({session_notes:notes})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    state.currentSession = data;
+    var saved = document.getElementById('notes-saved');
+    saved.classList.remove('hidden');
+    setTimeout(function() { saved.classList.add('hidden'); }, 2500);
+  });
+}
+
 function switchSessionTab(tab) {
-  var tabs = ['transcript', 'storyboard'];
+  var tabs = ['transcript','notes','storyboard'];
   tabs.forEach(function(t) {
     document.getElementById('session-tab-' + t).style.display = t === tab ? 'block' : 'none';
     var el = document.getElementById('stab-' + t);
@@ -297,17 +380,15 @@ function loadCharacters() {
 }
 
 function renderCharacters() {
-  var colors = ['#EEEDFE', '#E1F5EE', '#FAECE7', '#E6F1FB', '#FAEEDA'];
-  var fgs = ['#534AB7', '#0F6E56', '#993C1D', '#185FA5', '#854F0B'];
-
+  var colors = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
+  var fgs = ['#534AB7','#0F6E56','#993C1D','#185FA5','#854F0B'];
   var html = state.characters.map(function(c, i) {
-    var initials = c.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+    var initials = c.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
     var portrait = c.image
       ? '<img src="' + c.image + '" style="width:100%;height:100%;object-fit:cover;" alt="' + c.name + '">'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
-
     return '<div class="char-card">' +
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
@@ -317,20 +398,21 @@ function renderCharacters() {
         '</div>' +
       '</div>' +
       '<div class="char-name">' + c.name + '</div>' +
+      (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
     '</div>';
   }).join('');
-
   html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   document.getElementById('char-grid').innerHTML = html;
 }
 
 function openCharModal(editId) {
-  var char = editId ? state.characters.find(function(c) { return c.id === editId; }) : null;
+  var char = editId ? state.characters.find(function(c){return c.id===editId;}) : null;
   document.getElementById('char-edit-id').value = editId || '';
   document.getElementById('char-modal-title').textContent = editId ? 'Edit Character' : 'Add Character';
   document.getElementById('char-name').value = char ? char.name : '';
+  document.getElementById('char-player').value = char ? (char.player_name || '') : '';
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
   document.getElementById('char-desc').value = char ? (char.description || '') : '';
   document.getElementById('char-image-input').value = '';
@@ -341,9 +423,7 @@ function openCharModal(editId) {
   document.getElementById('char-modal').classList.remove('hidden');
 }
 
-function closeCharModal() {
-  document.getElementById('char-modal').classList.add('hidden');
-}
+function closeCharModal() { document.getElementById('char-modal').classList.add('hidden'); }
 
 function previewCharImage() {
   var input = document.getElementById('char-image-input');
@@ -357,15 +437,16 @@ function previewCharImage() {
 
 function saveChar() {
   var name = document.getElementById('char-name').value.trim();
+  var player = document.getElementById('char-player').value.trim();
   var cls = document.getElementById('char-cls').value.trim();
   var desc = document.getElementById('char-desc').value.trim();
   var editId = document.getElementById('char-edit-id').value;
   var imageInput = document.getElementById('char-image-input');
-
   if (!name) { showModalError('char-modal-error', 'Character name is required.'); return; }
 
   var formData = new FormData();
   formData.append('name', name);
+  formData.append('player_name', player);
   formData.append('cls', cls || 'Adventurer');
   formData.append('description', desc);
   if (imageInput.files[0]) formData.append('image', imageInput.files[0]);
@@ -373,9 +454,8 @@ function saveChar() {
   var url = editId
     ? '/api/campaigns/' + state.currentCampaign.id + '/characters/' + editId
     : '/api/campaigns/' + state.currentCampaign.id + '/characters';
-  var method = editId ? 'PUT' : 'POST';
 
-  fetch(url, { method: method, body: formData })
+  fetch(url, {method: editId ? 'PUT' : 'POST', body: formData})
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) { showModalError('char-modal-error', data.error); return; }
@@ -385,9 +465,9 @@ function saveChar() {
 }
 
 function deleteChar(id) {
-  var char = state.characters.find(function(c) { return c.id === id; });
-  if (!confirm('Delete ' + (char ? char.name : 'this character') + '? This cannot be undone.')) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + id, { method: 'DELETE' })
+  var char = state.characters.find(function(c){return c.id===id;});
+  if (!confirm('Delete ' + (char ? char.name : 'this character') + '?')) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + id, {method:'DELETE'})
     .then(function() { loadCharacters(); });
 }
 
@@ -395,19 +475,19 @@ function deleteChar(id) {
 // EXTRACT MOMENTS
 // ============================================================
 function selStyle(el, style) {
-  document.querySelectorAll('.style-row .chip').forEach(function(c) { c.classList.remove('sel'); });
+  document.querySelectorAll('.style-row .chip').forEach(function(c){c.classList.remove('sel');});
   el.classList.add('sel');
   state.artStyle = style;
 }
 
 function extractMoments() {
-  var key = document.getElementById('api-key').value.trim();
+  var key = getApiKey();
   var transcript = document.getElementById('transcript-input').value.trim();
   var errorEl = document.getElementById('extract-error');
   errorEl.classList.add('hidden');
 
   if (!key || key.indexOf('sk-ant-') !== 0) {
-    errorEl.textContent = 'Please enter your Anthropic API key at the top of the page.';
+    errorEl.textContent = 'Please add your Anthropic API key in Settings first.';
     errorEl.classList.remove('hidden');
     return;
   }
@@ -417,11 +497,11 @@ function extractMoments() {
     return;
   }
 
-  // Auto save transcript
+  // Auto save transcript first
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transcript: transcript })
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({transcript:transcript})
   });
 
   var btn = document.getElementById('extract-btn');
@@ -442,8 +522,8 @@ function extractMoments() {
 
   fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: key, artStyle: state.artStyle })
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({key:key, artStyle:state.artStyle})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -479,19 +559,19 @@ function extractMoments() {
 function renderStoryboard() {
   document.getElementById('sb-empty').style.display = 'none';
   document.getElementById('sb-content').style.display = 'block';
-  var typeLabel = { combat: 'Combat', drama: 'Drama', discovery: 'Discovery', humor: 'Humor' };
+  var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
   document.getElementById('moments-grid').innerHTML = state.moments.map(function(m, i) {
     return '<div class="moment-card">' +
       '<div class="moment-img"><div class="moment-img-inner">' +
         '<div style="font-size:28px;margin-bottom:4px;">&#128444;</div>' +
-        (m.prompt ? m.prompt.slice(0, 80) + '...' : '') +
+        (m.prompt ? m.prompt.slice(0,80) + '...' : '') +
       '</div></div>' +
       '<div class="moment-body">' +
-        '<div class="moment-num">Panel ' + (i + 1) + '</div>' +
+        '<div class="moment-num">Panel ' + (i+1) + '</div>' +
         '<div class="moment-title">' + m.title + '</div>' +
         '<div class="moment-desc">' + m.description + '</div>' +
-        '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type] || m.type) + '</span>' +
-        '<div class="moment-prompt">' + (m.prompt || '') + '</div>' +
+        '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type]||m.type) + '</span>' +
+        '<div class="moment-prompt">' + (m.prompt||'') + '</div>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -503,16 +583,14 @@ function renderStoryboard() {
 function loadNovelSummary() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-      renderNovelSummary(Array.isArray(data) ? data : []);
-    });
+    .then(function(data) { renderNovelSummary(Array.isArray(data) ? data : []); });
 }
 
 function renderNovelSummary(sessions) {
-  var container = document.getElementById('novel-summary-list');
   document.getElementById('novel-preview-section').style.display = 'none';
   document.getElementById('preview-novel-btn').style.display = 'inline-flex';
 
+  var container = document.getElementById('novel-summary-list');
   if (!sessions.length) {
     container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128213;</div>' +
       '<h3>No sessions yet</h3><p>Create sessions and extract moments to build your graphic novel</p></div>';
@@ -526,39 +604,30 @@ function renderNovelSummary(sessions) {
     var momentsHtml = moments.length
       ? moments.map(function(m, j) {
           return '<div class="novel-moment-row">' +
-            '<div class="novel-moment-num">' + (j + 1) + '</div>' +
-            '<div class="novel-moment-info">' +
-              '<div class="novel-moment-title">' + m.title + '</div>' +
-              '<div class="novel-moment-desc">' + m.description + '</div>' +
-            '</div>' +
-          '</div>';
+            '<div class="novel-moment-num">' + (j+1) + '</div>' +
+            '<div><div class="novel-moment-title">' + m.title + '</div>' +
+            '<div class="novel-moment-desc">' + m.description + '</div></div></div>';
         }).join('')
       : '<div class="novel-empty">No moments extracted yet — open this session to generate storyboard panels</div>';
 
     return '<div class="novel-session-block">' +
       '<div class="novel-session-header">' +
-        '<div>' +
-          '<div class="novel-session-title">Session ' + (i + 1) + ' &mdash; ' + s.name + '</div>' +
-          '<div class="novel-session-date">' + new Date(s.session_date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) + '</div>' +
-        '</div>' +
-        '<span class="session-badge' + (moments.length ? '' : ' empty') + '">' + moments.length + ' panels</span>' +
+        '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
+        '<div class="novel-session-date">' + new Date(s.session_date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '</div></div>' +
+        '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
       '</div>' +
       '<div class="novel-session-moments">' + momentsHtml + '</div>' +
     '</div>';
   }).join('');
 
-  container.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">' +
-    '<div style="font-size:13px;color:var(--text-muted);">' + sessions.length + ' sessions &middot; ' + totalMoments + ' total panels</div>' +
-  '</div>' + html;
+  container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">' +
+    sessions.length + ' sessions &middot; ' + totalMoments + ' total panels</div>' + html;
 }
 
 function showNovelPreview() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-      var sessions = Array.isArray(data) ? data : [];
-      renderNovelPreview(sessions);
-    });
+    .then(function(data) { renderNovelPreview(Array.isArray(data) ? data : []); });
 }
 
 function renderNovelPreview(sessions) {
@@ -566,32 +635,109 @@ function renderNovelPreview(sessions) {
   document.getElementById('preview-novel-btn').style.display = 'none';
   document.getElementById('novel-preview-section').style.display = 'block';
 
-  var allPanelsHtml = sessions.map(function(s, si) {
+  var html = sessions.map(function(s, si) {
     var moments = s.moments || [];
     if (!moments.length) return '';
-
-    var panelsHtml = '<div class="novel-grid" style="grid-template-columns:1fr 1fr;gap:2px;background:#222;padding:2px;">' +
+    return '<div>' +
+      '<div class="novel-chapter-header">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
+      '<div class="novel-grid" style="grid-template-columns:1fr 1fr;gap:2px;background:#222;padding:2px;">' +
       moments.map(function(m, i) {
-        var wide = (i === 0 || i === Math.floor(moments.length / 2));
-        return '<div class="novel-panel' + (wide ? ' wide' : '') + '">' +
+        var wide = (i===0 || i===Math.floor(moments.length/2));
+        return '<div class="novel-panel' + (wide?' wide':'') + '">' +
           '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>' +
           '<div class="novel-caption">' + m.description + '</div>' +
         '</div>';
-      }).join('') +
-    '</div>';
-
-    return '<div class="novel-chapter">' +
-      '<div class="novel-chapter-header">Session ' + (si + 1) + ' &mdash; ' + s.name + '</div>' +
-      panelsHtml +
-    '</div>';
+      }).join('') + '</div></div>';
   }).join('');
 
-  document.getElementById('novel-all-panels').innerHTML = allPanelsHtml ||
-    '<div class="empty-state" style="padding:2rem;"><p>No moments extracted yet. Go to your sessions and extract key moments first.</p></div>';
+  document.getElementById('novel-all-panels').innerHTML = html ||
+    '<div class="empty-state" style="padding:2rem;"><p>No moments extracted yet.</p></div>';
 }
 
-function hideNovelPreview() {
-  loadNovelSummary();
+function hideNovelPreview() { loadNovelSummary(); }
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function loadSettingsForm() {
+  document.getElementById('settings-name').value = state.user.name || '';
+  document.getElementById('settings-email').value = state.user.email || '';
+  // API key already loaded on init
+}
+
+function saveProfile() {
+  var name = document.getElementById('settings-name').value.trim();
+  var email = document.getElementById('settings-email').value.trim();
+  document.getElementById('profile-error').classList.add('hidden');
+  document.getElementById('profile-success').classList.add('hidden');
+  if (!name || !email) { showSettingsError('profile-error', 'Name and email are required.'); return; }
+
+  fetch('/api/auth/profile', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name:name, email:email})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showSettingsError('profile-error', data.error); return; }
+    state.user.name = name;
+    state.user.email = email;
+    document.getElementById('user-name').textContent = name;
+    document.getElementById('user-menu-email').textContent = email;
+    var initials = name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+    document.getElementById('user-avatar').textContent = initials;
+    document.getElementById('profile-success').textContent = 'Profile updated!';
+    document.getElementById('profile-success').classList.remove('hidden');
+    setTimeout(function() { document.getElementById('profile-success').classList.add('hidden'); }, 2500);
+  });
+}
+
+function saveApiKey() {
+  var key = document.getElementById('settings-apikey').value.trim();
+  document.getElementById('apikey-success').classList.add('hidden');
+
+  fetch('/api/auth/apikey', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({api_key:key})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('apikey-success').textContent = 'API key saved!';
+    document.getElementById('apikey-success').classList.remove('hidden');
+    setTimeout(function() { document.getElementById('apikey-success').classList.add('hidden'); }, 2500);
+  });
+}
+
+function changePassword() {
+  var current = document.getElementById('settings-current-password').value;
+  var newpw = document.getElementById('settings-new-password').value;
+  document.getElementById('password-error').classList.add('hidden');
+  document.getElementById('password-success').classList.add('hidden');
+  if (!current || !newpw) { showSettingsError('password-error', 'Both fields are required.'); return; }
+  if (newpw.length < 8) { showSettingsError('password-error', 'New password must be at least 8 characters.'); return; }
+
+  fetch('/api/auth/password', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({current_password:current, new_password:newpw})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showSettingsError('password-error', data.error); return; }
+    document.getElementById('settings-current-password').value = '';
+    document.getElementById('settings-new-password').value = '';
+    document.getElementById('password-success').textContent = 'Password changed successfully!';
+    document.getElementById('password-success').classList.remove('hidden');
+    setTimeout(function() { document.getElementById('password-success').classList.add('hidden'); }, 2500);
+  });
+}
+
+function showSettingsError(id, msg) {
+  var el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.remove('hidden');
 }
 
 // ============================================================
@@ -607,7 +753,7 @@ function showAlert(msg) {
   var el = document.createElement('div');
   el.className = 'alert alert-success';
   el.textContent = msg;
-  el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999;min-width:200px;';
+  el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999;min-width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
   document.body.appendChild(el);
   setTimeout(function() { el.remove(); }, 2500);
 }
