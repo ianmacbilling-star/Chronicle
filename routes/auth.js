@@ -105,23 +105,34 @@ router.put('/password', async function(req, res) {
   res.json({ success: true });
 });
 
-// PUT /api/auth/apikey - save API key to account
+// PUT /api/auth/apikey - save API keys to account
 router.put('/apikey', function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { api_key } = req.body;
+  const { api_key, fal_key } = req.body;
   const db = getDb();
   const now = new Date().toISOString();
-  db.prepare('UPDATE users SET api_key = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-    .run(api_key || null, now, req.session.userId, req.session.userId);
+
+  // Only update fields that were sent
+  if (api_key !== undefined) {
+    db.prepare('UPDATE users SET api_key = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(api_key || null, now, req.session.userId, req.session.userId);
+  }
+  if (fal_key !== undefined) {
+    db.prepare('UPDATE users SET fal_key = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(fal_key || null, now, req.session.userId, req.session.userId);
+  }
   res.json({ success: true });
 });
 
-// GET /api/auth/apikey - get stored API key
+// GET /api/auth/apikey - get stored API keys
 router.get('/apikey', function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const db = getDb();
-  const user = db.prepare('SELECT api_key FROM users WHERE id = ?').get(req.session.userId);
-  res.json({ api_key: user ? (user.api_key || '') : '' });
+  const user = db.prepare('SELECT api_key, fal_key FROM users WHERE id = ?').get(req.session.userId);
+  res.json({
+    api_key: user ? (user.api_key || '') : '',
+    fal_key: user ? (user.fal_key || '') : ''
+  });
 });
 
 module.exports = router;

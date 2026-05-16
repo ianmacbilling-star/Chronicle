@@ -393,3 +393,58 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .novel-panel-inner{font-size:11px;color:var(--text-muted);text-align:center;padding:8px;line-height:1.5;}
 .novel-caption{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.75);color:white;font-size:9px;padding:4px 7px;line-height:1.4;}
 .novel-chapter-header{background:var(--ink);color:var(--gold);padding:8px 12px;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;font-family:var(--font-display);}
+
+/* IMAGE GENERATION */
+.moment-img-generated{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;}
+.moment-img-shimmer{
+  width:100%;aspect-ratio:4/3;
+  background:linear-gradient(90deg,rgba(201,168,76,0.05) 25%,rgba(201,168,76,0.12) 50%,rgba(201,168,76,0.05) 75%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s infinite;
+  display:flex;align-items:center;justify-content:center;
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.moment-img-shimmer-text{font-size:11px;color:rgba(201,168,76,0.5);text-align:center;}
+.moment-card{position:relative;}
+.moment-regen-btn{
+  position:absolute;top:6px;right:6px;
+  padding:3px 8px;font-size:10px;
+  background:rgba(0,0,0,0.6);color:rgba(201,168,76,0.8);
+  border:1px solid rgba(201,168,76,0.3);border-radius:4px;
+  cursor:pointer;opacity:0;transition:opacity 0.15s;
+}
+.moment-card:hover .moment-regen-btn{opacity:1;}
+.moment-regen-btn:hover{background:rgba(0,0,0,0.8);color:var(--gold);}
+
+/* DRAG AND DROP */
+.image-upload-area{transition:all 0.2s;cursor:pointer;}
+.image-upload-area.drag-over{
+  border-color:var(--gold) !important;
+  background:rgba(201,168,76,0.1) !important;
+  transform:scale(1.02);
+  box-shadow:0 0 0 3px rgba(201,168,76,0.2);
+}
+.char-card-drop{
+  position:relative;
+  transition:all 0.2s;
+}
+.char-card-drop.drag-over{
+  border-color:var(--gold) !important;
+  background:rgba(201,168,76,0.12) !important;
+  transform:scale(1.02);
+  box-shadow:0 0 0 3px rgba(201,168,76,0.25);
+}
+.char-card-drop.drag-over::after{
+  content:'Drop portrait here';
+  position:absolute;
+  inset:0;
+  background:rgba(12,8,4,0.75);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--gold);
+  font-size:12px;
+  font-weight:600;
+  border-radius:var(--radius-lg);
+  letter-spacing:0.5px;
+}

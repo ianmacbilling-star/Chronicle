@@ -405,6 +405,7 @@ function renderCharacters() {
   }).join('');
   html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   document.getElementById('char-grid').innerHTML = html;
+  setupCardDragDrop();
 }
 
 function openCharModal(editId) {
@@ -561,11 +562,16 @@ function renderStoryboard() {
   document.getElementById('sb-content').style.display = 'block';
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
   document.getElementById('moments-grid').innerHTML = state.moments.map(function(m, i) {
-    return '<div class="moment-card">' +
-      '<div class="moment-img"><div class="moment-img-inner">' +
-        '<div style="font-size:28px;margin-bottom:4px;">&#128444;</div>' +
-        (m.prompt ? m.prompt.slice(0,80) + '...' : '') +
-      '</div></div>' +
+    var imgHtml = m.image
+      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" />'
+      : '<div class="moment-img"><div class="moment-img-inner">' +
+          '<div style="font-size:24px;margin-bottom:4px;opacity:0.4;">&#128444;</div>' +
+          '<div style="font-size:10px;color:rgba(201,168,76,0.35);">No image yet</div>' +
+        '</div></div>';
+
+    return '<div class="moment-card" id="moment-card-' + m.id + '">' +
+      imgHtml +
+      '<button class="moment-regen-btn" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate</button>' +
       '<div class="moment-body">' +
         '<div class="moment-num">Panel ' + (i+1) + '</div>' +
         '<div class="moment-title">' + m.title + '</div>' +
@@ -575,6 +581,123 @@ function renderStoryboard() {
       '</div>' +
     '</div>';
   }).join('');
+}
+
+function generateAllImages() {
+  var falKey = getFalKey();
+  if (!falKey) {
+    document.getElementById('generate-error').textContent = 'Please add your fal.ai API key in Settings first.';
+    document.getElementById('generate-error').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('generate-error').classList.add('hidden');
+
+  var btn = document.getElementById('generate-all-btn');
+  var progressWrap = document.getElementById('generate-progress');
+  var fill = document.getElementById('gen-progress-fill');
+  var msg = document.getElementById('gen-progress-msg');
+
+  btn.disabled = true;
+  progressWrap.style.display = 'block';
+  fill.style.width = '5%';
+  msg.textContent = 'Generating ' + state.moments.length + ' images with Flux AI...';
+
+  // Show shimmer on all panels
+  state.moments.forEach(function(m) {
+    var card = document.getElementById('moment-card-' + m.id);
+    if (card) {
+      var imgArea = card.querySelector('.moment-img, .moment-img-generated');
+      if (imgArea) {
+        imgArea.outerHTML = '<div class="moment-img-shimmer"><div class="moment-img-shimmer-text">&#10024; Generating...</div></div>';
+      }
+    }
+  });
+
+  fetch('/api/images/generate-all', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      session_id: state.currentSession.id,
+      campaign_id: state.currentCampaign.id,
+      style: state.artStyle,
+      fal_key: falKey
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      document.getElementById('generate-error').textContent = 'Error: ' + data.error;
+      document.getElementById('generate-error').classList.remove('hidden');
+      btn.disabled = false;
+      progressWrap.style.display = 'none';
+      return;
+    }
+
+    fill.style.width = '100%';
+    msg.textContent = data.count + ' of ' + data.total + ' images generated!';
+
+    // Update moment images in state
+    data.generated.forEach(function(result) {
+      if (result.success) {
+        var moment = state.moments.find(function(m) { return m.id === result.moment_id; });
+        if (moment) moment.image = result.image_url;
+      }
+    });
+
+    // Re-render storyboard with images
+    renderStoryboard();
+    renderNovelWithImages();
+
+    setTimeout(function() {
+      btn.disabled = false;
+      progressWrap.style.display = 'none';
+      fill.style.width = '0%';
+    }, 2000);
+  })
+  .catch(function(e) {
+    document.getElementById('generate-error').textContent = 'Error: ' + e.message;
+    document.getElementById('generate-error').classList.remove('hidden');
+    btn.disabled = false;
+    progressWrap.style.display = 'none';
+  });
+}
+
+function regenImage(momentId, index) {
+  var falKey = getFalKey();
+  if (!falKey) { showAlert('Add your fal.ai key in Settings first.'); return; }
+
+  var moment = state.moments.find(function(m) { return m.id === momentId; });
+  if (!moment) return;
+
+  // Show shimmer on this card
+  var card = document.getElementById('moment-card-' + momentId);
+  if (card) {
+    var imgArea = card.querySelector('.moment-img, .moment-img-generated, .moment-img-shimmer');
+    if (imgArea) {
+      imgArea.outerHTML = '<div class="moment-img-shimmer"><div class="moment-img-shimmer-text">&#10024; Regenerating...</div></div>';
+    }
+  }
+
+  fetch('/api/images/generate-moment', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      moment_id: momentId,
+      session_id: state.currentSession.id,
+      campaign_id: state.currentCampaign.id,
+      prompt: moment.prompt,
+      style: state.artStyle,
+      fal_key: falKey
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showAlert('Error: ' + data.error); renderStoryboard(); return; }
+    moment.image = data.image_url;
+    renderStoryboard();
+    renderNovelWithImages();
+  })
+  .catch(function(e) { showAlert('Error: ' + e.message); renderStoryboard(); });
 }
 
 // ============================================================
@@ -630,6 +753,24 @@ function showNovelPreview() {
     .then(function(data) { renderNovelPreview(Array.isArray(data) ? data : []); });
 }
 
+function renderNovelWithImages() {
+  // Re-render novel panels for current session with updated images
+  if (!state.moments.length) return;
+  var panels = document.getElementById('novel-panels');
+  if (panels) {
+    panels.innerHTML = state.moments.map(function(m, i) {
+      var wide = (i === 0 || i === Math.floor(state.moments.length / 2));
+      var imgContent = m.image
+        ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;" alt="' + m.title + '">'
+        : '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>';
+      return '<div class="novel-panel' + (wide ? ' wide' : '') + '">' +
+        imgContent +
+        '<div class="novel-caption">' + m.description + '</div>' +
+      '</div>';
+    }).join('');
+  }
+}
+
 function renderNovelPreview(sessions) {
   document.getElementById('novel-summary-list').innerHTML = '';
   document.getElementById('preview-novel-btn').style.display = 'none';
@@ -643,8 +784,11 @@ function renderNovelPreview(sessions) {
       '<div class="novel-grid" style="grid-template-columns:1fr 1fr;gap:2px;background:#222;padding:2px;">' +
       moments.map(function(m, i) {
         var wide = (i===0 || i===Math.floor(moments.length/2));
+        var imgContent = m.image
+          ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;" alt="' + m.title + '">'
+          : '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>';
         return '<div class="novel-panel' + (wide?' wide':'') + '">' +
-          '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>' +
+          imgContent +
           '<div class="novel-caption">' + m.description + '</div>' +
         '</div>';
       }).join('') + '</div></div>';
@@ -662,7 +806,13 @@ function hideNovelPreview() { loadNovelSummary(); }
 function loadSettingsForm() {
   document.getElementById('settings-name').value = state.user.name || '';
   document.getElementById('settings-email').value = state.user.email || '';
-  // API key already loaded on init
+  // Load stored keys
+  fetch('/api/auth/apikey')
+    .then(function(r) { return r.json(); })
+    .then(function(k) {
+      if (k.api_key) document.getElementById('settings-apikey').value = k.api_key;
+      if (k.fal_key) document.getElementById('settings-falkey').value = k.fal_key;
+    });
 }
 
 function saveProfile() {
@@ -695,7 +845,6 @@ function saveProfile() {
 function saveApiKey() {
   var key = document.getElementById('settings-apikey').value.trim();
   document.getElementById('apikey-success').classList.add('hidden');
-
   fetch('/api/auth/apikey', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
@@ -708,6 +857,28 @@ function saveApiKey() {
     document.getElementById('apikey-success').classList.remove('hidden');
     setTimeout(function() { document.getElementById('apikey-success').classList.add('hidden'); }, 2500);
   });
+}
+
+function saveFalKey() {
+  var key = document.getElementById('settings-falkey').value.trim();
+  document.getElementById('falkey-success').classList.add('hidden');
+  fetch('/api/auth/apikey', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({fal_key:key})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('falkey-success').textContent = 'fal.ai key saved!';
+    document.getElementById('falkey-success').classList.remove('hidden');
+    setTimeout(function() { document.getElementById('falkey-success').classList.add('hidden'); }, 2500);
+  });
+}
+
+function getFalKey() {
+  var el = document.getElementById('settings-falkey');
+  return el ? el.value.trim() : '';
 }
 
 function changePassword() {
@@ -738,6 +909,124 @@ function showSettingsError(id, msg) {
   var el = document.getElementById(id);
   el.textContent = msg;
   el.classList.remove('hidden');
+}
+
+// ============================================================
+// DRAG AND DROP — Character portraits
+// ============================================================
+
+// Drop zone in the modal (upload area)
+function handleDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('char-drop-zone').classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('char-drop-zone').classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('char-drop-zone').classList.remove('drag-over');
+
+  var files = e.dataTransfer.files;
+  if (!files || !files[0]) return;
+
+  var file = files[0];
+  if (!file.type.match('image.*')) {
+    showAlert('Please drop an image file (JPG, PNG, WebP)');
+    return;
+  }
+
+  // Set the file input and trigger preview
+  var input = document.getElementById('char-image-input');
+  var dt = new DataTransfer();
+  dt.items.add(file);
+  input.files = dt.files;
+
+  // Show preview
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var preview = document.getElementById('char-image-preview');
+    preview.src = ev.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// Drag and drop directly onto character cards
+function setupCardDragDrop() {
+  document.getElementById('char-grid').addEventListener('dragover', function(e) {
+    var card = e.target.closest('.char-card');
+    if (!card) return;
+    e.preventDefault();
+    card.classList.add('drag-over');
+  });
+
+  document.getElementById('char-grid').addEventListener('dragleave', function(e) {
+    var card = e.target.closest('.char-card');
+    if (!card) return;
+    card.classList.remove('drag-over');
+  });
+
+  document.getElementById('char-grid').addEventListener('drop', function(e) {
+    var card = e.target.closest('.char-card');
+    if (!card) return;
+    e.preventDefault();
+    card.classList.remove('drag-over');
+
+    var files = e.dataTransfer.files;
+    if (!files || !files[0]) return;
+
+    var file = files[0];
+    if (!file.type.match('image.*')) {
+      showAlert('Please drop an image file');
+      return;
+    }
+
+    // Get character id from card id (format: char-card-ID)
+    var charId = parseInt(card.id.replace('char-card-', ''));
+    if (!charId) return;
+
+    uploadPortraitToChar(charId, file);
+  });
+}
+
+function uploadPortraitToChar(charId, file) {
+  var formData = new FormData();
+  formData.append('image', file);
+
+  // Get existing char data to preserve it
+  var char = state.characters.find(function(c) { return c.id === charId; });
+  if (!char) return;
+
+  formData.append('name', char.name);
+  formData.append('cls', char.cls || '');
+  formData.append('description', char.description || '');
+  formData.append('player_name', char.player_name || '');
+
+  // Show uploading indicator on the card
+  var card = document.getElementById('char-card-' + charId);
+  if (card) {
+    var avatar = card.querySelector('.char-avatar');
+    if (avatar) avatar.style.opacity = '0.5';
+  }
+
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId, {
+    method: 'PUT',
+    body: formData
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showAlert('Error uploading portrait: ' + data.error); return; }
+    showAlert('Portrait updated for ' + char.name + '!');
+    loadCharacters();
+  })
+  .catch(function(e) { showAlert('Error: ' + e.message); });
 }
 
 // ============================================================

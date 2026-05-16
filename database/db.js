@@ -21,6 +21,7 @@ function getDb() {
     try { db.exec('ALTER TABLE characters ADD COLUMN player_name TEXT'); } catch(e) {}
     try { db.exec('ALTER TABLE sessions ADD COLUMN session_notes TEXT'); } catch(e) {}
     try { db.exec('ALTER TABLE users ADD COLUMN api_key TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE users ADD COLUMN fal_key TEXT'); } catch(e) {}
   }
   return db;
 }
