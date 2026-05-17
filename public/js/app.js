@@ -987,10 +987,6 @@ function loadNovelSummary() {
 }
 
 function renderNovelSummary(sessions) {
-  var previewSection = document.getElementById('novel-preview-section');
-  var previewBtn = document.getElementById('preview-novel-btn');
-  if (previewSection) previewSection.style.display = 'none';
-  if (previewBtn) previewBtn.style.display = 'inline-flex';
 
   var container = document.getElementById('novel-summary-list');
   if (!sessions.length) {

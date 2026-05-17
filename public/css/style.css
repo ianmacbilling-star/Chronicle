@@ -698,3 +698,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   background: rgba(15,110,86,0.35);
   color: #86d4ba;
 }
+
+/* Publish tab - no top padding */
+#session-tab-export {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}

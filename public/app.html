@@ -59,9 +59,7 @@
         <div class="sidebar-item" id="snav-characters" onclick="showCampaignSection('characters')">
           &#129464; Characters
         </div>
-        <div class="sidebar-item" id="snav-novel" onclick="showCampaignSection('novel')">
-          &#128213; Graphic Novel
-        </div>
+
       </div>
     </div>
   </div>
@@ -113,29 +111,14 @@
       <div class="page-header">
         <div>
           <div class="page-title">Graphic Novel</div>
-          <div class="page-subtitle">All sessions combined into your campaign book</div>
+          <div class="page-subtitle">Your complete campaign story</div>
         </div>
-        <button class="btn btn-primary" id="preview-novel-btn" onclick="showNovelPreview()">&#128213; Preview full novel</button>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="previewNovelPDF()">&#128065; Preview PDF</button>
+          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">&#8659; Export PDF</button>
+        </div>
       </div>
       <div id="novel-summary-list"></div>
-      <div id="novel-preview-section" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div style="font-size:14px;font-weight:600;color:var(--gold);">Campaign Graphic Novel Preview</div>
-          <div class="flex gap-1">
-            <button class="btn btn-sm" onclick="exportNovelPDF()">&#8659; Save as PDF</button>
-            <button class="btn btn-sm btn-primary" onclick="alert('Print on demand coming soon!')">&#128424; Print book</button>
-          </div>
-        </div>
-        <div style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
-          <div class="novel-cover">
-            <div class="novel-cover-eyebrow">Chronicle of</div>
-            <div class="novel-cover-title" id="novel-cover-title">Your Campaign</div>
-            <div class="novel-cover-divider"></div>
-            <div class="novel-cover-sub" id="novel-cover-sub"></div>
-          </div>
-          <div id="novel-all-panels"></div>
-        </div>
-      </div>
     </div>
 
     <!-- ==================== SESSION DETAIL ==================== -->
