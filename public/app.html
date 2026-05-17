@@ -164,39 +164,53 @@
       </div>
 
       <!-- STORYBOARD TAB -->
+      <!-- STORYBOARD TAB -->
       <div id="session-tab-storyboard" style="display:none;">
-        <div class="form-group">
-          <label class="form-label">Art style</label>
-          <div class="style-row">
-            <div class="chip sel" onclick="selStyle(this,'High fantasy illustration')">High fantasy</div>
-            <div class="chip" onclick="selStyle(this,'Dark gritty comic book')">Dark and gritty</div>
-            <div class="chip" onclick="selStyle(this,'Watercolor painterly')">Watercolor</div>
-            <div class="chip" onclick="selStyle(this,'Anime manga style')">Anime / manga</div>
-            <div class="chip" onclick="selStyle(this,'Classic pen and ink')">Pen and ink</div>
-          </div>
-        </div>
         <div id="sb-empty" class="empty-state">
           <div class="empty-state-icon">&#127912;</div>
           <h3>No moments yet</h3>
-          <p>Go to the Transcript tab, paste your session transcript and click Extract key moments</p>
-          <button class="btn" onclick="switchSessionTab('transcript')">Go to transcript</button>
+          <p>Go to Session Notes, paste your transcript and click Generate Story</p>
+          <button class="btn" onclick="switchSessionTab('notes')">Go to Session Notes</button>
         </div>
         <div id="sb-content" style="display:none;">
-          <div class="storyboard-header">
-            <div style="font-size:13px;color:rgba(201,168,76,0.6);"><strong id="moment-count" style="color:var(--gold);">0</strong> key moments</div>
-            <div class="flex gap-1">
-              <button class="btn btn-sm" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
-              <button class="btn btn-sm" onclick="alert('Session PDF export coming soon!')">&#8659; Export session</button>
+          <div style="background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius-lg);padding:14px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <div>
+                <div class="form-label" style="margin-bottom:6px;">Art style</div>
+                <div class="style-row" style="margin:0;">
+                  <div class="chip sel" onclick="selStyle(this,'High fantasy illustration')">High fantasy</div>
+                  <div class="chip" onclick="selStyle(this,'Dark gritty comic book')">Dark and gritty</div>
+                  <div class="chip" onclick="selStyle(this,'Watercolor painterly')">Watercolor</div>
+                  <div class="chip" onclick="selStyle(this,'Anime manga style')">Anime / manga</div>
+                  <div class="chip" onclick="selStyle(this,'Classic pen and ink')">Pen and ink</div>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
             </div>
+            <div style="margin-top:8px;font-size:11px;color:rgba(201,168,76,0.4);">&#9998; Review moments and narrative below. When happy, click Generate all images.</div>
+            <div id="generate-progress" style="display:none;margin-top:10px;">
+              <div class="progress-bar"><div class="progress-fill" id="gen-progress-fill"></div></div>
+              <div class="progress-msg" id="gen-progress-msg">Generating images...</div>
+            </div>
+            <div id="generate-error" class="alert alert-error hidden" style="margin-top:8px;"></div>
           </div>
-          <div id="generate-progress" style="display:none;margin-bottom:14px;">
-            <div class="progress-bar"><div class="progress-fill" id="gen-progress-fill"></div></div>
-            <div class="progress-msg" id="gen-progress-msg">Generating images...</div>
-          </div>
-          <div id="generate-error" class="alert alert-error hidden"></div>
-          <div class="moments-grid" id="moments-grid"></div>
+          <div style="font-size:12px;color:rgba(201,168,76,0.5);margin-bottom:12px;"><strong id="moment-count" style="color:var(--gold);">0</strong> panels</div>
+          <div id="moments-grid"></div>
         </div>
       </div>
+
+      <!-- PUBLISH TAB -->
+      <div id="session-tab-export" style="display:none;">
+        <div class="flex gap-1" style="margin-bottom:10px;align-items:center;">
+          <button class="btn btn-sm" onclick="previewSessionInline()">&#128065; Preview</button>
+          <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
+          <span style="font-size:11px;color:rgba(201,168,76,0.35);margin-left:6px;">8.5&times;11 &middot; cover + panels + narrative</span>
+        </div>
+        <div id="session-preview-frame" style="display:none;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;height:75vh;">
+          <iframe id="session-preview-iframe" src="" style="width:100%;height:100%;border:none;background:#fff;"></iframe>
+        </div>
+      </div>
+
     </div>
 
     <!-- ==================== SETTINGS VIEW ==================== -->
@@ -274,19 +288,6 @@
       </div>
     </div>
 
-
-
-      <!-- PUBLISH TAB -->
-      <div id="session-tab-export" style="display:none;">
-        <div class="flex gap-1 items-center" style="margin-bottom:12px;">
-          <button class="btn btn-sm" onclick="toggleSessionPreview()">&#128065; Preview</button>
-          <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Save as PDF</button>
-          <span style="font-size:11px;color:rgba(201,168,76,0.35);margin-left:4px;">8.5 x 11 &middot; includes cover, panels &amp; narrative</span>
-        </div>
-        <div id="session-preview-frame" style="display:none;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;">
-          <iframe id="session-preview-iframe" src="" style="width:100%;height:600px;border:none;background:#fff;"></iframe>
-        </div>
-      </div>
 
   </div>
 </div>
