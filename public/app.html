@@ -146,7 +146,7 @@
           <div class="page-title" id="session-detail-name">Session</div>
           <div class="page-subtitle" id="session-detail-date"></div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="saveTranscript()">Save transcript</button>
+
       </div>
 
       <div class="sess-tabs">
@@ -167,9 +167,9 @@
           <textarea class="transcript-box" id="transcript-input" style="min-height:220px;" placeholder="Paste your session transcript here..."></textarea>
         </div>
         <div class="flex gap-1" style="margin-top:4px;">
-          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#10022; Extract moments &amp; generate narrative</button>
-          <button class="btn btn-sm" onclick="saveNotes()">Save notes</button>
+          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
         </div>
+        <div style="font-size:11px;color:rgba(201,168,76,0.35);margin-top:6px;">Notes and transcript are saved automatically when you click Generate Story</div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
         <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
         <div class="progress-wrap" id="progress-wrap">
