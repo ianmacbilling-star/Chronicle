@@ -296,6 +296,14 @@ function deleteSession(id) {
 }
 
 function selectSession(id) {
+  // Clear previous session state
+  state.moments = [];
+  state.narrativeData = { intro: '', sections: [], outro: '' };
+  var sbEmpty = document.getElementById('sb-empty');
+  var sbContent = document.getElementById('sb-content');
+  if (sbEmpty) sbEmpty.style.display = 'block';
+  if (sbContent) sbContent.style.display = 'none';
+
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id)
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -330,7 +338,20 @@ function selectSession(id) {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
         if (transcriptEl) transcriptEl.value = data.transcript || '';
-        if (notesEl) notesEl.value = data.session_notes || '';
+        if (notesEl) {
+          notesEl.value = data.session_notes || '';
+          // Auto-save notes when DM types
+          notesEl.oninput = function() {
+            clearTimeout(notesEl._saveTimer);
+            notesEl._saveTimer = setTimeout(function() {
+              fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+                method: 'PUT',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({session_notes: notesEl.value.trim()})
+              }).catch(function(){});
+            }, 1500);
+          };
+        }
       }, 50);
 
       // Update sidebar
@@ -536,11 +557,15 @@ function extractMoments() {
     return;
   }
 
-  // Auto save transcript first
+  // Auto save notes AND transcript
+  var notesVal = document.getElementById('session-notes-input');
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({transcript:transcript})
+    body: JSON.stringify({
+      transcript: transcript,
+      session_notes: notesVal ? notesVal.value.trim() : ''
+    })
   });
 
   var btn = document.getElementById('extract-btn');

@@ -152,7 +152,7 @@
       <div class="sess-tabs">
         <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">&#128203; Session Notes</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">&#127912; Storyboard</div>
-        <div class="sess-tab" id="stab-export" onclick="switchSessionTab('export')">&#8659; Export</div>
+        <div class="sess-tab" id="stab-export" onclick="switchSessionTab('export')">&#128214; Publish</div>
       </div>
 
       <!-- COMBINED SESSION NOTES + TRANSCRIPT TAB -->
@@ -293,32 +293,19 @@
 
       <!-- EXPORT TAB -->
       <div id="session-tab-export" style="display:none;">
-        <div style="max-width:500px;">
-          <div class="page-title" style="margin-bottom:6px;">Export Session</div>
-          <div style="font-size:13px;color:rgba(201,168,76,0.5);margin-bottom:24px;">Generate a beautifully formatted PDF of this session</div>
-
-          <div class="settings-section" style="margin-bottom:16px;">
-            <div class="settings-section-title">Session PDF</div>
-            <div class="settings-section-desc">Includes cover page, all storyboard panels with AI-generated narrative prose between each image. 8.5 x 11 inches.</div>
-            <div style="display:flex;gap:8px;margin-top:4px;">
-              <button class="btn btn-primary" onclick="exportSessionPDF()">&#8659; Export Session PDF</button>
-              <button class="btn btn-sm" onclick="previewSessionPDF()">&#128065; Preview first</button>
-            </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div>
+            <div class="page-title" style="font-size:16px;">Export Session</div>
+            <div style="font-size:12px;color:rgba(201,168,76,0.5);margin-top:2px;">Export this session as a beautifully formatted PDF</div>
           </div>
-
-          <div class="settings-section">
-            <div class="settings-section-title">Graphic Novel</div>
-            <div class="settings-section-desc">Exports the complete campaign as one book — cover page, cast and crew page, then all sessions in order with narrative prose.</div>
-            <div style="display:flex;gap:8px;margin-top:4px;">
-              <button class="btn btn-primary" onclick="exportNovelPDF()">&#8659; Export Full Graphic Novel</button>
-              <button class="btn btn-sm" onclick="previewNovelPDF()">&#128065; Preview first</button>
-            </div>
+          <div class="flex gap-1">
+            <button class="btn btn-sm" onclick="previewSessionPDF()">&#128065; Preview</button>
+            <button class="btn btn-primary" onclick="exportSessionPDF()">&#8659; Export PDF</button>
           </div>
-
-          <div style="margin-top:16px;padding:12px;border:1px solid rgba(201,168,76,0.15);border-radius:8px;background:rgba(20,12,4,0.5);">
-            <div style="font-size:11px;color:rgba(201,168,76,0.4);line-height:1.6;">
-              &#9998; <strong style="color:rgba(201,168,76,0.6);">Tip:</strong> For best results, generate the narrative on the Narrative tab before exporting. Panels without narrative will still export — the images and captions will carry the story.
-            </div>
+        </div>
+        <div style="padding:10px 14px;border:1px solid rgba(201,168,76,0.15);border-radius:8px;background:rgba(20,12,4,0.5);">
+          <div style="font-size:11px;color:rgba(201,168,76,0.4);line-height:1.6;">
+            &#9998; Includes cover page, all panels and narrative prose. 8.5 x 11 inches. For the full campaign graphic novel export, go to the campaign's Graphic Novel tab.
           </div>
         </div>
       </div>
