@@ -18,8 +18,10 @@ var state = {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
   checkAuth();
-  document.getElementById('char-image-input').addEventListener('change', previewCharImage);
-  document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
+  var charImageInput = document.getElementById('char-image-input');
+  if (charImageInput) charImageInput.addEventListener('change', previewCharImage);
+  var sessionDate = document.getElementById('session-date');
+  if (sessionDate) sessionDate.value = new Date().toISOString().split('T')[0];
 
   // Close user menu when clicking outside
   document.addEventListener('click', function(e) {
@@ -307,7 +309,7 @@ function selectSession(id) {
       if (state.moments.length) renderStoryboard();
 
       // Load last used art style for this campaign
-      loadLastArtStyle(data.art_style);
+      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style);
 
       switchSessionTab('transcript');
 
