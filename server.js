@@ -1,8 +1,6 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const SQLiteStore = require('better-sqlite3-session-store')(session);
-const { getDb } = require('./database/db');
 
 const app = express();
 
@@ -10,17 +8,15 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Session management
-const db = getDb();
+// Session management — memory store
 app.use(session({
-  store: new SQLiteStore({ client: db }),
-  secret: process.env.SESSION_SECRET || 'chronicle-dev-secret-change-in-production',
+  secret: process.env.SESSION_SECRET || 'chronicle-dev-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000
   }
 }));
 
@@ -39,7 +35,7 @@ app.use('/api/images', require('./routes/images'));
 app.use('/api/narrative', require('./routes/narrative'));
 app.use('/api/pdf', require('./routes/pdf'));
 
-// Serve app for all non-API routes (SPA routing)
+// Serve app for all non-API routes
 app.get('*', function(req, res) {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
