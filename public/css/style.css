@@ -661,16 +661,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 }
 .narrative-inline-box {
   width: 100%;
-  padding: 12px 14px;
+  padding: 14px 16px;
   background: transparent;
   border: none;
   color: var(--parchment);
   font-family: 'Georgia', serif;
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.8;
   resize: vertical;
-  min-height: 80px;
+  min-height: 120px;
   font-style: italic;
+  field-sizing: content;
+  overflow-y: hidden;
 }
 .narrative-inline-box:focus {
   outline: none;

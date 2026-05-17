@@ -316,24 +316,22 @@ function selectSession(id) {
       // Load last used art style for this campaign
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style);
 
-      // Show the session view FIRST then populate fields
-      switchSessionTab('notes');
-
-      // Small delay to ensure DOM is visible before setting values
-      setTimeout(function() {
-        var transcriptEl = document.getElementById('transcript-input');
-        var notesEl = document.getElementById('session-notes-input');
-        if (transcriptEl) transcriptEl.value = data.transcript || '';
-        if (notesEl) notesEl.value = data.session_notes || '';
-      }, 50);
-
-      // Show session detail view
+      // Show session detail view FIRST
       var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
       views.forEach(function(v) {
         var el = document.getElementById('view-' + v);
         if (el) el.style.display = 'none';
       });
       document.getElementById('view-session-detail').style.display = 'block';
+
+      // Now that view is visible, populate fields
+      switchSessionTab('notes');
+      setTimeout(function() {
+        var transcriptEl = document.getElementById('transcript-input');
+        var notesEl = document.getElementById('session-notes-input');
+        if (transcriptEl) transcriptEl.value = data.transcript || '';
+        if (notesEl) notesEl.value = data.session_notes || '';
+      }, 50);
 
       // Update sidebar
       document.querySelectorAll('.sidebar-item').forEach(function(el) { el.classList.remove('active'); });
