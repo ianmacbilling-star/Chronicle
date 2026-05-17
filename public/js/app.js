@@ -375,9 +375,10 @@ function saveNotes() {
 }
 
 function switchSessionTab(tab) {
-  var tabs = ['transcript','notes','storyboard'];
+  var tabs = ['notes', 'storyboard', 'export'];
   tabs.forEach(function(t) {
-    document.getElementById('session-tab-' + t).style.display = t === tab ? 'block' : 'none';
+    var pane = document.getElementById('session-tab-' + t);
+    if (pane) pane.style.display = t === tab ? 'block' : 'none';
     var el = document.getElementById('stab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
