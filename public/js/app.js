@@ -141,10 +141,12 @@ function showCampaignSection(section) {
   document.getElementById('campaign-subnav').style.display = 'block';
   document.getElementById('sidebar-campaign-name').textContent = state.currentCampaign.name;
 
-  // Sidebar active
-  var navId = 'snav-' + section;
-  var el = document.getElementById(navId);
-  if (el) el.classList.add('active');
+  // Sidebar active — novel has no sidebar item so skip it
+  if (section !== 'novel') {
+    var navId = 'snav-' + section;
+    var el = document.getElementById(navId);
+    if (el) el.classList.add('active');
+  }
 
   // Breadcrumb
   var sectionLabel = {sessions:'Sessions', characters:'Characters', novel:'Graphic Novel'}[section] || section;
@@ -156,7 +158,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') loadCharacters();
-  if (section === 'novel') loadNovelSummary();
+  if (section === 'novel') { loadNovelSummary(); showNovelPreview(); }
 }
 
 // ============================================================
@@ -178,7 +180,10 @@ function renderCampaigns() {
       '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>' +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
-      '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
+        '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+        '<button class="btn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();selectCampaignNovel(' + c.id + ')">&#128213; Graphic Novel</button>' +
+      '</div>' +
     '</div>';
   }).join('');
   html += '<div class="add-campaign-card" onclick="openCampaignModal()"><div class="plus">+</div><span>New campaign</span></div>';
@@ -191,6 +196,17 @@ function selectCampaign(id) {
   document.getElementById('novel-cover-title').textContent = state.currentCampaign.name;
   document.getElementById('novel-cover-sub').textContent = state.currentCampaign.description || '';
   showCampaignSection('sessions');
+}
+
+function selectCampaignNovel(id) {
+  state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  document.getElementById('sessions-title').textContent = state.currentCampaign.name;
+  document.getElementById('novel-cover-title').textContent = state.currentCampaign.name;
+  document.getElementById('novel-cover-sub').textContent = state.currentCampaign.description || '';
+  document.getElementById('campaign-subnav').style.display = 'block';
+  document.getElementById('sidebar-campaign-name').textContent = state.currentCampaign.name;
+  showView('campaign-detail');
+  showCampaignTab('novel');
 }
 
 function openCampaignModal(editId) {
@@ -971,8 +987,10 @@ function loadNovelSummary() {
 }
 
 function renderNovelSummary(sessions) {
-  document.getElementById('novel-preview-section').style.display = 'none';
-  document.getElementById('preview-novel-btn').style.display = 'inline-flex';
+  var previewSection = document.getElementById('novel-preview-section');
+  var previewBtn = document.getElementById('preview-novel-btn');
+  if (previewSection) previewSection.style.display = 'none';
+  if (previewBtn) previewBtn.style.display = 'inline-flex';
 
   var container = document.getElementById('novel-summary-list');
   if (!sessions.length) {
@@ -1505,31 +1523,29 @@ function saveNarrative() {
 // PDF EXPORT
 // ============================================================
 
-function previewSessionPDF() {
-  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
-  window.open(url, '_blank');
+function toggleSessionPreview() {
+  var frame = document.getElementById('session-preview-frame');
+  var iframe = document.getElementById('session-preview-iframe');
+  if (frame.style.display === 'none') {
+    var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
+    iframe.src = url;
+    frame.style.display = 'block';
+  } else {
+    frame.style.display = 'none';
+    iframe.src = '';
+  }
 }
 
 function exportSessionPDF() {
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
   var win = window.open(url, '_blank');
-  // Give the page a moment to load then trigger print
-  setTimeout(function() {
-    if (win) win.print();
-  }, 2500);
-}
-
-function previewNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id;
-  window.open(url, '_blank');
+  setTimeout(function() { if (win) win.print(); }, 2500);
 }
 
 function exportNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id;
   var win = window.open(url, '_blank');
-  setTimeout(function() {
-    if (win) win.print();
-  }, 3000);
+  setTimeout(function() { if (win) win.print(); }, 3000);
 }
 
 // ============================================================

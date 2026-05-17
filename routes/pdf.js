@@ -27,17 +27,14 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
 
   // Build panels with narrative
   var panelsHTML = '';
+
+  // Opening narrative
   if (intro) {
     panelsHTML += '<div class="narrative-text intro-text">' + intro + '</div>';
   }
 
   moments.forEach(function(m, i) {
-    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
-
-    if (section.before) {
-      panelsHTML += '<div class="narrative-text">' + section.before + '</div>';
-    }
-
+    // Panel image
     panelsHTML += '<div class="panel-block">' +
       (m.image
         ? '<img class="panel-image" src="' + m.image + '" alt="' + m.title + '" />'
@@ -49,11 +46,19 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
       '</div>' +
     '</div>';
 
-    if (section.after) {
-      panelsHTML += '<div class="narrative-text">' + section.after + '</div>';
+    // Between-panel narrative (after text bridges to next panel)
+    if (i < moments.length - 1) {
+      var section = sections.find(function(s) { return s.panel_index === i; })
+                 || sections[i]
+                 || {};
+      var bridgeText = section.after || section.before || '';
+      if (bridgeText) {
+        panelsHTML += '<div class="narrative-text">' + bridgeText + '</div>';
+      }
     }
   });
 
+  // Closing narrative
   if (outro) {
     panelsHTML += '<div class="narrative-text outro-text">' + outro + '</div>';
   }
@@ -383,8 +388,6 @@ function buildNovelHTML(campaign, sessions, characters) {
     if (narrative.intro) panelsHTML += '<div class="narrative-text intro-text">' + narrative.intro + '</div>';
 
     moments.forEach(function(m, i) {
-      var section = narrative.sections.find(function(sec) { return sec.panel_index === i; }) || {};
-      if (section.before) panelsHTML += '<div class="narrative-text">' + section.before + '</div>';
       panelsHTML += '<div class="panel-block">' +
         (m.image
           ? '<img class="panel-image" src="' + m.image + '" alt="' + m.title + '" />'
@@ -394,7 +397,13 @@ function buildNovelHTML(campaign, sessions, characters) {
           '<div class="panel-title">' + m.title + '</div>' +
         '</div>' +
       '</div>';
-      if (section.after) panelsHTML += '<div class="narrative-text">' + section.after + '</div>';
+      // Between-panel narrative
+      if (i < moments.length - 1) {
+        var section = narrative.sections.find(function(sec) { return sec.panel_index === i; })
+                   || narrative.sections[i] || {};
+        var bridge = section.after || section.before || '';
+        if (bridge) panelsHTML += '<div class="narrative-text">' + bridge + '</div>';
+      }
     });
 
     if (narrative.outro) panelsHTML += '<div class="narrative-text outro-text">' + narrative.outro + '</div>';
