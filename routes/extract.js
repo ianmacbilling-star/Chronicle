@@ -27,6 +27,14 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   const style = artStyle || session.campaign_style || 'High fantasy illustration';
 
+  // Scale moment count to transcript length, capped at 10
+  const wordCount = session.transcript.split(/\s+/).length;
+  let momentCount;
+  if (wordCount < 2000)       momentCount = '3-4';
+  else if (wordCount < 5000)  momentCount = '4-6';
+  else if (wordCount < 10000) momentCount = '6-8';
+  else                        momentCount = '8-10';
+
   // Parse session notes into mandatory and optional directives
   const notesSection = session.session_notes
     ? '\n\n## DIRECTOR\'S INSTRUCTIONS — FOLLOW THESE EXACTLY:\n' +

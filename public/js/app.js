@@ -603,7 +603,10 @@ function renderStoryboard() {
   html += '<div class="narrative-block" id="narrative-opening">' +
     '<div class="narrative-block-header">' +
       '<span>&#9998; Opening</span>' +
-      '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"opening\")">&#8635; Regenerate</button>' +
+      '<div class="flex gap-1">' +
+        '<button class="narrative-save-btn" onclick="saveNarrativeSection(\"intro\")">&#10003; Save</button>' +
+        '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"opening\")">&#8635; Regen</button>' +
+      '</div>' +
     '</div>' +
     '<textarea class="narrative-inline-box" id="narrative-intro-box" placeholder="Opening paragraph — sets the scene before the first panel...">' +
     (narrative.intro || '') + '</textarea>' +
@@ -649,35 +652,63 @@ function renderStoryboard() {
   html += '<div class="narrative-block" id="narrative-closing">' +
     '<div class="narrative-block-header">' +
       '<span>&#9998; Closing</span>' +
-      '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"closing\")">&#8635; Regenerate</button>' +
+      '<div class="flex gap-1">' +
+        '<button class="narrative-save-btn" onclick="saveNarrativeSection(\"outro\")">&#10003; Save</button>' +
+        '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"closing\")">&#8635; Regen</button>' +
+      '</div>' +
     '</div>' +
     '<textarea class="narrative-inline-box" id="narrative-outro-box" placeholder="Closing paragraph — what this session meant, what comes next...">' +
     (narrative.outro || '') + '</textarea>' +
   '</div>';
 
-  // Save narrative button
-  html += '<div style="display:flex;justify-content:flex-end;margin-top:8px;">' +
-    '<button class="btn btn-primary btn-sm" onclick="saveInlineNarrative()">Save narrative</button>' +
-  '</div>';
-
   document.getElementById('moments-grid').innerHTML = html;
 }
 
-function saveInlineNarrative() {
+function collectNarrativeState() {
   var intro = document.getElementById('narrative-intro-box');
   var outro = document.getElementById('narrative-outro-box');
-
   var sections = state.moments.slice(0, -1).map(function(m, i) {
     var box = document.getElementById('narrative-between-box-' + i);
     return { panel_index: i, before: '', after: box ? box.value.trim() : '' };
   });
-
-  var data = {
+  return {
     intro: intro ? intro.value.trim() : '',
     sections: sections,
     outro: outro ? outro.value.trim() : ''
   };
+}
 
+function saveNarrativeSection(type, panelIndex) {
+  var data = collectNarrativeState();
+
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(result) {
+    if (result.error) { showAlert('Error: ' + result.error); return; }
+    state.narrativeData = data;
+    // Show brief saved indicator on the button
+    var btnId = type === 'intro' ? 'narrative-opening'
+      : type === 'outro' ? 'narrative-closing'
+      : 'narrative-between-' + panelIndex;
+    var block = document.getElementById(btnId);
+    if (block) {
+      var btn = block.querySelector('.narrative-save-btn');
+      if (btn) {
+        var orig = btn.textContent;
+        btn.textContent = '✓ Saved!';
+        btn.style.color = '#5dcaa5';
+        setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 1500);
+      }
+    }
+  });
+}
+
+function saveInlineNarrative() {
+  var data = collectNarrativeState();
   fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},

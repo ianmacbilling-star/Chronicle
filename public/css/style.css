@@ -680,3 +680,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   color: rgba(201,168,76,0.15);
   font-style: italic;
 }
+
+/* NARRATIVE SAVE BUTTON */
+.narrative-save-btn {
+  padding: 2px 8px;
+  font-size: 10px;
+  background: rgba(15,110,86,0.2);
+  border: 1px solid rgba(134,212,186,0.3);
+  border-radius: 4px;
+  color: rgba(134,212,186,0.7);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.narrative-save-btn:hover {
+  background: rgba(15,110,86,0.35);
+  color: #86d4ba;
+}
