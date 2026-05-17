@@ -394,7 +394,8 @@ function renderCharacters() {
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
     var portrait = c.image
-      ? '<img src="' + c.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox('' + c.image + '', '' + c.name.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
+    var portrait = c.image
+      ? '<img src="' + c.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     return '<div class="char-card">' +
       '<div class="char-card-header">' +
@@ -585,7 +586,7 @@ function renderStoryboard() {
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
   document.getElementById('moments-grid').innerHTML = state.moments.map(function(m, i) {
     var imgHtml = m.image
-      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox('' + m.image + '', '' + m.title.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
+      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<div class="moment-img"><div class="moment-img-inner">' +
           '<div style="font-size:24px;margin-bottom:4px;opacity:0.4;">&#128444;</div>' +
           '<div style="font-size:10px;color:rgba(201,168,76,0.35);">No image yet</div>' +
@@ -783,7 +784,7 @@ function renderNovelWithImages() {
     panels.innerHTML = state.moments.map(function(m, i) {
       var wide = (i === 0 || i === Math.floor(state.moments.length / 2));
       var imgContent = m.image
-        ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + m.title + '" onclick="openLightbox('' + m.image + '', '' + m.title.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
+        ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
         : '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>';
       return '<div class="novel-panel' + (wide ? ' wide' : '') + '">' +
         imgContent +
@@ -807,7 +808,7 @@ function renderNovelPreview(sessions) {
       moments.map(function(m, i) {
         var wide = (i===0 || i===Math.floor(moments.length/2));
         var imgContent = m.image
-          ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + m.title + '" onclick="openLightbox('' + m.image + '', '' + m.title.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
+          ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
           : '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>';
         return '<div class="novel-panel' + (wide?' wide':'') + '">' +
           imgContent +
@@ -1205,7 +1206,7 @@ function renderNarrativeEditor(data) {
 
     html += '<div class="narrative-section">' +
       '<div class="narrative-section-header">' +
-        (m.image ? '<img class="narrative-section-img" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox('' + m.image + '','' + m.title + '')" />' : '') +
+        (m.image ? '<img class="narrative-section-img" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" />' : '') +
         'Panel ' + (i+1) + ' — ' + m.title +
       '</div>' +
       '<textarea class="narrative-textarea" id="narrative-before-' + i + '" placeholder="Prose leading into this panel...">' +
