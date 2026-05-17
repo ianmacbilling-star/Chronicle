@@ -704,3 +704,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   padding-top: 0 !important;
   margin-top: 0 !important;
 }
+
+/* Storyboard panel caption - gold parchment */
+.storyboard-panel-meta {
+  color: var(--gold-light) !important;
+}
+.storyboard-panel-meta .moment-num {
+  color: rgba(201,168,76,0.6) !important;
+}
+.storyboard-panel-meta .moment-title {
+  color: var(--gold-light) !important;
+}
+.moment-prompt-text {
+  color: rgba(201,168,76,0.35) !important;
+}

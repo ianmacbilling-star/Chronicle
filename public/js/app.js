@@ -190,19 +190,24 @@ function renderCampaigns() {
   grid.innerHTML = html;
 }
 
+function setCampaignElements() {
+  var t = document.getElementById('sessions-title');
+  var ct = document.getElementById('novel-cover-title');
+  var cs = document.getElementById('novel-cover-sub');
+  if (t) t.textContent = state.currentCampaign.name;
+  if (ct) ct.textContent = state.currentCampaign.name;
+  if (cs) cs.textContent = state.currentCampaign.description || '';
+}
+
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
-  document.getElementById('sessions-title').textContent = state.currentCampaign.name;
-  document.getElementById('novel-cover-title').textContent = state.currentCampaign.name;
-  document.getElementById('novel-cover-sub').textContent = state.currentCampaign.description || '';
+  setCampaignElements();
   showCampaignSection('sessions');
 }
 
 function selectCampaignNovel(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
-  document.getElementById('sessions-title').textContent = state.currentCampaign.name;
-  document.getElementById('novel-cover-title').textContent = state.currentCampaign.name;
-  document.getElementById('novel-cover-sub').textContent = state.currentCampaign.description || '';
+  setCampaignElements();
   document.getElementById('campaign-subnav').style.display = 'block';
   document.getElementById('sidebar-campaign-name').textContent = state.currentCampaign.name;
   showView('campaign-detail');
