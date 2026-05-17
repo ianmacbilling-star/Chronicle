@@ -182,7 +182,6 @@ function renderCampaigns() {
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
         '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
-        '<button class="btn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();selectCampaignNovel(' + c.id + ')">&#128213; Graphic Novel</button>' +
       '</div>' +
     '</div>';
   }).join('');
