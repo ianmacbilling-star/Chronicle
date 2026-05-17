@@ -303,8 +303,6 @@ function selectSession(id) {
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
       document.getElementById('session-detail-date').textContent = new Date(data.session_date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-      document.getElementById('transcript-input').value = data.transcript || '';
-      document.getElementById('session-notes-input').value = data.session_notes || '';
 
       // Load narrative data
       state.narrativeData = {
@@ -318,7 +316,16 @@ function selectSession(id) {
       // Load last used art style for this campaign
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style);
 
+      // Show the session view FIRST then populate fields
       switchSessionTab('notes');
+
+      // Small delay to ensure DOM is visible before setting values
+      setTimeout(function() {
+        var transcriptEl = document.getElementById('transcript-input');
+        var notesEl = document.getElementById('session-notes-input');
+        if (transcriptEl) transcriptEl.value = data.transcript || '';
+        if (notesEl) notesEl.value = data.session_notes || '';
+      }, 50);
 
       // Show session detail view
       var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
@@ -569,17 +576,49 @@ function extractMoments() {
       btn.disabled = false;
       return;
     }
-    fill.style.width = '100%';
-    msg.textContent = 'Moments found! Building storyboard...';
+    fill.style.width = '60%';
+    msg.textContent = 'Moments found! Writing your narrative...';
     state.moments = data.moments || [];
-    document.getElementById('moment-count').textContent = state.moments.length;
-    renderStoryboard();
-    setTimeout(function() {
-      wrap.style.display = 'none';
-      fill.style.width = '0%';
-      btn.disabled = false;
-      switchSessionTab('storyboard');
-    }, 1000);
+
+    // Step 2 — Generate narrative then render everything together
+    fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({key: key})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(narData) {
+      // Set narrative BEFORE rendering storyboard
+      state.narrativeData = {
+        intro: narData.intro || '',
+        sections: narData.sections || [],
+        outro: narData.outro || ''
+      };
+      fill.style.width = '100%';
+      msg.textContent = 'Your story is ready!';
+      document.getElementById('moment-count').textContent = state.moments.length;
+      renderStoryboard();
+      setTimeout(function() {
+        wrap.style.display = 'none';
+        fill.style.width = '0%';
+        btn.disabled = false;
+        switchSessionTab('storyboard');
+      }, 800);
+    })
+    .catch(function() {
+      // Narrative failed — still show storyboard with empty narrative
+      state.narrativeData = { intro: '', sections: [], outro: '' };
+      fill.style.width = '100%';
+      msg.textContent = 'Moments extracted!';
+      document.getElementById('moment-count').textContent = state.moments.length;
+      renderStoryboard();
+      setTimeout(function() {
+        wrap.style.display = 'none';
+        fill.style.width = '0%';
+        btn.disabled = false;
+        switchSessionTab('storyboard');
+      }, 800);
+    });
   })
   .catch(function(e) {
     clearInterval(ticker);
@@ -603,12 +642,9 @@ function renderStoryboard() {
   html += '<div class="narrative-block" id="narrative-opening">' +
     '<div class="narrative-block-header">' +
       '<span>&#9998; Opening</span>' +
-      '<div class="flex gap-1">' +
-        '<button class="narrative-save-btn" onclick="saveNarrativeSection(\"intro\")">&#10003; Save</button>' +
-        '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"opening\")">&#8635; Regen</button>' +
-      '</div>' +
+      '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"opening\")">&#8635; Regen</button>' +
     '</div>' +
-    '<textarea class="narrative-inline-box" id="narrative-intro-box" placeholder="Opening paragraph — sets the scene before the first panel...">' +
+    '<textarea class="narrative-inline-box" id="narrative-intro-box" placeholder="Opening paragraph — sets the scene before the first panel..." oninput="scheduleNarrativeSave()">' +
     (narrative.intro || '') + '</textarea>' +
   '</div>';
 
@@ -652,16 +688,22 @@ function renderStoryboard() {
   html += '<div class="narrative-block" id="narrative-closing">' +
     '<div class="narrative-block-header">' +
       '<span>&#9998; Closing</span>' +
-      '<div class="flex gap-1">' +
-        '<button class="narrative-save-btn" onclick="saveNarrativeSection(\"outro\")">&#10003; Save</button>' +
-        '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"closing\")">&#8635; Regen</button>' +
-      '</div>' +
+      '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"closing\")">&#8635; Regen</button>' +
     '</div>' +
-    '<textarea class="narrative-inline-box" id="narrative-outro-box" placeholder="Closing paragraph — what this session meant, what comes next...">' +
+    '<textarea class="narrative-inline-box" id="narrative-outro-box" placeholder="Closing paragraph — what this session meant, what comes next..." oninput="scheduleNarrativeSave()">' +
     (narrative.outro || '') + '</textarea>' +
   '</div>';
 
   document.getElementById('moments-grid').innerHTML = html;
+}
+
+// Auto-save narrative with debounce — saves 1.5 seconds after user stops typing
+var narrativeSaveTimer = null;
+function scheduleNarrativeSave() {
+  if (narrativeSaveTimer) clearTimeout(narrativeSaveTimer);
+  narrativeSaveTimer = setTimeout(function() {
+    saveInlineNarrative(true); // true = silent save
+  }, 1500);
 }
 
 function collectNarrativeState() {
@@ -707,7 +749,7 @@ function saveNarrativeSection(type, panelIndex) {
   });
 }
 
-function saveInlineNarrative() {
+function saveInlineNarrative(silent) {
   var data = collectNarrativeState();
   fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
     method: 'PUT',
@@ -716,9 +758,9 @@ function saveInlineNarrative() {
   })
   .then(function(r) { return r.json(); })
   .then(function(result) {
-    if (result.error) { showAlert('Error: ' + result.error); return; }
+    if (result.error) { if (!silent) showAlert('Error: ' + result.error); return; }
     state.narrativeData = data;
-    showAlert('Narrative saved!');
+    if (!silent) showAlert('Narrative saved!');
   });
 }
 
