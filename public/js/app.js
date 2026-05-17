@@ -29,6 +29,10 @@ document.addEventListener('DOMContentLoaded', function() {
       menu.classList.remove('open');
     }
   });
+
+  // CRITICAL: Prevent browser from opening dragged files as new pages
+  document.addEventListener('dragover', function(e) { e.preventDefault(); });
+  document.addEventListener('drop', function(e) { e.preventDefault(); });
 });
 
 // ============================================================
@@ -302,6 +306,9 @@ function selectSession(id) {
 
       if (state.moments.length) renderStoryboard();
 
+      // Load last used art style for this campaign
+      loadLastArtStyle(data.art_style);
+
       switchSessionTab('transcript');
 
       // Show session detail view
@@ -387,7 +394,7 @@ function renderCharacters() {
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
     var portrait = c.image
-      ? '<img src="' + c.image + '" style="width:100%;height:100%;object-fit:cover;" alt="' + c.name + '">'
+      ? '<img src="' + c.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox('' + c.image + '', '' + c.name.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     return '<div class="char-card">' +
       '<div class="char-card-header">' +
@@ -416,10 +423,7 @@ function openCharModal(editId) {
   document.getElementById('char-player').value = char ? (char.player_name || '') : '';
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
   document.getElementById('char-desc').value = char ? (char.description || '') : '';
-  document.getElementById('char-image-input').value = '';
-  var preview = document.getElementById('char-image-preview');
-  if (char && char.image) { preview.src = char.image; preview.style.display = 'block'; }
-  else { preview.style.display = 'none'; }
+  loadSlotPreviews(char);
   document.getElementById('char-modal-error').classList.add('hidden');
   document.getElementById('char-modal').classList.remove('hidden');
 }
@@ -442,7 +446,6 @@ function saveChar() {
   var cls = document.getElementById('char-cls').value.trim();
   var desc = document.getElementById('char-desc').value.trim();
   var editId = document.getElementById('char-edit-id').value;
-  var imageInput = document.getElementById('char-image-input');
   if (!name) { showModalError('char-modal-error', 'Character name is required.'); return; }
 
   var formData = new FormData();
@@ -450,7 +453,17 @@ function saveChar() {
   formData.append('player_name', player);
   formData.append('cls', cls || 'Adventurer');
   formData.append('description', desc);
-  if (imageInput.files[0]) formData.append('image', imageInput.files[0]);
+
+  // Append all slot files
+  var slots = ['image_portrait', 'image_fullbody', 'image_action', 'image_other'];
+  slots.forEach(function(slot) {
+    if (slotFiles[slot]) {
+      formData.append(slot, slotFiles[slot]);
+    }
+    if (slotFiles[slot + '_clear']) {
+      formData.append('clear_' + slot, 'true');
+    }
+  });
 
   var url = editId
     ? '/api/campaigns/' + state.currentCampaign.id + '/characters/' + editId
@@ -479,6 +492,15 @@ function selStyle(el, style) {
   document.querySelectorAll('.style-row .chip').forEach(function(c){c.classList.remove('sel');});
   el.classList.add('sel');
   state.artStyle = style;
+
+  // Save style to current session immediately so it persists
+  if (state.currentSession && state.currentCampaign) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({art_style: style})
+    }).catch(function() {}); // Silently fail
+  }
 }
 
 function extractMoments() {
@@ -563,7 +585,7 @@ function renderStoryboard() {
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
   document.getElementById('moments-grid').innerHTML = state.moments.map(function(m, i) {
     var imgHtml = m.image
-      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" />'
+      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox('' + m.image + '', '' + m.title.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
       : '<div class="moment-img"><div class="moment-img-inner">' +
           '<div style="font-size:24px;margin-bottom:4px;opacity:0.4;">&#128444;</div>' +
           '<div style="font-size:10px;color:rgba(201,168,76,0.35);">No image yet</div>' +
@@ -761,7 +783,7 @@ function renderNovelWithImages() {
     panels.innerHTML = state.moments.map(function(m, i) {
       var wide = (i === 0 || i === Math.floor(state.moments.length / 2));
       var imgContent = m.image
-        ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;" alt="' + m.title + '">'
+        ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + m.title + '" onclick="openLightbox('' + m.image + '', '' + m.title.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
         : '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>';
       return '<div class="novel-panel' + (wide ? ' wide' : '') + '">' +
         imgContent +
@@ -785,7 +807,7 @@ function renderNovelPreview(sessions) {
       moments.map(function(m, i) {
         var wide = (i===0 || i===Math.floor(moments.length/2));
         var imgContent = m.image
-          ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;" alt="' + m.title + '">'
+          ? '<img src="' + m.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + m.title + '" onclick="openLightbox('' + m.image + '', '' + m.title.replace(/'/g, "\'") + '')" title="Click to enlarge" />'
           : '<div class="novel-panel-inner"><div style="font-size:20px;margin-bottom:4px;">&#128444;</div>' + m.title + '</div>';
         return '<div class="novel-panel' + (wide?' wide':'') + '">' +
           imgContent +
@@ -915,80 +937,140 @@ function showSettingsError(id, msg) {
 // DRAG AND DROP — Character portraits
 // ============================================================
 
-// Drop zone in the modal (upload area)
-function handleDragOver(e) {
+// Image slot handlers — modal upload areas
+var slotFiles = {}; // Tracks new files selected for each slot
+
+function handleSlotDragOver(e, slot) {
   e.preventDefault();
   e.stopPropagation();
-  document.getElementById('char-drop-zone').classList.add('drag-over');
+  document.getElementById('drop-' + slot).classList.add('drag-over');
 }
 
-function handleDragLeave(e) {
+function handleSlotDragLeave(e, slot) {
   e.preventDefault();
   e.stopPropagation();
-  document.getElementById('char-drop-zone').classList.remove('drag-over');
+  document.getElementById('drop-' + slot).classList.remove('drag-over');
 }
 
-function handleDrop(e) {
+function handleSlotDrop(e, slot) {
   e.preventDefault();
   e.stopPropagation();
-  document.getElementById('char-drop-zone').classList.remove('drag-over');
-
+  document.getElementById('drop-' + slot).classList.remove('drag-over');
   var files = e.dataTransfer.files;
   if (!files || !files[0]) return;
+  if (!files[0].type.match('image.*')) { showAlert('Please drop an image file'); return; }
+  setSlotFile(slot, files[0]);
+}
 
-  var file = files[0];
-  if (!file.type.match('image.*')) {
-    showAlert('Please drop an image file (JPG, PNG, WebP)');
-    return;
+function handleSlotFileSelect(e, slot) {
+  if (e.target.files && e.target.files[0]) {
+    setSlotFile(slot, e.target.files[0]);
   }
+}
 
-  // Set the file input and trigger preview
-  var input = document.getElementById('char-image-input');
-  var dt = new DataTransfer();
-  dt.items.add(file);
-  input.files = dt.files;
-
-  // Show preview
+function setSlotFile(slot, file) {
+  slotFiles[slot] = file;
   var reader = new FileReader();
   reader.onload = function(ev) {
-    var preview = document.getElementById('char-image-preview');
+    var preview = document.getElementById('preview-' + slot);
+    var placeholder = document.getElementById('placeholder-' + slot);
+    var clearBtn = document.getElementById('clear-' + slot);
     preview.src = ev.target.result;
-    preview.style.display = 'block';
+    preview.classList.remove('hidden');
+    preview.onclick = function() { openLightbox(ev.target.result, slot.replace('image_', '').replace('_', ' ')); };
+    if (placeholder) placeholder.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'inline-flex';
   };
   reader.readAsDataURL(file);
 }
 
+function clearSlot(slot) {
+  slotFiles[slot] = null;
+  var preview = document.getElementById('preview-' + slot);
+  var placeholder = document.getElementById('placeholder-' + slot);
+  var clearBtn = document.getElementById('clear-' + slot);
+  var input = document.getElementById('input-' + slot);
+  preview.src = '';
+  preview.classList.add('hidden');
+  if (placeholder) placeholder.style.display = 'flex';
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (input) input.value = '';
+  // Mark for clearing on save
+  slotFiles[slot + '_clear'] = true;
+}
+
+function loadSlotPreviews(char) {
+  var slots = ['image_portrait', 'image_fullbody', 'image_action', 'image_other'];
+  slots.forEach(function(slot) {
+    var preview = document.getElementById('preview-' + slot);
+    var placeholder = document.getElementById('placeholder-' + slot);
+    var clearBtn = document.getElementById('clear-' + slot);
+    var url = char ? char[slot] : null;
+    slotFiles[slot] = null;
+    slotFiles[slot + '_clear'] = false;
+
+    if (url) {
+      preview.src = url;
+      preview.classList.remove('hidden');
+      preview.onclick = function() { openLightbox(url, slot.replace('image_', '').replace('_', ' ')); };
+      if (placeholder) placeholder.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = 'inline-flex';
+    } else {
+      preview.src = '';
+      preview.classList.add('hidden');
+      if (placeholder) placeholder.style.display = 'flex';
+      if (clearBtn) clearBtn.style.display = 'none';
+    }
+  });
+}
+
 // Drag and drop directly onto character cards
 function setupCardDragDrop() {
-  document.getElementById('char-grid').addEventListener('dragover', function(e) {
-    var card = e.target.closest('.char-card');
-    if (!card) return;
+  var grid = document.getElementById('char-grid');
+  if (!grid) return;
+
+  grid.addEventListener('dragenter', function(e) {
     e.preventDefault();
-    card.classList.add('drag-over');
+    e.stopPropagation();
+    var card = e.target.closest('.char-card-drop');
+    if (card) card.classList.add('drag-over');
   });
 
-  document.getElementById('char-grid').addEventListener('dragleave', function(e) {
-    var card = e.target.closest('.char-card');
-    if (!card) return;
-    card.classList.remove('drag-over');
+  grid.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var card = e.target.closest('.char-card-drop');
+    // Remove drag-over from all cards first
+    grid.querySelectorAll('.char-card-drop').forEach(function(c) { c.classList.remove('drag-over'); });
+    if (card) card.classList.add('drag-over');
   });
 
-  document.getElementById('char-grid').addEventListener('drop', function(e) {
-    var card = e.target.closest('.char-card');
-    if (!card) return;
+  grid.addEventListener('dragleave', function(e) {
     e.preventDefault();
-    card.classList.remove('drag-over');
+    e.stopPropagation();
+    // Only remove if leaving the grid entirely
+    if (!grid.contains(e.relatedTarget)) {
+      grid.querySelectorAll('.char-card-drop').forEach(function(c) { c.classList.remove('drag-over'); });
+    }
+  });
+
+  grid.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    grid.querySelectorAll('.char-card-drop').forEach(function(c) { c.classList.remove('drag-over'); });
+
+    var card = e.target.closest('.char-card-drop');
+    if (!card) return;
 
     var files = e.dataTransfer.files;
     if (!files || !files[0]) return;
 
     var file = files[0];
     if (!file.type.match('image.*')) {
-      showAlert('Please drop an image file');
+      showAlert('Please drop an image file (JPG, PNG, WebP)');
       return;
     }
 
-    // Get character id from card id (format: char-card-ID)
     var charId = parseInt(card.id.replace('char-card-', ''));
     if (!charId) return;
 
@@ -1027,6 +1109,243 @@ function uploadPortraitToChar(charId, file) {
     loadCharacters();
   })
   .catch(function(e) { showAlert('Error: ' + e.message); });
+}
+
+// ============================================================
+// NARRATIVE
+// ============================================================
+
+var narrativeData = { intro: '', sections: [], outro: '' };
+
+function loadNarrative() {
+  fetch('/api/narrative/' + state.currentCampaign.id + '/' + state.currentSession.id)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      narrativeData = data;
+      if (data.intro || (data.sections && data.sections.length) || data.outro) {
+        renderNarrativeEditor(data);
+        document.getElementById('narrative-empty').style.display = 'none';
+        document.getElementById('narrative-content').style.display = 'block';
+      } else {
+        document.getElementById('narrative-empty').style.display = 'block';
+        document.getElementById('narrative-content').style.display = 'none';
+      }
+    });
+}
+
+function generateNarrative() {
+  var key = getApiKey();
+  if (!key || key.indexOf('sk-ant-') !== 0) {
+    showAlert('Please add your Anthropic API key in Settings first.');
+    return;
+  }
+
+  var btn = document.getElementById('regen-narrative-btn');
+  var progress = document.getElementById('narrative-progress');
+  var fill = document.getElementById('narrative-progress-fill');
+  var msg = document.getElementById('narrative-progress-msg');
+  var errorEl = document.getElementById('narrative-error');
+
+  if (btn) btn.disabled = true;
+  if (errorEl) errorEl.classList.add('hidden');
+  document.getElementById('narrative-empty').style.display = 'none';
+  document.getElementById('narrative-content').style.display = 'block';
+  if (progress) progress.style.display = 'block';
+
+  var pct = 5;
+  var ticker = setInterval(function() {
+    pct = Math.min(pct + Math.random() * 5, 88);
+    if (fill) fill.style.width = pct + '%';
+  }, 500);
+
+  if (msg) msg.textContent = 'Writing your story narrative...';
+
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({key: key})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    clearInterval(ticker);
+    if (progress) progress.style.display = 'none';
+    if (btn) btn.disabled = false;
+
+    if (data.error) {
+      if (errorEl) { errorEl.textContent = 'Error: ' + data.error; errorEl.classList.remove('hidden'); }
+      return;
+    }
+
+    narrativeData = data;
+    renderNarrativeEditor(data);
+    if (fill) fill.style.width = '0%';
+  })
+  .catch(function(e) {
+    clearInterval(ticker);
+    if (progress) progress.style.display = 'none';
+    if (btn) btn.disabled = false;
+    if (errorEl) { errorEl.textContent = 'Error: ' + e.message; errorEl.classList.remove('hidden'); }
+  });
+}
+
+function renderNarrativeEditor(data) {
+  var editor = document.getElementById('narrative-editor');
+  var html = '';
+
+  // Intro section
+  html += '<div class="narrative-section">' +
+    '<div class="narrative-section-header">Opening — before first panel</div>' +
+    '<textarea class="narrative-textarea" id="narrative-intro" placeholder="Opening paragraph that sets the scene...">' +
+    (data.intro || '') + '</textarea>' +
+  '</div>';
+
+  // Per-moment sections
+  state.moments.forEach(function(m, i) {
+    var section = (data.sections || []).find(function(s) { return s.panel_index === i; }) || {};
+
+    html += '<div class="narrative-section">' +
+      '<div class="narrative-section-header">' +
+        (m.image ? '<img class="narrative-section-img" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox('' + m.image + '','' + m.title + '')" />' : '') +
+        'Panel ' + (i+1) + ' — ' + m.title +
+      '</div>' +
+      '<textarea class="narrative-textarea" id="narrative-before-' + i + '" placeholder="Prose leading into this panel...">' +
+      (section.before || '') + '</textarea>' +
+      (i < state.moments.length - 1
+        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(201,168,76,0.3);font-style:italic;">— panel image appears here —</div>' +
+          '<textarea class="narrative-textarea" id="narrative-after-' + i + '" placeholder="Prose bridging from this panel to the next...">' +
+          (section.after || '') + '</textarea>'
+        : '<div style="padding:4px 14px;font-size:10px;color:rgba(201,168,76,0.3);font-style:italic;">— final panel image appears here —</div>') +
+    '</div>';
+  });
+
+  // Outro section
+  html += '<div class="narrative-section">' +
+    '<div class="narrative-section-header">Closing — after final panel</div>' +
+    '<textarea class="narrative-textarea" id="narrative-outro" placeholder="Closing paragraph — what this session meant, what comes next...">' +
+    (data.outro || '') + '</textarea>' +
+  '</div>';
+
+  editor.innerHTML = html;
+}
+
+function collectNarrativeFromEditor() {
+  var intro = document.getElementById('narrative-intro');
+  var outro = document.getElementById('narrative-outro');
+  var sections = state.moments.map(function(m, i) {
+    var before = document.getElementById('narrative-before-' + i);
+    var after = document.getElementById('narrative-after-' + i);
+    return {
+      panel_index: i,
+      before: before ? before.value.trim() : '',
+      after: after ? after.value.trim() : ''
+    };
+  });
+  return {
+    intro: intro ? intro.value.trim() : '',
+    sections: sections,
+    outro: outro ? outro.value.trim() : ''
+  };
+}
+
+function saveNarrative() {
+  var data = collectNarrativeFromEditor();
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(result) {
+    if (result.error) { showAlert('Error saving: ' + result.error); return; }
+    narrativeData = data;
+    showAlert('Narrative saved!');
+  });
+}
+
+// ============================================================
+// PDF EXPORT
+// ============================================================
+
+function previewSessionPDF() {
+  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
+  window.open(url, '_blank');
+}
+
+function exportSessionPDF() {
+  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
+  var win = window.open(url, '_blank');
+  // Give the page a moment to load then trigger print
+  setTimeout(function() {
+    if (win) win.print();
+  }, 2500);
+}
+
+function previewNovelPDF() {
+  var url = '/api/pdf/novel/' + state.currentCampaign.id;
+  window.open(url, '_blank');
+}
+
+function exportNovelPDF() {
+  var url = '/api/pdf/novel/' + state.currentCampaign.id;
+  var win = window.open(url, '_blank');
+  setTimeout(function() {
+    if (win) win.print();
+  }, 3000);
+}
+
+// ============================================================
+// LIGHTBOX
+// ============================================================
+
+function openLightbox(src, caption) {
+  if (!src) return;
+
+  // Remove any existing lightbox
+  closeLightbox();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'lightbox-overlay';
+  overlay.id = 'lightbox';
+  overlay.onclick = function(e) {
+    if (e.target === overlay || e.target.classList.contains('lightbox-close')) {
+      closeLightbox();
+    }
+  };
+
+  var close = document.createElement('div');
+  close.className = 'lightbox-close';
+  close.innerHTML = '&times;';
+  close.onclick = closeLightbox;
+
+  var img = document.createElement('img');
+  img.className = 'lightbox-img';
+  img.src = src;
+  img.alt = caption || '';
+
+  overlay.appendChild(close);
+  overlay.appendChild(img);
+
+  if (caption) {
+    var cap = document.createElement('div');
+    cap.className = 'lightbox-caption';
+    cap.textContent = caption;
+    overlay.appendChild(cap);
+  }
+
+  document.body.appendChild(overlay);
+
+  // Close on escape key
+  document.addEventListener('keydown', handleLightboxKey);
+}
+
+function handleLightboxKey(e) {
+  if (e.key === 'Escape') closeLightbox();
+}
+
+function closeLightbox() {
+  var existing = document.getElementById('lightbox');
+  if (existing) existing.remove();
+  document.removeEventListener('keydown', handleLightboxKey);
 }
 
 // ============================================================

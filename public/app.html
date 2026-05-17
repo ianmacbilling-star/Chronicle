@@ -153,6 +153,8 @@
         <div class="sess-tab active" id="stab-transcript" onclick="switchSessionTab('transcript')">Transcript</div>
         <div class="sess-tab" id="stab-notes" onclick="switchSessionTab('notes')">Session Notes</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
+        <div class="sess-tab" id="stab-narrative" onclick="switchSessionTab('narrative')">&#9997; Narrative</div>
+        <div class="sess-tab" id="stab-export" onclick="switchSessionTab('export')">&#8659; Export</div>
       </div>
 
       <!-- TRANSCRIPT TAB -->
@@ -175,8 +177,8 @@
       <div id="session-tab-notes" style="display:none;">
         <div class="form-group">
           <label class="form-label">Session notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— optional flavor for AI image generation</span></label>
-          <textarea class="transcript-box" id="session-notes-input" style="min-height:180px;" placeholder="Add extra flavor and context to help the AI generate better images...&#10;&#10;Examples:&#10;- The overall mood was dark and foreboding, gothic horror atmosphere&#10;- Key location: a crumbling stone cathedral lit by torchlight&#10;- The party was exhausted and battle-worn by this point&#10;- Think Rembrandt lighting — deep shadows, dramatic highlights&#10;- Weather: heavy rain, lightning flashing through broken windows"></textarea>
-          <div class="form-hint" style="margin-top:6px;">These notes are passed to the AI along with your transcript to enrich the image generation prompts. The more vivid your descriptions, the better the results.</div>
+          <textarea class="transcript-box" id="session-notes-input" style="min-height:180px;" placeholder="Give the AI specific instructions for your storyboard...&#10;&#10;MANDATORY SCENES (the AI will always include these):&#10;- I want a panel showing the moment Zara betrayed the party at the bridge&#10;- Include the scene where Ruk picks up the fallen king's crown&#10;&#10;VISUAL STYLE &amp; ATMOSPHERE:&#10;- Dark gothic tone throughout — think candlelit crypts and heavy shadows&#10;- The tavern scene should feel warm and intimate, firelight only&#10;- Raining heavily during all outdoor scenes&#10;&#10;COMPOSITION NOTES:&#10;- Theron should always be shown with his wolf Shadow nearby&#10;- Use dramatic low angles for Ruk's combat moments"></textarea>
+          <div class="form-hint" style="margin-top:6px;">Specify mandatory scenes, visual atmosphere, character directions, and any moments you want guaranteed in the storyboard. The AI follows these instructions precisely.</div>
         </div>
         <div class="flex gap-1">
           <button class="btn btn-primary btn-sm" onclick="saveNotes()">Save notes</button>
@@ -295,6 +297,63 @@
       </div>
     </div>
 
+      <!-- NARRATIVE TAB -->
+      <div id="session-tab-narrative" style="display:none;">
+        <div id="narrative-empty" class="empty-state">
+          <div class="empty-state-icon">&#9997;</div>
+          <h3>No narrative yet</h3>
+          <p>Generate the story narrative that will appear between your storyboard panels in the final PDF</p>
+          <button class="btn btn-primary" onclick="generateNarrative()">&#10022; Generate narrative</button>
+        </div>
+        <div id="narrative-content" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div style="font-size:13px;color:rgba(201,168,76,0.6);">Story narrative for PDF export</div>
+            <div class="flex gap-1">
+              <button class="btn btn-sm" onclick="generateNarrative()" id="regen-narrative-btn">&#8635; Regenerate</button>
+              <button class="btn btn-sm btn-primary" onclick="saveNarrative()">Save narrative</button>
+            </div>
+          </div>
+          <div id="narrative-error" class="alert alert-error hidden" style="margin-bottom:12px;"></div>
+          <div id="narrative-progress" style="display:none;margin-bottom:16px;">
+            <div class="progress-bar"><div class="progress-fill" id="narrative-progress-fill"></div></div>
+            <div class="progress-msg" id="narrative-progress-msg">Writing your story...</div>
+          </div>
+          <div id="narrative-editor"></div>
+        </div>
+      </div>
+
+      <!-- EXPORT TAB -->
+      <div id="session-tab-export" style="display:none;">
+        <div style="max-width:500px;">
+          <div class="page-title" style="margin-bottom:6px;">Export Session</div>
+          <div style="font-size:13px;color:rgba(201,168,76,0.5);margin-bottom:24px;">Generate a beautifully formatted PDF of this session</div>
+
+          <div class="settings-section" style="margin-bottom:16px;">
+            <div class="settings-section-title">Session PDF</div>
+            <div class="settings-section-desc">Includes cover page, all storyboard panels with AI-generated narrative prose between each image. 8.5 x 11 inches.</div>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <button class="btn btn-primary" onclick="exportSessionPDF()">&#8659; Export Session PDF</button>
+              <button class="btn btn-sm" onclick="previewSessionPDF()">&#128065; Preview first</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Graphic Novel</div>
+            <div class="settings-section-desc">Exports the complete campaign as one book — cover page, cast and crew page, then all sessions in order with narrative prose.</div>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <button class="btn btn-primary" onclick="exportNovelPDF()">&#8659; Export Full Graphic Novel</button>
+              <button class="btn btn-sm" onclick="previewNovelPDF()">&#128065; Preview first</button>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;padding:12px;border:1px solid rgba(201,168,76,0.15);border-radius:8px;background:rgba(20,12,4,0.5);">
+            <div style="font-size:11px;color:rgba(201,168,76,0.4);line-height:1.6;">
+              &#9998; <strong style="color:rgba(201,168,76,0.6);">Tip:</strong> For best results, generate the narrative on the Narrative tab before exporting. Panels without narrative will still export — the images and captions will carry the story.
+            </div>
+          </div>
+        </div>
+      </div>
+
   </div>
 </div>
 
@@ -371,18 +430,87 @@
       <textarea class="form-textarea" id="char-desc" style="min-height:100px;" placeholder="Describe appearance in detail — hair, skin, clothing, weapons, distinctive features..."></textarea>
     </div>
     <div class="form-group">
-      <label class="form-label">Portrait image <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">Hero Forge, fan art, etc.</span></label>
-      <div class="image-upload-area" id="char-drop-zone"
-        onclick="document.getElementById('char-image-input').click()"
-        ondragover="handleDragOver(event)"
-        ondragleave="handleDragLeave(event)"
-        ondrop="handleDrop(event)">
-        <div style="font-size:28px;">&#128247;</div>
-        <div style="font-size:12px;color:rgba(201,168,76,0.6);margin-top:4px;">Click or drag &amp; drop portrait here</div>
-        <div style="font-size:11px;color:rgba(201,168,76,0.35);margin-top:2px;">JPG, PNG or WebP up to 5MB</div>
+      <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">The more you provide, the better the AI consistency</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+
+        <!-- Portrait -->
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">&#128247; Portrait / Headshot</div>
+          <div class="image-upload-area image-slot" id="drop-image_portrait"
+            onclick="document.getElementById('input-image_portrait').click()"
+            ondragover="handleSlotDragOver(event,'image_portrait')"
+            ondragleave="handleSlotDragLeave(event,'image_portrait')"
+            ondrop="handleSlotDrop(event,'image_portrait')"
+            style="padding:10px;min-height:80px;">
+            <img id="preview-image_portrait" class="slot-preview hidden" alt="Portrait" />
+            <div class="slot-placeholder" id="placeholder-image_portrait">
+              <div style="font-size:20px;">&#128100;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-image_portrait" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_portrait')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_portrait" onclick="clearSlot('image_portrait')">&#10005; Remove</button>
+        </div>
+
+        <!-- Full Body -->
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">&#129464; Full Body</div>
+          <div class="image-upload-area image-slot" id="drop-image_fullbody"
+            onclick="document.getElementById('input-image_fullbody').click()"
+            ondragover="handleSlotDragOver(event,'image_fullbody')"
+            ondragleave="handleSlotDragLeave(event,'image_fullbody')"
+            ondrop="handleSlotDrop(event,'image_fullbody')"
+            style="padding:10px;min-height:80px;">
+            <img id="preview-image_fullbody" class="slot-preview hidden" alt="Full body" />
+            <div class="slot-placeholder" id="placeholder-image_fullbody">
+              <div style="font-size:20px;">&#129464;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-image_fullbody" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_fullbody')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_fullbody" onclick="clearSlot('image_fullbody')">&#10005; Remove</button>
+        </div>
+
+        <!-- Action Shot -->
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">&#9876; Action Shot</div>
+          <div class="image-upload-area image-slot" id="drop-image_action"
+            onclick="document.getElementById('input-image_action').click()"
+            ondragover="handleSlotDragOver(event,'image_action')"
+            ondragleave="handleSlotDragLeave(event,'image_action')"
+            ondrop="handleSlotDrop(event,'image_action')"
+            style="padding:10px;min-height:80px;">
+            <img id="preview-image_action" class="slot-preview hidden" alt="Action shot" />
+            <div class="slot-placeholder" id="placeholder-image_action">
+              <div style="font-size:20px;">&#9876;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-image_action" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_action')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_action" onclick="clearSlot('image_action')">&#10005; Remove</button>
+        </div>
+
+        <!-- Other Reference -->
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">&#127912; Other Reference</div>
+          <div class="image-upload-area image-slot" id="drop-image_other"
+            onclick="document.getElementById('input-image_other').click()"
+            ondragover="handleSlotDragOver(event,'image_other')"
+            ondragleave="handleSlotDragLeave(event,'image_other')"
+            ondrop="handleSlotDrop(event,'image_other')"
+            style="padding:10px;min-height:80px;">
+            <img id="preview-image_other" class="slot-preview hidden" alt="Other reference" />
+            <div class="slot-placeholder" id="placeholder-image_other">
+              <div style="font-size:20px;">&#127912;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-image_other" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'image_other')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-image_other" onclick="clearSlot('image_other')">&#10005; Remove</button>
+        </div>
+
       </div>
-      <input type="file" id="char-image-input" accept="image/*" style="display:none;" />
-      <img id="char-image-preview" class="image-preview" alt="Preview" />
+      <div class="form-hint" style="margin-top:8px;">Drag images directly onto each slot or click to browse. Hero Forge screenshots, fan art, miniature photos all work great.</div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeCharModal()">Cancel</button>

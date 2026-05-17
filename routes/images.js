@@ -10,15 +10,17 @@ const { fal } = require('@fal-ai/client');
 // Everything else in the app stays the same.
 // ============================================================
 
-async function generateImage(prompt, style, falKey) {
-  // Configure fal client with user's key
+async function generateImage(prompt, style, falKey, charList) {
   fal.config({ credentials: falKey });
 
-  const styledPrompt = prompt + ', ' + getStyleSuffix(style);
+  // Style goes FIRST so Flux treats it as primary instruction
+  const stylePrefix = getStylePrefix(style);
+  const charSection = charList ? '\n\nCHARACTERS (maintain exact appearance throughout): ' + charList : '';
+  const fullPrompt = stylePrefix + '\n\n' + prompt + charSection;
 
   const result = await fal.subscribe('fal-ai/flux/schnell', {
     input: {
-      prompt: styledPrompt,
+      prompt: fullPrompt,
       image_size: 'landscape_4_3',
       num_inference_steps: 4,
       num_images: 1,
@@ -33,15 +35,15 @@ async function generateImage(prompt, style, falKey) {
   return result.data.images[0].url;
 }
 
-function getStyleSuffix(style) {
-  var suffixes = {
-    'High fantasy illustration': 'epic fantasy art, highly detailed, dramatic lighting, painterly style, concept art',
-    'Dark gritty comic book': 'dark comic book art, heavy inks, gritty noir, dramatic shadows, Frank Miller style',
-    'Watercolor painterly': 'beautiful watercolor illustration, loose brushwork, soft colors, artistic, painterly',
-    'Anime manga style': 'anime illustration, manga style, vibrant colors, dynamic composition, studio quality',
-    'Classic pen and ink': 'detailed pen and ink illustration, crosshatching, black and white with sepia tones, classic fantasy art'
+function getStylePrefix(style) {
+  var prefixes = {
+    'High fantasy illustration': 'STYLE: Epic high fantasy illustration. Painterly, highly detailed, dramatic cinematic lighting, rich colors, in the style of fantasy concept art and book covers. Detailed backgrounds, heroic compositions.',
+    'Dark gritty comic book': 'STYLE: Dark gritty comic book art. Heavy ink lines, deep shadows, high contrast black and white with selective color, noir atmosphere, Frank Miller and Mike Mignola inspired. Gritty textures, dramatic angles.',
+    'Watercolor painterly': 'STYLE: Beautiful loose watercolor illustration. Soft wet-on-wet washes, organic flowing color, artistic brushwork, warm earthy tones, delicate linework. Painterly and expressive, like a fantasy storybook.',
+    'Anime manga style': 'STYLE: High quality anime illustration. Clean bold linework, vibrant flat colors, dynamic composition, expressive characters, detailed backgrounds, studio Ghibli and JRPG inspired. Cinematic anime framing.',
+    'Classic pen and ink': 'STYLE: Classic pen and ink illustration with sepia wash. Fine crosshatching, detailed linework, old parchment tones, reminiscent of vintage fantasy book illustrations and Tolkien-era artwork. Intricate detail.'
   };
-  return suffixes[style] || suffixes['High fantasy illustration'];
+  return prefixes[style] || prefixes['High fantasy illustration'];
 }
 
 // ============================================================
@@ -66,7 +68,11 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   if (!moment) return res.status(403).json({ error: 'Access denied' });
 
   try {
-    const imageUrl = await generateImage(prompt, style, fal_key);
+    // Get characters for this campaign for consistency
+    const chars = db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = (SELECT campaign_id FROM sessions WHERE id = ?)').all(moment.session_id);
+    const charList = chars.map(function(c) { return c.name + ' (' + c.cls + '): ' + c.description; }).join('; ');
+
+    const imageUrl = await generateImage(prompt, style, fal_key, charList);
     const now = new Date().toISOString();
     db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
@@ -94,11 +100,15 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   const moments = db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session_id);
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
 
+  // Get characters for consistency across all panels
+  const chars = db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campaign_id);
+  const charList = chars.map(function(c) { return c.name + ' (' + c.cls + '): ' + c.description; }).join('; ');
+
   // Generate all images in parallel
   const results = await Promise.allSettled(
     moments.map(async function(m) {
       try {
-        const imageUrl = await generateImage(m.prompt, style, fal_key);
+        const imageUrl = await generateImage(m.prompt, style, fal_key, charList);
         const now = new Date().toISOString();
         db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
           .run(imageUrl, now, req.session.userId, m.id);

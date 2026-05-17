@@ -13,9 +13,10 @@ const storage = multer.diskStorage({
   destination: function(req, file, cb) { cb(null, UPLOADS_DIR); },
   filename: function(req, file, cb) {
     const ext = path.extname(file.originalname);
-    cb(null, 'char-' + Date.now() + ext);
+    cb(null, 'char-' + Date.now() + '-' + file.fieldname + ext);
   }
 });
+
 const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -25,13 +26,36 @@ const upload = multer({
   }
 });
 
-// Verify campaign belongs to user
+// Accept up to 4 named image fields
+const uploadFields = upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'image_portrait', maxCount: 1 },
+  { name: 'image_fullbody', maxCount: 1 },
+  { name: 'image_action', maxCount: 1 },
+  { name: 'image_other', maxCount: 1 }
+]);
+
 function verifyCampaignOwner(req, res, next) {
   const db = getDb();
   const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
   req.campaign = campaign;
   next();
+}
+
+function getUploadedUrl(files, fieldname) {
+  if (files && files[fieldname] && files[fieldname][0]) {
+    return '/uploads/' + files[fieldname][0].filename;
+  }
+  return null;
+}
+
+function deleteFile(filePath) {
+  if (!filePath) return;
+  try {
+    const full = path.join(__dirname, '..', filePath);
+    if (fs.existsSync(full)) fs.unlinkSync(full);
+  } catch(e) {}
 }
 
 // GET all characters for a campaign
@@ -42,46 +66,66 @@ router.get('/', requireAuth, verifyCampaignOwner, function(req, res) {
 });
 
 // POST create character
-router.post('/', requireAuth, verifyCampaignOwner, upload.single('image'), function(req, res) {
-  const { name, cls, description } = req.body;
+router.post('/', requireAuth, verifyCampaignOwner, uploadFields, function(req, res) {
+  const { name, player_name, cls, description } = req.body;
   if (!name) return res.json({ error: 'Character name is required' });
 
   const db = getDb();
   const now = new Date().toISOString();
-  const image = req.file ? '/uploads/' + req.file.filename : null;
+
+  // Legacy single image field support
+  const image = getUploadedUrl(req.files, 'image');
+  const image_portrait = getUploadedUrl(req.files, 'image_portrait');
+  const image_fullbody = getUploadedUrl(req.files, 'image_fullbody');
+  const image_action = getUploadedUrl(req.files, 'image_action');
+  const image_other = getUploadedUrl(req.files, 'image_other');
 
   const result = db.prepare(
-    'INSERT INTO characters (campaign_id, name, cls, description, image, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(req.params.campaignId, name, cls || 'Adventurer', description || '', image, now, req.session.userId);
+    'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(req.params.campaignId, name, player_name || '', cls || 'Adventurer', description || '', image, image_portrait, image_fullbody, image_action, image_other, now, req.session.userId);
 
   const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
   res.json(character);
 });
 
 // PUT update character
-router.put('/:id', requireAuth, verifyCampaignOwner, upload.single('image'), function(req, res) {
+router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, function(req, res) {
   const db = getDb();
   const char = db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
   if (!char) return res.status(404).json({ error: 'Character not found' });
 
   const now = new Date().toISOString();
-  let image = char.image;
 
-  if (req.file) {
-    if (char.image) {
-      const oldPath = path.join(__dirname, '..', char.image);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  // Handle each image field — keep existing if no new upload
+  const imageFields = ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other'];
+  const images = {};
+  imageFields.forEach(function(field) {
+    const newUrl = getUploadedUrl(req.files, field);
+    if (newUrl) {
+      deleteFile(char[field]); // Delete old file
+      images[field] = newUrl;
+    } else {
+      images[field] = char[field]; // Keep existing
     }
-    image = '/uploads/' + req.file.filename;
-  }
+  });
+
+  // Handle explicit clear requests (e.g. clear_image_portrait=true)
+  imageFields.forEach(function(field) {
+    if (req.body['clear_' + field] === 'true') {
+      deleteFile(char[field]);
+      images[field] = null;
+    }
+  });
 
   db.prepare(
-    'UPDATE characters SET name = ?, cls = ?, description = ?, image = ?, edited_at = ?, edited_by = ? WHERE id = ?'
+    'UPDATE characters SET name=?, player_name=?, cls=?, description=?, image=?, image_portrait=?, image_fullbody=?, image_action=?, image_other=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
-    req.body.name || char.name,
-    req.body.cls || char.cls,
-    req.body.description || char.description,
-    image, now, req.session.userId, char.id
+    req.body.name ? req.body.name.trim() : char.name,
+    req.body.player_name !== undefined ? req.body.player_name.trim() : (char.player_name || ''),
+    req.body.cls ? req.body.cls.trim() : char.cls,
+    req.body.description !== undefined ? req.body.description.trim() : (char.description || ''),
+    images.image, images.image_portrait, images.image_fullbody, images.image_action, images.image_other,
+    now, req.session.userId, char.id
   );
 
   const updated = db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);
@@ -94,10 +138,9 @@ router.delete('/:id', requireAuth, verifyCampaignOwner, function(req, res) {
   const char = db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
   if (!char) return res.status(404).json({ error: 'Character not found' });
 
-  if (char.image) {
-    const imgPath = path.join(__dirname, '..', char.image);
-    if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-  }
+  ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other'].forEach(function(f) {
+    deleteFile(char[f]);
+  });
 
   db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
   res.json({ success: true });

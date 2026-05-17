@@ -18,6 +18,18 @@ router.get('/', requireAuth, verifyCampaignOwner, function(req, res) {
   res.json(sessions);
 });
 
+// GET all sessions with moments for graphic novel view
+// IMPORTANT: This must be defined BEFORE /:id or Express matches 'novel' as an id
+router.get('/novel/all', requireAuth, verifyCampaignOwner, function(req, res) {
+  const db = getDb();
+  const sessions = db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(req.params.campaignId);
+  const result = sessions.map(function(s) {
+    const moments = db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(s.id);
+    return { ...s, moments };
+  });
+  res.json(result);
+});
+
 // GET single session with its moments
 router.get('/:id', requireAuth, verifyCampaignOwner, function(req, res) {
   const db = getDb();
@@ -27,15 +39,14 @@ router.get('/:id', requireAuth, verifyCampaignOwner, function(req, res) {
   res.json({ ...session, moments });
 });
 
-// GET all sessions with moments for graphic novel view
-router.get('/novel/all', requireAuth, verifyCampaignOwner, function(req, res) {
+// GET last used art style for this campaign
+router.get('/last-style', requireAuth, verifyCampaignOwner, function(req, res) {
   const db = getDb();
-  const sessions = db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(req.params.campaignId);
-  const result = sessions.map(function(s) {
-    const moments = db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(s.id);
-    return { ...s, moments };
-  });
-  res.json(result);
+  // Find the most recent session in this campaign that has an art style set
+  const session = db.prepare(
+    'SELECT art_style FROM sessions WHERE campaign_id = ? AND art_style IS NOT NULL ORDER BY session_date DESC, created_at DESC LIMIT 1'
+  ).get(req.params.campaignId);
+  res.json({ art_style: session ? session.art_style : null });
 });
 
 // POST create session
@@ -59,11 +70,13 @@ router.put('/:id', requireAuth, verifyCampaignOwner, function(req, res) {
   if (!session) return res.status(404).json({ error: 'Session not found' });
   const now = new Date().toISOString();
   db.prepare(
-    'UPDATE sessions SET name = ?, session_date = ?, transcript = ?, edited_at = ?, edited_by = ? WHERE id = ?'
+    'UPDATE sessions SET name = ?, session_date = ?, transcript = ?, session_notes = ?, art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?'
   ).run(
     req.body.name || session.name,
     req.body.session_date || session.session_date,
     req.body.transcript !== undefined ? req.body.transcript : session.transcript,
+    req.body.session_notes !== undefined ? req.body.session_notes : session.session_notes,
+    req.body.art_style !== undefined ? req.body.art_style : session.art_style,
     now, req.session.userId, session.id
   );
   const updated = db.prepare('SELECT * FROM sessions WHERE id = ?').get(session.id);

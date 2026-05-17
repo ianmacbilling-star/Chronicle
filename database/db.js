@@ -19,7 +19,15 @@ function getDb() {
 
     // Migrations — safely add new columns if they don't exist
     try { db.exec('ALTER TABLE characters ADD COLUMN player_name TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE characters ADD COLUMN image_portrait TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE characters ADD COLUMN image_fullbody TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE characters ADD COLUMN image_action TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE characters ADD COLUMN image_other TEXT'); } catch(e) {}
     try { db.exec('ALTER TABLE sessions ADD COLUMN session_notes TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE sessions ADD COLUMN art_style TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE sessions ADD COLUMN narrative_intro TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE sessions ADD COLUMN narrative_sections TEXT'); } catch(e) {}
+    try { db.exec('ALTER TABLE sessions ADD COLUMN narrative_outro TEXT'); } catch(e) {}
     try { db.exec('ALTER TABLE users ADD COLUMN api_key TEXT'); } catch(e) {}
     try { db.exec('ALTER TABLE users ADD COLUMN fal_key TEXT'); } catch(e) {}
   }

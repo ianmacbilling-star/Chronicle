@@ -1,26 +1,34 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const SQLiteStore = require('better-sqlite3-session-store')(session);
+const { getDb } = require('./database/db');
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Session management
+const db = getDb();
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'chronicle-dev-secret',
+  store: new SQLiteStore({ client: db }),
+  secret: process.env.SESSION_SECRET || 'chronicle-dev-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
 
+// Static files
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/campaigns/:campaignId/characters', require('./routes/characters'));
@@ -28,7 +36,10 @@ app.use('/api/campaigns/:campaignId/sessions', require('./routes/sessions'));
 app.use('/api/campaigns/:campaignId/sessions/:sessionId/moments', require('./routes/moments'));
 app.use('/api/extract', require('./routes/extract'));
 app.use('/api/images', require('./routes/images'));
+app.use('/api/narrative', require('./routes/narrative'));
+app.use('/api/pdf', require('./routes/pdf'));
 
+// Serve app for all non-API routes (SPA routing)
 app.get('*', function(req, res) {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
