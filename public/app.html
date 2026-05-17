@@ -150,40 +150,32 @@
       </div>
 
       <div class="sess-tabs">
-        <div class="sess-tab active" id="stab-transcript" onclick="switchSessionTab('transcript')">Transcript</div>
-        <div class="sess-tab" id="stab-notes" onclick="switchSessionTab('notes')">Session Notes</div>
-        <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
-        <div class="sess-tab" id="stab-narrative" onclick="switchSessionTab('narrative')">&#9997; Narrative</div>
+        <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">&#128203; Session Notes</div>
+        <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">&#127912; Storyboard</div>
         <div class="sess-tab" id="stab-export" onclick="switchSessionTab('export')">&#8659; Export</div>
       </div>
 
-      <!-- TRANSCRIPT TAB -->
-      <div id="session-tab-transcript">
+      <!-- COMBINED SESSION NOTES + TRANSCRIPT TAB -->
+      <div id="session-tab-notes">
         <div class="form-group">
-          <label class="form-label">Session transcript</label>
-          <textarea class="transcript-box" id="transcript-input" placeholder="Paste your session transcript here..."></textarea>
+          <label class="form-label">Session notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— director's instructions for the AI</span></label>
+          <textarea class="transcript-box" id="session-notes-input" style="min-height:120px;" placeholder="Give the AI specific instructions...&#10;&#10;MANDATORY SCENES:&#10;- I want a panel showing the moment Zara betrayed the party&#10;&#10;VISUAL STYLE:&#10;- Dark gothic tone, candlelit crypts&#10;&#10;COMPOSITION:&#10;- Theron should always be shown with his wolf Shadow"></textarea>
+          <div class="form-hint" style="margin-top:4px;">Specify mandatory scenes, atmosphere, and character directions. The AI follows these precisely.</div>
         </div>
-        <div class="flex gap-1">
-          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#10022; Extract key moments</button>
+        <div class="form-group" style="margin-top:16px;">
+          <label class="form-label">Session transcript</label>
+          <textarea class="transcript-box" id="transcript-input" style="min-height:220px;" placeholder="Paste your session transcript here..."></textarea>
+        </div>
+        <div class="flex gap-1" style="margin-top:4px;">
+          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#10022; Extract moments &amp; generate narrative</button>
+          <button class="btn btn-sm" onclick="saveNotes()">Save notes</button>
         </div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
+        <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
         <div class="progress-wrap" id="progress-wrap">
           <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
           <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
         </div>
-      </div>
-
-      <!-- SESSION NOTES TAB -->
-      <div id="session-tab-notes" style="display:none;">
-        <div class="form-group">
-          <label class="form-label">Session notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— optional flavor for AI image generation</span></label>
-          <textarea class="transcript-box" id="session-notes-input" style="min-height:180px;" placeholder="Give the AI specific instructions for your storyboard...&#10;&#10;MANDATORY SCENES (the AI will always include these):&#10;- I want a panel showing the moment Zara betrayed the party at the bridge&#10;- Include the scene where Ruk picks up the fallen king's crown&#10;&#10;VISUAL STYLE &amp; ATMOSPHERE:&#10;- Dark gothic tone throughout — think candlelit crypts and heavy shadows&#10;- The tavern scene should feel warm and intimate, firelight only&#10;- Raining heavily during all outdoor scenes&#10;&#10;COMPOSITION NOTES:&#10;- Theron should always be shown with his wolf Shadow nearby&#10;- Use dramatic low angles for Ruk's combat moments"></textarea>
-          <div class="form-hint" style="margin-top:6px;">Specify mandatory scenes, visual atmosphere, character directions, and any moments you want guaranteed in the storyboard. The AI follows these instructions precisely.</div>
-        </div>
-        <div class="flex gap-1">
-          <button class="btn btn-primary btn-sm" onclick="saveNotes()">Save notes</button>
-        </div>
-        <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
       </div>
 
       <!-- STORYBOARD TAB -->
@@ -297,30 +289,7 @@
       </div>
     </div>
 
-      <!-- NARRATIVE TAB -->
-      <div id="session-tab-narrative" style="display:none;">
-        <div id="narrative-empty" class="empty-state">
-          <div class="empty-state-icon">&#9997;</div>
-          <h3>No narrative yet</h3>
-          <p>Generate the story narrative that will appear between your storyboard panels in the final PDF</p>
-          <button class="btn btn-primary" onclick="generateNarrative()">&#10022; Generate narrative</button>
-        </div>
-        <div id="narrative-content" style="display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-            <div style="font-size:13px;color:rgba(201,168,76,0.6);">Story narrative for PDF export</div>
-            <div class="flex gap-1">
-              <button class="btn btn-sm" onclick="generateNarrative()" id="regen-narrative-btn">&#8635; Regenerate</button>
-              <button class="btn btn-sm btn-primary" onclick="saveNarrative()">Save narrative</button>
-            </div>
-          </div>
-          <div id="narrative-error" class="alert alert-error hidden" style="margin-bottom:12px;"></div>
-          <div id="narrative-progress" style="display:none;margin-bottom:16px;">
-            <div class="progress-bar"><div class="progress-fill" id="narrative-progress-fill"></div></div>
-            <div class="progress-msg" id="narrative-progress-msg">Writing your story...</div>
-          </div>
-          <div id="narrative-editor"></div>
-        </div>
-      </div>
+
 
       <!-- EXPORT TAB -->
       <div id="session-tab-export" style="display:none;">

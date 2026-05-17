@@ -30,7 +30,7 @@ router.get('/novel/all', requireAuth, verifyCampaignOwner, function(req, res) {
   res.json(result);
 });
 
-// GET single session with its moments
+// GET single session with its moments and narrative
 router.get('/:id', requireAuth, verifyCampaignOwner, function(req, res) {
   const db = getDb();
   const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);

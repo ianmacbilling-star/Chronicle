@@ -306,12 +306,19 @@ function selectSession(id) {
       document.getElementById('transcript-input').value = data.transcript || '';
       document.getElementById('session-notes-input').value = data.session_notes || '';
 
+      // Load narrative data
+      state.narrativeData = {
+        intro: data.narrative_intro || '',
+        sections: data.narrative_sections ? JSON.parse(data.narrative_sections) : [],
+        outro: data.narrative_outro || ''
+      };
+
       if (state.moments.length) renderStoryboard();
 
       // Load last used art style for this campaign
       if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style);
 
-      switchSessionTab('transcript');
+      switchSessionTab('notes');
 
       // Show session detail view
       var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
@@ -585,27 +592,159 @@ function extractMoments() {
 function renderStoryboard() {
   document.getElementById('sb-empty').style.display = 'none';
   document.getElementById('sb-content').style.display = 'block';
+
+  var narrative = state.narrativeData || { intro: '', sections: [], outro: '' };
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
-  document.getElementById('moments-grid').innerHTML = state.moments.map(function(m, i) {
+
+  var html = '';
+
+  // Opening narrative
+  html += '<div class="narrative-block" id="narrative-opening">' +
+    '<div class="narrative-block-header">' +
+      '<span>&#9998; Opening</span>' +
+      '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"opening\")">&#8635; Regenerate</button>' +
+    '</div>' +
+    '<textarea class="narrative-inline-box" id="narrative-intro-box" placeholder="Opening paragraph — sets the scene before the first panel...">' +
+    (narrative.intro || '') + '</textarea>' +
+  '</div>';
+
+  state.moments.forEach(function(m, i) {
+    // Panel
     var imgHtml = m.image
       ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
-      : '<div class="moment-img"><div class="moment-img-inner">' +
-          '<div style="font-size:24px;margin-bottom:4px;opacity:0.4;">&#128444;</div>' +
-          '<div style="font-size:10px;color:rgba(201,168,76,0.35);">No image yet</div>' +
-        '</div></div>';
+      : '<div class="moment-img-placeholder">' +
+          '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
+          '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">Image not yet generated</div>' +
+        '</div>';
 
-    return '<div class="moment-card" id="moment-card-' + m.id + '">' +
-      imgHtml +
-      '<button class="moment-regen-btn" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate</button>' +
-      '<div class="moment-body">' +
-        '<div class="moment-num">Panel ' + (i+1) + '</div>' +
-        '<div class="moment-title">' + m.title + '</div>' +
-        '<div class="moment-desc">' + m.description + '</div>' +
-        '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type]||m.type) + '</span>' +
-        '<div class="moment-prompt">' + (m.prompt||'') + '</div>' +
+    html += '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
+      '<div class="storyboard-panel-img">' +
+        imgHtml +
+        '<button class="moment-regen-btn" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>' +
       '</div>' +
+      '<div class="storyboard-panel-meta">' +
+        '<span class="moment-num">Panel ' + (i+1) + '</span>' +
+        '<span class="moment-title">' + m.title + '</span>' +
+        '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type]||m.type) + '</span>' +
+      '</div>' +
+      '<div class="moment-prompt-text">' + (m.prompt||'') + '</div>' +
     '</div>';
-  }).join('');
+
+    // Narrative between panels (after each panel except last) or closing after last
+    if (i < state.moments.length - 1) {
+      var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
+      html += '<div class="narrative-block" id="narrative-between-' + i + '">' +
+        '<div class="narrative-block-header">' +
+          '<span>&#9998; Between panel ' + (i+1) + ' and ' + (i+2) + '</span>' +
+          '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"between\",' + i + ')">&#8635; Regenerate</button>' +
+        '</div>' +
+        '<textarea class="narrative-inline-box" id="narrative-between-box-' + i + '" placeholder="Bridge the story between these two panels...">' +
+        (section.after || '') + '</textarea>' +
+      '</div>';
+    }
+  });
+
+  // Closing narrative
+  html += '<div class="narrative-block" id="narrative-closing">' +
+    '<div class="narrative-block-header">' +
+      '<span>&#9998; Closing</span>' +
+      '<button class="narrative-regen-btn" onclick="regenNarrativeSection(\"closing\")">&#8635; Regenerate</button>' +
+    '</div>' +
+    '<textarea class="narrative-inline-box" id="narrative-outro-box" placeholder="Closing paragraph — what this session meant, what comes next...">' +
+    (narrative.outro || '') + '</textarea>' +
+  '</div>';
+
+  // Save narrative button
+  html += '<div style="display:flex;justify-content:flex-end;margin-top:8px;">' +
+    '<button class="btn btn-primary btn-sm" onclick="saveInlineNarrative()">Save narrative</button>' +
+  '</div>';
+
+  document.getElementById('moments-grid').innerHTML = html;
+}
+
+function saveInlineNarrative() {
+  var intro = document.getElementById('narrative-intro-box');
+  var outro = document.getElementById('narrative-outro-box');
+
+  var sections = state.moments.slice(0, -1).map(function(m, i) {
+    var box = document.getElementById('narrative-between-box-' + i);
+    return { panel_index: i, before: '', after: box ? box.value.trim() : '' };
+  });
+
+  var data = {
+    intro: intro ? intro.value.trim() : '',
+    sections: sections,
+    outro: outro ? outro.value.trim() : ''
+  };
+
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(result) {
+    if (result.error) { showAlert('Error: ' + result.error); return; }
+    state.narrativeData = data;
+    showAlert('Narrative saved!');
+  });
+}
+
+function regenNarrativeSection(type, panelIndex) {
+  var key = getApiKey();
+  if (!key || key.indexOf('sk-ant-') !== 0) {
+    showAlert('Please add your Anthropic API key in Settings first.');
+    return;
+  }
+
+  // Save current state first
+  saveInlineNarrative();
+
+  // Show loading in the specific box
+  var boxId = type === 'opening' ? 'narrative-intro-box'
+    : type === 'closing' ? 'narrative-outro-box'
+    : 'narrative-between-box-' + panelIndex;
+
+  var box = document.getElementById(boxId);
+  if (box) {
+    box.value = 'Regenerating...';
+    box.disabled = true;
+  }
+
+  // Regenerate full narrative and extract the relevant section
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({key: key})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      if (box) { box.value = ''; box.disabled = false; }
+      showAlert('Error: ' + data.error);
+      return;
+    }
+
+    state.narrativeData = {
+      intro: data.intro || '',
+      sections: data.sections || [],
+      outro: data.outro || ''
+    };
+
+    if (box) box.disabled = false;
+
+    // Update just the relevant box
+    if (type === 'opening' && box) box.value = data.intro || '';
+    else if (type === 'closing' && box) box.value = data.outro || '';
+    else if (type === 'between' && box) {
+      var section = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
+      box.value = section ? (section.after || '') : '';
+    }
+  })
+  .catch(function(e) {
+    if (box) { box.value = ''; box.disabled = false; }
+    showAlert('Error: ' + e.message);
+  });
 }
 
 function generateAllImages() {
