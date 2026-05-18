@@ -87,6 +87,7 @@ async function uploadFile(fileBuffer, filename, mimetype) {
       const signed = signRequest('PUT', key, mimetype, fileBuffer);
 
       console.log('  R2 uploading:', filename, '(' + fileBuffer.length + ' bytes)');
+      console.log('  R2 endpoint:', signed.url.substring(0, 60) + '...');
 
       const response = await fetch(signed.url, {
         method: 'PUT',
@@ -104,7 +105,7 @@ async function uploadFile(fileBuffer, filename, mimetype) {
       console.log('  R2 upload success:', url);
       return url;
     } catch(e) {
-      console.error('R2 upload error:', e.message);
+      console.error('R2 upload error:', e.message, e.cause ? JSON.stringify(e.cause) : '');
       throw e;
     }
   } else {
