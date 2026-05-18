@@ -470,29 +470,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
       outro: s.narrative_outro || ''
     };
 
-    var panelsHTML = '';
-    if (narrative.intro) panelsHTML += '<div class="narrative-text intro-text">' + narrative.intro + '</div>';
-
-    moments.forEach(function(m, i) {
-      panelsHTML += '<div class="panel-block">' +
-        (m.image
-          ? '<img class="panel-image" src="' + m.image + '" alt="' + m.title + '" />'
-          : '<div class="panel-placeholder"><div class="panel-placeholder-icon">&#128444;</div></div>') +
-        '<div class="panel-caption">' +
-          '<div class="panel-num">Panel ' + (i+1) + '</div>' +
-          '<div class="panel-title">' + m.title + '</div>' +
-        '</div>' +
-      '</div>';
-      // Between-panel narrative
-      if (i < moments.length - 1) {
-        var section = narrative.sections.find(function(sec) { return sec.panel_index === i; })
-                   || narrative.sections[i] || {};
-        var bridge = section.after || section.before || '';
-        if (bridge) panelsHTML += '<div class="narrative-text">' + bridge + '</div>';
-      }
-    });
-
-    if (narrative.outro) panelsHTML += '<div class="narrative-text outro-text">' + narrative.outro + '</div>';
+    var panelsHTML = buildLayout(layoutStyle, moments, narrative.sections, narrative.intro, narrative.outro);
 
     return '<div class="content-page">' +
       '<div class="page-header">' +
