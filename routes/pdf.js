@@ -435,7 +435,8 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
 // ============================================================
 // BUILD Graphic Novel HTML (all sessions)
 // ============================================================
-function buildNovelHTML(campaign, sessions, characters) {
+function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
+  layoutStyle = layoutStyle || 'Classic';
   // Date range
   const dates = sessions.map(function(s) { return new Date(s.session_date + 'T12:00:00'); });
   const minDate = new Date(Math.min.apply(null, dates));
@@ -650,13 +651,21 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
+  // Sort sessions ascending (oldest first)
+  sessions.sort(function(a, b) {
+    var da = a.session_date ? a.session_date.toString() : '';
+    var db2 = b.session_date ? b.session_date.toString() : '';
+    return da.localeCompare(db2);
+  });
+
   // Load moments and narrative for each session
   const sessionsWithData = await Promise.all(sessions.map(async function(s) {
     const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(s.id);
     return Object.assign({}, s, { moments: moments });
   }));
 
-  const html = buildNovelHTML(campaign, sessionsWithData, characters);
+  const layoutStyle = req.query.layout || 'Classic';
+  const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle);
   res.send(html);
 });
 

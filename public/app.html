@@ -116,12 +116,46 @@
           <div class="page-title">Graphic Novel</div>
           <div class="page-subtitle">Your complete campaign story</div>
         </div>
-        <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="previewNovelPDF()">&#128065; Preview PDF</button>
-          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">&#8659; Export PDF</button>
+      </div>
+
+      <!-- Novel tabs -->
+      <div class="sess-tabs" style="margin-bottom:16px;">
+        <div class="sess-tab active" id="ntab-sessions" onclick="switchNovelTab('sessions')">&#128203; Sessions</div>
+        <div class="sess-tab" id="ntab-preview" onclick="switchNovelTab('preview')">&#128213; Preview &amp; Export</div>
+      </div>
+
+      <!-- Sessions tab -->
+      <div id="novel-tab-sessions">
+        <div id="novel-summary-list"></div>
+      </div>
+
+      <!-- Preview & Export tab -->
+      <div id="novel-tab-preview" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
+            <div class="style-row" style="margin:0;">
+              <div class="chip sel" id="novel-layout-classic" onclick="selNovelLayout(this,'Classic')">Classic</div>
+              <div class="chip" id="novel-layout-cinematic" onclick="selNovelLayout(this,'Cinematic')">Cinematic</div>
+              <div class="chip" id="novel-layout-dramatic" onclick="selNovelLayout(this,'Dramatic')">Dramatic</div>
+              <div class="chip" id="novel-layout-storybook" onclick="selNovelLayout(this,'Storybook')">Storybook</div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">&#8659; Export Full Novel PDF</button>
+        </div>
+        <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
+          &#9888; Large novel detected — preview may take a moment to load.
+        </div>
+        <div style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;height:75vh;">
+          <div id="novel-preview-loading" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
+            <div style="text-align:center;color:rgba(201,168,76,0.4);">
+              <div style="font-size:32px;margin-bottom:8px;">&#128213;</div>
+              <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
+            </div>
+          </div>
+          <iframe id="novel-preview-iframe" src="" style="width:100%;height:100%;border:none;background:#fff;display:none;"></iframe>
         </div>
       </div>
-      <div id="novel-summary-list"></div>
     </div>
 
     <!-- ==================== SESSION DETAIL ==================== -->
@@ -129,12 +163,11 @@
       <div class="page-header">
         <div>
           <div class="page-title" id="session-detail-name">Session</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+          <div style="margin-top:6px;">
             <input type="date" id="session-detail-date-input"
-              style="background:transparent;border:none;border-bottom:1px solid rgba(201,168,76,0.3);color:rgba(201,168,76,0.6);font-size:12px;font-family:inherit;padding:2px 4px;cursor:pointer;outline:none;"
+              class="form-input"
+              style="max-width:200px;font-size:12px;padding:5px 10px;"
               onchange="updateSessionDate(this.value)"
-              onfocus="this.style.borderBottomColor='rgba(201,168,76,0.8)'"
-              onblur="this.style.borderBottomColor='rgba(201,168,76,0.3)'"
             />
           </div>
         </div>

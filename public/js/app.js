@@ -999,10 +999,71 @@ function regenImage(momentId, index) {
 // ============================================================
 // GRAPHIC NOVEL
 // ============================================================
+var novelLayoutStyle = 'Classic';
+
+function switchNovelTab(tab) {
+  ['sessions', 'preview'].forEach(function(t) {
+    var pane = document.getElementById('novel-tab-' + t);
+    if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    var el = document.getElementById('ntab-' + t);
+    if (el) el.classList.toggle('active', t === tab);
+  });
+}
+
+function selNovelLayout(el, layout) {
+  document.querySelectorAll('#novel-tab-preview .chip').forEach(function(c){c.classList.remove('sel');});
+  el.classList.add('sel');
+  novelLayoutStyle = layout;
+  loadNovelPreview(layout);
+}
+
+function loadNovelPreview(layout) {
+  var loading = document.getElementById('novel-preview-loading');
+  var iframe = document.getElementById('novel-preview-iframe');
+  var warning = document.getElementById('novel-preview-warning');
+  if (!iframe) return;
+
+  // Show warning for large novels
+  var sessionCount = document.querySelectorAll('#novel-summary-list .novel-session-block').length;
+  if (warning) warning.style.display = sessionCount > 15 ? 'block' : 'none';
+
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(layout || novelLayoutStyle);
+
+  if (loading) loading.style.display = 'flex';
+  iframe.style.display = 'none';
+  iframe.src = '';
+
+  iframe.onload = function() {
+    if (loading) loading.style.display = 'none';
+    iframe.style.display = 'block';
+  };
+  iframe.src = url;
+}
+
+function previewNovelPDF() {
+  switchNovelTab('preview');
+  loadNovelPreview(novelLayoutStyle);
+}
+
+function exportNovelPDF() {
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle);
+  var win = window.open(url, '_blank');
+  setTimeout(function() { if (win) win.print(); }, 5000);
+}
+
 function loadNovelSummary() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
     .then(function(r) { return r.json(); })
-    .then(function(data) { renderNovelSummary(Array.isArray(data) ? data : []); });
+    .then(function(data) {
+      // Sort ascending by date (oldest first)
+      var sessions = Array.isArray(data) ? data : [];
+      sessions.sort(function(a, b) {
+        var da = typeof a.session_date === 'string' ? a.session_date : a.session_date.toISOString();
+        var db2 = typeof b.session_date === 'string' ? b.session_date : b.session_date.toISOString();
+        return da.localeCompare(db2);
+      });
+      renderNovelSummary(sessions);
+    });
 }
 
 function renderNovelSummary(sessions) {
@@ -1043,8 +1104,8 @@ function renderNovelSummary(sessions) {
     '</div>';
   }).join('');
 
-  container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">' +
-    sessions.length + ' sessions &middot; ' + totalMoments + ' total panels</div>' + html;
+  container.innerHTML = '<div style="font-size:12px;color:rgba(201,168,76,0.5);margin-bottom:14px;">' +
+    sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;
 }
 
 function showNovelPreview() {
@@ -2716,10 +2777,71 @@ function regenImage(momentId, index) {
 // ============================================================
 // GRAPHIC NOVEL
 // ============================================================
+var novelLayoutStyle = 'Classic';
+
+function switchNovelTab(tab) {
+  ['sessions', 'preview'].forEach(function(t) {
+    var pane = document.getElementById('novel-tab-' + t);
+    if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    var el = document.getElementById('ntab-' + t);
+    if (el) el.classList.toggle('active', t === tab);
+  });
+}
+
+function selNovelLayout(el, layout) {
+  document.querySelectorAll('#novel-tab-preview .chip').forEach(function(c){c.classList.remove('sel');});
+  el.classList.add('sel');
+  novelLayoutStyle = layout;
+  loadNovelPreview(layout);
+}
+
+function loadNovelPreview(layout) {
+  var loading = document.getElementById('novel-preview-loading');
+  var iframe = document.getElementById('novel-preview-iframe');
+  var warning = document.getElementById('novel-preview-warning');
+  if (!iframe) return;
+
+  // Show warning for large novels
+  var sessionCount = document.querySelectorAll('#novel-summary-list .novel-session-block').length;
+  if (warning) warning.style.display = sessionCount > 15 ? 'block' : 'none';
+
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(layout || novelLayoutStyle);
+
+  if (loading) loading.style.display = 'flex';
+  iframe.style.display = 'none';
+  iframe.src = '';
+
+  iframe.onload = function() {
+    if (loading) loading.style.display = 'none';
+    iframe.style.display = 'block';
+  };
+  iframe.src = url;
+}
+
+function previewNovelPDF() {
+  switchNovelTab('preview');
+  loadNovelPreview(novelLayoutStyle);
+}
+
+function exportNovelPDF() {
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle);
+  var win = window.open(url, '_blank');
+  setTimeout(function() { if (win) win.print(); }, 5000);
+}
+
 function loadNovelSummary() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
     .then(function(r) { return r.json(); })
-    .then(function(data) { renderNovelSummary(Array.isArray(data) ? data : []); });
+    .then(function(data) {
+      // Sort ascending by date (oldest first)
+      var sessions = Array.isArray(data) ? data : [];
+      sessions.sort(function(a, b) {
+        var da = typeof a.session_date === 'string' ? a.session_date : a.session_date.toISOString();
+        var db2 = typeof b.session_date === 'string' ? b.session_date : b.session_date.toISOString();
+        return da.localeCompare(db2);
+      });
+      renderNovelSummary(sessions);
+    });
 }
 
 function renderNovelSummary(sessions) {
@@ -2760,8 +2882,8 @@ function renderNovelSummary(sessions) {
     '</div>';
   }).join('');
 
-  container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">' +
-    sessions.length + ' sessions &middot; ' + totalMoments + ' total panels</div>' + html;
+  container.innerHTML = '<div style="font-size:12px;color:rgba(201,168,76,0.5);margin-bottom:14px;">' +
+    sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;
 }
 
 function showNovelPreview() {
