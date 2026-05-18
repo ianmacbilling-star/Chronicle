@@ -86,6 +86,8 @@ async function uploadFile(fileBuffer, filename, mimetype) {
       const key = 'uploads/' + filename;
       const signed = signRequest('PUT', key, mimetype, fileBuffer);
 
+      console.log('  R2 uploading:', filename, '(' + fileBuffer.length + ' bytes)');
+
       const response = await fetch(signed.url, {
         method: 'PUT',
         headers: signed.headers,
@@ -94,10 +96,13 @@ async function uploadFile(fileBuffer, filename, mimetype) {
 
       if (!response.ok) {
         const text = await response.text();
+        console.error('  R2 upload failed:', response.status, text);
         throw new Error('R2 upload failed: ' + response.status + ' ' + text);
       }
 
-      return (process.env.R2_PUBLIC_URL || '') + '/' + key;
+      const url = (process.env.R2_PUBLIC_URL || '') + '/' + key;
+      console.log('  R2 upload success:', url);
+      return url;
     } catch(e) {
       console.error('R2 upload error:', e.message);
       throw e;

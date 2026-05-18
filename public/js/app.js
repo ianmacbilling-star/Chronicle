@@ -2287,59 +2287,6 @@ function openCharModal(editId) {
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
   document.getElementById('char-desc').value = char ? (char.description || '') : '';
   loadSlotPreviews(char);
-  document.getElementById('char-modal-error').classList.add('hidden');
-  document.getElementById('char-modal').classList.remove('hidden');
-}
-
-function closeCharModal() { document.getElementById('char-modal').classList.add('hidden'); }
-
-function previewCharImage() {
-  var input = document.getElementById('char-image-input');
-  var preview = document.getElementById('char-image-preview');
-  if (input.files && input.files[0]) {
-    var reader = new FileReader();
-    reader.onload = function(e) { preview.src = e.target.result; preview.style.display = 'block'; };
-    reader.readAsDataURL(input.files[0]);
-  }
-}
-
-function saveChar() {
-  var name = document.getElementById('char-name').value.trim();
-  var player = document.getElementById('char-player').value.trim();
-  var cls = document.getElementById('char-cls').value.trim();
-  var desc = document.getElementById('char-desc').value.trim();
-  var editId = document.getElementById('char-edit-id').value;
-  if (!name) { showModalError('char-modal-error', 'Character name is required.'); return; }
-
-  var formData = new FormData();
-  formData.append('name', name);
-  formData.append('player_name', player);
-  formData.append('cls', cls || 'Adventurer');
-  formData.append('description', desc);
-
-  // Append all slot files
-  var slots = ['image_portrait', 'image_fullbody', 'image_action', 'image_other'];
-  slots.forEach(function(slot) {
-    if (slotFiles[slot]) {
-      formData.append(slot, slotFiles[slot]);
-    }
-    if (slotFiles[slot + '_clear']) {
-      formData.append('clear_' + slot, 'true');
-    }
-  });
-
-  var url = editId
-    ? '/api/campaigns/' + state.currentCampaign.id + '/characters/' + editId
-    : '/api/campaigns/' + state.currentCampaign.id + '/characters';
-
-  fetch(url, {method: editId ? 'PUT' : 'POST', body: formData})
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { showModalError('char-modal-error', data.error); return; }
-      closeCharModal();
-      loadCharacters();
-    });
-}
 
 function deleteChar(id) {
   var char = state.characters.find(function(c){return c.id===id;});
@@ -3455,4 +3402,5 @@ function showAlert(msg) {
   el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999;min-width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
   document.body.appendChild(el);
   setTimeout(function() { el.remove(); }, 2500);
+}
 }
