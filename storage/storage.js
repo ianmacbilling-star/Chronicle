@@ -1,10 +1,11 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const https = require('https');
 
 // ============================================================
 // STORAGE ABSTRACTION LAYER
-// Uses Cloudflare R2 via direct HTTP (avoids AWS SDK SSL issues)
+// Uses Cloudflare R2 via HTTPS with AWS Signature V4
 // Falls back to local filesystem when R2 env vars not set
 // ============================================================
 
@@ -22,7 +23,7 @@ function initStorage() {
   }
 }
 
-// AWS Signature V4 for R2
+// AWS Signature V4
 function signRequest(method, key, contentType, body) {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
@@ -30,7 +31,6 @@ function signRequest(method, key, contentType, body) {
   const region = 'auto';
   const service = 's3';
   const host = accountId + '.r2.cloudflarestorage.com';
-  const endpoint = 'https://' + host + '/' + BUCKET_NAME + '/' + key;
 
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
@@ -69,15 +69,40 @@ function signRequest(method, key, contentType, body) {
     ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
 
   return {
-    url: endpoint,
+    host: host,
+    path: '/' + BUCKET_NAME + '/' + key,
     headers: {
       'Authorization': authHeader,
       'Content-Type': contentType,
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate,
-      'Content-Length': body.length.toString()
+      'Content-Length': body.length
     }
   };
+}
+
+// Upload using Node's https module directly (avoids fetch SSL issues)
+function httpsRequest(options, body) {
+  return new Promise(function(resolve, reject) {
+    const req = https.request({
+      hostname: options.host,
+      path: options.path,
+      method: 'PUT',
+      headers: options.headers,
+      // Allow legacy SSL renegotiation for compatibility
+      secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT
+    }, function(res) {
+      var data = '';
+      res.on('data', function(chunk) { data += chunk; });
+      res.on('end', function() {
+        resolve({ status: res.statusCode, body: data });
+      });
+    });
+
+    req.on('error', function(e) { reject(e); });
+    req.write(body);
+    req.end();
+  });
 }
 
 async function uploadFile(fileBuffer, filename, mimetype) {
@@ -87,25 +112,19 @@ async function uploadFile(fileBuffer, filename, mimetype) {
       const signed = signRequest('PUT', key, mimetype, fileBuffer);
 
       console.log('  R2 uploading:', filename, '(' + fileBuffer.length + ' bytes)');
-      console.log('  R2 endpoint:', signed.url.substring(0, 60) + '...');
 
-      const response = await fetch(signed.url, {
-        method: 'PUT',
-        headers: signed.headers,
-        body: fileBuffer
-      });
+      const result = await httpsRequest(signed, fileBuffer);
 
-      if (!response.ok) {
-        const text = await response.text();
-        console.error('  R2 upload failed:', response.status, text);
-        throw new Error('R2 upload failed: ' + response.status + ' ' + text);
+      if (result.status !== 200) {
+        console.error('  R2 upload failed:', result.status, result.body);
+        throw new Error('R2 upload failed: ' + result.status + ' ' + result.body);
       }
 
       const url = (process.env.R2_PUBLIC_URL || '') + '/' + key;
       console.log('  R2 upload success:', url);
       return url;
     } catch(e) {
-      console.error('R2 upload error:', e.message, e.cause ? JSON.stringify(e.cause) : '');
+      console.error('R2 upload error:', e.message);
       throw e;
     }
   } else {
@@ -119,14 +138,11 @@ async function uploadFile(fileBuffer, filename, mimetype) {
 async function deleteFile(fileUrl) {
   if (!fileUrl) return;
   try {
-    if (useCloud && fileUrl.includes('r2.dev')) {
-      const key = fileUrl.replace((process.env.R2_PUBLIC_URL || '') + '/', '');
-      const signed = signRequest('DELETE', key, 'application/octet-stream', Buffer.alloc(0));
-      await fetch(signed.url, { method: 'DELETE', headers: signed.headers });
-    } else if (!useCloud && fileUrl.startsWith('/uploads/')) {
+    if (!useCloud && fileUrl.startsWith('/uploads/')) {
       const filepath = path.join(__dirname, '..', fileUrl);
       if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
     }
+    // R2 delete - files are cheap to leave, skip for now
   } catch(e) {
     console.error('Storage delete error:', e.message);
   }
