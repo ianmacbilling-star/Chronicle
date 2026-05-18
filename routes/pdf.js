@@ -524,17 +524,17 @@ ${allSessionsHTML}
 
 // GET session PDF HTML
 router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, res) {
-  const db = getDb();
+  const db = await getDb();
 
-  const session = db.prepare(
+  const session = await db.prepare(
     'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
 
-  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
-  const moments = db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
-  const characters = db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
+  const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
   const narrative = {
     intro: session.narrative_intro || '',
@@ -548,20 +548,20 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
 
 // GET graphic novel HTML (all sessions)
 router.get('/novel/:campaignId', requireAuth, async function(req, res) {
-  const db = getDb();
+  const db = await getDb();
 
-  const campaign = db.prepare(
+  const campaign = await db.prepare(
     'SELECT c.* FROM campaigns c WHERE c.id = ? AND c.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
 
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
 
-  const sessions = db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
-  const characters = db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   // Load moments and narrative for each session
   const sessionsWithData = sessions.map(function(s) {
-    const moments = db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(s.id);
     return Object.assign({}, s, { moments: moments });
   });
 

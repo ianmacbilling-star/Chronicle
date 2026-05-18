@@ -57,8 +57,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   if (!fal_key) return res.json({ error: 'fal.ai API key required. Please add it in Settings.' });
   if (!prompt) return res.json({ error: 'Prompt required' });
 
-  const db = getDb();
-  const moment = db.prepare(
+  const db = await getDb();
+  const moment = await db.prepare(
     'SELECT m.* FROM moments m ' +
     'JOIN sessions s ON m.session_id = s.id ' +
     'JOIN campaigns c ON s.campaign_id = c.id ' +
@@ -69,12 +69,12 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
 
   try {
     // Get characters for this campaign for consistency
-    const chars = db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = (SELECT campaign_id FROM sessions WHERE id = ?)').all(moment.session_id);
+    const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = (SELECT campaign_id FROM sessions WHERE id = ?)').all(moment.session_id);
     const charList = chars.map(function(c) { return c.name + ' (' + c.cls + '): ' + c.description; }).join('; ');
 
     const imageUrl = await generateImage(prompt, style, fal_key, charList);
     const now = new Date().toISOString();
-    db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
     res.json({ success: true, image_url: imageUrl, moment_id: moment_id });
   } catch(e) {
@@ -89,19 +89,19 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 
   if (!fal_key) return res.json({ error: 'fal.ai API key required. Please add it in Settings.' });
 
-  const db = getDb();
-  const session = db.prepare(
+  const db = await getDb();
+  const session = await db.prepare(
     'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
     'WHERE s.id = ? AND c.user_id = ?'
   ).get(session_id, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
 
-  const moments = db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session_id);
+  const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session_id);
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
 
   // Get characters for consistency across all panels
-  const chars = db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campaign_id);
+  const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campaign_id);
   const charList = chars.map(function(c) { return c.name + ' (' + c.cls + '): ' + c.description; }).join('; ');
 
   // Generate all images in parallel
@@ -110,7 +110,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
       try {
         const imageUrl = await generateImage(m.prompt, style, fal_key, charList);
         const now = new Date().toISOString();
-        db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+        await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
           .run(imageUrl, now, req.session.userId, m.id);
         return { moment_id: m.id, image_url: imageUrl, success: true };
       } catch(e) {

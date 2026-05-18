@@ -10,10 +10,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const { key } = req.body;
   if (!key) return res.json({ error: 'Anthropic API key required' });
 
-  const db = getDb();
+  const db = await getDb();
 
   // Verify ownership and get session
-  const session = db.prepare(
+  const session = await db.prepare(
     'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
@@ -21,12 +21,12 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   if (!session.transcript) return res.json({ error: 'No transcript found. Please add a transcript first.' });
 
   // Get moments in order
-  const moments = db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
+  const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
 
   // Get campaign and characters
-  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
-  const characters = db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
   const charList = characters.map(function(c) {
     return c.name + (c.player_name ? ' (played by ' + c.player_name + ')' : '') + ' — ' + (c.cls || '') + ': ' + (c.description || '');
@@ -60,11 +60,11 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '  "sections": [\n' +
     '    {\n' +
     '      "panel_index": 0,\n' +
-    '      "before": "Prose that leads INTO this panel (1-3 sentences)",\n' +
-    '      "after": "Prose that bridges FROM this panel to the next (1-3 sentences). Leave empty for last panel."\n' +
+    '      "before": "",\n' +
+    '      "after": "Prose that bridges FROM this panel to the next (2-3 sentences)"\n' +
     '    }\n' +
     '  ],\n' +
-    '  "outro": "Closing paragraph after the final panel — what the outcome means, what comes next (2-3 sentences)"\n' +
+    '  "outro": "Closing paragraph after the final panel (2-3 sentences)"\n' +
     '}';
 
   try {
@@ -92,7 +92,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
     // Save to database
     const now = new Date().toISOString();
-    db.prepare(
+    await db.prepare(
       'UPDATE sessions SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
     ).run(
       parsed.intro || '',
@@ -120,15 +120,15 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { intro, sections, outro } = req.body;
 
-  const db = getDb();
-  const session = db.prepare(
+  const db = await getDb();
+  const session = await db.prepare(
     'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
 
   const now = new Date().toISOString();
-  db.prepare(
+  await db.prepare(
     'UPDATE sessions SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
     intro || '',
@@ -144,8 +144,8 @@ router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res)
 // GET narrative for a session
 // ============================================================
 router.get('/:campaignId/:sessionId', requireAuth, async function(req, res) {
-  const db = getDb();
-  const session = db.prepare(
+  const db = await getDb();
+  const session = await db.prepare(
     'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 

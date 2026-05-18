@@ -1,70 +1,42 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
-const { requireAuth, requireCampaignOwner } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 
-// GET all campaigns for logged in user
-router.get('/', requireAuth, function(req, res) {
-  const db = getDb();
-  const campaigns = db.prepare(
-    'SELECT * FROM campaigns WHERE user_id = ? ORDER BY created_at DESC'
-  ).all(req.user.id);
+router.get('/', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const campaigns = await db.prepare('SELECT * FROM campaigns WHERE user_id=? ORDER BY created_at DESC').all(req.session.userId);
   res.json(campaigns);
 });
 
-// GET single campaign
-router.get('/:id', requireAuth, requireCampaignOwner, function(req, res) {
-  res.json(req.campaign);
-});
-
-// POST create campaign
-router.post('/', requireAuth, function(req, res) {
-  const { name, description, art_style } = req.body;
-  if (!name) return res.json({ error: 'Campaign name is required' });
-
-  const db = getDb();
+router.post('/', requireAuth, async function(req, res) {
+  const { name, description } = req.body;
+  if (!name) return res.json({ error: 'Campaign name required' });
+  const db = await getDb();
   const now = new Date().toISOString();
-
-  const result = db.prepare(
-    'INSERT INTO campaigns (user_id, name, description, art_style, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(req.user.id, name, description || '', art_style || 'High fantasy illustration', now, req.user.id);
-
-  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(result.lastInsertRowid);
+  const result = await db.prepare(
+    'INSERT INTO campaigns (user_id, name, description, created_at, created_by) VALUES (?,?,?,?,?)'
+  ).run(req.session.userId, name.trim(), description || '', now, req.session.userId);
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(result.lastInsertRowid);
   res.json(campaign);
 });
 
-// PUT update campaign
-router.put('/:id', requireAuth, requireCampaignOwner, function(req, res) {
-  const { name, description, art_style } = req.body;
-  const db = getDb();
+router.put('/:id', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!campaign) return res.status(403).json({ error: 'Access denied' });
   const now = new Date().toISOString();
-
-  db.prepare(
-    'UPDATE campaigns SET name = ?, description = ?, art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?'
-  ).run(
-    name || req.campaign.name,
-    description !== undefined ? description : req.campaign.description,
-    art_style || req.campaign.art_style,
-    now, req.user.id, req.campaign.id
-  );
-
-  const updated = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(req.campaign.id);
+  await db.prepare('UPDATE campaigns SET name=?, description=?, edited_at=?, edited_by=? WHERE id=?')
+    .run(req.body.name || campaign.name, req.body.description !== undefined ? req.body.description : campaign.description, now, req.session.userId, campaign.id);
+  const updated = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(campaign.id);
   res.json(updated);
 });
 
-// DELETE campaign
-router.delete('/:id', requireAuth, requireCampaignOwner, function(req, res) {
-  const db = getDb();
-
-  // Delete all related data in order
-  const sessions = db.prepare('SELECT id FROM sessions WHERE campaign_id = ?').all(req.campaign.id);
-  sessions.forEach(function(s) {
-    db.prepare('DELETE FROM moments WHERE session_id = ?').run(s.id);
-  });
-  db.prepare('DELETE FROM sessions WHERE campaign_id = ?').run(req.campaign.id);
-  db.prepare('DELETE FROM characters WHERE campaign_id = ?').run(req.campaign.id);
-  db.prepare('DELETE FROM campaigns WHERE id = ?').run(req.campaign.id);
-
+router.delete('/:id', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!campaign) return res.status(403).json({ error: 'Access denied' });
+  await db.prepare('DELETE FROM campaigns WHERE id=?').run(campaign.id);
   res.json({ success: true });
 });
 

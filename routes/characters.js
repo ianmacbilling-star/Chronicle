@@ -35,9 +35,9 @@ const uploadFields = upload.fields([
   { name: 'image_other', maxCount: 1 }
 ]);
 
-function verifyCampaignOwner(req, res, next) {
-  const db = getDb();
-  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
+async function verifyCampaignOwner(req, res, next) {
+  const db = await getDb();
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
   req.campaign = campaign;
   next();
@@ -59,18 +59,18 @@ function deleteFile(filePath) {
 }
 
 // GET all characters for a campaign
-router.get('/', requireAuth, verifyCampaignOwner, function(req, res) {
-  const db = getDb();
-  const characters = db.prepare('SELECT * FROM characters WHERE campaign_id = ? ORDER BY created_at ASC').all(req.params.campaignId);
+router.get('/', requireAuth, verifyCampaignOwner, async function(req, res) {
+  const db = await getDb();
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ? ORDER BY created_at ASC').all(req.params.campaignId);
   res.json(characters);
 });
 
 // POST create character
-router.post('/', requireAuth, verifyCampaignOwner, uploadFields, function(req, res) {
+router.post('/', requireAuth, verifyCampaignOwner, uploadFields, async function(req, res) {
   const { name, player_name, cls, description } = req.body;
   if (!name) return res.json({ error: 'Character name is required' });
 
-  const db = getDb();
+  const db = await getDb();
   const now = new Date().toISOString();
 
   // Legacy single image field support
@@ -80,18 +80,18 @@ router.post('/', requireAuth, verifyCampaignOwner, uploadFields, function(req, r
   const image_action = getUploadedUrl(req.files, 'image_action');
   const image_other = getUploadedUrl(req.files, 'image_other');
 
-  const result = db.prepare(
+  const result = await db.prepare(
     'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(req.params.campaignId, name, player_name || '', cls || 'Adventurer', description || '', image, image_portrait, image_fullbody, image_action, image_other, now, req.session.userId);
 
-  const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
+  const character = await db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
   res.json(character);
 });
 
 // PUT update character
-router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, function(req, res) {
-  const db = getDb();
-  const char = db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, async function(req, res) {
+  const db = await getDb();
+  const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
   if (!char) return res.status(404).json({ error: 'Character not found' });
 
   const now = new Date().toISOString();
@@ -117,7 +117,7 @@ router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, function(req,
     }
   });
 
-  db.prepare(
+  await db.prepare(
     'UPDATE characters SET name=?, player_name=?, cls=?, description=?, image=?, image_portrait=?, image_fullbody=?, image_action=?, image_other=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
     req.body.name ? req.body.name.trim() : char.name,
@@ -128,21 +128,21 @@ router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, function(req,
     now, req.session.userId, char.id
   );
 
-  const updated = db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);
+  const updated = await db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);
   res.json(updated);
 });
 
 // DELETE character
-router.delete('/:id', requireAuth, verifyCampaignOwner, function(req, res) {
-  const db = getDb();
-  const char = db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+router.delete('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
+  const db = await getDb();
+  const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
   if (!char) return res.status(404).json({ error: 'Character not found' });
 
   ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other'].forEach(function(f) {
     deleteFile(char[f]);
   });
 
-  db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
+  await db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
   res.json({ success: true });
 });
 

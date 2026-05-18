@@ -8,10 +8,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   if (!key) return res.json({ error: 'API key required' });
 
-  const db = getDb();
+  const db = await getDb();
 
   // Verify ownership
-  const session = db.prepare(
+  const session = await db.prepare(
     'SELECT s.*, c.art_style as campaign_style FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
@@ -19,7 +19,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   if (!session.transcript) return res.json({ error: 'No transcript found for this session' });
 
   // Get characters for this campaign
-  const characters = db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
   const charList = characters.map(function(c) {
     var playerInfo = c.player_name ? ' (played by ' + c.player_name + ')' : '';
     return c.name + playerInfo + ' (' + c.cls + '): ' + c.description;
@@ -102,14 +102,14 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
     // Auto-save moments to database
     if (parsed.moments && parsed.moments.length) {
-      db.prepare('DELETE FROM moments WHERE session_id = ?').run(session.id);
+      await db.prepare('DELETE FROM moments WHERE session_id = ?').run(session.id);
       const now = new Date().toISOString();
 
       // Save the art style used so future sessions can inherit it
-      db.prepare('UPDATE sessions SET art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      await db.prepare('UPDATE sessions SET art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
         .run(style, now, req.session.userId, session.id);
 
-      const insert = db.prepare(
+      const insert = await db.prepare(
         'INSERT INTO moments (session_id, title, description, type, prompt, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       );
       parsed.moments.forEach(function(m, i) {
