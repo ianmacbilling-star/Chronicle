@@ -20,7 +20,11 @@ function initStorage() {
       credentials: {
         accessKeyId: process.env.R2_ACCESS_KEY_ID,
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
-      }
+      },
+      forcePathStyle: true,
+      tls: true,
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED'
     });
     useCloud = true;
     console.log('  Storage: Cloudflare R2');
