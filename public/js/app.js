@@ -1503,36 +1503,23 @@ function previewSessionInline() {
 // Also keep old name working
 function toggleSessionPreview() { previewSessionInline(); }
 
-// Export - opens blank page, loads PDF silently, then triggers print dialog
+// Export - opens PDF page, waits for full render, then prints
 function exportSessionPDF() {
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
-  var win = window.open('', '_blank');
-  win.document.write('<html><head><title>Printing...</title></head><body style="background:#1a0f08;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><p style="color:#c9a84c;font-family:serif;font-size:18px;">Preparing your Chronicle PDF...</p></body></html>');
-  var iframe = win.document.createElement('iframe');
-  iframe.style.display = 'none';
-  iframe.src = url;
-  iframe.onload = function() {
-    setTimeout(function() { win.print(); }, 500);
-  };
-  win.document.body.appendChild(iframe);
+  var win = window.open(url, '_blank');
+  // Wait for fonts, images and layout to fully load before print dialog
+  setTimeout(function() { if (win) win.print(); }, 4000);
+}
+
+function exportNovelPDF() {
+  var url = '/api/pdf/novel/' + state.currentCampaign.id;
+  var win = window.open(url, '_blank');
+  setTimeout(function() { if (win) win.print(); }, 5000);
 }
 
 function previewNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id;
   window.open(url, '_blank');
-}
-
-function exportNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id;
-  var win = window.open('', '_blank');
-  win.document.write('<html><head><title>Printing...</title></head><body style="background:#1a0f08;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><p style="color:#c9a84c;font-family:serif;font-size:18px;">Preparing your Graphic Novel PDF...</p></body></html>');
-  var iframe = win.document.createElement('iframe');
-  iframe.style.display = 'none';
-  iframe.src = url;
-  iframe.onload = function() {
-    setTimeout(function() { win.print(); }, 500);
-  };
-  win.document.body.appendChild(iframe);
 }
 
 // ============================================================
