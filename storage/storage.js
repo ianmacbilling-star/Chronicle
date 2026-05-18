@@ -1,13 +1,6 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const https = require('https');
-
-// ============================================================
-// STORAGE ABSTRACTION LAYER
-// Uses Cloudflare R2 via HTTPS with AWS Signature V4
-// Falls back to local filesystem when R2 env vars not set
-// ============================================================
 
 let useCloud = false;
 const BUCKET_NAME = 'chronicle-images';
@@ -23,56 +16,30 @@ function initStorage() {
   }
 }
 
-// AWS Signature V4
 function signRequest(method, key, contentType, body) {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretKey = process.env.R2_SECRET_ACCESS_KEY;
-  const region = 'auto';
-  const service = 's3';
   const host = accountId + '.r2.cloudflarestorage.com';
-
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
   const dateStamp = amzDate.slice(0, 8);
-
   const payloadHash = crypto.createHash('sha256').update(body).digest('hex');
 
-  const canonicalHeaders = 'content-type:' + contentType + '\n' +
-    'host:' + host + '\n' +
-    'x-amz-content-sha256:' + payloadHash + '\n' +
-    'x-amz-date:' + amzDate + '\n';
-
+  const canonicalHeaders = 'content-type:' + contentType + '\nhost:' + host + '\nx-amz-content-sha256:' + payloadHash + '\nx-amz-date:' + amzDate + '\n';
   const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [method, '/' + BUCKET_NAME + '/' + key, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const credentialScope = dateStamp + '/auto/s3/aws4_request';
+  const stringToSign = 'AWS4-HMAC-SHA256\n' + amzDate + '\n' + credentialScope + '\n' + crypto.createHash('sha256').update(canonicalRequest).digest('hex');
 
-  const canonicalRequest = [
-    method,
-    '/' + BUCKET_NAME + '/' + key,
-    '',
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash
-  ].join('\n');
-
-  const credentialScope = dateStamp + '/' + region + '/' + service + '/aws4_request';
-  const stringToSign = 'AWS4-HMAC-SHA256\n' + amzDate + '\n' + credentialScope + '\n' +
-    crypto.createHash('sha256').update(canonicalRequest).digest('hex');
-
-  function hmac(key, data) {
-    return crypto.createHmac('sha256', key).update(data).digest();
-  }
-
-  const signingKey = hmac(hmac(hmac(hmac('AWS4' + secretKey, dateStamp), region), service), 'aws4_request');
+  function hmac(k, d) { return crypto.createHmac('sha256', k).update(d).digest(); }
+  const signingKey = hmac(hmac(hmac(hmac('AWS4' + secretKey, dateStamp), 'auto'), 's3'), 'aws4_request');
   const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
 
-  const authHeader = 'AWS4-HMAC-SHA256 Credential=' + accessKeyId + '/' + credentialScope +
-    ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
-
   return {
-    host: host,
-    path: '/' + BUCKET_NAME + '/' + key,
+    url: 'https://' + host + '/' + BUCKET_NAME + '/' + key,
     headers: {
-      'Authorization': authHeader,
+      'Authorization': 'AWS4-HMAC-SHA256 Credential=' + accessKeyId + '/' + credentialScope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature,
       'Content-Type': contentType,
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate,
@@ -81,71 +48,43 @@ function signRequest(method, key, contentType, body) {
   };
 }
 
-// Upload using Node's https module directly (avoids fetch SSL issues)
-function httpsRequest(options, body) {
-  return new Promise(function(resolve, reject) {
-    const req = https.request({
-      hostname: options.host,
-      path: options.path,
-      method: 'PUT',
-      headers: options.headers,
-      // Allow legacy SSL renegotiation for compatibility
-      secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT
-    }, function(res) {
-      var data = '';
-      res.on('data', function(chunk) { data += chunk; });
-      res.on('end', function() {
-        resolve({ status: res.statusCode, body: data });
-      });
-    });
-
-    req.on('error', function(e) { reject(e); });
-    req.write(body);
-    req.end();
-  });
-}
-
 async function uploadFile(fileBuffer, filename, mimetype) {
   if (useCloud) {
     try {
       const key = 'uploads/' + filename;
       const signed = signRequest('PUT', key, mimetype, fileBuffer);
+      console.log('  R2 uploading to:', signed.url.substring(0, 60));
 
-      console.log('  R2 uploading:', filename, '(' + fileBuffer.length + ' bytes)');
-
-      const result = await httpsRequest(signed, fileBuffer);
-
-      if (result.status !== 200) {
-        console.error('  R2 upload failed:', result.status, result.body);
-        throw new Error('R2 upload failed: ' + result.status + ' ' + result.body);
-      }
+      const axios = require('axios');
+      const response = await axios.put(signed.url, fileBuffer, {
+        headers: signed.headers,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
+      });
 
       const url = (process.env.R2_PUBLIC_URL || '') + '/' + key;
-      console.log('  R2 upload success:', url);
+      console.log('  R2 success:', response.status, url);
       return url;
     } catch(e) {
-      console.error('R2 upload error:', e.message);
-      throw e;
+      const msg = e.response ? (e.response.status + ' ' + JSON.stringify(e.response.data)) : e.message;
+      console.error('R2 upload error:', msg);
+      throw new Error('Image upload failed: ' + msg);
     }
   } else {
     const uploadsDir = path.join(__dirname, '../uploads');
-    const filepath = path.join(uploadsDir, filename);
-    fs.writeFileSync(filepath, fileBuffer);
+    fs.writeFileSync(path.join(uploadsDir, filename), fileBuffer);
     return '/uploads/' + filename;
   }
 }
 
 async function deleteFile(fileUrl) {
-  if (!fileUrl) return;
+  if (!fileUrl || useCloud) return; // Skip R2 deletes for now
   try {
-    if (!useCloud && fileUrl.startsWith('/uploads/')) {
-      const filepath = path.join(__dirname, '..', fileUrl);
-      if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+    if (fileUrl.startsWith('/uploads/')) {
+      const fp = path.join(__dirname, '..', fileUrl);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
     }
-    // R2 delete - files are cheap to leave, skip for now
-  } catch(e) {
-    console.error('Storage delete error:', e.message);
-  }
+  } catch(e) { console.error('Delete error:', e.message); }
 }
 
 module.exports = { initStorage, uploadFile, deleteFile };
