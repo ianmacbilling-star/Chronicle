@@ -158,7 +158,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') loadCharacters();
-  if (section === 'novel') { loadNovelSummary(); showNovelPreview(); }
+  if (section === 'novel') loadNovelSummary();
 }
 
 // ============================================================
@@ -1004,12 +1004,18 @@ function renderNovelSummary(sessions) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var momentsHtml = moments.length
-      ? moments.map(function(m, j) {
-          return '<div class="novel-moment-row">' +
-            '<div class="novel-moment-num">' + (j+1) + '</div>' +
-            '<div><div class="novel-moment-title">' + m.title + '</div>' +
-            '<div class="novel-moment-desc">' + m.description + '</div></div></div>';
-        }).join('')
+      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;padding:10px 14px;">' +
+        moments.map(function(m, j) {
+          return '<div style="position:relative;border-radius:6px;overflow:hidden;background:rgba(15,10,5,0.6);border:1px solid rgba(201,168,76,0.1);">' +
+            (m.image
+              ? '<img src="' + m.image + '" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" alt="' + m.title + '" />'
+              : '<div style="width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:20px;opacity:0.2;">&#128444;</div>') +
+            '<div style="padding:5px 7px;">' +
+              '<div style="font-size:9px;color:rgba(201,168,76,0.4);">Panel ' + (j+1) + '</div>' +
+              '<div style="font-size:10px;color:var(--gold-light);font-weight:600;line-height:1.3;">' + m.title + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>'
       : '<div class="novel-empty">No moments extracted yet — open this session to generate storyboard panels</div>';
 
     return '<div class="novel-session-block">' +
