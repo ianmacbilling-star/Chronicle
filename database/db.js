@@ -184,6 +184,7 @@ async function initPostgres() {
       transcript TEXT,
       session_notes TEXT,
       art_style TEXT,
+      layout_style TEXT,
       narrative_intro TEXT,
       narrative_sections TEXT,
       narrative_outro TEXT,
@@ -193,6 +194,26 @@ async function initPostgres() {
       edited_by INTEGER
     )
   `);
+
+  // ALTER TABLE migrations for existing databases
+  const alterations = [
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS art_style TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS layout_style TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS session_notes TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_intro TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_sections TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_outro TEXT',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS player_name TEXT',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_portrait TEXT',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_fullbody TEXT',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_action TEXT',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_other TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS fal_key TEXT',
+  ];
+  for (const sql of alterations) {
+    try { await pool.query(sql); } catch(e) {}
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS moments (
