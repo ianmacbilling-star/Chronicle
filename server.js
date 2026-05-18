@@ -72,6 +72,7 @@ const PORT = process.env.PORT || 3000;
 // Initialize database first, then start server
 console.log('  DATABASE_URL present:', !!process.env.DATABASE_URL);
 console.log('  DATABASE_URL prefix:', process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'NOT SET');
+console.log('  All env keys with DB:', Object.keys(process.env).filter(k => k.includes('DATABASE') || k.includes('POSTGRES') || k.includes('PG')));
 getDb().then(function() {
   app.listen(PORT, function() {
     console.log('');
