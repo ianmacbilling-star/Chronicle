@@ -56,10 +56,17 @@ async function uploadFile(fileBuffer, filename, mimetype) {
       console.log('  R2 uploading to:', signed.url.substring(0, 60));
 
       const axios = require('axios');
+      const https = require('https');
+      const agent = new https.Agent({
+        minVersion: 'TLSv1.2',
+        rejectUnauthorized: false
+      });
+
       const response = await axios.put(signed.url, fileBuffer, {
         headers: signed.headers,
         maxBodyLength: Infinity,
-        maxContentLength: Infinity
+        maxContentLength: Infinity,
+        httpsAgent: agent
       });
 
       const url = (process.env.R2_PUBLIC_URL || '') + '/' + key;
