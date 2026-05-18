@@ -735,7 +735,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   grid-column: 1 / -1;
 }
 
-/* Storyboard layout */
+/* Storyboard layout - alternating narrative and image panels */
 #moments-grid {
   display: block;
 }
@@ -744,11 +744,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   align-items: start;
-  margin-bottom: 8px;
 }
 @media (max-width: 700px) {
   .panels-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 480px) {
   .panels-grid { grid-template-columns: 1fr; }
+}
+/* Narrative panels sit in the grid same as image panels */
+.narrative-panel {
+  border: 1px solid rgba(201,168,76,0.12);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: rgba(12,8,4,0.5);
+  display: flex;
+  flex-direction: column;
+}
+.narrative-panel .narrative-inline-box {
+  flex: 1;
+  min-height: 160px;
 }
