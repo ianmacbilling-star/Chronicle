@@ -1485,10 +1485,12 @@ function saveNarrative() {
 // PDF EXPORT
 // ============================================================
 
-function toggleSessionPreview() {
+// Preview inline below the buttons (toggles)
+function previewSessionInline() {
   var frame = document.getElementById('session-preview-frame');
   var iframe = document.getElementById('session-preview-iframe');
-  if (frame.style.display === 'none') {
+  if (!frame || !iframe) return;
+  if (frame.style.display === 'none' || frame.style.display === '') {
     var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
     iframe.src = url;
     frame.style.display = 'block';
@@ -1498,16 +1500,39 @@ function toggleSessionPreview() {
   }
 }
 
+// Also keep old name working
+function toggleSessionPreview() { previewSessionInline(); }
+
+// Export - opens blank page, loads PDF silently, then triggers print dialog
 function exportSessionPDF() {
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 2500);
+  var win = window.open('', '_blank');
+  win.document.write('<html><head><title>Printing...</title></head><body style="background:#1a0f08;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><p style="color:#c9a84c;font-family:serif;font-size:18px;">Preparing your Chronicle PDF...</p></body></html>');
+  var iframe = win.document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = url;
+  iframe.onload = function() {
+    setTimeout(function() { win.print(); }, 500);
+  };
+  win.document.body.appendChild(iframe);
+}
+
+function previewNovelPDF() {
+  var url = '/api/pdf/novel/' + state.currentCampaign.id;
+  window.open(url, '_blank');
 }
 
 function exportNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id;
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 3000);
+  var win = window.open('', '_blank');
+  win.document.write('<html><head><title>Printing...</title></head><body style="background:#1a0f08;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><p style="color:#c9a84c;font-family:serif;font-size:18px;">Preparing your Graphic Novel PDF...</p></body></html>');
+  var iframe = win.document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = url;
+  iframe.onload = function() {
+    setTimeout(function() { win.print(); }, 500);
+  };
+  win.document.body.appendChild(iframe);
 }
 
 // ============================================================
@@ -3141,30 +3166,6 @@ function saveNarrative() {
 // PDF EXPORT
 // ============================================================
 
-function toggleSessionPreview() {
-  var frame = document.getElementById('session-preview-frame');
-  var iframe = document.getElementById('session-preview-iframe');
-  if (frame.style.display === 'none') {
-    var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
-    iframe.src = url;
-    frame.style.display = 'block';
-  } else {
-    frame.style.display = 'none';
-    iframe.src = '';
-  }
-}
-
-function exportSessionPDF() {
-  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 2500);
-}
-
-function exportNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id;
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 3000);
-}
 
 // ============================================================
 // LIGHTBOX
