@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const { getDb } = require('./database/db');
+const { initStorage } = require('./storage/storage');
 
 const app = express();
 
@@ -73,6 +74,7 @@ const PORT = process.env.PORT || 3000;
 console.log('  DATABASE_URL present:', !!process.env.DATABASE_URL);
 console.log('  DATABASE_URL prefix:', process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'NOT SET');
 console.log('  All env keys with DB:', Object.keys(process.env).filter(k => k.includes('DATABASE') || k.includes('POSTGRES') || k.includes('PG')));
+initStorage();
 getDb().then(function() {
   app.listen(PORT, function() {
     console.log('');
