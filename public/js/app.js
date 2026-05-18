@@ -687,82 +687,6 @@ function extractMoments() {
   });
 }
 
-function renderStoryboard() {
-  document.getElementById('sb-empty').style.display = 'none';
-  document.getElementById('sb-content').style.display = 'block';
-
-  var narrative = state.narrativeData || { intro: '', sections: [], outro: '' };
-  var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
-
-  // Build HTML: narrative blocks and panel grids alternating
-  // Structure: opening | [panels grid] | between | [panels grid] | ... | closing
-  // All panels go in ONE grid, narrative blocks are full-width separators
-
-  var panelHtml = state.moments.map(function(m, i) {
-    var imgHtml = m.image
-      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
-      : '<div class="moment-img-placeholder">' +
-          '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
-          '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
-        '</div>';
-    return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
-      '<div class="storyboard-panel-img">' +
-        imgHtml +
-        '<button class="moment-regen-btn" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>' +
-      '</div>' +
-      '<div class="storyboard-panel-meta">' +
-        '<span class="moment-num">Panel ' + (i+1) + '</span>' +
-        '<span class="moment-title">' + m.title + '</span>' +
-        '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type]||m.type) + '</span>' +
-      '</div>' +
-      '<div class="moment-prompt-text">' + (m.prompt||'') + '</div>' +
-    '</div>';
-  }).join('');
-
-  // Build narrative blocks
-  var buildNarrativeBlock = function(id, label, textareaId, text, regenCall, oninput) {
-    return '<div class="narrative-block" id="' + id + '">' +
-      '<div class="narrative-block-header">' +
-        '<span>&#9998; ' + label + '</span>' +
-        '<button class="narrative-regen-btn" onclick="' + regenCall + '">&#8635; Regen</button>' +
-      '</div>' +
-      '<textarea class="narrative-inline-box" id="' + textareaId + '" ' +
-        'placeholder="' + text.placeholder + '" ' +
-        (oninput ? 'oninput="scheduleNarrativeSave()"' : '') + '>' +
-      (text.value || '') + '</textarea>' +
-    '</div>';
-  };
-
-  var html = '';
-
-  // Opening narrative
-  html += buildNarrativeBlock('narrative-opening', 'Opening', 'narrative-intro-box',
-    {placeholder: 'Opening paragraph — sets the scene...', value: narrative.intro},
-    'regenNarrativeSection(\"opening\")', true);
-
-  // Panels grid
-  html += '<div class="panels-grid">' + panelHtml + '</div>';
-
-  // Between narratives
-  state.moments.slice(0, -1).forEach(function(m, i) {
-    var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
-    html += buildNarrativeBlock(
-      'narrative-between-' + i,
-      'Between panel ' + (i+1) + ' and ' + (i+2),
-      'narrative-between-box-' + i,
-      {placeholder: 'Bridge the story between these two panels...', value: section.after || ''},
-      'regenNarrativeSection(\"between\",' + i + ')',
-      false
-    );
-  });
-
-  // Closing narrative
-  html += buildNarrativeBlock('narrative-closing', 'Closing', 'narrative-outro-box',
-    {placeholder: 'Closing paragraph — what this session meant...', value: narrative.outro},
-    'regenNarrativeSection(\"closing\")', true);
-
-  document.getElementById('moments-grid').innerHTML = html;
-}
 
 // Auto-save narrative with debounce — saves 1.5 seconds after user stops typing
 var narrativeSaveTimer = null;
@@ -1657,7 +1581,16 @@ function showAlert(msg) {
   el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999;min-width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
   document.body.appendChild(el);
   setTimeout(function() { el.remove(); }, 2500);
-}  // True alternating grid — narrative and image panels flow together
+}
+
+function renderStoryboard() {
+  document.getElementById('sb-empty').style.display = 'none';
+  document.getElementById('sb-content').style.display = 'block';
+
+  var narrative = state.narrativeData || { intro: '', sections: [], outro: '' };
+  var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
+
+  // True alternating grid — narrative and image panels flow together
   // [Opening] [Panel 1] [Between 1-2] [Panel 2] [Between 2-3] [Panel 3] ...
 
   function buildPanel(m, i) {
@@ -1720,6 +1653,7 @@ function showAlert(msg) {
     'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\"closing\")', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
+}
 
 // STATE
 // ============================================================
@@ -2409,82 +2343,6 @@ function extractMoments() {
   });
 }
 
-function renderStoryboard() {
-  document.getElementById('sb-empty').style.display = 'none';
-  document.getElementById('sb-content').style.display = 'block';
-
-  var narrative = state.narrativeData || { intro: '', sections: [], outro: '' };
-  var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
-
-  // Build HTML: narrative blocks and panel grids alternating
-  // Structure: opening | [panels grid] | between | [panels grid] | ... | closing
-  // All panels go in ONE grid, narrative blocks are full-width separators
-
-  var panelHtml = state.moments.map(function(m, i) {
-    var imgHtml = m.image
-      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
-      : '<div class="moment-img-placeholder">' +
-          '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
-          '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
-        '</div>';
-    return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
-      '<div class="storyboard-panel-img">' +
-        imgHtml +
-        '<button class="moment-regen-btn" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>' +
-      '</div>' +
-      '<div class="storyboard-panel-meta">' +
-        '<span class="moment-num">Panel ' + (i+1) + '</span>' +
-        '<span class="moment-title">' + m.title + '</span>' +
-        '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type]||m.type) + '</span>' +
-      '</div>' +
-      '<div class="moment-prompt-text">' + (m.prompt||'') + '</div>' +
-    '</div>';
-  }).join('');
-
-  // Build narrative blocks
-  var buildNarrativeBlock = function(id, label, textareaId, text, regenCall, oninput) {
-    return '<div class="narrative-block" id="' + id + '">' +
-      '<div class="narrative-block-header">' +
-        '<span>&#9998; ' + label + '</span>' +
-        '<button class="narrative-regen-btn" onclick="' + regenCall + '">&#8635; Regen</button>' +
-      '</div>' +
-      '<textarea class="narrative-inline-box" id="' + textareaId + '" ' +
-        'placeholder="' + text.placeholder + '" ' +
-        (oninput ? 'oninput="scheduleNarrativeSave()"' : '') + '>' +
-      (text.value || '') + '</textarea>' +
-    '</div>';
-  };
-
-  var html = '';
-
-  // Opening narrative
-  html += buildNarrativeBlock('narrative-opening', 'Opening', 'narrative-intro-box',
-    {placeholder: 'Opening paragraph — sets the scene...', value: narrative.intro},
-    'regenNarrativeSection(\"opening\")', true);
-
-  // Panels grid
-  html += '<div class="panels-grid">' + panelHtml + '</div>';
-
-  // Between narratives
-  state.moments.slice(0, -1).forEach(function(m, i) {
-    var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
-    html += buildNarrativeBlock(
-      'narrative-between-' + i,
-      'Between panel ' + (i+1) + ' and ' + (i+2),
-      'narrative-between-box-' + i,
-      {placeholder: 'Bridge the story between these two panels...', value: section.after || ''},
-      'regenNarrativeSection(\"between\",' + i + ')',
-      false
-    );
-  });
-
-  // Closing narrative
-  html += buildNarrativeBlock('narrative-closing', 'Closing', 'narrative-outro-box',
-    {placeholder: 'Closing paragraph — what this session meant...', value: narrative.outro},
-    'regenNarrativeSection(\"closing\")', true);
-
-  document.getElementById('moments-grid').innerHTML = html;
-}
 
 // Auto-save narrative with debounce — saves 1.5 seconds after user stops typing
 var narrativeSaveTimer = null;
