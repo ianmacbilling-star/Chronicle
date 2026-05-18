@@ -342,7 +342,15 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
-      document.getElementById('session-detail-date').textContent = formatSessionDate(data.session_date);
+      // Set editable date input
+      var dateInput = document.getElementById('session-detail-date-input');
+      if (dateInput && data.session_date) {
+        var dateStr = typeof data.session_date === 'string'
+          ? data.session_date.split('T')[0]
+          : data.session_date.toISOString().split('T')[0];
+        dateInput.value = dateStr;
+      }
+      // date now handled by session-detail-date-input
 
       // Load narrative data
       state.narrativeData = {
@@ -2051,7 +2059,15 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
-      document.getElementById('session-detail-date').textContent = formatSessionDate(data.session_date);
+      // Set editable date input
+      var dateInput = document.getElementById('session-detail-date-input');
+      if (dateInput && data.session_date) {
+        var dateStr = typeof data.session_date === 'string'
+          ? data.session_date.split('T')[0]
+          : data.session_date.toISOString().split('T')[0];
+        dateInput.value = dateStr;
+      }
+      // date now handled by session-detail-date-input
 
       // Load narrative data
       state.narrativeData = {

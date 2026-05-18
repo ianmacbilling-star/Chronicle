@@ -129,9 +129,15 @@
       <div class="page-header">
         <div>
           <div class="page-title" id="session-detail-name">Session</div>
-          <div class="page-subtitle" id="session-detail-date"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <input type="date" id="session-detail-date-input"
+              style="background:transparent;border:none;border-bottom:1px solid rgba(201,168,76,0.3);color:rgba(201,168,76,0.6);font-size:12px;font-family:inherit;padding:2px 4px;cursor:pointer;outline:none;"
+              onchange="updateSessionDate(this.value)"
+              onfocus="this.style.borderBottomColor='rgba(201,168,76,0.8)'"
+              onblur="this.style.borderBottomColor='rgba(201,168,76,0.3)'"
+            />
+          </div>
         </div>
-
       </div>
 
       <div class="sess-tabs">
