@@ -17,6 +17,109 @@ function formatDate(dateVal, options) {
 }
 
 // ============================================================
+// LAYOUT BUILDERS
+// Each takes (moments, sections, intro, outro) and returns panel HTML
+// ============================================================
+
+function buildPanelHTML(m, i, size) {
+  // size: 'full' | 'half' | 'third'
+  var widthMap = { full: '100%', half: '48%', third: '31%' };
+  var heightMap = { full: '5in', half: '3.5in', third: '2.5in' };
+  var w = widthMap[size] || '31%';
+  var h = heightMap[size] || '2.5in';
+
+  return '<div style="width:' + w + ';display:inline-block;vertical-align:top;margin-bottom:0.15in;margin-right:0.1in;page-break-inside:avoid;">' +
+    (m.image
+      ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.2);" src="' + m.image + '" alt="' + m.title + '" />'
+      : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:3px;display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>') +
+    '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:2px;">' +
+      '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i+1) + '</span>' +
+      '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;margin-left:8px;">' + m.title + '</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function buildNarrativeHTML(text, isIntro) {
+  if (!text) return '';
+  return '<p style="font-family:Crimson Text,Georgia,serif;font-size:12pt;line-height:1.8;color:#2a1a0e;' +
+    (isIntro ? 'font-style:italic;font-size:13pt;' : '') +
+    'margin:0.15in 0;text-indent:' + (isIntro ? '0' : '0.3in') + ';">' + text + '</p>';
+}
+
+function layoutClassic(moments, sections, intro, outro) {
+  // 3 uniform columns — clean and readable
+  var html = buildNarrativeHTML(intro, true);
+  html += '<div style="line-height:0;">';
+  moments.forEach(function(m, i) {
+    html += buildPanelHTML(m, i, 'third');
+  });
+  html += '</div>';
+  // Between narratives
+  sections.forEach(function(s) {
+    if (s.after) html += buildNarrativeHTML(s.after, false);
+  });
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function layoutCinematic(moments, sections, intro, outro) {
+  // First panel wide, rest in 2 columns
+  var html = buildNarrativeHTML(intro, true);
+  moments.forEach(function(m, i) {
+    var size = i === 0 ? 'full' : (i % 5 === 0 ? 'full' : 'half');
+    html += '<div style="line-height:0;">' + buildPanelHTML(m, i, size) + '</div>';
+    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
+    if (section.after) html += buildNarrativeHTML(section.after, false);
+  });
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function layoutDramatic(moments, sections, intro, outro) {
+  // Combat/key moments get full width, others get third
+  var html = buildNarrativeHTML(intro, true);
+  var row = '';
+  moments.forEach(function(m, i) {
+    var isBig = m.type === 'combat' || i === 0 || i === moments.length - 1;
+    if (isBig) {
+      if (row) { html += '<div style="line-height:0;">' + row + '</div>'; row = ''; }
+      html += '<div style="line-height:0;">' + buildPanelHTML(m, i, 'full') + '</div>';
+    } else {
+      row += buildPanelHTML(m, i, 'third');
+    }
+    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
+    if (section.after) {
+      if (row) { html += '<div style="line-height:0;">' + row + '</div>'; row = ''; }
+      html += buildNarrativeHTML(section.after, false);
+    }
+  });
+  if (row) html += '<div style="line-height:0;">' + row + '</div>';
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function layoutStorybook(moments, sections, intro, outro) {
+  // 2 columns, larger panels, literary breathing room
+  var html = buildNarrativeHTML(intro, true);
+  moments.forEach(function(m, i) {
+    html += '<div style="line-height:0;">' + buildPanelHTML(m, i, 'half') + '</div>';
+    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
+    if (section.after) html += buildNarrativeHTML(section.after, false);
+  });
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function buildLayout(layoutStyle, moments, sections, intro, outro) {
+  switch(layoutStyle) {
+    case 'Cinematic': return layoutCinematic(moments, sections, intro, outro);
+    case 'Dramatic':  return layoutDramatic(moments, sections, intro, outro);
+    case 'Storybook': return layoutStorybook(moments, sections, intro, outro);
+    default:          return layoutClassic(moments, sections, intro, outro);
+  }
+}
+
+// ============================================================
 // Generate PDF HTML for a session
 // ============================================================
 function buildSessionHTML(session, moments, campaign, characters, narrative) {
@@ -551,7 +654,8 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
   const narrative = {
     intro: session.narrative_intro || '',
     sections: session.narrative_sections ? JSON.parse(session.narrative_sections) : [],
-    outro: session.narrative_outro || ''
+    outro: session.narrative_outro || '',
+    layout_style: session.layout_style || req.query.layout || 'Classic'
   };
 
   const html = buildSessionHTML(session, moments, campaign, characters, narrative);

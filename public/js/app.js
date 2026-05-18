@@ -5,6 +5,7 @@ var state = {
   user: null,
   campaigns: [],
   currentCampaign: null,
+  layoutStyle: 'Classic',
   currentSession: null,
   characters: [],
   sessions: [],
@@ -353,7 +354,7 @@ function selectSession(id) {
       if (state.moments.length) renderStoryboard();
 
       // Load last used art style for this campaign
-      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style);
+      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style, data.layout_style);
 
       // Show session detail view FIRST
       var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
@@ -565,14 +566,42 @@ function selStyle(el, style) {
   el.classList.add('sel');
   state.artStyle = style;
 
-  // Save style to current session immediately so it persists
   if (state.currentSession && state.currentCampaign) {
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({art_style: style})
-    }).catch(function() {}); // Silently fail
+    }).catch(function() {});
   }
+}
+
+function selLayout(el, layout) {
+  document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
+  el.classList.add('sel');
+  state.layoutStyle = layout;
+
+  // Save to session and refresh preview if open
+  if (state.currentSession && state.currentCampaign) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({layout_style: layout})
+    }).catch(function() {});
+  }
+
+  // Refresh preview if it's open
+  var frame = document.getElementById('session-preview-frame');
+  if (frame && frame.style.display !== 'none') {
+    previewSessionInline(true); // force refresh
+  }
+}
+
+function applyLayoutStyle(layout) {
+  state.layoutStyle = layout || 'Classic';
+  document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
+  var id = 'layout-' + (layout || 'Classic').toLowerCase();
+  var el = document.getElementById(id);
+  if (el) el.classList.add('sel');
 }
 
 function extractMoments() {
@@ -1486,12 +1515,13 @@ function saveNarrative() {
 // ============================================================
 
 // Preview inline below the buttons (toggles)
-function previewSessionInline() {
+function previewSessionInline(forceRefresh) {
   var frame = document.getElementById('session-preview-frame');
   var iframe = document.getElementById('session-preview-iframe');
   if (!frame || !iframe) return;
-  if (frame.style.display === 'none' || frame.style.display === '') {
-    var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
+  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
+    '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic');
+  if (forceRefresh || frame.style.display === 'none' || frame.style.display === '') {
     iframe.src = url;
     frame.style.display = 'block';
   } else {
@@ -1505,9 +1535,9 @@ function toggleSessionPreview() { previewSessionInline(); }
 
 // Export - opens PDF page, waits for full render, then prints
 function exportSessionPDF() {
-  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id;
+  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
+    '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic');
   var win = window.open(url, '_blank');
-  // Wait for fonts, images and layout to fully load before print dialog
   setTimeout(function() { if (win) win.print(); }, 4000);
 }
 
@@ -1673,6 +1703,7 @@ var state = {
   user: null,
   campaigns: [],
   currentCampaign: null,
+  layoutStyle: 'Classic',
   currentSession: null,
   characters: [],
   sessions: [],
@@ -2021,7 +2052,7 @@ function selectSession(id) {
       if (state.moments.length) renderStoryboard();
 
       // Load last used art style for this campaign
-      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style);
+      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style, data.layout_style);
 
       // Show session detail view FIRST
       var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
@@ -2233,14 +2264,42 @@ function selStyle(el, style) {
   el.classList.add('sel');
   state.artStyle = style;
 
-  // Save style to current session immediately so it persists
   if (state.currentSession && state.currentCampaign) {
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({art_style: style})
-    }).catch(function() {}); // Silently fail
+    }).catch(function() {});
   }
+}
+
+function selLayout(el, layout) {
+  document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
+  el.classList.add('sel');
+  state.layoutStyle = layout;
+
+  // Save to session and refresh preview if open
+  if (state.currentSession && state.currentCampaign) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({layout_style: layout})
+    }).catch(function() {});
+  }
+
+  // Refresh preview if it's open
+  var frame = document.getElementById('session-preview-frame');
+  if (frame && frame.style.display !== 'none') {
+    previewSessionInline(true); // force refresh
+  }
+}
+
+function applyLayoutStyle(layout) {
+  state.layoutStyle = layout || 'Classic';
+  document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
+  var id = 'layout-' + (layout || 'Classic').toLowerCase();
+  var el = document.getElementById(id);
+  if (el) el.classList.add('sel');
 }
 
 function extractMoments() {

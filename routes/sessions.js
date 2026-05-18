@@ -11,13 +11,16 @@ async function verifyCampaignOwner(req, res, next) {
   next();
 }
 
-// GET last used art style
+// GET last used art style and layout style
 router.get('/last-style', requireAuth, verifyCampaignOwner, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(
-    'SELECT art_style FROM sessions WHERE campaign_id=? AND art_style IS NOT NULL ORDER BY session_date DESC, created_at DESC LIMIT 1'
+    'SELECT art_style, layout_style FROM sessions WHERE campaign_id=? AND (art_style IS NOT NULL OR layout_style IS NOT NULL) ORDER BY session_date DESC, created_at DESC LIMIT 1'
   ).get(req.params.campaignId);
-  res.json({ art_style: session ? session.art_style : null });
+  res.json({
+    art_style: session ? session.art_style : null,
+    layout_style: session ? session.layout_style : null
+  });
 });
 
 // GET novel/all - must come before /:id
@@ -67,13 +70,14 @@ router.put('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
   if (!session) return res.status(404).json({ error: 'Session not found' });
   const now = new Date().toISOString();
   await db.prepare(
-    'UPDATE sessions SET name=?, session_date=?, transcript=?, session_notes=?, art_style=?, edited_at=?, edited_by=? WHERE id=?'
+    'UPDATE sessions SET name=?, session_date=?, transcript=?, session_notes=?, art_style=?, layout_style=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
     req.body.name || session.name,
     req.body.session_date || session.session_date,
     req.body.transcript !== undefined ? req.body.transcript : session.transcript,
     req.body.session_notes !== undefined ? req.body.session_notes : session.session_notes,
     req.body.art_style !== undefined ? req.body.art_style : session.art_style,
+    req.body.layout_style !== undefined ? req.body.layout_style : session.layout_style,
     now, req.session.userId, session.id
   );
   const updated = await db.prepare('SELECT * FROM sessions WHERE id=?').get(session.id);
