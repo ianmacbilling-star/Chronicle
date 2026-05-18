@@ -440,6 +440,10 @@ function switchSessionTab(tab) {
     var el = document.getElementById('stab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
+  // Auto-load preview when switching to publish tab
+  if (tab === 'export' && state.currentSession && state.layoutStyle) {
+    loadPreview(state.layoutStyle);
+  }
 }
 
 // ============================================================
@@ -580,7 +584,7 @@ function selLayout(el, layout) {
   el.classList.add('sel');
   state.layoutStyle = layout;
 
-  // Save to session and refresh preview if open
+  // Save to session
   if (state.currentSession && state.currentCampaign) {
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
       method: 'PUT',
@@ -589,11 +593,29 @@ function selLayout(el, layout) {
     }).catch(function() {});
   }
 
-  // Refresh preview if it's open
-  var frame = document.getElementById('session-preview-frame');
-  if (frame && frame.style.display !== 'none') {
-    previewSessionInline(true); // force refresh
-  }
+  // Always show preview when layout is selected
+  loadPreview(layout);
+}
+
+function loadPreview(layout) {
+  var loading = document.getElementById('session-preview-loading');
+  var iframe = document.getElementById('session-preview-iframe');
+  if (!iframe) return;
+
+  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
+    '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic');
+
+  // Show loading state
+  if (loading) loading.style.display = 'flex';
+  iframe.style.display = 'none';
+  iframe.src = '';
+
+  // Load new preview
+  iframe.onload = function() {
+    if (loading) loading.style.display = 'none';
+    iframe.style.display = 'block';
+  };
+  iframe.src = url;
 }
 
 function applyLayoutStyle(layout) {
@@ -1515,19 +1537,8 @@ function saveNarrative() {
 // ============================================================
 
 // Preview inline below the buttons (toggles)
-function previewSessionInline(forceRefresh) {
-  var frame = document.getElementById('session-preview-frame');
-  var iframe = document.getElementById('session-preview-iframe');
-  if (!frame || !iframe) return;
-  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
-    '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic');
-  if (forceRefresh || frame.style.display === 'none' || frame.style.display === '') {
-    iframe.src = url;
-    frame.style.display = 'block';
-  } else {
-    frame.style.display = 'none';
-    iframe.src = '';
-  }
+function previewSessionInline() {
+  loadPreview(state.layoutStyle || 'Classic');
 }
 
 // Also keep old name working
@@ -2138,6 +2149,10 @@ function switchSessionTab(tab) {
     var el = document.getElementById('stab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
+  // Auto-load preview when switching to publish tab
+  if (tab === 'export' && state.currentSession && state.layoutStyle) {
+    loadPreview(state.layoutStyle);
+  }
 }
 
 // ============================================================
@@ -2278,7 +2293,7 @@ function selLayout(el, layout) {
   el.classList.add('sel');
   state.layoutStyle = layout;
 
-  // Save to session and refresh preview if open
+  // Save to session
   if (state.currentSession && state.currentCampaign) {
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
       method: 'PUT',
@@ -2287,11 +2302,29 @@ function selLayout(el, layout) {
     }).catch(function() {});
   }
 
-  // Refresh preview if it's open
-  var frame = document.getElementById('session-preview-frame');
-  if (frame && frame.style.display !== 'none') {
-    previewSessionInline(true); // force refresh
-  }
+  // Always show preview when layout is selected
+  loadPreview(layout);
+}
+
+function loadPreview(layout) {
+  var loading = document.getElementById('session-preview-loading');
+  var iframe = document.getElementById('session-preview-iframe');
+  if (!iframe) return;
+
+  var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
+    '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic');
+
+  // Show loading state
+  if (loading) loading.style.display = 'flex';
+  iframe.style.display = 'none';
+  iframe.src = '';
+
+  // Load new preview
+  iframe.onload = function() {
+    if (loading) loading.style.display = 'none';
+    iframe.style.display = 'block';
+  };
+  iframe.src = url;
 }
 
 function applyLayoutStyle(layout) {

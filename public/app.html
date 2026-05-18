@@ -201,22 +201,26 @@
 
       <!-- PUBLISH TAB -->
       <div id="session-tab-export" style="display:none;">
-        <div style="margin-bottom:12px;">
-          <div class="form-label" style="margin-bottom:6px;">Layout style</div>
-          <div class="style-row" style="margin:0 0 10px 0;">
-            <div class="chip sel" id="layout-classic" onclick="selLayout(this,'Classic')">Classic</div>
-            <div class="chip" id="layout-cinematic" onclick="selLayout(this,'Cinematic')">Cinematic</div>
-            <div class="chip" id="layout-dramatic" onclick="selLayout(this,'Dramatic')">Dramatic</div>
-            <div class="chip" id="layout-storybook" onclick="selLayout(this,'Storybook')">Storybook</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
+            <div class="style-row" style="margin:0;">
+              <div class="chip sel" id="layout-classic" onclick="selLayout(this,'Classic')">Classic</div>
+              <div class="chip" id="layout-cinematic" onclick="selLayout(this,'Cinematic')">Cinematic</div>
+              <div class="chip" id="layout-dramatic" onclick="selLayout(this,'Dramatic')">Dramatic</div>
+              <div class="chip" id="layout-storybook" onclick="selLayout(this,'Storybook')">Storybook</div>
+            </div>
           </div>
-          <div class="flex gap-1" style="align-items:center;">
-            <button class="btn btn-sm" onclick="previewSessionInline()">&#128065; Preview</button>
-            <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
-            <span style="font-size:11px;color:rgba(201,168,76,0.35);margin-left:6px;">8.5&times;11 &middot; cover + panels + narrative</span>
-          </div>
+          <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
         </div>
-        <div id="session-preview-frame" style="display:none;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;height:75vh;">
-          <iframe id="session-preview-iframe" src="" style="width:100%;height:100%;border:none;background:#fff;"></iframe>
+        <div id="session-preview-frame" style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;height:75vh;">
+          <div id="session-preview-loading" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
+            <div style="text-align:center;color:rgba(201,168,76,0.4);">
+              <div style="font-size:32px;margin-bottom:8px;">&#128213;</div>
+              <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
+            </div>
+          </div>
+          <iframe id="session-preview-iframe" src="" style="width:100%;height:100%;border:none;background:#fff;display:none;"></iframe>
         </div>
       </div>
 
