@@ -5,6 +5,18 @@ const { requireAuth } = require('../middleware/auth');
 const path = require('path');
 
 // ============================================================
+// Date helper - handles both PostgreSQL Date objects and SQLite strings
+// ============================================================
+function formatDate(dateVal, options) {
+  if (!dateVal) return '';
+  var dateStr = typeof dateVal === 'string' ? dateVal : dateVal.toISOString();
+  var datePart = dateStr.split('T')[0];
+  return new Date(datePart + 'T12:00:00').toLocaleDateString('en-US', options || {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+
+// ============================================================
 // Generate PDF HTML for a session
 // ============================================================
 function buildSessionHTML(session, moments, campaign, characters, narrative) {
@@ -327,7 +339,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
     <div class="cover-campaign">${campaign.name}</div>
     <div class="cover-divider"></div>
     <div class="cover-session">${session.name}</div>
-    <div class="cover-date">${new Date(session.session_date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</div>
+    <div class="cover-date">${formatDate(session.session_date)}</div>
   </div>
   <div class="cover-watermark">CHRONICLEMYGAME.COM</div>
 </div>
@@ -414,7 +426,7 @@ function buildNovelHTML(campaign, sessions, characters) {
         '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
       '</div>' +
       '<div class="session-chapter-title">Session ' + (si+1) + ': ' + s.name + '</div>' +
-      '<div class="session-chapter-date">' + new Date(s.session_date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) + '</div>' +
+      '<div class="session-chapter-date">' + formatDate(s.session_date) + '</div>' +
       panelsHTML +
     '</div>';
   }).join('');

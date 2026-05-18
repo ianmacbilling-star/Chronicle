@@ -248,6 +248,17 @@ function saveCampaign() {
 // ============================================================
 // SESSIONS
 // ============================================================
+
+function formatSessionDate(dateVal) {
+  if (!dateVal) return '';
+  // PostgreSQL returns Date objects, SQLite returns strings
+  var dateStr = typeof dateVal === 'string' ? dateVal : dateVal.toISOString();
+  // Handle both 'YYYY-MM-DD' and full ISO strings
+  var datePart = dateStr.split('T')[0];
+  return new Date(datePart + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
 function loadSessions() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions')
     .then(function(r) { return r.json(); })
@@ -271,7 +282,7 @@ function renderSessions() {
         '<div class="session-num">' + (state.sessions.length - i) + '</div>' +
         '<div>' +
           '<div class="session-name">' + s.name + '</div>' +
-          '<div class="session-date">' + new Date(s.session_date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '</div>' +
+          '<div class="session-date">' + formatSessionDate(s.session_date) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="flex gap-1 items-center">' +
@@ -330,7 +341,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
-      document.getElementById('session-detail-date').textContent = new Date(data.session_date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+      document.getElementById('session-detail-date').textContent = formatSessionDate(data.session_date);
 
       // Load narrative data
       state.narrativeData = {
@@ -449,9 +460,9 @@ function renderCharacters() {
     var initials = c.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
-    var portrait = c.image
-    var portrait = c.image
-      ? '<img src="' + c.image + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+    var primaryImg = c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    var portrait = primaryImg
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     return '<div class="char-card">' +
       '<div class="char-card-header">' +
@@ -679,7 +690,7 @@ function renderStoryboard() {
   var narrative = state.narrativeData || { intro: '', sections: [], outro: '' };
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
 
-  var html = '';
+  var html = '<div class="moments-grid">';
 
   // Opening narrative
   html += '<div class="narrative-block" id="narrative-opening">' +
@@ -737,6 +748,7 @@ function renderStoryboard() {
     (narrative.outro || '') + '</textarea>' +
   '</div>';
 
+  html += '</div>';
   document.getElementById('moments-grid').innerHTML = html;
 }
 
@@ -872,6 +884,14 @@ function generateAllImages() {
     return;
   }
   document.getElementById('generate-error').classList.add('hidden');
+
+  // Warn if images already exist
+  var hasImages = state.moments && state.moments.some(function(m) { return m.image; });
+  if (hasImages) {
+    if (!confirm('This will replace all existing panel images. Are you sure?')) {
+      return;
+    }
+  }
 
   var btn = document.getElementById('generate-all-btn');
   var progressWrap = document.getElementById('generate-progress');
@@ -1021,7 +1041,7 @@ function renderNovelSummary(sessions) {
     return '<div class="novel-session-block">' +
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
-        '<div class="novel-session-date">' + new Date(s.session_date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '</div></div>' +
+        '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
         '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
       '</div>' +
       '<div class="novel-session-moments">' + momentsHtml + '</div>' +
