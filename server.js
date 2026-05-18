@@ -8,16 +8,46 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'chronicle-dev-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,
-    httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000
+// Session store — PostgreSQL in production, memory locally
+function buildSessionMiddleware() {
+  if (process.env.DATABASE_URL) {
+    const pgSession = require('connect-pg-simple')(session);
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    return session({
+      store: new pgSession({
+        pool: pool,
+        tableName: 'user_sessions',
+        createTableIfMissing: true
+      }),
+      secret: process.env.SESSION_SECRET || 'chronicle-dev-secret',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: false,
+        httpOnly: true,
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+      }
+    });
+  } else {
+    // Local development — memory store is fine
+    return session({
+      secret: process.env.SESSION_SECRET || 'chronicle-dev-secret',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: false,
+        httpOnly: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000
+      }
+    });
   }
-}));
+}
+
+app.use(buildSessionMiddleware());
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

@@ -560,10 +560,10 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   // Load moments and narrative for each session
-  const sessionsWithData = sessions.map(function(s) {
+  const sessionsWithData = await Promise.all(sessions.map(async function(s) {
     const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(s.id);
     return Object.assign({}, s, { moments: moments });
-  });
+  }));
 
   const html = buildNovelHTML(campaign, sessionsWithData, characters);
   res.send(html);
