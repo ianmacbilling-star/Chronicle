@@ -2278,22 +2278,6 @@ function renderCharacters() {
   setupCardDragDrop();
 }
 
-function openCharModal(editId) {
-  var char = editId ? state.characters.find(function(c){return c.id===editId;}) : null;
-  document.getElementById('char-edit-id').value = editId || '';
-  document.getElementById('char-modal-title').textContent = editId ? 'Edit Character' : 'Add Character';
-  document.getElementById('char-name').value = char ? char.name : '';
-  document.getElementById('char-player').value = char ? (char.player_name || '') : '';
-  document.getElementById('char-cls').value = char ? (char.cls || '') : '';
-  document.getElementById('char-desc').value = char ? (char.description || '') : '';
-  loadSlotPreviews(char);
-
-function deleteChar(id) {
-  var char = state.characters.find(function(c){return c.id===id;});
-  if (!confirm('Delete ' + (char ? char.name : 'this character') + '?')) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + id, {method:'DELETE'})
-    .then(function() { loadCharacters(); });
-}
 
 // ============================================================
 // EXTRACT MOMENTS
@@ -3402,5 +3386,4 @@ function showAlert(msg) {
   el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999;min-width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
   document.body.appendChild(el);
   setTimeout(function() { el.remove(); }, 2500);
-}
 }
