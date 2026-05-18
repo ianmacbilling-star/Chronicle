@@ -111,6 +111,10 @@ function layoutStorybook(moments, sections, intro, outro) {
 }
 
 function buildLayout(layoutStyle, moments, sections, intro, outro) {
+  if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet — generate your storyboard first.</p>';
+  sections = sections || [];
+  intro = intro || '';
+  outro = outro || '';
   switch(layoutStyle) {
     case 'Cinematic': return layoutCinematic(moments, sections, intro, outro);
     case 'Dramatic':  return layoutDramatic(moments, sections, intro, outro);
@@ -140,43 +144,9 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
     '</div>';
   }).join('');
 
-  // Build panels with narrative
-  var panelsHTML = '';
-
-  // Opening narrative
-  if (intro) {
-    panelsHTML += '<div class="narrative-text intro-text">' + intro + '</div>';
-  }
-
-  moments.forEach(function(m, i) {
-    // Panel image
-    panelsHTML += '<div class="panel-block">' +
-      (m.image
-        ? '<img class="panel-image" src="' + m.image + '" alt="' + m.title + '" />'
-        : '<div class="panel-placeholder"><div class="panel-placeholder-icon">&#128444;</div></div>') +
-      '<div class="panel-caption">' +
-        '<div class="panel-num">Panel ' + (i + 1) + '</div>' +
-        '<div class="panel-title">' + m.title + '</div>' +
-        '<div class="panel-desc">' + m.description + '</div>' +
-      '</div>' +
-    '</div>';
-
-    // Between-panel narrative (after text bridges to next panel)
-    if (i < moments.length - 1) {
-      var section = sections.find(function(s) { return s.panel_index === i; })
-                 || sections[i]
-                 || {};
-      var bridgeText = section.after || section.before || '';
-      if (bridgeText) {
-        panelsHTML += '<div class="narrative-text">' + bridgeText + '</div>';
-      }
-    }
-  });
-
-  // Closing narrative
-  if (outro) {
-    panelsHTML += '<div class="narrative-text outro-text">' + outro + '</div>';
-  }
+  // Build panels using selected layout
+  var layoutStyle = narrative.layout_style || 'Classic';
+  var panelsHTML = buildLayout(layoutStyle, moments, sections, intro, outro);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -639,27 +609,32 @@ ${allSessionsHTML}
 
 // GET session PDF HTML
 router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, res) {
-  const db = await getDb();
+  try {
+    const db = await getDb();
 
-  const session = await db.prepare(
-    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
-  ).get(req.params.sessionId, req.session.userId);
+    const session = await db.prepare(
+      'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
+    ).get(req.params.sessionId, req.session.userId);
 
-  if (!session) return res.status(403).json({ error: 'Access denied' });
+    if (!session) return res.status(403).json({ error: 'Access denied' });
 
-  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
-  const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
-  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
+    const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
+    const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
-  const narrative = {
-    intro: session.narrative_intro || '',
-    sections: session.narrative_sections ? JSON.parse(session.narrative_sections) : [],
-    outro: session.narrative_outro || '',
-    layout_style: session.layout_style || req.query.layout || 'Classic'
-  };
+    const narrative = {
+      intro: session.narrative_intro || '',
+      sections: session.narrative_sections ? JSON.parse(session.narrative_sections) : [],
+      outro: session.narrative_outro || '',
+      layout_style: req.query.layout || session.layout_style || 'Classic'
+    };
 
-  const html = buildSessionHTML(session, moments, campaign, characters, narrative);
-  res.send(html);
+    const html = buildSessionHTML(session, moments, campaign, characters, narrative);
+    res.send(html);
+  } catch(e) {
+    console.error('PDF session error:', e.message);
+    res.status(500).send('<html><body style="background:#1a0f08;color:#c9a84c;font-family:serif;padding:2rem;"><h2>Error generating PDF</h2><p>' + e.message + '</p></body></html>');
+  }
 });
 
 // GET graphic novel HTML (all sessions)
