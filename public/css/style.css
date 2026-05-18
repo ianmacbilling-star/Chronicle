@@ -737,9 +737,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Storyboard grid layout - panels side by side */
 #moments-grid {
-  display: block;
-}
-#moments-grid .moments-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;

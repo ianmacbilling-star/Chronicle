@@ -464,7 +464,26 @@ function renderCharacters() {
     var portrait = primaryImg
       ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
-    return '<div class="char-card">' +
+    // Build thumbnail grid from all available images
+    var imgSlots = [
+      {field:'image_portrait',label:'Portrait'},
+      {field:'image_fullbody',label:'Full Body'},
+      {field:'image_action',label:'Action'},
+      {field:'image_other',label:'Other'}
+    ];
+    var availableImgs = imgSlots.filter(function(s) { return c[s.field]; });
+    if (!availableImgs.length && c.image) availableImgs = [{field:'image',label:'Portrait'}];
+
+    var imgGridHtml = availableImgs.length
+      ? '<div class="char-img-grid">' +
+        availableImgs.slice(0,4).map(function(s) {
+          return '<img class="char-img-thumb" src="' + c[s.field] + '" alt="' + s.label + '" ' +
+            'onclick="openLightbox(this.src,this.alt)" ' +
+            'title="' + s.label + '" />';
+        }).join('') + '</div>'
+      : '';
+
+    return '<div class="char-card char-card-drop" id="char-card-' + c.id + '">' +
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
@@ -476,6 +495,7 @@ function renderCharacters() {
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
+      imgGridHtml +
     '</div>';
   }).join('');
   html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
@@ -690,7 +710,7 @@ function renderStoryboard() {
   var narrative = state.narrativeData || { intro: '', sections: [], outro: '' };
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
 
-  var html = '<div class="moments-grid">';
+  var html = '';
 
   // Opening narrative
   html += '<div class="narrative-block" id="narrative-opening">' +
@@ -748,7 +768,6 @@ function renderStoryboard() {
     (narrative.outro || '') + '</textarea>' +
   '</div>';
 
-  html += '</div>';
   document.getElementById('moments-grid').innerHTML = html;
 }
 
