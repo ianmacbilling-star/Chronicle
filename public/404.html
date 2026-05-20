@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 — You Have Wandered Off the Map</title>
+  <link rel="icon" type="image/png" href="/images/Chronicle_Logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&family=Crimson+Text:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Crimson Text', Georgia, serif;
+      background: #0a0806;
+      background-image: url('/images/Chronicle_background.png');
+      background-size: cover;
+      background-position: center;
+      color: #e8d5a3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: rgba(10,8,6,0.82);
+    }
+    .panel {
+      position: relative;
+      z-index: 1;
+      border: 4px solid #0a0806;
+      background: rgba(20,12,4,0.95);
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+      overflow: hidden;
+    }
+    .panel-top {
+      background: #1a0f08;
+      border-bottom: 3px solid rgba(201,168,76,0.2);
+      padding: 24px;
+    }
+    .logo {
+      font-family: 'Cinzel', serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: #c9a84c;
+      letter-spacing: 4px;
+    }
+    .panel-body {
+      padding: 48px 40px;
+    }
+    .error-num {
+      font-family: 'Bangers', cursive;
+      font-size: 120px;
+      color: #8b1a1a;
+      line-height: 1;
+      text-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+      margin-bottom: 8px;
+    }
+    .narrator-box {
+      background: #f0e8d0;
+      color: #0a0806;
+      border: 3px solid #0a0806;
+      padding: 16px 20px;
+      font-style: italic;
+      font-size: 16px;
+      line-height: 1.7;
+      margin: 24px 0;
+      position: relative;
+    }
+    .narrator-box::before {
+      content: 'NARRATOR';
+      position: absolute;
+      top: -1px;
+      left: 12px;
+      font-family: 'Bangers', cursive;
+      font-size: 10px;
+      letter-spacing: 3px;
+      background: #f0e8d0;
+      padding: 0 6px;
+      transform: translateY(-50%);
+    }
+    .title {
+      font-family: 'Bangers', cursive;
+      font-size: 32px;
+      color: #c9a84c;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .sub {
+      font-size: 16px;
+      font-style: italic;
+      color: rgba(232,213,163,0.6);
+      margin-bottom: 32px;
+    }
+    .btn {
+      display: inline-block;
+      font-family: 'Bangers', cursive;
+      font-size: 20px;
+      letter-spacing: 2px;
+      padding: 14px 40px;
+      background: #c9a84c;
+      color: #0a0806;
+      text-decoration: none;
+      border: 3px solid #0a0806;
+      box-shadow: 4px 4px 0 #0a0806;
+      transition: all 0.15s;
+      margin: 6px;
+    }
+    .btn:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0 #0a0806;
+    }
+    .btn-ghost {
+      background: transparent;
+      color: #c9a84c;
+      border-color: rgba(201,168,76,0.3);
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+    }
+    .btn-ghost:hover {
+      border-color: #c9a84c;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="panel-top">
+      <div class="logo">CHRONICLE</div>
+    </div>
+    <div class="panel-body">
+      <div class="error-num">404</div>
+      <div class="title">YOU HAVE WANDERED OFF THE MAP</div>
+      <div class="sub">Even the most seasoned adventurers lose their way.</div>
+      <div class="narrator-box">
+        The party paused at the edge of the known world. Beyond this point, the cartographers had written only one thing: <em>"Here there be nothing."</em> Whatever you sought does not exist — or has been moved by forces unknown.
+      </div>
+      <a href="/" class="btn">RETURN TO SAFETY</a>
+      <a href="/app.html" class="btn btn-ghost">ENTER THE APP</a>
+    </div>
+  </div>
+</body>
+</html>

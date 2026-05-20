@@ -78,6 +78,11 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize database first, then start server
 initStorage();
+// 404 handler
+app.use(function(req, res) {
+  res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+});
+
 getDb().then(function() {
   app.listen(PORT, function() {
     console.log('');

@@ -5,17 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chronicle — You make it legendary. We make it forever.</title>
   <meta name="description" content="Turn your TTRPG sessions into stunning graphic novels. AI-powered storyboards, image generation, and PDF export for Dungeon Masters." />
+  <meta name="keywords" content="TTRPG, D&D, Dungeon Master, graphic novel, session recap, AI, storyboard" />
+
+  <!-- Open Graph / Social sharing -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://chroniclemygame.com" />
   <meta property="og:title" content="Chronicle — You make it legendary. We make it forever." />
   <meta property="og:description" content="Turn your TTRPG sessions into stunning graphic novels. Paste your transcript, AI generates your storyboard and images, export a print-ready PDF." />
-  <meta property="og:image" content="https://chroniclemygame.com/images/Chronicle_Book_Payoff2.png" />
+  <meta property="og:image" content="https://chroniclemygame.com/images/og-image.png" />
+
+  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Chronicle — You make it legendary. We make it forever." />
   <meta name="twitter:description" content="Turn your TTRPG sessions into stunning graphic novels with AI." />
-  <meta name="twitter:image" content="https://chroniclemygame.com/images/Chronicle_Book_Payoff2.png" />
+  <meta name="twitter:image" content="https://chroniclemygame.com/images/og-image.png" />
+
+  <!-- Favicon -->
   <link rel="icon" type="image/png" href="/images/Chronicle_Logo.png" />
   <link rel="apple-touch-icon" href="/images/Chronicle_Logo.png" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Bangers&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   <style>
@@ -23,721 +31,759 @@
 
     :root {
       --ink: #0a0806;
-      --ink-mid: #160e06;
+      --ink-mid: #1a0f08;
       --gold: #c9a84c;
       --gold-light: #e8d5a3;
+      --gold-dim: rgba(201,168,76,0.15);
       --crimson: #8b1a1a;
       --crimson-bright: #c0392b;
       --parchment: #f0e8d0;
-      --border: 5px solid #0a0806;
-      --gutter: 10px;
+      --panel-border: 4px solid #0a0806;
+      --gutter: 12px;
     }
 
     html { scroll-behavior: smooth; }
 
     body {
       font-family: 'Crimson Text', Georgia, serif;
-      background: #1a1008;
+      background: var(--ink);
       color: var(--parchment);
       overflow-x: hidden;
+      cursor: default;
     }
 
-    /* HALFTONE */
+    /* HALFTONE TEXTURE */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background-image: radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px);
-      background-size: 6px 6px;
+      background-image: radial-gradient(circle, rgba(201,168,76,0.03) 1px, transparent 1px);
+      background-size: 8px 8px;
       pointer-events: none;
-      z-index: 1000;
+      z-index: 0;
     }
 
     /* NAV */
     nav {
       position: fixed;
       top: 0; left: 0; right: 0;
-      z-index: 500;
+      z-index: 100;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 24px;
-      background: rgba(10,8,6,0.96);
-      border-bottom: 3px solid var(--ink);
-      box-shadow: 0 3px 0 rgba(201,168,76,0.15);
+      padding: 16px 40px;
+      background: rgba(10,8,6,0.92);
+      border-bottom: 2px solid var(--gold-dim);
+      backdrop-filter: blur(12px);
     }
 
     .nav-logo {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       text-decoration: none;
     }
 
-    .nav-logo img { height: 32px; }
+    .nav-logo img {
+      height: 36px;
+    }
 
     .nav-logo-text {
       font-family: 'Cinzel', serif;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
       color: var(--gold);
       letter-spacing: 4px;
     }
 
-    .nav-actions { display: flex; align-items: center; gap: 12px; }
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
 
     .nav-link {
       font-family: 'Cinzel', serif;
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 2px;
       color: rgba(201,168,76,0.6);
       text-decoration: none;
       transition: color 0.2s;
     }
+
     .nav-link:hover { color: var(--gold); }
 
     .btn-nav {
-      font-family: 'Bangers', cursive;
-      font-size: 16px;
+      font-family: 'Cinzel', serif;
+      font-size: 11px;
+      font-weight: 700;
       letter-spacing: 2px;
-      padding: 8px 24px;
-      background: var(--crimson-bright);
-      color: var(--parchment);
-      border: 3px solid var(--ink);
-      border-radius: 3px;
+      padding: 10px 24px;
+      background: var(--gold);
+      color: var(--ink);
+      border: none;
+      border-radius: 4px;
       cursor: pointer;
       text-decoration: none;
-      box-shadow: 3px 3px 0 var(--ink);
-      transition: all 0.15s;
-    }
-    .btn-nav:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink); }
-
-    /* COMIC BOOK PAGE */
-    .comic-book {
-      padding-top: 64px;
-      background: #2a1a08;
-      min-height: 100vh;
-      position: relative;
+      transition: all 0.2s;
     }
 
-    /* PAGE BACKGROUND - aged paper feel */
+    .btn-nav:hover {
+      background: var(--gold-light);
+      transform: translateY(-1px);
+    }
+
+    /* COMIC PAGE WRAPPER */
     .comic-page {
-      max-width: 1200px;
-      margin: 0 auto;
-      background: #1a0f06;
-      padding: var(--gutter);
       position: relative;
+      z-index: 1;
+      padding-top: 72px;
     }
 
-    /* ROW */
-    .comic-row {
+    /* PANEL SYSTEM */
+    .panel-row {
       display: flex;
       gap: var(--gutter);
-      margin-bottom: var(--gutter);
+      padding: var(--gutter);
     }
 
-    /* PANEL BASE */
     .panel {
-      border: var(--border);
+      border: var(--panel-border);
       position: relative;
       overflow: hidden;
       flex-shrink: 0;
-      background: var(--ink-mid);
     }
 
-    /* ============================================================
-       PANEL 1 — HERO (Full width, tall)
-       ============================================================ */
-    .panel-hero {
+    /* HERO PANEL */
+    .hero-panel {
       width: 100%;
-      min-height: 88vh;
-      background-image: url('/images/DM_Rolling_Dice.png');
+      min-height: 92vh;
+      background: var(--ink);
+      background-image:
+        url('/images/Chronicle_background.png');
       background-size: cover;
       background-position: center top;
       display: flex;
       flex-direction: column;
-      justify-content: flex-end;
-      padding: 0;
-      margin-bottom: var(--gutter);
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 40px;
+      margin: var(--gutter);
+      margin-top: 0;
+      position: relative;
     }
 
-    .panel-hero::before {
+    .hero-panel::before {
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(
-        to bottom,
-        rgba(10,8,6,0.1) 0%,
-        rgba(10,8,6,0.2) 40%,
-        rgba(10,8,6,0.85) 75%,
-        rgba(10,8,6,0.97) 100%
+      background: linear-gradient(to bottom,
+        rgba(10,8,6,0.3) 0%,
+        rgba(10,8,6,0.6) 50%,
+        rgba(10,8,6,0.85) 100%
       );
+    }
+
+    .hero-panel::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(201,168,76,0.04) 1px, transparent 1px);
+      background-size: 6px 6px;
     }
 
     .hero-content {
       position: relative;
       z-index: 2;
-      padding: 40px 48px;
       max-width: 800px;
     }
 
     .hero-eyebrow {
       font-family: 'Bangers', cursive;
-      font-size: 14px;
+      font-size: 16px;
       letter-spacing: 6px;
       color: var(--crimson-bright);
-      margin-bottom: 12px;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.8);
     }
 
     .hero-title {
       font-family: 'Bangers', cursive;
-      font-size: clamp(56px, 8vw, 100px);
-      line-height: 0.92;
+      font-size: clamp(52px, 10vw, 96px);
+      line-height: 0.95;
       color: var(--gold);
-      text-shadow: 4px 4px 0 var(--ink), 6px 6px 0 rgba(0,0,0,0.4);
-      margin-bottom: 20px;
+      text-shadow:
+        4px 4px 0 var(--ink),
+        -2px -2px 0 var(--ink),
+        6px 6px 0 rgba(0,0,0,0.5);
+      margin-bottom: 24px;
       letter-spacing: 2px;
     }
 
-    .hero-title .white { color: var(--parchment); }
-    .hero-title .red { color: var(--crimson-bright); }
+    .hero-title span {
+      color: var(--parchment);
+      display: block;
+    }
 
     .hero-sub {
       font-family: 'Crimson Text', serif;
-      font-size: clamp(16px, 2.5vw, 22px);
+      font-size: clamp(18px, 3vw, 24px);
       font-style: italic;
       color: var(--gold-light);
       line-height: 1.6;
-      margin-bottom: 28px;
-      max-width: 580px;
+      margin-bottom: 36px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
-    .hero-cta-wrap {
+    .hero-cta-group {
       display: flex;
-      align-items: center;
       gap: 16px;
+      justify-content: center;
       flex-wrap: wrap;
     }
 
-    .btn-hero {
+    .btn-primary {
       font-family: 'Bangers', cursive;
-      font-size: 26px;
+      font-size: 22px;
       letter-spacing: 3px;
-      padding: 16px 52px;
+      padding: 16px 48px;
       background: var(--crimson-bright);
       color: var(--parchment);
-      border: 4px solid var(--ink);
-      border-radius: 3px;
+      border: 3px solid var(--ink);
+      border-radius: 4px;
       cursor: pointer;
       text-decoration: none;
-      box-shadow: 5px 5px 0 var(--ink);
-      transition: all 0.15s;
       display: inline-block;
+      transition: all 0.15s;
+      box-shadow: 4px 4px 0 var(--ink);
     }
-    .btn-hero:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--ink); }
 
-    .btn-ghost {
+    .btn-primary:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+
+    .btn-secondary {
       font-family: 'Cinzel', serif;
       font-size: 13px;
       letter-spacing: 2px;
-      padding: 14px 28px;
+      padding: 16px 32px;
       background: transparent;
       color: var(--gold);
       border: 2px solid rgba(201,168,76,0.4);
-      border-radius: 3px;
+      border-radius: 4px;
       cursor: pointer;
       text-decoration: none;
-      transition: all 0.2s;
       display: inline-block;
+      transition: all 0.15s;
     }
-    .btn-ghost:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
 
-    .hero-trial {
-      font-size: 12px;
-      color: rgba(201,168,76,0.4);
-      font-family: 'Cinzel', serif;
+    .btn-secondary:hover {
+      border-color: var(--gold);
+      background: rgba(201,168,76,0.08);
+    }
+
+    .hero-trial-note {
+      margin-top: 16px;
+      font-size: 13px;
+      color: rgba(201,168,76,0.45);
       letter-spacing: 1px;
-      margin-top: 12px;
-    }
-
-    /* CAPTION BOX - like comic book caption */
-    .caption-box {
-      background: var(--parchment);
-      color: var(--ink);
-      border: var(--border);
-      padding: 14px 18px;
-      font-family: 'Crimson Text', serif;
-      font-size: 15px;
-      font-style: italic;
-      line-height: 1.7;
-      position: relative;
-    }
-
-    .caption-box.gold-cap::before {
-      content: attr(data-label);
-      position: absolute;
-      top: -1px; left: 12px;
-      font-family: 'Bangers', cursive;
-      font-size: 10px;
-      letter-spacing: 3px;
-      background: var(--gold);
-      color: var(--ink);
-      padding: 0 8px;
-      transform: translateY(-50%);
     }
 
     /* SPEECH BUBBLE */
     .speech-bubble {
-      background: white;
+      position: absolute;
+      background: var(--parchment);
       color: var(--ink);
-      border: 4px solid var(--ink);
-      border-radius: 20px;
-      padding: 14px 20px;
+      border: 3px solid var(--ink);
+      border-radius: 16px;
+      padding: 12px 18px;
       font-family: 'Bangers', cursive;
-      font-size: 20px;
+      font-size: 18px;
       letter-spacing: 1px;
-      position: relative;
-      display: inline-block;
+      white-space: nowrap;
       box-shadow: 3px 3px 0 var(--ink);
     }
 
     .speech-bubble::after {
       content: '';
       position: absolute;
-      bottom: -20px; left: 28px;
-      border-left: 14px solid transparent;
-      border-right: 8px solid transparent;
-      border-top: 20px solid var(--ink);
+      bottom: -16px;
+      left: 24px;
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 16px solid var(--ink);
     }
+
     .speech-bubble::before {
       content: '';
       position: absolute;
-      bottom: -13px; left: 31px;
-      border-left: 11px solid transparent;
-      border-right: 6px solid transparent;
-      border-top: 14px solid white;
+      bottom: -12px;
+      left: 26px;
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 14px solid var(--parchment);
       z-index: 1;
     }
 
-    /* ============================================================
-       ROW 2 — Players celebrating (left, tall) + How It Works (right)
-       ============================================================ */
-    .panel-players {
-      width: 42%;
-      min-height: 600px;
-      background-image: url('/images/Player_Scoring_a_Critical_Hit.png');
-      background-size: cover;
-      background-position: center top;
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    .panel-players::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to top, rgba(10,8,6,0.7) 0%, transparent 50%);
-    }
-
-    .players-caption {
-      position: absolute;
-      bottom: 16px;
-      left: 16px;
-      right: 16px;
-      z-index: 2;
-    }
-
-    .panel-how {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: var(--gutter);
-      background: transparent;
-      border: none;
-      padding: 0;
-    }
-
-    .how-title-panel {
-      background: var(--crimson);
-      padding: 20px 24px;
-      border: var(--border);
+    /* SECTION HEADERS */
+    .section-header {
+      padding: var(--gutter) var(--gutter) 0;
     }
 
     .section-tag {
       font-family: 'Bangers', cursive;
-      font-size: 11px;
+      font-size: 13px;
       letter-spacing: 5px;
-      color: rgba(240,232,208,0.6);
-      margin-bottom: 4px;
+      color: var(--crimson-bright);
+      margin-bottom: 6px;
       display: block;
     }
 
     .section-title {
       font-family: 'Bangers', cursive;
-      font-size: clamp(28px, 4vw, 48px);
-      color: var(--parchment);
-      line-height: 1;
-      letter-spacing: 2px;
-      text-shadow: 2px 2px 0 rgba(0,0,0,0.4);
-    }
-
-    .how-steps {
-      display: flex;
-      flex-direction: column;
-      gap: var(--gutter);
-      flex: 1;
-    }
-
-    .how-step-panel {
-      flex: 1;
-      border: var(--border);
-      background: var(--ink-mid);
-      padding: 20px;
-      display: flex;
-      align-items: flex-start;
-      gap: 16px;
-    }
-
-    .step-num {
-      font-family: 'Bangers', cursive;
-      font-size: 52px;
+      font-size: clamp(36px, 6vw, 64px);
       color: var(--gold);
       line-height: 1;
       text-shadow: 3px 3px 0 rgba(0,0,0,0.5);
-      flex-shrink: 0;
-      width: 50px;
+      letter-spacing: 2px;
     }
 
-    .step-content {}
-
-    .step-label {
-      font-family: 'Bangers', cursive;
-      font-size: 10px;
-      letter-spacing: 4px;
-      color: var(--crimson-bright);
-      margin-bottom: 4px;
-    }
-
-    .step-title {
-      font-family: 'Bangers', cursive;
-      font-size: 22px;
-      color: var(--gold);
-      margin-bottom: 6px;
-      letter-spacing: 1px;
-    }
-
-    .step-desc {
-      font-family: 'Crimson Text', serif;
-      font-size: 14px;
-      font-style: italic;
-      color: rgba(240,232,208,0.7);
-      line-height: 1.6;
-    }
-
-    /* ============================================================
-       ROW 3 — Features strip (full width)
-       ============================================================ */
-    .features-strip {
-      width: 100%;
-      border: var(--border);
-      background: #0d0804;
-      margin-bottom: var(--gutter);
-      overflow: hidden;
-    }
-
-    .features-strip-header {
-      background: var(--gold);
-      padding: 12px 24px;
-      border-bottom: var(--border);
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .features-strip-title {
-      font-family: 'Bangers', cursive;
-      font-size: 28px;
+    /* NARRATOR BOX */
+    .narrator-box {
+      background: var(--parchment);
       color: var(--ink);
-      letter-spacing: 3px;
-    }
-
-    .features-strip-body {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-    }
-
-    .feature-cell {
-      padding: 24px 20px;
-      border-right: 3px solid rgba(201,168,76,0.1);
+      border: var(--panel-border);
+      padding: 16px 20px;
+      font-family: 'Crimson Text', serif;
+      font-size: 16px;
+      font-style: italic;
+      line-height: 1.7;
       position: relative;
     }
 
-    .feature-cell:last-child { border-right: none; }
+    .narrator-box::before {
+      content: 'NARRATOR';
+      position: absolute;
+      top: -1px;
+      left: 12px;
+      font-family: 'Bangers', cursive;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--ink);
+      background: var(--parchment);
+      padding: 0 6px;
+      transform: translateY(-50%);
+    }
 
-    .feature-cell::before {
+    /* HOW IT WORKS — 3 panel row */
+    .how-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: var(--gutter);
+      padding: var(--gutter);
+    }
+
+    .how-panel {
+      border: var(--panel-border);
+      background: var(--ink-mid);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .how-panel-num {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      font-family: 'Bangers', cursive;
+      font-size: 64px;
+      color: rgba(201,168,76,0.08);
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .how-panel-inner {
+      padding: 28px 24px 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .how-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .how-step {
+      font-family: 'Bangers', cursive;
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--crimson-bright);
+      margin-bottom: 8px;
+    }
+
+    .how-title {
+      font-family: 'Bangers', cursive;
+      font-size: 28px;
+      color: var(--gold);
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+      line-height: 1.1;
+    }
+
+    .how-desc {
+      font-family: 'Crimson Text', serif;
+      font-size: 15px;
+      color: rgba(240,232,208,0.75);
+      line-height: 1.6;
+      font-style: italic;
+    }
+
+    /* ACTION LINES */
+    .action-panel {
+      background: var(--ink);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .action-lines {
+      position: absolute;
+      inset: 0;
+      background: repeating-conic-gradient(
+        from 0deg at 50% 50%,
+        rgba(201,168,76,0.03) 0deg,
+        transparent 2deg,
+        transparent 8deg
+      );
+    }
+
+    /* FEATURES PANEL */
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gutter);
+      padding: var(--gutter);
+    }
+
+    .feature-panel {
+      border: var(--panel-border);
+      background: var(--ink-mid);
+      padding: 28px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-panel::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: var(--crimson);
+      background: var(--gold);
     }
 
-    .feature-icon { font-size: 28px; margin-bottom: 8px; display: block; }
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+      display: block;
+    }
 
     .feature-title {
       font-family: 'Bangers', cursive;
-      font-size: 18px;
+      font-size: 24px;
       color: var(--gold);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       letter-spacing: 1px;
     }
 
     .feature-desc {
       font-family: 'Crimson Text', serif;
-      font-size: 13px;
-      font-style: italic;
-      color: rgba(240,232,208,0.6);
+      font-size: 15px;
+      color: rgba(240,232,208,0.7);
       line-height: 1.6;
+      font-style: italic;
     }
 
-    /* ============================================================
-       ROW 4 — Pricing (left, 2/5) + Payoff image (right, 3/5)
-       ============================================================ */
-    .panel-pricing {
-      width: 42%;
-      border: var(--border);
+    /* PRICING */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--gutter);
+      padding: var(--gutter);
+    }
+
+    .pricing-panel {
+      border: var(--panel-border);
       background: var(--ink-mid);
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s;
+    }
+
+    .pricing-panel:hover {
+      transform: translateY(-4px);
+    }
+
+    .pricing-panel.featured {
+      background: rgba(201,168,76,0.06);
+      border-color: var(--gold);
+      border-width: 4px;
+    }
+
+    .pricing-panel.featured::before {
+      content: 'MOST POPULAR';
+      position: absolute;
+      top: 12px;
+      right: -28px;
+      background: var(--crimson-bright);
+      color: var(--parchment);
+      font-family: 'Bangers', cursive;
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 4px 36px;
+      transform: rotate(45deg);
     }
 
     .pricing-header {
-      background: var(--gold);
-      padding: 14px 20px;
-      border-bottom: var(--border);
+      padding: 20px;
+      border-bottom: 2px solid rgba(201,168,76,0.15);
+      text-align: center;
     }
 
-    .pricing-header-title {
+    .tier-coin {
+      font-size: 36px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .tier-name {
       font-family: 'Bangers', cursive;
-      font-size: 32px;
-      color: var(--ink);
-      letter-spacing: 2px;
+      font-size: 28px;
+      letter-spacing: 3px;
     }
 
-    .pricing-header-sub {
-      font-size: 13px;
-      color: rgba(10,8,6,0.6);
-      font-style: italic;
-    }
+    .tier-copper .tier-name { color: #b87333; }
+    .tier-silver .tier-name { color: #aaa9ad; }
+    .tier-gold .tier-name { color: var(--gold); }
+    .tier-platinum .tier-name { color: #e5e4e2; }
 
-    .pricing-tiers {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-    }
-
-    .tier-row {
-      display: flex;
-      align-items: center;
-      padding: 14px 20px;
-      border-bottom: 2px solid rgba(201,168,76,0.1);
-      gap: 14px;
-      transition: background 0.15s;
-    }
-    .tier-row:last-child { border-bottom: none; }
-    .tier-row:hover { background: rgba(201,168,76,0.05); }
-
-    .tier-coin { font-size: 28px; flex-shrink: 0; }
-
-    .tier-info { flex: 1; }
-
-    .tier-name-row {
+    .tier-price {
       font-family: 'Bangers', cursive;
-      font-size: 20px;
-      letter-spacing: 2px;
-    }
-
-    .tier-copper .tier-name-row { color: #b87333; }
-    .tier-silver .tier-name-row { color: #c0c0c0; }
-    .tier-gold .tier-name-row { color: var(--gold); }
-    .tier-platinum .tier-name-row { color: #e5e4e2; }
-
-    .tier-perks {
-      font-size: 12px;
-      color: rgba(240,232,208,0.5);
-      font-style: italic;
-      margin-top: 2px;
-    }
-
-    .tier-price-tag {
-      font-family: 'Bangers', cursive;
-      font-size: 22px;
+      font-size: 42px;
       color: var(--parchment);
-      text-align: right;
+      margin-top: 8px;
+      line-height: 1;
+    }
+
+    .tier-price span {
+      font-size: 18px;
+      color: rgba(240,232,208,0.5);
+    }
+
+    .pricing-features {
+      padding: 20px;
+    }
+
+    .pricing-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-family: 'Crimson Text', serif;
+      font-size: 14px;
+      color: rgba(240,232,208,0.75);
+      line-height: 1.4;
+    }
+
+    .pricing-feature .check {
+      color: var(--gold);
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .pricing-feature .cross {
+      color: rgba(240,232,208,0.3);
       flex-shrink: 0;
     }
 
-    .tier-price-tag small {
-      font-size: 12px;
-      color: rgba(240,232,208,0.4);
-      display: block;
-      font-family: 'Crimson Text', serif;
+    .pricing-cta {
+      padding: 0 20px 20px;
     }
 
     .btn-tier {
-      display: block;
+      width: 100%;
       font-family: 'Bangers', cursive;
-      font-size: 14px;
+      font-size: 18px;
       letter-spacing: 2px;
-      padding: 8px 16px;
+      padding: 12px;
       border: 3px solid var(--ink);
-      border-radius: 3px;
+      border-radius: 4px;
       cursor: pointer;
       text-decoration: none;
+      display: block;
       text-align: center;
       transition: all 0.15s;
-      box-shadow: 2px 2px 0 var(--ink);
-      white-space: nowrap;
-      flex-shrink: 0;
+      box-shadow: 3px 3px 0 var(--ink);
     }
-    .btn-tier:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+
+    .btn-tier:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
 
     .tier-copper .btn-tier { background: #b87333; color: var(--parchment); }
-    .tier-silver .btn-tier { background: #c0c0c0; color: var(--ink); }
+    .tier-silver .btn-tier { background: #aaa9ad; color: var(--ink); }
     .tier-gold .btn-tier { background: var(--gold); color: var(--ink); }
     .tier-platinum .btn-tier { background: #e5e4e2; color: var(--ink); }
 
-    /* PAYOFF PANEL */
-    .panel-payoff {
-      flex: 1;
-      min-height: 600px;
-      background-image: url('/images/Chronicle_Book_Payoff2.png');
-      background-size: cover;
-      background-position: center top;
+    /* WHO IT'S FOR */
+    .for-panel {
+      margin: var(--gutter);
+      border: var(--panel-border);
+      background: var(--ink-mid);
+      padding: 48px 60px;
       position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
+      overflow: hidden;
     }
 
-    .panel-payoff::before {
-      content: '';
+    .for-panel::before {
+      content: '"';
       position: absolute;
-      inset: 0;
-      background: linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.3) 50%, transparent 100%);
-    }
-
-    .payoff-content {
-      position: relative;
-      z-index: 2;
-      padding: 32px;
-      text-align: center;
-    }
-
-    .payoff-title {
+      top: -20px;
+      left: 40px;
       font-family: 'Bangers', cursive;
-      font-size: clamp(32px, 5vw, 60px);
-      color: var(--gold);
-      text-shadow: 3px 3px 0 var(--ink);
+      font-size: 200px;
+      color: rgba(201,168,76,0.05);
       line-height: 1;
-      margin-bottom: 12px;
+    }
+
+    .for-title {
+      font-family: 'Bangers', cursive;
+      font-size: clamp(28px, 4vw, 48px);
+      color: var(--gold);
+      margin-bottom: 24px;
       letter-spacing: 2px;
     }
 
-    .payoff-sub {
+    .for-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      list-style: none;
+    }
+
+    .for-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
       font-family: 'Crimson Text', serif;
       font-size: 17px;
-      font-style: italic;
       color: var(--gold-light);
-      margin-bottom: 24px;
-      line-height: 1.6;
+      line-height: 1.5;
+      font-style: italic;
     }
 
-    .btn-cta {
-      font-family: 'Bangers', cursive;
-      font-size: 28px;
-      letter-spacing: 3px;
-      padding: 18px 56px;
-      background: var(--crimson-bright);
-      color: var(--parchment);
-      border: 4px solid var(--ink);
-      border-radius: 3px;
-      cursor: pointer;
-      text-decoration: none;
-      box-shadow: 5px 5px 0 var(--ink);
-      transition: all 0.15s;
-      display: inline-block;
-    }
-    .btn-cta:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--ink); }
-
-    .cta-note {
-      margin-top: 12px;
-      font-size: 12px;
-      color: rgba(201,168,76,0.4);
-      font-family: 'Cinzel', serif;
-      letter-spacing: 1px;
+    .for-item::before {
+      content: '⚔';
+      flex-shrink: 0;
+      font-style: normal;
+      color: var(--crimson-bright);
+      margin-top: 2px;
     }
 
-    /* ============================================================
-       ROW 5 — FAQ strip
-       ============================================================ */
-    .faq-strip {
-      width: 100%;
-      border: var(--border);
-      background: var(--ink-mid);
-      margin-bottom: var(--gutter);
-    }
-
-    .faq-header {
-      background: var(--crimson);
-      padding: 12px 24px;
-      border-bottom: var(--border);
-    }
-
-    .faq-header-title {
-      font-family: 'Bangers', cursive;
-      font-size: 28px;
-      color: var(--parchment);
-      letter-spacing: 3px;
-    }
-
+    /* FAQ */
     .faq-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gutter);
+      padding: var(--gutter);
     }
 
-    .faq-cell {
-      padding: 20px;
-      border-right: 2px solid rgba(201,168,76,0.1);
-      border-bottom: 2px solid rgba(201,168,76,0.1);
+    .faq-item {
+      border: var(--panel-border);
+      background: var(--ink-mid);
+      padding: 24px;
     }
-
-    .faq-cell:nth-child(3n) { border-right: none; }
-    .faq-cell:nth-child(n+4) { border-bottom: none; }
 
     .faq-q {
       font-family: 'Bangers', cursive;
-      font-size: 17px;
+      font-size: 20px;
       color: var(--gold);
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       letter-spacing: 0.5px;
       line-height: 1.2;
     }
 
     .faq-a {
       font-family: 'Crimson Text', serif;
-      font-size: 14px;
+      font-size: 15px;
+      color: rgba(240,232,208,0.75);
+      line-height: 1.7;
       font-style: italic;
-      color: rgba(240,232,208,0.65);
+    }
+
+    /* CLOSING PANEL */
+    .closing-panel {
+      margin: var(--gutter);
+      border: var(--panel-border);
+      background: var(--ink);
+      background-image: url('/images/Chronicle_background.png');
+      background-size: cover;
+      background-position: center;
+      min-height: 60vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .closing-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(10,8,6,0.75);
+    }
+
+    .closing-content {
+      position: relative;
+      z-index: 1;
+      max-width: 700px;
+    }
+
+    .closing-title {
+      font-family: 'Bangers', cursive;
+      font-size: clamp(40px, 7vw, 80px);
+      color: var(--gold);
+      line-height: 1;
+      text-shadow: 4px 4px 0 rgba(0,0,0,0.6);
+      margin-bottom: 16px;
+      letter-spacing: 2px;
+    }
+
+    .closing-sub {
+      font-family: 'Crimson Text', serif;
+      font-size: 20px;
+      font-style: italic;
+      color: var(--gold-light);
+      margin-bottom: 36px;
       line-height: 1.6;
     }
 
     /* FOOTER */
     footer {
-      background: var(--ink);
-      border-top: var(--border);
-      padding: 28px 32px;
+      background: rgba(5,4,2,0.95);
+      border-top: 2px solid var(--gold-dim);
+      padding: 32px 40px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -753,7 +799,10 @@
       letter-spacing: 4px;
     }
 
-    .footer-links { display: flex; gap: 24px; }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
 
     .footer-link {
       font-family: 'Cinzel', serif;
@@ -763,39 +812,83 @@
       text-decoration: none;
       transition: color 0.2s;
     }
+
     .footer-link:hover { color: var(--gold); }
 
-    .footer-copy { font-size: 12px; color: rgba(201,168,76,0.2); }
+    .footer-copy {
+      font-size: 12px;
+      color: rgba(201,168,76,0.25);
+    }
+
+    /* DIVIDER */
+    .panel-divider {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px var(--gutter);
+    }
+
+    .panel-divider-line {
+      flex: 1;
+      height: 2px;
+      background: var(--gold-dim);
+    }
+
+    .panel-divider-icon {
+      font-family: 'Bangers', cursive;
+      font-size: 20px;
+      color: rgba(201,168,76,0.3);
+      letter-spacing: 4px;
+    }
+
+    /* SCREENSHOT PLACEHOLDER */
+    .screenshot-placeholder {
+      background: rgba(201,168,76,0.04);
+      border: 2px dashed rgba(201,168,76,0.15);
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: rgba(201,168,76,0.3);
+      font-family: 'Cinzel', serif;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-align: center;
+      gap: 8px;
+    }
 
     /* ANIMATIONS */
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(24px); }
+      from { opacity: 0; transform: translateY(30px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .hero-eyebrow { animation: fadeUp 0.7s ease 0.1s both; }
-    .hero-title { animation: fadeUp 0.7s ease 0.25s both; }
-    .hero-sub { animation: fadeUp 0.7s ease 0.4s both; }
-    .hero-cta-wrap { animation: fadeUp 0.7s ease 0.55s both; }
-    .hero-trial { animation: fadeUp 0.7s ease 0.65s both; }
+    .hero-content > * {
+      animation: fadeUp 0.8s ease both;
+    }
+    .hero-eyebrow { animation-delay: 0.1s; }
+    .hero-title { animation-delay: 0.25s; }
+    .hero-sub { animation-delay: 0.4s; }
+    .hero-cta-group { animation-delay: 0.55s; }
+    .hero-trial-note { animation-delay: 0.65s; }
 
     /* RESPONSIVE */
     @media (max-width: 900px) {
-      .comic-row { flex-direction: column; }
-      .panel-players { width: 100%; min-height: 400px; }
-      .panel-pricing { width: 100%; }
-      .panel-payoff { min-height: 500px; }
-      .features-strip-body { grid-template-columns: 1fr 1fr; }
+      nav { padding: 12px 20px; }
+      .how-panels { grid-template-columns: 1fr; }
+      .pricing-grid { grid-template-columns: 1fr 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      .for-list { grid-template-columns: 1fr; }
       .faq-grid { grid-template-columns: 1fr; }
-      .faq-cell { border-right: none; }
       footer { flex-direction: column; gap: 16px; text-align: center; }
-      nav .nav-link { display: none; }
     }
 
     @media (max-width: 600px) {
-      .hero-content { padding: 24px; }
-      .features-strip-body { grid-template-columns: 1fr; }
+      .pricing-grid { grid-template-columns: 1fr; }
       .hero-title { font-size: 52px; }
+      nav .nav-link { display: none; }
     }
   </style>
 </head>
@@ -808,234 +901,323 @@
     <span class="nav-logo-text">CHRONICLE</span>
   </a>
   <div class="nav-actions">
+    <a href="#how-it-works" class="nav-link">HOW IT WORKS</a>
     <a href="#pricing" class="nav-link">PRICING</a>
-    <a href="#faq" class="nav-link">FAQ</a>
     <a href="/login" class="btn-nav">SIGN IN</a>
   </div>
 </nav>
 
-<div class="comic-book">
 <div class="comic-page">
 
-  <!-- ============================================================
-       PANEL 1 — HERO
-       ============================================================ -->
-  <div class="panel panel-hero">
+  <!-- HERO -->
+  <div class="hero-panel panel">
     <div class="hero-content">
       <div class="hero-eyebrow">⚔ FOR DUNGEON MASTERS ⚔</div>
       <h1 class="hero-title">
         You make it<br>
-        <span class="white">legendary.</span><br>
+        <span>legendary.</span>
         Chronicle makes it<br>
-        <span class="red">forever.</span>
+        <span style="color:var(--crimson-bright)">forever.</span>
       </h1>
       <p class="hero-sub">
-        Your players still talk about that session. The betrayal. The sacrifice.
-        The moment everything changed at the table.<br>
+        Your players still talk about that session. The betrayal. The sacrifice. The moment everything changed.<br>
         Now imagine handing them a graphic novel of exactly that night.
       </p>
-      <div class="hero-cta-wrap">
-        <a href="/login" class="btn-hero">START FREE TRIAL</a>
-        <a href="#pricing" class="btn-ghost">See Plans</a>
+      <div class="hero-cta-group">
+        <a href="/login" class="btn-primary">START YOUR FREE TRIAL</a>
+        <a href="#how-it-works" class="btn-secondary">See How It Works</a>
       </div>
-      <div class="hero-trial">30-day free trial · No credit card required to explore</div>
+      <div class="hero-trial-note">30-day free trial · No credit card required to explore</div>
     </div>
   </div>
 
-  <!-- ============================================================
-       ROW 2 — Players celebrating + How It Works
-       ============================================================ -->
-  <div class="comic-row">
-
-    <!-- LEFT: Players image panel -->
-    <div class="panel panel-players">
-      <div class="players-caption">
-        <div class="caption-box gold-cap" data-label="NARRATOR">
-          These are the moments your players will talk about for years.
-          Chronicle makes sure they never have to rely on memory alone.
-        </div>
-      </div>
+  <!-- NARRATOR INTRO -->
+  <div style="padding: var(--gutter);">
+    <div class="narrator-box">
+      You've been running campaigns for years. Epic battles. Shocking twists. Characters your players will never forget.
+      But next week? Half of it will be fuzzy. In a month? Gone. In a year? A legend that exists only in someone's head —
+      if they remember it at all. <strong>Chronicle changes that.</strong>
     </div>
-
-    <!-- RIGHT: How It Works -->
-    <div class="panel-how">
-      <div class="how-title-panel">
-        <span class="section-tag">⚡ THE QUEST</span>
-        <div class="section-title">THREE STEPS TO IMMORTALITY</div>
-      </div>
-
-      <div class="how-steps">
-        <div class="how-step-panel panel">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <div class="step-label">STEP ONE</div>
-            <div class="step-title">📜 PASTE YOUR TRANSCRIPT</div>
-            <div class="step-desc">Drop in your session notes, chat logs, or any record of what happened. Chronicle reads it all — the chaos, the drama, the moments that made your table erupt.</div>
-          </div>
-        </div>
-
-        <div class="how-step-panel panel">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <div class="step-label">STEP TWO</div>
-            <div class="step-title">✨ AI BUILDS YOUR STORYBOARD</div>
-            <div class="step-desc">The AI identifies key moments — combat, revelations, emotional beats — and generates stunning storyboard panels for each one, with narrative prose woven between.</div>
-          </div>
-        </div>
-
-        <div class="how-step-panel panel">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <div class="step-label">STEP THREE</div>
-            <div class="step-title">📖 EXPORT YOUR GRAPHIC NOVEL</div>
-            <div class="step-desc">Choose your layout, preview it in the app, and export a print-ready PDF graphic novel. Hand it to your players. Frame it. Bind it. It's a real artifact of your campaign.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </div>
 
-  <!-- ============================================================
-       FEATURES STRIP
-       ============================================================ -->
-  <div class="features-strip">
-    <div class="features-strip-header">
-      <div class="features-strip-title">🗡 YOUR ARSENAL — WHAT CHRONICLE GIVES YOU</div>
+  <!-- HOW IT WORKS -->
+  <div class="section-header" id="how-it-works">
+    <span class="section-tag">⚡ THE QUEST</span>
+    <div class="section-title">THREE STEPS TO IMMORTALITY</div>
+  </div>
+
+  <div class="how-panels">
+    <div class="how-panel panel">
+      <div class="how-panel-num">1</div>
+      <div class="how-panel-inner">
+        <span class="how-icon">📜</span>
+        <div class="how-step">STEP ONE</div>
+        <div class="how-title">PASTE YOUR TRANSCRIPT</div>
+        <div class="how-desc">
+          Drop in your session notes, chat logs, or any record of what happened at the table.
+          Chronicle reads it all — the chaos, the drama, the moments that made your table erupt.
+        </div>
+      </div>
     </div>
-    <div class="features-strip-body">
-      <div class="feature-cell">
-        <span class="feature-icon">🎨</span>
-        <div class="feature-title">AI IMAGE GENERATION</div>
-        <div class="feature-desc">Every panel gets a unique AI illustration. High fantasy, dark and gritty, watercolor, anime — choose the style that matches your campaign.</div>
+
+    <div class="how-panel panel">
+      <div class="how-panel-num">2</div>
+      <div class="how-panel-inner">
+        <span class="how-icon">✨</span>
+        <div class="how-step">STEP TWO</div>
+        <div class="how-title">AI BUILDS YOUR STORYBOARD</div>
+        <div class="how-desc">
+          Chronicle's AI identifies the key moments — the combat, the revelations, the emotional beats —
+          and generates a stunning storyboard panel for each one. With narrative text woven between.
+        </div>
       </div>
-      <div class="feature-cell">
-        <span class="feature-icon">📖</span>
-        <div class="feature-title">NARRATIVE PROSE</div>
-        <div class="feature-desc">Between every panel, Chronicle weaves narrative prose that reads like a real novel. Opening scenes, bridges, closing chapters.</div>
-      </div>
-      <div class="feature-cell">
-        <span class="feature-icon">🧙</span>
-        <div class="feature-title">CHARACTER MEMORY</div>
-        <div class="feature-desc">Upload reference images for each character. Chronicle keeps your party visually consistent across every session of your campaign.</div>
-      </div>
-      <div class="feature-cell">
-        <span class="feature-icon">📄</span>
-        <div class="feature-title">4 LAYOUT STYLES</div>
-        <div class="feature-desc">Classic. Cinematic. Dramatic. Storybook. Four layouts for your PDF. Preview any style before you print — what you see is what you get.</div>
+    </div>
+
+    <div class="how-panel panel">
+      <div class="how-panel-num">3</div>
+      <div class="how-panel-inner">
+        <span class="how-icon">📖</span>
+        <div class="how-step">STEP THREE</div>
+        <div class="how-title">EXPORT YOUR GRAPHIC NOVEL</div>
+        <div class="how-desc">
+          Choose your layout, preview it in the app, and export a print-ready PDF graphic novel.
+          Hand it to your players. Frame it. Bind it. It's a real artifact of your campaign.
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ============================================================
-       ROW 4 — Pricing + Chronicle Book Payoff
-       ============================================================ -->
-  <div class="comic-row" id="pricing">
+  <div class="panel-divider">
+    <div class="panel-divider-line"></div>
+    <div class="panel-divider-icon">⚔ ⚔ ⚔</div>
+    <div class="panel-divider-line"></div>
+  </div>
 
-    <!-- LEFT: Pricing -->
-    <div class="panel-pricing">
+  <!-- FEATURES -->
+  <div class="section-header">
+    <span class="section-tag">🗡 YOUR ARSENAL</span>
+    <div class="section-title">BUILT FOR THE DUNGEON MASTER</div>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-panel panel">
+      <span class="feature-icon">🎨</span>
+      <div class="feature-title">AI IMAGE GENERATION</div>
+      <div class="feature-desc">
+        Every panel gets a unique AI-generated illustration. High fantasy, dark and gritty, watercolor, anime —
+        choose the art style that matches your campaign's soul. Your characters, your world.
+      </div>
+    </div>
+
+    <div class="feature-panel panel">
+      <span class="feature-icon">📖</span>
+      <div class="feature-title">NARRATIVE PROSE</div>
+      <div class="feature-desc">
+        Between every panel, Chronicle weaves narrative prose that reads like a real novel.
+        Opening scenes, bridge passages, closing chapters — your campaign told as epic literature.
+      </div>
+    </div>
+
+    <div class="feature-panel panel">
+      <span class="feature-icon">🧙</span>
+      <div class="feature-title">CHARACTER MEMORY</div>
+      <div class="feature-desc">
+        Upload reference images for each character — portraits, action shots, full body art.
+        Chronicle uses these to keep your party visually consistent across every session.
+      </div>
+    </div>
+
+    <div class="feature-panel panel">
+      <span class="feature-icon">📄</span>
+      <div class="feature-title">MULTIPLE LAYOUT STYLES</div>
+      <div class="feature-desc">
+        Classic. Cinematic. Dramatic. Storybook. Four distinct layouts for your PDF export.
+        Preview any layout before you print — what you see is exactly what you get.
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-divider">
+    <div class="panel-divider-line"></div>
+    <div class="panel-divider-icon">⚔ ⚔ ⚔</div>
+    <div class="panel-divider-line"></div>
+  </div>
+
+  <!-- WHO IT'S FOR -->
+  <div class="for-panel">
+    <div class="for-title">THIS IS YOUR CHRONICLE IF...</div>
+    <ul class="for-list">
+      <li class="for-item">You've been running the same campaign for months and your players deserve something to hold onto</li>
+      <li class="for-item">You charge for your sessions and want to give players a deliverable they'll treasure</li>
+      <li class="for-item">Your campaign is ending and you want to commemorate every arc, every loss, every victory</li>
+      <li class="for-item">You want to share your world with people who weren't at the table</li>
+      <li class="for-item">You're a forever DM who finally wants the story credited to its author — you</li>
+      <li class="for-item">You believe your sessions deserve to be remembered the way great stories deserve to be told</li>
+    </ul>
+  </div>
+
+  <div class="panel-divider">
+    <div class="panel-divider-line"></div>
+    <div class="panel-divider-icon">⚔ ⚔ ⚔</div>
+    <div class="panel-divider-line"></div>
+  </div>
+
+  <!-- PRICING -->
+  <div class="section-header" id="pricing">
+    <span class="section-tag">💰 THE TREASURE HOARD</span>
+    <div class="section-title">CHOOSE YOUR TIER</div>
+  </div>
+
+  <div style="padding: 0 var(--gutter) 8px; font-family: 'Crimson Text', serif; font-style: italic; font-size: 16px; color: rgba(201,168,76,0.55);">
+    Every adventurer starts somewhere. Your 30-day free trial begins the moment you create your first campaign.
+  </div>
+
+  <div class="pricing-grid">
+
+    <!-- COPPER -->
+    <div class="pricing-panel tier-copper panel">
       <div class="pricing-header">
-        <div class="pricing-header-title">💰 CHOOSE YOUR TIER</div>
-        <div class="pricing-header-sub">Every adventurer starts somewhere. Your 30-day trial begins on your first campaign.</div>
+        <span class="tier-coin">🟤</span>
+        <div class="tier-name">COPPER</div>
+        <div class="tier-price">FREE<span> / trial</span></div>
       </div>
-      <div class="pricing-tiers">
-
-        <div class="tier-row tier-copper">
-          <span class="tier-coin">🟤</span>
-          <div class="tier-info">
-            <div class="tier-name-row">COPPER</div>
-            <div class="tier-perks">1 campaign · 5 sessions · watermarked images</div>
-          </div>
-          <div class="tier-price-tag">FREE<small>30-day trial</small></div>
-          <a href="/login" class="btn-tier">TRY FREE</a>
-        </div>
-
-        <div class="tier-row tier-silver">
-          <span class="tier-coin">⚪</span>
-          <div class="tier-info">
-            <div class="tier-name-row">SILVER</div>
-            <div class="tier-perks">1 campaign · unlimited sessions · full export</div>
-          </div>
-          <div class="tier-price-tag">$9<small>per month</small></div>
-          <a href="/login" class="btn-tier">GET SILVER</a>
-        </div>
-
-        <div class="tier-row tier-gold">
-          <span class="tier-coin">🟡</span>
-          <div class="tier-info">
-            <div class="tier-name-row">GOLD ⭐</div>
-            <div class="tier-perks">3 campaigns · unlimited sessions · extended moments</div>
-          </div>
-          <div class="tier-price-tag">$12<small>per month</small></div>
-          <a href="/login" class="btn-tier">GET GOLD</a>
-        </div>
-
-        <div class="tier-row tier-platinum">
-          <span class="tier-coin">⬜</span>
-          <div class="tier-info">
-            <div class="tier-name-row">PLATINUM</div>
-            <div class="tier-perks">unlimited everything · prompt editing</div>
-          </div>
-          <div class="tier-price-tag">$15<small>per month</small></div>
-          <a href="/login" class="btn-tier">GO PLATINUM</a>
-        </div>
-
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="check">✓</span> 30-day free trial</div>
+        <div class="pricing-feature"><span class="check">✓</span> 1 active campaign</div>
+        <div class="pricing-feature"><span class="check">✓</span> Up to 5 sessions</div>
+        <div class="pricing-feature"><span class="check">✓</span> AI storyboard generation</div>
+        <div class="pricing-feature"><span class="check">✓</span> AI image generation</div>
+        <div class="pricing-feature"><span class="cross">✗</span> <span style="opacity:0.5;">Watermark on images</span></div>
+        <div class="pricing-feature"><span class="cross">✗</span> <span style="opacity:0.5;">PDF export disabled</span></div>
+      </div>
+      <div class="pricing-cta">
+        <a href="/login" class="btn-tier">START FREE</a>
       </div>
     </div>
 
-    <!-- RIGHT: Chronicle Book Payoff -->
-    <div class="panel panel-payoff">
-      <div class="payoff-content">
-        <div class="payoff-title">YOUR NEXT SESSION<br>DESERVES TO BE<br>REMEMBERED.</div>
-        <div class="payoff-sub">
-          Every campaign has a moment the whole table<br>
-          will never forget. Chronicle makes sure<br>
-          they never have to.
-        </div>
-        <a href="/login" class="btn-cta">BEGIN YOUR CHRONICLE</a>
-        <div class="cta-note">30-DAY FREE TRIAL · NO CREDIT CARD REQUIRED</div>
+    <!-- SILVER -->
+    <div class="pricing-panel tier-silver panel">
+      <div class="pricing-header">
+        <span class="tier-coin">⚪</span>
+        <div class="tier-name">SILVER</div>
+        <div class="tier-price">$9<span> / month</span></div>
+      </div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="check">✓</span> 1 active campaign</div>
+        <div class="pricing-feature"><span class="check">✓</span> Unlimited sessions</div>
+        <div class="pricing-feature"><span class="check">✓</span> Full image quality</div>
+        <div class="pricing-feature"><span class="check">✓</span> PDF export & print</div>
+        <div class="pricing-feature"><span class="check">✓</span> All layout styles</div>
+        <div class="pricing-feature"><span class="check">✓</span> Graphic novel export</div>
+        <div class="pricing-feature"><span class="cross">✗</span> <span style="opacity:0.5;">1 campaign only</span></div>
+      </div>
+      <div class="pricing-cta">
+        <a href="/login" class="btn-tier">GET SILVER</a>
+      </div>
+    </div>
+
+    <!-- GOLD -->
+    <div class="pricing-panel tier-gold panel featured">
+      <div class="pricing-header">
+        <span class="tier-coin">🟡</span>
+        <div class="tier-name">GOLD</div>
+        <div class="tier-price">$12<span> / month</span></div>
+      </div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="check">✓</span> 3 active campaigns</div>
+        <div class="pricing-feature"><span class="check">✓</span> Unlimited sessions</div>
+        <div class="pricing-feature"><span class="check">✓</span> Extended moment counts</div>
+        <div class="pricing-feature"><span class="check">✓</span> Up to 15 panels per session</div>
+        <div class="pricing-feature"><span class="check">✓</span> Full image quality</div>
+        <div class="pricing-feature"><span class="check">✓</span> PDF export & print</div>
+        <div class="pricing-feature"><span class="check">✓</span> All layout styles</div>
+      </div>
+      <div class="pricing-cta">
+        <a href="/login" class="btn-tier">GET GOLD</a>
+      </div>
+    </div>
+
+    <!-- PLATINUM -->
+    <div class="pricing-panel tier-platinum panel">
+      <div class="pricing-header">
+        <span class="tier-coin">⬜</span>
+        <div class="tier-name">PLATINUM</div>
+        <div class="tier-price">$15<span> / month</span></div>
+      </div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="check">✓</span> Unlimited campaigns</div>
+        <div class="pricing-feature"><span class="check">✓</span> Unlimited sessions</div>
+        <div class="pricing-feature"><span class="check">✓</span> Extended moment counts</div>
+        <div class="pricing-feature"><span class="check">✓</span> Full image quality</div>
+        <div class="pricing-feature"><span class="check">✓</span> PDF export & print</div>
+        <div class="pricing-feature"><span class="check" style="color:var(--crimson-bright);">★</span> <strong style="color:var(--gold-light);">Prompt editing</strong> — exclusive</div>
+        <div class="pricing-feature"><span class="check" style="color:var(--crimson-bright);">★</span> <strong style="color:var(--gold-light);">Priority support</strong></div>
+      </div>
+      <div class="pricing-cta">
+        <a href="/login" class="btn-tier">GO PLATINUM</a>
       </div>
     </div>
 
   </div>
 
-  <!-- ============================================================
-       FAQ STRIP
-       ============================================================ -->
-  <div class="faq-strip" id="faq">
-    <div class="faq-header">
-      <div class="faq-header-title">📜 THE LORE — FREQUENTLY ASKED QUESTIONS</div>
+  <div class="panel-divider">
+    <div class="panel-divider-line"></div>
+    <div class="panel-divider-icon">⚔ ⚔ ⚔</div>
+    <div class="panel-divider-line"></div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="section-header">
+    <span class="section-tag">📜 THE LORE</span>
+    <div class="section-title">FREQUENTLY ASKED QUESTIONS</div>
+  </div>
+
+  <div class="faq-grid">
+    <div class="faq-item panel">
+      <div class="faq-q">What kind of transcript does Chronicle need?</div>
+      <div class="faq-a">Anything goes — session notes, chat logs from Discord or Roll20, voice-to-text recordings, or just your own summary written after the session. The more detail, the richer the output.</div>
     </div>
-    <div class="faq-grid">
-      <div class="faq-cell">
-        <div class="faq-q">What transcript format does Chronicle need?</div>
-        <div class="faq-a">Anything goes — session notes, Discord logs, Roll20 exports, voice-to-text recordings, or your own summary. The more detail, the richer the output.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">How does the AI know which moments matter?</div>
-        <div class="faq-a">Chronicle identifies combat, revelations, and emotional beats automatically. You can also give it director's notes — tell it exactly which scenes you want included.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">Can I use Chronicle for any TTRPG system?</div>
-        <div class="faq-a">Absolutely. D&D, Pathfinder, Call of Cthulhu, Blades in the Dark, Mothership — any system with a story worth telling. Chronicle works from the transcript, not the ruleset.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">Do I need my own AI API keys?</div>
-        <div class="faq-a">No. Chronicle handles all AI costs on our end. Your subscription covers everything — no setup required beyond creating your account.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">What does the exported PDF look like?</div>
-        <div class="faq-a">A print-ready graphic novel with cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, preview before you print.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">Can I cancel anytime?</div>
-        <div class="faq-a">Yes, always. Cancel anytime and keep access through your billing period. Your campaigns and sessions are always accessible — your stories don't disappear.</div>
-      </div>
+
+    <div class="faq-item panel">
+      <div class="faq-q">How does the AI know which moments matter?</div>
+      <div class="faq-a">Chronicle reads your full transcript and identifies combat encounters, dramatic revelations, character moments, and emotional beats. You can also give it director's notes before generating — tell it exactly what scenes you want included.</div>
+    </div>
+
+    <div class="faq-item panel">
+      <div class="faq-q">Can I use Chronicle for any TTRPG system?</div>
+      <div class="faq-a">Absolutely. D&D, Pathfinder, Call of Cthulhu, Blades in the Dark, Mothership — any system with a story worth telling. Chronicle works from the transcript, not the ruleset.</div>
+    </div>
+
+    <div class="faq-item panel">
+      <div class="faq-q">What does the exported PDF look like?</div>
+      <div class="faq-a">A print-ready graphic novel with a cover page, your session panels with AI-generated illustrations, narrative prose between panels, and your character cast. Choose from four layout styles and preview before you print.</div>
+    </div>
+
+    <div class="faq-item panel">
+      <div class="faq-q">Do I need to provide my own AI API keys?</div>
+      <div class="faq-a">No. Chronicle handles all the AI costs on our end. Your subscription covers everything — Claude for narrative intelligence, Flux for image generation. No setup required beyond creating your account.</div>
+    </div>
+
+    <div class="faq-item panel">
+      <div class="faq-q">Can I cancel anytime?</div>
+      <div class="faq-a">Yes, always. Cancel anytime and keep access through your current billing period. Your campaigns and sessions are always accessible even if you downgrade — your stories don't disappear.</div>
     </div>
   </div>
 
-</div><!-- /comic-page -->
-</div><!-- /comic-book -->
+  <!-- CLOSING -->
+  <div class="closing-panel panel">
+    <div class="closing-content">
+      <div class="closing-title">YOUR NEXT SESSION<br>DESERVES TO BE<br>REMEMBERED.</div>
+      <div class="closing-sub">
+        Every campaign has a moment the whole table will never forget.<br>
+        Chronicle makes sure they never have to.
+      </div>
+      <a href="/login" class="btn-primary">BEGIN YOUR CHRONICLE</a>
+      <div style="margin-top:16px;font-size:13px;color:rgba(201,168,76,0.4);font-family:'Cinzel',serif;letter-spacing:1px;">30-DAY FREE TRIAL · NO CREDIT CARD REQUIRED</div>
+    </div>
+  </div>
+
+</div>
 
 <!-- FOOTER -->
 <footer>
@@ -1048,9 +1230,6 @@
   <div class="footer-copy">© <span id="footer-year"></span> Chronicle · chroniclemygame.com</div>
 </footer>
 
-<script>
-  document.getElementById('footer-year').textContent = new Date().getFullYear();
-</script>
-
+<script>document.getElementById("footer-year").textContent = new Date().getFullYear();</script>
 </body>
 </html>
