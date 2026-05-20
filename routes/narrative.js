@@ -7,8 +7,9 @@ const { requireAuth } = require('../middleware/auth');
 // GENERATE narrative prose for a session
 // ============================================================
 router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req, res) {
-  const { key } = req.body;
-  if (!key) return res.json({ error: 'Anthropic API key required' });
+  // Use platform key from env, fall back to request body key
+  const key = process.env.ANTHROPIC_API_KEY || req.body.key;
+  if (!key) return res.json({ error: 'AI service not configured. Please contact support.' });
 
   const db = await getDb();
 
@@ -76,7 +77,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
         max_tokens: 3000,
         system: 'You are a skilled fantasy author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for fantasy graphic novels. You always return valid JSON.',
         messages: [{ role: 'user', content: prompt }]

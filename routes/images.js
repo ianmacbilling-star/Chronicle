@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { getTier } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 const { fal } = require('@fal-ai/client');
 
@@ -18,7 +19,7 @@ async function generateImage(prompt, style, falKey, charList) {
   const charSection = charList ? '\n\nCHARACTERS (maintain exact appearance throughout): ' + charList : '';
   const fullPrompt = stylePrefix + '\n\n' + prompt + charSection;
 
-  const result = await fal.subscribe('fal-ai/flux/schnell', {
+  const result = await fal.subscribe(process.env.IMAGE_MODEL || 'fal-ai/flux/schnell', {
     input: {
       prompt: fullPrompt,
       image_size: 'landscape_4_3',
@@ -52,9 +53,9 @@ function getStylePrefix(style) {
 
 // POST /api/images/generate-moment
 router.post('/generate-moment', requireAuth, async function(req, res) {
-  const { moment_id, session_id, campaign_id, prompt, style, fal_key } = req.body;
-
-  if (!fal_key) return res.json({ error: 'fal.ai API key required. Please add it in Settings.' });
+  const { moment_id, session_id, campaign_id, prompt, style } = req.body;
+  const fal_key = process.env.FAL_API_KEY || req.body.fal_key;
+  if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
   if (!prompt) return res.json({ error: 'Prompt required' });
 
   const db = await getDb();
@@ -85,9 +86,9 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
 
 // POST /api/images/generate-all
 router.post('/generate-all', requireAuth, async function(req, res) {
-  const { session_id, campaign_id, style, fal_key } = req.body;
-
-  if (!fal_key) return res.json({ error: 'fal.ai API key required. Please add it in Settings.' });
+  const { session_id, campaign_id, style } = req.body;
+  const fal_key = process.env.FAL_API_KEY || req.body.fal_key;
+  if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
 
   const db = await getDb();
   const session = await db.prepare(

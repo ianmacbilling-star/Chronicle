@@ -3,6 +3,7 @@
 // ============================================================
 var state = {
   user: null,
+  userTier: null,
   campaigns: [],
   currentCampaign: null,
   layoutStyle: 'Classic',
@@ -815,11 +816,7 @@ function saveInlineNarrative(silent) {
 }
 
 function regenNarrativeSection(type, panelIndex) {
-  var key = getApiKey();
-  if (!key || key.indexOf('sk-ant-') !== 0) {
-    showAlert('Please add your Anthropic API key in Settings first.');
-    return;
-  }
+  var key = getApiKey() || 'platform';  // Platform key used server-side
 
   // Save current state first
   saveInlineNarrative();
@@ -872,12 +869,7 @@ function regenNarrativeSection(type, panelIndex) {
 }
 
 function generateAllImages() {
-  var falKey = getFalKey();
-  if (!falKey) {
-    document.getElementById('generate-error').textContent = 'Please add your fal.ai API key in Settings first.';
-    document.getElementById('generate-error').classList.remove('hidden');
-    return;
-  }
+  var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
 
   // Warn if images already exist
@@ -959,8 +951,7 @@ function generateAllImages() {
 }
 
 function regenImage(momentId, index) {
-  var falKey = getFalKey();
-  if (!falKey) { showAlert('Add your fal.ai key in Settings first.'); return; }
+  var falKey = getFalKey() || 'platform';
 
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (!moment) return;
@@ -1473,11 +1464,7 @@ function loadNarrative() {
 }
 
 function generateNarrative() {
-  var key = getApiKey();
-  if (!key || key.indexOf('sk-ant-') !== 0) {
-    showAlert('Please add your Anthropic API key in Settings first.');
-    return;
-  }
+  var key = getApiKey() || 'platform';  // Platform key used server-side
 
   var btn = document.getElementById('regen-narrative-btn');
   var progress = document.getElementById('narrative-progress');
@@ -1615,6 +1602,10 @@ function toggleSessionPreview() { previewSessionInline(); }
 
 // Export - opens PDF page, waits for full render, then prints
 function exportSessionPDF() {
+  if (state.userTier && !state.userTier.can_export) {
+    showAlert('Export is not available on the Copper plan. Upgrade to Silver or higher to export PDFs!');
+    return;
+  }
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic');
   var win = window.open(url, '_blank');
@@ -1716,8 +1707,9 @@ function renderStoryboard() {
   // [Opening] [Panel 1] [Between 1-2] [Panel 2] [Between 2-3] [Panel 3] ...
 
   function buildPanel(m, i) {
+    var needsWatermark = state.userTier && state.userTier.watermark;
     var imgHtml = m.image
-      ? '<img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
           '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
@@ -1781,6 +1773,7 @@ function renderStoryboard() {
 // ============================================================
 var state = {
   user: null,
+  userTier: null,
   campaigns: [],
   currentCampaign: null,
   layoutStyle: 'Classic',
@@ -2524,11 +2517,7 @@ function saveInlineNarrative(silent) {
 }
 
 function regenNarrativeSection(type, panelIndex) {
-  var key = getApiKey();
-  if (!key || key.indexOf('sk-ant-') !== 0) {
-    showAlert('Please add your Anthropic API key in Settings first.');
-    return;
-  }
+  var key = getApiKey() || 'platform';  // Platform key used server-side
 
   // Save current state first
   saveInlineNarrative();
@@ -2581,12 +2570,7 @@ function regenNarrativeSection(type, panelIndex) {
 }
 
 function generateAllImages() {
-  var falKey = getFalKey();
-  if (!falKey) {
-    document.getElementById('generate-error').textContent = 'Please add your fal.ai API key in Settings first.';
-    document.getElementById('generate-error').classList.remove('hidden');
-    return;
-  }
+  var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
 
   // Warn if images already exist
@@ -2668,8 +2652,7 @@ function generateAllImages() {
 }
 
 function regenImage(momentId, index) {
-  var falKey = getFalKey();
-  if (!falKey) { showAlert('Add your fal.ai key in Settings first.'); return; }
+  var falKey = getFalKey() || 'platform';
 
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (!moment) return;
@@ -3182,11 +3165,7 @@ function loadNarrative() {
 }
 
 function generateNarrative() {
-  var key = getApiKey();
-  if (!key || key.indexOf('sk-ant-') !== 0) {
-    showAlert('Please add your Anthropic API key in Settings first.');
-    return;
-  }
+  var key = getApiKey() || 'platform';  // Platform key used server-side
 
   var btn = document.getElementById('regen-narrative-btn');
   var progress = document.getElementById('narrative-progress');

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { getTier, getMomentRange } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
@@ -27,13 +28,12 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   const style = artStyle || session.campaign_style || 'High fantasy illustration';
 
-  // Scale moment count to transcript length, capped at 10
+  // Scale moment count to transcript length based on user tier
   const wordCount = session.transcript.split(/\s+/).length;
-  let momentCount;
-  if (wordCount < 2000)       momentCount = '3-4';
-  else if (wordCount < 5000)  momentCount = '4-6';
-  else if (wordCount < 10000) momentCount = '6-8';
-  else                        momentCount = '8-10';
+  const db2 = await getDb();
+  const userForTier = await db2.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+  const userTier = userForTier ? userForTier.tier : 'copper';
+  const momentCount = getMomentRange(userTier, wordCount);
 
   // Parse session notes into mandatory and optional directives
   const notesSection = session.session_notes
@@ -83,7 +83,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
         max_tokens: 2000,
         system: systemPrompt,
         messages: [{

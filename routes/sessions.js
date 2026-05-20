@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
+const { checkSessionLimit } = require('../middleware/tiers');
 
 async function verifyCampaignOwner(req, res, next) {
   const db = await getDb();
@@ -51,7 +52,7 @@ router.get('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
 });
 
 // POST create session
-router.post('/', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignOwner, checkSessionLimit, async function(req, res) {
   const { name, session_date } = req.body;
   if (!name || !session_date) return res.json({ error: 'Name and date required' });
   const db = await getDb();

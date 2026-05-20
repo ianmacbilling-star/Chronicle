@@ -21,6 +21,7 @@
       </div>
       <div class="user-menu-dropdown" id="user-menu">
         <div class="user-menu-header" id="user-menu-email"></div>
+        <div class="user-menu-item" onclick="showView('account');closeUserMenu()">&#9733; My Account</div>
         <div class="user-menu-item" onclick="showView('settings');closeUserMenu()">&#9881; Settings</div>
         <div class="user-menu-divider"></div>
         <div class="user-menu-item danger" onclick="logout()">&#8594; Sign out</div>
@@ -42,6 +43,9 @@
     <div class="sidebar-section">
       <div class="sidebar-item active" id="snav-campaigns" onclick="showView('campaigns')">
         &#127956; My Campaigns
+      </div>
+      <div class="sidebar-item" id="snav-account" onclick="showView('account')">
+        &#9733; My Account
       </div>
       <div class="sidebar-item" id="snav-settings" onclick="showView('settings')">
         &#9881; Settings
@@ -265,6 +269,42 @@
 
     </div>
 
+    <!-- ==================== ACCOUNT VIEW ==================== -->
+    <div id="view-account" class="view" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">My Account</div>
+          <div class="page-subtitle">Manage your subscription and billing</div>
+        </div>
+      </div>
+
+      <!-- Current Plan -->
+      <div class="settings-section" id="account-tier-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="settings-section-title" id="account-tier-name">Loading...</div>
+          <div id="account-tier-badge" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:600;font-family:var(--font-display);letter-spacing:1px;"></div>
+        </div>
+        <div class="settings-section-desc" id="account-tier-desc"></div>
+        <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
+        <div id="account-features" style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;"></div>
+      </div>
+
+      <!-- Usage -->
+      <div class="settings-section">
+        <div class="settings-section-title">Usage</div>
+        <div class="settings-section-desc">Your current usage this period</div>
+        <div id="account-usage" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;"></div>
+      </div>
+
+      <!-- Upgrade Options -->
+      <div id="account-upgrade-section" class="settings-section">
+        <div class="settings-section-title">Upgrade Your Plan</div>
+        <div class="settings-section-desc">Unlock more campaigns, sessions, and features</div>
+        <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
+      </div>
+
+    </div>
+
     <!-- ==================== SETTINGS VIEW ==================== -->
     <div id="view-settings" class="view" style="display:none;">
       <div class="page-header">
@@ -291,29 +331,7 @@
         <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
       </div>
 
-      <!-- API Keys -->
-      <div class="settings-section">
-        <div class="settings-section-title">Anthropic API Key</div>
-        <div class="settings-section-desc">Used for AI moment extraction from transcripts. Get yours from console.anthropic.com</div>
-        <div id="apikey-success" class="alert alert-success hidden"></div>
-        <div class="form-group">
-          <label class="form-label">API Key</label>
-          <input class="key-input-field" id="settings-apikey" type="password" placeholder="sk-ant-..." autocomplete="off" />
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveApiKey()">Save API key</button>
-      </div>
 
-      <!-- fal.ai Key -->
-      <div class="settings-section">
-        <div class="settings-section-title">fal.ai API Key</div>
-        <div class="settings-section-desc">Used for AI image generation on storyboard panels. Get yours from fal.ai — $5 credit gives you 600+ images.</div>
-        <div id="falkey-success" class="alert alert-success hidden"></div>
-        <div class="form-group">
-          <label class="form-label">fal.ai Key</label>
-          <input class="key-input-field" id="settings-falkey" type="password" placeholder="fal-..." autocomplete="off" />
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveFalKey()">Save fal.ai key</button>
-      </div>
 
       <!-- Change Password -->
       <div class="settings-section">

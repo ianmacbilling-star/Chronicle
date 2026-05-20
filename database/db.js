@@ -135,9 +135,28 @@ async function initPostgres() {
       password TEXT NOT NULL,
       api_key TEXT,
       fal_key TEXT,
+      tier TEXT DEFAULT 'copper',
+      trial_started_at TIMESTAMP,
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
+      subscription_status TEXT DEFAULT 'trialing',
+      current_period_end TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       edited_at TIMESTAMP,
       edited_by INTEGER
+    )
+  `);
+
+  // Tier/billing migrations
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tier_events (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      event_type TEXT NOT NULL,
+      from_tier TEXT,
+      to_tier TEXT,
+      stripe_event_id TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
@@ -148,6 +167,7 @@ async function initPostgres() {
       name TEXT NOT NULL,
       description TEXT,
       art_style TEXT,
+      is_active BOOLEAN DEFAULT true,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_by INTEGER NOT NULL,
       edited_at TIMESTAMP,
@@ -197,6 +217,13 @@ async function initPostgres() {
 
   // ALTER TABLE migrations for existing databases
   const alterations = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'copper'",
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'trialing'",
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMP',
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS art_style TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS layout_style TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS session_notes TEXT',

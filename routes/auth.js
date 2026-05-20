@@ -57,9 +57,33 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
-    res.json({ authenticated: true, name: user.name, email: user.email, id: user.id });
+
+    const tier = getTier(user.tier || 'copper');
+    const trialExpired = isTrialExpired(user);
+
+    // Calculate trial days remaining
+    let trialDaysLeft = null;
+    if (user.tier === 'copper' && user.trial_started_at) {
+      const started = new Date(user.trial_started_at);
+      const expires = new Date(started.getTime() + 30 * 24 * 60 * 60 * 1000);
+      trialDaysLeft = Math.max(0, Math.ceil((expires - new Date()) / (24 * 60 * 60 * 1000)));
+    }
+
+    res.json({
+      authenticated: true,
+      name: user.name,
+      email: user.email,
+      id: user.id,
+      tier: user.tier || 'copper',
+      tierName: tier.name,
+      tierFeatures: tier,
+      trialExpired: trialExpired,
+      trialDaysLeft: trialDaysLeft,
+      subscriptionStatus: user.subscription_status || 'trialing',
+      allTiers: TIERS
+    });
   } catch(e) {
     res.json({ authenticated: false });
   }
@@ -119,3 +143,24 @@ router.get('/apikey', async function(req, res) {
 });
 
 module.exports = router;
+
+// PUT /api/auth/tier - admin only tier change
+router.put('/tier', requireAuth, async function(req, res) {
+  const { user_id, tier } = req.body;
+  const validTiers = ['copper', 'silver', 'gold', 'platinum'];
+
+  // Simple admin check - you can make this more sophisticated
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
+  if (!adminEmails.includes(req.session.userEmail)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  if (!validTiers.includes(tier)) return res.json({ error: 'Invalid tier' });
+
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE users SET tier = ?, edited_at = ? WHERE id = ?')
+    .run(tier, now, user_id || req.session.userId);
+
+  res.json({ success: true });
+});
