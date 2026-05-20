@@ -145,20 +145,19 @@ router.get('/apikey', async function(req, res) {
 module.exports = router;
 
 // PUT /api/auth/tier - admin only tier change
-router.put('/tier', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+router.put('/tier', requireAuth, async function(req, res) {
   const { user_id, tier } = req.body;
   const validTiers = ['copper', 'silver', 'gold', 'platinum'];
 
+  // Simple admin check - you can make this more sophisticated
   const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
-  const db = await getDb();
-  const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
-  if (!user || !adminEmails.includes(user.email)) {
+  if (!adminEmails.includes(req.session.userEmail)) {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
   if (!validTiers.includes(tier)) return res.json({ error: 'Invalid tier' });
 
+  const db = await getDb();
   const now = new Date().toISOString();
   await db.prepare('UPDATE users SET tier = ?, edited_at = ? WHERE id = ?')
     .run(tier, now, user_id || req.session.userId);
