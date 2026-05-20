@@ -152,6 +152,24 @@
       </div>
       <button class="btn btn-primary" id="login-btn">Enter the Chronicle</button>
       <div class="auth-switch">New here? <a onclick="showRegister()">Create your account</a></div>
+      <div style="text-align:center;margin-top:10px;">
+        <a onclick="showForgotPassword()" style="font-size:12px;color:rgba(201,168,76,0.5);cursor:pointer;">Forgot your password?</a>
+      </div>
+    </div>
+
+    <!-- FORGOT PASSWORD -->
+    <div id="forgot-panel" class="hidden">
+      <div class="auth-title">Reset Password</div>
+      <div class="auth-subtitle">Enter your email and we'll send a reset link</div>
+      <div class="auth-divider"></div>
+      <div id="forgot-error" class="alert-error hidden"></div>
+      <div id="forgot-success" class="alert-success hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Email address</label>
+        <input class="form-input" type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <button class="btn btn-primary" id="forgot-btn">Send Reset Link</button>
+      <div class="auth-switch"><a onclick="showLogin()">Back to sign in</a></div>
     </div>
 
     <!-- REGISTER -->

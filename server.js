@@ -54,6 +54,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/email', require('./routes/email').router);
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/campaigns/:campaignId/characters', require('./routes/characters'));
 app.use('/api/campaigns/:campaignId/sessions', require('./routes/sessions'));
