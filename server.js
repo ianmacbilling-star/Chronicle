@@ -51,6 +51,11 @@ function buildSessionMiddleware() {
 app.use(buildSessionMiddleware());
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Explicit page routes
+app.get('/login', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use('/api/auth', require('./routes/auth'));

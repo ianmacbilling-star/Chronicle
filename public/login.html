@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronicle</title>
+<link rel="stylesheet" href="/css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  .auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: #0a0806;
+    background-image: url('/images/Chronicle_background.png');
+    background-size: cover;
+    background-position: center;
+    position: relative;
+  }
+  .auth-page::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+  }
+  .auth-box {
+    position: relative;
+    z-index: 1;
+    background: rgba(20,15,8,0.92);
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 16px;
+    padding: 36px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.1);
+  }
+  .auth-logo-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 28px;
+    gap: 12px;
+  }
+  .auth-logo-img {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+  }
+  .auth-logo-name {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: #c9a84c;
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px rgba(201,168,76,0.3);
+  }
+  .auth-title {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 16px;
+    font-weight: 400;
+    color: #c9a84c;
+    text-align: center;
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+  }
+  .auth-subtitle {
+    font-size: 13px;
+    color: rgba(201,168,76,0.5);
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .auth-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent);
+    margin: 0 0 24px;
+  }
+  .auth-box .form-label {
+    color: rgba(201,168,76,0.7);
+  }
+  .auth-box .form-input {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(201,168,76,0.2);
+    color: #e8d5a3;
+  }
+  .auth-box .form-input:focus {
+    border-color: rgba(201,168,76,0.6);
+    outline: none;
+  }
+  .auth-box .form-input::placeholder {
+    color: rgba(201,168,76,0.25);
+  }
+  .auth-box .btn-primary {
+    background: #c9a84c;
+    color: #1a0e06;
+    border-color: #c9a84c;
+    font-family: 'Cinzel', Georgia, serif;
+    letter-spacing: 1px;
+    font-size: 13px;
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+  }
+  .auth-box .btn-primary:hover {
+    background: #e8c870;
+  }
+  .auth-switch {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 12px;
+    color: rgba(201,168,76,0.5);
+  }
+  .auth-switch a {
+    color: #c9a84c;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .auth-switch a:hover { text-decoration: underline; }
+  .alert-error {
+    background: rgba(139,26,26,0.3);
+    border: 1px solid rgba(240,149,149,0.4);
+    color: #f09595;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo-wrap">
+      <img class="auth-logo-img" src="/images/Chronicle_Logo.png" alt="Chronicle logo" />
+      <span class="auth-logo-name">CHRONICLE</span>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="login-panel">
+      <div class="auth-title">Welcome Back, DM</div>
+      <div class="auth-subtitle">Sign in to your campaigns</div>
+      <div class="auth-divider"></div>
+      <div id="login-error" class="alert-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="login-password" placeholder="Your password" autocomplete="current-password" />
+      </div>
+      <button class="btn btn-primary" id="login-btn">Enter the Chronicle</button>
+      <div class="auth-switch">New here? <a onclick="showRegister()">Create your account</a></div>
+      <div style="text-align:center;margin-top:10px;">
+        <a onclick="showForgotPassword()" style="font-size:12px;color:rgba(201,168,76,0.5);cursor:pointer;">Forgot your password?</a>
+      </div>
+    </div>
+
+    <!-- FORGOT PASSWORD -->
+    <div id="forgot-panel" class="hidden">
+      <div class="auth-title">Reset Password</div>
+      <div class="auth-subtitle">Enter your email and we'll send a reset link</div>
+      <div class="auth-divider"></div>
+      <div id="forgot-error" class="alert-error hidden"></div>
+      <div id="forgot-success" class="alert-success hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Email address</label>
+        <input class="form-input" type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <button class="btn btn-primary" id="forgot-btn">Send Reset Link</button>
+      <div class="auth-switch"><a onclick="showLogin()">Back to sign in</a></div>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="register-panel" class="hidden">
+      <div class="auth-title">Begin Your Chronicle</div>
+      <div class="auth-subtitle">Create your Dungeon Master account</div>
+      <div class="auth-divider"></div>
+      <div id="register-error" class="alert-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Your name</label>
+        <input class="form-input" type="text" id="reg-name" placeholder="e.g. Dungeon Master Dave" autocomplete="name" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="reg-email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="reg-password" placeholder="At least 8 characters" autocomplete="new-password" />
+      </div>
+      <button class="btn btn-primary" id="register-btn">Create Account</button>
+      <div class="auth-switch">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showLogin() {
+  document.getElementById('login-panel').classList.remove('hidden');
+  document.getElementById('register-panel').classList.add('hidden');
+}
+function showRegister() {
+  document.getElementById('login-panel').classList.add('hidden');
+  document.getElementById('register-panel').classList.remove('hidden');
+}
+function showError(id, msg) {
+  var el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+function hideError(id) { document.getElementById(id).classList.add('hidden'); }
+
+document.getElementById('login-btn').addEventListener('click', async function() {
+  hideError('login-error');
+  var email = document.getElementById('login-email').value.trim();
+  var password = document.getElementById('login-password').value;
+  if (!email || !password) { showError('login-error', 'Please enter your email and password.'); return; }
+  this.disabled = true; this.textContent = 'Entering...';
+  try {
+    var res = await fetch('/api/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+    var data = await res.json();
+    if (data.error) { showError('login-error', data.error); this.disabled=false; this.textContent='Enter the Chronicle'; return; }
+    window.location.href = '/app.html';
+  } catch(e) { showError('login-error','Connection error. Please try again.'); this.disabled=false; this.textContent='Enter the Chronicle'; }
+});
+
+document.getElementById('register-btn').addEventListener('click', async function() {
+  hideError('register-error');
+  var name = document.getElementById('reg-name').value.trim();
+  var email = document.getElementById('reg-email').value.trim();
+  var password = document.getElementById('reg-password').value;
+  if (!name||!email||!password) { showError('register-error','All fields are required.'); return; }
+  if (password.length < 8) { showError('register-error','Password must be at least 8 characters.'); return; }
+  this.disabled=true; this.textContent='Creating...';
+  try {
+    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password})});
+    var data = await res.json();
+    if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
+    window.location.href = '/app.html';
+  } catch(e) { showError('register-error','Connection error.'); this.disabled=false; this.textContent='Create Account'; }
+});
+
+document.getElementById('login-password').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('login-btn').click(); });
+document.getElementById('reg-password').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('register-btn').click(); });
+
+fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated) window.location.href='/app.html'; });
+</script>
+</body>
+</html>
