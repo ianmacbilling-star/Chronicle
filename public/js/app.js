@@ -1174,9 +1174,16 @@ function setupNovelPager() {
 function scrollNovelPreviewToTop() {
   var anchor = document.getElementById('novel-pager') ||
                document.getElementById('novel-preview-frame');
-  if (anchor && anchor.scrollIntoView) {
-    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  if (!anchor) return;
+  // Defer so the scroll is computed after loadNovelPreview has updated the
+  // DOM (hiding the iframe / showing the loading box shifts page height).
+  setTimeout(function() {
+    var rect = anchor.getBoundingClientRect();
+    var top = rect.top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+    // Small offset so the pager isn't flush against the very top edge
+    top = Math.max(0, top - 12);
+    window.scrollTo({ top: top, behavior: 'smooth' });
+  }, 60);
 }
 
 function novelPageJump(value) {
@@ -3086,9 +3093,16 @@ function setupNovelPager() {
 function scrollNovelPreviewToTop() {
   var anchor = document.getElementById('novel-pager') ||
                document.getElementById('novel-preview-frame');
-  if (anchor && anchor.scrollIntoView) {
-    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  if (!anchor) return;
+  // Defer so the scroll is computed after loadNovelPreview has updated the
+  // DOM (hiding the iframe / showing the loading box shifts page height).
+  setTimeout(function() {
+    var rect = anchor.getBoundingClientRect();
+    var top = rect.top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+    // Small offset so the pager isn't flush against the very top edge
+    top = Math.max(0, top - 12);
+    window.scrollTo({ top: top, behavior: 'smooth' });
+  }, 60);
 }
 
 function novelPageJump(value) {

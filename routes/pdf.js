@@ -40,16 +40,11 @@ function buildPanelHTML(m, i, size) {
 }
 
 // Comic-book style panel — thick black border, flush, optional overlaid caption.
-// size: 'full' | 'half' | 'third'. showCaption: overlay the panel title comic-style.
-function buildComicPanel(m, i, size, showCaption) {
-  var widthMap = { full: '100%', half: '49.4%', third: '32.6%' };
-  var heightMap = { full: '5.4in', half: '3.7in', third: '2.6in' };
-  var w = widthMap[size] || '32.6%';
-  var h = heightMap[size] || '2.6in';
-
+// Designed to sit inside a flex row; `flex` controls how much width it takes.
+function buildComicPanel(m, i, flexGrow, h, showCaption) {
   var caption = '';
   if (showCaption && m.title) {
-    caption = '<div style="position:absolute;top:0;left:0;max-width:78%;' +
+    caption = '<div style="position:absolute;top:0;left:0;max-width:80%;' +
       'background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;' +
       'padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;' +
       'color:#0a0806;letter-spacing:0.02em;line-height:1.25;">' + m.title + '</div>';
@@ -60,9 +55,9 @@ function buildComicPanel(m, i, size, showCaption) {
     : '<div style="width:100%;height:' + h + ';background:#1a0f06;display:flex;align-items:center;justify-content:center;">' +
         '<span style="font-size:30pt;opacity:0.25;color:#c9a84c;">&#128444;</span></div>';
 
-  return '<div style="width:' + w + ';display:inline-block;vertical-align:top;' +
+  return '<div style="flex:' + flexGrow + ';box-sizing:border-box;' +
     'position:relative;overflow:hidden;border:5px solid #0a0806;' +
-    'margin:0 5px 5px 0;page-break-inside:avoid;background:#160e06;">' +
+    'page-break-inside:avoid;background:#160e06;">' +
     media + caption +
   '</div>';
 }
@@ -116,42 +111,76 @@ function layoutStorybook(moments, sections, intro, outro) {
 // dynamic mixed-size rows, captions overlaid comic-style.
 function layoutComicBook(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
-  // Repeating row rhythm: a wide pair, then a tight trio, then a full splash.
-  var pattern = ['half', 'half', 'third', 'third', 'third', 'full'];
-  html += '<div style="line-height:0;">';
-  moments.forEach(function(m, i) {
-    var size = (i === 0) ? 'full' : pattern[i % pattern.length];
-    html += buildComicPanel(m, i, size, true);
-    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
-    if (section.after) {
-      html += '</div>' + buildNarrativeHTML(section.after, false) + '<div style="line-height:0;">';
+
+  // Row recipes: each defines how many panels and their flex ratios + height.
+  // Mixing 1-, 2-, and 3-panel rows (some uneven) gives a real comic rhythm.
+  var recipes = [
+    { sizes: [1],        h: '4.6in' },          // full splash
+    { sizes: [2, 1],     h: '3.0in' },          // big + small
+    { sizes: [1, 1, 1],  h: '2.5in' },          // even trio
+    { sizes: [1, 1],     h: '3.2in' },          // even pair
+    { sizes: [1, 2],     h: '3.0in' },          // small + big
+    { sizes: [1, 1],     h: '3.2in' }           // even pair
+  ];
+
+  function rowOpen() { return '<div style="display:flex;gap:6px;margin-bottom:6px;line-height:0;">'; }
+
+  var idx = 0;            // moment index
+  var recipeNum = 0;      // which recipe to use next
+  while (idx < moments.length) {
+    var recipe = recipes[recipeNum % recipes.length];
+    recipeNum++;
+    var count = recipe.sizes.length;
+    var slice = moments.slice(idx, idx + count);
+    // If fewer moments remain than the recipe wants, just lay them out evenly.
+    var sizes = (slice.length === count) ? recipe.sizes : slice.map(function() { return 1; });
+
+    html += rowOpen();
+    slice.forEach(function(m, j) {
+      html += buildComicPanel(m, idx + j, sizes[j], recipe.h, true);
+    });
+    html += '</div>';
+
+    // Narrative that falls within this row's moments
+    for (var k = 0; k < slice.length; k++) {
+      var section = sections.find(function(s) { return s.panel_index === (idx + k); }) || {};
+      if (section.after) html += buildNarrativeHTML(section.after, false);
     }
-  });
-  html += '</div>';
+    idx += slice.length;
+  }
+
   html += buildNarrativeHTML(outro, true);
   return html;
 }
 
 // ACTION — comic treatment, but combat/key beats become full-bleed splash
 // panels; quieter moments stay small. No captions on the art — kinetic.
+// ACTION — comic treatment, but combat/key beats become full-bleed splash
+// panels; quieter moments stay small in flex rows. No captions — kinetic.
 function layoutAction(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
-  var row = '';
-  function flush() {
-    if (row) { html += '<div style="line-height:0;">' + row + '</div>'; row = ''; }
+  var rowPanels = [];
+  function flushRow() {
+    if (rowPanels.length) {
+      html += '<div style="display:flex;gap:6px;margin-bottom:6px;line-height:0;">' +
+        rowPanels.join('') + '</div>';
+      rowPanels = [];
+    }
   }
   moments.forEach(function(m, i) {
     var isBig = m.type === 'combat' || i === 0 || i === moments.length - 1;
     if (isBig) {
-      flush();
-      html += '<div style="line-height:0;">' + buildComicPanel(m, i, 'full', false) + '</div>';
+      flushRow();
+      html += '<div style="display:flex;margin-bottom:6px;line-height:0;">' +
+        buildComicPanel(m, i, 1, '5.0in', false) + '</div>';
     } else {
-      row += buildComicPanel(m, i, 'third', false);
+      rowPanels.push(buildComicPanel(m, i, 1, '2.6in', false));
+      if (rowPanels.length === 3) flushRow();   // up to 3 small panels per row
     }
     var section = sections.find(function(s) { return s.panel_index === i; }) || {};
-    if (section.after) { flush(); html += buildNarrativeHTML(section.after, false); }
+    if (section.after) { flushRow(); html += buildNarrativeHTML(section.after, false); }
   });
-  flush();
+  flushRow();
   html += buildNarrativeHTML(outro, true);
   return html;
 }
