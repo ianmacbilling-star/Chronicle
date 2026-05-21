@@ -80,6 +80,137 @@ function closeUserMenu() {
   document.getElementById('user-menu').classList.remove('open');
 }
 
+// ============================================================
+// MY ACCOUNT (read-only)
+// ============================================================
+function loadAccount() {
+  // Pull current tier + plan info, then usage counts.
+  fetch('/api/auth/me')
+    .then(function(r) { return r.json(); })
+    .then(function(me) {
+      if (!me || !me.authenticated) return;
+      renderAccountTier(me);
+      renderAccountPlans(me);
+      return fetch('/api/auth/usage').then(function(r) { return r.json(); });
+    })
+    .then(function(usage) {
+      if (usage) renderAccountUsage(usage);
+    })
+    .catch(function(){});
+}
+
+var TIER_COLORS = {
+  copper:   { bg:'#6b4a2f', fg:'#f0d8b8' },
+  silver:   { bg:'#8a8d93', fg:'#1a1a1a' },
+  gold:     { bg:'#c9a84c', fg:'#1a1a1a' },
+  platinum: { bg:'#3a3d6b', fg:'#e8e8f0' }
+};
+
+function renderAccountTier(me) {
+  var tierKey = (me.tier || 'copper');
+  var feat = me.tierFeatures || {};
+  var nameEl = document.getElementById('account-tier-name');
+  if (nameEl) nameEl.textContent = (feat.name || tierKey) + ' Plan';
+
+  var badge = document.getElementById('account-tier-badge');
+  if (badge) {
+    var col = TIER_COLORS[tierKey] || TIER_COLORS.copper;
+    badge.textContent = (feat.name || tierKey).toUpperCase();
+    badge.style.background = col.bg;
+    badge.style.color = col.fg;
+  }
+
+  var desc = document.getElementById('account-tier-desc');
+  if (desc) {
+    var priceText = (feat.price ? ('$' + feat.price + '/month') : 'Free');
+    desc.textContent = (feat.description || '') + ' \u2014 ' + priceText;
+  }
+
+  // Trial banner — only for copper with a trial running
+  var banner = document.getElementById('account-trial-banner');
+  if (banner) {
+    if (tierKey === 'copper' && me.trialDaysLeft !== null && me.trialDaysLeft !== undefined) {
+      if (me.trialExpired) {
+        banner.textContent = 'Your free trial has expired. Upgrade to keep creating.';
+      } else {
+        banner.textContent = 'Free trial: ' + me.trialDaysLeft + ' day' +
+          (me.trialDaysLeft === 1 ? '' : 's') + ' remaining.';
+      }
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  // Feature grid
+  var grid = document.getElementById('account-features');
+  if (grid) {
+    function row(label, ok) {
+      var mark = ok
+        ? '<span style="color:#7fae5f;">\u2713</span> '
+        : '<span style="color:#9a6a5a;">\u2717</span> ';
+      return '<div>' + mark + label + '</div>';
+    }
+    function val(label, v) {
+      return '<div><span style="color:var(--gold);">' + v + '</span> ' + label + '</div>';
+    }
+    var campLimit = (feat.max_campaigns === null || feat.max_campaigns === undefined)
+      ? 'Unlimited' : feat.max_campaigns;
+    var sessLimit = (feat.max_sessions === null || feat.max_sessions === undefined)
+      ? 'Unlimited' : feat.max_sessions;
+    grid.innerHTML =
+      val('campaigns', campLimit) +
+      val('sessions per campaign', sessLimit) +
+      row('Export to PDF', feat.can_export) +
+      row('Print on demand', feat.can_print) +
+      row('Prompt editing', feat.can_edit_prompts) +
+      row('Watermark-free', !feat.watermark);
+  }
+}
+
+function renderAccountUsage(usage) {
+  var el = document.getElementById('account-usage');
+  if (!el) return;
+  function card(num, label) {
+    return '<div style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.18);' +
+      'border-radius:var(--radius);padding:16px;text-align:center;">' +
+      '<div style="font-family:var(--font-display);font-size:28px;color:var(--gold);">' + num + '</div>' +
+      '<div style="font-size:11px;color:var(--text-light);letter-spacing:0.5px;margin-top:4px;">' +
+      label + '</div></div>';
+  }
+  el.innerHTML =
+    card(usage.campaigns || 0, 'ACTIVE CAMPAIGNS') +
+    card(usage.sessions || 0, 'TOTAL SESSIONS') +
+    card(usage.storyboards || 0, 'STORYBOARDS');
+}
+
+function renderAccountPlans(me) {
+  var el = document.getElementById('account-plans');
+  if (!el) return;
+  var all = me.allTiers || {};
+  var current = me.tier || 'copper';
+  var order = ['copper','silver','gold','platinum'];
+
+  el.innerHTML = order.map(function(key) {
+    var t = all[key];
+    if (!t) return '';
+    var isCurrent = (key === current);
+    var col = TIER_COLORS[key] || TIER_COLORS.copper;
+    var priceText = t.price ? ('$' + t.price + '<span style="font-size:11px;color:var(--text-light);">/mo</span>') : 'Free';
+    return '<div style="border:1px solid ' + (isCurrent ? 'var(--gold)' : 'rgba(201,168,76,0.2)') + ';' +
+      'border-radius:var(--radius-lg);padding:16px;background:' +
+      (isCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<span style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + col.bg + ';">' +
+          (t.name || key).toUpperCase() + '</span>' +
+        (isCurrent ? '<span style="font-size:10px;color:var(--gold);font-weight:600;">CURRENT</span>' : '') +
+      '</div>' +
+      '<div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin:8px 0;">' + priceText + '</div>' +
+      '<div style="font-size:11px;color:var(--text-light);line-height:1.5;">' + (t.description || '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
 // Get API key — prefer settings field, fall back to nothing
 function getApiKey() {
   var el = document.getElementById('settings-apikey');
@@ -135,6 +266,7 @@ function showView(view) {
       {label:'My Campaigns', action:"showView('campaigns')"},
       {label:'My Account'}
     ]);
+    loadAccount();
   } else if (view === 'settings') {
     document.getElementById('snav-settings').classList.add('active');
     document.getElementById('campaign-subnav').style.display = 'none';
@@ -2174,6 +2306,7 @@ function showView(view) {
       {label:'My Campaigns', action:"showView('campaigns')"},
       {label:'My Account'}
     ]);
+    loadAccount();
   } else if (view === 'settings') {
     document.getElementById('snav-settings').classList.add('active');
     document.getElementById('campaign-subnav').style.display = 'none';

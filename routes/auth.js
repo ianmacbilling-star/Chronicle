@@ -165,4 +165,35 @@ router.put('/tier', async function(req, res) {
   res.json({ success: true });
 });
 
+// GET /api/auth/usage - current usage counts for the account page
+router.get('/usage', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    const uid = req.session.userId;
+
+    const campaigns = await db.prepare(
+      'SELECT COUNT(*) AS c FROM campaigns WHERE user_id = ? AND is_active = true'
+    ).get(uid);
+
+    const sessions = await db.prepare(
+      'SELECT COUNT(*) AS c FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE c.user_id = ?'
+    ).get(uid);
+
+    const storyboards = await db.prepare(
+      'SELECT COUNT(DISTINCT m.session_id) AS c FROM moments m ' +
+      'JOIN sessions s ON m.session_id = s.id ' +
+      'JOIN campaigns c ON s.campaign_id = c.id WHERE c.user_id = ?'
+    ).get(uid);
+
+    res.json({
+      campaigns: campaigns ? campaigns.c : 0,
+      sessions: sessions ? sessions.c : 0,
+      storyboards: storyboards ? storyboards.c : 0
+    });
+  } catch(e) {
+    res.json({ campaigns: 0, sessions: 0, storyboards: 0 });
+  }
+});
+
 module.exports = router;
