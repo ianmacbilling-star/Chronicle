@@ -237,6 +237,7 @@ async function initPostgres() {
     'ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_other TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS fal_key TEXT',
+    'ALTER TABLE moments ADD COLUMN IF NOT EXISTS emphasis TEXT',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -250,6 +251,7 @@ async function initPostgres() {
       description TEXT,
       type TEXT,
       prompt TEXT,
+      emphasis TEXT,
       image TEXT,
       panel_order INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -305,7 +307,7 @@ function initSQLite() {
     CREATE TABLE IF NOT EXISTS moments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER NOT NULL, title TEXT NOT NULL, description TEXT,
-      type TEXT, prompt TEXT, image TEXT, panel_order INTEGER DEFAULT 0,
+      type TEXT, prompt TEXT, emphasis TEXT, image TEXT, panel_order INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
       edited_at DATETIME, edited_by INTEGER
     );
@@ -325,6 +327,7 @@ function initSQLite() {
     'ALTER TABLE sessions ADD COLUMN narrative_outro TEXT',
     'ALTER TABLE users ADD COLUMN api_key TEXT',
     'ALTER TABLE users ADD COLUMN fal_key TEXT',
+    'ALTER TABLE moments ADD COLUMN emphasis TEXT',
   ];
   migrations.forEach(function(m) { try { sqlite.exec(m); } catch(e) {} });
 

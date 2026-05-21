@@ -30,7 +30,7 @@ function buildPanelHTML(m, i, size) {
 
   return '<div style="width:' + w + ';display:inline-block;vertical-align:top;margin-bottom:0.15in;margin-right:0.1in;page-break-inside:avoid;">' +
     (m.image
-      ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.2);" src="' + m.image + '" alt="' + m.title + '" />'
+      ? '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.2);" src="' + m.image + '" alt="' + m.title + '" />'
       : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:3px;display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>') +
     '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:2px;">' +
       '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i+1) + '</span>' +
@@ -41,7 +41,7 @@ function buildPanelHTML(m, i, size) {
 
 // Comic-book style panel — thick black border, flush, optional overlaid caption.
 // Designed to sit inside a flex row; `flex` controls how much width it takes.
-function buildComicPanel(m, i, flexGrow, h, showCaption) {
+function buildComicPanel(m, i, flexGrow, h, showCaption, emphasisText) {
   var caption = '';
   if (showCaption && m.title) {
     caption = '<div style="position:absolute;top:0;left:0;max-width:80%;' +
@@ -51,14 +51,33 @@ function buildComicPanel(m, i, flexGrow, h, showCaption) {
   }
 
   var media = m.image
-    ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + m.title + '" />'
+    ? '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;" src="' + m.image + '" alt="' + m.title + '" />'
     : '<div style="width:100%;height:' + h + ';background:#1a0f06;display:flex;align-items:center;justify-content:center;">' +
         '<span style="font-size:30pt;opacity:0.25;color:#c9a84c;">&#128444;</span></div>';
 
-  return '<div style="flex:' + flexGrow + ';box-sizing:border-box;' +
+  // The panel itself clips its contents (overflow:hidden keeps the image tidy).
+  var panel = '<div style="width:100%;box-sizing:border-box;' +
     'position:relative;overflow:hidden;border:5px solid #0a0806;' +
-    'page-break-inside:avoid;background:#160e06;">' +
+    'background:#160e06;">' +
     media + caption +
+  '</div>';
+
+  // Emphasis burst — angled comic SFX text that breaks past the panel edge.
+  // It lives on the (non-clipping) wrapper, not inside the clipped panel.
+  var burst = '';
+  if (emphasisText) {
+    burst = '<div style="position:absolute;right:-0.12in;bottom:-0.1in;z-index:5;' +
+      'transform:rotate(-7deg);font-family:Cinzel,serif;font-weight:700;' +
+      'font-size:21pt;line-height:0.95;color:#c0392b;' +
+      '-webkit-text-stroke:1.5px #0a0806;text-stroke:1.5px #0a0806;' +
+      'text-shadow:2px 2px 0 #f0e8d0,-1px -1px 0 #f0e8d0,1px -1px 0 #f0e8d0,-1px 1px 0 #f0e8d0;' +
+      'text-transform:uppercase;letter-spacing:0.01em;max-width:2.6in;text-align:right;">' +
+      emphasisText + '</div>';
+  }
+
+  // Wrapper does NOT clip — lets the burst overflow into the gutter/white.
+  return '<div style="flex:' + flexGrow + ';position:relative;page-break-inside:avoid;">' +
+    panel + burst +
   '</div>';
 }
 
@@ -74,7 +93,7 @@ function buildNarrativeHTML(text, isIntro) {
 // A book-style image panel sized for a flex row.
 function buildClassicImage(m, i, h) {
   var media = m.image
-    ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.25);" src="' + m.image + '" alt="' + m.title + '" />'
+    ? '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.25);" src="' + m.image + '" alt="' + m.title + '" />'
     : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:3px;display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
   return media +
     '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:3px;">' +
@@ -134,7 +153,7 @@ function layoutStorybook(moments, sections, intro, outro) {
       // Image sits under a soft white vignette so its edges fade into the
       // page. Overlay approach is print-safe (works in the exported PDF).
       media = '<div style="position:relative;width:100%;height:' + h + ';">' +
-        '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + m.title + '" />' +
+        '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;" src="' + m.image + '" alt="' + m.title + '" />' +
         '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.55in 0.32in #ffffff;"></div>' +
         '<div style="position:absolute;inset:0;pointer-events:none;background:' +
           'radial-gradient(ellipse at center, rgba(255,255,255,0) 55%, rgba(255,255,255,0.55) 82%, rgba(255,255,255,1) 100%);"></div>' +
@@ -218,10 +237,12 @@ function layoutAction(moments, sections, intro, outro) {
     var isBig = m.type === 'combat' || i === 0 || i === moments.length - 1;
     if (isBig) {
       flushRow();
+      // Emphasis burst only on actual combat moments that have one
+      var emph = (m.type === 'combat' && m.emphasis) ? m.emphasis : '';
       html += '<div style="display:flex;margin-bottom:6px;line-height:0;">' +
-        buildComicPanel(m, i, 1, '5.0in', false) + '</div>';
+        buildComicPanel(m, i, 1, '5.0in', false, emph) + '</div>';
     } else {
-      rowPanels.push(buildComicPanel(m, i, 1, '2.6in', false));
+      rowPanels.push(buildComicPanel(m, i, 1, '2.6in', false, ''));
       if (rowPanels.length === 3) flushRow();   // up to 3 small panels per row
     }
     var section = sections.find(function(s) { return s.panel_index === i; }) || {};
@@ -682,7 +703,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   .intro-text { font-size:13pt;font-style:italic;text-indent:0;color:#3a2010; }
   .outro-text { font-size:12pt;font-style:italic;text-indent:0;color:#3a2010;border-top:1px solid rgba(201,168,76,0.3);padding-top:0.2in;margin-top:0.25in; }
   .panel-block { margin:0.2in 0;page-break-inside:avoid; }
-  .panel-image { width:100%;max-height:4.5in;object-fit:cover;display:block;border-radius:4px;border:1px solid rgba(201,168,76,0.2);box-shadow:0 2px 12px rgba(0,0,0,0.15); }
+  .panel-image { width:100%;max-height:4.5in;object-fit:cover;object-position:center top;display:block;border-radius:4px;border:1px solid rgba(201,168,76,0.2);box-shadow:0 2px 12px rgba(0,0,0,0.15); }
   .panel-placeholder { width:100%;height:2.5in;background:#f0e8d0;display:flex;align-items:center;justify-content:center;border:1px solid rgba(201,168,76,0.3);border-radius:4px; }
   .panel-placeholder-icon { font-size:36pt;opacity:0.3; }
   .panel-caption { display:flex;align-items:baseline;gap:0.12in;margin-top:0.06in;padding:0.07in 0.1in;background:#f9f4e8;border-left:3px solid #c9a84c; }

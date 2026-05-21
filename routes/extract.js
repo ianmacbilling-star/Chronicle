@@ -69,6 +69,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '      "title": "Short evocative panel title",\n' +
     '      "description": "One sentence visual scene description for an artist",\n' +
     '      "type": "combat|drama|discovery|humor",\n' +
+    '      "emphasis": "ONLY for combat moments: a punchy 1-3 word comic-style emphasis phrase that fits THIS specific moment (e.g. \\"Steel meets steel!\\", \\"The wards shatter!\\", \\"No escape!\\"). It must make sense for what actually happens in the moment — not a generic sound effect. For non-combat moments, use an empty string.",\n' +
     '      "prompt": "Detailed image generation prompt in ' + style + ' style. Describe composition, lighting, character positions, mood, and any specific visual details from the director\'s instructions. 2-3 sentences."\n' +
     '    }\n' +
     '  ]\n' +
@@ -110,10 +111,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
         .run(style, now, req.session.userId, session.id);
 
       const insert = await db.prepare(
-        'INSERT INTO moments (session_id, title, description, type, prompt, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO moments (session_id, title, description, type, prompt, emphasis, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
       parsed.moments.forEach(function(m, i) {
-        insert.run(session.id, m.title, m.description, m.type, m.prompt, i, now, req.session.userId);
+        insert.run(session.id, m.title, m.description, m.type, m.prompt, m.emphasis || null, i, now, req.session.userId);
       });
     }
 
