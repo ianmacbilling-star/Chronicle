@@ -58,7 +58,8 @@ function checkAuth() {
         .then(function(r) { return r.json(); })
         .then(function(k) {
           if (k.api_key) {
-            document.getElementById('settings-apikey').value = k.api_key;
+            var akEl = document.getElementById('settings-apikey');
+            if (akEl) akEl.value = k.api_key;
           }
         });
 
@@ -81,7 +82,8 @@ function closeUserMenu() {
 
 // Get API key — prefer settings field, fall back to nothing
 function getApiKey() {
-  return document.getElementById('settings-apikey').value.trim();
+  var el = document.getElementById('settings-apikey');
+  return el ? el.value.trim() : '';
 }
 
 // ============================================================
@@ -1384,8 +1386,10 @@ function loadSettingsForm() {
   fetch('/api/auth/apikey')
     .then(function(r) { return r.json(); })
     .then(function(k) {
-      if (k.api_key) document.getElementById('settings-apikey').value = k.api_key;
-      if (k.fal_key) document.getElementById('settings-falkey').value = k.fal_key;
+      var sk = document.getElementById('settings-apikey');
+      if (k.api_key && sk) sk.value = k.api_key;
+      var fk = document.getElementById('settings-falkey');
+      if (k.fal_key && fk) fk.value = k.fal_key;
     });
 }
 
@@ -1417,7 +1421,9 @@ function saveProfile() {
 }
 
 function saveApiKey() {
-  var key = document.getElementById('settings-apikey').value.trim();
+  var apiEl = document.getElementById('settings-apikey');
+  if (!apiEl) return;
+  var key = apiEl.value.trim();
   document.getElementById('apikey-success').classList.add('hidden');
   fetch('/api/auth/apikey', {
     method: 'PUT',
@@ -1434,7 +1440,9 @@ function saveApiKey() {
 }
 
 function saveFalKey() {
-  var key = document.getElementById('settings-falkey').value.trim();
+  var falEl = document.getElementById('settings-falkey');
+  if (!falEl) return;
+  var key = falEl.value.trim();
   document.getElementById('falkey-success').classList.add('hidden');
   fetch('/api/auth/apikey', {
     method: 'PUT',
@@ -2050,7 +2058,8 @@ function checkAuth() {
         .then(function(r) { return r.json(); })
         .then(function(k) {
           if (k.api_key) {
-            document.getElementById('settings-apikey').value = k.api_key;
+            var akEl = document.getElementById('settings-apikey');
+            if (akEl) akEl.value = k.api_key;
           }
         });
 
@@ -2073,7 +2082,8 @@ function closeUserMenu() {
 
 // Get API key — prefer settings field, fall back to nothing
 function getApiKey() {
-  return document.getElementById('settings-apikey').value.trim();
+  var el = document.getElementById('settings-apikey');
+  return el ? el.value.trim() : '';
 }
 
 // ============================================================
@@ -3307,8 +3317,10 @@ function loadSettingsForm() {
   fetch('/api/auth/apikey')
     .then(function(r) { return r.json(); })
     .then(function(k) {
-      if (k.api_key) document.getElementById('settings-apikey').value = k.api_key;
-      if (k.fal_key) document.getElementById('settings-falkey').value = k.fal_key;
+      var sk = document.getElementById('settings-apikey');
+      if (k.api_key && sk) sk.value = k.api_key;
+      var fk = document.getElementById('settings-falkey');
+      if (k.fal_key && fk) fk.value = k.fal_key;
     });
 }
 
@@ -3340,7 +3352,9 @@ function saveProfile() {
 }
 
 function saveApiKey() {
-  var key = document.getElementById('settings-apikey').value.trim();
+  var apiEl = document.getElementById('settings-apikey');
+  if (!apiEl) return;
+  var key = apiEl.value.trim();
   document.getElementById('apikey-success').classList.add('hidden');
   fetch('/api/auth/apikey', {
     method: 'PUT',
@@ -3357,7 +3371,9 @@ function saveApiKey() {
 }
 
 function saveFalKey() {
-  var key = document.getElementById('settings-falkey').value.trim();
+  var falEl = document.getElementById('settings-falkey');
+  if (!falEl) return;
+  var key = falEl.value.trim();
   document.getElementById('falkey-success').classList.add('hidden');
   fetch('/api/auth/apikey', {
     method: 'PUT',
