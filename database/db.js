@@ -190,6 +190,7 @@ async function initPostgres() {
       image_other TEXT,
       canonical_prompt TEXT,
       canonical_prompt_at TIMESTAMP,
+      is_npc BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_by INTEGER NOT NULL,
       edited_at TIMESTAMP,
@@ -242,6 +243,7 @@ async function initPostgres() {
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS emphasis TEXT',
     'ALTER TABLE characters ADD COLUMN IF NOT EXISTS canonical_prompt TEXT',
     'ALTER TABLE characters ADD COLUMN IF NOT EXISTS canonical_prompt_at TIMESTAMP',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS is_npc BOOLEAN DEFAULT false',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -297,7 +299,7 @@ function initSQLite() {
       campaign_id INTEGER NOT NULL, name TEXT NOT NULL, player_name TEXT,
       cls TEXT, description TEXT, image TEXT,
       image_portrait TEXT, image_fullbody TEXT, image_action TEXT, image_other TEXT,
-      canonical_prompt TEXT, canonical_prompt_at DATETIME,
+      canonical_prompt TEXT, canonical_prompt_at DATETIME, is_npc INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
       edited_at DATETIME, edited_by INTEGER
     );
@@ -335,6 +337,7 @@ function initSQLite() {
     'ALTER TABLE moments ADD COLUMN emphasis TEXT',
     'ALTER TABLE characters ADD COLUMN canonical_prompt TEXT',
     'ALTER TABLE characters ADD COLUMN canonical_prompt_at DATETIME',
+    'ALTER TABLE characters ADD COLUMN is_npc INTEGER DEFAULT 0',
   ];
   migrations.forEach(function(m) { try { sqlite.exec(m); } catch(e) {} });
 

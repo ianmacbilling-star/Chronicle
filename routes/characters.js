@@ -52,7 +52,7 @@ router.get('/', requireAuth, verifyCampaignOwner, async function(req, res) {
 
 // POST create character
 router.post('/', requireAuth, verifyCampaignOwner, uploadFields, async function(req, res) {
-  const { name, player_name, cls, description } = req.body;
+  const { name, player_name, cls, description, is_npc } = req.body;
   if (!name) return res.json({ error: 'Character name is required' });
 
   try {
@@ -65,9 +65,10 @@ router.post('/', requireAuth, verifyCampaignOwner, uploadFields, async function(
     const image_action = await handleFileUpload(req.files, 'image_action', null);
     const image_other = await handleFileUpload(req.files, 'image_other', null);
 
+    const npcFlag = (is_npc === true || is_npc === 'true' || is_npc === 1 || is_npc === '1');
     const result = await db.prepare(
-      'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.params.campaignId, name.trim(), player_name || '', cls || 'Adventurer', description || '', image, image_portrait, image_fullbody, image_action, image_other, now, req.session.userId);
+      'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, is_npc, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.params.campaignId, name.trim(), player_name || '', cls || 'Adventurer', description || '', image, image_portrait, image_fullbody, image_action, image_other, npcFlag, now, req.session.userId);
 
     const character = await db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
     res.json(character);
@@ -99,15 +100,19 @@ router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, async functio
       }
     }
 
+    var npcVal = char.is_npc;
+    if (req.body.is_npc !== undefined) {
+      npcVal = (req.body.is_npc === true || req.body.is_npc === 'true' || req.body.is_npc === 1 || req.body.is_npc === '1');
+    }
     await db.prepare(
-      'UPDATE characters SET name=?, player_name=?, cls=?, description=?, image=?, image_portrait=?, image_fullbody=?, image_action=?, image_other=?, edited_at=?, edited_by=? WHERE id=?'
+      'UPDATE characters SET name=?, player_name=?, cls=?, description=?, image=?, image_portrait=?, image_fullbody=?, image_action=?, image_other=?, is_npc=?, edited_at=?, edited_by=? WHERE id=?'
     ).run(
       req.body.name ? req.body.name.trim() : char.name,
       req.body.player_name !== undefined ? req.body.player_name.trim() : (char.player_name || ''),
       req.body.cls ? req.body.cls.trim() : char.cls,
       req.body.description !== undefined ? req.body.description.trim() : (char.description || ''),
       images.image, images.image_portrait, images.image_fullbody, images.image_action, images.image_other,
-      now, req.session.userId, char.id
+      npcVal, now, req.session.userId, char.id
     );
 
     const updated = await db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);

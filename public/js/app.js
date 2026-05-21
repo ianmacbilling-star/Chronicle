@@ -665,11 +665,11 @@ function renderCharModalPrompt(char) {
     ? '<div class="char-prompt-text" id="char-prompt-text-' + char.id + '">' + char.canonical_prompt + '</div>'
     : '<div class="char-prompt-empty" id="char-prompt-text-' + char.id + '">No character prompt yet \u2014 build one from the card info and images.</div>';
 
-  var buttons = '<button class="char-prompt-btn" id="char-prompt-rebuild-' + char.id + '" ' +
+  var buttons = '<button class="btn btn-sm" id="char-prompt-rebuild-' + char.id + '" ' +
     'onclick="rebuildCharPrompt(' + char.id + ')">&#10227; ' +
     (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button>';
   if (canEdit && hasPrompt) {
-    buttons += '<button class="char-prompt-btn" onclick="startEditCharPrompt(' + char.id + ')">&#9998; Edit</button>';
+    buttons += '<button class="btn btn-sm" onclick="startEditCharPrompt(' + char.id + ')">&#9998; Edit</button>';
   }
 
   body.innerHTML = inner + '<div class="char-prompt-actions">' + buttons + '</div>';
@@ -773,6 +773,7 @@ function renderCharacters() {
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
+      ((c.is_npc === true || c.is_npc === 1 || c.is_npc === '1') ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
       imgGridHtml +
     '</div>';
   }).join('');
@@ -789,6 +790,8 @@ function openCharModal(editId) {
   document.getElementById('char-player').value = char ? (char.player_name || '') : '';
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
   document.getElementById('char-desc').value = char ? (char.description || '') : '';
+  var npcEl = document.getElementById('char-is-npc');
+  if (npcEl) npcEl.checked = !!(char && (char.is_npc === true || char.is_npc === 1 || char.is_npc === '1'));
   loadSlotPreviews(char);
   renderCharModalPrompt(char);
   document.getElementById('char-modal-error').classList.add('hidden');
@@ -820,6 +823,8 @@ function saveChar() {
   formData.append('player_name', player);
   formData.append('cls', cls || 'Adventurer');
   formData.append('description', desc);
+  var npcEl = document.getElementById('char-is-npc');
+  formData.append('is_npc', (npcEl && npcEl.checked) ? 'true' : 'false');
 
   // Append all slot files
   var slots = ['image_portrait', 'image_fullbody', 'image_action', 'image_other'];
@@ -2887,6 +2892,7 @@ function renderCharacters() {
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
+      ((c.is_npc === true || c.is_npc === 1 || c.is_npc === '1') ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
       imgGridHtml +
     '</div>';
   }).join('');

@@ -857,3 +857,70 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Canonical character prompt — Edit Character modal */
+.char-prompt-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--parchment);
+  background: rgba(20,12,4,0.75);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.char-prompt-empty {
+  font-size: 13px;
+  font-style: italic;
+  color: rgba(201,168,76,0.4);
+  background: rgba(20,12,4,0.4);
+  border: 1px dashed rgba(201,168,76,0.2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.char-prompt-editor {
+  width: 100%;
+  min-height: 110px;
+  padding: 9px 12px;
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.6;
+  background: rgba(20,12,4,0.75);
+  color: var(--parchment);
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.char-prompt-editor:focus {
+  outline: none;
+  border-color: rgba(201,168,76,0.6);
+}
+.char-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* NPC checkbox row + badge */
+.form-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--gold-light);
+}
+.form-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.char-badge-npc {
+  background: rgba(90,70,140,0.35);
+  color: #c9bdf0;
+  border: 1px solid rgba(160,140,210,0.4);
+  margin-left: 5px;
+}
