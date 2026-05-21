@@ -77,9 +77,13 @@ function buildCharacterBlock(chars, panelText) {
 
   return present.map(function(c) {
     // Keep each character's descriptors tightly bound to their name.
+    // Prefer the session snapshot prompt; fall back to the raw description.
     var line = c.name;
     if (c.cls) line += ' (' + c.cls + ')';
-    if (c.description) line += ' — ' + c.description;
+    var desc = (c.snapshot_prompt && c.snapshot_prompt.trim())
+      ? c.snapshot_prompt
+      : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description);
+    if (desc) line += ' — ' + desc;
     return line;
   }).join('\n');
 }
@@ -120,7 +124,13 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     // Get characters for this campaign for consistency
     const campRow = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
     const campId = campRow ? campRow.campaign_id : campaign_id;
-    const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campId);
+    const chars = await db.prepare(
+      'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ' +
+      'sc.prompt AS snapshot_prompt ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(moment.session_id, campId);
     // Only include characters actually named in this panel's text
     const panelText = (prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
     const charList = buildCharacterBlock(chars, panelText);
@@ -158,7 +168,13 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 
   // Load all campaign characters once; the per-panel block is built inside
   // the loop so each panel only includes the characters actually in it.
-  const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campaign_id);
+  const chars = await db.prepare(
+    'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ' +
+    'sc.prompt AS snapshot_prompt ' +
+    'FROM characters ch ' +
+    'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
+    'WHERE ch.campaign_id = ?'
+  ).all(session_id, campaign_id);
 
   // Campaign base seed, varied per run: every "Generate all" produces a
   // fresh set of images, but all panels within ONE run share the base

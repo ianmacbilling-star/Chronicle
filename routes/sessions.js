@@ -97,4 +97,37 @@ router.delete('/:id', requireAuth, verifyCampaignOwner, async function(req, res)
   res.json({ success: true });
 });
 
+// GET session character snapshots (Stage 2)
+router.get('/:id/characters', requireAuth, verifyCampaignOwner, async function(req, res) {
+  const db = await getDb();
+  const rows = await db.prepare(
+    'SELECT sc.id, sc.character_id, sc.prompt, sc.change_note, sc.edited_at, ' +
+    'ch.name, ch.cls, ch.is_npc, ch.image_portrait, ch.image, ch.image_fullbody ' +
+    'FROM session_characters sc JOIN characters ch ON ch.id = sc.character_id ' +
+    'WHERE sc.session_id = ? ORDER BY ch.is_npc ASC, ch.name ASC'
+  ).all(req.params.id);
+  res.json(rows);
+});
+
+// PUT edit a session character snapshot prompt (Platinum only)
+router.put('/:id/characters/:characterId', requireAuth, verifyCampaignOwner, async function(req, res) {
+  const { getTier } = require('../middleware/tiers');
+  const db = await getDb();
+  const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+  const tier = getTier(user ? user.tier : 'copper');
+  if (!tier.can_edit_prompts) {
+    return res.status(403).json({ error: 'Editing session character prompts is a Platinum feature.' });
+  }
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string') return res.json({ error: 'Prompt required' });
+
+  const now = new Date().toISOString();
+  await db.prepare(
+    'UPDATE session_characters SET prompt = ?, edited_at = ?, edited_by = ? ' +
+    'WHERE session_id = ? AND character_id = ?'
+  ).run(prompt, now, req.session.userId, req.params.id, req.params.characterId);
+
+  res.json({ success: true, prompt: prompt });
+});
+
 module.exports = router;

@@ -621,8 +621,95 @@ function saveNotes() {
   });
 }
 
+// ---- Session character snapshots (Stage 2) ----
+function loadSessionCharacters() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var empty = document.getElementById('sc-empty');
+  var content = document.getElementById('sc-content');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters')
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) {
+        if (empty) empty.style.display = 'block';
+        if (content) content.style.display = 'none';
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+      if (content) content.style.display = 'block';
+      renderSessionCharacters(rows);
+    })
+    .catch(function(){});
+}
+
+function renderSessionCharacters(rows) {
+  var canEdit = state.userTier && state.userTier.can_edit_prompts;
+  var list = document.getElementById('sc-list');
+  if (!list) return;
+  list.innerHTML = rows.map(function(r) {
+    var isNpc = (r.is_npc === true || r.is_npc === 1 || r.is_npc === '1');
+    var img = r.image_portrait || r.image || r.image_fullbody;
+    var thumb = img
+      ? '<img src="' + img + '" class="sc-thumb" alt="' + r.name + '" />'
+      : '<div class="sc-thumb sc-thumb-empty">&#128100;</div>';
+    var editBtn = canEdit
+      ? '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit</button>'
+      : '';
+    return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
+      '<div class="sc-card-head">' +
+        thumb +
+        '<div class="sc-card-id">' +
+          '<div class="sc-card-name">' + r.name +
+            (isNpc ? ' <span class="char-badge char-badge-npc">NPC</span>' : '') + '</div>' +
+          '<div class="sc-card-cls">' + (r.cls || '') + '</div>' +
+        '</div>' +
+        editBtn +
+      '</div>' +
+      '<div class="sc-card-prompt" id="sc-prompt-' + r.character_id + '">' +
+        (r.prompt || '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function startEditSnapshot(charId) {
+  var card = document.getElementById('sc-card-' + charId);
+  var promptEl = document.getElementById('sc-prompt-' + charId);
+  if (!card || !promptEl) return;
+  var current = promptEl.textContent;
+  promptEl.outerHTML =
+    '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + current + '</textarea>' +
+    '<div class="char-prompt-actions" id="sc-actions-' + charId + '">' +
+      '<button class="btn btn-sm btn-primary" onclick="saveSnapshot(' + charId + ')">Save</button>' +
+      '<button class="btn btn-sm" onclick="loadSessionCharacters()">Cancel</button>' +
+    '</div>';
+}
+
+function saveSnapshot(charId) {
+  var ta = document.getElementById('sc-editor-' + charId);
+  if (!ta) return;
+  var newPrompt = ta.value;
+  ta.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ prompt: newPrompt })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        loadSessionCharacters();
+      } else {
+        ta.disabled = false;
+        alert((data && data.error) || 'Could not save.');
+      }
+    })
+    .catch(function() { ta.disabled = false; alert('Could not save.'); });
+}
+
 function switchSessionTab(tab) {
-  var tabs = ['notes', 'storyboard', 'export'];
+  var tabs = ['notes', 'characters', 'storyboard', 'export'];
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -632,6 +719,10 @@ function switchSessionTab(tab) {
   // Auto-load preview when switching to publish tab
   if (tab === 'export' && state.currentSession && state.layoutStyle) {
     loadPreview(state.layoutStyle);
+  }
+  // Load character snapshots when switching to the characters tab
+  if (tab === 'characters') {
+    loadSessionCharacters();
   }
 }
 
@@ -975,7 +1066,8 @@ function extractMoments() {
   if (state.moments && state.moments.length) {
     if (!confirm('This session already has a storyboard with ' + state.moments.length +
         ' panel' + (state.moments.length === 1 ? '' : 's') +
-        '. Generating again will replace it — existing panels, narrative, and images will be lost. Continue?')) {
+        '. Generating again will replace it — existing panels, narrative, and images will be lost. ' +
+        'The character snapshots for this session will also be rebuilt. Continue?')) {
       return;
     }
   }
@@ -2841,7 +2933,7 @@ function saveNotes() {
 }
 
 function switchSessionTab(tab) {
-  var tabs = ['notes', 'storyboard', 'export'];
+  var tabs = ['notes', 'characters', 'storyboard', 'export'];
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -2851,6 +2943,10 @@ function switchSessionTab(tab) {
   // Auto-load preview when switching to publish tab
   if (tab === 'export' && state.currentSession && state.layoutStyle) {
     loadPreview(state.layoutStyle);
+  }
+  // Load character snapshots when switching to the characters tab
+  if (tab === 'characters') {
+    loadSessionCharacters();
   }
 }
 
@@ -3020,7 +3116,8 @@ function extractMoments() {
   if (state.moments && state.moments.length) {
     if (!confirm('This session already has a storyboard with ' + state.moments.length +
         ' panel' + (state.moments.length === 1 ? '' : 's') +
-        '. Generating again will replace it — existing panels, narrative, and images will be lost. Continue?')) {
+        '. Generating again will replace it — existing panels, narrative, and images will be lost. ' +
+        'The character snapshots for this session will also be rebuilt. Continue?')) {
       return;
     }
   }

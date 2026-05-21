@@ -196,6 +196,7 @@
 
       <div class="sess-tabs">
         <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">&#128203; Session Notes</div>
+        <div class="sess-tab" id="stab-characters" onclick="switchSessionTab('characters')">&#128100; Characters</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">&#127912; Storyboard</div>
         <div class="sess-tab" id="stab-export" onclick="switchSessionTab('export')">&#128214; Publish</div>
       </div>
@@ -223,7 +224,20 @@
         </div>
       </div>
 
-      <!-- STORYBOARD TAB -->
+      <!-- CHARACTERS TAB -->
+      <div id="session-tab-characters" style="display:none;">
+        <div id="sc-empty" class="empty-state">
+          <div class="empty-state-icon">&#128100;</div>
+          <h3>No character snapshots yet</h3>
+          <p>Generate the story first. When moments are extracted, Chronicle captures how each character looked this session.</p>
+          <button class="btn" onclick="switchSessionTab('notes')">Go to Session Notes</button>
+        </div>
+        <div id="sc-content" style="display:none;">
+          <div class="form-hint" style="margin-bottom:14px;">These are the character descriptions used to generate this session's images. Each carries forward from the prior session, or the character's base prompt.</div>
+          <div id="sc-list"></div>
+        </div>
+      </div>
+
       <!-- STORYBOARD TAB -->
       <div id="session-tab-storyboard" style="display:none;">
         <div id="sb-empty" class="empty-state">

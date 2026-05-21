@@ -119,6 +119,9 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       parsed.moments.forEach(function(m, i) {
         insert.run(session.id, m.title, m.description, m.type, m.prompt, m.emphasis || null, i, now, req.session.userId);
       });
+
+      // Snapshot each character present in this session (Stage 2)
+      await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now);
     }
 
     res.json(parsed);
@@ -126,5 +129,65 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     res.json({ error: e.message });
   }
 });
+
+// ============================================================
+// STAGE 2 — per-session character snapshots
+// ============================================================
+
+// Detect whether a character is "present" in the session by name match.
+function characterInText(character, text) {
+  if (!character.name) return false;
+  var lower = text.toLowerCase();
+  var full = character.name.toLowerCase();
+  var first = full.split(/\s+/)[0];
+  return lower.indexOf(full) !== -1 || (first.length > 2 && lower.indexOf(first) !== -1);
+}
+
+// Resolve the snapshot prompt for a character, using the agreed priority:
+//   1. that character's snapshot from the most recent PRIOR session (by date)
+//   2. the character's canonical_prompt
+//   3. the character's raw description
+async function resolveSnapshotPrompt(db, character, currentSession) {
+  // 1. Walk prior sessions by date for the most recent snapshot of this character
+  var prior = await db.prepare(
+    'SELECT sc.prompt FROM session_characters sc ' +
+    'JOIN sessions s ON sc.session_id = s.id ' +
+    'WHERE sc.character_id = ? AND s.campaign_id = ? ' +
+    'AND s.session_date < ? AND sc.prompt IS NOT NULL ' +
+    'ORDER BY s.session_date DESC LIMIT 1'
+  ).get(character.id, currentSession.campaign_id, currentSession.session_date);
+  if (prior && prior.prompt) return prior.prompt;
+
+  // 2. Canonical prompt
+  if (character.canonical_prompt && character.canonical_prompt.trim()) {
+    return character.canonical_prompt;
+  }
+  // 3. Raw description
+  return character.description || '';
+}
+
+// Build/refresh snapshot rows for every character present in this session.
+async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
+  try {
+    const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
+    if (!characters.length) return;
+
+    const text = session.transcript || '';
+
+    // Full refresh — re-extraction rebuilds snapshots for this session
+    await db.prepare('DELETE FROM session_characters WHERE session_id = ?').run(session.id);
+
+    for (const ch of characters) {
+      if (!characterInText(ch, text)) continue;
+      const prompt = await resolveSnapshotPrompt(db, ch, session);
+      await db.prepare(
+        'INSERT INTO session_characters (session_id, character_id, prompt, change_note, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?)'
+      ).run(session.id, ch.id, prompt, null, now);
+    }
+  } catch(e) {
+    console.error('snapshotSessionCharacters error:', e.message);
+  }
+}
 
 module.exports = router;

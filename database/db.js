@@ -267,6 +267,20 @@ async function initPostgres() {
     )
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS session_characters (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      character_id INTEGER NOT NULL REFERENCES characters(id),
+      prompt TEXT,
+      change_note TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      edited_at TIMESTAMP,
+      edited_by INTEGER,
+      UNIQUE (session_id, character_id)
+    )
+  `);
+
   console.log('  PostgreSQL schema ready!');
   return db;
 }
@@ -317,6 +331,14 @@ function initSQLite() {
       type TEXT, prompt TEXT, emphasis TEXT, image TEXT, panel_order INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
       edited_at DATETIME, edited_by INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS session_characters (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL, character_id INTEGER NOT NULL,
+      prompt TEXT, change_note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      edited_at DATETIME, edited_by INTEGER,
+      UNIQUE (session_id, character_id)
     );
   `);
 
