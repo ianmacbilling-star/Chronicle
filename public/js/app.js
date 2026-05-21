@@ -105,7 +105,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
+  var views = ['campaigns','sessions','characters','novel','session-detail','account','settings'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -125,6 +125,14 @@ function showView(view) {
     state.currentSession = null;
     setBreadcrumb([{label:'My Campaigns'}]);
     loadCampaigns();
+  } else if (view === 'account') {
+    var sn = document.getElementById('snav-account');
+    if (sn) sn.classList.add('active');
+    document.getElementById('campaign-subnav').style.display = 'none';
+    setBreadcrumb([
+      {label:'My Campaigns', action:"showView('campaigns')"},
+      {label:'My Account'}
+    ]);
   } else if (view === 'settings') {
     document.getElementById('snav-settings').classList.add('active');
     document.getElementById('campaign-subnav').style.display = 'none';
@@ -1875,7 +1883,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
+  var views = ['campaigns','sessions','characters','novel','session-detail','account','settings'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -1895,6 +1903,14 @@ function showView(view) {
     state.currentSession = null;
     setBreadcrumb([{label:'My Campaigns'}]);
     loadCampaigns();
+  } else if (view === 'account') {
+    var sn = document.getElementById('snav-account');
+    if (sn) sn.classList.add('active');
+    document.getElementById('campaign-subnav').style.display = 'none';
+    setBreadcrumb([
+      {label:'My Campaigns', action:"showView('campaigns')"},
+      {label:'My Account'}
+    ]);
   } else if (view === 'settings') {
     document.getElementById('snav-settings').classList.add('active');
     document.getElementById('campaign-subnav').style.display = 'none';
