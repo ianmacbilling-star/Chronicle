@@ -71,17 +71,54 @@ function buildNarrativeHTML(text, isIntro) {
 
 // ---- BOOK FAMILY ----
 
-// CLASSIC — clean uniform grid, the orderly "book" layout.
+// A book-style image panel sized for a flex row.
+function buildClassicImage(m, i, h) {
+  var media = m.image
+    ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.25);" src="' + m.image + '" alt="' + m.title + '" />'
+    : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:3px;display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
+  return media +
+    '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:3px;">' +
+      '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i+1) + '</span>' +
+      '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;margin-left:8px;">' + (m.title || '') + '</span>' +
+    '</div>';
+}
+
+// A book-style text panel — narrative prose on a parchment card.
+function buildClassicTextPanel(text) {
+  return '<div style="background:#f9f4e8;border:1px solid rgba(201,168,76,0.25);border-radius:3px;' +
+    'padding:0.18in 0.22in;font-family:Crimson Text,Georgia,serif;font-size:11.5pt;' +
+    'line-height:1.7;color:#2a1a0e;text-indent:0.25in;">' + text + '</div>';
+}
+
+// CLASSIC — clean book layout. Each moment pairs with its narrative, in order.
+// Layout alternates: text beside the image, then text below it, for rhythm.
 function layoutClassic(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
-  html += '<div style="line-height:0;">';
+
   moments.forEach(function(m, i) {
-    html += buildPanelHTML(m, i, 'third');
+    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
+    var text = section.after || '';
+    var besideMode = (i % 2 === 0);   // alternate: beside on even, below on odd
+
+    if (text && besideMode) {
+      // Image left, narrative panel right — same row
+      html += '<div style="display:flex;gap:0.18in;align-items:stretch;margin-bottom:0.22in;page-break-inside:avoid;">' +
+        '<div style="flex:1.15;">' + buildClassicImage(m, i, '3.0in') + '</div>' +
+        '<div style="flex:1;display:flex;">' + buildClassicTextPanel(text) + '</div>' +
+      '</div>';
+    } else if (text) {
+      // Image on top, narrative panel below
+      html += '<div style="margin-bottom:0.22in;page-break-inside:avoid;">' +
+        buildClassicImage(m, i, '3.4in') +
+        '<div style="margin-top:0.1in;">' + buildClassicTextPanel(text) + '</div>' +
+      '</div>';
+    } else {
+      // No narrative for this moment — just the image
+      html += '<div style="margin-bottom:0.22in;page-break-inside:avoid;">' +
+        buildClassicImage(m, i, '3.4in') + '</div>';
+    }
   });
-  html += '</div>';
-  sections.forEach(function(s) {
-    if (s.after) html += buildNarrativeHTML(s.after, false);
-  });
+
   html += buildNarrativeHTML(outro, true);
   return html;
 }
