@@ -492,7 +492,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Make images show zoom cursor */
 .moment-img-generated{cursor:zoom-in;}
-.char-avatar img{cursor:zoom-in;}
+.char-avatar img{cursor:zoom-in;object-position:center top;}
 
 /* CHARACTER IMAGE SLOTS */
 .image-slot{
@@ -510,6 +510,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   border-radius:6px;max-height:120px;
   cursor:zoom-in;
 }
+/* Per-type image treatment — each shot type frames differently.
+   Portrait: fill, crop from the top so faces are safe.
+   Full body: show the WHOLE figure (contain), taller frame, no crop.
+   Action: fill, centered — dynamic compositions read fine cropped.
+   Other: catch-all reference, show all of it. */
+.slot-preview.slot-portrait{
+  object-fit:cover;object-position:center top;max-height:220px;
+}
+.slot-preview.slot-fullbody{
+  object-fit:contain;max-height:340px;background:rgba(12,8,4,0.55);
+}
+.slot-preview.slot-action{
+  object-fit:cover;object-position:center;max-height:220px;
+}
+.slot-preview.slot-other{
+  object-fit:contain;max-height:220px;background:rgba(12,8,4,0.55);
+}
+.image-slot.slot-tall{ min-height:220px; }
+.image-slot.slot-xtall{ min-height:340px; }
 .slot-placeholder{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   text-align:center;pointer-events:none;
