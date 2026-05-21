@@ -647,27 +647,32 @@ function loadCharacters() {
     });
 }
 
-// ---- Canonical character prompt (the look used to keep them consistent) ----
-function buildCanonicalPromptBlock(c) {
-  var canEdit = state.userTier && state.userTier.can_edit_prompts;
-  var hasPrompt = c.canonical_prompt && c.canonical_prompt.trim();
-  var body = hasPrompt
-    ? '<div class="char-prompt-text" id="char-prompt-text-' + c.id + '">' + c.canonical_prompt + '</div>'
-    : '<div class="char-prompt-empty" id="char-prompt-text-' + c.id + '">' +
-        'No character prompt yet. Rebuild to generate one from the card info and images.</div>';
+// ---- Canonical character prompt (shown in the Edit Character modal) ----
+// Renders into the modal's prompt section. charId may be null for a new
+// (unsaved) character — in which case the prompt can't be built yet.
+function renderCharModalPrompt(char) {
+  var body = document.getElementById('char-modal-prompt-body');
+  if (!body) return;
 
-  var buttons = '<button class="char-prompt-btn" id="char-prompt-rebuild-' + c.id + '" ' +
-    'onclick="rebuildCharPrompt(' + c.id + ')">&#10227; ' +
-    (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button>';
-  if (canEdit && hasPrompt) {
-    buttons += '<button class="char-prompt-btn" onclick="startEditCharPrompt(' + c.id + ')">&#9998; Edit</button>';
+  if (!char || !char.id) {
+    body.innerHTML = '<div class="char-prompt-empty">Save the character first, then you can build its prompt from the images.</div>';
+    return;
   }
 
-  return '<div class="char-prompt-block" id="char-prompt-block-' + c.id + '">' +
-    '<div class="char-prompt-label">Character Prompt</div>' +
-    body +
-    '<div class="char-prompt-actions">' + buttons + '</div>' +
-  '</div>';
+  var canEdit = state.userTier && state.userTier.can_edit_prompts;
+  var hasPrompt = char.canonical_prompt && char.canonical_prompt.trim();
+  var inner = hasPrompt
+    ? '<div class="char-prompt-text" id="char-prompt-text-' + char.id + '">' + char.canonical_prompt + '</div>'
+    : '<div class="char-prompt-empty" id="char-prompt-text-' + char.id + '">No character prompt yet \u2014 build one from the card info and images.</div>';
+
+  var buttons = '<button class="char-prompt-btn" id="char-prompt-rebuild-' + char.id + '" ' +
+    'onclick="rebuildCharPrompt(' + char.id + ')">&#10227; ' +
+    (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button>';
+  if (canEdit && hasPrompt) {
+    buttons += '<button class="char-prompt-btn" onclick="startEditCharPrompt(' + char.id + ')">&#9998; Edit</button>';
+  }
+
+  body.innerHTML = inner + '<div class="char-prompt-actions">' + buttons + '</div>';
 }
 
 function rebuildCharPrompt(charId) {
@@ -688,8 +693,8 @@ function rebuildCharPrompt(charId) {
         if (ch) {
           ch.canonical_prompt = data.canonical_prompt;
           ch.canonical_prompt_at = data.canonical_prompt_at;
+          renderCharModalPrompt(ch);
         }
-        renderCharacters();
       } else {
         if (textEl) textEl.textContent = (data && data.error) || 'Could not build the prompt.';
         if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
@@ -702,17 +707,20 @@ function rebuildCharPrompt(charId) {
 }
 
 function startEditCharPrompt(charId) {
-  var block = document.getElementById('char-prompt-block-' + charId);
+  var body = document.getElementById('char-modal-prompt-body');
   var ch = (state.characters || []).find(function(c) { return c.id === charId; });
-  if (!block || !ch) return;
-  block.innerHTML =
-    '<div class="char-prompt-label">Character Prompt</div>' +
+  if (!body || !ch) return;
+  body.innerHTML =
     '<textarea class="char-prompt-editor" id="char-prompt-editor-' + charId + '">' +
       (ch.canonical_prompt || '') + '</textarea>' +
     '<div class="char-prompt-actions">' +
       '<button class="btn btn-sm btn-primary" onclick="saveCharPrompt(' + charId + ')">Save</button>' +
-      '<button class="btn btn-sm" onclick="renderCharacters()">Cancel</button>' +
+      '<button class="btn btn-sm" onclick="renderCharModalPrompt(charById(' + charId + '))">Cancel</button>' +
     '</div>';
+}
+
+function charById(id) {
+  return (state.characters || []).find(function(c) { return c.id === id; }) || null;
 }
 
 function saveCharPrompt(charId) {
@@ -730,7 +738,7 @@ function saveCharPrompt(charId) {
       if (data && data.success) {
         var ch = (state.characters || []).find(function(c) { return c.id === charId; });
         if (ch) ch.canonical_prompt = newPrompt;
-        renderCharacters();
+        renderCharModalPrompt(ch);
       } else {
         ta.disabled = false;
         alert((data && data.error) || 'Could not save.');
@@ -766,7 +774,6 @@ function renderCharacters() {
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
       imgGridHtml +
-      buildCanonicalPromptBlock(c) +
     '</div>';
   }).join('');
   html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
@@ -783,6 +790,7 @@ function openCharModal(editId) {
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
   document.getElementById('char-desc').value = char ? (char.description || '') : '';
   loadSlotPreviews(char);
+  renderCharModalPrompt(char);
   document.getElementById('char-modal-error').classList.add('hidden');
   document.getElementById('char-modal').classList.remove('hidden');
 }
@@ -2880,7 +2888,6 @@ function renderCharacters() {
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
       imgGridHtml +
-      buildCanonicalPromptBlock(c) +
     '</div>';
   }).join('');
   html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
