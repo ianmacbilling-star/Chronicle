@@ -200,10 +200,9 @@ function renderCampaigns() {
 }
 
 function setCampaignElements() {
-  var t = document.getElementById('sessions-title');
+  // sessions-title is owned by renderSessions() so it can include the session count
   var ct = document.getElementById('novel-cover-title');
   var cs = document.getElementById('novel-cover-sub');
-  if (t) t.textContent = state.currentCampaign.name;
   if (ct) ct.textContent = state.currentCampaign.name;
   if (cs) cs.textContent = state.currentCampaign.description || '';
 }
@@ -280,16 +279,36 @@ function loadSessions() {
 
 function renderSessions() {
   var list = document.getElementById('sessions-list');
+
+  // Update the page title with a session count, e.g. "The Hidden Pass (35 sessions)"
+  var titleEl = document.getElementById('sessions-title');
+  if (titleEl) {
+    var campName = (state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : 'Sessions';
+    var n = state.sessions.length;
+    titleEl.innerHTML = campName +
+      ' <span style="font-size:0.6em;font-weight:400;color:var(--text-light);">(' +
+      n + ' session' + (n === 1 ? '' : 's') + ')</span>';
+  }
+
   if (!state.sessions.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
     return;
   }
-  list.innerHTML = state.sessions.map(function(s, i) {
+
+  // Newest first — sort by session date descending
+  var ordered = state.sessions.slice().sort(function(a, b) {
+    var da = (a.session_date || '').toString().split('T')[0];
+    var db = (b.session_date || '').toString().split('T')[0];
+    if (da < db) return 1;
+    if (da > db) return -1;
+    return 0;
+  });
+
+  list.innerHTML = ordered.map(function(s) {
     return '<div class="session-item" onclick="selectSession(' + s.id + ')">' +
       '<div class="session-item-left">' +
-        '<div class="session-num">' + (state.sessions.length - i) + '</div>' +
         '<div>' +
           '<div class="session-name">' + s.name + '</div>' +
           '<div class="session-date">' + formatSessionDate(s.session_date) + '</div>' +
@@ -1995,10 +2014,9 @@ function renderCampaigns() {
 }
 
 function setCampaignElements() {
-  var t = document.getElementById('sessions-title');
+  // sessions-title is owned by renderSessions() so it can include the session count
   var ct = document.getElementById('novel-cover-title');
   var cs = document.getElementById('novel-cover-sub');
-  if (t) t.textContent = state.currentCampaign.name;
   if (ct) ct.textContent = state.currentCampaign.name;
   if (cs) cs.textContent = state.currentCampaign.description || '';
 }
@@ -2075,16 +2093,36 @@ function loadSessions() {
 
 function renderSessions() {
   var list = document.getElementById('sessions-list');
+
+  // Update the page title with a session count, e.g. "The Hidden Pass (35 sessions)"
+  var titleEl = document.getElementById('sessions-title');
+  if (titleEl) {
+    var campName = (state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : 'Sessions';
+    var n = state.sessions.length;
+    titleEl.innerHTML = campName +
+      ' <span style="font-size:0.6em;font-weight:400;color:var(--text-light);">(' +
+      n + ' session' + (n === 1 ? '' : 's') + ')</span>';
+  }
+
   if (!state.sessions.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
     return;
   }
-  list.innerHTML = state.sessions.map(function(s, i) {
+
+  // Newest first — sort by session date descending
+  var ordered = state.sessions.slice().sort(function(a, b) {
+    var da = (a.session_date || '').toString().split('T')[0];
+    var db = (b.session_date || '').toString().split('T')[0];
+    if (da < db) return 1;
+    if (da > db) return -1;
+    return 0;
+  });
+
+  list.innerHTML = ordered.map(function(s) {
     return '<div class="session-item" onclick="selectSession(' + s.id + ')">' +
       '<div class="session-item-left">' +
-        '<div class="session-num">' + (state.sessions.length - i) + '</div>' +
         '<div>' +
           '<div class="session-name">' + s.name + '</div>' +
           '<div class="session-date">' + formatSessionDate(s.session_date) + '</div>' +
