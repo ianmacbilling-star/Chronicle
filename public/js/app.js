@@ -956,6 +956,22 @@ function regenNarrativeSection(type, panelIndex) {
   });
 }
 
+// Re-fetch the current session from the server and re-render the storyboard
+// in place. Used after image generation so new images appear without a reload.
+function refreshStoryboardImages() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || data.error) return;
+      state.currentSession = data;
+      state.moments = data.moments || [];
+      renderStoryboard();
+      if (typeof renderNovelWithImages === 'function') renderNovelWithImages();
+    })
+    .catch(function(){});
+}
+
 function generateAllImages() {
   var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
@@ -1012,17 +1028,9 @@ function generateAllImages() {
     fill.style.width = '100%';
     msg.textContent = data.count + ' of ' + data.total + ' images generated!';
 
-    // Update moment images in state
-    data.generated.forEach(function(result) {
-      if (result.success) {
-        var moment = state.moments.find(function(m) { return m.id === result.moment_id; });
-        if (moment) moment.image = result.image_url;
-      }
-    });
-
-    // Re-render storyboard with images
-    renderStoryboard();
-    renderNovelWithImages();
+    // Re-fetch the session fresh from the database so the storyboard
+    // shows the newly generated images reliably (stays on this tab).
+    refreshStoryboardImages();
 
     setTimeout(function() {
       btn.disabled = false;
@@ -2943,17 +2951,9 @@ function generateAllImages() {
     fill.style.width = '100%';
     msg.textContent = data.count + ' of ' + data.total + ' images generated!';
 
-    // Update moment images in state
-    data.generated.forEach(function(result) {
-      if (result.success) {
-        var moment = state.moments.find(function(m) { return m.id === result.moment_id; });
-        if (moment) moment.image = result.image_url;
-      }
-    });
-
-    // Re-render storyboard with images
-    renderStoryboard();
-    renderNovelWithImages();
+    // Re-fetch the session fresh from the database so the storyboard
+    // shows the newly generated images reliably (stays on this tab).
+    refreshStoryboardImages();
 
     setTimeout(function() {
       btn.disabled = false;
