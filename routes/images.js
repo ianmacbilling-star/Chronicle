@@ -11,22 +11,32 @@ const { fal } = require('@fal-ai/client');
 // Everything else in the app stays the same.
 // ============================================================
 
-async function generateImage(prompt, style, falKey, charList) {
+async function generateImage(prompt, style, falKey, charList, seed) {
   fal.config({ credentials: falKey });
 
   // Style goes FIRST so Flux treats it as primary instruction
   const stylePrefix = getStylePrefix(style);
-  const charSection = charList ? '\n\nCHARACTERS (maintain exact appearance throughout): ' + charList : '';
+  const charSection = charList
+    ? '\n\n=== RECURRING CHARACTERS — DRAW THESE EXACTLY THE SAME IN EVERY PANEL ===\n' + charList +
+      '\n=== END CHARACTERS ===\nConsistency of character appearance is critical: same faces, same hair, same outfits, same colors as described above.'
+    : '';
   const fullPrompt = stylePrefix + '\n\n' + prompt + charSection;
 
+  const input = {
+    prompt: fullPrompt,
+    image_size: 'landscape_4_3',
+    num_inference_steps: 4,
+    num_images: 1,
+    enable_safety_checker: true
+  };
+  // A stable per-campaign seed keeps the overall look/palette consistent
+  // across panels. Different prompts still vary, but the base is anchored.
+  if (typeof seed === 'number' && !isNaN(seed)) {
+    input.seed = seed;
+  }
+
   const result = await fal.subscribe(process.env.IMAGE_MODEL || 'fal-ai/flux/schnell', {
-    input: {
-      prompt: fullPrompt,
-      image_size: 'landscape_4_3',
-      num_inference_steps: 4,
-      num_images: 1,
-      enable_safety_checker: true
-    }
+    input: input
   });
 
   if (!result.data || !result.data.images || !result.data.images[0]) {
@@ -34,6 +44,28 @@ async function generateImage(prompt, style, falKey, charList) {
   }
 
   return result.data.images[0].url;
+}
+
+// Deterministic seed from a campaign id — same campaign, same seed every time.
+function campaignSeed(campaignId) {
+  var n = parseInt(campaignId, 10);
+  if (isNaN(n)) return 12345;
+  // Spread the id across the seed space so small ids aren't all clustered.
+  return ((n * 2654435761) % 2147483647 + 2147483647) % 2147483647;
+}
+
+// Build a structured, emphatic character block. Repeating a tightly
+// structured description identically in every panel is the cheapest
+// lever for reducing character drift.
+function buildCharacterBlock(chars) {
+  if (!chars || !chars.length) return '';
+  return chars.map(function(c) {
+    var parts = [];
+    parts.push('• ' + c.name);
+    if (c.cls) parts.push('role: ' + c.cls);
+    if (c.description) parts.push('appearance: ' + c.description);
+    return parts.join(' | ');
+  }).join('\n');
 }
 
 function getStylePrefix(style) {
@@ -70,10 +102,12 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
 
   try {
     // Get characters for this campaign for consistency
-    const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = (SELECT campaign_id FROM sessions WHERE id = ?)').all(moment.session_id);
-    const charList = chars.map(function(c) { return c.name + ' (' + c.cls + '): ' + c.description; }).join('; ');
+    const campRow = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
+    const campId = campRow ? campRow.campaign_id : campaign_id;
+    const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campId);
+    const charList = buildCharacterBlock(chars);
 
-    const imageUrl = await generateImage(prompt, style, fal_key, charList);
+    const imageUrl = await generateImage(prompt, style, fal_key, charList, campaignSeed(campId));
     const now = new Date().toISOString();
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
@@ -103,13 +137,18 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 
   // Get characters for consistency across all panels
   const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campaign_id);
-  const charList = chars.map(function(c) { return c.name + ' (' + c.cls + '): ' + c.description; }).join('; ');
+  const charList = buildCharacterBlock(chars);
+
+  // Campaign base seed — each panel offsets from it so panels share the
+  // campaign's visual DNA while still varying scene to scene.
+  const baseSeed = campaignSeed(campaign_id);
 
   // Generate all images in parallel
   const results = await Promise.allSettled(
     moments.map(async function(m) {
       try {
-        const imageUrl = await generateImage(m.prompt, style, fal_key, charList);
+        const panelSeed = (baseSeed + (m.panel_order || 0)) % 2147483647;
+        const imageUrl = await generateImage(m.prompt, style, fal_key, charList, panelSeed);
         const now = new Date().toISOString();
         await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
           .run(imageUrl, now, req.session.userId, m.id);
