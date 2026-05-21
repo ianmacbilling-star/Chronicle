@@ -48,6 +48,8 @@ function checkAuth() {
     .then(function(data) {
       if (!data.authenticated) { window.location.href = '/'; return; }
       state.user = data;
+      // Tier info drives feature gates (prompt editing, watermark, export)
+      state.userTier = data.tierFeatures || null;
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -2290,6 +2292,8 @@ function checkAuth() {
     .then(function(data) {
       if (!data.authenticated) { window.location.href = '/'; return; }
       state.user = data;
+      // Tier info drives feature gates (prompt editing, watermark, export)
+      state.userTier = data.tierFeatures || null;
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
