@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
+const { getTier, isTrialExpired, TIERS } = require('../middleware/tiers');
 
 router.post('/register', async function(req, res) {
   try {
@@ -16,8 +17,8 @@ router.post('/register', async function(req, res) {
     const hash = await bcrypt.hash(password, 10);
     const now = new Date().toISOString();
     const result = await db.prepare(
-      'INSERT INTO users (name, email, password, created_at) VALUES (?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, now);
+      'INSERT INTO users (name, email, password, created_at, trial_started_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(name.trim(), email.toLowerCase().trim(), hash, now, now);
 
     req.session.userId = result.lastInsertRowid;
     req.session.userName = name.trim();
@@ -142,8 +143,6 @@ router.get('/apikey', async function(req, res) {
   res.json({ api_key: user ? (user.api_key || '') : '', fal_key: user ? (user.fal_key || '') : '' });
 });
 
-module.exports = router;
-
 // PUT /api/auth/tier - admin only tier change
 router.put('/tier', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
@@ -165,3 +164,5 @@ router.put('/tier', async function(req, res) {
 
   res.json({ success: true });
 });
+
+module.exports = router;

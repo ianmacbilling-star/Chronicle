@@ -6,6 +6,9 @@ const { initStorage } = require('./storage/storage');
 
 const app = express();
 
+// Railway terminates SSL at a proxy — trust it so secure cookies work
+app.set('trust proxy', 1);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -28,7 +31,8 @@ function buildSessionMiddleware() {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: false,
+        secure: true,
+        sameSite: 'lax',
         httpOnly: true,
         maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
       }
