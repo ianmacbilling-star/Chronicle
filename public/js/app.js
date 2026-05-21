@@ -1227,12 +1227,16 @@ function loadNovelSummary() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      // Sort ascending by date (oldest first)
+      // Sort ascending by date (oldest first) using a normalized YYYY-MM-DD key
       var sessions = Array.isArray(data) ? data : [];
+      function sessionDateKey(s) {
+        if (!s.session_date) return '';
+        if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
+        try { return s.session_date.toISOString().split('T')[0]; }
+        catch (e) { return String(s.session_date); }
+      }
       sessions.sort(function(a, b) {
-        var da = typeof a.session_date === 'string' ? a.session_date : a.session_date.toISOString();
-        var db2 = typeof b.session_date === 'string' ? b.session_date : b.session_date.toISOString();
-        return da.localeCompare(db2);
+        return sessionDateKey(a).localeCompare(sessionDateKey(b));
       });
       renderNovelSummary(sessions);
     });
@@ -3112,12 +3116,16 @@ function loadNovelSummary() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      // Sort ascending by date (oldest first)
+      // Sort ascending by date (oldest first) using a normalized YYYY-MM-DD key
       var sessions = Array.isArray(data) ? data : [];
+      function sessionDateKey(s) {
+        if (!s.session_date) return '';
+        if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
+        try { return s.session_date.toISOString().split('T')[0]; }
+        catch (e) { return String(s.session_date); }
+      }
       sessions.sort(function(a, b) {
-        var da = typeof a.session_date === 'string' ? a.session_date : a.session_date.toISOString();
-        var db2 = typeof b.session_date === 'string' ? b.session_date : b.session_date.toISOString();
-        return da.localeCompare(db2);
+        return sessionDateKey(a).localeCompare(sessionDateKey(b));
       });
       renderNovelSummary(sessions);
     });

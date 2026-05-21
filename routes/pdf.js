@@ -653,11 +653,17 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
-  // Sort sessions ascending (oldest first)
+  // Sort sessions ascending (oldest first) using a normalized YYYY-MM-DD key.
+  // session_date may arrive as a string or a Date depending on the driver;
+  // Date.toString() sorts by weekday name, so normalize before comparing.
+  function sessionDateKey(s) {
+    if (!s.session_date) return '';
+    if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
+    try { return s.session_date.toISOString().split('T')[0]; }
+    catch (e) { return String(s.session_date); }
+  }
   sessions.sort(function(a, b) {
-    var da = a.session_date ? a.session_date.toString() : '';
-    var db2 = b.session_date ? b.session_date.toString() : '';
-    return da.localeCompare(db2);
+    return sessionDateKey(a).localeCompare(sessionDateKey(b));
   });
 
   // Load moments and narrative for each session
