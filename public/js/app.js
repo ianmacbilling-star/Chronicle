@@ -723,15 +723,19 @@ function extractMoments() {
   var errorEl = document.getElementById('extract-error');
   errorEl.classList.add('hidden');
 
-  if (!key || key.indexOf('sk-ant-') !== 0) {
-    errorEl.textContent = 'Please add your Anthropic API key in Settings first.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
   if (transcript.length < 50) {
     errorEl.textContent = 'Please paste a longer transcript first.';
     errorEl.classList.remove('hidden');
     return;
+  }
+
+  // Warn before overwriting an existing storyboard
+  if (state.moments && state.moments.length) {
+    if (!confirm('This session already has a storyboard with ' + state.moments.length +
+        ' panel' + (state.moments.length === 1 ? '' : 's') +
+        '. Generating again will replace it — existing panels, narrative, and images will be lost. Continue?')) {
+      return;
+    }
   }
 
   // Auto save notes AND transcript
@@ -2642,15 +2646,19 @@ function extractMoments() {
   var errorEl = document.getElementById('extract-error');
   errorEl.classList.add('hidden');
 
-  if (!key || key.indexOf('sk-ant-') !== 0) {
-    errorEl.textContent = 'Please add your Anthropic API key in Settings first.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
   if (transcript.length < 50) {
     errorEl.textContent = 'Please paste a longer transcript first.';
     errorEl.classList.remove('hidden');
     return;
+  }
+
+  // Warn before overwriting an existing storyboard
+  if (state.moments && state.moments.length) {
+    if (!confirm('This session already has a storyboard with ' + state.moments.length +
+        ' panel' + (state.moments.length === 1 ? '' : 's') +
+        '. Generating again will replace it — existing panels, narrative, and images will be lost. Continue?')) {
+      return;
+    }
   }
 
   // Auto save notes AND transcript

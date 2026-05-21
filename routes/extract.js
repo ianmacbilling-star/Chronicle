@@ -5,9 +5,10 @@ const { getTier, getMomentRange } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
-  const { key, artStyle } = req.body;
+  const { artStyle } = req.body;
+  const key = process.env.ANTHROPIC_API_KEY || req.body.key;
 
-  if (!key) return res.json({ error: 'API key required' });
+  if (!key) return res.json({ error: 'AI service is not configured. Please contact support.' });
 
   const db = await getDb();
 
