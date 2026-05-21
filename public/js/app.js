@@ -330,6 +330,23 @@ function saveSession() {
   });
 }
 
+function updateSessionDate(value) {
+  if (!value || !state.currentCampaign || !state.currentSession) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ session_date: value })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.id) {
+        state.currentSession = data;
+        if (typeof loadSessions === 'function') loadSessions();
+      }
+    })
+    .catch(function(){});
+}
+
 function deleteSession(id) {
   if (!confirm('Delete this session and all its moments? This cannot be undone.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id, {method:'DELETE'})
@@ -2106,6 +2123,23 @@ function saveSession() {
     closeSessionModal();
     loadSessions();
   });
+}
+
+function updateSessionDate(value) {
+  if (!value || !state.currentCampaign || !state.currentSession) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ session_date: value })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.id) {
+        state.currentSession = data;
+        if (typeof loadSessions === 'function') loadSessions();
+      }
+    })
+    .catch(function(){});
 }
 
 function deleteSession(id) {
