@@ -34,4 +34,28 @@ router.delete('/:momentId', requireAuth, verifyCampaignOwner, async function(req
   res.json({ success: true });
 });
 
+// PUT - edit a moment's prompt. Prompt editing is a Platinum-tier perk,
+// so the tier is enforced here on the server, not just in the UI.
+router.put('/:momentId', requireAuth, verifyCampaignOwner, async function(req, res) {
+  const { getTier } = require('../middleware/tiers');
+  const db = await getDb();
+
+  const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+  const tier = getTier(user ? user.tier : 'copper');
+  if (!tier.can_edit_prompts) {
+    return res.status(403).json({ error: 'Prompt editing is available on the Platinum plan.' });
+  }
+
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string') return res.json({ error: 'Prompt required' });
+
+  const now = new Date().toISOString();
+  await db.prepare(
+    'UPDATE moments SET prompt = ?, edited_at = ?, edited_by = ? WHERE id = ? AND session_id = ?'
+  ).run(prompt, now, req.session.userId, req.params.momentId, req.params.sessionId);
+
+  const moment = await db.prepare('SELECT * FROM moments WHERE id = ?').get(req.params.momentId);
+  res.json({ success: true, moment: moment });
+});
+
 module.exports = router;

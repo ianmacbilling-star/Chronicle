@@ -2097,6 +2097,77 @@ function showAlert(msg) {
   setTimeout(function() { el.remove(); }, 2500);
 }
 
+// Prompt block for a storyboard panel. Platinum users get an Edit button;
+// everyone else sees read-only text.
+function buildPromptBlock(m) {
+  var canEdit = state.userTier && state.userTier.can_edit_prompts;
+  var safe = (m.prompt || '');
+  if (!canEdit) {
+    return '<div class="moment-prompt-text" id="prompt-text-' + m.id + '">' + safe + '</div>';
+  }
+  return '<div class="moment-prompt-wrap" id="prompt-wrap-' + m.id + '">' +
+    '<div class="moment-prompt-text" id="prompt-text-' + m.id + '">' + safe + '</div>' +
+    '<button class="moment-prompt-edit-btn" onclick="startEditPrompt(' + m.id + ')">' +
+      '&#9998; Edit prompt</button>' +
+  '</div>';
+}
+
+function startEditPrompt(momentId) {
+  var wrap = document.getElementById('prompt-wrap-' + momentId);
+  if (!wrap) return;
+  var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
+  var current = moment ? (moment.prompt || '') : '';
+  wrap.innerHTML =
+    '<textarea class="moment-prompt-editor" id="prompt-editor-' + momentId + '">' +
+      current + '</textarea>' +
+    '<div class="moment-prompt-actions">' +
+      '<button class="btn btn-sm btn-primary" onclick="savePrompt(' + momentId + ')">Save</button>' +
+      '<button class="btn btn-sm" onclick="cancelEditPrompt(' + momentId + ')">Cancel</button>' +
+    '</div>';
+  var ta = document.getElementById('prompt-editor-' + momentId);
+  if (ta) ta.focus();
+}
+
+function cancelEditPrompt(momentId) {
+  var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
+  var wrap = document.getElementById('prompt-wrap-' + momentId);
+  if (wrap && moment) {
+    wrap.innerHTML =
+      '<div class="moment-prompt-text" id="prompt-text-' + momentId + '">' + (moment.prompt || '') + '</div>' +
+      '<button class="moment-prompt-edit-btn" onclick="startEditPrompt(' + momentId + ')">' +
+        '&#9998; Edit prompt</button>';
+  }
+}
+
+function savePrompt(momentId) {
+  var ta = document.getElementById('prompt-editor-' + momentId);
+  if (!ta) return;
+  var newPrompt = ta.value;
+  if (!state.currentCampaign || !state.currentSession) return;
+  ta.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/moments/' + momentId, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ prompt: newPrompt })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
+        if (moment) moment.prompt = newPrompt;
+        cancelEditPrompt(momentId);
+      } else {
+        ta.disabled = false;
+        alert((data && data.error) || 'Could not save the prompt.');
+      }
+    })
+    .catch(function() {
+      ta.disabled = false;
+      alert('Could not save the prompt.');
+    });
+}
+
 function renderStoryboard() {
   document.getElementById('sb-empty').style.display = 'none';
   document.getElementById('sb-content').style.display = 'block';
@@ -2125,7 +2196,7 @@ function renderStoryboard() {
         '<span class="moment-title">' + m.title + '</span>' +
         '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type]||m.type) + '</span>' +
       '</div>' +
-      '<div class="moment-prompt-text">' + (m.prompt||'') + '</div>' +
+      buildPromptBlock(m) +
     '</div>';
   }
 
