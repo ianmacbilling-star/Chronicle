@@ -1124,17 +1124,19 @@ function loadNovelPreview(layout) {
 var novelPreviewPage = 1;
 
 function setupNovelPager() {
-  var pager = document.getElementById('novel-pager');
-  var select = document.getElementById('novel-pager-select');
   var warning = document.getElementById('novel-preview-warning');
   var sessions = state.novelSessions || [];
   var total = sessions.length;
 
-  if (!pager) return;
+  // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
+  var suffixes = ['', '-bottom'];
 
-  // Only show the pager when there is more than one session
+  // Only show the pagers when there is more than one session
   if (total <= 1) {
-    pager.style.display = 'none';
+    suffixes.forEach(function(sx) {
+      var p = document.getElementById('novel-pager' + sx);
+      if (p) p.style.display = 'none';
+    });
     if (warning) warning.style.display = 'none';
     novelPreviewPage = 1;
     return;
@@ -1144,25 +1146,37 @@ function setupNovelPager() {
   if (novelPreviewPage < 1) novelPreviewPage = 1;
   if (novelPreviewPage > total) novelPreviewPage = total;
 
-  // Build the jump dropdown
-  if (select) {
-    var opts = '';
-    for (var i = 0; i < total; i++) {
-      var nm = sessions[i] && sessions[i].name ? sessions[i].name : ('Session ' + (i+1));
-      var label = 'Session ' + (i+1) + ' of ' + total + '  —  ' + nm;
-      opts += '<option value="' + (i+1) + '"' + ((i+1) === novelPreviewPage ? ' selected' : '') + '>' +
-        label + '</option>';
-    }
-    select.innerHTML = opts;
+  // Build dropdown options once, reuse for both bars
+  var opts = '';
+  for (var i = 0; i < total; i++) {
+    var nm = sessions[i] && sessions[i].name ? sessions[i].name : ('Session ' + (i+1));
+    var label = 'Session ' + (i+1) + ' of ' + total + '  —  ' + nm;
+    opts += '<option value="' + (i+1) + '"' + ((i+1) === novelPreviewPage ? ' selected' : '') + '>' +
+      label + '</option>';
   }
 
-  var prev = document.getElementById('novel-pager-prev');
-  var next = document.getElementById('novel-pager-next');
-  if (prev) prev.disabled = (novelPreviewPage <= 1);
-  if (next) next.disabled = (novelPreviewPage >= total);
+  suffixes.forEach(function(sx) {
+    var pager = document.getElementById('novel-pager' + sx);
+    if (!pager) return;
+    var select = document.getElementById('novel-pager-select' + sx);
+    if (select) select.innerHTML = opts;
+    var prev = document.getElementById('novel-pager-prev' + sx);
+    var next = document.getElementById('novel-pager-next' + sx);
+    if (prev) prev.disabled = (novelPreviewPage <= 1);
+    if (next) next.disabled = (novelPreviewPage >= total);
+    pager.style.display = 'flex';
+  });
 
-  pager.style.display = 'flex';
   if (warning) warning.style.display = total > 15 ? 'block' : 'none';
+}
+
+// Scroll the preview area back to the top after navigating
+function scrollNovelPreviewToTop() {
+  var anchor = document.getElementById('novel-pager') ||
+               document.getElementById('novel-preview-frame');
+  if (anchor && anchor.scrollIntoView) {
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function novelPageJump(value) {
@@ -1170,12 +1184,14 @@ function novelPageJump(value) {
   if (isNaN(n)) return;
   novelPreviewPage = n;
   loadNovelPreview(novelLayoutStyle);
+  scrollNovelPreviewToTop();
 }
 
 function novelPagePrev() {
   if (novelPreviewPage > 1) {
     novelPreviewPage--;
     loadNovelPreview(novelLayoutStyle);
+    scrollNovelPreviewToTop();
   }
 }
 
@@ -1184,6 +1200,7 @@ function novelPageNext() {
   if (novelPreviewPage < total) {
     novelPreviewPage++;
     loadNovelPreview(novelLayoutStyle);
+    scrollNovelPreviewToTop();
   }
 }
 
@@ -3019,17 +3036,19 @@ function loadNovelPreview(layout) {
 var novelPreviewPage = 1;
 
 function setupNovelPager() {
-  var pager = document.getElementById('novel-pager');
-  var select = document.getElementById('novel-pager-select');
   var warning = document.getElementById('novel-preview-warning');
   var sessions = state.novelSessions || [];
   var total = sessions.length;
 
-  if (!pager) return;
+  // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
+  var suffixes = ['', '-bottom'];
 
-  // Only show the pager when there is more than one session
+  // Only show the pagers when there is more than one session
   if (total <= 1) {
-    pager.style.display = 'none';
+    suffixes.forEach(function(sx) {
+      var p = document.getElementById('novel-pager' + sx);
+      if (p) p.style.display = 'none';
+    });
     if (warning) warning.style.display = 'none';
     novelPreviewPage = 1;
     return;
@@ -3039,25 +3058,37 @@ function setupNovelPager() {
   if (novelPreviewPage < 1) novelPreviewPage = 1;
   if (novelPreviewPage > total) novelPreviewPage = total;
 
-  // Build the jump dropdown
-  if (select) {
-    var opts = '';
-    for (var i = 0; i < total; i++) {
-      var nm = sessions[i] && sessions[i].name ? sessions[i].name : ('Session ' + (i+1));
-      var label = 'Session ' + (i+1) + ' of ' + total + '  —  ' + nm;
-      opts += '<option value="' + (i+1) + '"' + ((i+1) === novelPreviewPage ? ' selected' : '') + '>' +
-        label + '</option>';
-    }
-    select.innerHTML = opts;
+  // Build dropdown options once, reuse for both bars
+  var opts = '';
+  for (var i = 0; i < total; i++) {
+    var nm = sessions[i] && sessions[i].name ? sessions[i].name : ('Session ' + (i+1));
+    var label = 'Session ' + (i+1) + ' of ' + total + '  —  ' + nm;
+    opts += '<option value="' + (i+1) + '"' + ((i+1) === novelPreviewPage ? ' selected' : '') + '>' +
+      label + '</option>';
   }
 
-  var prev = document.getElementById('novel-pager-prev');
-  var next = document.getElementById('novel-pager-next');
-  if (prev) prev.disabled = (novelPreviewPage <= 1);
-  if (next) next.disabled = (novelPreviewPage >= total);
+  suffixes.forEach(function(sx) {
+    var pager = document.getElementById('novel-pager' + sx);
+    if (!pager) return;
+    var select = document.getElementById('novel-pager-select' + sx);
+    if (select) select.innerHTML = opts;
+    var prev = document.getElementById('novel-pager-prev' + sx);
+    var next = document.getElementById('novel-pager-next' + sx);
+    if (prev) prev.disabled = (novelPreviewPage <= 1);
+    if (next) next.disabled = (novelPreviewPage >= total);
+    pager.style.display = 'flex';
+  });
 
-  pager.style.display = 'flex';
   if (warning) warning.style.display = total > 15 ? 'block' : 'none';
+}
+
+// Scroll the preview area back to the top after navigating
+function scrollNovelPreviewToTop() {
+  var anchor = document.getElementById('novel-pager') ||
+               document.getElementById('novel-preview-frame');
+  if (anchor && anchor.scrollIntoView) {
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function novelPageJump(value) {
@@ -3065,12 +3096,14 @@ function novelPageJump(value) {
   if (isNaN(n)) return;
   novelPreviewPage = n;
   loadNovelPreview(novelLayoutStyle);
+  scrollNovelPreviewToTop();
 }
 
 function novelPagePrev() {
   if (novelPreviewPage > 1) {
     novelPreviewPage--;
     loadNovelPreview(novelLayoutStyle);
+    scrollNovelPreviewToTop();
   }
 }
 
@@ -3079,6 +3112,7 @@ function novelPageNext() {
   if (novelPreviewPage < total) {
     novelPreviewPage++;
     loadNovelPreview(novelLayoutStyle);
+    scrollNovelPreviewToTop();
   }
 }
 
