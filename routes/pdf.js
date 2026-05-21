@@ -435,8 +435,17 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
 // ============================================================
 // BUILD Graphic Novel HTML (all sessions)
 // ============================================================
-function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
+function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   layoutStyle = layoutStyle || 'Classic';
+  pageOpts = pageOpts || {};
+  // When paginated, render only one session. page is 1-indexed.
+  var paginated = (typeof pageOpts.page === 'number' && pageOpts.page > 0);
+  var totalSessions = sessions.length;
+  var pageIndex = paginated ? (pageOpts.page - 1) : -1;
+  // Slice down to a single session when paginated
+  var renderSessions = paginated
+    ? (sessions[pageIndex] ? [sessions[pageIndex]] : [])
+    : sessions;
   // Date range
   const dates = sessions.map(function(s) { return new Date(s.session_date + 'T12:00:00'); });
   const minDate = new Date(Math.min.apply(null, dates));
@@ -461,8 +470,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
   // Get DM name from campaign
   const dmName = campaign.dm_name || 'The Dungeon Master';
 
-  // Build all session content
-  var allSessionsHTML = sessions.map(function(s, si) {
+  // Build session content. When paginated, only one session is rendered,
+  // but it keeps its real session number, and the chapter seam is suppressed
+  // so a sequence spanning sessions reads continuously in the preview.
+  var allSessionsHTML = renderSessions.map(function(s, localIdx) {
+    var si = paginated ? pageIndex : localIdx;
     var moments = s.moments || [];
     var narrative = {
       intro: s.narrative_intro || '',
@@ -472,13 +484,20 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
 
     var panelsHTML = buildLayout(layoutStyle, moments, narrative.sections, narrative.intro, narrative.outro);
 
+    var chapterHeading = paginated
+      ? ''
+      : '<div class="session-marker">' +
+          '<div class="session-marker-ornament">&bull; &bull; &bull;</div>' +
+          '<div class="session-marker-label">Session ' + (si+1) + ' &mdash; ' + s.name +
+            ' &middot; ' + formatDate(s.session_date) + '</div>' +
+        '</div>';
+
     return '<div class="content-page">' +
       '<div class="page-header">' +
         '<div class="page-header-campaign">' + campaign.name + '</div>' +
         '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
       '</div>' +
-      '<div class="session-chapter-title">Session ' + (si+1) + ': ' + s.name + '</div>' +
-      '<div class="session-chapter-date">' + formatDate(s.session_date) + '</div>' +
+      chapterHeading +
       panelsHTML +
     '</div>';
   }).join('');
@@ -528,6 +547,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
   .page-header-session { font-family:'Cinzel',serif;font-size:7pt;color:#8a6a2a; }
   .session-chapter-title { font-family:'Cinzel',serif;font-size:18pt;font-weight:700;color:#2c1810;margin-bottom:0.05in; }
   .session-chapter-date { font-family:'Crimson Text',serif;font-size:11pt;color:#8a6a2a;font-style:italic;margin-bottom:0.2in;padding-bottom:0.15in;border-bottom:1px solid rgba(201,168,76,0.2); }
+  /* Softened session marker — a quiet signal that a new play session begins,
+     without a hard chapter break */
+  .session-marker { text-align:center;margin:0.1in 0 0.28in; }
+  .session-marker-ornament { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.55);letter-spacing:0.3em;margin-bottom:0.06in; }
+  .session-marker-label { font-family:'Cinzel',serif;font-size:8.5pt;font-weight:600;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase; }
   .narrative-text { font-family:'Crimson Text',serif;font-size:12pt;line-height:1.7;color:#2a1a0e;margin:0.18in 0;text-indent:0.3in; }
   .intro-text { font-size:13pt;font-style:italic;text-indent:0;color:#3a2010; }
   .outro-text { font-size:12pt;font-style:italic;text-indent:0;color:#3a2010;border-top:1px solid rgba(201,168,76,0.3);padding-top:0.2in;margin-top:0.25in; }
@@ -548,7 +572,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
 </head>
 <body>
 
-<!-- COVER PAGE -->
+${paginated ? '' : `<!-- COVER PAGE -->
 <div class="cover-page">
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
@@ -571,9 +595,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle) {
   <div class="cast-divider"></div>
   <div class="cast-page-dm">Dungeon Master: ${dmName} &nbsp;&nbsp;|&nbsp;&nbsp; ${dateRange}</div>
   <div class="cast-grid">${castHTML}</div>
-</div>
+</div>`}
 
-<!-- ALL SESSIONS -->
+<!-- SESSIONS -->
 ${allSessionsHTML}
 
 <div class="page-watermark">CHRONICLEMYGAME.COM</div>
@@ -643,7 +667,17 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   }));
 
   const layoutStyle = req.query.layout || 'Classic';
-  const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle);
+
+  // Optional pagination: ?page=N renders only session N (1-indexed).
+  // Total session count is returned in a header so the client can build a pager.
+  var pageOpts = {};
+  var pageNum = parseInt(req.query.page, 10);
+  if (!isNaN(pageNum) && pageNum > 0) {
+    pageOpts.page = pageNum;
+  }
+  res.set('X-Total-Sessions', String(sessionsWithData.length));
+
+  const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts);
   res.send(html);
 });
 

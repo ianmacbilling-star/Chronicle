@@ -667,9 +667,41 @@ function loadPreview(layout) {
   iframe.onload = function() {
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
+    resizePreviewIframe();
   };
   iframe.src = url;
 }
+
+// Grow the preview iframe to the full height of its content so there is
+// no inner scrollbar — the user scrolls only the outer page.
+function resizePreviewIframe() {
+  var iframe = document.getElementById('session-preview-iframe');
+  var frame = document.getElementById('session-preview-frame');
+  if (!iframe) return;
+  try {
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    if (!doc || !doc.body) return;
+    // Take the largest of several height measures to be safe across layouts
+    var h = Math.max(
+      doc.body.scrollHeight, doc.documentElement.scrollHeight,
+      doc.body.offsetHeight, doc.documentElement.offsetHeight
+    );
+    if (h > 0) {
+      iframe.style.height = h + 'px';
+      if (frame) frame.style.height = 'auto';
+    }
+  } catch (e) {
+    // If measurement fails for any reason, leave the iframe as-is
+  }
+}
+
+// Re-measure on window resize — content reflow can change the height
+window.addEventListener('resize', function() {
+  var iframe = document.getElementById('session-preview-iframe');
+  if (iframe && iframe.style.display !== 'none' && iframe.src) {
+    resizePreviewIframe();
+  }
+});
 
 function applyLayoutStyle(layout) {
   state.layoutStyle = layout || 'Classic';
@@ -1055,14 +1087,20 @@ function selNovelLayout(el, layout) {
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
-  var warning = document.getElementById('novel-preview-warning');
   if (!iframe) return;
 
-  // Show warning for large novels
-  var sessionCount = document.querySelectorAll('#novel-summary-list .novel-session-block').length;
-  if (warning) warning.style.display = sessionCount > 15 ? 'block' : 'none';
+  if (layout) novelLayoutStyle = layout;
 
-  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(layout || novelLayoutStyle);
+  // Build/refresh the session pager
+  setupNovelPager();
+
+  var total = (state.novelSessions || []).length;
+  var url = '/api/pdf/novel/' + state.currentCampaign.id +
+    '?layout=' + encodeURIComponent(novelLayoutStyle);
+  // Paginate by session whenever there is more than one session
+  if (total > 1) {
+    url += '&page=' + novelPreviewPage;
+  }
 
   if (loading) loading.style.display = 'flex';
   iframe.style.display = 'none';
@@ -1071,11 +1109,110 @@ function loadNovelPreview(layout) {
   iframe.onload = function() {
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
+    resizeNovelPreviewIframe();
   };
   iframe.src = url;
 }
 
+// ---- Novel preview pager ----
+var novelPreviewPage = 1;
+
+function setupNovelPager() {
+  var pager = document.getElementById('novel-pager');
+  var select = document.getElementById('novel-pager-select');
+  var warning = document.getElementById('novel-preview-warning');
+  var sessions = state.novelSessions || [];
+  var total = sessions.length;
+
+  if (!pager) return;
+
+  // Only show the pager when there is more than one session
+  if (total <= 1) {
+    pager.style.display = 'none';
+    if (warning) warning.style.display = 'none';
+    novelPreviewPage = 1;
+    return;
+  }
+
+  // Clamp current page into range
+  if (novelPreviewPage < 1) novelPreviewPage = 1;
+  if (novelPreviewPage > total) novelPreviewPage = total;
+
+  // Build the jump dropdown
+  if (select) {
+    var opts = '';
+    for (var i = 0; i < total; i++) {
+      var nm = sessions[i] && sessions[i].name ? sessions[i].name : ('Session ' + (i+1));
+      var label = 'Session ' + (i+1) + ' of ' + total + '  —  ' + nm;
+      opts += '<option value="' + (i+1) + '"' + ((i+1) === novelPreviewPage ? ' selected' : '') + '>' +
+        label + '</option>';
+    }
+    select.innerHTML = opts;
+  }
+
+  var prev = document.getElementById('novel-pager-prev');
+  var next = document.getElementById('novel-pager-next');
+  if (prev) prev.disabled = (novelPreviewPage <= 1);
+  if (next) next.disabled = (novelPreviewPage >= total);
+
+  pager.style.display = 'flex';
+  if (warning) warning.style.display = total > 15 ? 'block' : 'none';
+}
+
+function novelPageJump(value) {
+  var n = parseInt(value, 10);
+  if (isNaN(n)) return;
+  novelPreviewPage = n;
+  loadNovelPreview(novelLayoutStyle);
+}
+
+function novelPagePrev() {
+  if (novelPreviewPage > 1) {
+    novelPreviewPage--;
+    loadNovelPreview(novelLayoutStyle);
+  }
+}
+
+function novelPageNext() {
+  var total = (state.novelSessions || []).length;
+  if (novelPreviewPage < total) {
+    novelPreviewPage++;
+    loadNovelPreview(novelLayoutStyle);
+  }
+}
+
+// Grow the novel preview iframe to the full height of its content so there
+// is no inner scrollbar — the user scrolls only the outer page.
+function resizeNovelPreviewIframe() {
+  var iframe = document.getElementById('novel-preview-iframe');
+  var frame = document.getElementById('novel-preview-frame');
+  if (!iframe) return;
+  try {
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    if (!doc || !doc.body) return;
+    var h = Math.max(
+      doc.body.scrollHeight, doc.documentElement.scrollHeight,
+      doc.body.offsetHeight, doc.documentElement.offsetHeight
+    );
+    if (h > 0) {
+      iframe.style.height = h + 'px';
+      if (frame) frame.style.height = 'auto';
+    }
+  } catch (e) {
+    // If measurement fails for any reason, leave the iframe as-is
+  }
+}
+
+// Re-measure novel preview on window resize
+window.addEventListener('resize', function() {
+  var iframe = document.getElementById('novel-preview-iframe');
+  if (iframe && iframe.style.display !== 'none' && iframe.src) {
+    resizeNovelPreviewIframe();
+  }
+});
+
 function previewNovelPDF() {
+  novelPreviewPage = 1;
   switchNovelTab('preview');
   loadNovelPreview(novelLayoutStyle);
 }
@@ -1102,6 +1239,9 @@ function loadNovelSummary() {
 }
 
 function renderNovelSummary(sessions) {
+
+  // Keep the ordered session list available for the preview pager
+  state.novelSessions = sessions || [];
 
   var container = document.getElementById('novel-summary-list');
   if (!sessions.length) {
@@ -2412,9 +2552,41 @@ function loadPreview(layout) {
   iframe.onload = function() {
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
+    resizePreviewIframe();
   };
   iframe.src = url;
 }
+
+// Grow the preview iframe to the full height of its content so there is
+// no inner scrollbar — the user scrolls only the outer page.
+function resizePreviewIframe() {
+  var iframe = document.getElementById('session-preview-iframe');
+  var frame = document.getElementById('session-preview-frame');
+  if (!iframe) return;
+  try {
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    if (!doc || !doc.body) return;
+    // Take the largest of several height measures to be safe across layouts
+    var h = Math.max(
+      doc.body.scrollHeight, doc.documentElement.scrollHeight,
+      doc.body.offsetHeight, doc.documentElement.offsetHeight
+    );
+    if (h > 0) {
+      iframe.style.height = h + 'px';
+      if (frame) frame.style.height = 'auto';
+    }
+  } catch (e) {
+    // If measurement fails for any reason, leave the iframe as-is
+  }
+}
+
+// Re-measure on window resize — content reflow can change the height
+window.addEventListener('resize', function() {
+  var iframe = document.getElementById('session-preview-iframe');
+  if (iframe && iframe.style.display !== 'none' && iframe.src) {
+    resizePreviewIframe();
+  }
+});
 
 function applyLayoutStyle(layout) {
   state.layoutStyle = layout || 'Classic';
@@ -2800,14 +2972,20 @@ function selNovelLayout(el, layout) {
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
-  var warning = document.getElementById('novel-preview-warning');
   if (!iframe) return;
 
-  // Show warning for large novels
-  var sessionCount = document.querySelectorAll('#novel-summary-list .novel-session-block').length;
-  if (warning) warning.style.display = sessionCount > 15 ? 'block' : 'none';
+  if (layout) novelLayoutStyle = layout;
 
-  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(layout || novelLayoutStyle);
+  // Build/refresh the session pager
+  setupNovelPager();
+
+  var total = (state.novelSessions || []).length;
+  var url = '/api/pdf/novel/' + state.currentCampaign.id +
+    '?layout=' + encodeURIComponent(novelLayoutStyle);
+  // Paginate by session whenever there is more than one session
+  if (total > 1) {
+    url += '&page=' + novelPreviewPage;
+  }
 
   if (loading) loading.style.display = 'flex';
   iframe.style.display = 'none';
@@ -2816,11 +2994,110 @@ function loadNovelPreview(layout) {
   iframe.onload = function() {
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
+    resizeNovelPreviewIframe();
   };
   iframe.src = url;
 }
 
+// ---- Novel preview pager ----
+var novelPreviewPage = 1;
+
+function setupNovelPager() {
+  var pager = document.getElementById('novel-pager');
+  var select = document.getElementById('novel-pager-select');
+  var warning = document.getElementById('novel-preview-warning');
+  var sessions = state.novelSessions || [];
+  var total = sessions.length;
+
+  if (!pager) return;
+
+  // Only show the pager when there is more than one session
+  if (total <= 1) {
+    pager.style.display = 'none';
+    if (warning) warning.style.display = 'none';
+    novelPreviewPage = 1;
+    return;
+  }
+
+  // Clamp current page into range
+  if (novelPreviewPage < 1) novelPreviewPage = 1;
+  if (novelPreviewPage > total) novelPreviewPage = total;
+
+  // Build the jump dropdown
+  if (select) {
+    var opts = '';
+    for (var i = 0; i < total; i++) {
+      var nm = sessions[i] && sessions[i].name ? sessions[i].name : ('Session ' + (i+1));
+      var label = 'Session ' + (i+1) + ' of ' + total + '  —  ' + nm;
+      opts += '<option value="' + (i+1) + '"' + ((i+1) === novelPreviewPage ? ' selected' : '') + '>' +
+        label + '</option>';
+    }
+    select.innerHTML = opts;
+  }
+
+  var prev = document.getElementById('novel-pager-prev');
+  var next = document.getElementById('novel-pager-next');
+  if (prev) prev.disabled = (novelPreviewPage <= 1);
+  if (next) next.disabled = (novelPreviewPage >= total);
+
+  pager.style.display = 'flex';
+  if (warning) warning.style.display = total > 15 ? 'block' : 'none';
+}
+
+function novelPageJump(value) {
+  var n = parseInt(value, 10);
+  if (isNaN(n)) return;
+  novelPreviewPage = n;
+  loadNovelPreview(novelLayoutStyle);
+}
+
+function novelPagePrev() {
+  if (novelPreviewPage > 1) {
+    novelPreviewPage--;
+    loadNovelPreview(novelLayoutStyle);
+  }
+}
+
+function novelPageNext() {
+  var total = (state.novelSessions || []).length;
+  if (novelPreviewPage < total) {
+    novelPreviewPage++;
+    loadNovelPreview(novelLayoutStyle);
+  }
+}
+
+// Grow the novel preview iframe to the full height of its content so there
+// is no inner scrollbar — the user scrolls only the outer page.
+function resizeNovelPreviewIframe() {
+  var iframe = document.getElementById('novel-preview-iframe');
+  var frame = document.getElementById('novel-preview-frame');
+  if (!iframe) return;
+  try {
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    if (!doc || !doc.body) return;
+    var h = Math.max(
+      doc.body.scrollHeight, doc.documentElement.scrollHeight,
+      doc.body.offsetHeight, doc.documentElement.offsetHeight
+    );
+    if (h > 0) {
+      iframe.style.height = h + 'px';
+      if (frame) frame.style.height = 'auto';
+    }
+  } catch (e) {
+    // If measurement fails for any reason, leave the iframe as-is
+  }
+}
+
+// Re-measure novel preview on window resize
+window.addEventListener('resize', function() {
+  var iframe = document.getElementById('novel-preview-iframe');
+  if (iframe && iframe.style.display !== 'none' && iframe.src) {
+    resizeNovelPreviewIframe();
+  }
+});
+
 function previewNovelPDF() {
+  novelPreviewPage = 1;
   switchNovelTab('preview');
   loadNovelPreview(novelLayoutStyle);
 }
@@ -2847,6 +3124,9 @@ function loadNovelSummary() {
 }
 
 function renderNovelSummary(sessions) {
+
+  // Keep the ordered session list available for the preview pager
+  state.novelSessions = sessions || [];
 
   var container = document.getElementById('novel-summary-list');
   if (!sessions.length) {
