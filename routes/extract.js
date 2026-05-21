@@ -59,7 +59,9 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     notesSection + '\n\n' +
     '## SESSION TRANSCRIPT\n' + session.transcript + '\n\n' +
     '## YOUR TASK\n' +
-    'Extract 4-6 key moments for graphic novel panels. ' +
+    'This transcript is approximately ' + wordCount + ' words long. ' +
+    'Based on its length and the level of detail, extract ' + momentCount + ' key moments ' +
+    'for graphic novel panels (aim within that range). ' +
     'Focus on dramatic combat, emotional revelations, tense standoffs, and memorable character moments. ' +
     'If the director\'s instructions specify particular scenes, those MUST be included as panels.\n\n' +
     'Return ONLY valid JSON with no markdown fences or explanation:\n' +
@@ -86,7 +88,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       },
       body: JSON.stringify({
         model: process.env.AI_MODEL || 'claude-sonnet-4-6',
-        max_tokens: 2000,
+        max_tokens: 8000,
         system: systemPrompt,
         messages: [{
           role: 'user',
