@@ -92,9 +92,19 @@ function layoutStorybook(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
   moments.forEach(function(m, i) {
     var h = '4.2in';
-    var media = m.image
-      ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;border:1px solid rgba(201,168,76,0.25);" src="' + m.image + '" alt="' + m.title + '" />'
-      : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;"><span style="font-size:28pt;opacity:0.3;">&#128444;</span></div>';
+    var media;
+    if (m.image) {
+      // Image sits under a soft white vignette so its edges fade into the
+      // page. Overlay approach is print-safe (works in the exported PDF).
+      media = '<div style="position:relative;width:100%;height:' + h + ';">' +
+        '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + m.title + '" />' +
+        '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.55in 0.32in #ffffff;"></div>' +
+        '<div style="position:absolute;inset:0;pointer-events:none;background:' +
+          'radial-gradient(ellipse at center, rgba(255,255,255,0) 55%, rgba(255,255,255,0.55) 82%, rgba(255,255,255,1) 100%);"></div>' +
+      '</div>';
+    } else {
+      media = '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;"><span style="font-size:28pt;opacity:0.3;">&#128444;</span></div>';
+    }
     html += '<div style="margin:0.3in 0 0.1in;page-break-inside:avoid;">' + media +
       '<div style="text-align:center;font-family:Cinzel,serif;font-size:9pt;font-style:italic;color:#8a6a2a;margin-top:5px;">' +
       (m.title || '') + '</div></div>';
