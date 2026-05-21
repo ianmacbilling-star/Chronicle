@@ -703,11 +703,17 @@ window.addEventListener('resize', function() {
   }
 });
 
+// Map a layout value (including legacy names) to its chip id suffix
+function layoutChipKey(layout) {
+  var legacy = { cinematic: 'comicbook', dramatic: 'action' };
+  var k = (layout || 'Classic').toLowerCase();
+  return legacy[k] || k;
+}
+
 function applyLayoutStyle(layout) {
   state.layoutStyle = layout || 'Classic';
   document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
-  var id = 'layout-' + (layout || 'Classic').toLowerCase();
-  var el = document.getElementById(id);
+  var el = document.getElementById('layout-' + layoutChipKey(layout));
   if (el) el.classList.add('sel');
 }
 
@@ -2592,11 +2598,17 @@ window.addEventListener('resize', function() {
   }
 });
 
+// Map a layout value (including legacy names) to its chip id suffix
+function layoutChipKey(layout) {
+  var legacy = { cinematic: 'comicbook', dramatic: 'action' };
+  var k = (layout || 'Classic').toLowerCase();
+  return legacy[k] || k;
+}
+
 function applyLayoutStyle(layout) {
   state.layoutStyle = layout || 'Classic';
   document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
-  var id = 'layout-' + (layout || 'Classic').toLowerCase();
-  var el = document.getElementById(id);
+  var el = document.getElementById('layout-' + layoutChipKey(layout));
   if (el) el.classList.add('sel');
 }
 

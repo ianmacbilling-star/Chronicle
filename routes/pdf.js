@@ -39,6 +39,34 @@ function buildPanelHTML(m, i, size) {
   '</div>';
 }
 
+// Comic-book style panel — thick black border, flush, optional overlaid caption.
+// size: 'full' | 'half' | 'third'. showCaption: overlay the panel title comic-style.
+function buildComicPanel(m, i, size, showCaption) {
+  var widthMap = { full: '100%', half: '49.4%', third: '32.6%' };
+  var heightMap = { full: '5.4in', half: '3.7in', third: '2.6in' };
+  var w = widthMap[size] || '32.6%';
+  var h = heightMap[size] || '2.6in';
+
+  var caption = '';
+  if (showCaption && m.title) {
+    caption = '<div style="position:absolute;top:0;left:0;max-width:78%;' +
+      'background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;' +
+      'padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;' +
+      'color:#0a0806;letter-spacing:0.02em;line-height:1.25;">' + m.title + '</div>';
+  }
+
+  var media = m.image
+    ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + m.title + '" />'
+    : '<div style="width:100%;height:' + h + ';background:#1a0f06;display:flex;align-items:center;justify-content:center;">' +
+        '<span style="font-size:30pt;opacity:0.25;color:#c9a84c;">&#128444;</span></div>';
+
+  return '<div style="width:' + w + ';display:inline-block;vertical-align:top;' +
+    'position:relative;overflow:hidden;border:5px solid #0a0806;' +
+    'margin:0 5px 5px 0;page-break-inside:avoid;background:#160e06;">' +
+    media + caption +
+  '</div>';
+}
+
 function buildNarrativeHTML(text, isIntro) {
   if (!text) return '';
   return '<p style="font-family:Crimson Text,Georgia,serif;font-size:12pt;line-height:1.8;color:#2a1a0e;' +
@@ -46,15 +74,16 @@ function buildNarrativeHTML(text, isIntro) {
     'margin:0.15in 0;text-indent:' + (isIntro ? '0' : '0.3in') + ';">' + text + '</p>';
 }
 
+// ---- BOOK FAMILY ----
+
+// CLASSIC — clean uniform grid, the orderly "book" layout.
 function layoutClassic(moments, sections, intro, outro) {
-  // 3 uniform columns — clean and readable
   var html = buildNarrativeHTML(intro, true);
   html += '<div style="line-height:0;">';
   moments.forEach(function(m, i) {
     html += buildPanelHTML(m, i, 'third');
   });
   html += '</div>';
-  // Between narratives
   sections.forEach(function(s) {
     if (s.after) html += buildNarrativeHTML(s.after, false);
   });
@@ -62,12 +91,18 @@ function layoutClassic(moments, sections, intro, outro) {
   return html;
 }
 
-function layoutCinematic(moments, sections, intro, outro) {
-  // First panel wide, rest in 2 columns
+// STORYBOOK — one large image per beat with narrative flowing around it,
+// like an illustrated novel. Fewer, bigger images; lots of prose.
+function layoutStorybook(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
   moments.forEach(function(m, i) {
-    var size = i === 0 ? 'full' : (i % 5 === 0 ? 'full' : 'half');
-    html += '<div style="line-height:0;">' + buildPanelHTML(m, i, size) + '</div>';
+    var h = '4.2in';
+    var media = m.image
+      ? '<img style="width:100%;height:' + h + ';object-fit:cover;display:block;border:1px solid rgba(201,168,76,0.25);" src="' + m.image + '" alt="' + m.title + '" />'
+      : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;"><span style="font-size:28pt;opacity:0.3;">&#128444;</span></div>';
+    html += '<div style="margin:0.3in 0 0.1in;page-break-inside:avoid;">' + media +
+      '<div style="text-align:center;font-family:Cinzel,serif;font-size:9pt;font-style:italic;color:#8a6a2a;margin-top:5px;">' +
+      (m.title || '') + '</div></div>';
     var section = sections.find(function(s) { return s.panel_index === i; }) || {};
     if (section.after) html += buildNarrativeHTML(section.after, false);
   });
@@ -75,37 +110,48 @@ function layoutCinematic(moments, sections, intro, outro) {
   return html;
 }
 
-function layoutDramatic(moments, sections, intro, outro) {
-  // Combat/key moments get full width, others get third
+// ---- COMIC FAMILY ----
+
+// COMIC BOOK — thick black borders, tight gutters, flush-packed panels in
+// dynamic mixed-size rows, captions overlaid comic-style.
+function layoutComicBook(moments, sections, intro, outro) {
+  var html = buildNarrativeHTML(intro, true);
+  // Repeating row rhythm: a wide pair, then a tight trio, then a full splash.
+  var pattern = ['half', 'half', 'third', 'third', 'third', 'full'];
+  html += '<div style="line-height:0;">';
+  moments.forEach(function(m, i) {
+    var size = (i === 0) ? 'full' : pattern[i % pattern.length];
+    html += buildComicPanel(m, i, size, true);
+    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
+    if (section.after) {
+      html += '</div>' + buildNarrativeHTML(section.after, false) + '<div style="line-height:0;">';
+    }
+  });
+  html += '</div>';
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+// ACTION — comic treatment, but combat/key beats become full-bleed splash
+// panels; quieter moments stay small. No captions on the art — kinetic.
+function layoutAction(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
   var row = '';
+  function flush() {
+    if (row) { html += '<div style="line-height:0;">' + row + '</div>'; row = ''; }
+  }
   moments.forEach(function(m, i) {
     var isBig = m.type === 'combat' || i === 0 || i === moments.length - 1;
     if (isBig) {
-      if (row) { html += '<div style="line-height:0;">' + row + '</div>'; row = ''; }
-      html += '<div style="line-height:0;">' + buildPanelHTML(m, i, 'full') + '</div>';
+      flush();
+      html += '<div style="line-height:0;">' + buildComicPanel(m, i, 'full', false) + '</div>';
     } else {
-      row += buildPanelHTML(m, i, 'third');
+      row += buildComicPanel(m, i, 'third', false);
     }
     var section = sections.find(function(s) { return s.panel_index === i; }) || {};
-    if (section.after) {
-      if (row) { html += '<div style="line-height:0;">' + row + '</div>'; row = ''; }
-      html += buildNarrativeHTML(section.after, false);
-    }
+    if (section.after) { flush(); html += buildNarrativeHTML(section.after, false); }
   });
-  if (row) html += '<div style="line-height:0;">' + row + '</div>';
-  html += buildNarrativeHTML(outro, true);
-  return html;
-}
-
-function layoutStorybook(moments, sections, intro, outro) {
-  // 2 columns, larger panels, literary breathing room
-  var html = buildNarrativeHTML(intro, true);
-  moments.forEach(function(m, i) {
-    html += '<div style="line-height:0;">' + buildPanelHTML(m, i, 'half') + '</div>';
-    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
-    if (section.after) html += buildNarrativeHTML(section.after, false);
-  });
+  flush();
   html += buildNarrativeHTML(outro, true);
   return html;
 }
@@ -116,10 +162,14 @@ function buildLayout(layoutStyle, moments, sections, intro, outro) {
   intro = intro || '';
   outro = outro || '';
   switch(layoutStyle) {
-    case 'Cinematic': return layoutCinematic(moments, sections, intro, outro);
-    case 'Dramatic':  return layoutDramatic(moments, sections, intro, outro);
-    case 'Storybook': return layoutStorybook(moments, sections, intro, outro);
-    default:          return layoutClassic(moments, sections, intro, outro);
+    case 'ComicBook':
+    case 'Cinematic':  // legacy name — old saved sessions
+      return layoutComicBook(moments, sections, intro, outro);
+    case 'Action':
+    case 'Dramatic':   // legacy name — old saved sessions
+      return layoutAction(moments, sections, intro, outro);
+    case 'Storybook':  return layoutStorybook(moments, sections, intro, outro);
+    default:           return layoutClassic(moments, sections, intro, outro);
   }
 }
 
