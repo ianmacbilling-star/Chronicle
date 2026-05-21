@@ -137,4 +137,98 @@ router.delete('/:id', requireAuth, verifyCampaignOwner, async function(req, res)
   }
 });
 
+// POST rebuild canonical character prompt — uses vision on uploaded images
+router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+
+    const key = process.env.ANTHROPIC_API_KEY || req.body.key;
+    if (!key) return res.json({ error: 'AI service is not configured.' });
+
+    // Collect any uploaded reference images (public R2 URLs) for vision input
+    const imageUrls = [char.image_portrait, char.image_fullbody, char.image_action, char.image_other, char.image]
+      .filter(function(u) { return u && /^https?:\/\//.test(u); });
+
+    // Build the message content: the images first, then the instruction
+    const content = [];
+    imageUrls.forEach(function(url) {
+      content.push({ type: 'image', source: { type: 'url', url: url } });
+    });
+
+    const textInfo =
+      'Character name: ' + char.name + '\n' +
+      'Class/role: ' + (char.cls || 'Adventurer') + '\n' +
+      'Player-written description: ' + (char.description || '(none)') + '\n\n' +
+      (imageUrls.length
+        ? 'Above are reference image(s) of this character. Study them carefully.'
+        : 'No reference images were provided — work from the text description only.') +
+      '\n\nWrite a single, tight CANONICAL APPEARANCE PROMPT for this character: a ' +
+      'style-neutral physical description used to keep them visually consistent across ' +
+      'comic panels. Lead with the most distinctive feature. Include hair, face/build, ' +
+      'skin tone, signature outfit and its colors, and any notable gear or markings. ' +
+      'Do NOT describe personality, backstory, pose, background, or art style — physical ' +
+      'appearance only. 2-4 sentences, dense with concrete visual detail. ' +
+      'Return ONLY the description text, no preamble or labels.';
+
+    content.push({ type: 'text', text: textInfo });
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+        max_tokens: 600,
+        messages: [{ role: 'user', content: content }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) return res.json({ error: data.error.message });
+
+    const promptText = data.content.map(function(b) { return b.text || ''; }).join('').trim();
+    if (!promptText) return res.json({ error: 'No description was generated.' });
+
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE characters SET canonical_prompt = ?, canonical_prompt_at = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(promptText, now, now, req.session.userId, char.id);
+
+    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now });
+  } catch(e) {
+    console.error('Rebuild prompt error:', e.message);
+    res.json({ error: e.message });
+  }
+});
+
+// PUT update just the canonical prompt (Platinum manual edit)
+router.put('/:id/canonical-prompt', requireAuth, verifyCampaignOwner, async function(req, res) {
+  try {
+    const { getTier } = require('../middleware/tiers');
+    const db = await getDb();
+    const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    const tier = getTier(user ? user.tier : 'copper');
+    if (!tier.can_edit_prompts) {
+      return res.status(403).json({ error: 'Editing character prompts is a Platinum feature.' });
+    }
+    const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+
+    const { canonical_prompt } = req.body;
+    if (typeof canonical_prompt !== 'string') return res.json({ error: 'Prompt required' });
+
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE characters SET canonical_prompt = ?, canonical_prompt_at = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(canonical_prompt, now, now, req.session.userId, char.id);
+
+    res.json({ success: true, canonical_prompt: canonical_prompt, canonical_prompt_at: now });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 module.exports = router;

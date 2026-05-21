@@ -647,6 +647,98 @@ function loadCharacters() {
     });
 }
 
+// ---- Canonical character prompt (the look used to keep them consistent) ----
+function buildCanonicalPromptBlock(c) {
+  var canEdit = state.userTier && state.userTier.can_edit_prompts;
+  var hasPrompt = c.canonical_prompt && c.canonical_prompt.trim();
+  var body = hasPrompt
+    ? '<div class="char-prompt-text" id="char-prompt-text-' + c.id + '">' + c.canonical_prompt + '</div>'
+    : '<div class="char-prompt-empty" id="char-prompt-text-' + c.id + '">' +
+        'No character prompt yet. Rebuild to generate one from the card info and images.</div>';
+
+  var buttons = '<button class="char-prompt-btn" id="char-prompt-rebuild-' + c.id + '" ' +
+    'onclick="rebuildCharPrompt(' + c.id + ')">&#10227; ' +
+    (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button>';
+  if (canEdit && hasPrompt) {
+    buttons += '<button class="char-prompt-btn" onclick="startEditCharPrompt(' + c.id + ')">&#9998; Edit</button>';
+  }
+
+  return '<div class="char-prompt-block" id="char-prompt-block-' + c.id + '">' +
+    '<div class="char-prompt-label">Character Prompt</div>' +
+    body +
+    '<div class="char-prompt-actions">' + buttons + '</div>' +
+  '</div>';
+}
+
+function rebuildCharPrompt(charId) {
+  var btn = document.getElementById('char-prompt-rebuild-' + charId);
+  var textEl = document.getElementById('char-prompt-text-' + charId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Building...'; }
+  if (textEl) textEl.textContent = 'Analyzing character and images...';
+
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/rebuild-prompt', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+        if (ch) {
+          ch.canonical_prompt = data.canonical_prompt;
+          ch.canonical_prompt_at = data.canonical_prompt_at;
+        }
+        renderCharacters();
+      } else {
+        if (textEl) textEl.textContent = (data && data.error) || 'Could not build the prompt.';
+        if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
+      }
+    })
+    .catch(function() {
+      if (textEl) textEl.textContent = 'Could not build the prompt.';
+      if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
+    });
+}
+
+function startEditCharPrompt(charId) {
+  var block = document.getElementById('char-prompt-block-' + charId);
+  var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+  if (!block || !ch) return;
+  block.innerHTML =
+    '<div class="char-prompt-label">Character Prompt</div>' +
+    '<textarea class="char-prompt-editor" id="char-prompt-editor-' + charId + '">' +
+      (ch.canonical_prompt || '') + '</textarea>' +
+    '<div class="char-prompt-actions">' +
+      '<button class="btn btn-sm btn-primary" onclick="saveCharPrompt(' + charId + ')">Save</button>' +
+      '<button class="btn btn-sm" onclick="renderCharacters()">Cancel</button>' +
+    '</div>';
+}
+
+function saveCharPrompt(charId) {
+  var ta = document.getElementById('char-prompt-editor-' + charId);
+  if (!ta) return;
+  var newPrompt = ta.value;
+  ta.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/canonical-prompt', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ canonical_prompt: newPrompt })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+        if (ch) ch.canonical_prompt = newPrompt;
+        renderCharacters();
+      } else {
+        ta.disabled = false;
+        alert((data && data.error) || 'Could not save.');
+      }
+    })
+    .catch(function() { ta.disabled = false; alert('Could not save.'); });
+}
+
 function renderCharacters() {
   var colors = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
   var fgs = ['#534AB7','#0F6E56','#993C1D','#185FA5','#854F0B'];
@@ -674,6 +766,7 @@ function renderCharacters() {
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
       imgGridHtml +
+      buildCanonicalPromptBlock(c) +
     '</div>';
   }).join('');
   html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
@@ -2787,6 +2880,7 @@ function renderCharacters() {
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
       imgGridHtml +
+      buildCanonicalPromptBlock(c) +
     '</div>';
   }).join('');
   html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
