@@ -17,8 +17,7 @@ async function generateImage(prompt, style, falKey, charList, seed) {
   // Style goes FIRST so Flux treats it as primary instruction
   const stylePrefix = getStylePrefix(style);
   const charSection = charList
-    ? '\n\n--- RECURRING CHARACTERS (keep their appearance recognizable from panel to panel) ---\n' + charList +
-      '\nKeep these characters recognizably consistent — similar faces, hair, and signature outfits — while still letting each panel be its own dynamic scene.'
+    ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charList
     : '';
   const fullPrompt = stylePrefix + '\n\n' + prompt + charSection;
 
@@ -54,17 +53,34 @@ function campaignSeed(campaignId) {
   return ((n * 2654435761) % 2147483647 + 2147483647) % 2147483647;
 }
 
-// Build a structured, emphatic character block. Repeating a tightly
-// structured description identically in every panel is the cheapest
-// lever for reducing character drift.
-function buildCharacterBlock(chars) {
+// Build a character block containing ONLY the characters actually present
+// in this panel. Sending the full roster to every panel causes the image
+// model to merge features between characters ("concept bleed"), so we
+// detect presence from the panel text and include just those characters.
+function buildCharacterBlock(chars, panelText) {
   if (!chars || !chars.length) return '';
-  return chars.map(function(c) {
-    var parts = [];
-    parts.push('• ' + c.name);
-    if (c.cls) parts.push('role: ' + c.cls);
-    if (c.description) parts.push('appearance: ' + c.description);
-    return parts.join(' | ');
+  var text = (panelText || '').toLowerCase();
+
+  // A character is "present" if their name (or first name) appears in the
+  // panel's prompt/description text.
+  var present = chars.filter(function(c) {
+    if (!c.name) return false;
+    var full = c.name.toLowerCase();
+    var first = full.split(/\s+/)[0];
+    return text.indexOf(full) !== -1 || (first.length > 2 && text.indexOf(first) !== -1);
+  });
+
+  // If we can't detect anyone (e.g. a scenery panel, or names not mentioned),
+  // send nothing rather than the whole roster — an empty block is safer than
+  // a bleed-prone one.
+  if (!present.length) return '';
+
+  return present.map(function(c) {
+    // Keep each character's descriptors tightly bound to their name.
+    var line = c.name;
+    if (c.cls) line += ' (' + c.cls + ')';
+    if (c.description) line += ' — ' + c.description;
+    return line;
   }).join('\n');
 }
 
@@ -105,7 +121,9 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const campRow = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
     const campId = campRow ? campRow.campaign_id : campaign_id;
     const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campId);
-    const charList = buildCharacterBlock(chars);
+    // Only include characters actually named in this panel's text
+    const panelText = (prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
+    const charList = buildCharacterBlock(chars, panelText);
 
     // Single regenerate = user wants a different take, so use a fresh
     // random seed each time rather than the fixed campaign seed.
@@ -138,9 +156,9 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session_id);
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
 
-  // Get characters for consistency across all panels
+  // Load all campaign characters once; the per-panel block is built inside
+  // the loop so each panel only includes the characters actually in it.
   const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campaign_id);
-  const charList = buildCharacterBlock(chars);
 
   // Campaign base seed, varied per run: every "Generate all" produces a
   // fresh set of images, but all panels within ONE run share the base
@@ -152,6 +170,9 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     moments.map(async function(m) {
       try {
         const panelSeed = (baseSeed + (m.panel_order || 0)) % 2147483647;
+        // Only the characters named in THIS panel — prevents feature bleed
+        const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
+        const charList = buildCharacterBlock(chars, panelText);
         const imageUrl = await generateImage(m.prompt, style, fal_key, charList, panelSeed);
         const now = new Date().toISOString();
         await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
