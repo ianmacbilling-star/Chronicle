@@ -1189,14 +1189,25 @@ function scrollNovelPreviewToTop() {
   var anchor = document.getElementById('novel-pager') ||
                document.getElementById('novel-preview-frame');
   if (!anchor) return;
+  // The app scrolls inside .main-content (overflow-y:auto), NOT the window —
+  // so we must scroll that container, not window.
+  var container = document.querySelector('.main-content');
   // Defer so the scroll is computed after loadNovelPreview has updated the
   // DOM (hiding the iframe / showing the loading box shifts page height).
   setTimeout(function() {
-    var rect = anchor.getBoundingClientRect();
-    var top = rect.top + (window.pageYOffset || document.documentElement.scrollTop || 0);
-    // Small offset so the pager isn't flush against the very top edge
-    top = Math.max(0, top - 12);
-    window.scrollTo({ top: top, behavior: 'smooth' });
+    if (container) {
+      // Position of the anchor relative to the container's current scroll
+      var aRect = anchor.getBoundingClientRect();
+      var cRect = container.getBoundingClientRect();
+      var target = container.scrollTop + (aRect.top - cRect.top) - 12;
+      target = Math.max(0, target);
+      container.scrollTo({ top: target, behavior: 'smooth' });
+    } else {
+      // Fallback: scroll the window
+      var rect = anchor.getBoundingClientRect();
+      var top = Math.max(0, rect.top + (window.pageYOffset || 0) - 12);
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    }
   }, 60);
 }
 
@@ -3112,14 +3123,25 @@ function scrollNovelPreviewToTop() {
   var anchor = document.getElementById('novel-pager') ||
                document.getElementById('novel-preview-frame');
   if (!anchor) return;
+  // The app scrolls inside .main-content (overflow-y:auto), NOT the window —
+  // so we must scroll that container, not window.
+  var container = document.querySelector('.main-content');
   // Defer so the scroll is computed after loadNovelPreview has updated the
   // DOM (hiding the iframe / showing the loading box shifts page height).
   setTimeout(function() {
-    var rect = anchor.getBoundingClientRect();
-    var top = rect.top + (window.pageYOffset || document.documentElement.scrollTop || 0);
-    // Small offset so the pager isn't flush against the very top edge
-    top = Math.max(0, top - 12);
-    window.scrollTo({ top: top, behavior: 'smooth' });
+    if (container) {
+      // Position of the anchor relative to the container's current scroll
+      var aRect = anchor.getBoundingClientRect();
+      var cRect = container.getBoundingClientRect();
+      var target = container.scrollTop + (aRect.top - cRect.top) - 12;
+      target = Math.max(0, target);
+      container.scrollTo({ top: target, behavior: 'smooth' });
+    } else {
+      // Fallback: scroll the window
+      var rect = anchor.getBoundingClientRect();
+      var top = Math.max(0, rect.top + (window.pageYOffset || 0) - 12);
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    }
   }, 60);
 }
 
