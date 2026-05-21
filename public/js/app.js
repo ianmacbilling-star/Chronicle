@@ -1185,30 +1185,50 @@ function setupNovelPager() {
 }
 
 // Scroll the preview area back to the top after navigating
+// Find the nearest ancestor of `el` that actually has a vertical scrollbar.
+function findScrollParent(el) {
+  var node = el ? el.parentElement : null;
+  while (node) {
+    var style = window.getComputedStyle(node);
+    var oy = style.overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight + 2) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 function scrollNovelPreviewToTop() {
   var anchor = document.getElementById('novel-pager') ||
                document.getElementById('novel-preview-frame');
-  if (!anchor) return;
-  // The app scrolls inside .main-content (overflow-y:auto), NOT the window —
-  // so we must scroll that container, not window.
-  var container = document.querySelector('.main-content');
-  // Defer so the scroll is computed after loadNovelPreview has updated the
-  // DOM (hiding the iframe / showing the loading box shifts page height).
-  setTimeout(function() {
-    if (container) {
-      // Position of the anchor relative to the container's current scroll
+  if (!anchor) { console.log('[pager-scroll] no anchor element found'); return; }
+
+  function doScroll(label) {
+    var scroller = findScrollParent(anchor);
+    if (scroller) {
       var aRect = anchor.getBoundingClientRect();
-      var cRect = container.getBoundingClientRect();
-      var target = container.scrollTop + (aRect.top - cRect.top) - 12;
-      target = Math.max(0, target);
-      container.scrollTo({ top: target, behavior: 'smooth' });
+      var sRect = scroller.getBoundingClientRect();
+      var target = Math.max(0, scroller.scrollTop + (aRect.top - sRect.top) - 12);
+      // Instant jump — a smooth scroll gets interrupted by the iframe resize.
+      scroller.scrollTop = target;
+      console.log('[pager-scroll ' + label + '] scrolled', scroller.className || scroller.tagName,
+        'to', target);
     } else {
-      // Fallback: scroll the window
+      // No scrollable ancestor found — fall back to window + documentElement.
       var rect = anchor.getBoundingClientRect();
       var top = Math.max(0, rect.top + (window.pageYOffset || 0) - 12);
-      window.scrollTo({ top: top, behavior: 'smooth' });
+      window.scrollTo(0, top);
+      document.documentElement.scrollTop = top;
+      document.body.scrollTop = top;
+      console.log('[pager-scroll ' + label + '] no scroll parent — used window, top', top);
     }
-  }, 60);
+  }
+
+  // Scroll now, then re-assert after the iframe reloads/resizes the page.
+  doScroll('immediate');
+  setTimeout(function() { doScroll('settle-1'); }, 120);
+  setTimeout(function() { doScroll('settle-2'); }, 500);
 }
 
 function novelPageJump(value) {
@@ -3119,30 +3139,50 @@ function setupNovelPager() {
 }
 
 // Scroll the preview area back to the top after navigating
+// Find the nearest ancestor of `el` that actually has a vertical scrollbar.
+function findScrollParent(el) {
+  var node = el ? el.parentElement : null;
+  while (node) {
+    var style = window.getComputedStyle(node);
+    var oy = style.overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight + 2) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 function scrollNovelPreviewToTop() {
   var anchor = document.getElementById('novel-pager') ||
                document.getElementById('novel-preview-frame');
-  if (!anchor) return;
-  // The app scrolls inside .main-content (overflow-y:auto), NOT the window —
-  // so we must scroll that container, not window.
-  var container = document.querySelector('.main-content');
-  // Defer so the scroll is computed after loadNovelPreview has updated the
-  // DOM (hiding the iframe / showing the loading box shifts page height).
-  setTimeout(function() {
-    if (container) {
-      // Position of the anchor relative to the container's current scroll
+  if (!anchor) { console.log('[pager-scroll] no anchor element found'); return; }
+
+  function doScroll(label) {
+    var scroller = findScrollParent(anchor);
+    if (scroller) {
       var aRect = anchor.getBoundingClientRect();
-      var cRect = container.getBoundingClientRect();
-      var target = container.scrollTop + (aRect.top - cRect.top) - 12;
-      target = Math.max(0, target);
-      container.scrollTo({ top: target, behavior: 'smooth' });
+      var sRect = scroller.getBoundingClientRect();
+      var target = Math.max(0, scroller.scrollTop + (aRect.top - sRect.top) - 12);
+      // Instant jump — a smooth scroll gets interrupted by the iframe resize.
+      scroller.scrollTop = target;
+      console.log('[pager-scroll ' + label + '] scrolled', scroller.className || scroller.tagName,
+        'to', target);
     } else {
-      // Fallback: scroll the window
+      // No scrollable ancestor found — fall back to window + documentElement.
       var rect = anchor.getBoundingClientRect();
       var top = Math.max(0, rect.top + (window.pageYOffset || 0) - 12);
-      window.scrollTo({ top: top, behavior: 'smooth' });
+      window.scrollTo(0, top);
+      document.documentElement.scrollTop = top;
+      document.body.scrollTop = top;
+      console.log('[pager-scroll ' + label + '] no scroll parent — used window, top', top);
     }
-  }, 60);
+  }
+
+  // Scroll now, then re-assert after the iframe reloads/resizes the page.
+  doScroll('immediate');
+  setTimeout(function() { doScroll('settle-1'); }, 120);
+  setTimeout(function() { doScroll('settle-2'); }, 500);
 }
 
 function novelPageJump(value) {
