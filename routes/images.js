@@ -17,8 +17,8 @@ async function generateImage(prompt, style, falKey, charList, seed) {
   // Style goes FIRST so Flux treats it as primary instruction
   const stylePrefix = getStylePrefix(style);
   const charSection = charList
-    ? '\n\n=== RECURRING CHARACTERS — DRAW THESE EXACTLY THE SAME IN EVERY PANEL ===\n' + charList +
-      '\n=== END CHARACTERS ===\nConsistency of character appearance is critical: same faces, same hair, same outfits, same colors as described above.'
+    ? '\n\n--- RECURRING CHARACTERS (keep their appearance recognizable from panel to panel) ---\n' + charList +
+      '\nKeep these characters recognizably consistent — similar faces, hair, and signature outfits — while still letting each panel be its own dynamic scene.'
     : '';
   const fullPrompt = stylePrefix + '\n\n' + prompt + charSection;
 
@@ -107,7 +107,10 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campId);
     const charList = buildCharacterBlock(chars);
 
-    const imageUrl = await generateImage(prompt, style, fal_key, charList, campaignSeed(campId));
+    // Single regenerate = user wants a different take, so use a fresh
+    // random seed each time rather than the fixed campaign seed.
+    const randomSeed = Math.floor(Math.random() * 2147483647);
+    const imageUrl = await generateImage(prompt, style, fal_key, charList, randomSeed);
     const now = new Date().toISOString();
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
@@ -139,9 +142,10 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   const chars = await db.prepare('SELECT name, cls, description FROM characters WHERE campaign_id = ?').all(campaign_id);
   const charList = buildCharacterBlock(chars);
 
-  // Campaign base seed — each panel offsets from it so panels share the
-  // campaign's visual DNA while still varying scene to scene.
-  const baseSeed = campaignSeed(campaign_id);
+  // Campaign base seed, varied per run: every "Generate all" produces a
+  // fresh set of images, but all panels within ONE run share the base
+  // (offset per panel) so they stay consistent with each other.
+  const baseSeed = (campaignSeed(campaign_id) + Math.floor(Math.random() * 1000000)) % 2147483647;
 
   // Generate all images in parallel
   const results = await Promise.allSettled(
