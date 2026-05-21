@@ -267,7 +267,7 @@ async function initPostgres() {
     )
   `);
 
-  await db.query(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS session_characters (
       id SERIAL PRIMARY KEY,
       session_id INTEGER NOT NULL REFERENCES sessions(id),
