@@ -176,16 +176,20 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     'WHERE ch.campaign_id = ?'
   ).all(session_id, campaign_id);
 
-  // Campaign base seed, varied per run: every "Generate all" produces a
-  // fresh set of images, but all panels within ONE run share the base
-  // (offset per panel) so they stay consistent with each other.
-  const baseSeed = (campaignSeed(campaign_id) + Math.floor(Math.random() * 1000000)) % 2147483647;
+  // Stable campaign base seed — every session of a campaign renders from the
+  // same visual DNA, so characters stay consistent across sessions. Each panel
+  // offsets from it by panel_order so panels within a session still vary.
+  // (Single-panel Regenerate uses a random seed, preserving per-panel variety.)
+  const baseSeed = campaignSeed(campaign_id);
+  // Offset by session so two sessions don't render panel-for-panel identical,
+  // while still sharing the campaign's overall visual DNA.
+  const sessionOffset = (parseInt(session_id, 10) || 0) * 1000;
 
   // Generate all images in parallel
   const results = await Promise.allSettled(
     moments.map(async function(m) {
       try {
-        const panelSeed = (baseSeed + (m.panel_order || 0)) % 2147483647;
+        const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
         // Only the characters named in THIS panel — prevents feature bleed
         const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
         const charList = buildCharacterBlock(chars, panelText);
