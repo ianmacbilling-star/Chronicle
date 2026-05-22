@@ -14,9 +14,12 @@ const { fal } = require('@fal-ai/client');
 // The image models the app can switch between. Add new entries here.
 // 'schnell' is the default. Each call shape differs, so each model
 // gets its own input builder.
+// nano2 uses the TEXT-TO-IMAGE endpoint (no /edit) — it needs no
+// reference image. The /edit endpoint (for Lever 3 reference-image
+// consistency) is a separate future change.
 const IMAGE_MODELS = {
   schnell: 'fal-ai/flux/schnell',
-  nano2: 'fal-ai/nano-banana-2/edit'
+  nano2: 'fal-ai/nano-banana-2'
 };
 
 // Read the currently-selected model key from app_settings.
@@ -45,7 +48,8 @@ async function generateImage(prompt, style, falKey, charList, seed, modelKey) {
   let input;
 
   if (key === 'nano2') {
-    // Nano Banana 2: editing-model call shape.
+    // Nano Banana 2 text-to-image call shape. No reference image —
+    // that's the /edit endpoint, a separate future change for Lever 3.
     input = {
       prompt: fullPrompt,
       num_images: 1,
