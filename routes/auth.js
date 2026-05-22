@@ -216,7 +216,7 @@ router.get('/image-model', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const db = await getDb();
-    const row = await db.prepare("SELECT value FROM app_settings WHERE key = 'image_model'").get();
+    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
     res.json({ model: row && row.value ? row.value : 'schnell' });
   } catch(e) {
     res.json({ model: 'schnell' });
@@ -232,11 +232,11 @@ router.put('/image-model', async function(req, res) {
   try {
     const db = await getDb();
     // Upsert the single 'image_model' row.
-    const existing = await db.prepare("SELECT key FROM app_settings WHERE key = 'image_model'").get();
+    const existing = await db.prepare("SELECT setting_key FROM app_settings WHERE setting_key = 'image_model'").get();
     if (existing) {
-      await db.prepare("UPDATE app_settings SET value = ? WHERE key = 'image_model'").run(model);
+      await db.prepare("UPDATE app_settings SET value = ? WHERE setting_key = 'image_model'").run(model);
     } else {
-      await db.prepare("INSERT INTO app_settings (key, value) VALUES ('image_model', ?)").run(model);
+      await db.prepare("INSERT INTO app_settings (setting_key, value) VALUES ('image_model', ?)").run(model);
     }
     res.json({ success: true, model: model });
   } catch(e) {

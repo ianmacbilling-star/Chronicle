@@ -23,7 +23,7 @@ const IMAGE_MODELS = {
 // Falls back to 'schnell' if unset or on any error.
 async function getSelectedModel(db) {
   try {
-    const row = await db.prepare("SELECT value FROM app_settings WHERE key = 'image_model'").get();
+    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
     const key = row && row.value ? row.value : 'schnell';
     return IMAGE_MODELS[key] ? key : 'schnell';
   } catch (e) {

@@ -303,9 +303,13 @@ async function initPostgres() {
 
   // Global app settings as simple key/value rows. Used for the
   // image-model selector and any future app-wide toggles.
+  // Column is 'setting_key' (not 'key' — that is reserved in Postgres).
+  // DROP first: an earlier build created this with a 'key' column.
+  // The table holds only throwaway settings, so recreating is safe.
+  await pool.query('DROP TABLE IF EXISTS app_settings');
   await pool.query(`
     CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
+      setting_key TEXT PRIMARY KEY,
       value TEXT
     )
   `);
@@ -378,7 +382,7 @@ function initSQLite() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
+      setting_key TEXT PRIMARY KEY,
       value TEXT
     );
   `);
