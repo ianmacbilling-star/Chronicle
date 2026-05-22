@@ -183,7 +183,9 @@ function renderAccountUsage(usage) {
   el.innerHTML =
     card(usage.campaigns || 0, 'ACTIVE CAMPAIGNS') +
     card(usage.sessions || 0, 'TOTAL SESSIONS') +
-    card(usage.storyboards || 0, 'STORYBOARDS');
+    card(usage.storyboards || 0, 'STORYBOARDS') +
+    card(usage.imagesThisMonth || 0, 'IMAGES THIS MONTH') +
+    card(usage.imagesAllTime || 0, 'IMAGES ALL TIME');
 }
 
 function renderAccountPlans(me) {

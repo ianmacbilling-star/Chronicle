@@ -99,6 +99,22 @@ function getStylePrefix(style) {
   return prefixes[style] || prefixes['High fantasy illustration'];
 }
 
+// Log one image generation for usage counting. month_key is 'YYYY-MM'.
+// source = what kind of image ('moment', 'character_reference', etc).
+// refId = id of whatever it was for; interpret it using source.
+// Failures here must never break image generation — wrapped in try/catch.
+async function logImageGeneration(db, userId, source, refId) {
+  try {
+    var d = new Date();
+    var monthKey = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+    await db.prepare(
+      'INSERT INTO image_generations (user_id, source, ref_id, month_key, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(userId, source || 'moment', refId || null, monthKey, d.toISOString());
+  } catch (e) {
+    console.error('logImageGeneration failed (non-fatal):', e.message);
+  }
+}
+
 // ============================================================
 // ROUTES
 // ============================================================
@@ -142,6 +158,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const now = new Date().toISOString();
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
+    await logImageGeneration(db, req.session.userId, 'moment', moment_id);
     res.json({ success: true, image_url: imageUrl, moment_id: moment_id });
   } catch(e) {
     console.error('Image generation error:', e.message);
@@ -207,6 +224,13 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 
   const generated = results.map(function(r) { return r.value || { success: false, error: r.reason }; });
   const successCount = generated.filter(function(r) { return r.success; }).length;
+
+  // Log one usage row per successfully generated image.
+  for (var i = 0; i < generated.length; i++) {
+    if (generated[i] && generated[i].success) {
+      await logImageGeneration(db, req.session.userId, 'moment', generated[i].moment_id);
+    }
+  }
 
   res.json({ success: true, generated: generated, count: successCount, total: moments.length });
 });

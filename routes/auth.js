@@ -186,13 +186,28 @@ router.get('/usage', async function(req, res) {
       'JOIN campaigns c ON s.campaign_id = c.id WHERE c.user_id = ?'
     ).get(uid);
 
+    // Image generation counts. month_key is 'YYYY-MM'.
+    // When Stripe lands, swap the monthly count to the billing-cycle range.
+    var d = new Date();
+    var monthKey = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+
+    const imagesAllTime = await db.prepare(
+      'SELECT COUNT(*) AS c FROM image_generations WHERE user_id = ?'
+    ).get(uid);
+
+    const imagesThisMonth = await db.prepare(
+      'SELECT COUNT(*) AS c FROM image_generations WHERE user_id = ? AND month_key = ?'
+    ).get(uid, monthKey);
+
     res.json({
       campaigns: campaigns ? campaigns.c : 0,
       sessions: sessions ? sessions.c : 0,
-      storyboards: storyboards ? storyboards.c : 0
+      storyboards: storyboards ? storyboards.c : 0,
+      imagesAllTime: imagesAllTime ? imagesAllTime.c : 0,
+      imagesThisMonth: imagesThisMonth ? imagesThisMonth.c : 0
     });
   } catch(e) {
-    res.json({ campaigns: 0, sessions: 0, storyboards: 0 });
+    res.json({ campaigns: 0, sessions: 0, storyboards: 0, imagesAllTime: 0, imagesThisMonth: 0 });
   }
 });
 

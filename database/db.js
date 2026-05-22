@@ -281,6 +281,26 @@ async function initPostgres() {
     )
   `);
 
+  // One row per image generated. month_key ('YYYY-MM') lets us count
+  // per-month without a reset job; all-time = COUNT(*) for the user.
+  // source = what kind of image ('moment', 'character_reference', etc).
+  // ref_id = the id of whatever it was for (moment id, character id...);
+  // interpret it using source.
+  // When Stripe lands, "this month" just counts from the billing anchor
+  // instead of the calendar month — the rows never need to migrate.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS image_generations (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      source TEXT NOT NULL DEFAULT 'moment',
+      ref_id INTEGER,
+      month_key TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_imggen_user ON image_generations(user_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_imggen_user_month ON image_generations(user_id, month_key)');
+
   console.log('  PostgreSQL schema ready!');
   return db;
 }
@@ -339,6 +359,14 @@ function initSQLite() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       edited_at DATETIME, edited_by INTEGER,
       UNIQUE (session_id, character_id)
+    );
+    CREATE TABLE IF NOT EXISTS image_generations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      source TEXT NOT NULL DEFAULT 'moment',
+      ref_id INTEGER,
+      month_key TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
