@@ -364,6 +364,22 @@
 
 
 
+      <!-- Image Generation Model -->
+      <div class="settings-section">
+        <div class="settings-section-title">Image Generation Model</div>
+        <div class="settings-section-desc">Which AI model generates storyboard images. Applies to all users.</div>
+        <div id="model-success" class="alert alert-success hidden"></div>
+        <div id="model-error" class="alert alert-error hidden"></div>
+        <div class="form-group">
+          <label class="form-label">Model</label>
+          <select class="form-input" id="settings-image-model">
+            <option value="schnell">Flux schnell (current — fast &amp; low cost)</option>
+            <option value="nano2">Nano Banana 2 (higher quality — higher cost)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveImageModel()">Save model</button>
+      </div>
+
       <!-- Change Password -->
       <div class="settings-section">
         <div class="settings-section-title">Change Password</div>

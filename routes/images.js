@@ -7,36 +7,69 @@ const { fal } = require('@fal-ai/client');
 
 // ============================================================
 // PROVIDER ABSTRACTION LAYER
-// To switch providers, only change the generateImage function.
-// Everything else in the app stays the same.
+// generateImage builds the correct API call for whichever model
+// is selected (the two models need different call shapes).
 // ============================================================
 
-async function generateImage(prompt, style, falKey, charList, seed) {
+// The image models the app can switch between. Add new entries here.
+// 'schnell' is the default. Each call shape differs, so each model
+// gets its own input builder.
+const IMAGE_MODELS = {
+  schnell: 'fal-ai/flux/schnell',
+  nano2: 'fal-ai/nano-banana-2/edit'
+};
+
+// Read the currently-selected model key from app_settings.
+// Falls back to 'schnell' if unset or on any error.
+async function getSelectedModel(db) {
+  try {
+    const row = await db.prepare("SELECT value FROM app_settings WHERE key = 'image_model'").get();
+    const key = row && row.value ? row.value : 'schnell';
+    return IMAGE_MODELS[key] ? key : 'schnell';
+  } catch (e) {
+    return 'schnell';
+  }
+}
+
+async function generateImage(prompt, style, falKey, charList, seed, modelKey) {
   fal.config({ credentials: falKey });
 
-  // Style goes FIRST so Flux treats it as primary instruction
+  // Style goes FIRST so the model treats it as the primary instruction
   const stylePrefix = getStylePrefix(style);
   const charSection = charList
     ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charList
     : '';
   const fullPrompt = stylePrefix + '\n\n' + prompt + charSection;
 
-  const input = {
-    prompt: fullPrompt,
-    image_size: 'landscape_4_3',
-    num_inference_steps: 4,
-    num_images: 1,
-    enable_safety_checker: true
-  };
-  // A stable per-campaign seed keeps the overall look/palette consistent
-  // across panels. Different prompts still vary, but the base is anchored.
-  if (typeof seed === 'number' && !isNaN(seed)) {
-    input.seed = seed;
+  const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
+  let input;
+
+  if (key === 'nano2') {
+    // Nano Banana 2: editing-model call shape.
+    input = {
+      prompt: fullPrompt,
+      num_images: 1,
+      aspect_ratio: '4:3',
+      output_format: 'png',
+      safety_tolerance: '5',
+      resolution: '1K'
+    };
+  } else {
+    // Flux schnell: text-to-image call shape.
+    input = {
+      prompt: fullPrompt,
+      image_size: 'landscape_4_3',
+      num_inference_steps: 4,
+      num_images: 1,
+      enable_safety_checker: true
+    };
+    // A stable per-campaign seed keeps the overall look consistent.
+    if (typeof seed === 'number' && !isNaN(seed)) {
+      input.seed = seed;
+    }
   }
 
-  const result = await fal.subscribe(process.env.IMAGE_MODEL || 'fal-ai/flux/schnell', {
-    input: input
-  });
+  const result = await fal.subscribe(IMAGE_MODELS[key], { input: input });
 
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
@@ -154,7 +187,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     // Single regenerate = user wants a different take, so use a fresh
     // random seed each time rather than the fixed campaign seed.
     const randomSeed = Math.floor(Math.random() * 2147483647);
-    const imageUrl = await generateImage(prompt, style, fal_key, charList, randomSeed);
+    const modelKey = await getSelectedModel(db);
+    const imageUrl = await generateImage(prompt, style, fal_key, charList, randomSeed, modelKey);
     const now = new Date().toISOString();
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
@@ -202,6 +236,9 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // while still sharing the campaign's overall visual DNA.
   const sessionOffset = (parseInt(session_id, 10) || 0) * 1000;
 
+  // Resolve the selected image model once for the whole batch.
+  const modelKey = await getSelectedModel(db);
+
   // Generate all images in parallel
   const results = await Promise.allSettled(
     moments.map(async function(m) {
@@ -210,7 +247,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         // Only the characters named in THIS panel — prevents feature bleed
         const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
         const charList = buildCharacterBlock(chars, panelText);
-        const imageUrl = await generateImage(m.prompt, style, fal_key, charList, panelSeed);
+        const imageUrl = await generateImage(m.prompt, style, fal_key, charList, panelSeed, modelKey);
         const now = new Date().toISOString();
         await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
           .run(imageUrl, now, req.session.userId, m.id);

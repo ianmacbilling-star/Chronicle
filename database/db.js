@@ -301,6 +301,15 @@ async function initPostgres() {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_imggen_user ON image_generations(user_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_imggen_user_month ON image_generations(user_id, month_key)');
 
+  // Global app settings as simple key/value rows. Used for the
+  // image-model selector and any future app-wide toggles.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )
+  `);
+
   console.log('  PostgreSQL schema ready!');
   return db;
 }
@@ -367,6 +376,10 @@ function initSQLite() {
       ref_id INTEGER,
       month_key TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
     );
   `);
 

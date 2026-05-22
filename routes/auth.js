@@ -211,4 +211,37 @@ router.get('/usage', async function(req, res) {
   }
 });
 
+// GET /api/auth/image-model - current global image model setting
+router.get('/image-model', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM app_settings WHERE key = 'image_model'").get();
+    res.json({ model: row && row.value ? row.value : 'schnell' });
+  } catch(e) {
+    res.json({ model: 'schnell' });
+  }
+});
+
+// PUT /api/auth/image-model - change the global image model setting
+router.put('/image-model', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  const validModels = ['schnell', 'nano2'];
+  const model = req.body.model;
+  if (!validModels.includes(model)) return res.json({ error: 'Invalid model' });
+  try {
+    const db = await getDb();
+    // Upsert the single 'image_model' row.
+    const existing = await db.prepare("SELECT key FROM app_settings WHERE key = 'image_model'").get();
+    if (existing) {
+      await db.prepare("UPDATE app_settings SET value = ? WHERE key = 'image_model'").run(model);
+    } else {
+      await db.prepare("INSERT INTO app_settings (key, value) VALUES ('image_model', ?)").run(model);
+    }
+    res.json({ success: true, model: model });
+  } catch(e) {
+    res.json({ error: 'Could not save setting' });
+  }
+});
+
 module.exports = router;

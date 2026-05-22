@@ -1764,6 +1764,39 @@ function loadSettingsForm() {
       var fk = document.getElementById('settings-falkey');
       if (k.fal_key && fk) fk.value = k.fal_key;
     });
+  // Load the current global image-generation model
+  fetch('/api/auth/image-model')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var el = document.getElementById('settings-image-model');
+      if (el && d.model) el.value = d.model;
+    });
+}
+
+function saveImageModel() {
+  var el = document.getElementById('settings-image-model');
+  if (!el) return;
+  fetch('/api/auth/image-model', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: el.value })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) {
+        showSettingsError('model-error', d.error);
+      } else {
+        var ok = document.getElementById('model-success');
+        if (ok) {
+          ok.textContent = 'Image model saved.';
+          ok.classList.remove('hidden');
+          setTimeout(function() { ok.classList.add('hidden'); }, 2500);
+        }
+      }
+    })
+    .catch(function() {
+      showSettingsError('model-error', 'Could not save. Please try again.');
+    });
 }
 
 function saveProfile() {
@@ -3797,6 +3830,39 @@ function loadSettingsForm() {
       if (k.api_key && sk) sk.value = k.api_key;
       var fk = document.getElementById('settings-falkey');
       if (k.fal_key && fk) fk.value = k.fal_key;
+    });
+  // Load the current global image-generation model
+  fetch('/api/auth/image-model')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var el = document.getElementById('settings-image-model');
+      if (el && d.model) el.value = d.model;
+    });
+}
+
+function saveImageModel() {
+  var el = document.getElementById('settings-image-model');
+  if (!el) return;
+  fetch('/api/auth/image-model', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: el.value })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) {
+        showSettingsError('model-error', d.error);
+      } else {
+        var ok = document.getElementById('model-success');
+        if (ok) {
+          ok.textContent = 'Image model saved.';
+          ok.classList.remove('hidden');
+          setTimeout(function() { ok.classList.add('hidden'); }, 2500);
+        }
+      }
+    })
+    .catch(function() {
+      showSettingsError('model-error', 'Could not save. Please try again.');
     });
 }
 
