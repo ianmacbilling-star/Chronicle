@@ -241,7 +241,7 @@ router.put('/image-model', async function(req, res) {
     res.json({ success: true, model: model });
   } catch(e) {
     console.error('image-model save error:', e.message);
-    res.json({ error: 'Could not save setting: ' + e.message });
+    res.json({ error: 'Could not save setting' });
   }
 });
 
