@@ -719,7 +719,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
 </head>
 <body>
 
-${paginated ? '' : `<!-- COVER PAGE -->
+${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
 <div class="cover-page">
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
@@ -742,7 +742,7 @@ ${paginated ? '' : `<!-- COVER PAGE -->
   <div class="cast-divider"></div>
   <div class="cast-page-dm">Dungeon Master: ${dmName} &nbsp;&nbsp;|&nbsp;&nbsp; ${dateRange}</div>
   <div class="cast-grid">${castHTML}</div>
-</div>`}
+</div>` : ''}
 
 <!-- SESSIONS -->
 ${allSessionsHTML}
