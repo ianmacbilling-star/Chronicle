@@ -190,6 +190,7 @@ async function initPostgres() {
       image_other TEXT,
       canonical_prompt TEXT,
       canonical_prompt_at TIMESTAMP,
+      canonical_reference_url TEXT,
       is_npc BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_by INTEGER NOT NULL,
@@ -244,6 +245,12 @@ async function initPostgres() {
     'ALTER TABLE characters ADD COLUMN IF NOT EXISTS canonical_prompt TEXT',
     'ALTER TABLE characters ADD COLUMN IF NOT EXISTS canonical_prompt_at TIMESTAMP',
     'ALTER TABLE characters ADD COLUMN IF NOT EXISTS is_npc BOOLEAN DEFAULT false',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS canonical_reference_url TEXT',
+    'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS reference_url TEXT',
+    'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_flag BOOLEAN DEFAULT false',
+    'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_detail TEXT',
+    'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_moment_index INTEGER',
+    "ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_status TEXT DEFAULT 'none'",
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -274,6 +281,11 @@ async function initPostgres() {
       character_id INTEGER NOT NULL REFERENCES characters(id),
       prompt TEXT,
       change_note TEXT,
+      reference_url TEXT,
+      change_flag BOOLEAN DEFAULT false,
+      change_detail TEXT,
+      change_moment_index INTEGER,
+      change_status TEXT DEFAULT 'none',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       edited_at TIMESTAMP,
       edited_by INTEGER,
@@ -348,7 +360,7 @@ function initSQLite() {
       campaign_id INTEGER NOT NULL, name TEXT NOT NULL, player_name TEXT,
       cls TEXT, description TEXT, image TEXT,
       image_portrait TEXT, image_fullbody TEXT, image_action TEXT, image_other TEXT,
-      canonical_prompt TEXT, canonical_prompt_at DATETIME, is_npc INTEGER DEFAULT 0,
+      canonical_prompt TEXT, canonical_prompt_at DATETIME, canonical_reference_url TEXT, is_npc INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
       edited_at DATETIME, edited_by INTEGER
     );
@@ -371,6 +383,11 @@ function initSQLite() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER NOT NULL, character_id INTEGER NOT NULL,
       prompt TEXT, change_note TEXT,
+      reference_url TEXT,
+      change_flag INTEGER DEFAULT 0,
+      change_detail TEXT,
+      change_moment_index INTEGER,
+      change_status TEXT DEFAULT 'none',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       edited_at DATETIME, edited_by INTEGER,
       UNIQUE (session_id, character_id)
@@ -408,6 +425,12 @@ function initSQLite() {
     'ALTER TABLE characters ADD COLUMN canonical_prompt TEXT',
     'ALTER TABLE characters ADD COLUMN canonical_prompt_at DATETIME',
     'ALTER TABLE characters ADD COLUMN is_npc INTEGER DEFAULT 0',
+    'ALTER TABLE characters ADD COLUMN canonical_reference_url TEXT',
+    'ALTER TABLE session_characters ADD COLUMN reference_url TEXT',
+    'ALTER TABLE session_characters ADD COLUMN change_flag INTEGER DEFAULT 0',
+    'ALTER TABLE session_characters ADD COLUMN change_detail TEXT',
+    'ALTER TABLE session_characters ADD COLUMN change_moment_index INTEGER',
+    "ALTER TABLE session_characters ADD COLUMN change_status TEXT DEFAULT 'none'",
   ];
   migrations.forEach(function(m) { try { sqlite.exec(m); } catch(e) {} });
 
