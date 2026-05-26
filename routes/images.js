@@ -245,6 +245,10 @@ async function editReferenceImage(falKey, baseImageUrl, changeText, charName, mo
     if (!result.data || !result.data.images || !result.data.images[0]) {
       throw new Error('No edited reference image returned from fal.ai');
     }
+    // A flagged image comes back blanked — report it instead of saving black.
+    if (result.data.has_nsfw_concepts && result.data.has_nsfw_concepts[0] === true) {
+      throw new Error('image was flagged by the safety filter (returned blank)');
+    }
     return result.data.images[0].url;
   }
 

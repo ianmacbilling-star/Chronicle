@@ -168,10 +168,10 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId);
 
     // Return the draft URL — NOT saved as final until Approve.
-    res.json({ success: true, image_url: newUrl });
+    res.json({ success: true, image_url: newUrl, debug_model: modelKey, debug_base: baseImage });
   } catch(e) {
     console.error('regenerate-reference error:', e.message);
-    res.json({ error: 'Could not regenerate the reference image.' });
+    res.json({ error: 'Could not regenerate: ' + e.message });
   }
 });
 
