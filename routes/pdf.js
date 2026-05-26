@@ -282,7 +282,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
 
   // Character roster for cast page
   const castHTML = characters.map(function(c) {
-    var primaryImg = c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     return '<div class="cast-member">' +
       (primaryImg ? '<img class="cast-portrait" src="' + primaryImg + '" alt="' + c.name + '" />' : '<div class="cast-portrait cast-no-img">' + c.name.charAt(0) + '</div>') +
       '<div class="cast-name">' + c.name + '</div>' +
@@ -602,7 +602,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
 
   // Cast page
   const castHTML = characters.map(function(c) {
-    var primaryImg = c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     return '<div class="cast-member">' +
       (primaryImg
         ? '<img class="cast-portrait" src="' + primaryImg + '" alt="' + c.name + '" />'

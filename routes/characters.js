@@ -3,6 +3,7 @@ const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { uploadFile, deleteFile } = require('../storage/storage');
+const imageHelpers = require('./images');
 const multer = require('multer');
 const path = require('path');
 
@@ -203,7 +204,25 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignOwner, async funct
     await db.prepare('UPDATE characters SET canonical_prompt = ?, canonical_prompt_at = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(promptText, now, now, req.session.userId, char.id);
 
-    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now });
+    // Also generate a canonical REFERENCE IMAGE from the new prompt.
+    // This becomes the character's thumbnail and the Lever 3 anchor.
+    // Image failure must NOT fail the whole rebuild — the prompt is saved.
+    let referenceUrl = char.canonical_reference_url || null;
+    try {
+      const falKey = process.env.FAL_API_KEY || req.body.fal_key;
+      if (falKey) {
+        const modelKey = await imageHelpers.getSelectedModel(db);
+        const portrait = char.image_portrait || char.image_fullbody || char.image || null;
+        referenceUrl = await imageHelpers.generateReferenceImage(falKey, promptText, portrait, modelKey);
+        await db.prepare('UPDATE characters SET canonical_reference_url = ? WHERE id = ?')
+          .run(referenceUrl, char.id);
+        await imageHelpers.logImageGeneration(db, req.session.userId, 'character_reference', char.id);
+      }
+    } catch(imgErr) {
+      console.error('Canonical reference image failed (non-fatal):', imgErr.message);
+    }
+
+    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, canonical_reference_url: referenceUrl });
   } catch(e) {
     console.error('Rebuild prompt error:', e.message);
     res.json({ error: e.message });

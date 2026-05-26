@@ -847,9 +847,12 @@ function renderCharacters() {
     var initials = c.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
-    var primaryImg = c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    // Canonical reference image is the preferred thumbnail (Stage 3 Piece 2).
+    var refImg = c.canonical_reference_url;
+    var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
@@ -3004,9 +3007,12 @@ function renderCharacters() {
     var initials = c.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
-    var primaryImg = c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    // Canonical reference image is the preferred thumbnail (Stage 3 Piece 2).
+    var refImg = c.canonical_reference_url;
+    var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+    var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';

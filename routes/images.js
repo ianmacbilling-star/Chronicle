@@ -152,6 +152,64 @@ async function logImageGeneration(db, userId, source, refId) {
   }
 }
 
+// Generate a clean, neutral REFERENCE image for a character — used for
+// the canonical reference (Piece 2) and amendment regeneration (Piece 5).
+// Built from the canonical/amended text. If the character has an uploaded
+// portrait, the editing model conditions on it; otherwise it's pure
+// text-to-image. Returns the image URL. Caller stores it + logs it.
+async function generateReferenceImage(falKey, descriptionText, portraitUrl, modelKey) {
+  fal.config({ credentials: falKey });
+
+  // Neutral framing — a plain, consistent reference, not a scene.
+  const refPrompt =
+    'Full-body character reference portrait. Neutral standing pose, ' +
+    'facing forward, plain neutral background, even lighting, comic book art style.\n\n' +
+    'CHARACTER: ' + descriptionText;
+
+  const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
+  let model = IMAGE_MODELS[key];
+  let input;
+
+  if (key === 'nano2' && portraitUrl && /^https?:\/\//.test(portraitUrl)) {
+    // Editing model + a real portrait to anchor identity.
+    model = 'fal-ai/nano-banana-2/edit';
+    input = {
+      prompt: refPrompt,
+      image_urls: [portraitUrl],
+      num_images: 1,
+      aspect_ratio: '3:4',
+      output_format: 'png',
+      safety_tolerance: '5',
+      resolution: '1K'
+    };
+  } else if (key === 'nano2') {
+    // No portrait — Nano Banana 2 text-to-image.
+    input = {
+      prompt: refPrompt,
+      num_images: 1,
+      aspect_ratio: '3:4',
+      output_format: 'png',
+      safety_tolerance: '5',
+      resolution: '1K'
+    };
+  } else {
+    // schnell text-to-image.
+    input = {
+      prompt: refPrompt,
+      image_size: 'portrait_4_3',
+      num_inference_steps: 4,
+      num_images: 1,
+      enable_safety_checker: true
+    };
+  }
+
+  const result = await fal.subscribe(model, { input: input });
+  if (!result.data || !result.data.images || !result.data.images[0]) {
+    throw new Error('No reference image returned from fal.ai');
+  }
+  return result.data.images[0].url;
+}
+
 // ============================================================
 // ROUTES
 // ============================================================
@@ -277,3 +335,6 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 });
 
 module.exports = router;
+module.exports.generateReferenceImage = generateReferenceImage;
+module.exports.getSelectedModel = getSelectedModel;
+module.exports.logImageGeneration = logImageGeneration;
