@@ -163,23 +163,12 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
       ch.image_portrait || ch.image_fullbody || ch.image || null;
 
     const modelKey = await imageHelpers.getSelectedModel(db);
-
-    // DEBUG: read the raw app_settings row directly to see what's stored.
-    let rawSetting = null;
-    try {
-      const r = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
-      rawSetting = r ? r.value : '(no row)';
-    } catch(dbg) {
-      rawSetting = 'ERROR: ' + dbg.message;
-    }
-
     const newUrl = await imageHelpers.editReferenceImage(falKey, baseImage, detail, ch.name, modelKey);
 
     await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId);
 
     // Return the draft URL — NOT saved as final until Approve.
-    res.json({ success: true, image_url: newUrl, debug_model: modelKey,
-               debug_raw_setting: rawSetting, debug_base: baseImage });
+    res.json({ success: true, image_url: newUrl });
   } catch(e) {
     console.error('regenerate-reference error:', e.message);
     res.json({ error: 'Could not regenerate: ' + e.message });
