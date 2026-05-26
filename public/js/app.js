@@ -654,7 +654,8 @@ function renderSessionCharacters(rows) {
     // Reference image is the preferred thumbnail.
     var img = r.reference_url || r.canonical_reference_url || r.image_portrait || r.image || r.image_fullbody;
     var thumb = img
-      ? '<img src="' + img + '" class="sc-thumb" alt="' + r.name + '" />'
+      ? '<img src="' + img + '" class="sc-thumb" alt="' + r.name + '" ' +
+        'style="cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<div class="sc-thumb sc-thumb-empty">&#128100;</div>';
     var editBtn = canEdit
       ? '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit</button>'
