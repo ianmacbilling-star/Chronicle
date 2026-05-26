@@ -127,6 +127,17 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       await detectCharacterChanges(db, session, req.params.campaignId, key, now);
     }
 
+    // Tell the frontend whether any character changes need review, so it
+    // can route to the Characters tab instead of the Storyboard tab.
+    let pendingChanges = 0;
+    try {
+      const pc = await db.prepare(
+        "SELECT COUNT(*) AS c FROM session_characters WHERE session_id = ? AND change_status = 'pending'"
+      ).get(req.params.sessionId);
+      pendingChanges = pc ? pc.c : 0;
+    } catch(pcErr) { pendingChanges = 0; }
+
+    parsed.pendingChanges = pendingChanges;
     res.json(parsed);
   } catch(e) {
     res.json({ error: e.message });
@@ -187,11 +198,23 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
     // Name-match against transcript + session notes combined.
     const text = (session.transcript || '') + '\n' + (session.session_notes || '');
 
-    // Full refresh — re-extraction rebuilds snapshots for this session only.
-    await db.prepare('DELETE FROM session_characters WHERE session_id = ?').run(session.id);
+    // Full refresh — but PRESERVE rows the DM has already approved.
+    // An accepted amendment is a deliberate decision and must survive
+    // re-extraction (re-extraction touches only un-amended snapshots).
+    await db.prepare(
+      "DELETE FROM session_characters WHERE session_id = ? AND (change_status IS NULL OR change_status != 'accepted')"
+    ).run(session.id);
+
+    // Which characters already have an accepted row this session — skip them.
+    const acceptedRows = await db.prepare(
+      "SELECT character_id FROM session_characters WHERE session_id = ? AND change_status = 'accepted'"
+    ).all(session.id);
+    const acceptedIds = {};
+    acceptedRows.forEach(function(r) { acceptedIds[r.character_id] = true; });
 
     for (const ch of characters) {
       if (!characterInText(ch, text)) continue;
+      if (acceptedIds[ch.id]) continue; // approved — leave its row untouched
       const carry = await resolveCarryForward(db, ch, session);
       await db.prepare(
         'INSERT INTO session_characters ' +
@@ -218,7 +241,17 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     const notes = session.session_notes || '';
     const text = transcript + '\n' + notes;
     // Only characters actually present in this session.
-    const present = characters.filter(function(ch) { return characterInText(ch, text); });
+    let present = characters.filter(function(ch) { return characterInText(ch, text); });
+
+    // Skip characters whose change for THIS session is already accepted —
+    // a re-extraction must not re-flag a settled change.
+    const acceptedRows = await db.prepare(
+      "SELECT character_id FROM session_characters WHERE session_id = ? AND change_status = 'accepted'"
+    ).all(session.id);
+    const acceptedIds = {};
+    acceptedRows.forEach(function(r) { acceptedIds[r.character_id] = true; });
+    present = present.filter(function(ch) { return !acceptedIds[ch.id]; });
+
     if (!present.length) return;
 
     const charListText = present.map(function(ch) {

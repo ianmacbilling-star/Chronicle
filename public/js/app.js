@@ -1260,6 +1260,7 @@ function extractMoments() {
     fill.style.width = '60%';
     msg.textContent = 'Moments found! Writing your narrative...';
     state.moments = data.moments || [];
+    state.pendingChanges = data.pendingChanges || 0;
 
     // Step 2 — Generate narrative then render everything together
     fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
@@ -1283,7 +1284,13 @@ function extractMoments() {
         wrap.style.display = 'none';
         fill.style.width = '0%';
         btn.disabled = false;
-        switchSessionTab('storyboard');
+        // If character changes were detected, send the DM to the
+        // Characters tab to review them; otherwise go to Storyboard.
+        if (state.pendingChanges && state.pendingChanges > 0) {
+          switchSessionTab('characters');
+        } else {
+          switchSessionTab('storyboard');
+        }
       }, 800);
     })
     .catch(function() {
@@ -1297,7 +1304,13 @@ function extractMoments() {
         wrap.style.display = 'none';
         fill.style.width = '0%';
         btn.disabled = false;
-        switchSessionTab('storyboard');
+        // If character changes were detected, send the DM to the
+        // Characters tab to review them; otherwise go to Storyboard.
+        if (state.pendingChanges && state.pendingChanges > 0) {
+          switchSessionTab('characters');
+        } else {
+          switchSessionTab('storyboard');
+        }
       }, 800);
     });
   })
@@ -3346,6 +3359,7 @@ function extractMoments() {
     fill.style.width = '60%';
     msg.textContent = 'Moments found! Writing your narrative...';
     state.moments = data.moments || [];
+    state.pendingChanges = data.pendingChanges || 0;
 
     // Step 2 — Generate narrative then render everything together
     fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
@@ -3369,7 +3383,13 @@ function extractMoments() {
         wrap.style.display = 'none';
         fill.style.width = '0%';
         btn.disabled = false;
-        switchSessionTab('storyboard');
+        // If character changes were detected, send the DM to the
+        // Characters tab to review them; otherwise go to Storyboard.
+        if (state.pendingChanges && state.pendingChanges > 0) {
+          switchSessionTab('characters');
+        } else {
+          switchSessionTab('storyboard');
+        }
       }, 800);
     })
     .catch(function() {
@@ -3383,7 +3403,13 @@ function extractMoments() {
         wrap.style.display = 'none';
         fill.style.width = '0%';
         btn.disabled = false;
-        switchSessionTab('storyboard');
+        // If character changes were detected, send the DM to the
+        // Characters tab to review them; otherwise go to Storyboard.
+        if (state.pendingChanges && state.pendingChanges > 0) {
+          switchSessionTab('characters');
+        } else {
+          switchSessionTab('storyboard');
+        }
       }, 800);
     });
   })
