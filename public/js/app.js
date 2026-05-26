@@ -759,14 +759,82 @@ function openChangeReview(charId) {
     '</div>';
 }
 
-// Piece 5 wires these — placeholders so the buttons don't error.
+// Piece 5: regenerate the reference image as a draft. The DM can do
+// this repeatedly; the latest draft URL is held until Approve.
 function regenerateReference(charId) {
   var msg = document.getElementById('sc-review-msg-' + charId);
-  if (msg) msg.textContent = 'Regenerate is built in the next step.';
+  var btn = document.getElementById('sc-regen-' + charId);
+  var textEl = document.getElementById('sc-review-text-' + charId);
+  var detail = textEl ? textEl.value : '';
+  if (btn) { btn.disabled = true; }
+  if (msg) msg.textContent = 'Generating new reference image...';
+
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/regenerate-reference', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ detail: detail })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (btn) { btn.disabled = false; }
+      if (data && data.success && data.image_url) {
+        // Show the new draft image; hold the URL for Approve.
+        var wrap = document.getElementById('sc-review-img-' + charId);
+        if (wrap) {
+          var fresh = '<img src="' + data.image_url + '" class="sc-review-img" ' +
+            'id="sc-review-img-' + charId + '" alt="reference" />';
+          wrap.outerHTML = fresh;
+        }
+        state.draftReference = state.draftReference || {};
+        state.draftReference[charId] = data.image_url;
+        if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
+      } else {
+        if (msg) msg.textContent = (data && data.error) || 'Could not regenerate.';
+      }
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; }
+      if (msg) msg.textContent = 'Could not regenerate.';
+    });
 }
+
+// Piece 5: approve the change — locks the draft image + text into this
+// session and writes it forward to later sessions.
 function approveChange(charId) {
   var msg = document.getElementById('sc-review-msg-' + charId);
-  if (msg) msg.textContent = 'Approve is built in the next step.';
+  var btn = document.getElementById('sc-approve-' + charId);
+  var textEl = document.getElementById('sc-review-text-' + charId);
+  var detail = textEl ? textEl.value : '';
+  var draftUrl = (state.draftReference && state.draftReference[charId]) || null;
+
+  if (!draftUrl) {
+    if (msg) msg.textContent = 'Regenerate the image at least once before approving.';
+    return;
+  }
+  if (btn) { btn.disabled = true; }
+  if (msg) msg.textContent = 'Approving...';
+
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/approve-change', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ detail: detail, image_url: draftUrl })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        if (state.draftReference) delete state.draftReference[charId];
+        loadSessionCharacters();
+      } else {
+        if (btn) { btn.disabled = false; }
+        if (msg) msg.textContent = (data && data.error) || 'Could not approve.';
+      }
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; }
+      if (msg) msg.textContent = 'Could not approve.';
+    });
 }
 
 function switchSessionTab(tab) {

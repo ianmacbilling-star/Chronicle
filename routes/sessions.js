@@ -3,6 +3,7 @@ const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { checkSessionLimit } = require('../middleware/tiers');
+const imageHelpers = require('./images');
 
 async function verifyCampaignOwner(req, res, next) {
   const db = await getDb();
@@ -129,6 +130,101 @@ router.put('/:id/characters/:characterId', requireAuth, verifyCampaignOwner, asy
   ).run(prompt, now, req.session.userId, req.params.id, req.params.characterId);
 
   res.json({ success: true, prompt: prompt });
+});
+
+// POST regenerate the reference image for a pending change (draft — not saved).
+// Body: { detail } — the (possibly edited) amended-appearance text.
+// Returns a new image URL; the DM reviews it, may regenerate again,
+// and only Approve commits it.
+router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, verifyCampaignOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const sessionId = req.params.id;
+    const characterId = req.params.characterId;
+    const detail = (req.body && req.body.detail) || '';
+
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
+    if (!ch) return res.json({ error: 'Character not found' });
+
+    const sc = await db.prepare(
+      'SELECT * FROM session_characters WHERE session_id = ? AND character_id = ?'
+    ).get(sessionId, characterId);
+
+    const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
+    if (!falKey) return res.json({ error: 'Image generation not configured.' });
+
+    // Build the description: current snapshot prompt + the amended change.
+    const baseText = (sc && sc.prompt) || ch.canonical_prompt || ch.description || '';
+    const fullText = detail ? (baseText + '\n\nRECENT CHANGE: ' + detail) : baseText;
+
+    // Condition on the current reference so identity carries over.
+    const portrait = (sc && sc.reference_url) || ch.canonical_reference_url ||
+      ch.image_portrait || ch.image_fullbody || ch.image || null;
+
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const newUrl = await imageHelpers.generateReferenceImage(falKey, fullText, portrait, modelKey);
+
+    await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId);
+
+    // Return the draft URL — NOT saved as final until Approve.
+    res.json({ success: true, image_url: newUrl });
+  } catch(e) {
+    console.error('regenerate-reference error:', e.message);
+    res.json({ error: 'Could not regenerate the reference image.' });
+  }
+});
+
+// POST approve a pending change. Body: { detail, image_url }.
+// Locks the approved image + text into THIS session, writes the change
+// forward into all LATER sessions for this character, clears the flag.
+router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCampaignOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const sessionId = req.params.id;
+    const characterId = req.params.characterId;
+    const detail = (req.body && req.body.detail) || '';
+    const imageUrl = (req.body && req.body.image_url) || null;
+    const now = new Date().toISOString();
+
+    const thisSession = await db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+    if (!thisSession) return res.json({ error: 'Session not found' });
+
+    const sc = await db.prepare(
+      'SELECT * FROM session_characters WHERE session_id = ? AND character_id = ?'
+    ).get(sessionId, characterId);
+    if (!sc) return res.json({ error: 'Session character not found' });
+
+    // The amended text = current prompt + the approved change detail.
+    const baseText = sc.prompt || '';
+    const amendedText = detail ? (baseText + '\n\nRECENT CHANGE: ' + detail) : baseText;
+
+    // 1. Lock it into THIS session: approved image + amended text, clear flag.
+    await db.prepare(
+      'UPDATE session_characters SET prompt = ?, reference_url = ?, change_note = ?, ' +
+      'change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
+      'WHERE session_id = ? AND character_id = ?'
+    ).run(amendedText, imageUrl, detail, 0, 'accepted', now, req.session.userId, sessionId, characterId);
+
+    // 2. Write the change FORWARD into all later sessions for this character.
+    // Self-contained sessions don't auto-chain, so propagation is explicit.
+    const laterRows = await db.prepare(
+      'SELECT sc.session_id FROM session_characters sc ' +
+      'JOIN sessions s ON sc.session_id = s.id ' +
+      'WHERE sc.character_id = ? AND s.campaign_id = ? AND s.session_date > ?'
+    ).all(characterId, thisSession.campaign_id, thisSession.session_date);
+
+    for (const row of laterRows) {
+      await db.prepare(
+        'UPDATE session_characters SET prompt = ?, reference_url = ?, edited_at = ?, edited_by = ? ' +
+        'WHERE session_id = ? AND character_id = ?'
+      ).run(amendedText, imageUrl, now, req.session.userId, row.session_id, characterId);
+    }
+
+    res.json({ success: true, forwarded: laterRows.length });
+  } catch(e) {
+    console.error('approve-change error:', e.message);
+    res.json({ error: 'Could not approve the change.' });
+  }
 });
 
 module.exports = router;
