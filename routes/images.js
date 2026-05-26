@@ -178,10 +178,15 @@ function buildCharacterBlock(chars, panelText, panelIndex) {
   var refs = [];
 
   present.forEach(function(c) {
-    // Does this character have an accepted change that lands mid-session?
-    var hasChange = (c.change_status === 'accepted') &&
-                    (typeof c.change_moment_index === 'number');
-    var changeIdx = hasChange ? c.change_moment_index : 0;
+    // Does this character have an accepted change?
+    var hasChange = (c.change_status === 'accepted');
+    // The moment the change starts. A NULL/missing index means the change
+    // has no mid-session precision — treat it as moment 0 (session-wide),
+    // the safe Stage 3 fallback. A real number gives Stage 4 precision.
+    var changeIdx = 0;
+    if (hasChange && typeof c.change_moment_index === 'number' && c.change_moment_index >= 0) {
+      changeIdx = c.change_moment_index;
+    }
     // "Before the change" = accepted change exists AND this panel is earlier.
     var beforeChange = hasChange && (pIdx < changeIdx);
 

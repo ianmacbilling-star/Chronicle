@@ -185,6 +185,9 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     const characterId = req.params.characterId;
     const detail = (req.body && req.body.detail) || '';
     const imageUrl = (req.body && req.body.image_url) || null;
+    // Stage 4: the moment index the change first appears at (DM override).
+    let momentIndex = parseInt(req.body && req.body.moment_index, 10);
+    if (isNaN(momentIndex) || momentIndex < 0) momentIndex = 0;
     const now = new Date().toISOString();
 
     const thisSession = await db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
@@ -202,9 +205,9 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     // 1. Lock it into THIS session: approved image + amended text, clear flag.
     await db.prepare(
       'UPDATE session_characters SET prompt = ?, reference_url = ?, change_note = ?, ' +
-      'change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
+      'change_moment_index = ?, change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
       'WHERE session_id = ? AND character_id = ?'
-    ).run(amendedText, imageUrl, detail, 0, 'accepted', now, req.session.userId, sessionId, characterId);
+    ).run(amendedText, imageUrl, detail, momentIndex, 0, 'accepted', now, req.session.userId, sessionId, characterId);
 
     // 2. Write the change FORWARD into all later sessions for this character.
     // Self-contained sessions don't auto-chain, so propagation is explicit.

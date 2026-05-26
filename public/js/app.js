@@ -740,6 +740,23 @@ function openChangeReview(charId) {
     ? '<img src="' + currentImg + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'
     : '<div class="sc-review-img sc-review-img-empty" id="sc-review-img-' + charId + '">No reference image yet</div>';
 
+  // Moment selector — which panel the change first becomes visible at.
+  // The character looks normal before it, changed from it onward.
+  var moments = state.moments || [];
+  var savedIdx = (typeof r.change_moment_index === 'number') ? r.change_moment_index : 0;
+  var momentOptions = moments.map(function(m, i) {
+    var label = 'Moment ' + (i + 1) + (m.title ? ': ' + m.title : '');
+    var sel = (i === savedIdx) ? ' selected' : '';
+    return '<option value="' + i + '"' + sel + '>' + label + '</option>';
+  }).join('');
+  var momentSelector = moments.length
+    ? '<label class="sc-review-label">Change first appears at this moment ' +
+        '(character looks normal before it):</label>' +
+      '<select class="form-input sc-review-moment" id="sc-review-moment-' + charId + '">' +
+        momentOptions +
+      '</select>'
+    : '';
+
   card.innerHTML =
     '<div class="sc-review">' +
       '<div class="sc-review-title">&#9888; Permanent change detected</div>' +
@@ -748,6 +765,7 @@ function openChangeReview(charId) {
       '<label class="sc-review-label">Amended appearance (edit if needed before approving):</label>' +
       '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '">' +
         (r.change_detail || '') + '</textarea>' +
+      momentSelector +
       '<div class="sc-review-imgwrap">' + imgHtml + '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions">' +
@@ -810,6 +828,10 @@ function approveChange(charId) {
   var textEl = document.getElementById('sc-review-text-' + charId);
   var detail = textEl ? textEl.value : '';
   var draftUrl = (state.draftReference && state.draftReference[charId]) || null;
+  // The DM's chosen moment index (override of the AI's guess).
+  var momentEl = document.getElementById('sc-review-moment-' + charId);
+  var momentIndex = momentEl ? parseInt(momentEl.value, 10) : 0;
+  if (isNaN(momentIndex) || momentIndex < 0) momentIndex = 0;
 
   if (!draftUrl) {
     if (msg) msg.textContent = 'Regenerate the image at least once before approving.';
@@ -822,7 +844,7 @@ function approveChange(charId) {
         state.currentSession.id + '/characters/' + charId + '/approve-change', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ detail: detail, image_url: draftUrl })
+    body: JSON.stringify({ detail: detail, image_url: draftUrl, moment_index: momentIndex })
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
