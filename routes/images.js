@@ -34,24 +34,57 @@ async function getSelectedModel(db) {
   }
 }
 
-async function generateImage(prompt, style, falKey, charList, seed, modelKey) {
+async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   fal.config({ credentials: falKey });
+
+  // charBlock is { text, refs } from buildCharacterBlock. Tolerate a
+  // plain string or null for safety.
+  var charText = '';
+  var charRefs = [];
+  if (charBlock && typeof charBlock === 'object') {
+    charText = charBlock.text || '';
+    charRefs = charBlock.refs || [];
+  } else if (typeof charBlock === 'string') {
+    charText = charBlock;
+  }
 
   // Style goes FIRST so the model treats it as the primary instruction
   const stylePrefix = getStylePrefix(style);
-  const charSection = charList
-    ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charList
+  const charSection = charText
+    ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charText
     : '';
-  const fullPrompt = stylePrefix + '\n\n' + prompt + charSection;
 
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
   let input;
+  let model = IMAGE_MODELS[key];
 
-  if (key === 'nano2') {
-    // Nano Banana 2 text-to-image call shape. No reference image —
-    // that's the /edit endpoint, a separate future change for Lever 3.
+  if (key === 'nano2' && charRefs.length) {
+    // Nano Banana 2 /edit — condition the panel on each present
+    // character's reference image. Map each image to its character by
+    // position so the model knows which reference is who (fal's
+    // recommended technique for multi-subject scenes).
+    model = 'fal-ai/nano-banana-2/edit';
+    var refMap = charRefs.map(function(r, i) {
+      return 'Image ' + (i + 1) + ' is the reference for ' + r.name + '.';
+    }).join(' ');
+    var editPrompt = stylePrefix + '\n\n' +
+      'Draw this comic panel: ' + prompt + charSection + '\n\n' +
+      'REFERENCE IMAGES: ' + refMap + ' Render each of these characters to ' +
+      'match their reference image — same face, build, hair, distinctive ' +
+      'features and outfit. Do not blend characters together.';
     input = {
-      prompt: fullPrompt,
+      prompt: editPrompt,
+      image_urls: charRefs.map(function(r) { return r.url; }),
+      num_images: 1,
+      aspect_ratio: '4:3',
+      output_format: 'png',
+      safety_tolerance: '5',
+      resolution: '1K'
+    };
+  } else if (key === 'nano2') {
+    // Nano Banana 2 text-to-image — no reference images for this panel.
+    input = {
+      prompt: stylePrefix + '\n\n' + prompt + charSection,
       num_images: 1,
       aspect_ratio: '4:3',
       output_format: 'png',
@@ -59,9 +92,9 @@ async function generateImage(prompt, style, falKey, charList, seed, modelKey) {
       resolution: '1K'
     };
   } else {
-    // Flux schnell: text-to-image call shape.
+    // Flux schnell: text-to-image only — no /edit endpoint, no references.
     input = {
-      prompt: fullPrompt,
+      prompt: stylePrefix + '\n\n' + prompt + charSection,
       image_size: 'landscape_4_3',
       num_inference_steps: 4,
       num_images: 1,
@@ -73,7 +106,7 @@ async function generateImage(prompt, style, falKey, charList, seed, modelKey) {
     }
   }
 
-  const result = await fal.subscribe(IMAGE_MODELS[key], { input: input });
+  const result = await fal.subscribe(model, { input: input });
 
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
@@ -94,8 +127,12 @@ function campaignSeed(campaignId) {
 // in this panel. Sending the full roster to every panel causes the image
 // model to merge features between characters ("concept bleed"), so we
 // detect presence from the panel text and include just those characters.
+// Returns { text, refs } for the characters present in a panel.
+//   text = the per-character description block (amended snapshot preferred)
+//   refs = [{ name, url }] reference images for present characters
+// refs is what Piece 6 feeds to the Nano Banana 2 /edit endpoint.
 function buildCharacterBlock(chars, panelText) {
-  if (!chars || !chars.length) return '';
+  if (!chars || !chars.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
 
   // A character is "present" if their name (or first name) appears in the
@@ -110,9 +147,9 @@ function buildCharacterBlock(chars, panelText) {
   // If we can't detect anyone (e.g. a scenery panel, or names not mentioned),
   // send nothing rather than the whole roster — an empty block is safer than
   // a bleed-prone one.
-  if (!present.length) return '';
+  if (!present.length) return { text: '', refs: [] };
 
-  return present.map(function(c) {
+  var block = present.map(function(c) {
     // Keep each character's descriptors tightly bound to their name.
     // Prefer the session snapshot prompt; fall back to the raw description.
     var line = c.name;
@@ -123,6 +160,17 @@ function buildCharacterBlock(chars, panelText) {
     if (desc) line += ' — ' + desc;
     return line;
   }).join('\n');
+
+  // Reference images — session reference preferred, then canonical.
+  var refs = [];
+  present.forEach(function(c) {
+    var url = c.snapshot_reference_url || c.canonical_reference_url || null;
+    if (url && /^https?:\/\//.test(url)) {
+      refs.push({ name: c.name, url: url });
+    }
+  });
+
+  return { text: block, refs: refs };
 }
 
 function getStylePrefix(style) {
@@ -291,8 +339,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const campRow = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
     const campId = campRow ? campRow.campaign_id : campaign_id;
     const chars = await db.prepare(
-      'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ' +
-      'sc.prompt AS snapshot_prompt ' +
+      'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url ' +
       'FROM characters ch ' +
       'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
       'WHERE ch.campaign_id = ?'
@@ -337,8 +385,8 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // Load all campaign characters once; the per-panel block is built inside
   // the loop so each panel only includes the characters actually in it.
   const chars = await db.prepare(
-    'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ' +
-    'sc.prompt AS snapshot_prompt ' +
+    'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+    'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url ' +
     'FROM characters ch ' +
     'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
     'WHERE ch.campaign_id = ?'
