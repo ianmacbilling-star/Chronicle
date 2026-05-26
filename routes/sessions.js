@@ -198,8 +198,10 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     ).get(sessionId, characterId);
     if (!sc) return res.json({ error: 'Session character not found' });
 
-    // The amended text = current prompt + the approved change detail.
-    const baseText = sc.prompt || '';
+    // The amended text = base prompt + the approved change detail.
+    // Strip any prior "RECENT CHANGE" block first so re-approving an
+    // already-accepted change doesn't stack a second one.
+    const baseText = (sc.prompt || '').split('\n\nRECENT CHANGE:')[0];
     const amendedText = detail ? (baseText + '\n\nRECENT CHANGE: ' + detail) : baseText;
 
     // 1. Lock it into THIS session: approved image + amended text, clear flag.

@@ -664,11 +664,18 @@ function renderSessionCharacters(rows) {
     // Stage 3: a pending change shows a review badge.
     var pendingChange = (r.change_flag === true || r.change_flag === 1 || r.change_flag === '1')
       && r.change_status === 'pending';
-    var changeBadge = pendingChange
-      ? '<div class="sc-change-badge" onclick="openChangeReview(' + r.character_id + ')">' +
-          '&#9888; Change detected &mdash; review' +
-        '</div>'
-      : '';
+    // An accepted change shows a quieter badge that re-opens the review
+    // screen — so the DM can adjust the moment, re-image, or un-approve.
+    var acceptedChange = (r.change_status === 'accepted');
+    var changeBadge = '';
+    if (pendingChange) {
+      changeBadge = '<div class="sc-change-badge" onclick="openChangeReview(' + r.character_id + ')">' +
+        '&#9888; Change detected &mdash; review</div>';
+    } else if (acceptedChange) {
+      changeBadge = '<div class="sc-change-badge sc-change-badge-accepted" ' +
+        'onclick="openChangeReview(' + r.character_id + ')">' +
+        '&#10003; Change applied &mdash; edit</div>';
+    }
 
     return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
       '<div class="sc-card-head">' +
@@ -757,14 +764,24 @@ function openChangeReview(charId) {
       '</select>'
     : '';
 
+  var isAccepted = (r.change_status === 'accepted');
+  var titleText = isAccepted
+    ? '&#10003; Change applied — adjust or un-approve'
+    : '&#9888; Permanent change detected';
+  // For an accepted change, the textarea holds the clean change_note
+  // (the approved detail), not change_detail.
+  var detailText = isAccepted
+    ? (r.change_note || r.change_detail || '')
+    : (r.change_detail || '');
+
   card.innerHTML =
     '<div class="sc-review">' +
-      '<div class="sc-review-title">&#9888; Permanent change detected</div>' +
+      '<div class="sc-review-title">' + titleText + '</div>' +
       '<div class="sc-review-name">' + r.name + '</div>' +
       '<div class="sc-review-detected">The AI detected: <em>' + (r.change_detail || '') + '</em></div>' +
       '<label class="sc-review-label">Amended appearance (edit if needed before approving):</label>' +
       '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '">' +
-        (r.change_detail || '') + '</textarea>' +
+        detailText + '</textarea>' +
       momentSelector +
       '<div class="sc-review-imgwrap">' + imgHtml + '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
@@ -772,9 +789,11 @@ function openChangeReview(charId) {
         '<button class="btn btn-sm" id="sc-regen-' + charId + '" ' +
           'onclick="regenerateReference(' + charId + ')">&#10227; Regenerate image</button>' +
         '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
-          'onclick="approveChange(' + charId + ')">&#10003; Approve change</button>' +
+          'onclick="approveChange(' + charId + ')">&#10003; ' +
+          (isAccepted ? 'Save changes' : 'Approve change') + '</button>' +
         '<button class="btn btn-sm" id="sc-reject-' + charId + '" ' +
-          'onclick="rejectChange(' + charId + ')">&#10005; Not a real change</button>' +
+          'onclick="rejectChange(' + charId + ')">&#10005; ' +
+          (isAccepted ? 'Un-approve' : 'Not a real change') + '</button>' +
         '<button class="btn btn-sm" onclick="loadSessionCharacters()">Cancel</button>' +
       '</div>' +
     '</div>';
@@ -827,18 +846,24 @@ function approveChange(charId) {
   var btn = document.getElementById('sc-approve-' + charId);
   var textEl = document.getElementById('sc-review-text-' + charId);
   var detail = textEl ? textEl.value : '';
-  var draftUrl = (state.draftReference && state.draftReference[charId]) || null;
   // The DM's chosen moment index (override of the AI's guess).
   var momentEl = document.getElementById('sc-review-moment-' + charId);
   var momentIndex = momentEl ? parseInt(momentEl.value, 10) : 0;
   if (isNaN(momentIndex) || momentIndex < 0) momentIndex = 0;
+
+  // The image to lock in: a fresh draft if regenerated, otherwise the
+  // existing reference (so editing an already-accepted change — e.g.
+  // just moving the moment — doesn't force a regenerate).
+  var row = (state.sessionCharacterRows || []).find(function(x) { return x.character_id === charId; });
+  var existingUrl = row ? (row.reference_url || row.canonical_reference_url) : null;
+  var draftUrl = (state.draftReference && state.draftReference[charId]) || existingUrl || null;
 
   if (!draftUrl) {
     if (msg) msg.textContent = 'Regenerate the image at least once before approving.';
     return;
   }
   if (btn) { btn.disabled = true; }
-  if (msg) msg.textContent = 'Approving...';
+  if (msg) msg.textContent = 'Saving...';
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
         state.currentSession.id + '/characters/' + charId + '/approve-change', {
