@@ -102,7 +102,8 @@ router.get('/:id/characters', requireAuth, verifyCampaignOwner, async function(r
   const db = await getDb();
   const rows = await db.prepare(
     'SELECT sc.id, sc.character_id, sc.prompt, sc.change_note, sc.edited_at, ' +
-    'ch.name, ch.cls, ch.is_npc, ch.image_portrait, ch.image, ch.image_fullbody ' +
+    'sc.reference_url, sc.change_flag, sc.change_detail, sc.change_status, sc.change_moment_index, ' +
+    'ch.name, ch.cls, ch.is_npc, ch.image_portrait, ch.image, ch.image_fullbody, ch.canonical_reference_url ' +
     'FROM session_characters sc JOIN characters ch ON ch.id = sc.character_id ' +
     'WHERE sc.session_id = ? ORDER BY ch.is_npc ASC, ch.name ASC'
   ).all(req.params.id);

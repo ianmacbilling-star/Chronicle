@@ -952,6 +952,70 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   padding: 14px;
   margin-bottom: 12px;
 }
+
+/* Stage 3: change-detected badge */
+.sc-change-badge {
+  margin: 10px 0 4px;
+  padding: 8px 12px;
+  background: rgba(224,122,106,0.12);
+  border: 1px solid rgba(224,122,106,0.4);
+  border-radius: var(--radius);
+  color: #e8a99c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sc-change-badge:hover {
+  background: rgba(224,122,106,0.2);
+}
+
+/* Stage 3: change review screen */
+.sc-review-title {
+  font-weight: 600;
+  color: #e8a99c;
+  font-size: 14px;
+}
+.sc-review-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--gold);
+  margin: 4px 0;
+}
+.sc-review-detected {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-bottom: 10px;
+}
+.sc-review-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-light);
+  margin-bottom: 4px;
+}
+.sc-review-imgwrap {
+  margin-top: 12px;
+}
+.sc-review-img {
+  max-width: 280px;
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid rgba(201,168,76,0.18);
+  display: block;
+}
+.sc-review-img-empty {
+  padding: 30px;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 13px;
+  background: rgba(20,12,4,0.5);
+}
+.sc-review-msg {
+  font-size: 13px;
+  color: var(--gold);
+  margin: 8px 0;
+  min-height: 18px;
+}
+
 .sc-card-head {
   display: flex;
   align-items: center;

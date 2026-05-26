@@ -651,13 +651,24 @@ function renderSessionCharacters(rows) {
   if (!list) return;
   list.innerHTML = rows.map(function(r) {
     var isNpc = (r.is_npc === true || r.is_npc === 1 || r.is_npc === '1');
-    var img = r.image_portrait || r.image || r.image_fullbody;
+    // Reference image is the preferred thumbnail.
+    var img = r.reference_url || r.canonical_reference_url || r.image_portrait || r.image || r.image_fullbody;
     var thumb = img
       ? '<img src="' + img + '" class="sc-thumb" alt="' + r.name + '" />'
       : '<div class="sc-thumb sc-thumb-empty">&#128100;</div>';
     var editBtn = canEdit
       ? '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit</button>'
       : '';
+
+    // Stage 3: a pending change shows a review badge.
+    var pendingChange = (r.change_flag === true || r.change_flag === 1 || r.change_flag === '1')
+      && r.change_status === 'pending';
+    var changeBadge = pendingChange
+      ? '<div class="sc-change-badge" onclick="openChangeReview(' + r.character_id + ')">' +
+          '&#9888; Change detected &mdash; review' +
+        '</div>'
+      : '';
+
     return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
       '<div class="sc-card-head">' +
         thumb +
@@ -668,10 +679,13 @@ function renderSessionCharacters(rows) {
         '</div>' +
         editBtn +
       '</div>' +
+      changeBadge +
       '<div class="sc-card-prompt" id="sc-prompt-' + r.character_id + '">' +
         (r.prompt || '') + '</div>' +
     '</div>';
   }).join('');
+  // Keep the rows available for the review screen.
+  state.sessionCharacterRows = rows;
 }
 
 function startEditSnapshot(charId) {
@@ -708,6 +722,51 @@ function saveSnapshot(charId) {
       }
     })
     .catch(function() { ta.disabled = false; alert('Could not save.'); });
+}
+
+// ---- Stage 3: character change review screen ----
+// Opens an in-card review: the AI's detected change + an editable text
+// field. Regenerate / Approve buttons are wired in Piece 5.
+function openChangeReview(charId) {
+  var rows = state.sessionCharacterRows || [];
+  var r = rows.find(function(x) { return x.character_id === charId; });
+  if (!r) return;
+  var card = document.getElementById('sc-card-' + charId);
+  if (!card) return;
+
+  var currentImg = r.reference_url || r.canonical_reference_url || '';
+  var imgHtml = currentImg
+    ? '<img src="' + currentImg + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'
+    : '<div class="sc-review-img sc-review-img-empty" id="sc-review-img-' + charId + '">No reference image yet</div>';
+
+  card.innerHTML =
+    '<div class="sc-review">' +
+      '<div class="sc-review-title">&#9888; Permanent change detected</div>' +
+      '<div class="sc-review-name">' + r.name + '</div>' +
+      '<div class="sc-review-detected">The AI detected: <em>' + (r.change_detail || '') + '</em></div>' +
+      '<label class="sc-review-label">Amended appearance (edit if needed before approving):</label>' +
+      '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '">' +
+        (r.change_detail || '') + '</textarea>' +
+      '<div class="sc-review-imgwrap">' + imgHtml + '</div>' +
+      '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
+      '<div class="char-prompt-actions">' +
+        '<button class="btn btn-sm" id="sc-regen-' + charId + '" ' +
+          'onclick="regenerateReference(' + charId + ')">&#10227; Regenerate image</button>' +
+        '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
+          'onclick="approveChange(' + charId + ')">&#10003; Approve change</button>' +
+        '<button class="btn btn-sm" onclick="loadSessionCharacters()">Cancel</button>' +
+      '</div>' +
+    '</div>';
+}
+
+// Piece 5 wires these — placeholders so the buttons don't error.
+function regenerateReference(charId) {
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  if (msg) msg.textContent = 'Regenerate is built in the next step.';
+}
+function approveChange(charId) {
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  if (msg) msg.textContent = 'Approve is built in the next step.';
 }
 
 function switchSessionTab(tab) {
