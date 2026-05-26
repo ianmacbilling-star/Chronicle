@@ -246,7 +246,18 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
       'If genuinely unsure whether something is permanent, DO NOT flag it.\n\n' +
       'Return ONLY a JSON object, no preamble:\n' +
       '{\n  "changes": [\n    { "character": "exact name from the list", ' +
-      '"detail": "a short amended-appearance phrase to add, e.g. \'skin and hair turned deathly albino-white\'" }\n  ]\n}\n' +
+      '"detail": "..." }\n  ]\n}\n\n' +
+      'CRITICAL — the "detail" field must describe ONLY the resulting VISIBLE ' +
+      'APPEARANCE, as if writing a costume/makeup note. It is fed directly to an ' +
+      'image generator.\n' +
+      '- DO include: what the character now looks like (e.g. "skin and hair are ' +
+      'deathly pale albino-white", "left horn is broken off to a jagged stump").\n' +
+      '- DO NOT include the CAUSE or any lore: no monster names, no spell or ability ' +
+      'names, no "from...", no "because...", no story context. An image model will ' +
+      'wrongly draw those words as objects.\n' +
+      '- Example of WRONG: "skin turned white from a Pale Stalker necrotic shriek".\n' +
+      '- Example of RIGHT: "skin and hair are deathly albino-white".\n' +
+      'Keep it short — one descriptive phrase.\n\n' +
       'If there are no permanent changes, return { "changes": [] }.\n\n' +
       'SESSION TRANSCRIPT:\n' + transcript + '\n\n' +
       'DM SESSION NOTES:\n' + (notes || '(none)');

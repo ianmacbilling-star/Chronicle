@@ -221,12 +221,17 @@ async function editReferenceImage(falKey, baseImageUrl, changeText, charName, mo
   fal.config({ credentials: falKey });
 
   const name = charName || 'the character';
-  // Same instruction shape as the prototype's successful cut-horn test:
-  // "Take X from the reference and [change]. Keep everything else identical."
+  // Instruction shape proven in the Nano Banana 2 prototype's cut-horn test,
+  // tightened: the change is framed strictly as an appearance edit, and the
+  // identity-preservation clause is emphatic so stray words can't redraw
+  // the character as something else.
   const instruction =
-    'Take ' + name + ' from the reference image and ' + changeText + '. ' +
-    'Keep their face, build, hair, distinctive features, outfit and pose ' +
-    'exactly the same as the reference. Comic book art style.';
+    'This reference image shows ' + name + '. Keep ' + name + ' as the SAME ' +
+    'character — identical face, body type, species, hair, horns, distinctive ' +
+    'features, outfit, colors and pose as the reference image. ' +
+    'Apply ONLY this one appearance change: ' + changeText + '. ' +
+    'Do not add or draw any other creatures, characters, or objects. ' +
+    'Comic book art style.';
 
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
 
