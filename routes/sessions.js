@@ -153,16 +153,17 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
     if (!falKey) return res.json({ error: 'Image generation not configured.' });
 
-    // Build the description: current snapshot prompt + the amended change.
-    const baseText = (sc && sc.prompt) || ch.canonical_prompt || ch.description || '';
-    const fullText = detail ? (baseText + '\n\nRECENT CHANGE: ' + detail) : baseText;
+    if (!detail || !detail.trim()) {
+      return res.json({ error: 'Describe the change before regenerating.' });
+    }
 
-    // Condition on the current reference so identity carries over.
-    const portrait = (sc && sc.reference_url) || ch.canonical_reference_url ||
+    // Edit FROM the current reference — session first, then canonical,
+    // then an uploaded portrait — so amendments accumulate correctly.
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
       ch.image_portrait || ch.image_fullbody || ch.image || null;
 
     const modelKey = await imageHelpers.getSelectedModel(db);
-    const newUrl = await imageHelpers.generateReferenceImage(falKey, fullText, portrait, modelKey);
+    const newUrl = await imageHelpers.editReferenceImage(falKey, baseImage, detail, ch.name, modelKey);
 
     await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId);
 

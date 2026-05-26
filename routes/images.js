@@ -210,6 +210,52 @@ async function generateReferenceImage(falKey, descriptionText, portraitUrl, mode
   return result.data.images[0].url;
 }
 
+// Edit an EXISTING reference image to apply an amendment (Stage 3 Piece 5).
+// Unlike generateReferenceImage (which builds from scratch), this takes
+// the current reference image and changes ONLY the amended feature —
+// the approach proven in the Nano Banana 2 prototype's cut-horn test.
+//   baseImageUrl = the image to edit FROM (session ref preferred)
+//   changeText   = the amendment, e.g. "skin and hair turned deathly white"
+//   charName     = the character's name, for the instruction
+async function editReferenceImage(falKey, baseImageUrl, changeText, charName, modelKey) {
+  fal.config({ credentials: falKey });
+
+  const name = charName || 'the character';
+  // Same instruction shape as the prototype's successful cut-horn test:
+  // "Take X from the reference and [change]. Keep everything else identical."
+  const instruction =
+    'Take ' + name + ' from the reference image and ' + changeText + '. ' +
+    'Keep their face, build, hair, distinctive features, outfit and pose ' +
+    'exactly the same as the reference. Comic book art style.';
+
+  const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
+
+  // Editing genuinely needs the /edit endpoint + a real base image.
+  if (key === 'nano2' && baseImageUrl && /^https?:\/\//.test(baseImageUrl)) {
+    const input = {
+      prompt: instruction,
+      image_urls: [baseImageUrl],
+      num_images: 1,
+      aspect_ratio: '3:4',
+      output_format: 'png',
+      safety_tolerance: '5',
+      resolution: '1K'
+    };
+    const result = await fal.subscribe('fal-ai/nano-banana-2/edit', { input: input });
+    if (!result.data || !result.data.images || !result.data.images[0]) {
+      throw new Error('No edited reference image returned from fal.ai');
+    }
+    return result.data.images[0].url;
+  }
+
+  // Fallback: no editing model or no base image — build from text instead.
+  // (generateReferenceImage handles schnell / no-portrait cases.)
+  const fallbackText = changeText
+    ? (name + ' — ' + changeText)
+    : name;
+  return await generateReferenceImage(falKey, fallbackText, baseImageUrl, key);
+}
+
 // ============================================================
 // ROUTES
 // ============================================================
@@ -336,5 +382,6 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 
 module.exports = router;
 module.exports.generateReferenceImage = generateReferenceImage;
+module.exports.editReferenceImage = editReferenceImage;
 module.exports.getSelectedModel = getSelectedModel;
 module.exports.logImageGeneration = logImageGeneration;
