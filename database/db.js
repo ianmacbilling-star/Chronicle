@@ -315,11 +315,10 @@ async function initPostgres() {
 
   // Global app settings as simple key/value rows. Used for the
   // image-model selector and any future app-wide toggles.
-  // Needs an 'id' column: the db.js wrapper appends RETURNING id
-  // to every INSERT. 'setting_key' is the unique lookup column.
-  // DROP first: earlier builds created this without an id column.
-  // The table holds only throwaway settings, so recreating is safe.
-  await pool.query('DROP TABLE IF EXISTS app_settings');
+  // 'id' column: the db.js wrapper appends RETURNING id to INSERTs.
+  // 'setting_key' is the unique lookup column.
+  // NOTE: this table PERSISTS across deploys — do NOT drop it, or
+  // saved settings (like the chosen image model) get wiped.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS app_settings (
       id SERIAL PRIMARY KEY,
