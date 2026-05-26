@@ -198,23 +198,24 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
     // Name-match against transcript + session notes combined.
     const text = (session.transcript || '') + '\n' + (session.session_notes || '');
 
-    // Full refresh — but PRESERVE rows the DM has already approved.
-    // An accepted amendment is a deliberate decision and must survive
-    // re-extraction (re-extraction touches only un-amended snapshots).
+    // Full refresh — but PRESERVE rows the DM has already decided on
+    // (accepted OR rejected). An accepted amendment must survive; a
+    // rejected one must keep its detail so the AI won't re-flag the same
+    // change. Only un-decided ('none'/'pending') rows are rebuilt.
     await db.prepare(
-      "DELETE FROM session_characters WHERE session_id = ? AND (change_status IS NULL OR change_status != 'accepted')"
+      "DELETE FROM session_characters WHERE session_id = ? AND (change_status IS NULL OR change_status NOT IN ('accepted','rejected'))"
     ).run(session.id);
 
-    // Which characters already have an accepted row this session — skip them.
+    // Which characters already have a decided row this session — skip them.
     const acceptedRows = await db.prepare(
-      "SELECT character_id FROM session_characters WHERE session_id = ? AND change_status = 'accepted'"
+      "SELECT character_id FROM session_characters WHERE session_id = ? AND change_status IN ('accepted','rejected')"
     ).all(session.id);
     const acceptedIds = {};
     acceptedRows.forEach(function(r) { acceptedIds[r.character_id] = true; });
 
     for (const ch of characters) {
       if (!characterInText(ch, text)) continue;
-      if (acceptedIds[ch.id]) continue; // approved — leave its row untouched
+      if (acceptedIds[ch.id]) continue; // decided — leave its row untouched
       const carry = await resolveCarryForward(db, ch, session);
       await db.prepare(
         'INSERT INTO session_characters ' +
@@ -243,13 +244,20 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     // Only characters actually present in this session.
     let present = characters.filter(function(ch) { return characterInText(ch, text); });
 
-    // Skip characters whose change for THIS session is already accepted —
-    // a re-extraction must not re-flag a settled change.
-    const acceptedRows = await db.prepare(
-      "SELECT character_id FROM session_characters WHERE session_id = ? AND change_status = 'accepted'"
+    // Characters whose change this session is already ACCEPTED — skip
+    // entirely (settled). Characters whose change is REJECTED stay in the
+    // scan, but we pass the rejected detail to the AI so it won't re-flag
+    // the SAME change (a genuinely different change still flags).
+    const decidedRows = await db.prepare(
+      "SELECT character_id, change_status, change_detail FROM session_characters " +
+      "WHERE session_id = ? AND change_status IN ('accepted','rejected')"
     ).all(session.id);
     const acceptedIds = {};
-    acceptedRows.forEach(function(r) { acceptedIds[r.character_id] = true; });
+    const rejectedDetail = {};
+    decidedRows.forEach(function(r) {
+      if (r.change_status === 'accepted') acceptedIds[r.character_id] = true;
+      else if (r.change_status === 'rejected') rejectedDetail[r.character_id] = r.change_detail || '';
+    });
     present = present.filter(function(ch) { return !acceptedIds[ch.id]; });
 
     if (!present.length) return;
@@ -269,6 +277,16 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     const charListText = present.map(function(ch) {
       return '- ' + ch.name + (ch.cls ? ' (' + ch.cls + ')' : '');
     }).join('\n');
+
+    // Stage 3/4: any changes the DM previously REJECTED for this session.
+    // The AI must NOT re-flag these same changes — but a genuinely
+    // different new change for the same character SHOULD still be flagged.
+    var rejectedText = '';
+    present.forEach(function(ch) {
+      if (rejectedDetail[ch.id]) {
+        rejectedText += '- ' + ch.name + ': "' + rejectedDetail[ch.id] + '"\n';
+      }
+    });
 
     const instruction =
       'You are reviewing a tabletop RPG session for PERMANENT physical changes to characters. ' +
@@ -307,6 +325,12 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
       'below) where the change happens — the change should be visible in that moment ' +
       'and every moment after it. Pick the EARLIEST moment where the change has ' +
       'occurred. If you genuinely cannot tell, use 0 (applies from the start).\n\n' +
+      (rejectedText
+        ? 'PREVIOUSLY REJECTED CHANGES — the DM has already reviewed and REJECTED ' +
+          'these specific changes. Do NOT flag them again:\n' + rejectedText +
+          'However, if a character above has a genuinely DIFFERENT permanent change ' +
+          '(not the rejected one), you SHOULD still flag that new change.\n\n'
+        : '') +
       'MOMENTS IN THIS SESSION (in order):\n' + momentListText + '\n\n' +
       'If there are no permanent changes, return { "changes": [] }.\n\n' +
       'SESSION TRANSCRIPT:\n' + transcript + '\n\n' +

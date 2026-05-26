@@ -755,6 +755,8 @@ function openChangeReview(charId) {
           'onclick="regenerateReference(' + charId + ')">&#10227; Regenerate image</button>' +
         '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
           'onclick="approveChange(' + charId + ')">&#10003; Approve change</button>' +
+        '<button class="btn btn-sm" id="sc-reject-' + charId + '" ' +
+          'onclick="rejectChange(' + charId + ')">&#10005; Not a real change</button>' +
         '<button class="btn btn-sm" onclick="loadSessionCharacters()">Cancel</button>' +
       '</div>' +
     '</div>';
@@ -835,6 +837,35 @@ function approveChange(charId) {
     .catch(function() {
       if (btn) { btn.disabled = false; }
       if (msg) msg.textContent = 'Could not approve.';
+    });
+}
+
+// Reject a detected change — it's not real, or the DM doesn't want it.
+// Marks it rejected; re-extraction won't re-flag the SAME change.
+function rejectChange(charId) {
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  var btn = document.getElementById('sc-reject-' + charId);
+  if (btn) { btn.disabled = true; }
+  if (msg) msg.textContent = 'Rejecting...';
+
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/reject-change', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        loadSessionCharacters();
+      } else {
+        if (btn) { btn.disabled = false; }
+        if (msg) msg.textContent = (data && data.error) || 'Could not reject.';
+      }
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; }
+      if (msg) msg.textContent = 'Could not reject.';
     });
 }
 

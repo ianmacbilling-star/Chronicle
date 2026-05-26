@@ -228,4 +228,23 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
   }
 });
 
+// POST reject a pending change. Marks it 'rejected' and clears the badge.
+// The rejected detail is kept on the row so re-extraction can tell the AI
+// not to re-flag the SAME change (a genuinely different change still flags).
+router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCampaignOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.prepare(
+      'UPDATE session_characters SET change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
+      'WHERE session_id = ? AND character_id = ?'
+    ).run(0, 'rejected', now, req.session.userId, req.params.id, req.params.characterId);
+    // change_detail is intentionally left in place — re-extraction reads it.
+    res.json({ success: true });
+  } catch(e) {
+    console.error('reject-change error:', e.message);
+    res.json({ error: 'Could not reject the change.' });
+  }
+});
+
 module.exports = router;
