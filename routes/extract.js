@@ -184,7 +184,8 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
     if (!characters.length) return;
 
-    const text = session.transcript || '';
+    // Name-match against transcript + session notes combined.
+    const text = (session.transcript || '') + '\n' + (session.session_notes || '');
 
     // Full refresh — re-extraction rebuilds snapshots for this session only.
     await db.prepare('DELETE FROM session_characters WHERE session_id = ?').run(session.id);
@@ -212,7 +213,10 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
     if (!characters.length) return;
 
-    const text = session.transcript || '';
+    // Scan transcript + session notes together.
+    const transcript = session.transcript || '';
+    const notes = session.session_notes || '';
+    const text = transcript + '\n' + notes;
     // Only characters actually present in this session.
     const present = characters.filter(function(ch) { return characterInText(ch, text); });
     if (!present.length) return;
@@ -222,22 +226,30 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     }).join('\n');
 
     const instruction =
-      'You are reviewing a tabletop RPG session transcript for PERMANENT physical changes to characters.\n\n' +
+      'You are reviewing a tabletop RPG session for PERMANENT physical changes to characters. ' +
+      'You are given the session transcript AND the DM\'s session notes — check BOTH.\n\n' +
       'CHARACTERS IN THIS SESSION:\n' + charListText + '\n\n' +
-      'Identify ONLY *significant permanent physical changes* — things that would ' +
-      'change how the character looks from now on. Examples: a lasting scar, a lost ' +
-      'limb or eye, a cut or broken horn, a curse that alters appearance, a dramatic ' +
-      'transformation, a new permanent signature item. ALSO count *restorations* ' +
-      '(e.g. a lost eye magically healed) as permanent changes.\n\n' +
-      'DO NOT flag temporary states. Ignore anything a night\'s rest or a D&D ' +
-      'Long Rest would undo: being bloodied, wounded-but-healing, muddy, exhausted, ' +
-      'poisoned, frightened, disguised, or any short-term condition.\n\n' +
-      'If unsure whether something is permanent, DO NOT flag it.\n\n' +
+      'Flag ONLY *significant permanent physical changes* — anything that changes how a ' +
+      'character LOOKS from now on. This includes, but is not limited to:\n' +
+      '- Injuries and losses: a lasting scar, a lost limb or eye, a cut or broken horn.\n' +
+      '- Colour changes: skin, hair, or eyes permanently changing colour.\n' +
+      '- Curses and magical effects that alter appearance (e.g. skin turns deathly white, ' +
+      'petrified patches, glowing eyes).\n' +
+      '- Transformations: partial or full (e.g. turning undead, growing scales).\n' +
+      '- New permanent signature features or gear that becomes part of their look.\n' +
+      'ALSO flag *restorations* — a previously lost feature being healed or restored ' +
+      '(e.g. a lost eye regrown) — these are permanent changes too.\n\n' +
+      'DO NOT flag temporary states. Ignore anything a night\'s rest or a D&D Long Rest ' +
+      'would undo: bloodied, wounded-but-healing, bruised, muddy, exhausted, poisoned, ' +
+      'frightened, disguised, or any short-term condition. The change must be clearly ' +
+      'PERMANENT — usually the text will say so, or the nature of it makes it obvious.\n' +
+      'If genuinely unsure whether something is permanent, DO NOT flag it.\n\n' +
       'Return ONLY a JSON object, no preamble:\n' +
       '{\n  "changes": [\n    { "character": "exact name from the list", ' +
-      '"detail": "a short amended-appearance phrase to add, e.g. \'left horn broken off to a jagged stump\'" }\n  ]\n}\n' +
+      '"detail": "a short amended-appearance phrase to add, e.g. \'skin and hair turned deathly albino-white\'" }\n  ]\n}\n' +
       'If there are no permanent changes, return { "changes": [] }.\n\n' +
-      'TRANSCRIPT:\n' + text;
+      'SESSION TRANSCRIPT:\n' + transcript + '\n\n' +
+      'DM SESSION NOTES:\n' + (notes || '(none)');
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
