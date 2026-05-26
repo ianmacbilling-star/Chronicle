@@ -120,8 +120,11 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
         insert.run(session.id, m.title, m.description, m.type, m.prompt, m.emphasis || null, i, now, req.session.userId);
       });
 
-      // Snapshot each character present in this session (Stage 2)
+      // Snapshot each character present in this session (self-contained).
       await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now);
+
+      // Stage 3: scan for major permanent changes and flag them for review.
+      await detectCharacterChanges(db, session, req.params.campaignId, key, now);
     }
 
     res.json(parsed);
@@ -131,7 +134,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 });
 
 // ============================================================
-// STAGE 2 — per-session character snapshots
+// STAGE 3 — per-session character snapshots (self-contained)
+// Each session stores its OWN copy of prompt + reference_url.
+// No walk-back at read time. Extraction copies the prior session's
+// values forward, then a dedicated AI call flags major changes.
 // ============================================================
 
 // Detect whether a character is "present" in the session by name match.
@@ -143,30 +149,36 @@ function characterInText(character, text) {
   return lower.indexOf(full) !== -1 || (first.length > 2 && lower.indexOf(first) !== -1);
 }
 
-// Resolve the snapshot prompt for a character, using the agreed priority:
+// Resolve a character's prompt + reference_url to copy into THIS session,
+// using the agreed priority:
 //   1. that character's snapshot from the most recent PRIOR session (by date)
-//   2. the character's canonical_prompt
-//   3. the character's raw description
-async function resolveSnapshotPrompt(db, character, currentSession) {
-  // 1. Walk prior sessions by date for the most recent snapshot of this character
+//   2. the character's canonical_prompt / canonical_reference_url
+//   3. the character's raw description / null
+async function resolveCarryForward(db, character, currentSession) {
   var prior = await db.prepare(
-    'SELECT sc.prompt FROM session_characters sc ' +
+    'SELECT sc.prompt, sc.reference_url FROM session_characters sc ' +
     'JOIN sessions s ON sc.session_id = s.id ' +
     'WHERE sc.character_id = ? AND s.campaign_id = ? ' +
-    'AND s.session_date < ? AND sc.prompt IS NOT NULL ' +
+    'AND s.session_date < ? ' +
     'ORDER BY s.session_date DESC LIMIT 1'
   ).get(character.id, currentSession.campaign_id, currentSession.session_date);
-  if (prior && prior.prompt) return prior.prompt;
 
-  // 2. Canonical prompt
-  if (character.canonical_prompt && character.canonical_prompt.trim()) {
-    return character.canonical_prompt;
-  }
-  // 3. Raw description
-  return character.description || '';
+  var prompt = (prior && prior.prompt)
+    ? prior.prompt
+    : (character.canonical_prompt && character.canonical_prompt.trim()
+        ? character.canonical_prompt
+        : (character.description || ''));
+
+  var referenceUrl = (prior && prior.reference_url)
+    ? prior.reference_url
+    : (character.canonical_reference_url || null);
+
+  return { prompt: prompt, referenceUrl: referenceUrl };
 }
 
-// Build/refresh snapshot rows for every character present in this session.
+// Build snapshot rows for every character present in this session.
+// Each row is self-contained: its own prompt + reference_url, copied
+// forward. change_flag / change_detail are filled by detectCharacterChanges.
 async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
   try {
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
@@ -174,19 +186,94 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
 
     const text = session.transcript || '';
 
-    // Full refresh — re-extraction rebuilds snapshots for this session
+    // Full refresh — re-extraction rebuilds snapshots for this session only.
     await db.prepare('DELETE FROM session_characters WHERE session_id = ?').run(session.id);
 
     for (const ch of characters) {
       if (!characterInText(ch, text)) continue;
-      const prompt = await resolveSnapshotPrompt(db, ch, session);
+      const carry = await resolveCarryForward(db, ch, session);
       await db.prepare(
-        'INSERT INTO session_characters (session_id, character_id, prompt, change_note, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?)'
-      ).run(session.id, ch.id, prompt, null, now);
+        'INSERT INTO session_characters ' +
+        '(session_id, character_id, prompt, reference_url, change_note, change_flag, change_status, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(session.id, ch.id, carry.prompt, carry.referenceUrl, null, 0, 'none', now);
     }
   } catch(e) {
     console.error('snapshotSessionCharacters error:', e.message);
+  }
+}
+
+// Dedicated AI call: scan the transcript for MAJOR PERMANENT physical
+// changes to known characters. Flags the session_characters row.
+// Conservative — temporary states (Long Rest, bloodied, etc) are ignored.
+async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
+  try {
+    if (!apiKey) return;
+    const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
+    if (!characters.length) return;
+
+    const text = session.transcript || '';
+    // Only characters actually present in this session.
+    const present = characters.filter(function(ch) { return characterInText(ch, text); });
+    if (!present.length) return;
+
+    const charListText = present.map(function(ch) {
+      return '- ' + ch.name + (ch.cls ? ' (' + ch.cls + ')' : '');
+    }).join('\n');
+
+    const instruction =
+      'You are reviewing a tabletop RPG session transcript for PERMANENT physical changes to characters.\n\n' +
+      'CHARACTERS IN THIS SESSION:\n' + charListText + '\n\n' +
+      'Identify ONLY *significant permanent physical changes* — things that would ' +
+      'change how the character looks from now on. Examples: a lasting scar, a lost ' +
+      'limb or eye, a cut or broken horn, a curse that alters appearance, a dramatic ' +
+      'transformation, a new permanent signature item. ALSO count *restorations* ' +
+      '(e.g. a lost eye magically healed) as permanent changes.\n\n' +
+      'DO NOT flag temporary states. Ignore anything a night\'s rest or a D&D ' +
+      'Long Rest would undo: being bloodied, wounded-but-healing, muddy, exhausted, ' +
+      'poisoned, frightened, disguised, or any short-term condition.\n\n' +
+      'If unsure whether something is permanent, DO NOT flag it.\n\n' +
+      'Return ONLY a JSON object, no preamble:\n' +
+      '{\n  "changes": [\n    { "character": "exact name from the list", ' +
+      '"detail": "a short amended-appearance phrase to add, e.g. \'left horn broken off to a jagged stump\'" }\n  ]\n}\n' +
+      'If there are no permanent changes, return { "changes": [] }.\n\n' +
+      'TRANSCRIPT:\n' + text;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+        max_tokens: 800,
+        messages: [{ role: 'user', content: instruction }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) { console.error('detectCharacterChanges API error:', data.error.message); return; }
+
+    var raw = data.content.map(function(b) { return b.text || ''; }).join('').trim();
+    raw = raw.replace(/```json|```/g, '').trim();
+    var parsed = JSON.parse(raw);
+    if (!parsed.changes || !parsed.changes.length) return;
+
+    for (const change of parsed.changes) {
+      const match = characters.find(function(ch) {
+        return ch.name && ch.name.toLowerCase() === String(change.character || '').toLowerCase();
+      });
+      if (!match || !change.detail) continue;
+      // Flag this character's snapshot row for the DM to review.
+      await db.prepare(
+        'UPDATE session_characters SET change_flag = ?, change_detail = ?, change_status = ?, edited_at = ? ' +
+        'WHERE session_id = ? AND character_id = ?'
+      ).run(1, change.detail, 'pending', now, session.id, match.id);
+    }
+  } catch(e) {
+    console.error('detectCharacterChanges error (non-fatal):', e.message);
   }
 }
 
