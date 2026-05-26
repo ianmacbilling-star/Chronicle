@@ -321,10 +321,19 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
       '- Example of WRONG: "skin turned white from a Pale Stalker necrotic shriek".\n' +
       '- Example of RIGHT: "skin and hair are deathly albino-white".\n' +
       'Keep it short — one descriptive phrase.\n\n' +
-      'The "moment_index" field is the number of the moment (from the MOMENTS list ' +
-      'below) where the change happens — the change should be visible in that moment ' +
-      'and every moment after it. Pick the EARLIEST moment where the change has ' +
-      'occurred. If you genuinely cannot tell, use 0 (applies from the start).\n\n' +
+      'The "moment_index" field is the number of the moment (from the MOMENTS ' +
+      'list below) where the change BECOMES VISIBLE on the character.\n' +
+      '- Pick the moment in which the change actually HAPPENS TO the character — ' +
+      'the moment the scar is cut, the spell lands, the horn breaks, the ' +
+      'transformation occurs. The character should look NORMAL in every moment ' +
+      'before it, and CHANGED in that moment and every moment after.\n' +
+      '- Do NOT pick the moment a fight or scene merely BEGINS. A battle can ' +
+      'start several moments before the blow that actually causes the change. ' +
+      'Pin it to the exact moment of the change itself, not its lead-up.\n' +
+      '- If a moment\'s description shows the change already in effect but an ' +
+      'earlier moment shows it actually occurring, use the moment it occurs.\n' +
+      '- Only if the change is already true from the very start, or you truly ' +
+      'cannot place it, use 0.\n\n' +
       (rejectedText
         ? 'PREVIOUSLY REJECTED CHANGES — the DM has already reviewed and REJECTED ' +
           'these specific changes. Do NOT flag them again:\n' + rejectedText +
