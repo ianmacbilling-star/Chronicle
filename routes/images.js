@@ -127,16 +127,44 @@ function campaignSeed(campaignId) {
 // in this panel. Sending the full roster to every panel causes the image
 // model to merge features between characters ("concept bleed"), so we
 // detect presence from the panel text and include just those characters.
+// Stage 4: for each character that has an ACCEPTED mid-session change,
+// look up the prior session's reference image. Pre-change panels use it
+// so the character shows their OLD look before the change moment.
+// Mutates each char row, adding `prior_reference_url`.
+async function attachPriorReferences(db, chars, sessionId, campaignId) {
+  try {
+    var sess = await db.prepare('SELECT session_date FROM sessions WHERE id = ?').get(sessionId);
+    if (!sess) return;
+    for (var i = 0; i < chars.length; i++) {
+      var c = chars[i];
+      // Only relevant if this character has an accepted change this session.
+      if (c.change_status !== 'accepted') continue;
+      var prior = await db.prepare(
+        'SELECT sc.reference_url FROM session_characters sc ' +
+        'JOIN sessions s ON sc.session_id = s.id ' +
+        'WHERE sc.character_id = ? AND s.campaign_id = ? AND s.session_date < ? ' +
+        'AND sc.reference_url IS NOT NULL ' +
+        'ORDER BY s.session_date DESC LIMIT 1'
+      ).get(c.character_id, campaignId, sess.session_date);
+      c.prior_reference_url = (prior && prior.reference_url) ? prior.reference_url : null;
+    }
+  } catch (e) {
+    console.error('attachPriorReferences error (non-fatal):', e.message);
+  }
+}
+
 // Returns { text, refs } for the characters present in a panel.
 //   text = the per-character description block (amended snapshot preferred)
 //   refs = [{ name, url }] reference images for present characters
-// refs is what Piece 6 feeds to the Nano Banana 2 /edit endpoint.
-function buildCharacterBlock(chars, panelText) {
+// panelIndex (0-based) drives Stage 4 mid-session precision: a character
+// with an accepted change at change_moment_index shows their OLD look
+// (prior text + prior reference) for panels BEFORE that index, and the
+// amended look from that index onward.
+function buildCharacterBlock(chars, panelText, panelIndex) {
   if (!chars || !chars.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
+  var pIdx = (typeof panelIndex === 'number' && !isNaN(panelIndex)) ? panelIndex : 0;
 
-  // A character is "present" if their name (or first name) appears in the
-  // panel's prompt/description text.
   var present = chars.filter(function(c) {
     if (!c.name) return false;
     var full = c.name.toLowerCase();
@@ -144,33 +172,51 @@ function buildCharacterBlock(chars, panelText) {
     return text.indexOf(full) !== -1 || (first.length > 2 && text.indexOf(first) !== -1);
   });
 
-  // If we can't detect anyone (e.g. a scenery panel, or names not mentioned),
-  // send nothing rather than the whole roster — an empty block is safer than
-  // a bleed-prone one.
   if (!present.length) return { text: '', refs: [] };
 
-  var block = present.map(function(c) {
-    // Keep each character's descriptors tightly bound to their name.
-    // Prefer the session snapshot prompt; fall back to the raw description.
+  var lines = [];
+  var refs = [];
+
+  present.forEach(function(c) {
+    // Does this character have an accepted change that lands mid-session?
+    var hasChange = (c.change_status === 'accepted') &&
+                    (typeof c.change_moment_index === 'number');
+    var changeIdx = hasChange ? c.change_moment_index : 0;
+    // "Before the change" = accepted change exists AND this panel is earlier.
+    var beforeChange = hasChange && (pIdx < changeIdx);
+
     var line = c.name;
     if (c.cls) line += ' (' + c.cls + ')';
-    var desc = (c.snapshot_prompt && c.snapshot_prompt.trim())
-      ? c.snapshot_prompt
-      : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description);
-    if (desc) line += ' — ' + desc;
-    return line;
-  }).join('\n');
 
-  // Reference images — session reference preferred, then canonical.
-  var refs = [];
-  present.forEach(function(c) {
-    var url = c.snapshot_reference_url || c.canonical_reference_url || null;
-    if (url && /^https?:\/\//.test(url)) {
-      refs.push({ name: c.name, url: url });
+    if (beforeChange) {
+      // Pre-change panel: use the snapshot prompt with the change text
+      // stripped off, so the character shows their OLD look.
+      var base = c.snapshot_prompt || c.canonical_prompt || c.description || '';
+      if (c.change_note) {
+        // The approve route appended "\n\nRECENT CHANGE: <detail>" — remove it.
+        base = base.split('\n\nRECENT CHANGE:')[0];
+      }
+      if (base) line += ' — ' + base;
+      // Pre-change reference = the prior session's image (old look).
+      var oldUrl = c.prior_reference_url || c.canonical_reference_url || null;
+      if (oldUrl && /^https?:\/\//.test(oldUrl)) {
+        refs.push({ name: c.name, url: oldUrl });
+      }
+    } else {
+      // At/after the change (or no change at all): amended snapshot.
+      var desc = (c.snapshot_prompt && c.snapshot_prompt.trim())
+        ? c.snapshot_prompt
+        : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description);
+      if (desc) line += ' — ' + desc;
+      var url = c.snapshot_reference_url || c.canonical_reference_url || null;
+      if (url && /^https?:\/\//.test(url)) {
+        refs.push({ name: c.name, url: url });
+      }
     }
+    lines.push(line);
   });
 
-  return { text: block, refs: refs };
+  return { text: lines.join('\n'), refs: refs };
 }
 
 function getStylePrefix(style) {
@@ -339,15 +385,19 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const campRow = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
     const campId = campRow ? campRow.campaign_id : campaign_id;
     const chars = await db.prepare(
-      'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
-      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url ' +
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
       'FROM characters ch ' +
       'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
       'WHERE ch.campaign_id = ?'
     ).all(moment.session_id, campId);
+    // Stage 4: for any character with an accepted mid-session change, fetch
+    // the PRIOR session's reference so pre-change panels show the old look.
+    await attachPriorReferences(db, chars, moment.session_id, campId);
     // Only include characters actually named in this panel's text
     const panelText = (prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
-    const charList = buildCharacterBlock(chars, panelText);
+    const charList = buildCharacterBlock(chars, panelText, moment.panel_order);
 
     // Single regenerate = user wants a different take, so use a fresh
     // random seed each time rather than the fixed campaign seed.
@@ -385,12 +435,15 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // Load all campaign characters once; the per-panel block is built inside
   // the loop so each panel only includes the characters actually in it.
   const chars = await db.prepare(
-    'SELECT ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
-    'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url ' +
+    'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+    'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+    'sc.change_note, sc.change_moment_index, sc.change_status ' +
     'FROM characters ch ' +
     'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
     'WHERE ch.campaign_id = ?'
   ).all(session_id, campaign_id);
+  // Stage 4: attach each changed character's prior-session reference image.
+  await attachPriorReferences(db, chars, session_id, campaign_id);
 
   // Stable campaign base seed — every session of a campaign renders from the
   // same visual DNA, so characters stay consistent across sessions. Each panel
@@ -411,7 +464,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
         // Only the characters named in THIS panel — prevents feature bleed
         const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
-        const charList = buildCharacterBlock(chars, panelText);
+        const charList = buildCharacterBlock(chars, panelText, m.panel_order);
         const imageUrl = await generateImage(m.prompt, style, fal_key, charList, panelSeed, modelKey);
         const now = new Date().toISOString();
         await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
