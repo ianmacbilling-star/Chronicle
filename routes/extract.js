@@ -254,6 +254,18 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
 
     if (!present.length) return;
 
+    // Stage 4: fetch this session's moments in order, so the AI can say
+    // WHICH moment a change happens at. moments[].panel_order is 0-based.
+    const moments = await db.prepare(
+      'SELECT title, description, panel_order FROM moments WHERE session_id = ? ORDER BY panel_order ASC'
+    ).all(session.id);
+    const momentListText = moments.length
+      ? moments.map(function(m) {
+          return 'Moment ' + m.panel_order + ': ' + (m.title || '') +
+            (m.description ? ' — ' + m.description : '');
+        }).join('\n')
+      : '(no moments)';
+
     const charListText = present.map(function(ch) {
       return '- ' + ch.name + (ch.cls ? ' (' + ch.cls + ')' : '');
     }).join('\n');
@@ -279,7 +291,7 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
       'If genuinely unsure whether something is permanent, DO NOT flag it.\n\n' +
       'Return ONLY a JSON object, no preamble:\n' +
       '{\n  "changes": [\n    { "character": "exact name from the list", ' +
-      '"detail": "..." }\n  ]\n}\n\n' +
+      '"detail": "...", "moment_index": <number> }\n  ]\n}\n\n' +
       'CRITICAL — the "detail" field must describe ONLY the resulting VISIBLE ' +
       'APPEARANCE, as if writing a costume/makeup note. It is fed directly to an ' +
       'image generator.\n' +
@@ -291,6 +303,11 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
       '- Example of WRONG: "skin turned white from a Pale Stalker necrotic shriek".\n' +
       '- Example of RIGHT: "skin and hair are deathly albino-white".\n' +
       'Keep it short — one descriptive phrase.\n\n' +
+      'The "moment_index" field is the number of the moment (from the MOMENTS list ' +
+      'below) where the change happens — the change should be visible in that moment ' +
+      'and every moment after it. Pick the EARLIEST moment where the change has ' +
+      'occurred. If you genuinely cannot tell, use 0 (applies from the start).\n\n' +
+      'MOMENTS IN THIS SESSION (in order):\n' + momentListText + '\n\n' +
       'If there are no permanent changes, return { "changes": [] }.\n\n' +
       'SESSION TRANSCRIPT:\n' + transcript + '\n\n' +
       'DM SESSION NOTES:\n' + (notes || '(none)');
@@ -322,11 +339,15 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
         return ch.name && ch.name.toLowerCase() === String(change.character || '').toLowerCase();
       });
       if (!match || !change.detail) continue;
+      // Stage 4: clamp the moment index to a sane value (default 0).
+      var mi = parseInt(change.moment_index, 10);
+      if (isNaN(mi) || mi < 0) mi = 0;
       // Flag this character's snapshot row for the DM to review.
       await db.prepare(
-        'UPDATE session_characters SET change_flag = ?, change_detail = ?, change_status = ?, edited_at = ? ' +
+        'UPDATE session_characters SET change_flag = ?, change_detail = ?, ' +
+        'change_moment_index = ?, change_status = ?, edited_at = ? ' +
         'WHERE session_id = ? AND character_id = ?'
-      ).run(1, change.detail, 'pending', now, session.id, match.id);
+      ).run(1, change.detail, mi, 'pending', now, session.id, match.id);
     }
   } catch(e) {
     console.error('detectCharacterChanges error (non-fatal):', e.message);
