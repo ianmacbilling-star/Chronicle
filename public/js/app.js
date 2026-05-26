@@ -765,7 +765,16 @@ function renderCharModalPrompt(char) {
     buttons += '<button class="btn btn-sm" onclick="startEditCharPrompt(' + char.id + ')">&#9998; Edit</button>';
   }
 
-  body.innerHTML = inner + '<div class="char-prompt-actions">' + buttons + '</div>';
+  // Reference image — the generated picture, shown full under the button.
+  var refImg = char.canonical_reference_url
+    ? '<div class="char-ref-image" id="char-ref-image-' + char.id + '">' +
+        '<div class="char-ref-label">Reference image</div>' +
+        '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
+        'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
+      '</div>'
+    : '<div class="char-ref-image" id="char-ref-image-' + char.id + '"></div>';
+
+  body.innerHTML = inner + '<div class="char-prompt-actions">' + buttons + '</div>' + refImg;
 }
 
 function rebuildCharPrompt(charId) {
@@ -786,6 +795,7 @@ function rebuildCharPrompt(charId) {
         if (ch) {
           ch.canonical_prompt = data.canonical_prompt;
           ch.canonical_prompt_at = data.canonical_prompt_at;
+          if (data.canonical_reference_url) ch.canonical_reference_url = data.canonical_reference_url;
           renderCharModalPrompt(ch);
         }
       } else {
