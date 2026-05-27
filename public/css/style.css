@@ -218,11 +218,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Notes toolbar — find/replace (left) + Generate Story (right), one row */
 .notes-toolbar{display:flex;align-items:center;justify-content:space-between;
   gap:12px;flex-wrap:wrap;margin-bottom:8px;}
-.fr-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.fr-tools{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
 .fr-input{height:30px;padding:2px 8px;font-size:12px;
-  min-width:110px;max-width:170px;}
-.fr-result{font-size:11px;color:var(--gold);}
-.btn-xs{padding:4px 10px;font-size:12px;line-height:1.2;}
+  min-width:90px;max-width:150px;}
+.fr-result{font-size:11px;color:var(--gold);white-space:nowrap;}
+.btn-xs{padding:4px 10px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .sess-tab{color:rgba(201,168,76,0.45);}
 .sess-tab:hover{color:var(--gold);}
 .sess-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
