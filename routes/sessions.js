@@ -282,17 +282,40 @@ router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, 
       'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
     ).all(campaignId);
 
+    // Narrative prose, if Generate Story has produced it. Stored per-panel
+    // as a JSON array of { panel_index, before, after } on the session.
+    const sessRow = await db.prepare(
+      'SELECT narrative_sections FROM sessions WHERE id = ?'
+    ).get(sessionId);
+    let narrativeByPanel = {};
+    if (sessRow && sessRow.narrative_sections) {
+      try {
+        const secs = JSON.parse(sessRow.narrative_sections);
+        if (Array.isArray(secs)) {
+          secs.forEach(function(s) {
+            if (typeof s.panel_index === 'number') narrativeByPanel[s.panel_index] = s;
+          });
+        }
+      } catch (e) { narrativeByPanel = {}; }
+    }
+
     // Per moment, run the SAME matching the storyboard uses.
-    const panels = moments.map(function(m) {
+    // Narrative sections are keyed by panel_index = the moment's 0-based
+    // position in panel_order sequence (same convention as the PDF layouts).
+    const panels = moments.map(function(m, i) {
       const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
       const charBlock = imageHelpers.buildCharacterBlock(chars, panelText, m.panel_order);
       const assetBlock = imageHelpers.buildAssetBlock(assets, panelText);
       const combined = imageHelpers.combineRefs(charBlock.refs, assetBlock.refs);
+      // The narrative prose tied to this panel (the 'after' bridge text).
+      const nsec = narrativeByPanel[i];
+      const narrative = nsec ? (nsec.after || nsec.before || '') : '';
       return {
         panel_order: m.panel_order,
         title: m.title,
         description: m.description,
         type: m.type,
+        narrative: narrative,
         characters: charBlock.refs.map(function(r) { return r.name; }),
         assets: assetBlock.refs.map(function(r) {
           return { name: r.name, category: r.category };
