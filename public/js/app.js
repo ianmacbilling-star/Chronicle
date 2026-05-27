@@ -1187,10 +1187,12 @@ function openAssetModal(assetId) {
   var nameEl = document.getElementById('asset-name');
   var catEl = document.getElementById('asset-category');
   var fileEl = document.getElementById('asset-image');
-  var curEl = document.getElementById('asset-image-current');
   var errEl = document.getElementById('asset-modal-error');
   if (errEl) errEl.classList.add('hidden');
   if (fileEl) fileEl.value = '';
+
+  // Reset the picked-file holder each time the modal opens.
+  state.assetPickedFile = null;
 
   if (assetId) {
     var a = (state.assets || []).find(function(x) { return x.id === assetId; });
@@ -1200,19 +1202,71 @@ function openAssetModal(assetId) {
     if (saveBtn) saveBtn.textContent = 'Save asset';
     if (nameEl) nameEl.value = a.name || '';
     if (catEl) catEl.value = a.category || 'location';
-    if (curEl) curEl.innerHTML = a.image_url
-      ? '<img src="' + a.image_url + '" style="max-width:120px;border-radius:6px;" alt="current" />' +
-        '<div class="form-hint">Choose a file above only if you want to replace this image.</div>'
-      : '';
+    setAssetPreview(a.image_url || null);
   } else {
     state.editingAssetId = null;
     if (title) title.textContent = 'Add Asset';
     if (saveBtn) saveBtn.textContent = 'Add asset';
     if (nameEl) nameEl.value = '';
     if (catEl) catEl.value = 'location';
-    if (curEl) curEl.innerHTML = '';
+    setAssetPreview(null);
   }
   if (modal) modal.classList.remove('hidden');
+}
+
+// Show an image in the drop zone (existing URL or a freshly picked file),
+// or the empty prompt when there is none. A shown image is click-to-enlarge.
+function setAssetPreview(src) {
+  var empty = document.getElementById('asset-drop-empty');
+  var preview = document.getElementById('asset-drop-preview');
+  if (!empty || !preview) return;
+  if (src) {
+    preview.src = src;
+    preview.style.display = 'block';
+    empty.style.display = 'none';
+    preview.onclick = function(e) {
+      e.stopPropagation();
+      openLightbox(preview.src, 'Asset image');
+    };
+  } else {
+    preview.removeAttribute('src');
+    preview.style.display = 'none';
+    empty.style.display = 'flex';
+    preview.onclick = null;
+  }
+}
+
+// A file was picked or dropped — hold it and show a local preview.
+function acceptAssetFile(file) {
+  if (!file) return;
+  if (!file.type || !file.type.match('image.*')) {
+    var errEl = document.getElementById('asset-modal-error');
+    if (errEl) { errEl.textContent = 'Please choose an image file.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  state.assetPickedFile = file;
+  setAssetPreview(URL.createObjectURL(file));
+}
+
+function handleAssetFileSelect(e) {
+  if (e.target.files && e.target.files[0]) acceptAssetFile(e.target.files[0]);
+}
+function handleAssetDragOver(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = document.getElementById('asset-drop');
+  if (z) z.classList.add('drag-over');
+}
+function handleAssetDragLeave(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = document.getElementById('asset-drop');
+  if (z) z.classList.remove('drag-over');
+}
+function handleAssetDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = document.getElementById('asset-drop');
+  if (z) z.classList.remove('drag-over');
+  var files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files[0]) acceptAssetFile(files[0]);
 }
 
 function closeAssetModal() {
@@ -1237,7 +1291,7 @@ function saveAsset() {
   var fd = new FormData();
   fd.append('name', name);
   fd.append('category', catEl ? catEl.value : 'location');
-  if (fileEl && fileEl.files && fileEl.files[0]) fd.append('image', fileEl.files[0]);
+  if (state.assetPickedFile) fd.append('image', state.assetPickedFile);
 
   var editing = state.editingAssetId;
   var url = '/api/campaigns/' + state.currentCampaign.id + '/assets' + (editing ? '/' + editing : '');

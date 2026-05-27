@@ -492,9 +492,20 @@
     </div>
     <div class="form-group">
       <label class="form-label">Image</label>
-      <input class="form-input" type="file" id="asset-image" accept="image/*" />
-      <div class="form-hint" style="margin-top:4px;">A reference image fed to panel generation when this asset's name appears.</div>
-      <div id="asset-image-current" style="margin-top:8px;"></div>
+      <div class="asset-drop" id="asset-drop"
+        onclick="document.getElementById('asset-image').click()"
+        ondragover="handleAssetDragOver(event)"
+        ondragleave="handleAssetDragLeave(event)"
+        ondrop="handleAssetDrop(event)">
+        <div id="asset-drop-empty" class="asset-drop-empty">
+          <div class="plus">+</div>
+          <span>Click or drag an image here</span>
+        </div>
+        <img id="asset-drop-preview" class="asset-drop-preview" style="display:none;" alt="asset" />
+      </div>
+      <input type="file" id="asset-image" accept="image/*" style="display:none;"
+        onchange="handleAssetFileSelect(event)" />
+      <div class="form-hint" style="margin-top:4px;">A reference image fed to panel generation when this asset's name appears. Click the image to enlarge.</div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeAssetModal()">Cancel</button>

@@ -210,6 +210,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .notes-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 @media (max-width:860px){.notes-grid{grid-template-columns:1fr;}}
 
+/* Asset modal — image drop zone */
+.asset-drop{border:2px dashed rgba(201,168,76,0.3);border-radius:var(--radius);
+  min-height:140px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all 0.15s;background:rgba(20,12,4,0.4);overflow:hidden;}
+.asset-drop:hover{border-color:rgba(201,168,76,0.55);}
+.asset-drop.drag-over{border-color:var(--gold);background:rgba(201,168,76,0.1);}
+.asset-drop-empty{display:flex;flex-direction:column;align-items:center;gap:6px;
+  color:rgba(201,168,76,0.45);font-size:13px;}
+.asset-drop-preview{max-width:100%;max-height:240px;border-radius:6px;display:block;}
+
 /* Session detail header — name left, date pushed right, one row */
 .session-detail-head{display:flex;align-items:center;justify-content:space-between;
   gap:16px;flex-wrap:wrap;margin-bottom:12px;}
