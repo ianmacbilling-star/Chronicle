@@ -560,19 +560,18 @@ function selectSession(id) {
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
-        if (transcriptEl) transcriptEl.value = data.transcript || '';
+        if (transcriptEl) {
+          transcriptEl.value = data.transcript || '';
+          // Auto-save the transcript when the DM clicks away from the box.
+          transcriptEl.onblur = function() {
+            saveSessionField('transcript', transcriptEl.value.trim());
+          };
+        }
         if (notesEl) {
           notesEl.value = data.session_notes || '';
-          // Auto-save notes when DM types
-          notesEl.oninput = function() {
-            clearTimeout(notesEl._saveTimer);
-            notesEl._saveTimer = setTimeout(function() {
-              fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
-                method: 'PUT',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({session_notes: notesEl.value.trim()})
-              }).catch(function(){});
-            }, 1500);
+          // Auto-save the notes when the DM clicks away from the box.
+          notesEl.onblur = function() {
+            saveSessionField('session_notes', notesEl.value.trim());
           };
         }
       }, 50);
@@ -591,6 +590,30 @@ function selectSession(id) {
         {label:data.name}
       ]);
     });
+}
+
+// Quietly save one session field (transcript or session_notes) — used by
+// the auto-save-on-blur handlers. Shows a brief confirmation, fails silent.
+function saveSessionField(field, value) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var body = {};
+  body[field] = value;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data && data.id) state.currentSession = data;
+    var saved = document.getElementById('notes-saved');
+    if (saved) {
+      saved.textContent = (field === 'transcript' ? 'Transcript saved' : 'Notes saved');
+      saved.classList.remove('hidden');
+      setTimeout(function() { saved.classList.add('hidden'); }, 1800);
+    }
+  })
+  .catch(function(){});
 }
 
 function saveTranscript() {
@@ -3307,19 +3330,18 @@ function selectSession(id) {
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
-        if (transcriptEl) transcriptEl.value = data.transcript || '';
+        if (transcriptEl) {
+          transcriptEl.value = data.transcript || '';
+          // Auto-save the transcript when the DM clicks away from the box.
+          transcriptEl.onblur = function() {
+            saveSessionField('transcript', transcriptEl.value.trim());
+          };
+        }
         if (notesEl) {
           notesEl.value = data.session_notes || '';
-          // Auto-save notes when DM types
-          notesEl.oninput = function() {
-            clearTimeout(notesEl._saveTimer);
-            notesEl._saveTimer = setTimeout(function() {
-              fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
-                method: 'PUT',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({session_notes: notesEl.value.trim()})
-              }).catch(function(){});
-            }, 1500);
+          // Auto-save the notes when the DM clicks away from the box.
+          notesEl.onblur = function() {
+            saveSessionField('session_notes', notesEl.value.trim());
           };
         }
       }, 50);
