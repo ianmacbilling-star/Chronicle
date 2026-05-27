@@ -55,7 +55,12 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   const userPrompt =
     '## ART STYLE\n' + style + '\n\n' +
-    '## KNOWN CHARACTERS (maintain exact appearance in all image prompts)\n' + charList +
+    '## KNOWN CHARACTERS (appearance reference only)\n' + charList + '\n' +
+    'IMPORTANT: the list above is an appearance reference, NOT a cast list for ' +
+    'this session. Only include a character in a panel if they ACTUALLY APPEAR ' +
+    'in the transcript below. Do NOT add a character to a scene just because ' +
+    'they are on this list — many of them are not in this session. If a ' +
+    'character is not present in the transcript, they must not appear in any panel.\n' +
     notesSection + '\n\n' +
     '## SESSION TRANSCRIPT\n' + session.transcript + '\n\n' +
     '## YOUR TASK\n' +
