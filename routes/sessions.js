@@ -252,4 +252,60 @@ router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCam
   }
 });
 
+// GET a review/overview of a session's storyboard plan — the moment
+// outline plus which characters and assets WILL be matched into each
+// panel. Reuses the exact matching logic from images.js so this preview
+// can never drift from what the storyboard actually generates.
+router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const sessionId = req.params.id;
+    const campaignId = req.params.campaignId;
+
+    const moments = await db.prepare(
+      'SELECT id, title, description, type, prompt, panel_order FROM moments WHERE session_id = ? ORDER BY panel_order ASC'
+    ).all(sessionId);
+
+    // Characters for this campaign, joined to this session's snapshots —
+    // identical query shape to the storyboard routes.
+    const chars = await db.prepare(
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(sessionId, campaignId);
+    await imageHelpers.attachPriorReferences(db, chars, sessionId, campaignId);
+
+    const assets = await db.prepare(
+      'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
+    ).all(campaignId);
+
+    // Per moment, run the SAME matching the storyboard uses.
+    const panels = moments.map(function(m) {
+      const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
+      const charBlock = imageHelpers.buildCharacterBlock(chars, panelText, m.panel_order);
+      const assetBlock = imageHelpers.buildAssetBlock(assets, panelText);
+      const combined = imageHelpers.combineRefs(charBlock.refs, assetBlock.refs);
+      return {
+        panel_order: m.panel_order,
+        title: m.title,
+        description: m.description,
+        type: m.type,
+        characters: charBlock.refs.map(function(r) { return r.name; }),
+        assets: assetBlock.refs.map(function(r) {
+          return { name: r.name, category: r.category };
+        }),
+        total_refs: combined.length
+      };
+    });
+
+    res.json({ panels: panels });
+  } catch (e) {
+    console.error('session review error:', e.message);
+    res.json({ error: 'Could not build the review.' });
+  }
+});
+
 module.exports = router;

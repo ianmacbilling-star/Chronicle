@@ -581,3 +581,9 @@ module.exports.generateReferenceImage = generateReferenceImage;
 module.exports.editReferenceImage = editReferenceImage;
 module.exports.getSelectedModel = getSelectedModel;
 module.exports.logImageGeneration = logImageGeneration;
+// Matching logic — exported so the Review endpoint shows EXACTLY what the
+// storyboard will do (one source of truth, no drift).
+module.exports.buildCharacterBlock = buildCharacterBlock;
+module.exports.buildAssetBlock = buildAssetBlock;
+module.exports.combineRefs = combineRefs;
+module.exports.attachPriorReferences = attachPriorReferences;
