@@ -58,14 +58,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'Return ONLY valid JSON, no markdown:\n' +
     '{\n' +
     '  "intro": "Opening paragraph that sets the scene before the first panel (2-3 sentences)",\n' +
+    '  "intro_summary": "A terse outline of the opening — what the reader needs to know. As short as possible while capturing the key beats. Maximum 25 words; aim shorter if you can.",\n' +
     '  "sections": [\n' +
     '    {\n' +
     '      "panel_index": 0,\n' +
     '      "before": "",\n' +
-    '      "after": "Prose that bridges FROM this panel to the next (2-3 sentences)"\n' +
+    '      "after": "Prose that bridges FROM this panel to the next (2-3 sentences)",\n' +
+    '      "after_summary": "A terse outline of what happens between this panel and the next — captures real story events the panels skip (travel, debate, side encounters). As short as possible. Maximum 25 words; aim shorter if you can. Do NOT pad to length."\n' +
     '    }\n' +
     '  ],\n' +
-    '  "outro": "Closing paragraph after the final panel (2-3 sentences)"\n' +
+    '  "outro": "Closing paragraph after the final panel (2-3 sentences)",\n' +
+    '  "outro_summary": "A terse outline of the closing — how the session ends. As short as possible. Maximum 25 words; aim shorter if you can."\n' +
     '}';
 
   try {
@@ -91,14 +94,19 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     const clean = raw.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
-    // Save to database
+    // Save to database — sections JSON already carries each panel's
+    // after_summary; intro/outro summaries get their own columns.
     const now = new Date().toISOString();
     await db.prepare(
-      'UPDATE sessions SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
+      'UPDATE sessions SET narrative_intro=?, narrative_intro_summary=?, ' +
+      'narrative_sections=?, narrative_outro=?, narrative_outro_summary=?, ' +
+      'edited_at=?, edited_by=? WHERE id=?'
     ).run(
       parsed.intro || '',
+      parsed.intro_summary || '',
       JSON.stringify(parsed.sections || []),
       parsed.outro || '',
+      parsed.outro_summary || '',
       now, req.session.userId, session.id
     );
 

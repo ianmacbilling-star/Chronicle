@@ -1147,17 +1147,29 @@ function escapeHtmlReview(s) {
 
 // Render the Review tab as the actual READING ORDER of the finished comic:
 // opening narrative → panel → bridge narrative → panel → bridge → ... → closing.
+// All narrative text shown is a TERSE SUMMARY (~10–25 words) of the actual
+// prose — the storyboard and graphic novel show the real text. Old
+// sessions (generated before summaries existed) fall back to truncated
+// prose, so the tab never goes blank.
 function renderReview(data) {
   var list = document.getElementById('review-list');
   if (!list) return;
   var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
   var panels = (data && data.panels) || [];
-  var intro = (data && data.intro) || '';
-  var outro = (data && data.outro) || '';
+
+  // Truncate prose to a fallback summary for older sessions.
+  function fallback(text, words) {
+    if (!text) return '';
+    var w = String(text).trim().split(/\s+/);
+    if (w.length <= words) return w.join(' ');
+    return w.slice(0, words).join(' ') + '\u2026';
+  }
+  var intro = (data && data.intro_summary) || fallback(data && data.intro, 25);
+  var outro = (data && data.outro_summary) || fallback(data && data.outro, 25);
 
   var html = '';
 
-  // Opening narrative.
+  // Opening narrative summary.
   if (intro) {
     html += '<div class="review-nar review-nar-open">' +
       '<div class="review-nar-label">Opening</div>' +
@@ -1165,7 +1177,7 @@ function renderReview(data) {
     '</div>';
   }
 
-  // Interleave: panel, then the bridge narrative after it.
+  // Interleave: panel, then the bridge narrative summary after it.
   panels.forEach(function(p, i) {
     var num = (typeof p.panel_order === 'number' ? p.panel_order : i) + 1;
 
@@ -1193,7 +1205,7 @@ function renderReview(data) {
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assets + '</div>' +
     '</div>';
 
-    // Bridge narrative AFTER this panel (omit on the last — outro handles it).
+    // Bridge summary AFTER this panel (omit on the last — outro handles it).
     if (p.bridge && i < panels.length - 1) {
       html += '<div class="review-nar review-nar-bridge">' +
         '<div class="review-nar-text">' + escapeHtmlReview(p.bridge) + '</div>' +
@@ -1201,7 +1213,7 @@ function renderReview(data) {
     }
   });
 
-  // Closing narrative.
+  // Closing narrative summary.
   if (outro) {
     html += '<div class="review-nar review-nar-close">' +
       '<div class="review-nar-label">Closing</div>' +

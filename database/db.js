@@ -265,6 +265,9 @@ async function initPostgres() {
     'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_detail TEXT',
     'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_moment_index INTEGER',
     "ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_status TEXT DEFAULT 'none'",
+    // Review tab — terse summaries of the opening and closing narrative.
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_intro_summary TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_outro_summary TEXT',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}

@@ -283,16 +283,23 @@ router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, 
     ).all(campaignId);
 
     // Narrative prose, if Generate Story has produced it. Stored per-panel
-    // as a JSON array of { panel_index, before, after } on the session.
+    // as a JSON array of { panel_index, before, after, after_summary } on
+    // the session. The Review tab uses summaries (terse outline); the
+    // storyboard/PDF use the full prose.
     const sessRow = await db.prepare(
-      'SELECT narrative_intro, narrative_sections, narrative_outro FROM sessions WHERE id = ?'
+      'SELECT narrative_intro, narrative_intro_summary, narrative_sections, ' +
+      'narrative_outro, narrative_outro_summary FROM sessions WHERE id = ?'
     ).get(sessionId);
     let narrativeByPanel = {};
     let narrativeIntro = '';
     let narrativeOutro = '';
+    let introSummary = '';
+    let outroSummary = '';
     if (sessRow) {
       narrativeIntro = sessRow.narrative_intro || '';
       narrativeOutro = sessRow.narrative_outro || '';
+      introSummary = sessRow.narrative_intro_summary || '';
+      outroSummary = sessRow.narrative_outro_summary || '';
       if (sessRow.narrative_sections) {
         try {
           const secs = JSON.parse(sessRow.narrative_sections);
@@ -323,9 +330,15 @@ router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, 
       const charBlock = imageHelpers.buildCharacterBlock(chars, panelText, m.panel_order);
       const assetBlock = imageHelpers.buildAssetBlock(assets, panelText);
       const combined = imageHelpers.combineRefs(charBlock.refs, assetBlock.refs);
-      // The bridge text from this panel to the next.
+      // Bridge AFTER this panel: prefer the terse summary; fall back to a
+      // truncated slice of the prose for sessions generated before the
+      // summary field existed.
       const nsec = narrativeByPanel[i];
-      const bridge = nsec ? (nsec.after || '') : '';
+      let bridge = '';
+      if (nsec) {
+        if (nsec.after_summary) bridge = nsec.after_summary;
+        else if (nsec.after) bridge = snippet(nsec.after);
+      }
       return {
         panel_order: m.panel_order,
         title: m.title,
@@ -342,7 +355,9 @@ router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, 
 
     res.json({
       intro: narrativeIntro,
+      intro_summary: introSummary,
       outro: narrativeOutro,
+      outro_summary: outroSummary,
       panels: panels
     });
   } catch (e) {
