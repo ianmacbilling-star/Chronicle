@@ -657,9 +657,6 @@ function renderSessionCharacters(rows) {
       ? '<img src="' + img + '" class="sc-thumb" alt="' + r.name + '" ' +
         'style="cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<div class="sc-thumb sc-thumb-empty">&#128100;</div>';
-    var editBtn = canEdit
-      ? '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit</button>'
-      : '';
 
     // Stage 3: a pending change shows a review badge.
     var pendingChange = (r.change_flag === true || r.change_flag === 1 || r.change_flag === '1')
@@ -675,6 +672,18 @@ function renderSessionCharacters(rows) {
       changeBadge = '<div class="sc-change-badge sc-change-badge-accepted" ' +
         'onclick="openChangeReview(' + r.character_id + ')">' +
         '&#10003; Change applied &mdash; edit</div>';
+    }
+
+    var editBtn = '';
+    if (canEdit) {
+      editBtn = '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit</button>';
+      // "Amend appearance" — manually start the review flow even when the
+      // AI flagged nothing. Hidden if a change is already pending/accepted
+      // (the badge already opens the review screen for those).
+      if (!pendingChange && !acceptedChange) {
+        editBtn += '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">' +
+          '&#10010; Amend appearance</button>';
+      }
     }
 
     return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
@@ -765,22 +774,37 @@ function openChangeReview(charId) {
     : '';
 
   var isAccepted = (r.change_status === 'accepted');
-  var titleText = isAccepted
-    ? '&#10003; Change applied — adjust or un-approve'
-    : '&#9888; Permanent change detected';
+  // A "manual amend" = the DM opened this with no AI-detected change.
+  var isManual = !isAccepted && !r.change_detail;
+  var titleText;
+  if (isAccepted) {
+    titleText = '&#10003; Change applied — adjust or un-approve';
+  } else if (isManual) {
+    titleText = '&#10010; Amend ' + r.name + '\u2019s appearance';
+  } else {
+    titleText = '&#9888; Permanent change detected';
+  }
   // For an accepted change, the textarea holds the clean change_note
   // (the approved detail), not change_detail.
   var detailText = isAccepted
     ? (r.change_note || r.change_detail || '')
     : (r.change_detail || '');
+  // Only show the "AI detected" line when the AI actually detected something.
+  var detectedLine = (r.change_detail && !isManual)
+    ? '<div class="sc-review-detected">The AI detected: <em>' + r.change_detail + '</em></div>'
+    : (isManual
+        ? '<div class="sc-review-detected">Describe a permanent change to this ' +
+          'character — it will be applied from the chosen moment onward.</div>'
+        : '');
 
   card.innerHTML =
     '<div class="sc-review">' +
       '<div class="sc-review-title">' + titleText + '</div>' +
       '<div class="sc-review-name">' + r.name + '</div>' +
-      '<div class="sc-review-detected">The AI detected: <em>' + (r.change_detail || '') + '</em></div>' +
+      detectedLine +
       '<label class="sc-review-label">Amended appearance (edit if needed before approving):</label>' +
-      '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '">' +
+      '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
+        'placeholder="e.g. left horn broken off to a jagged stump">' +
         detailText + '</textarea>' +
       momentSelector +
       '<div class="sc-review-imgwrap">' + imgHtml + '</div>' +
