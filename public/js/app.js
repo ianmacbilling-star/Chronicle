@@ -676,7 +676,7 @@ function renderSessionCharacters(rows) {
 
     var editBtn = '';
     if (canEdit) {
-      editBtn = '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit</button>';
+      editBtn = '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit Description</button>';
       // "Amend appearance" — manually start the review flow even when the
       // AI flagged nothing. Hidden if a change is already pending/accepted
       // (the badge already opens the review screen for those).
