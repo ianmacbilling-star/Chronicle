@@ -940,6 +940,46 @@ function rejectChange(charId) {
     });
 }
 
+// Find & replace across BOTH the transcript and the session notes at once.
+// Use case: a character's name is wrong throughout — fix it in one shot.
+function findReplaceSession() {
+  var findEl = document.getElementById('fr-find');
+  var replEl = document.getElementById('fr-replace');
+  var resultEl = document.getElementById('fr-result');
+  var find = findEl ? findEl.value : '';
+  var repl = replEl ? replEl.value : '';
+  if (resultEl) resultEl.textContent = '';
+
+  if (!find) {
+    if (resultEl) resultEl.textContent = 'Enter text to find.';
+    return;
+  }
+
+  var transcript = document.getElementById('transcript-input');
+  var notes = document.getElementById('session-notes-input');
+
+  // Escape regex special chars so the find text is treated literally.
+  var safe = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var rx = new RegExp(safe, 'g');
+
+  var count = 0;
+  [transcript, notes].forEach(function(box) {
+    if (!box || !box.value) return;
+    var matches = box.value.match(rx);
+    if (matches) {
+      count += matches.length;
+      box.value = box.value.replace(rx, repl);
+    }
+  });
+
+  if (resultEl) {
+    resultEl.textContent = count === 0
+      ? 'No matches found.'
+      : 'Replaced ' + count + ' occurrence' + (count === 1 ? '' : 's') + '. Click Generate Story to save.';
+  }
+}
+
+
 function switchSessionTab(tab) {
   var tabs = ['notes', 'characters', 'storyboard', 'export'];
   tabs.forEach(function(t) {
