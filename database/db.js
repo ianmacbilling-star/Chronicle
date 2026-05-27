@@ -200,6 +200,20 @@ async function initPostgres() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_assets (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'location',
+      image_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_by INTEGER NOT NULL,
+      edited_at TIMESTAMP,
+      edited_by INTEGER
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
       campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
@@ -368,6 +382,15 @@ function initSQLite() {
       campaign_id INTEGER NOT NULL, name TEXT NOT NULL, session_date DATE NOT NULL,
       transcript TEXT, session_notes TEXT, art_style TEXT,
       narrative_intro TEXT, narrative_sections TEXT, narrative_outro TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
+      edited_at DATETIME, edited_by INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS campaign_assets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'location',
+      image_url TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
       edited_at DATETIME, edited_by INTEGER
     );
