@@ -79,7 +79,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   letter-spacing:3px;
   text-shadow:0 0 20px rgba(201,168,76,0.3);
 }
-.app-header-right{margin-left:auto;display:flex;align-items:center;gap:4px;}
+.app-header-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
 
 /* USER MENU */
 .user-menu-wrap{position:relative;}

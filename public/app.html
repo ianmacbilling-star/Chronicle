@@ -16,6 +16,7 @@
   <div class="app-logo"><img src="/images/Chronicle_Logo.png" alt="Chronicle" /></div>
   <span class="app-name">Chronicle</span>
   <div class="app-header-right">
+    <button class="btn btn-sm" id="header-campaigns-btn" onclick="showView('campaigns')">&#127956; My Campaigns</button>
     <div class="user-menu-wrap">
       <div class="user-menu-btn" onclick="toggleUserMenu()">
         <div class="user-avatar" id="user-avatar">DM</div>
@@ -41,36 +42,6 @@
 <!-- MAIN LAYOUT -->
 <div class="app-layout">
 
-  <!-- SIDEBAR -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-item active" id="snav-campaigns" onclick="showView('campaigns')">
-        &#127956; My Campaigns
-      </div>
-      <div class="sidebar-item" id="snav-account" onclick="showView('account')">
-        &#9733; My Account
-      </div>
-      <div class="sidebar-item" id="snav-settings" onclick="showView('settings')">
-        &#9881; Settings
-      </div>
-    </div>
-
-    <!-- Campaign sub-nav (shown when inside a campaign) -->
-    <div id="campaign-subnav" style="display:none;">
-      <div class="sidebar-divider"></div>
-      <div class="sidebar-section">
-        <div class="sidebar-label" id="sidebar-campaign-name">Campaign</div>
-        <div class="sidebar-item" id="snav-sessions" onclick="showCampaignSection('sessions')">
-          &#128203; Sessions
-        </div>
-        <div class="sidebar-item" id="snav-characters" onclick="showCampaignSection('characters')">
-          &#129464; Characters
-        </div>
-
-      </div>
-    </div>
-  </div>
-
   <!-- MAIN CONTENT -->
   <div class="main-content">
 
@@ -94,6 +65,7 @@
           <div class="page-subtitle">Each session holds a transcript and generates a storyboard</div>
         </div>
         <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
           <button class="btn btn-sm" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
           <button class="btn btn-primary" onclick="openSessionModal()">+ New session</button>
         </div>
@@ -107,6 +79,10 @@
         <div>
           <div class="page-title">Party Members</div>
           <div class="page-subtitle">Characters appear in your storyboard panels</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
         </div>
       </div>
       <div class="char-grid" id="char-grid">
@@ -122,6 +98,10 @@
         <div>
           <div class="page-title">Graphic Novel</div>
           <div class="page-subtitle">Your complete campaign story</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
         </div>
       </div>
 
