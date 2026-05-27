@@ -242,7 +242,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','novel','session-detail','account','settings'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -297,7 +297,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', novel:'Graphic Novel'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
@@ -307,6 +307,7 @@ function showCampaignSection(section) {
   if (section === 'sessions') loadSessions();
   if (section === 'characters') loadCharacters();
   if (section === 'novel') loadNovelSummary();
+  if (section === 'assets') loadAssets();
 }
 
 // ============================================================
@@ -1131,6 +1132,147 @@ function switchSessionTab(tab) {
 // ============================================================
 // CHARACTERS
 // ============================================================
+// ============================================================
+// CAMPAIGN ASSET LIBRARY
+// ============================================================
+function loadAssets() {
+  var grid = document.getElementById('asset-grid');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      state.assets = Array.isArray(data) ? data : [];
+      renderAssets();
+    })
+    .catch(function() {
+      state.assets = [];
+      renderAssets();
+    });
+}
+
+var ASSET_CAT_LABEL = { location: 'Location', npc: 'NPC', item: 'Item' };
+
+function renderAssets() {
+  var grid = document.getElementById('asset-grid');
+  if (!grid) return;
+  var cards = (state.assets || []).map(function(a) {
+    var img = a.image_url
+      ? '<img src="' + a.image_url + '" class="sc-thumb" alt="' + a.name + '" ' +
+        'style="cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" />'
+      : '<div class="sc-thumb sc-thumb-empty">&#127912;</div>';
+    var cat = ASSET_CAT_LABEL[a.category] || 'Location';
+    return '<div class="sc-card">' +
+      '<div class="sc-card-head">' +
+        img +
+        '<div class="sc-card-id">' +
+          '<div class="sc-card-name">' + a.name + '</div>' +
+          '<div class="sc-card-cls">' + cat + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="char-prompt-actions">' +
+        '<button class="btn btn-sm" onclick="openAssetModal(' + a.id + ')">&#9998; Edit</button>' +
+        '<button class="btn btn-sm" onclick="deleteAsset(' + a.id + ')">&#10005; Delete</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  grid.innerHTML =
+    '<div class="add-char-card" onclick="openAssetModal()">' +
+      '<div class="plus">+</div><span>Add asset</span>' +
+    '</div>' + cards;
+}
+
+function openAssetModal(assetId) {
+  var modal = document.getElementById('asset-modal');
+  var title = document.getElementById('asset-modal-title');
+  var saveBtn = document.getElementById('asset-save-btn');
+  var nameEl = document.getElementById('asset-name');
+  var catEl = document.getElementById('asset-category');
+  var fileEl = document.getElementById('asset-image');
+  var curEl = document.getElementById('asset-image-current');
+  var errEl = document.getElementById('asset-modal-error');
+  if (errEl) errEl.classList.add('hidden');
+  if (fileEl) fileEl.value = '';
+
+  if (assetId) {
+    var a = (state.assets || []).find(function(x) { return x.id === assetId; });
+    if (!a) return;
+    state.editingAssetId = assetId;
+    if (title) title.textContent = 'Edit Asset';
+    if (saveBtn) saveBtn.textContent = 'Save asset';
+    if (nameEl) nameEl.value = a.name || '';
+    if (catEl) catEl.value = a.category || 'location';
+    if (curEl) curEl.innerHTML = a.image_url
+      ? '<img src="' + a.image_url + '" style="max-width:120px;border-radius:6px;" alt="current" />' +
+        '<div class="form-hint">Choose a file above only if you want to replace this image.</div>'
+      : '';
+  } else {
+    state.editingAssetId = null;
+    if (title) title.textContent = 'Add Asset';
+    if (saveBtn) saveBtn.textContent = 'Add asset';
+    if (nameEl) nameEl.value = '';
+    if (catEl) catEl.value = 'location';
+    if (curEl) curEl.innerHTML = '';
+  }
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeAssetModal() {
+  var modal = document.getElementById('asset-modal');
+  if (modal) modal.classList.add('hidden');
+  state.editingAssetId = null;
+}
+
+function saveAsset() {
+  var nameEl = document.getElementById('asset-name');
+  var catEl = document.getElementById('asset-category');
+  var fileEl = document.getElementById('asset-image');
+  var errEl = document.getElementById('asset-modal-error');
+  var saveBtn = document.getElementById('asset-save-btn');
+  var name = nameEl ? nameEl.value.trim() : '';
+
+  if (!name) {
+    if (errEl) { errEl.textContent = 'Asset name is required.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+
+  var fd = new FormData();
+  fd.append('name', name);
+  fd.append('category', catEl ? catEl.value : 'location');
+  if (fileEl && fileEl.files && fileEl.files[0]) fd.append('image', fileEl.files[0]);
+
+  var editing = state.editingAssetId;
+  var url = '/api/campaigns/' + state.currentCampaign.id + '/assets' + (editing ? '/' + editing : '');
+  var method = editing ? 'PUT' : 'POST';
+  if (saveBtn) saveBtn.disabled = true;
+
+  fetch(url, { method: method, body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (saveBtn) saveBtn.disabled = false;
+      if (data && data.error) {
+        if (errEl) { errEl.textContent = data.error; errEl.classList.remove('hidden'); }
+        return;
+      }
+      closeAssetModal();
+      loadAssets();
+    })
+    .catch(function() {
+      if (saveBtn) saveBtn.disabled = false;
+      if (errEl) { errEl.textContent = 'Could not save the asset.'; errEl.classList.remove('hidden'); }
+    });
+}
+
+function deleteAsset(assetId) {
+  if (!confirm('Delete this asset? This cannot be undone.')) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + assetId, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) { alert(data.error); return; }
+      loadAssets();
+    })
+    .catch(function() { alert('Could not delete the asset.'); });
+}
+
+
 function loadCharacters() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters')
     .then(function(r) { return r.json(); })
@@ -3012,7 +3154,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','novel','session-detail','account','settings'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -3067,7 +3209,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', novel:'Graphic Novel'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
@@ -3077,6 +3219,7 @@ function showCampaignSection(section) {
   if (section === 'sessions') loadSessions();
   if (section === 'characters') loadCharacters();
   if (section === 'novel') loadNovelSummary();
+  if (section === 'assets') loadAssets();
 }
 
 // ============================================================

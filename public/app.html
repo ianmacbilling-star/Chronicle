@@ -68,6 +68,7 @@
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
           <button class="btn btn-primary" onclick="openSessionModal()">+ New session</button>
           <button class="btn btn-sm" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
         </div>
       </div>
       <div class="sessions-list" id="sessions-list"></div>
@@ -82,12 +83,33 @@
         </div>
         <div class="flex gap-1">
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
           <button class="btn btn-sm" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
         </div>
       </div>
       <div class="char-grid" id="char-grid">
         <div class="add-char-card" onclick="openCharModal()">
           <div class="plus">+</div><span>Add character</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== CAMPAIGN SECTION: ASSETS ==================== -->
+    <div id="view-assets" class="view" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Asset Library</div>
+          <div class="page-subtitle">Maps, locations, NPCs and items — referenced in your storyboard panels by name</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
+        </div>
+      </div>
+      <div class="char-grid" id="asset-grid">
+        <div class="add-char-card" onclick="openAssetModal()">
+          <div class="plus">+</div><span>Add asset</span>
         </div>
       </div>
     </div>
@@ -444,6 +466,39 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeSessionModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveSession()">Create session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ASSET MODAL -->
+<div class="modal-overlay hidden" id="asset-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="asset-modal-title">Add Asset</div>
+      <button class="modal-close" onclick="closeAssetModal()">&times;</button>
+    </div>
+    <div id="asset-modal-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">Asset name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— used to match this asset into panels</span></label>
+      <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-input" id="asset-category">
+        <option value="location">Location / Map</option>
+        <option value="npc">NPC</option>
+        <option value="item">Item</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Image</label>
+      <input class="form-input" type="file" id="asset-image" accept="image/*" />
+      <div class="form-hint" style="margin-top:4px;">A reference image fed to panel generation when this asset's name appears.</div>
+      <div id="asset-image-current" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAssetModal()">Cancel</button>
+      <button class="btn btn-primary" id="asset-save-btn" onclick="saveAsset()">Add asset</button>
     </div>
   </div>
 </div>
