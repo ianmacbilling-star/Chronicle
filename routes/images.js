@@ -37,12 +37,14 @@ async function getSelectedModel(db) {
 async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   fal.config({ credentials: falKey });
 
-  // charBlock is { text, refs } from buildCharacterBlock. Tolerate a
-  // plain string or null for safety.
+  // charBlock is { text, refs } (refs may include assets) from the
+  // route. Tolerate a plain string or null for safety.
   var charText = '';
+  var assetText = '';
   var charRefs = [];
   if (charBlock && typeof charBlock === 'object') {
     charText = charBlock.text || '';
+    assetText = charBlock.assetText || '';
     charRefs = charBlock.refs || [];
   } else if (typeof charBlock === 'string') {
     charText = charBlock;
@@ -65,13 +67,24 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     // recommended technique for multi-subject scenes).
     model = 'fal-ai/nano-banana-2/edit';
     var refMap = charRefs.map(function(r, i) {
-      return 'Image ' + (i + 1) + ' is the reference for ' + r.name + '.';
+      var n = 'Image ' + (i + 1);
+      if (r.isAsset) {
+        if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
+        if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
+        if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        return n + ' is a reference for "' + r.name + '".';
+      }
+      return n + ' is the reference for ' + r.name + '.';
     }).join(' ');
+    var assetSection = assetText
+      ? '\n\nSCENE ASSETS (match these to their reference images): ' + assetText
+      : '';
     var editPrompt = stylePrefix + '\n\n' +
-      'Draw this comic panel: ' + prompt + charSection + '\n\n' +
-      'REFERENCE IMAGES: ' + refMap + ' Render each of these characters to ' +
-      'match their reference image — same face, build, hair, distinctive ' +
-      'features and outfit. Do not blend characters together.';
+      'Draw this comic panel: ' + prompt + charSection + assetSection + '\n\n' +
+      'REFERENCE IMAGES: ' + refMap + ' Render each character to match ' +
+      'their reference image — same face, build, hair, distinctive ' +
+      'features and outfit. Match any location or item to its reference ' +
+      'image too. Do not blend characters together.';
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -222,6 +235,49 @@ function buildCharacterBlock(chars, panelText, panelIndex) {
   });
 
   return { text: lines.join('\n'), refs: refs };
+}
+
+// Maximum reference images a single panel may send to the /edit endpoint.
+var MAX_PANEL_REFS = 14;
+
+// Name-match campaign assets into a panel. Same approach as characters:
+// an asset is "present" if its name appears in the panel's text.
+// Returns { text, refs } — each ref carries its category so the prompt
+// can describe it correctly (Piece 5).
+function buildAssetBlock(assets, panelText) {
+  if (!assets || !assets.length) return { text: '', refs: [] };
+  var text = (panelText || '').toLowerCase();
+
+  var present = assets.filter(function(a) {
+    if (!a.name || !a.image_url) return false;
+    return text.indexOf(a.name.toLowerCase()) !== -1;
+  });
+  if (!present.length) return { text: '', refs: [] };
+
+  var lines = [];
+  var refs = [];
+  present.forEach(function(a) {
+    var cat = a.category || 'location';
+    if (/^https?:\/\//.test(a.image_url)) {
+      refs.push({ name: a.name, url: a.image_url, category: cat, isAsset: true });
+      lines.push(a.name + ' (' + cat + ')');
+    }
+  });
+  return { text: lines.join('\n'), refs: refs };
+}
+
+// Merge character refs and asset refs under the 14-image hard cap.
+// Characters take priority — they fill slots first; assets fill the
+// remainder. Never exceeds MAX_PANEL_REFS total.
+function combineRefs(charRefs, assetRefs) {
+  charRefs = charRefs || [];
+  assetRefs = assetRefs || [];
+  var combined = charRefs.slice(0, MAX_PANEL_REFS);
+  var room = MAX_PANEL_REFS - combined.length;
+  if (room > 0 && assetRefs.length) {
+    combined = combined.concat(assetRefs.slice(0, room));
+  }
+  return combined;
 }
 
 function getStylePrefix(style) {
@@ -404,11 +460,23 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const panelText = (prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
     const charList = buildCharacterBlock(chars, panelText, moment.panel_order);
 
+    // Asset library: name-match campaign assets (maps, NPCs, items) into
+    // this panel. Characters fill reference slots first, then assets, cap 14.
+    const assets = await db.prepare(
+      'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
+    ).all(campId);
+    const assetList = buildAssetBlock(assets, panelText);
+    const panelBlock = {
+      text: charList.text,
+      assetText: assetList.text,
+      refs: combineRefs(charList.refs, assetList.refs)
+    };
+
     // Single regenerate = user wants a different take, so use a fresh
     // random seed each time rather than the fixed campaign seed.
     const randomSeed = Math.floor(Math.random() * 2147483647);
     const modelKey = await getSelectedModel(db);
-    const imageUrl = await generateImage(prompt, style, fal_key, charList, randomSeed, modelKey);
+    const imageUrl = await generateImage(prompt, style, fal_key, panelBlock, randomSeed, modelKey);
     const now = new Date().toISOString();
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
@@ -450,6 +518,11 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // Stage 4: attach each changed character's prior-session reference image.
   await attachPriorReferences(db, chars, session_id, campaign_id);
 
+  // Asset library: load campaign assets once; matched per-panel in the loop.
+  const assets = await db.prepare(
+    'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
+  ).all(campaign_id);
+
   // Stable campaign base seed — every session of a campaign renders from the
   // same visual DNA, so characters stay consistent across sessions. Each panel
   // offsets from it by panel_order so panels within a session still vary.
@@ -470,7 +543,15 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         // Only the characters named in THIS panel — prevents feature bleed
         const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
         const charList = buildCharacterBlock(chars, panelText, m.panel_order);
-        const imageUrl = await generateImage(m.prompt, style, fal_key, charList, panelSeed, modelKey);
+        // Name-match campaign assets into the panel; characters fill ref
+        // slots first, assets fill the remainder, hard cap 14.
+        const assetList = buildAssetBlock(assets, panelText);
+        const panelBlock = {
+          text: charList.text,
+          assetText: assetList.text,
+          refs: combineRefs(charList.refs, assetList.refs)
+        };
+        const imageUrl = await generateImage(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey);
         const now = new Date().toISOString();
         await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
           .run(imageUrl, now, req.session.userId, m.id);
