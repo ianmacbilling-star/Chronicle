@@ -194,6 +194,7 @@
       <div class="sess-tabs">
         <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">&#128203; Session Notes</div>
         <div class="sess-tab" id="stab-characters" onclick="switchSessionTab('characters')">&#128100; Characters</div>
+        <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">&#128269; Review</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">&#127912; Storyboard</div>
         <div class="sess-tab" id="stab-export" onclick="switchSessionTab('export')">&#128214; Publish</div>
       </div>
@@ -249,6 +250,20 @@
         <div id="sc-content" style="display:none;">
           <div class="form-hint" style="margin-bottom:14px;">These are the character descriptions used to generate this session's images. Each carries forward from the prior session, or the character's base prompt.</div>
           <div id="sc-list"></div>
+        </div>
+      </div>
+
+      <!-- REVIEW TAB -->
+      <div id="session-tab-review" style="display:none;">
+        <div id="review-empty" class="empty-state">
+          <div class="empty-state-icon">&#128269;</div>
+          <h3>Nothing to review yet</h3>
+          <p>Generate the story first. The review shows an outline of every panel and which characters and assets will appear in each.</p>
+          <button class="btn" onclick="switchSessionTab('notes')">Go to Session Notes</button>
+        </div>
+        <div id="review-content" style="display:none;">
+          <div class="form-hint" style="margin-bottom:14px;">A quick overview of your storyboard before you generate images — the panels in order, and which characters and assets each one will use.</div>
+          <div id="review-list"></div>
         </div>
       </div>
 

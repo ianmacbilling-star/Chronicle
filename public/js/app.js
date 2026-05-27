@@ -1111,8 +1111,82 @@ function findReplaceSession() {
 }
 
 
+// ============================================================
+// REVIEW TAB — storyboard outline + per-panel matched characters/assets
+// ============================================================
+function loadReview() {
+  var empty = document.getElementById('review-empty');
+  var content = document.getElementById('review-content');
+  var list = document.getElementById('review-list');
+  if (list) list.innerHTML = '<div class="form-hint">Loading review...</div>';
+
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/review')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var panels = (data && data.panels) || [];
+      if (!panels.length) {
+        if (empty) empty.style.display = 'block';
+        if (content) content.style.display = 'none';
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+      if (content) content.style.display = 'block';
+      renderReview(panels);
+    })
+    .catch(function() {
+      if (list) list.innerHTML = '<div class="alert alert-error">Could not load the review.</div>';
+    });
+}
+
+function escapeHtmlReview(s) {
+  return String(s || '').replace(/[&<>]/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+  });
+}
+
+function renderReview(panels) {
+  var list = document.getElementById('review-list');
+  if (!list) return;
+  var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
+
+  list.innerHTML = panels.map(function(p, i) {
+    var num = (typeof p.panel_order === 'number' ? p.panel_order : i) + 1;
+
+    var chars = (p.characters || []).length
+      ? (p.characters || []).map(function(n) {
+          return '<span class="review-chip">' + escapeHtmlReview(n) + '</span>';
+        }).join('')
+      : '<span class="review-none">none matched</span>';
+
+    var assets = (p.assets || []).length
+      ? (p.assets || []).map(function(a) {
+          return '<span class="review-chip review-chip-asset">' +
+            escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) +
+            '</span>';
+        }).join('')
+      : '<span class="review-none">none matched</span>';
+
+    var narrative = p.narrative
+      ? '<div class="review-narrative">\u201c' + escapeHtmlReview(p.narrative) + '\u201d</div>'
+      : '';
+
+    return '<div class="review-panel">' +
+      '<div class="review-panel-head">' +
+        '<span class="review-panel-num">' + num + '</span>' +
+        '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
+      '</div>' +
+      (p.description ? '<div class="review-desc">' + escapeHtmlReview(p.description) + '</div>' : '') +
+      narrative +
+      '<div class="review-row"><span class="review-label">Characters:</span> ' + chars + '</div>' +
+      '<div class="review-row"><span class="review-label">Assets:</span> ' + assets + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+
 function switchSessionTab(tab) {
-  var tabs = ['notes', 'characters', 'storyboard', 'export'];
+  var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -1126,6 +1200,9 @@ function switchSessionTab(tab) {
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
     loadSessionCharacters();
+  }
+  if (tab === 'review') {
+    loadReview();
   }
 }
 
@@ -3590,7 +3667,7 @@ function saveNotes() {
 }
 
 function switchSessionTab(tab) {
-  var tabs = ['notes', 'characters', 'storyboard', 'export'];
+  var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -3604,6 +3681,9 @@ function switchSessionTab(tab) {
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
     loadSessionCharacters();
+  }
+  if (tab === 'review') {
+    loadReview();
   }
 }
 
