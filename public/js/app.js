@@ -1185,6 +1185,17 @@ function renderReview(panels) {
 }
 
 
+// "Generate Storyboard Images" from the Review tab. The generation flow
+// (progress bar, panel shimmer) lives on the Storyboard tab and targets
+// its DOM — so switch there first, then run the same generate-all.
+function generateFromReview() {
+  switchSessionTab('storyboard');
+  // Let the storyboard pane render before the generation code touches it.
+  setTimeout(function() {
+    if (typeof generateAllImages === 'function') generateAllImages();
+  }, 60);
+}
+
 function switchSessionTab(tab) {
   var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
   tabs.forEach(function(t) {
@@ -1834,7 +1845,9 @@ function extractMoments() {
         if (state.pendingChanges && state.pendingChanges > 0) {
           switchSessionTab('characters');
         } else {
-          switchSessionTab('storyboard');
+          // Land on Review so the DM can check the storyboard plan
+          // before spending image-generation calls.
+          switchSessionTab('review');
         }
       }, 800);
     })
@@ -1854,7 +1867,9 @@ function extractMoments() {
         if (state.pendingChanges && state.pendingChanges > 0) {
           switchSessionTab('characters');
         } else {
-          switchSessionTab('storyboard');
+          // Land on Review so the DM can check the storyboard plan
+          // before spending image-generation calls.
+          switchSessionTab('review');
         }
       }, 800);
     });
@@ -3936,7 +3951,9 @@ function extractMoments() {
         if (state.pendingChanges && state.pendingChanges > 0) {
           switchSessionTab('characters');
         } else {
-          switchSessionTab('storyboard');
+          // Land on Review so the DM can check the storyboard plan
+          // before spending image-generation calls.
+          switchSessionTab('review');
         }
       }, 800);
     })
@@ -3956,7 +3973,9 @@ function extractMoments() {
         if (state.pendingChanges && state.pendingChanges > 0) {
           switchSessionTab('characters');
         } else {
-          switchSessionTab('storyboard');
+          // Land on Review so the DM can check the storyboard plan
+          // before spending image-generation calls.
+          switchSessionTab('review');
         }
       }, 800);
     });
