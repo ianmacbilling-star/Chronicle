@@ -1132,7 +1132,7 @@ function loadReview() {
       }
       if (empty) empty.style.display = 'none';
       if (content) content.style.display = 'block';
-      renderReview(panels);
+      renderReview(data);
     })
     .catch(function() {
       if (list) list.innerHTML = '<div class="alert alert-error">Could not load the review.</div>';
@@ -1145,12 +1145,28 @@ function escapeHtmlReview(s) {
   });
 }
 
-function renderReview(panels) {
+// Render the Review tab as the actual READING ORDER of the finished comic:
+// opening narrative → panel → bridge narrative → panel → bridge → ... → closing.
+function renderReview(data) {
   var list = document.getElementById('review-list');
   if (!list) return;
   var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
+  var panels = (data && data.panels) || [];
+  var intro = (data && data.intro) || '';
+  var outro = (data && data.outro) || '';
 
-  list.innerHTML = panels.map(function(p, i) {
+  var html = '';
+
+  // Opening narrative.
+  if (intro) {
+    html += '<div class="review-nar review-nar-open">' +
+      '<div class="review-nar-label">Opening</div>' +
+      '<div class="review-nar-text">' + escapeHtmlReview(intro) + '</div>' +
+    '</div>';
+  }
+
+  // Interleave: panel, then the bridge narrative after it.
+  panels.forEach(function(p, i) {
     var num = (typeof p.panel_order === 'number' ? p.panel_order : i) + 1;
 
     var chars = (p.characters || []).length
@@ -1167,21 +1183,33 @@ function renderReview(panels) {
         }).join('')
       : '<span class="review-none">none matched</span>';
 
-    var narrative = p.narrative
-      ? '<div class="review-narrative">\u201c' + escapeHtmlReview(p.narrative) + '\u201d</div>'
-      : '';
-
-    return '<div class="review-panel">' +
+    html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + num + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
       '</div>' +
-      (p.description ? '<div class="review-desc">' + escapeHtmlReview(p.description) + '</div>' : '') +
-      narrative +
+      (p.snippet ? '<div class="review-snippet">' + escapeHtmlReview(p.snippet) + '</div>' : '') +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + chars + '</div>' +
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assets + '</div>' +
     '</div>';
-  }).join('');
+
+    // Bridge narrative AFTER this panel (omit on the last — outro handles it).
+    if (p.bridge && i < panels.length - 1) {
+      html += '<div class="review-nar review-nar-bridge">' +
+        '<div class="review-nar-text">' + escapeHtmlReview(p.bridge) + '</div>' +
+      '</div>';
+    }
+  });
+
+  // Closing narrative.
+  if (outro) {
+    html += '<div class="review-nar review-nar-close">' +
+      '<div class="review-nar-label">Closing</div>' +
+      '<div class="review-nar-text">' + escapeHtmlReview(outro) + '</div>' +
+    '</div>';
+  }
+
+  list.innerHTML = html;
 }
 
 

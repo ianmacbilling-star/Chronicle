@@ -285,18 +285,34 @@ router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, 
     // Narrative prose, if Generate Story has produced it. Stored per-panel
     // as a JSON array of { panel_index, before, after } on the session.
     const sessRow = await db.prepare(
-      'SELECT narrative_sections FROM sessions WHERE id = ?'
+      'SELECT narrative_intro, narrative_sections, narrative_outro FROM sessions WHERE id = ?'
     ).get(sessionId);
     let narrativeByPanel = {};
-    if (sessRow && sessRow.narrative_sections) {
-      try {
-        const secs = JSON.parse(sessRow.narrative_sections);
-        if (Array.isArray(secs)) {
-          secs.forEach(function(s) {
-            if (typeof s.panel_index === 'number') narrativeByPanel[s.panel_index] = s;
-          });
-        }
-      } catch (e) { narrativeByPanel = {}; }
+    let narrativeIntro = '';
+    let narrativeOutro = '';
+    if (sessRow) {
+      narrativeIntro = sessRow.narrative_intro || '';
+      narrativeOutro = sessRow.narrative_outro || '';
+      if (sessRow.narrative_sections) {
+        try {
+          const secs = JSON.parse(sessRow.narrative_sections);
+          if (Array.isArray(secs)) {
+            secs.forEach(function(s) {
+              if (typeof s.panel_index === 'number') narrativeByPanel[s.panel_index] = s;
+            });
+          }
+        } catch (e) { narrativeByPanel = {}; }
+      }
+    }
+
+    // Trim a panel description to a short snippet (~10 words) for the
+    // Review tab. The narrative is the through-line; panels are quick
+    // reference points along it.
+    function snippet(text) {
+      if (!text) return '';
+      var words = String(text).trim().split(/\s+/);
+      if (words.length <= 10) return words.join(' ');
+      return words.slice(0, 10).join(' ') + '\u2026';
     }
 
     // Per moment, run the SAME matching the storyboard uses.
@@ -307,15 +323,15 @@ router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, 
       const charBlock = imageHelpers.buildCharacterBlock(chars, panelText, m.panel_order);
       const assetBlock = imageHelpers.buildAssetBlock(assets, panelText);
       const combined = imageHelpers.combineRefs(charBlock.refs, assetBlock.refs);
-      // The narrative prose tied to this panel (the 'after' bridge text).
+      // The bridge text from this panel to the next.
       const nsec = narrativeByPanel[i];
-      const narrative = nsec ? (nsec.after || nsec.before || '') : '';
+      const bridge = nsec ? (nsec.after || '') : '';
       return {
         panel_order: m.panel_order,
         title: m.title,
-        description: m.description,
+        snippet: snippet(m.description),
         type: m.type,
-        narrative: narrative,
+        bridge: bridge,
         characters: charBlock.refs.map(function(r) { return r.name; }),
         assets: assetBlock.refs.map(function(r) {
           return { name: r.name, category: r.category };
@@ -324,7 +340,11 @@ router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, 
       };
     });
 
-    res.json({ panels: panels });
+    res.json({
+      intro: narrativeIntro,
+      outro: narrativeOutro,
+      panels: panels
+    });
   } catch (e) {
     console.error('session review error:', e.message);
     res.json({ error: 'Could not build the review.' });
