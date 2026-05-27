@@ -66,6 +66,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/email', require('./routes/email').router);
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/campaigns/:campaignId/characters', require('./routes/characters'));
+app.use('/api/campaigns/:campaignId/assets', require('./routes/assets'));
 app.use('/api/campaigns/:campaignId/sessions', require('./routes/sessions'));
 app.use('/api/campaigns/:campaignId/sessions/:sessionId/moments', require('./routes/moments'));
 app.use('/api/extract', require('./routes/extract'));
