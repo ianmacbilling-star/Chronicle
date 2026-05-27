@@ -184,12 +184,22 @@
       <!-- COMBINED SESSION NOTES + TRANSCRIPT TAB -->
       <div id="session-tab-notes">
 
-        <!-- Find & replace — fixes a name/typo across both boxes at once -->
-        <div class="find-replace-bar">
-          <input type="text" class="form-input fr-input" id="fr-find" placeholder="Find text..." />
-          <input type="text" class="form-input fr-input" id="fr-replace" placeholder="Replace with..." />
-          <button class="btn btn-sm" onclick="findReplaceSession()">Replace all</button>
-          <span class="fr-result" id="fr-result"></span>
+        <!-- Toolbar: find/replace tools (left) + Generate Story (right) -->
+        <div class="notes-toolbar">
+          <div class="fr-tools">
+            <input type="text" class="form-input fr-input" id="fr-find" placeholder="Find..." />
+            <input type="text" class="form-input fr-input" id="fr-replace" placeholder="Replace..." />
+            <button class="btn btn-xs" onclick="findNextSession()">Find next</button>
+            <button class="btn btn-xs" onclick="findReplaceSession()">Replace all</button>
+            <span class="fr-result" id="fr-result"></span>
+          </div>
+          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+        </div>
+
+        <!-- Slim progress row -->
+        <div class="progress-wrap" id="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
         </div>
 
         <!-- Transcript (left) and Notes (right), side by side -->
@@ -205,16 +215,9 @@
           </div>
         </div>
 
-        <div class="flex gap-1" style="margin-top:4px;">
-          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
-        </div>
         <div style="font-size:11px;color:rgba(201,168,76,0.35);margin-top:6px;">Notes and transcript are saved automatically when you click Generate Story</div>
         <div id="extract-error" class="alert alert-error hidden" style="margin-top:12px;"></div>
         <div id="notes-saved" class="alert alert-success hidden" style="margin-top:12px;">Notes saved!</div>
-        <div class="progress-wrap" id="progress-wrap">
-          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-          <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
-        </div>
       </div>
 
       <!-- CHARACTERS TAB -->

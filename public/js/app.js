@@ -940,6 +940,55 @@ function rejectChange(charId) {
     });
 }
 
+// Find NEXT — steps through matches one at a time, selecting each.
+// Searches the transcript first, then the notes; wraps around.
+var _frLastBox = null;
+function findNextSession() {
+  var findEl = document.getElementById('fr-find');
+  var resultEl = document.getElementById('fr-result');
+  var find = findEl ? findEl.value : '';
+  if (resultEl) resultEl.textContent = '';
+  if (!find) {
+    if (resultEl) resultEl.textContent = 'Enter text to find.';
+    return;
+  }
+
+  var transcript = document.getElementById('transcript-input');
+  var notes = document.getElementById('session-notes-input');
+  var boxes = [transcript, notes].filter(function(b) { return b; });
+  if (!boxes.length) return;
+
+  // Start from the box used last (so repeated clicks advance), else the first.
+  var startBox = _frLastBox && boxes.indexOf(_frLastBox) !== -1 ? _frLastBox : boxes[0];
+  var order = [startBox];
+  boxes.forEach(function(b) { if (b !== startBox) order.push(b); });
+
+  var lower = find.toLowerCase();
+  for (var i = 0; i < order.length; i++) {
+    var box = order[i];
+    // Search after the current selection/cursor in this box.
+    var from = (box === startBox) ? (box.selectionEnd || 0) : 0;
+    var idx = box.value.toLowerCase().indexOf(lower, from);
+    // If nothing after the cursor in the starting box, wrap to its start.
+    if (idx === -1 && box === startBox) {
+      idx = box.value.toLowerCase().indexOf(lower, 0);
+    }
+    if (idx !== -1) {
+      box.focus();
+      box.setSelectionRange(idx, idx + find.length);
+      // Scroll the selection into view.
+      var before = box.value.substring(0, idx).split('\n').length;
+      box.scrollTop = Math.max(0, (before - 4) * 18);
+      _frLastBox = box;
+      if (resultEl) resultEl.textContent = 'Found in ' +
+        (box === transcript ? 'transcript' : 'notes') + '.';
+      return;
+    }
+  }
+  _frLastBox = null;
+  if (resultEl) resultEl.textContent = 'No matches found.';
+}
+
 // Find & replace across BOTH the transcript and the session notes at once.
 // Use case: a character's name is wrong throughout — fix it in one shot.
 function findReplaceSession() {
