@@ -135,7 +135,7 @@ async function initPostgres() {
       password TEXT NOT NULL,
       api_key TEXT,
       fal_key TEXT,
-      tier TEXT DEFAULT 'copper',
+      tier TEXT DEFAULT 'platinum',
       trial_started_at TIMESTAMP,
       stripe_customer_id TEXT,
       stripe_subscription_id TEXT,
@@ -235,7 +235,7 @@ async function initPostgres() {
 
   // ALTER TABLE migrations for existing databases
   const alterations = [
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'copper'",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
@@ -343,6 +343,14 @@ async function initPostgres() {
       value TEXT
     )
   `);
+
+  // Seed the default image model to Nano Banana 2 on a fresh DB so the
+  // Settings dropdown lands there out of the box. ON CONFLICT DO NOTHING
+  // means an admin who has already chosen a different model is NEVER
+  // overwritten on a redeploy — we only fill it in if it's missing.
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('image_model', 'nano2') ON CONFLICT (setting_key) DO NOTHING"
+  );
 
   console.log('  PostgreSQL schema ready!');
   return db;

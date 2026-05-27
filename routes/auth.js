@@ -16,9 +16,13 @@ router.post('/register', async function(req, res) {
 
     const hash = await bcrypt.hash(password, 10);
     const now = new Date().toISOString();
+    // NOTE: New accounts default to PLATINUM during early testing so
+    // testers don't hit tier limits. Flip this back (or remove the
+    // explicit value to let the schema default decide) when monetization
+    // goes live.
     const result = await db.prepare(
-      'INSERT INTO users (name, email, password, created_at, trial_started_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, now, now);
+      'INSERT INTO users (name, email, password, tier, created_at, trial_started_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(name.trim(), email.toLowerCase().trim(), hash, 'platinum', now, now);
 
     req.session.userId = result.lastInsertRowid;
     req.session.userName = name.trim();
@@ -217,9 +221,9 @@ router.get('/image-model', async function(req, res) {
   try {
     const db = await getDb();
     const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
-    res.json({ model: row && row.value ? row.value : 'schnell' });
+    res.json({ model: row && row.value ? row.value : 'nano2' });
   } catch(e) {
-    res.json({ model: 'schnell' });
+    res.json({ model: 'nano2' });
   }
 });
 

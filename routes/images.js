@@ -12,25 +12,24 @@ const { fal } = require('@fal-ai/client');
 // ============================================================
 
 // The image models the app can switch between. Add new entries here.
-// 'schnell' is the default. Each call shape differs, so each model
-// gets its own input builder.
-// nano2 uses the TEXT-TO-IMAGE endpoint (no /edit) — it needs no
-// reference image. The /edit endpoint (for Lever 3 reference-image
-// consistency) is a separate future change.
+// 'nano2' is the default (production). Each call shape differs, so each
+// model gets its own input builder. nano2 uses the /edit endpoint when
+// a panel has character/asset references (Lever 3) and the plain
+// text-to-image endpoint when it doesn't.
 const IMAGE_MODELS = {
   schnell: 'fal-ai/flux/schnell',
   nano2: 'fal-ai/nano-banana-2'
 };
 
 // Read the currently-selected model key from app_settings.
-// Falls back to 'schnell' if unset or on any error.
+// Falls back to 'nano2' if unset or on any error (the production model).
 async function getSelectedModel(db) {
   try {
     const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
-    const key = row && row.value ? row.value : 'schnell';
-    return IMAGE_MODELS[key] ? key : 'schnell';
+    const key = row && row.value ? row.value : 'nano2';
+    return IMAGE_MODELS[key] ? key : 'nano2';
   } catch (e) {
-    return 'schnell';
+    return 'nano2';
   }
 }
 
@@ -56,7 +55,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charText
     : '';
 
-  const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
+  const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   let input;
   let model = IMAGE_MODELS[key];
 
@@ -321,7 +320,7 @@ async function generateReferenceImage(falKey, descriptionText, portraitUrl, mode
     'facing forward, plain neutral background, even lighting, comic book art style.\n\n' +
     'CHARACTER: ' + descriptionText;
 
-  const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
+  const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   let model = IMAGE_MODELS[key];
   let input;
 
@@ -388,7 +387,7 @@ async function editReferenceImage(falKey, baseImageUrl, changeText, charName, mo
     'Do not add or draw any other creatures, characters, or objects. ' +
     'Comic book art style.';
 
-  const key = IMAGE_MODELS[modelKey] ? modelKey : 'schnell';
+  const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
 
   // Editing genuinely needs the /edit endpoint + a real base image.
   if (key === 'nano2' && baseImageUrl && /^https?:\/\//.test(baseImageUrl)) {
