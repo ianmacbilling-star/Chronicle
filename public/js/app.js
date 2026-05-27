@@ -940,6 +940,38 @@ function rejectChange(charId) {
     });
 }
 
+// Scroll a textarea so a character offset is visible. Uses a hidden
+// "mirror" div that copies the textarea's exact styling, so we can
+// measure where the offset actually lands — reliable with wrapped lines.
+function scrollTextareaToOffset(box, offset) {
+  try {
+    var cs = window.getComputedStyle(box);
+    var mirror = document.createElement('div');
+    var props = ['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing',
+      'textTransform','wordSpacing','paddingTop','paddingRight','paddingBottom',
+      'paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
+    props.forEach(function(p) { mirror.style[p] = cs[p]; });
+    mirror.style.position = 'absolute';
+    mirror.style.visibility = 'hidden';
+    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.wordWrap = 'break-word';
+    mirror.style.width = box.clientWidth + 'px';
+    mirror.style.boxSizing = 'border-box';
+    // Text up to the match, then a marker span at the match position.
+    mirror.textContent = box.value.substring(0, offset);
+    var marker = document.createElement('span');
+    marker.textContent = '\u200b';
+    mirror.appendChild(marker);
+    document.body.appendChild(mirror);
+    var markerTop = marker.offsetTop;
+    document.body.removeChild(mirror);
+    // Centre the match in the visible area.
+    box.scrollTop = Math.max(0, markerTop - box.clientHeight / 2);
+  } catch (e) {
+    // If anything goes wrong, fail quietly — selection is still set.
+  }
+}
+
 // Find NEXT — steps through matches one at a time, selecting each.
 // Searches the transcript first, then the notes; wraps around.
 var _frLastBox = null;
@@ -958,7 +990,6 @@ function findNextSession() {
   var boxes = [transcript, notes].filter(function(b) { return b; });
   if (!boxes.length) return;
 
-  // Start from the box used last (so repeated clicks advance), else the first.
   var startBox = _frLastBox && boxes.indexOf(_frLastBox) !== -1 ? _frLastBox : boxes[0];
   var order = [startBox];
   boxes.forEach(function(b) { if (b !== startBox) order.push(b); });
@@ -966,19 +997,15 @@ function findNextSession() {
   var lower = find.toLowerCase();
   for (var i = 0; i < order.length; i++) {
     var box = order[i];
-    // Search after the current selection/cursor in this box.
     var from = (box === startBox) ? (box.selectionEnd || 0) : 0;
     var idx = box.value.toLowerCase().indexOf(lower, from);
-    // If nothing after the cursor in the starting box, wrap to its start.
     if (idx === -1 && box === startBox) {
       idx = box.value.toLowerCase().indexOf(lower, 0);
     }
     if (idx !== -1) {
       box.focus();
       box.setSelectionRange(idx, idx + find.length);
-      // Scroll the selection into view.
-      var before = box.value.substring(0, idx).split('\n').length;
-      box.scrollTop = Math.max(0, (before - 4) * 18);
+      scrollTextareaToOffset(box, idx);
       _frLastBox = box;
       if (resultEl) resultEl.textContent = 'Found in ' +
         (box === transcript ? 'transcript' : 'notes') + '.';
@@ -987,6 +1014,37 @@ function findNextSession() {
   }
   _frLastBox = null;
   if (resultEl) resultEl.textContent = 'No matches found.';
+}
+
+// Replace just the currently-highlighted match, then advance to the next.
+function replaceOneSession() {
+  var findEl = document.getElementById('fr-find');
+  var replEl = document.getElementById('fr-replace');
+  var resultEl = document.getElementById('fr-result');
+  var find = findEl ? findEl.value : '';
+  var repl = replEl ? replEl.value : '';
+  if (!find) {
+    if (resultEl) resultEl.textContent = 'Enter text to find.';
+    return;
+  }
+
+  var box = _frLastBox;
+  // If the current selection matches the find text, replace it; then find next.
+  if (box) {
+    var selStart = box.selectionStart;
+    var selEnd = box.selectionEnd;
+    var selected = box.value.substring(selStart, selEnd);
+    if (selected.toLowerCase() === find.toLowerCase()) {
+      box.value = box.value.substring(0, selStart) + repl + box.value.substring(selEnd);
+      // Put the cursor right after the replacement so Find next moves on.
+      box.setSelectionRange(selStart + repl.length, selStart + repl.length);
+      if (resultEl) resultEl.textContent = 'Replaced one.';
+      findNextSession();
+      return;
+    }
+  }
+  // Nothing suitable selected — just jump to the next match first.
+  findNextSession();
 }
 
 // Find & replace across BOTH the transcript and the session notes at once.

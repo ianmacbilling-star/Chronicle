@@ -161,17 +161,12 @@
 
     <!-- ==================== SESSION DETAIL ==================== -->
     <div id="view-session-detail" class="view" style="display:none;">
-      <div class="page-header">
-        <div>
-          <div class="page-title" id="session-detail-name">Session</div>
-          <div style="margin-top:6px;">
-            <input type="date" id="session-detail-date-input"
-              class="form-input"
-              style="max-width:200px;font-size:12px;padding:5px 10px;"
-              onchange="updateSessionDate(this.value)"
-            />
-          </div>
-        </div>
+      <div class="session-detail-head">
+        <div class="page-title" id="session-detail-name">Session</div>
+        <input type="date" id="session-detail-date-input"
+          class="form-input session-detail-date"
+          onchange="updateSessionDate(this.value)"
+        />
       </div>
 
       <div class="sess-tabs">
@@ -190,6 +185,7 @@
             <input type="text" class="form-input fr-input" id="fr-find" placeholder="Find..." />
             <input type="text" class="form-input fr-input" id="fr-replace" placeholder="Replace..." />
             <button class="btn btn-xs" onclick="findNextSession()">Find next</button>
+            <button class="btn btn-xs" onclick="replaceOneSession()">Replace</button>
             <button class="btn btn-xs" onclick="findReplaceSession()">Replace all</button>
             <span class="fr-result" id="fr-result"></span>
           </div>
