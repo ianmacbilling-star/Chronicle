@@ -426,6 +426,64 @@ async function initPostgres() {
     "INSERT INTO app_settings (setting_key, value) VALUES ('token_cost:schnell', '1') ON CONFLICT (setting_key) DO NOTHING"
   );
 
+  // ============================================================
+  // CAMPAIGN MEMBERSHIP (Phase 1 — schema + backfill only;
+  // authorization refactor happens in Phase 2)
+  // ============================================================
+  // Design notes:
+  // - campaigns becomes a many-to-many with users via campaign_members.
+  //   role is 'dm' or 'player'. UNIQUE(campaign_id, user_id) means one
+  //   role per user per campaign.
+  // - campaigns.user_id stays as-is during Phase 1 (every existing query
+  //   reads it). Phase 2 refactors auth to read campaign_members instead.
+  //   campaigns.created_by already exists as the immutable provenance
+  //   column, so no rename is needed.
+  // - campaign_invites carries a single-use token, a character_id binding
+  //   (the PC the invitee will own), an optional email hint for the
+  //   registration pre-fill / welcome flow, and a 7-day expiration.
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_members (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      role TEXT NOT NULL,
+      joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (campaign_id, user_id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_cm_user ON campaign_members(user_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_cm_campaign ON campaign_members(campaign_id)');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_invites (
+      id SERIAL PRIMARY KEY,
+      token TEXT UNIQUE NOT NULL,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+      character_id INTEGER REFERENCES characters(id),
+      role TEXT NOT NULL DEFAULT 'player',
+      email_hint TEXT,
+      created_by INTEGER NOT NULL REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP NOT NULL,
+      used_at TIMESTAMP,
+      used_by INTEGER REFERENCES users(id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_inv_token ON campaign_invites(token)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_inv_campaign ON campaign_invites(campaign_id)');
+
+  // One-time backfill: every existing campaign's owner becomes a 'dm'
+  // member. Idempotent thanks to the UNIQUE(campaign_id, user_id)
+  // constraint + ON CONFLICT DO NOTHING — safe to re-run on every boot.
+  // After Phase 2's auth refactor, campaign_members is the source of
+  // truth, but Phase 1 just makes sure the data is there.
+  await pool.query(`
+    INSERT INTO campaign_members (campaign_id, user_id, role)
+    SELECT id, user_id, 'dm' FROM campaigns
+    ON CONFLICT (campaign_id, user_id) DO NOTHING
+  `);
+
   console.log('  PostgreSQL schema ready!');
   return db;
 }
