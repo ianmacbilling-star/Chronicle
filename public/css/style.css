@@ -485,6 +485,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   font-size:11px;color:#c9a84c;letter-spacing:1px;text-transform:uppercase;
   font-family:var(--font-display);text-shadow:0 1px 4px rgba(0,0,0,0.6);
 }
+.moment-img-busy-sublabel{
+  font-size:11px;color:rgba(201,168,76,0.8);
+  max-width:80%;text-align:center;line-height:1.4;
+  text-shadow:0 1px 4px rgba(0,0,0,0.6);
+  margin-top:2px;
+}
 @keyframes momentBusySpin{to{transform:rotate(360deg);}}
 .moment-card{position:relative;}
 .moment-regen-btn{

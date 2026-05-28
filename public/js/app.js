@@ -31,28 +31,57 @@ function refreshTokenBalance() {
     .catch(function() { /* non-fatal: keep last shown value */ });
 }
 
-// ----- Non-destructive panel busy overlay -----
-// During image generation we want a visible "this panel is working" signal,
-// but WITHOUT wiping the existing image. The overlay sits on top of the
-// current image, dimming it; if the call refuses or fails, the overlay
-// goes away and the original image is still right there underneath.
-function showPanelBusy(momentId, label) {
-  var card = document.getElementById('moment-card-' + momentId);
-  if (!card) return;
-  // Don't stack multiple overlays if called twice.
-  if (card.querySelector('.moment-img-busy-overlay')) return;
+// ----- Non-destructive busy overlay (shared across all generation flows) -----
+// Drops a semi-transparent overlay with a spinning gold ring + uppercase
+// label on top of any container — without removing what's underneath. The
+// existing image stays in the DOM; if generation refuses or fails, the
+// overlay is removed and the original is intact.
+// Optional `sublabel` shows a smaller line of descriptive text below the
+// main label (used for cycling status messages in the character flows).
+// `target` may be an Element or an element id string.
+function showBusyOverlay(target, label, sublabel) {
+  var el = (typeof target === 'string') ? document.getElementById(target) : target;
+  if (!el) return null;
+  // The target must be a positioned ancestor for absolute children to anchor.
+  // Force position:relative if it isn't already.
+  var computed = window.getComputedStyle(el).position;
+  if (computed === 'static') el.style.position = 'relative';
+  // Don't stack overlays.
+  var existing = el.querySelector(':scope > .moment-img-busy-overlay');
+  if (existing) existing.remove();
   var overlay = document.createElement('div');
   overlay.className = 'moment-img-busy-overlay';
+  var subHtml = sublabel
+    ? '<div class="moment-img-busy-sublabel">' + sublabel + '</div>'
+    : '';
   overlay.innerHTML =
     '<div class="moment-img-busy-spinner"></div>' +
-    '<div class="moment-img-busy-label">' + (label || 'Generating') + '\u2026</div>';
-  card.appendChild(overlay);
+    '<div class="moment-img-busy-label">' + (label || 'Generating') + '\u2026</div>' +
+    subHtml;
+  el.appendChild(overlay);
+  return overlay;
+}
+// Update just the sublabel text inside an existing overlay (used by the
+// cycling status ticker so we don't tear down and rebuild every 4 seconds).
+function updateBusyOverlaySublabel(target, sublabel) {
+  var el = (typeof target === 'string') ? document.getElementById(target) : target;
+  if (!el) return;
+  var sub = el.querySelector(':scope > .moment-img-busy-overlay .moment-img-busy-sublabel');
+  if (sub) sub.textContent = sublabel || '';
+}
+function hideBusyOverlay(target) {
+  var el = (typeof target === 'string') ? document.getElementById(target) : target;
+  if (!el) return;
+  var overlay = el.querySelector(':scope > .moment-img-busy-overlay');
+  if (overlay) overlay.remove();
+}
+
+// Storyboard-panel-specific wrappers (kept for the existing call sites).
+function showPanelBusy(momentId, label) {
+  return showBusyOverlay('moment-card-' + momentId, label);
 }
 function hidePanelBusy(momentId) {
-  var card = document.getElementById('moment-card-' + momentId);
-  if (!card) return;
-  var overlay = card.querySelector('.moment-img-busy-overlay');
-  if (overlay) overlay.remove();
+  hideBusyOverlay('moment-card-' + momentId);
 }
 function hideAllPanelBusy() {
   var overlays = document.querySelectorAll('.moment-img-busy-overlay');
@@ -1015,7 +1044,7 @@ function openChangeReview(charId) {
         'placeholder="e.g. left horn broken off to a jagged stump">' +
         detailText + '</textarea>' +
       momentSelector +
-      '<div class="sc-review-imgwrap">' + imgHtml + '</div>' +
+      '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions">' +
         '<button class="btn btn-sm" id="sc-regen-' + charId + '" ' +
@@ -1039,20 +1068,15 @@ function regenerateReference(charId) {
   var textEl = document.getElementById('sc-review-text-' + charId);
   var detail = textEl ? textEl.value : '';
   if (btn) { btn.disabled = true; }
+  // Clear any previous status text from the msg area — the spinner over
+  // the image carries the activity signal now.
+  if (msg) msg.textContent = '';
 
-  // Animated indeterminate progress bar + cycling status text — same
-  // treatment as the character "Build prompt" flow, for consistency.
-  // The amendment regenerate is a single editing API call with no real
-  // progress signal, so the bar is indeterminate (no fake percentage).
-  if (msg) {
-    msg.innerHTML =
-      '<div id="sc-regen-status-' + charId + '" style="font-size:13px;margin-bottom:6px;color:#c9a84c;">Applying the amendment\u2026</div>' +
-      '<div style="height:6px;border-radius:4px;background:rgba(201,168,76,0.15);overflow:hidden;">' +
-        '<div style="height:100%;width:30%;border-radius:4px;background:#c9a84c;' +
-        'animation:charBuildSlide 1.2s ease-in-out infinite;"></div>' +
-      '</div>';
-  }
-  ensureCharBuildKeyframes();
+  // Unified spinner overlay on the existing reference image area. Image
+  // stays visible underneath; on refusal/failure the overlay goes away
+  // and the original is intact. Cycling status text rides in the sublabel.
+  var wrapId = 'sc-review-imgwrap-' + charId;
+  showBusyOverlay(wrapId, 'Regenerating', 'Applying the amendment\u2026');
 
   var steps = [
     'Applying the amendment\u2026',
@@ -1062,10 +1086,9 @@ function regenerateReference(charId) {
     'Almost there\u2026'
   ];
   var stepIdx = 0;
-  var statusEl = document.getElementById('sc-regen-status-' + charId);
   var ticker = setInterval(function() {
     stepIdx++;
-    if (stepIdx < steps.length && statusEl) statusEl.innerHTML = steps[stepIdx];
+    if (stepIdx < steps.length) updateBusyOverlaySublabel(wrapId, steps[stepIdx]);
   }, 4000);
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
@@ -1079,12 +1102,12 @@ function regenerateReference(charId) {
       clearInterval(ticker);
       if (btn) { btn.disabled = false; }
       if (data && data.success && data.image_url) {
-        // Show the new draft image; hold the URL for Approve.
-        var wrap = document.getElementById('sc-review-img-' + charId);
+        // Swap in the new image. We rebuild the wrap's contents so the
+        // overlay is cleanly removed along with the old image.
+        var wrap = document.getElementById(wrapId);
         if (wrap) {
-          var fresh = '<img src="' + data.image_url + '" class="sc-review-img" ' +
+          wrap.innerHTML = '<img src="' + data.image_url + '" class="sc-review-img" ' +
             'id="sc-review-img-' + charId + '" alt="reference" />';
-          wrap.outerHTML = fresh;
         }
         state.draftReference = state.draftReference || {};
         state.draftReference[charId] = data.image_url;
@@ -1092,6 +1115,9 @@ function regenerateReference(charId) {
         // A token was spent — update the header balance.
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       } else {
+        // Refusal / failure — remove overlay; original image (if any)
+        // is fully visible underneath.
+        hideBusyOverlay(wrapId);
         if (data && data.error === 'INSUFFICIENT_TOKENS') {
           if (msg) msg.innerHTML = insufficientTokensHtml(data.message);
         } else if (msg) {
@@ -1101,6 +1127,7 @@ function regenerateReference(charId) {
     })
     .catch(function() {
       clearInterval(ticker);
+      hideBusyOverlay(wrapId);
       if (btn) { btn.disabled = false; }
       if (msg) msg.textContent = 'Could not regenerate.';
     });
@@ -1725,18 +1752,18 @@ function rebuildCharPrompt(charId) {
   var textEl = document.getElementById('char-prompt-text-' + charId);
   if (btn) { btn.disabled = true; btn.textContent = 'Building...'; }
 
-  // Show an animated indeterminate progress bar with cycling status text.
-  // The build is a single vision API call with no real progress signal,
-  // so we use an indeterminate bar (conveys activity without faking a %).
-  if (textEl) {
-    textEl.innerHTML =
-      '<div id="char-build-status-' + charId + '" style="font-size:13px;margin-bottom:6px;color:#c9a84c;">Analyzing character and images\u2026</div>' +
-      '<div style="height:6px;border-radius:4px;background:rgba(201,168,76,0.15);overflow:hidden;">' +
-        '<div id="char-build-bar-' + charId + '" style="height:100%;width:30%;border-radius:4px;background:#c9a84c;' +
-        'animation:charBuildSlide 1.2s ease-in-out infinite;"></div>' +
-      '</div>';
+  // Show the unified spinner overlay on top of the reference-image area.
+  // If a reference image already exists (rebuild case), it stays visible
+  // underneath, dimmed. If it doesn't yet (first build), the overlay just
+  // covers the empty container. Cycling status text goes in the sublabel.
+  var refTargetId = 'char-ref-image-' + charId;
+  var refEl = document.getElementById(refTargetId);
+  // Give the empty container a min-height so the overlay has somewhere
+  // to render even before any image exists.
+  if (refEl && !refEl.querySelector('img')) {
+    refEl.style.minHeight = '180px';
   }
-  ensureCharBuildKeyframes();
+  showBusyOverlay(refTargetId, 'Building', 'Analyzing character and images\u2026');
 
   // Cycle through status messages so it feels alive during the wait.
   var steps = [
@@ -1747,10 +1774,9 @@ function rebuildCharPrompt(charId) {
     'Almost there\u2026'
   ];
   var stepIdx = 0;
-  var statusEl = document.getElementById('char-build-status-' + charId);
   var ticker = setInterval(function() {
     stepIdx++;
-    if (stepIdx < steps.length && statusEl) statusEl.innerHTML = steps[stepIdx];
+    if (stepIdx < steps.length) updateBusyOverlaySublabel(refTargetId, steps[stepIdx]);
   }, 4000);
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/rebuild-prompt', {
@@ -1767,11 +1793,18 @@ function rebuildCharPrompt(charId) {
           ch.canonical_prompt = data.canonical_prompt;
           ch.canonical_prompt_at = data.canonical_prompt_at;
           if (data.canonical_reference_url) ch.canonical_reference_url = data.canonical_reference_url;
+          // renderCharModalPrompt rebuilds the whole prompt+image section,
+          // which naturally removes the overlay along with the old DOM.
           renderCharModalPrompt(ch);
+        } else {
+          hideBusyOverlay(refTargetId);
         }
         // A token was spent — update the header balance.
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       } else {
+        // Refusal / failure — remove the overlay so the existing image
+        // (if any) is fully visible again, and show the error.
+        hideBusyOverlay(refTargetId);
         if (data && data.error === 'INSUFFICIENT_TOKENS') {
           if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
         } else if (textEl) {
@@ -1782,22 +1815,10 @@ function rebuildCharPrompt(charId) {
     })
     .catch(function() {
       clearInterval(ticker);
+      hideBusyOverlay(refTargetId);
       if (textEl) textEl.textContent = 'Could not build the prompt.';
       if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
     });
-}
-
-// Inject the keyframes for the indeterminate build bar once.
-function ensureCharBuildKeyframes() {
-  if (document.getElementById('char-build-keyframes')) return;
-  var style = document.createElement('style');
-  style.id = 'char-build-keyframes';
-  style.textContent =
-    '@keyframes charBuildSlide {' +
-    '  0% { margin-left: -30%; }' +
-    '  100% { margin-left: 100%; }' +
-    '}';
-  document.head.appendChild(style);
 }
 
 function startEditCharPrompt(charId) {
