@@ -31,6 +31,34 @@ function refreshTokenBalance() {
     .catch(function() { /* non-fatal: keep last shown value */ });
 }
 
+// ----- Non-destructive panel busy overlay -----
+// During image generation we want a visible "this panel is working" signal,
+// but WITHOUT wiping the existing image. The overlay sits on top of the
+// current image, dimming it; if the call refuses or fails, the overlay
+// goes away and the original image is still right there underneath.
+function showPanelBusy(momentId, label) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return;
+  // Don't stack multiple overlays if called twice.
+  if (card.querySelector('.moment-img-busy-overlay')) return;
+  var overlay = document.createElement('div');
+  overlay.className = 'moment-img-busy-overlay';
+  overlay.innerHTML =
+    '<div class="moment-img-busy-spinner"></div>' +
+    '<div class="moment-img-busy-label">' + (label || 'Generating') + '\u2026</div>';
+  card.appendChild(overlay);
+}
+function hidePanelBusy(momentId) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return;
+  var overlay = card.querySelector('.moment-img-busy-overlay');
+  if (overlay) overlay.remove();
+}
+function hideAllPanelBusy() {
+  var overlays = document.querySelectorAll('.moment-img-busy-overlay');
+  for (var i = 0; i < overlays.length; i++) overlays[i].remove();
+}
+
 // ----- TOKENS VIEW (purchase screen) -----
 // The four token packs from the locked pricing model. Edit here when
 // pricing changes. The "best value" flag highlights one card so the
@@ -2364,12 +2392,12 @@ function generateAllImages() {
   fill.style.width = '5%';
   msg.textContent = 'Generating ' + state.moments.length + ' images with Flux AI...';
 
-  // NOTE: we used to wipe panels to shimmer here, BEFORE the API call.
-  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
-  // staring at blank panels even though their work was untouched in the
-  // database. We now leave the existing images in place; the top-level
-  // progress bar above signals activity during the API call, and we
-  // refresh the panels with the new images once generation succeeds.
+  // Non-destructive busy overlay on each panel — existing images stay
+  // in the DOM underneath, dimmed. On refusal/failure we remove overlays
+  // and the user's previous images are still right there.
+  state.moments.forEach(function(m) {
+    showPanelBusy(m.id, 'Generating');
+  });
 
   fetch('/api/images/generate-all', {
     method: 'POST',
@@ -2384,6 +2412,9 @@ function generateAllImages() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      // Generation refused — clear ALL busy overlays so the user's
+      // existing images are fully visible again (not dimmed).
+      hideAllPanelBusy();
       var errEl = document.getElementById('generate-error');
       if (data.error === 'INSUFFICIENT_TOKENS') {
         errEl.innerHTML = insufficientTokensHtml(data.message);
@@ -2413,6 +2444,7 @@ function generateAllImages() {
     }, 2000);
   })
   .catch(function(e) {
+    hideAllPanelBusy();
     document.getElementById('generate-error').textContent = 'Error: ' + e.message;
     document.getElementById('generate-error').classList.remove('hidden');
     btn.disabled = false;
@@ -2426,10 +2458,10 @@ function regenImage(momentId, index) {
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (!moment) return;
 
-  // NOTE: we used to wipe this panel to shimmer here, BEFORE the API call.
-  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
-  // with a blank panel even though their work was untouched. We now leave
-  // the existing image in place and only swap it once generation succeeds.
+  // Non-destructive busy overlay — existing image stays in the DOM
+  // underneath, dimmed. On refusal/failure we remove the overlay and
+  // the user's previous image is still there.
+  showPanelBusy(momentId, 'Regenerating');
 
   fetch('/api/images/generate-moment', {
     method: 'POST',
@@ -2446,6 +2478,9 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      // Generation refused — clear the busy overlay on this panel so
+      // the user's existing image is fully visible again.
+      hidePanelBusy(momentId);
       if (data.error === 'INSUFFICIENT_TOKENS') {
         var errEl = document.getElementById('generate-error');
         if (errEl) {
@@ -2465,7 +2500,7 @@ function regenImage(momentId, index) {
     renderStoryboard();
     renderNovelWithImages();
   })
-  .catch(function(e) { showAlert('Error: ' + e.message); renderStoryboard(); });
+  .catch(function(e) { hidePanelBusy(momentId); showAlert('Error: ' + e.message); renderStoryboard(); });
 }
 
 // ============================================================
@@ -4472,12 +4507,12 @@ function generateAllImages() {
   fill.style.width = '5%';
   msg.textContent = 'Generating ' + state.moments.length + ' images with Flux AI...';
 
-  // NOTE: we used to wipe panels to shimmer here, BEFORE the API call.
-  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
-  // staring at blank panels even though their work was untouched in the
-  // database. We now leave the existing images in place; the top-level
-  // progress bar above signals activity during the API call, and we
-  // refresh the panels with the new images once generation succeeds.
+  // Non-destructive busy overlay on each panel — existing images stay
+  // in the DOM underneath, dimmed. On refusal/failure we remove overlays
+  // and the user's previous images are still right there.
+  state.moments.forEach(function(m) {
+    showPanelBusy(m.id, 'Generating');
+  });
 
   fetch('/api/images/generate-all', {
     method: 'POST',
@@ -4492,6 +4527,9 @@ function generateAllImages() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      // Generation refused — clear ALL busy overlays so the user's
+      // existing images are fully visible again (not dimmed).
+      hideAllPanelBusy();
       var errEl = document.getElementById('generate-error');
       if (data.error === 'INSUFFICIENT_TOKENS') {
         errEl.innerHTML = insufficientTokensHtml(data.message);
@@ -4521,6 +4559,7 @@ function generateAllImages() {
     }, 2000);
   })
   .catch(function(e) {
+    hideAllPanelBusy();
     document.getElementById('generate-error').textContent = 'Error: ' + e.message;
     document.getElementById('generate-error').classList.remove('hidden');
     btn.disabled = false;
@@ -4534,10 +4573,10 @@ function regenImage(momentId, index) {
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (!moment) return;
 
-  // NOTE: we used to wipe this panel to shimmer here, BEFORE the API call.
-  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
-  // with a blank panel even though their work was untouched. We now leave
-  // the existing image in place and only swap it once generation succeeds.
+  // Non-destructive busy overlay — existing image stays in the DOM
+  // underneath, dimmed. On refusal/failure we remove the overlay and
+  // the user's previous image is still there.
+  showPanelBusy(momentId, 'Regenerating');
 
   fetch('/api/images/generate-moment', {
     method: 'POST',
@@ -4554,6 +4593,9 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
+      // Generation refused — clear the busy overlay on this panel so
+      // the user's existing image is fully visible again.
+      hidePanelBusy(momentId);
       if (data.error === 'INSUFFICIENT_TOKENS') {
         var errEl = document.getElementById('generate-error');
         if (errEl) {
@@ -4573,7 +4615,7 @@ function regenImage(momentId, index) {
     renderStoryboard();
     renderNovelWithImages();
   })
-  .catch(function(e) { showAlert('Error: ' + e.message); renderStoryboard(); });
+  .catch(function(e) { hidePanelBusy(momentId); showAlert('Error: ' + e.message); renderStoryboard(); });
 }
 
 // ============================================================
