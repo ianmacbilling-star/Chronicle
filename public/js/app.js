@@ -39,7 +39,7 @@ var TOKEN_PACKS = [
   { id:'small',  name:'Small',  price:15,  tokens:85,   tagline:'Try it out' },
   { id:'medium', name:'Medium', price:40,  tokens:250,  tagline:'Most popular', highlight:true },
   { id:'large',  name:'Large',  price:100, tokens:650,  tagline:'For active campaigns' },
-  { id:'whale',  name:'Whale',  price:250, tokens:1700, tagline:'Best per-token value' }
+  { id:'huge',   name:'Huge',   price:250, tokens:1700, tagline:'Best per-token value' }
 ];
 
 function openTokensModal() {
