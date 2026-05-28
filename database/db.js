@@ -141,6 +141,8 @@ async function initPostgres() {
       stripe_subscription_id TEXT,
       subscription_status TEXT DEFAULT 'trialing',
       current_period_end TIMESTAMP,
+      reset_token TEXT,
+      reset_token_expires TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       edited_at TIMESTAMP,
       edited_by INTEGER
@@ -268,6 +270,12 @@ async function initPostgres() {
     // Review tab — terse summaries of the opening and closing narrative.
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_intro_summary TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_outro_summary TEXT',
+    // Forgot-password flow. These were previously added to production by
+    // hand and never captured as migrations, so a fresh DB (e.g. staging)
+    // was missing them and forgot-password silently failed. Now migrated
+    // properly so every environment gets them.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
