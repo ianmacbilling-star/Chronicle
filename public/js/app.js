@@ -31,6 +31,101 @@ function refreshTokenBalance() {
     .catch(function() { /* non-fatal: keep last shown value */ });
 }
 
+// ----- TOKENS VIEW (purchase screen) -----
+// The four token packs from the locked pricing model. Edit here when
+// pricing changes. The "best value" flag highlights one card so the
+// eye lands on the recommended option (classic e-commerce nudge).
+var TOKEN_PACKS = [
+  { id:'small',  name:'Small',  price:15,  tokens:85,   tagline:'Try it out' },
+  { id:'medium', name:'Medium', price:40,  tokens:250,  tagline:'Most popular', highlight:true },
+  { id:'large',  name:'Large',  price:100, tokens:650,  tagline:'For active campaigns' },
+  { id:'whale',  name:'Whale',  price:250, tokens:1700, tagline:'Best per-token value' }
+];
+
+function openTokensModal() {
+  // Refresh balance into both the modal and the header chip.
+  fetch('/api/tokens/balance')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var el = document.getElementById('tokens-modal-balance');
+      if (el && data && typeof data.total === 'number') {
+        el.textContent = data.total.toLocaleString();
+      }
+      var hdr = document.getElementById('token-balance-value');
+      if (hdr && data && typeof data.total === 'number') {
+        hdr.textContent = data.total.toLocaleString();
+      }
+    })
+    .catch(function() { /* leave dashes */ });
+  renderTokenPacks();
+  // Hide any prior purchase message from a previous open.
+  var pm = document.getElementById('token-purchase-msg');
+  if (pm) pm.style.display = 'none';
+  // Show the modal.
+  var m = document.getElementById('tokens-modal');
+  if (m) m.classList.remove('hidden');
+}
+
+function closeTokensModal() {
+  var m = document.getElementById('tokens-modal');
+  if (m) m.classList.add('hidden');
+  // Refresh balance one more time on close so the header chip reflects
+  // anything that may have changed while the modal was open (future:
+  // a real Stripe purchase will redirect back and we'll see the credit).
+  if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+}
+
+function renderTokenPacks() {
+  var wrap = document.getElementById('token-packs');
+  if (!wrap) return;
+  var html = TOKEN_PACKS.map(function(p) {
+    var perTok = (p.price / p.tokens).toFixed(3);
+    var highlightStyle = p.highlight
+      ? 'border:2px solid #c9a84c;box-shadow:0 0 0 1px rgba(201,168,76,0.3),0 6px 18px rgba(201,168,76,0.1);'
+      : 'border:1px solid rgba(201,168,76,0.2);';
+    var badge = p.highlight
+      ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#c9a84c;color:#1a120a;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:99px;">' + p.tagline.toUpperCase() + '</div>'
+      : '';
+    return '' +
+      '<div style="position:relative;background:rgba(25,18,10,0.85);' + highlightStyle + 'border-radius:10px;padding:22px 18px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;">' +
+        badge +
+        '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(201,168,76,0.7);">' + p.name + '</div>' +
+        '<div style="font-size:32px;font-weight:700;color:#c9a84c;line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
+        '<div style="font-size:16px;color:var(--text);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
+        '<div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:6px;">$' + perTok + ' per token</div>' +
+        (p.highlight ? '' : '<div style="font-size:11px;color:rgba(201,168,76,0.6);font-style:italic;">' + p.tagline + '</div>') +
+        '<button class="btn btn-primary btn-sm" onclick="buyTokenPack(\'' + p.id + '\')" style="margin-top:auto;">Buy ' + p.name + '</button>' +
+      '</div>';
+  }).join('');
+  wrap.innerHTML = html;
+}
+
+function buyTokenPack(packId) {
+  // Stripe wiring is pending. For now show a friendly "coming soon"
+  // message anchored at the pack grid, so the surface is usable even
+  // before purchasing actually works.
+  var msg = document.getElementById('token-purchase-msg');
+  if (!msg) return;
+  var pack = TOKEN_PACKS.filter(function(p){return p.id===packId;})[0];
+  var label = pack ? pack.name + ' pack ($' + pack.price + ')' : 'this pack';
+  msg.innerHTML = '&#9881; Purchasing is being set up. ' + label + ' will be available very soon. ' +
+    'In the meantime, contact your admin to add tokens to your account.';
+  msg.style.display = 'block';
+  msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// Renders the INSUFFICIENT_TOKENS error as a message + "Buy more tokens"
+// button, returned as an HTML string. Callers drop it into the appropriate
+// container via .innerHTML. If the error isn't a token error, returns
+// the plain error text (HTML-safe by basic browser handling).
+function insufficientTokensHtml(message) {
+  var msg = message || 'You\u2019re out of tokens.';
+  return '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:8px;">' +
+    '<div>' + msg + '</div>' +
+    '<button class="btn btn-primary btn-sm" onclick="openTokensModal()">&#9672; Buy more tokens</button>' +
+    '</div>';
+}
+
 // ----- ADMIN TESTING: set my own balance (temporary, deprecate later) -----
 function adminSetMyBalance() {
   var input = document.getElementById('admin-set-balance-input');
@@ -969,10 +1064,11 @@ function regenerateReference(charId) {
         // A token was spent — update the header balance.
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       } else {
-        var emsg = (data && data.error === 'INSUFFICIENT_TOKENS' && data.message)
-          ? data.message
-          : ((data && data.error) || 'Could not regenerate.');
-        if (msg) msg.textContent = emsg;
+        if (data && data.error === 'INSUFFICIENT_TOKENS') {
+          if (msg) msg.innerHTML = insufficientTokensHtml(data.message);
+        } else if (msg) {
+          msg.textContent = (data && data.error) || 'Could not regenerate.';
+        }
       }
     })
     .catch(function() {
@@ -1648,10 +1744,11 @@ function rebuildCharPrompt(charId) {
         // A token was spent — update the header balance.
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       } else {
-        var emsg = (data && data.error === 'INSUFFICIENT_TOKENS' && data.message)
-          ? data.message
-          : ((data && data.error) || 'Could not build the prompt.');
-        if (textEl) textEl.textContent = emsg;
+        if (data && data.error === 'INSUFFICIENT_TOKENS') {
+          if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
+        } else if (textEl) {
+          textEl.textContent = (data && data.error) || 'Could not build the prompt.';
+        }
         if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
       }
     })
@@ -2291,10 +2388,13 @@ function generateAllImages() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      // INSUFFICIENT_TOKENS carries a friendly message; show that.
-      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
-      document.getElementById('generate-error').textContent = emsg;
-      document.getElementById('generate-error').classList.remove('hidden');
+      var errEl = document.getElementById('generate-error');
+      if (data.error === 'INSUFFICIENT_TOKENS') {
+        errEl.innerHTML = insufficientTokensHtml(data.message);
+      } else {
+        errEl.textContent = 'Error: ' + data.error;
+      }
+      errEl.classList.remove('hidden');
       btn.disabled = false;
       progressWrap.style.display = 'none';
       return;
@@ -2354,8 +2454,18 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
-      showAlert(emsg); renderStoryboard(); return;
+      if (data.error === 'INSUFFICIENT_TOKENS') {
+        var errEl = document.getElementById('generate-error');
+        if (errEl) {
+          errEl.innerHTML = insufficientTokensHtml(data.message);
+          errEl.classList.remove('hidden');
+        } else {
+          showAlert((data.message || 'Out of tokens.') + ' Open the Buy Tokens screen from the menu.');
+        }
+      } else {
+        showAlert('Error: ' + data.error);
+      }
+      renderStoryboard(); return;
     }
     moment.image = data.image_url;
     // A token was spent — update the header balance.
@@ -4394,10 +4504,13 @@ function generateAllImages() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      // INSUFFICIENT_TOKENS carries a friendly message; show that.
-      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
-      document.getElementById('generate-error').textContent = emsg;
-      document.getElementById('generate-error').classList.remove('hidden');
+      var errEl = document.getElementById('generate-error');
+      if (data.error === 'INSUFFICIENT_TOKENS') {
+        errEl.innerHTML = insufficientTokensHtml(data.message);
+      } else {
+        errEl.textContent = 'Error: ' + data.error;
+      }
+      errEl.classList.remove('hidden');
       btn.disabled = false;
       progressWrap.style.display = 'none';
       return;
@@ -4457,8 +4570,18 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
-      showAlert(emsg); renderStoryboard(); return;
+      if (data.error === 'INSUFFICIENT_TOKENS') {
+        var errEl = document.getElementById('generate-error');
+        if (errEl) {
+          errEl.innerHTML = insufficientTokensHtml(data.message);
+          errEl.classList.remove('hidden');
+        } else {
+          showAlert((data.message || 'Out of tokens.') + ' Open the Buy Tokens screen from the menu.');
+        }
+      } else {
+        showAlert('Error: ' + data.error);
+      }
+      renderStoryboard(); return;
     }
     moment.image = data.image_url;
     // A token was spent — update the header balance.

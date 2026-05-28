@@ -17,7 +17,7 @@
   <span class="app-name">Chronicle</span>
   <div class="app-header-right">
     <button class="btn btn-sm" id="header-campaigns-btn" onclick="showView('campaigns')">&#127956; My Campaigns</button>
-    <span id="token-balance-label" title="Your token balance" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:#c9a84c;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:4px 10px;margin:0 4px;">&#9672; <span id="token-balance-value">—</span></span>
+    <span id="token-balance-label" title="Buy more tokens" onclick="openTokensModal()" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:#c9a84c;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:4px 10px;margin:0 4px;cursor:pointer;">&#9672; <span id="token-balance-value">—</span></span>
     <div class="user-menu-wrap">
       <div class="user-menu-btn" onclick="toggleUserMenu()">
         <div class="user-avatar" id="user-avatar">DM</div>
@@ -27,6 +27,7 @@
       <div class="user-menu-dropdown" id="user-menu">
         <div class="user-menu-header" id="user-menu-email"></div>
         <div class="user-menu-item" onclick="showView('account');closeUserMenu()">&#9733; My Account</div>
+        <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">&#9672; Buy Tokens</div>
         <div class="user-menu-item" onclick="showView('settings');closeUserMenu()">&#9881; Settings</div>
         <div class="user-menu-divider"></div>
         <div class="user-menu-item danger" onclick="logout()">&#8594; Sign out</div>
@@ -677,6 +678,43 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeCharModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveChar()">Save character</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TOKENS / PURCHASE MODAL ====================
+     Modal (not a view) so users don't lose their work mid-action when
+     they hit "out of tokens" and click Buy more. Closing returns them
+     to exactly where they were. -->
+<div class="modal-overlay hidden" id="tokens-modal" onclick="if(event.target===this)closeTokensModal()">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal-header">
+      <div class="modal-title">&#9672; Buy Tokens</div>
+      <button class="modal-close" onclick="closeTokensModal()">&times;</button>
+    </div>
+
+    <!-- Current balance -->
+    <div style="text-align:center;padding:10px 0 18px;border-bottom:1px solid rgba(201,168,76,0.15);margin-bottom:18px;">
+      <div style="font-size:11px;color:rgba(201,168,76,0.6);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Your current balance</div>
+      <div style="font-size:34px;font-weight:700;color:#c9a84c;line-height:1;">
+        <span id="tokens-modal-balance">&mdash;</span>
+        <span style="font-size:15px;font-weight:500;opacity:0.7;margin-left:6px;">tokens</span>
+      </div>
+    </div>
+
+    <!-- Intro -->
+    <div style="font-size:13px;color:rgba(201,168,76,0.7);margin-bottom:18px;line-height:1.55;">
+      One token generates one image &mdash; a storyboard panel, a character reference, or an amended portrait. Bigger packs are a better per-token rate. Purchased tokens never expire.
+    </div>
+
+    <!-- The pack ladder -->
+    <div id="token-packs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">
+      <!-- Packs are rendered by renderTokenPacks() in app.js -->
+    </div>
+    <div id="token-purchase-msg" style="display:none;margin-top:18px;padding:12px 16px;border-radius:8px;font-size:13px;text-align:center;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);color:var(--gold-light);"></div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTokensModal()">Close</button>
     </div>
   </div>
 </div>
