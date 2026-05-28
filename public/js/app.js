@@ -16,6 +16,22 @@ var state = {
 };
 
 // ============================================================
+// TOKEN BALANCE — header label, refreshed on load and after any
+// token-spending action. Defined once (guarded), called globally.
+// ============================================================
+function refreshTokenBalance() {
+  fetch('/api/tokens/balance')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var el = document.getElementById('token-balance-value');
+      if (el && data && typeof data.total === 'number') {
+        el.textContent = data.total.toLocaleString();
+      }
+    })
+    .catch(function() { /* non-fatal: keep last shown value */ });
+}
+
+// ============================================================
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
@@ -54,6 +70,7 @@ function checkAuth() {
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
       document.getElementById('user-avatar').textContent = initials;
+      refreshTokenBalance();
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')
@@ -3285,6 +3302,7 @@ function checkAuth() {
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
       document.getElementById('user-avatar').textContent = initials;
+      refreshTokenBalance();
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')

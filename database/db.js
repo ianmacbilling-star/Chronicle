@@ -276,6 +276,15 @@ async function initPostgres() {
     // properly so every environment gets them.
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP',
+    // Token system (Phase 1). last_active_campaign_id drives DM bonus
+    // attribution: it's stamped on a player's image generations, then
+    // looked up when they purchase tokens to credit the right DM.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_campaign_id INTEGER',
+    // image_generations gains fork_id (which fork the generation belongs
+    // to; null = legacy/canonical) and model (which AI model produced it,
+    // so per-model cost can be set from real data later).
+    'ALTER TABLE image_generations ADD COLUMN IF NOT EXISTS fork_id INTEGER',
+    'ALTER TABLE image_generations ADD COLUMN IF NOT EXISTS model TEXT',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -358,6 +367,63 @@ async function initPostgres() {
   // overwritten on a redeploy — we only fill it in if it's missing.
   await pool.query(
     "INSERT INTO app_settings (setting_key, value) VALUES ('image_model', 'nano2') ON CONFLICT (setting_key) DO NOTHING"
+  );
+
+  // ============================================================
+  // TOKEN SYSTEM (Phase 1 — internal ledger; Stripe wired later)
+  // ============================================================
+  // Design notes:
+  // - Balance is DERIVED by summing token_ledger (single source of
+  //   truth, always auditable). No cached balance column to drift.
+  // - Two token types: 'utlt' (monthly grant, expires) and 'cot'
+  //   (carry-over, never expires). Spend order: utlt first, then cot.
+  // - Per-model token cost lives in app_settings as token_cost:<model>,
+  //   defaulting to 1 if unset. 1:1 today; tunable later with no schema
+  //   change as new models/pricing arrive.
+
+  // Every credit and debit. Positive amount = credit, negative = debit.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS token_ledger (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      amount INTEGER NOT NULL,
+      bucket TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      source TEXT,
+      triggered_by_user_id INTEGER REFERENCES users(id),
+      related_campaign_id INTEGER,
+      related_purchase_id INTEGER,
+      stripe_event_id TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_ledger_user ON token_ledger(user_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_ledger_user_bucket ON token_ledger(user_id, bucket)');
+
+  // Record of every Stripe purchase. attributed_campaign_id is the
+  // campaign that earns the DM the 10% bonus on this purchase.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS token_purchases (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      pack_tier TEXT,
+      price_paid_cents INTEGER,
+      tokens_granted INTEGER,
+      stripe_session_id TEXT,
+      stripe_payment_id TEXT,
+      attributed_campaign_id INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_purchases_user ON token_purchases(user_id)');
+
+  // Seed per-model token cost (1:1 today). DO NOTHING so an admin-tuned
+  // value is never overwritten on redeploy.
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('token_cost:nano2', '1') ON CONFLICT (setting_key) DO NOTHING"
+  );
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('token_cost:schnell', '1') ON CONFLICT (setting_key) DO NOTHING"
   );
 
   console.log('  PostgreSQL schema ready!');
