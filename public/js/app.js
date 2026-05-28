@@ -2364,16 +2364,12 @@ function generateAllImages() {
   fill.style.width = '5%';
   msg.textContent = 'Generating ' + state.moments.length + ' images with Flux AI...';
 
-  // Show shimmer on all panels
-  state.moments.forEach(function(m) {
-    var card = document.getElementById('moment-card-' + m.id);
-    if (card) {
-      var imgArea = card.querySelector('.moment-img, .moment-img-generated');
-      if (imgArea) {
-        imgArea.outerHTML = '<div class="moment-img-shimmer"><div class="moment-img-shimmer-text">&#10024; Generating...</div></div>';
-      }
-    }
-  });
+  // NOTE: we used to wipe panels to shimmer here, BEFORE the API call.
+  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
+  // staring at blank panels even though their work was untouched in the
+  // database. We now leave the existing images in place; the top-level
+  // progress bar above signals activity during the API call, and we
+  // refresh the panels with the new images once generation succeeds.
 
   fetch('/api/images/generate-all', {
     method: 'POST',
@@ -2430,14 +2426,10 @@ function regenImage(momentId, index) {
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (!moment) return;
 
-  // Show shimmer on this card
-  var card = document.getElementById('moment-card-' + momentId);
-  if (card) {
-    var imgArea = card.querySelector('.moment-img, .moment-img-generated, .moment-img-shimmer');
-    if (imgArea) {
-      imgArea.outerHTML = '<div class="moment-img-shimmer"><div class="moment-img-shimmer-text">&#10024; Regenerating...</div></div>';
-    }
-  }
+  // NOTE: we used to wipe this panel to shimmer here, BEFORE the API call.
+  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
+  // with a blank panel even though their work was untouched. We now leave
+  // the existing image in place and only swap it once generation succeeds.
 
   fetch('/api/images/generate-moment', {
     method: 'POST',
@@ -4480,16 +4472,12 @@ function generateAllImages() {
   fill.style.width = '5%';
   msg.textContent = 'Generating ' + state.moments.length + ' images with Flux AI...';
 
-  // Show shimmer on all panels
-  state.moments.forEach(function(m) {
-    var card = document.getElementById('moment-card-' + m.id);
-    if (card) {
-      var imgArea = card.querySelector('.moment-img, .moment-img-generated');
-      if (imgArea) {
-        imgArea.outerHTML = '<div class="moment-img-shimmer"><div class="moment-img-shimmer-text">&#10024; Generating...</div></div>';
-      }
-    }
-  });
+  // NOTE: we used to wipe panels to shimmer here, BEFORE the API call.
+  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
+  // staring at blank panels even though their work was untouched in the
+  // database. We now leave the existing images in place; the top-level
+  // progress bar above signals activity during the API call, and we
+  // refresh the panels with the new images once generation succeeds.
 
   fetch('/api/images/generate-all', {
     method: 'POST',
@@ -4546,14 +4534,10 @@ function regenImage(momentId, index) {
   var moment = state.moments.find(function(m) { return m.id === momentId; });
   if (!moment) return;
 
-  // Show shimmer on this card
-  var card = document.getElementById('moment-card-' + momentId);
-  if (card) {
-    var imgArea = card.querySelector('.moment-img, .moment-img-generated, .moment-img-shimmer');
-    if (imgArea) {
-      imgArea.outerHTML = '<div class="moment-img-shimmer"><div class="moment-img-shimmer-text">&#10024; Regenerating...</div></div>';
-    }
-  }
+  // NOTE: we used to wipe this panel to shimmer here, BEFORE the API call.
+  // That meant a refusal (e.g. INSUFFICIENT_TOKENS) would leave the user
+  // with a blank panel even though their work was untouched. We now leave
+  // the existing image in place and only swap it once generation succeeds.
 
   fetch('/api/images/generate-moment', {
     method: 'POST',
