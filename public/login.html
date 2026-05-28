@@ -203,10 +203,17 @@
 function showLogin() {
   document.getElementById('login-panel').classList.remove('hidden');
   document.getElementById('register-panel').classList.add('hidden');
+  document.getElementById('forgot-panel').classList.add('hidden');
 }
 function showRegister() {
   document.getElementById('login-panel').classList.add('hidden');
   document.getElementById('register-panel').classList.remove('hidden');
+  document.getElementById('forgot-panel').classList.add('hidden');
+}
+function showForgotPassword() {
+  document.getElementById('login-panel').classList.add('hidden');
+  document.getElementById('register-panel').classList.add('hidden');
+  document.getElementById('forgot-panel').classList.remove('hidden');
 }
 function showError(id, msg) {
   var el = document.getElementById(id);
@@ -247,6 +254,24 @@ document.getElementById('register-btn').addEventListener('click', async function
 
 document.getElementById('login-password').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('login-btn').click(); });
 document.getElementById('reg-password').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('register-btn').click(); });
+
+document.getElementById('forgot-btn').addEventListener('click', async function() {
+  hideError('forgot-error');
+  document.getElementById('forgot-success').classList.add('hidden');
+  var email = document.getElementById('forgot-email').value.trim();
+  if (!email) { showError('forgot-error', 'Please enter your email.'); return; }
+  this.disabled = true; this.textContent = 'Sending...';
+  try {
+    var res = await fetch('/api/email/forgot-password', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    var data = await res.json();
+    if (data.error) { showError('forgot-error', data.error); this.disabled=false; this.textContent='Send Reset Link'; return; }
+    var ok = document.getElementById('forgot-success');
+    ok.textContent = 'If an account exists for that email, a reset link is on its way. Check your inbox.';
+    ok.classList.remove('hidden');
+    this.disabled=false; this.textContent='Send Reset Link';
+  } catch(e) { showError('forgot-error','Connection error. Please try again.'); this.disabled=false; this.textContent='Send Reset Link'; }
+});
+document.getElementById('forgot-email').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('forgot-btn').click(); });
 
 fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated) window.location.href='/app.html'; });
 </script>
