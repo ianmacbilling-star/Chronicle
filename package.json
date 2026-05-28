@@ -18,6 +18,7 @@
     "@fal-ai/client": "^1.0.0",
     "pg": "^8.11.0",
     "axios": "^1.6.0",
-    "connect-pg-simple": "^9.0.0"
+    "connect-pg-simple": "^9.0.0",
+    "resend": "^6.12.4"
   }
 }
