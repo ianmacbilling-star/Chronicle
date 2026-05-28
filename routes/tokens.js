@@ -180,6 +180,44 @@ router.post('/admin/credit', async function(req, res) {
   }
 });
 
+// POST /api/tokens/admin/set-balance — admin-only TESTING helper.
+// Wipes the user's ledger and credits a fresh balance in COT. Use ONLY
+// in staging for exercising edge cases (exactly N tokens, zero, etc.).
+// Writes a marker row in the ledger so the wipe is auditable.
+// body: { user_id, amount }   amount >= 0
+router.post('/admin/set-balance', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
+  const { user_id, amount } = req.body || {};
+  const amt = parseInt(amount, 10);
+  if (!user_id || !Number.isFinite(amt) || amt < 0) {
+    return res.status(400).json({ error: 'Provide user_id and a non-negative amount' });
+  }
+  try {
+    const db = await getDb();
+    // Wipe existing ledger rows for this user.
+    await db.prepare('DELETE FROM token_ledger WHERE user_id = ?').run(user_id);
+    // Audit marker: a zero-amount note documenting the wipe.
+    await db.prepare(
+      "INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, 0, 'cot', 'admin_reset', ?)"
+    ).run(user_id, 'set_balance to ' + amt);
+    // Credit the requested amount (skip if 0 — the marker is enough).
+    let bal;
+    if (amt > 0) {
+      bal = await creditTokens(user_id, amt, {
+        bucket: 'cot',
+        event_type: 'manual_credit',
+        source: 'admin_set_balance'
+      });
+    } else {
+      bal = await getBalance(user_id);
+    }
+    res.json({ ok: true, balance: bal });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = {
   router,
   getTokenCost,

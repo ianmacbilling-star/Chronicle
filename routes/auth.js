@@ -76,6 +76,13 @@ router.get('/me', async function(req, res) {
       trialDaysLeft = Math.max(0, Math.ceil((expires - new Date()) / (24 * 60 * 60 * 1000)));
     }
 
+    // Is this user an admin? Source of truth = ADMIN_EMAILS env var.
+    // Surfaced to the frontend so admin-only UI (e.g. testing widgets)
+    // can show/hide cleanly. Backend endpoints still enforce admin
+    // gating server-side; this is just for UI.
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+    const isAdmin = adminEmails.includes(user.email);
+
     res.json({
       authenticated: true,
       name: user.name,
@@ -87,6 +94,7 @@ router.get('/me', async function(req, res) {
       trialExpired: trialExpired,
       trialDaysLeft: trialDaysLeft,
       subscriptionStatus: user.subscription_status || 'trialing',
+      is_admin: isAdmin,
       allTiers: TIERS
     });
   } catch(e) {

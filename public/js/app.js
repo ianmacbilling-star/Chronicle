@@ -31,6 +31,48 @@ function refreshTokenBalance() {
     .catch(function() { /* non-fatal: keep last shown value */ });
 }
 
+// ----- ADMIN TESTING: set my own balance (temporary, deprecate later) -----
+function adminSetMyBalance() {
+  var input = document.getElementById('admin-set-balance-input');
+  var msg = document.getElementById('admin-set-balance-msg');
+  if (!input || !state.user || !state.user.id) return;
+  var amt = parseInt(input.value, 10);
+  if (!Number.isFinite(amt) || amt < 0) {
+    showAdminBalanceMsg('Enter a non-negative whole number.', 'err');
+    return;
+  }
+  fetch('/api/tokens/admin/set-balance', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ user_id: state.user.id, amount: amt })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.ok) {
+        showAdminBalanceMsg('Balance set to ' + (data.balance && data.balance.total) + '.', 'ok');
+        refreshTokenBalance();
+      } else {
+        showAdminBalanceMsg((data && data.error) || 'Could not set balance.', 'err');
+      }
+    })
+    .catch(function() { showAdminBalanceMsg('Network error.', 'err'); });
+}
+function showAdminBalanceMsg(text, kind) {
+  var el = document.getElementById('admin-set-balance-msg');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = 'block';
+  if (kind === 'ok') {
+    el.style.background = 'rgba(15,110,86,0.25)';
+    el.style.border = '1px solid rgba(134,212,186,0.4)';
+    el.style.color = '#86d4ba';
+  } else {
+    el.style.background = 'rgba(139,26,26,0.35)';
+    el.style.border = '1px solid rgba(240,149,149,0.4)';
+    el.style.color = '#f09595';
+  }
+}
+
 // ============================================================
 // INIT
 // ============================================================
@@ -71,6 +113,8 @@ function checkAuth() {
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
       document.getElementById('user-avatar').textContent = initials;
       refreshTokenBalance();
+      var adminBox = document.getElementById('account-admin-testing');
+      if (adminBox) adminBox.style.display = data.is_admin ? 'block' : 'none';
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')
@@ -3398,6 +3442,8 @@ function checkAuth() {
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
       document.getElementById('user-avatar').textContent = initials;
       refreshTokenBalance();
+      var adminBox = document.getElementById('account-admin-testing');
+      if (adminBox) adminBox.style.display = data.is_admin ? 'block' : 'none';
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')

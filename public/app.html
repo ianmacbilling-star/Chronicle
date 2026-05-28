@@ -367,6 +367,26 @@
         <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
       </div>
 
+      <!-- ==================== ADMIN TESTING WIDGET ====================
+           TEMPORARY: lets admins set their own token balance for testing
+           edge cases (out-of-tokens, exactly-enough, etc.). Backed by the
+           admin-gated /api/tokens/admin/set-balance endpoint. Hidden for
+           non-admins. DEPRECATE when token testing is complete. -->
+      <div id="account-admin-testing" class="settings-section" style="display:none;border:2px dashed rgba(255,140,0,0.5);background:rgba(255,140,0,0.06);">
+        <div class="settings-section-title" style="color:#ff8c00;">&#9888; Admin Testing &mdash; Token Balance</div>
+        <div class="settings-section-desc">
+          Temporary testing tool. Sets <em>your own</em> token balance to the value below (wipes prior ledger, writes audit row). Remove this widget after token testing is complete.
+        </div>
+        <div id="admin-set-balance-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
+        <div style="display:flex;align-items:flex-end;gap:10px;margin-top:14px;">
+          <div class="form-group" style="margin-bottom:0;flex:0 0 180px;">
+            <label class="form-label">Set my balance to</label>
+            <input class="form-input" type="number" min="0" step="1" id="admin-set-balance-input" placeholder="e.g. 2" />
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="adminSetMyBalance()">Set balance</button>
+        </div>
+      </div>
+
     </div>
 
     <!-- ==================== SETTINGS VIEW ==================== -->
