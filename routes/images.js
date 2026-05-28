@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/auth');
 const { getTier } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 const { fal } = require('@fal-ai/client');
+const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
 
 // ============================================================
 // PROVIDER ABSTRACTION LAYER
@@ -475,12 +476,27 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     // random seed each time rather than the fixed campaign seed.
     const randomSeed = Math.floor(Math.random() * 2147483647);
     const modelKey = await getSelectedModel(db);
+
+    // Token gate (spend-on-success): make sure the user can afford one
+    // image before we generate. We only DEBIT after a successful result.
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    }
+
     const imageUrl = await generateImage(prompt, style, fal_key, panelBlock, randomSeed, modelKey);
     const now = new Date().toISOString();
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
     await logImageGeneration(db, req.session.userId, 'moment', moment_id);
-    res.json({ success: true, image_url: imageUrl, moment_id: moment_id });
+    // Spend AFTER success — failed generations never reach here.
+    await spendTokens(req.session.userId, cost, {
+      related_campaign_id: campId,
+      source: 'panel_regen',
+      event_type: 'generation_spend'
+    });
+    const balance = await getBalance(req.session.userId);
+    res.json({ success: true, image_url: imageUrl, moment_id: moment_id, balance: balance });
   } catch(e) {
     console.error('Image generation error:', e.message);
     res.json({ error: e.message });
@@ -534,6 +550,22 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // Resolve the selected image model once for the whole batch.
   const modelKey = await getSelectedModel(db);
 
+  // Token gate (all-or-nothing for batches, per design): the user must be
+  // able to afford the WHOLE batch before we start. We still only DEBIT for
+  // images that actually succeed (spend-on-success), so failures aren't
+  // charged — but the upfront check guarantees they can cover a full run.
+  const perImageCost = await getTokenCost(modelKey);
+  const batchCost = perImageCost * moments.length;
+  if (!(await canAfford(req.session.userId, batchCost))) {
+    const bal = await getBalance(req.session.userId);
+    return res.json({
+      error: 'INSUFFICIENT_TOKENS',
+      message: 'This batch needs ' + batchCost + ' tokens (' + moments.length + ' panels). You have ' + bal.total + '. Generate panels individually or add more tokens.',
+      needed: batchCost,
+      balance: bal.total
+    });
+  }
+
   // Generate all images in parallel
   const results = await Promise.allSettled(
     moments.map(async function(m) {
@@ -572,7 +604,19 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     }
   }
 
-  res.json({ success: true, generated: generated, count: successCount, total: moments.length });
+  // Spend-on-success: charge only for images that actually generated.
+  // Failures (NSFW false-positives, API errors) are not charged.
+  let balance = null;
+  if (successCount > 0) {
+    await spendTokens(req.session.userId, perImageCost * successCount, {
+      related_campaign_id: campaign_id,
+      source: 'panel_batch',
+      event_type: 'generation_spend'
+    });
+  }
+  balance = await getBalance(req.session.userId);
+
+  res.json({ success: true, generated: generated, count: successCount, total: moments.length, balance: balance });
 });
 
 module.exports = router;

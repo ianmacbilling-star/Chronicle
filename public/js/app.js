@@ -2208,7 +2208,9 @@ function generateAllImages() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      document.getElementById('generate-error').textContent = 'Error: ' + data.error;
+      // INSUFFICIENT_TOKENS carries a friendly message; show that.
+      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
+      document.getElementById('generate-error').textContent = emsg;
       document.getElementById('generate-error').classList.remove('hidden');
       btn.disabled = false;
       progressWrap.style.display = 'none';
@@ -2217,6 +2219,9 @@ function generateAllImages() {
 
     fill.style.width = '100%';
     msg.textContent = data.count + ' of ' + data.total + ' images generated!';
+
+    // Tokens were spent — update the header balance.
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 
     // Re-fetch the session fresh from the database so the storyboard
     // shows the newly generated images reliably (stays on this tab).
@@ -2265,8 +2270,13 @@ function regenImage(momentId, index) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Error: ' + data.error); renderStoryboard(); return; }
+    if (data.error) {
+      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
+      showAlert(emsg); renderStoryboard(); return;
+    }
     moment.image = data.image_url;
+    // A token was spent — update the header balance.
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     renderStoryboard();
     renderNovelWithImages();
   })
@@ -4299,7 +4309,9 @@ function generateAllImages() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      document.getElementById('generate-error').textContent = 'Error: ' + data.error;
+      // INSUFFICIENT_TOKENS carries a friendly message; show that.
+      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
+      document.getElementById('generate-error').textContent = emsg;
       document.getElementById('generate-error').classList.remove('hidden');
       btn.disabled = false;
       progressWrap.style.display = 'none';
@@ -4308,6 +4320,9 @@ function generateAllImages() {
 
     fill.style.width = '100%';
     msg.textContent = data.count + ' of ' + data.total + ' images generated!';
+
+    // Tokens were spent — update the header balance.
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 
     // Re-fetch the session fresh from the database so the storyboard
     // shows the newly generated images reliably (stays on this tab).
@@ -4356,8 +4371,13 @@ function regenImage(momentId, index) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.error) { showAlert('Error: ' + data.error); renderStoryboard(); return; }
+    if (data.error) {
+      var emsg = (data.error === 'INSUFFICIENT_TOKENS' && data.message) ? data.message : ('Error: ' + data.error);
+      showAlert(emsg); renderStoryboard(); return;
+    }
     moment.image = data.image_url;
+    // A token was spent — update the header balance.
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     renderStoryboard();
     renderNovelWithImages();
   })
