@@ -1522,7 +1522,34 @@ function rebuildCharPrompt(charId) {
   var btn = document.getElementById('char-prompt-rebuild-' + charId);
   var textEl = document.getElementById('char-prompt-text-' + charId);
   if (btn) { btn.disabled = true; btn.textContent = 'Building...'; }
-  if (textEl) textEl.textContent = 'Analyzing character and images...';
+
+  // Show an animated indeterminate progress bar with cycling status text.
+  // The build is a single vision API call with no real progress signal,
+  // so we use an indeterminate bar (conveys activity without faking a %).
+  if (textEl) {
+    textEl.innerHTML =
+      '<div id="char-build-status-' + charId + '" style="font-size:13px;margin-bottom:6px;color:#c9a84c;">Analyzing character and images\u2026</div>' +
+      '<div style="height:6px;border-radius:4px;background:rgba(201,168,76,0.15);overflow:hidden;">' +
+        '<div id="char-build-bar-' + charId + '" style="height:100%;width:30%;border-radius:4px;background:#c9a84c;' +
+        'animation:charBuildSlide 1.2s ease-in-out infinite;"></div>' +
+      '</div>';
+  }
+  ensureCharBuildKeyframes();
+
+  // Cycle through status messages so it feels alive during the wait.
+  var steps = [
+    'Analyzing character and images\u2026',
+    'Studying facial features and outfit\u2026',
+    'Writing the canonical description\u2026',
+    'Generating the reference image\u2026',
+    'Almost there\u2026'
+  ];
+  var stepIdx = 0;
+  var statusEl = document.getElementById('char-build-status-' + charId);
+  var ticker = setInterval(function() {
+    stepIdx++;
+    if (stepIdx < steps.length && statusEl) statusEl.innerHTML = steps[stepIdx];
+  }, 4000);
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/rebuild-prompt', {
     method: 'POST',
@@ -1531,6 +1558,7 @@ function rebuildCharPrompt(charId) {
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      clearInterval(ticker);
       if (data && data.success) {
         var ch = (state.characters || []).find(function(c) { return c.id === charId; });
         if (ch) {
@@ -1545,9 +1573,23 @@ function rebuildCharPrompt(charId) {
       }
     })
     .catch(function() {
+      clearInterval(ticker);
       if (textEl) textEl.textContent = 'Could not build the prompt.';
       if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
     });
+}
+
+// Inject the keyframes for the indeterminate build bar once.
+function ensureCharBuildKeyframes() {
+  if (document.getElementById('char-build-keyframes')) return;
+  var style = document.createElement('style');
+  style.id = 'char-build-keyframes';
+  style.textContent =
+    '@keyframes charBuildSlide {' +
+    '  0% { margin-left: -30%; }' +
+    '  100% { margin-left: 100%; }' +
+    '}';
+  document.head.appendChild(style);
 }
 
 function startEditCharPrompt(charId) {
@@ -1641,6 +1683,8 @@ function openCharModal(editId) {
   if (npcEl) npcEl.checked = !!(char && (char.is_npc === true || char.is_npc === 1 || char.is_npc === '1'));
   loadSlotPreviews(char);
   renderCharModalPrompt(char);
+  var oldNudge = document.getElementById('char-prompt-nudge');
+  if (oldNudge) oldNudge.remove();
   document.getElementById('char-modal-error').classList.add('hidden');
   document.getElementById('char-modal').classList.remove('hidden');
 }
@@ -1692,9 +1736,50 @@ function saveChar() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) { showModalError('char-modal-error', data.error); return; }
+
+      // If this was a NEW character that has no prompt yet, DON'T close —
+      // the "Build character prompt" step is only available once the
+      // character exists, so closing here would force a save-and-reopen.
+      // Instead, transition the open dialog into edit mode for the just-
+      // created character, reveal the Build button, and guide the user.
+      var wasNew = !editId;
+      var newChar = data && data.id ? data : null;
+      var needsPrompt = newChar && !(newChar.canonical_prompt && String(newChar.canonical_prompt).trim());
+
+      if (wasNew && newChar && needsPrompt) {
+        // Make the new character available to the rest of the UI.
+        loadCharacters();
+        // Switch the dialog from "Add" to "Edit" mode in place.
+        document.getElementById('char-edit-id').value = newChar.id;
+        document.getElementById('char-modal-title').textContent = 'Edit Character';
+        document.getElementById('char-modal-error').classList.add('hidden');
+        // Re-render the prompt section so the Build button appears.
+        renderCharModalPrompt(newChar);
+        // Guided nudge: point the user at the now-available build step.
+        showCharPromptNudge();
+        return;
+      }
+
       closeCharModal();
       loadCharacters();
     });
+}
+
+// Inline guided nudge shown after a new character is first saved, telling
+// the user the next step (building the character prompt) is now available.
+function showCharPromptNudge() {
+  var body = document.getElementById('char-modal-prompt-body');
+  if (!body) return;
+  var existing = document.getElementById('char-prompt-nudge');
+  if (existing) existing.remove();
+  var nudge = document.createElement('div');
+  nudge.id = 'char-prompt-nudge';
+  nudge.style.cssText = 'margin:8px 0;padding:8px 12px;border-radius:6px;font-size:13px;' +
+    'background:rgba(15,110,86,0.25);border:1px solid rgba(134,212,186,0.4);color:#86d4ba;';
+  nudge.innerHTML = '&#10003; Character saved. Now build its character prompt below \u2014 ' +
+    'this is what keeps the character looking consistent across your panels. ' +
+    'You can close this window when you\u2019re done.';
+  body.parentNode.insertBefore(nudge, body);
 }
 
 function deleteChar(id) {
