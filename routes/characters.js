@@ -4,6 +4,7 @@ const { getDb } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const imageHelpers = require('./images');
+const { getTokenCost, canAfford, spendTokens } = require('./tokens');
 const multer = require('multer');
 const path = require('path');
 
@@ -153,6 +154,17 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignOwner, async funct
     const key = process.env.ANTHROPIC_API_KEY || req.body.key;
     if (!key) return res.json({ error: 'AI service is not configured.' });
 
+    // Token gate (upfront check): building a character prompt also generates
+    // a reference image, which costs tokens. Check affordability BEFORE we
+    // call Anthropic or save anything, so a token shortage doesn't leave
+    // the user with a half-saved prompt and no image.
+    const falKey = process.env.FAL_API_KEY || req.body.fal_key;
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const refCost = await getTokenCost(modelKey);
+    if (falKey && !(await canAfford(req.session.userId, refCost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Building a character prompt generates a reference image. Add more tokens to continue.' });
+    }
+
     // Collect any uploaded reference images (public R2 URLs) for vision input
     const imageUrls = [char.image_portrait, char.image_fullbody, char.image_action, char.image_other, char.image]
       .filter(function(u) { return u && /^https?:\/\//.test(u); });
@@ -209,14 +221,18 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignOwner, async funct
     // Image failure must NOT fail the whole rebuild — the prompt is saved.
     let referenceUrl = char.canonical_reference_url || null;
     try {
-      const falKey = process.env.FAL_API_KEY || req.body.fal_key;
       if (falKey) {
-        const modelKey = await imageHelpers.getSelectedModel(db);
         const portrait = char.image_portrait || char.image_fullbody || char.image || null;
         referenceUrl = await imageHelpers.generateReferenceImage(falKey, promptText, portrait, modelKey);
         await db.prepare('UPDATE characters SET canonical_reference_url = ? WHERE id = ?')
           .run(referenceUrl, char.id);
         await imageHelpers.logImageGeneration(db, req.session.userId, 'character_reference', char.id);
+        // Spend AFTER success — failed generation never reaches here.
+        await spendTokens(req.session.userId, refCost, {
+          related_campaign_id: req.params.campaignId,
+          source: 'character_reference',
+          event_type: 'generation_spend'
+        });
       }
     } catch(imgErr) {
       console.error('Canonical reference image failed (non-fatal):', imgErr.message);

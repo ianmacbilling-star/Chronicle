@@ -938,8 +938,13 @@ function regenerateReference(charId) {
         state.draftReference = state.draftReference || {};
         state.draftReference[charId] = data.image_url;
         if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
+        // A token was spent — update the header balance.
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       } else {
-        if (msg) msg.textContent = (data && data.error) || 'Could not regenerate.';
+        var emsg = (data && data.error === 'INSUFFICIENT_TOKENS' && data.message)
+          ? data.message
+          : ((data && data.error) || 'Could not regenerate.');
+        if (msg) msg.textContent = emsg;
       }
     })
     .catch(function() {
@@ -1611,8 +1616,13 @@ function rebuildCharPrompt(charId) {
           if (data.canonical_reference_url) ch.canonical_reference_url = data.canonical_reference_url;
           renderCharModalPrompt(ch);
         }
+        // A token was spent — update the header balance.
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       } else {
-        if (textEl) textEl.textContent = (data && data.error) || 'Could not build the prompt.';
+        var emsg = (data && data.error === 'INSUFFICIENT_TOKENS' && data.message)
+          ? data.message
+          : ((data && data.error) || 'Could not build the prompt.');
+        if (textEl) textEl.textContent = emsg;
         if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
       }
     })

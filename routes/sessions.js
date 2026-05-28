@@ -4,6 +4,7 @@ const { getDb } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { checkSessionLimit } = require('../middleware/tiers');
 const imageHelpers = require('./images');
+const { getTokenCost, canAfford, spendTokens } = require('./tokens');
 
 async function verifyCampaignOwner(req, res, next) {
   const db = await getDb();
@@ -163,9 +164,23 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
       ch.image_portrait || ch.image_fullbody || ch.image || null;
 
     const modelKey = await imageHelpers.getSelectedModel(db);
+
+    // Token gate (spend-on-success): regenerating an amended reference image
+    // costs one image. Refuse upfront if the user can't afford it.
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    }
+
     const newUrl = await imageHelpers.editReferenceImage(falKey, baseImage, detail, ch.name, modelKey);
 
     await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId);
+    // Spend AFTER success — failed generation never reaches here.
+    await spendTokens(req.session.userId, cost, {
+      related_campaign_id: req.params.campaignId,
+      source: 'amendment_reference',
+      event_type: 'generation_spend'
+    });
 
     // Return the draft URL — NOT saved as final until Approve.
     res.json({ success: true, image_url: newUrl });
