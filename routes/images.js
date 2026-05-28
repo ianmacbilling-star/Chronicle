@@ -65,6 +65,15 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     // character's reference image. Map each image to its character by
     // position so the model knows which reference is who (fal's
     // recommended technique for multi-subject scenes).
+    //
+    // PROMPT ORDERING NOTE: the reference-image block sits HIGH in the
+    // prompt (right after the style prefix, BEFORE the scene description)
+    // because models weight earlier instructions more heavily. On busy
+    // panels with magical effects + many characters, putting the
+    // reference instruction last meant it competed with all that visual
+    // language for attention — and lost. Putting it first establishes
+    // "match these references" as the dominant rule before the scene
+    // complexity is introduced.
     model = 'fal-ai/nano-banana-2/edit';
     var refMap = charRefs.map(function(r, i) {
       var n = 'Image ' + (i + 1);
@@ -80,11 +89,13 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
       ? '\n\nSCENE ASSETS (match these to their reference images): ' + assetText
       : '';
     var editPrompt = stylePrefix + '\n\n' +
-      'Draw this comic panel: ' + prompt + charSection + assetSection + '\n\n' +
-      'REFERENCE IMAGES: ' + refMap + ' Render each character to match ' +
-      'their reference image — same face, build, hair, distinctive ' +
-      'features and outfit. Match any location or item to its reference ' +
-      'image too. Do not blend characters together.';
+      'REFERENCE IMAGES (HIGHEST PRIORITY): ' + refMap + ' ' +
+      'Render EACH character as a SEPARATE INDIVIDUAL whose face, hair, ' +
+      'build, and distinctive features EXACTLY match their own reference ' +
+      'image. Do NOT blend, average, or merge features between characters ' +
+      '— each person keeps only their own appearance. Match any location ' +
+      'or item to its reference image too.\n\n' +
+      'Draw this comic panel: ' + prompt + charSection + assetSection;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -560,7 +571,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     const bal = await getBalance(req.session.userId);
     return res.json({
       error: 'INSUFFICIENT_TOKENS',
-      message: 'This batch needs ' + batchCost + ' tokens (' + moments.length + ' panels). You have ' + bal.total + '. Generate panels individually or add more tokens.',
+      message: 'This batch would cost ' + batchCost + ' tokens. You have ' + bal.total + '. Generate panels individually or add more tokens.',
       needed: batchCost,
       balance: bal.total
     });
