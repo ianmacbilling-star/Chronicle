@@ -916,7 +916,34 @@ function regenerateReference(charId) {
   var textEl = document.getElementById('sc-review-text-' + charId);
   var detail = textEl ? textEl.value : '';
   if (btn) { btn.disabled = true; }
-  if (msg) msg.textContent = 'Generating new reference image...';
+
+  // Animated indeterminate progress bar + cycling status text — same
+  // treatment as the character "Build prompt" flow, for consistency.
+  // The amendment regenerate is a single editing API call with no real
+  // progress signal, so the bar is indeterminate (no fake percentage).
+  if (msg) {
+    msg.innerHTML =
+      '<div id="sc-regen-status-' + charId + '" style="font-size:13px;margin-bottom:6px;color:#c9a84c;">Applying the amendment\u2026</div>' +
+      '<div style="height:6px;border-radius:4px;background:rgba(201,168,76,0.15);overflow:hidden;">' +
+        '<div style="height:100%;width:30%;border-radius:4px;background:#c9a84c;' +
+        'animation:charBuildSlide 1.2s ease-in-out infinite;"></div>' +
+      '</div>';
+  }
+  ensureCharBuildKeyframes();
+
+  var steps = [
+    'Applying the amendment\u2026',
+    'Editing the reference image\u2026',
+    'Preserving the character\u2019s identity\u2026',
+    'Rendering the new look\u2026',
+    'Almost there\u2026'
+  ];
+  var stepIdx = 0;
+  var statusEl = document.getElementById('sc-regen-status-' + charId);
+  var ticker = setInterval(function() {
+    stepIdx++;
+    if (stepIdx < steps.length && statusEl) statusEl.innerHTML = steps[stepIdx];
+  }, 4000);
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
         state.currentSession.id + '/characters/' + charId + '/regenerate-reference', {
@@ -926,6 +953,7 @@ function regenerateReference(charId) {
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      clearInterval(ticker);
       if (btn) { btn.disabled = false; }
       if (data && data.success && data.image_url) {
         // Show the new draft image; hold the URL for Approve.
@@ -948,6 +976,7 @@ function regenerateReference(charId) {
       }
     })
     .catch(function() {
+      clearInterval(ticker);
       if (btn) { btn.disabled = false; }
       if (msg) msg.textContent = 'Could not regenerate.';
     });
