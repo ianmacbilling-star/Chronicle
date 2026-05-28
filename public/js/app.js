@@ -78,6 +78,9 @@ function hideBusyOverlay(target) {
 
 // Storyboard-panel-specific wrappers (kept for the existing call sites).
 function showPanelBusy(momentId, label) {
+  // Clear any stale error overlay first — a fresh regenerate should not
+  // show the spinner sitting on top of yesterday's error message.
+  hidePanelError(momentId);
   return showBusyOverlay('moment-card-' + momentId, label);
 }
 function hidePanelBusy(momentId) {
@@ -86,6 +89,53 @@ function hidePanelBusy(momentId) {
 function hideAllPanelBusy() {
   var overlays = document.querySelectorAll('.moment-img-busy-overlay');
   for (var i = 0; i < overlays.length; i++) overlays[i].remove();
+}
+
+// Show an error AT the panel (not at the top of the page). Solves the
+// "user scrolled deep, errors appear off-screen and they think nothing
+// happened" problem. The overlay sits on top of the existing image so
+// the original is preserved and visible underneath. Auto-removes the
+// busy overlay first (we never want both at once).
+// htmlContent: either a plain string (treated as text) or HTML when
+// the caller passes the insufficientTokensHtml(...) output.
+function showPanelError(momentId, htmlContent, isHtml) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return;
+  // Remove any existing busy / error overlay first.
+  hidePanelBusy(momentId);
+  var prev = card.querySelector('.moment-img-error-overlay');
+  if (prev) prev.remove();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'moment-img-error-overlay';
+
+  var dismissBtn = '<button class="moment-img-error-dismiss" onclick="hidePanelError(' + momentId + ')" title="Dismiss">&times;</button>';
+  var icon = '<div class="moment-img-error-icon">&#9888;</div>';
+  var body = isHtml
+    ? '<div class="moment-img-error-message">' + htmlContent + '</div>'
+    : '<div class="moment-img-error-message">' + (htmlContent || 'Something went wrong.') + '</div>';
+
+  overlay.innerHTML = dismissBtn + icon + body;
+  card.appendChild(overlay);
+
+  // Scroll the panel into view if it's off-screen (a courtesy, not the
+  // primary fix — the in-panel overlay IS the primary fix, but if the
+  // user clicked a panel that's already partially visible we may as well
+  // ensure the error is fully in frame).
+  try {
+    var rect = card.getBoundingClientRect();
+    var fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+    if (!fullyVisible) {
+      card.scrollIntoView({ behavior:'smooth', block:'center' });
+    }
+  } catch(e) { /* non-fatal */ }
+}
+
+function hidePanelError(momentId) {
+  var card = document.getElementById('moment-card-' + momentId);
+  if (!card) return;
+  var overlay = card.querySelector('.moment-img-error-overlay');
+  if (overlay) overlay.remove();
 }
 
 // ----- TOKENS VIEW (purchase screen) -----
@@ -2499,21 +2549,15 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      // Generation refused — clear the busy overlay on this panel so
-      // the user's existing image is fully visible again.
-      hidePanelBusy(momentId);
+      // Render the error AT the panel (not at the top of the page) so
+      // users scrolled deep in a long storyboard actually see it. The
+      // existing image stays visible underneath the error overlay.
       if (data.error === 'INSUFFICIENT_TOKENS') {
-        var errEl = document.getElementById('generate-error');
-        if (errEl) {
-          errEl.innerHTML = insufficientTokensHtml(data.message);
-          errEl.classList.remove('hidden');
-        } else {
-          showAlert((data.message || 'Out of tokens.') + ' Open the Buy Tokens screen from the menu.');
-        }
+        showPanelError(momentId, insufficientTokensHtml(data.message), true);
       } else {
-        showAlert('Error: ' + data.error);
+        showPanelError(momentId, 'Could not regenerate: ' + data.error);
       }
-      renderStoryboard(); return;
+      return;
     }
     moment.image = data.image_url;
     // A token was spent — update the header balance.
@@ -2521,7 +2565,7 @@ function regenImage(momentId, index) {
     renderStoryboard();
     renderNovelWithImages();
   })
-  .catch(function(e) { hidePanelBusy(momentId); showAlert('Error: ' + e.message); renderStoryboard(); });
+  .catch(function(e) { showPanelError(momentId, 'Could not regenerate: ' + e.message); });
 }
 
 // ============================================================
@@ -4614,21 +4658,15 @@ function regenImage(momentId, index) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) {
-      // Generation refused — clear the busy overlay on this panel so
-      // the user's existing image is fully visible again.
-      hidePanelBusy(momentId);
+      // Render the error AT the panel (not at the top of the page) so
+      // users scrolled deep in a long storyboard actually see it. The
+      // existing image stays visible underneath the error overlay.
       if (data.error === 'INSUFFICIENT_TOKENS') {
-        var errEl = document.getElementById('generate-error');
-        if (errEl) {
-          errEl.innerHTML = insufficientTokensHtml(data.message);
-          errEl.classList.remove('hidden');
-        } else {
-          showAlert((data.message || 'Out of tokens.') + ' Open the Buy Tokens screen from the menu.');
-        }
+        showPanelError(momentId, insufficientTokensHtml(data.message), true);
       } else {
-        showAlert('Error: ' + data.error);
+        showPanelError(momentId, 'Could not regenerate: ' + data.error);
       }
-      renderStoryboard(); return;
+      return;
     }
     moment.image = data.image_url;
     // A token was spent — update the header balance.
@@ -4636,7 +4674,7 @@ function regenImage(momentId, index) {
     renderStoryboard();
     renderNovelWithImages();
   })
-  .catch(function(e) { hidePanelBusy(momentId); showAlert('Error: ' + e.message); renderStoryboard(); });
+  .catch(function(e) { showPanelError(momentId, 'Could not regenerate: ' + e.message); });
 }
 
 // ============================================================

@@ -491,6 +491,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   text-shadow:0 1px 4px rgba(0,0,0,0.6);
   margin-top:2px;
 }
+/* Error-overlay variant — uses the same overlay slot as the busy overlay
+   but with a warm red tone, an error icon, and a dismiss (X) corner button.
+   Used for in-panel error display on single-image regen (so users don't
+   miss errors when scrolled deep in a long storyboard). */
+.moment-img-error-overlay{
+  position:absolute;inset:0;
+  background:rgba(40,12,8,0.85);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  z-index:3;
+  border-radius:inherit;
+  padding:14px;
+}
+.moment-img-error-icon{
+  font-size:22px;color:#f0a090;line-height:1;
+}
+.moment-img-error-message{
+  font-size:12px;color:#f5d8d0;
+  max-width:90%;text-align:center;line-height:1.45;
+  text-shadow:0 1px 4px rgba(0,0,0,0.6);
+}
+.moment-img-error-dismiss{
+  position:absolute;top:6px;right:8px;
+  background:none;border:none;cursor:pointer;
+  color:rgba(245,216,208,0.7);font-size:18px;line-height:1;
+  padding:2px 6px;border-radius:4px;
+}
+.moment-img-error-dismiss:hover{color:#f5d8d0;background:rgba(0,0,0,0.3);}
 @keyframes momentBusySpin{to{transform:rotate(360deg);}}
 .moment-card{position:relative;}
 .moment-regen-btn{
