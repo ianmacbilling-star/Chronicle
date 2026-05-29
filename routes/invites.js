@@ -79,12 +79,16 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
   }
 
   // Auto-revoke any prior unused invite to the same (campaign, email).
-  // We mark them used_at = now with a special used_by sentinel of -1 to
-  // distinguish revoked-by-new-invite from genuinely-accepted invites.
-  // Future improvement: dedicated revoked_at column. For now this works
-  // and Deploy 2 will add proper revocation tracking if needed.
+  // We mark them used_at = now (consumed) and leave used_by NULL — the
+  // combination (used_at IS NOT NULL AND used_by IS NULL) means
+  // "revoked / superseded by new invite," vs (used_at IS NOT NULL AND
+  // used_by IS NOT NULL) which means "genuinely accepted by user N."
+  // This sidesteps needing a sentinel value (we tried -1 originally,
+  // but used_by is a FK to users.id and -1 doesn't exist there). Future
+  // improvement if more states need distinguishing: a dedicated
+  // revoked_at column.
   await db.prepare(
-    'UPDATE campaign_invites SET used_at = ?, used_by = -1 ' +
+    'UPDATE campaign_invites SET used_at = ?, used_by = NULL ' +
     'WHERE campaign_id = ? AND LOWER(email_hint) = ? AND used_at IS NULL'
   ).run(new Date().toISOString(), campaignId, normalizedEmail);
 
@@ -206,8 +210,10 @@ router.delete('/campaigns/:campaignId/invites/:inviteId', requireAuth, verifyCam
     return res.status(404).json({ error: 'Invite not found' });
   }
   if (inv.used_at) return res.status(409).json({ error: 'Already used or revoked' });
+  // Revoked invites have used_at set but used_by NULL — see comment on
+  // the auto-revoke logic above for the rationale.
   await db.prepare(
-    'UPDATE campaign_invites SET used_at = ?, used_by = -1 WHERE id = ?'
+    'UPDATE campaign_invites SET used_at = ?, used_by = NULL WHERE id = ?'
   ).run(new Date().toISOString(), inviteId);
   res.json({ success: true });
 });
