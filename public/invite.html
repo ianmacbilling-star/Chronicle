@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronicle — You've Been Invited</title>
+<meta name="description" content="You've been invited to join a Chronicle campaign." />
+<link rel="icon" type="image/png" href="/images/Chronicle_Logo.png" />
+<link rel="apple-touch-icon" href="/images/Chronicle_Logo.png" />
+<link rel="stylesheet" href="/css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  .auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: #0a0806;
+    background-image: url('/images/Chronicle_background.png');
+    background-size: cover;
+    background-position: center;
+    position: relative;
+  }
+  .auth-page::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 8, 6, 0.65);
+  }
+  .invite-card {
+    position: relative;
+    z-index: 1;
+    background: rgba(20, 16, 12, 0.92);
+    border: 1px solid rgba(201, 168, 76, 0.3);
+    border-radius: 10px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .invite-logo {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+  .invite-logo img {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+  }
+  .invite-title {
+    font-family: 'Cinzel', serif;
+    font-size: 22px;
+    color: #c9a84c;
+    text-align: center;
+    margin: 6px 0 4px;
+  }
+  .invite-subtitle {
+    text-align: center;
+    color: rgba(245, 232, 200, 0.7);
+    font-size: 14px;
+    margin-bottom: 22px;
+  }
+  .invite-details {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(201, 168, 76, 0.15);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 22px;
+  }
+  .invite-details .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(201, 168, 76, 0.7);
+    margin-top: 10px;
+  }
+  .invite-details .label:first-child { margin-top: 0; }
+  .invite-details .value {
+    font-size: 16px;
+    color: #f5e8c8;
+    margin-top: 2px;
+  }
+  .invite-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .invite-status {
+    background: rgba(40, 12, 8, 0.6);
+    border: 1px solid rgba(240, 160, 144, 0.3);
+    color: #f5d8d0;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 14px;
+    text-align: center;
+  }
+  .invite-help {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 13px;
+    color: rgba(245, 232, 200, 0.5);
+  }
+  .form-field { margin-bottom: 10px; }
+  .form-field label { display:block; font-size:12px; color: rgba(201,168,76,0.8); margin-bottom: 4px; }
+  .form-field input {
+    width: 100%; box-sizing: border-box;
+    padding: 9px 12px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(201, 168, 76, 0.25);
+    border-radius: 6px;
+    color: #f5e8c8;
+    font-size: 14px;
+  }
+  .form-field input:focus {
+    outline: none;
+    border-color: rgba(201, 168, 76, 0.6);
+  }
+  .form-error {
+    background: rgba(40, 12, 8, 0.6);
+    border: 1px solid rgba(240, 160, 144, 0.3);
+    color: #f5d8d0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    margin-bottom: 10px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div class="auth-page">
+  <div class="invite-card" id="invite-card">
+    <div class="invite-logo">
+      <img src="/images/Chronicle_Logo.png" alt="Chronicle" />
+    </div>
+    <div id="loading-state">
+      <div class="invite-subtitle">Loading invitation...</div>
+    </div>
+    <div id="error-state" style="display:none;">
+      <div class="invite-title">Invitation Unavailable</div>
+      <div class="invite-status" id="error-message"></div>
+      <div class="invite-help">
+        <a href="/login" style="color:#c9a84c;">Go to Chronicle home</a>
+      </div>
+    </div>
+    <div id="invite-state" style="display:none;">
+      <div class="invite-title">You've Been Invited</div>
+      <div class="invite-subtitle" id="invited-by-label"></div>
+      <div class="invite-details">
+        <div class="label">Campaign</div>
+        <div class="value" id="campaign-name"></div>
+        <div class="label">Playing as</div>
+        <div class="value" id="character-name"></div>
+        <div class="label">Expires</div>
+        <div class="value" id="expires-at"></div>
+      </div>
+      <div id="auth-area"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Pull token from URL: /invite/<token>
+var pathParts = window.location.pathname.split('/');
+var token = pathParts[pathParts.length - 1];
+
+var loadingEl = document.getElementById('loading-state');
+var errorEl = document.getElementById('error-state');
+var inviteEl = document.getElementById('invite-state');
+
+function showError(msg) {
+  loadingEl.style.display = 'none';
+  inviteEl.style.display = 'none';
+  errorEl.style.display = 'block';
+  document.getElementById('error-message').textContent = msg;
+}
+
+function showInvite(invite, authState) {
+  loadingEl.style.display = 'none';
+  errorEl.style.display = 'none';
+  inviteEl.style.display = 'block';
+  document.getElementById('invited-by-label').textContent =
+    'Invited by ' + invite.invited_by;
+  document.getElementById('campaign-name').textContent = invite.campaign_name;
+  document.getElementById('character-name').textContent =
+    invite.character_name + (invite.character_class ? ' (' + invite.character_class + ')' : '');
+  var d = new Date(invite.expires_at);
+  document.getElementById('expires-at').textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+  renderAuthArea(invite, authState);
+}
+
+function renderAuthArea(invite, authState) {
+  var area = document.getElementById('auth-area');
+  area.innerHTML = '';
+
+  if (authState.logged_in) {
+    // Already logged in — single Accept button.
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.style.width = '100%';
+    btn.textContent = 'Accept and Join';
+    btn.onclick = function() { acceptInvite(invite); };
+    area.appendChild(btn);
+    var help = document.createElement('div');
+    help.className = 'invite-help';
+    help.textContent = 'Logged in as ' + (authState.email || authState.name || 'you');
+    area.appendChild(help);
+    return;
+  }
+
+  // Not logged in — offer either log-in or sign-up.
+  var loginBtn = document.createElement('button');
+  loginBtn.className = 'btn btn-primary';
+  loginBtn.style.width = '100%';
+  loginBtn.textContent = 'I have an account — log in';
+  loginBtn.onclick = function() {
+    // Redirect to login with a returnTo that brings them back here.
+    var rt = encodeURIComponent(window.location.pathname);
+    window.location.href = '/login?returnTo=' + rt;
+  };
+  area.appendChild(loginBtn);
+
+  var divider = document.createElement('div');
+  divider.style.textAlign = 'center';
+  divider.style.color = 'rgba(245, 232, 200, 0.4)';
+  divider.style.margin = '14px 0 10px';
+  divider.style.fontSize = '12px';
+  divider.textContent = '— or —';
+  area.appendChild(divider);
+
+  // Inline registration form pre-filled with the email_hint.
+  var form = document.createElement('div');
+  form.innerHTML =
+    '<div class="form-error" id="reg-error"></div>' +
+    '<div class="form-field"><label>Your name</label><input type="text" id="reg-name" /></div>' +
+    '<div class="form-field"><label>Email</label><input type="email" id="reg-email" value="' + (invite.email_hint || '') + '" /></div>' +
+    '<div class="form-field"><label>Password (8+ characters)</label><input type="password" id="reg-password" /></div>';
+  area.appendChild(form);
+
+  var regBtn = document.createElement('button');
+  regBtn.className = 'btn btn-primary';
+  regBtn.style.width = '100%';
+  regBtn.style.marginTop = '6px';
+  regBtn.textContent = 'Create account and join';
+  regBtn.onclick = function() { registerAndAccept(invite); };
+  area.appendChild(regBtn);
+}
+
+function registerAndAccept(invite) {
+  var nameEl = document.getElementById('reg-name');
+  var emailEl = document.getElementById('reg-email');
+  var pwEl = document.getElementById('reg-password');
+  var errEl = document.getElementById('reg-error');
+  errEl.style.display = 'none';
+
+  var name = (nameEl.value || '').trim();
+  var email = (emailEl.value || '').trim();
+  var pw = pwEl.value || '';
+  if (!name || !email || !pw) {
+    errEl.textContent = 'All fields required.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (pw.length < 8) {
+    errEl.textContent = 'Password must be at least 8 characters.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, email: email, password: pw, invite_token: invite.token })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      errEl.textContent = data.error;
+      errEl.style.display = 'block';
+      return;
+    }
+    // Registration succeeded AND invite was auto-accepted server-side.
+    var cid = data.auto_joined_campaign_id || invite.campaign_id;
+    window.location.href = '/app.html#campaign=' + cid;
+  })
+  .catch(function(e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    errEl.style.display = 'block';
+  });
+}
+
+function acceptInvite(invite) {
+  fetch('/api/invites/' + encodeURIComponent(invite.token) + '/accept', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+  .then(function(wrap) {
+    var data = wrap.data;
+    if (data.error) {
+      if (data.error === 'ALREADY_MEMBER') {
+        // Friendly — they're already in. Send them to the campaign.
+        window.location.href = '/app.html#campaign=' + invite.campaign_id;
+        return;
+      }
+      showError(data.message || ('Could not accept: ' + data.error));
+      return;
+    }
+    window.location.href = '/app.html#campaign=' + (data.campaign_id || invite.campaign_id);
+  })
+  .catch(function(e) {
+    showError('Network error: ' + e.message);
+  });
+}
+
+// Boot — fetch invite metadata + current auth state in parallel.
+Promise.all([
+  fetch('/api/invites/' + encodeURIComponent(token)).then(function(r) {
+    return r.json().then(function(d) { return { status: r.status, data: d }; });
+  }),
+  fetch('/api/auth/me').then(function(r) {
+    return r.json().then(function(d) { return { status: r.status, data: d }; });
+  }).catch(function() { return { status: 401, data: {} }; })
+])
+.then(function(results) {
+  var inviteResp = results[0];
+  var authResp = results[1];
+  if (inviteResp.data.error) {
+    showError(inviteResp.data.message || 'Invitation invalid');
+    return;
+  }
+  var authState = { logged_in: authResp.status === 200 && authResp.data && authResp.data.id };
+  if (authState.logged_in) {
+    authState.email = authResp.data.email;
+    authState.name = authResp.data.name;
+  }
+  showInvite(inviteResp.data, authState);
+})
+.catch(function(e) {
+  showError('Could not load invitation: ' + e.message);
+});
+</script>
+</body>
+</html>

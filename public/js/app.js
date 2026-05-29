@@ -571,6 +571,9 @@ function showCampaignSection(section) {
   if (section === 'characters') loadCharacters();
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
+
+  // Phase 3 — show the invite button only for DMs of this campaign.
+  refreshInviteButtonVisibility();
 }
 
 // ============================================================
@@ -3806,6 +3809,9 @@ function showCampaignSection(section) {
   if (section === 'characters') loadCharacters();
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
+
+  // Phase 3 — show the invite button only for DMs of this campaign.
+  refreshInviteButtonVisibility();
 }
 
 // ============================================================
@@ -5560,4 +5566,157 @@ function showAlert(msg) {
   el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999;min-width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
   document.body.appendChild(el);
   setTimeout(function() { el.remove(); }, 2500);
+}
+
+// ============================================================
+// PHASE 3 — INVITE FLOW
+// ============================================================
+// Deploy 1 of Phase 3: minimal invite-creation UI. The proper Members
+// tab lives in Deploy 2; this is the bare-minimum modal so the flow is
+// testable end-to-end on staging.
+
+// Show/hide the "Invite player" button based on whether the current
+// user is a DM of the current campaign. Called from showCampaignSection.
+function refreshInviteButtonVisibility() {
+  var btn = document.getElementById('campaign-invite-btn');
+  if (!btn) return;
+  var cur = state.currentCampaign;
+  // my_role lands on the campaign objects from the membership-aware
+  // JOIN query in routes/campaigns.js. Only DMs can invite.
+  if (cur && cur.my_role === 'dm') {
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+// Open the invite-creation modal. Fetches the campaign's characters so
+// the dropdown can list unowned PCs. The first option is always
+// "Create new character" — picking it reveals the name/class inputs.
+function openInviteModal() {
+  var cur = state.currentCampaign;
+  if (!cur) {
+    showAlert('No campaign selected');
+    return;
+  }
+  // Reset modal state.
+  document.getElementById('invite-modal-error').classList.add('hidden');
+  document.getElementById('invite-modal-step1').style.display = '';
+  document.getElementById('invite-modal-step2').style.display = 'none';
+  document.getElementById('invite-email').value = '';
+  document.getElementById('invite-newchar-name').value = '';
+  document.getElementById('invite-newchar-class').value = '';
+  document.getElementById('invite-character-select').value = '__new__';
+  document.getElementById('invite-newchar-fields').style.display = '';
+
+  // Populate the character dropdown with PCs not yet owned (is_npc=false
+  // AND owner_user_id IS NULL). We pull from the existing characters
+  // endpoint and filter client-side.
+  fetch('/api/campaigns/' + cur.id + '/characters')
+    .then(function(r) { return r.json(); })
+    .then(function(chars) {
+      var unowned = (chars || []).filter(function(c) {
+        return !c.is_npc && !c.owner_user_id;
+      });
+      var sel = document.getElementById('invite-character-select');
+      // Reset options to just "create new", then add unowned PCs.
+      sel.innerHTML = '<option value="__new__">+ Create a new character for them</option>';
+      unowned.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = String(c.id);
+        opt.textContent = c.name + (c.class ? ' (' + c.class + ')' : '');
+        sel.appendChild(opt);
+      });
+      // Wire change to toggle the new-character fields.
+      sel.onchange = function() {
+        document.getElementById('invite-newchar-fields').style.display =
+          (sel.value === '__new__') ? '' : 'none';
+      };
+    })
+    .catch(function() { /* non-fatal — DM can still create a new character */ });
+
+  document.getElementById('invite-modal').classList.remove('hidden');
+}
+
+function closeInviteModal() {
+  document.getElementById('invite-modal').classList.add('hidden');
+}
+
+function submitInvite() {
+  var cur = state.currentCampaign;
+  if (!cur) return;
+  var emailEl = document.getElementById('invite-email');
+  var sel = document.getElementById('invite-character-select');
+  var nameEl = document.getElementById('invite-newchar-name');
+  var classEl = document.getElementById('invite-newchar-class');
+  var errEl = document.getElementById('invite-modal-error');
+  errEl.classList.add('hidden');
+
+  var email = (emailEl.value || '').trim();
+  if (!email) {
+    errEl.textContent = 'Please enter the player\'s email.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  var body = { email: email };
+  if (sel.value === '__new__') {
+    var name = (nameEl.value || '').trim();
+    if (!name) {
+      errEl.textContent = 'Please enter a name for the new character.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    body.character_name = name;
+    body.character_class = (classEl.value || '').trim();
+  } else {
+    body.character_id = parseInt(sel.value, 10);
+  }
+
+  fetch('/api/campaigns/' + cur.id + '/invites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      errEl.textContent = data.error;
+      errEl.classList.remove('hidden');
+      return;
+    }
+    // Stash the link for the copy button and switch the modal to step 2.
+    window.__lastInviteUrl = data.url;
+    document.getElementById('invite-link-display').textContent = data.url;
+    document.getElementById('invite-modal-step1').style.display = 'none';
+    document.getElementById('invite-modal-step2').style.display = '';
+  })
+  .catch(function(e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    errEl.classList.remove('hidden');
+  });
+}
+
+function copyInviteLink() {
+  var url = window.__lastInviteUrl;
+  if (!url) return;
+  // Modern clipboard API with a fallback for older contexts.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function() {
+      var btn = document.getElementById('invite-copy-btn');
+      if (btn) {
+        var prev = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = prev; }, 1500);
+      }
+    });
+  } else {
+    // Fallback: select the text and let the user copy manually.
+    var el = document.getElementById('invite-link-display');
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
 }

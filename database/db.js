@@ -267,6 +267,22 @@ async function initPostgres() {
     'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_detail TEXT',
     'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_moment_index INTEGER',
     "ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS change_status TEXT DEFAULT 'none'",
+    // Phase 3 multi-user — character claim state + session access status.
+    // is_claimed = true means the character is fully owned (either a
+    // normal DM-created PC/NPC, OR a stub that's been claimed via an
+    // accepted invite). is_claimed = false means this character was
+    // stubbed out as part of an invite and is awaiting acceptance.
+    // Default is TRUE so every existing character (and every normal
+    // DM-created character) is considered claimed.
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS is_claimed BOOLEAN DEFAULT true',
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS owner_user_id INTEGER',
+    // sessions.player_access_status drives the Phase 3 lifecycle rule —
+    // players can canonical-edit their character until ANY session in
+    // the campaign is marked 'ready'. Using a TEXT field (not boolean)
+    // so future states like 'archived' or 'locked' can be added without
+    // a schema change. Default 'draft'. No UI to change this yet — that
+    // comes in Deploy 3 of Phase 3 work.
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS player_access_status TEXT DEFAULT 'draft'",
     // Review tab — terse summaries of the opening and closing narrative.
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_intro_summary TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_outro_summary TEXT',
