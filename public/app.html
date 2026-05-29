@@ -752,7 +752,11 @@
 
 <!-- Phase 3 — invite-creation modal (temporary placement for Deploy 1; moves into Members tab in Deploy 2). -->
 <div class="modal-overlay hidden" id="invite-modal" onclick="if(event.target===this)closeInviteModal()">
+<<<<<<< Updated upstream
   <div class="modal-content" style="max-width:520px;">
+=======
+  <div class="modal">
+>>>>>>> Stashed changes
     <div class="modal-header">
       <div class="modal-title">Invite a Player</div>
       <button class="modal-close" onclick="closeInviteModal()">&times;</button>
@@ -778,12 +782,17 @@
         <label class="form-label" style="margin-top:8px;">Class (optional)</label>
         <input class="form-input" id="invite-newchar-class" placeholder="e.g. Wizard" />
       </div>
+<<<<<<< Updated upstream
       <div class="modal-actions">
+=======
+      <div class="modal-footer">
+>>>>>>> Stashed changes
         <button class="btn" onclick="closeInviteModal()">Cancel</button>
         <button class="btn btn-primary" onclick="submitInvite()">Generate invite link</button>
       </div>
     </div>
     <div id="invite-modal-step2" style="display:none;">
+<<<<<<< Updated upstream
       <p style="color:#f5e8c8;margin-bottom:14px;">
         Invite created. Copy this link and send it to your player however you like (Discord, text, email, etc.).
       </p>
@@ -792,6 +801,16 @@
         Link expires in 7 days. Single use.
       </div>
       <div class="modal-actions" style="margin-top:14px;">
+=======
+      <p style="color:var(--text);margin-bottom:14px;">
+        Invite created. Copy this link and send it to your player however you like (Discord, text, email, etc.).
+      </p>
+      <div style="background:rgba(0,0,0,0.4);border:1px solid rgba(201,168,76,0.25);border-radius:6px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;color:var(--gold);" id="invite-link-display"></div>
+      <div style="font-size:11px;color:rgba(245,232,200,0.5);margin-top:8px;">
+        Link expires in 7 days. Single use.
+      </div>
+      <div class="modal-footer">
+>>>>>>> Stashed changes
         <button class="btn" onclick="closeInviteModal()">Done</button>
         <button class="btn btn-primary" id="invite-copy-btn" onclick="copyInviteLink()">Copy link</button>
       </div>
