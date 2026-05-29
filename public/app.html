@@ -71,6 +71,8 @@
           <button class="btn btn-primary" onclick="openSessionModal()">+ New session</button>
           <button class="btn btn-sm" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
+          <!-- Phase 3 Deploy 1: temporary invite button. Will move into a proper Members tab in Deploy 2. -->
+          <button class="btn btn-sm" id="campaign-invite-btn" onclick="openInviteModal()" style="display:none;">&#9993; Invite player</button>
         </div>
       </div>
       <div class="sessions-list" id="sessions-list"></div>
@@ -376,15 +378,44 @@
       <div id="account-admin-testing" class="settings-section" style="display:none;border:2px dashed rgba(255,140,0,0.5);background:rgba(255,140,0,0.06);">
         <div class="settings-section-title" style="color:#ff8c00;">&#9888; Admin Testing &mdash; Token Balance</div>
         <div class="settings-section-desc">
-          Temporary testing tool. Sets <em>your own</em> token balance to the value below (wipes prior ledger, writes audit row). Remove this widget after token testing is complete.
+          Admin tools for managing token balances. The cross-user credit section is the permanent admin tool; the "Set my balance" section is for testing edge cases and may be removed later.
         </div>
         <div id="admin-set-balance-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
-        <div style="display:flex;align-items:flex-end;gap:10px;margin-top:14px;">
-          <div class="form-group" style="margin-bottom:0;flex:0 0 180px;">
-            <label class="form-label">Set my balance to</label>
-            <input class="form-input" type="number" min="0" step="1" id="admin-set-balance-input" placeholder="e.g. 2" />
+
+        <!-- Cross-user credit (the operational tool — credit any user) -->
+        <div style="margin-top:18px;padding:14px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(201,168,76,0.04);">
+          <div style="font-size:13px;font-weight:600;color:#c9a84c;margin-bottom:10px;">Credit another user</div>
+          <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;">
+            <div class="form-group" style="margin-bottom:0;flex:1 1 240px;">
+              <label class="form-label">User</label>
+              <select class="form-input" id="admin-credit-user-select">
+                <option value="">Loading users\u2026</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;flex:0 0 140px;">
+              <label class="form-label">Amount</label>
+              <input class="form-input" type="number" min="1" step="1" id="admin-credit-amount-input" placeholder="e.g. 100" />
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="adminCreditUser()">Credit</button>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="adminSetMyBalance()">Set balance</button>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-top:6px;">
+            Adds to the user's existing balance (does not reset it). Use this to seed testers or comp users.
+          </div>
+        </div>
+
+        <!-- Set-my-balance (the testing tool — deprecate later) -->
+        <div style="margin-top:14px;padding:14px;border:1px dashed rgba(201,168,76,0.2);border-radius:6px;">
+          <div style="font-size:13px;font-weight:600;color:rgba(201,168,76,0.8);margin-bottom:6px;">Set my own balance (testing)</div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:10px;">
+            Wipes <em>your own</em> ledger and sets a fresh balance. Useful for testing edge cases (zero, exactly-N, etc.).
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:10px;">
+            <div class="form-group" style="margin-bottom:0;flex:0 0 180px;">
+              <label class="form-label">Set my balance to</label>
+              <input class="form-input" type="number" min="0" step="1" id="admin-set-balance-input" placeholder="e.g. 2" />
+            </div>
+            <button class="btn btn-sm" onclick="adminSetMyBalance()">Set balance</button>
+          </div>
         </div>
       </div>
 
@@ -715,6 +746,55 @@
 
     <div class="modal-footer">
       <button class="btn" onclick="closeTokensModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Phase 3 — invite-creation modal (temporary placement for Deploy 1; moves into Members tab in Deploy 2). -->
+<div class="modal-overlay hidden" id="invite-modal" onclick="if(event.target===this)closeInviteModal()">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Invite a Player</div>
+      <button class="modal-close" onclick="closeInviteModal()">&times;</button>
+    </div>
+    <div id="invite-modal-error" class="alert alert-error hidden"></div>
+    <div id="invite-modal-step1">
+      <div class="form-group">
+        <label class="form-label">Player's email</label>
+        <input class="form-input" id="invite-email" type="email" placeholder="player@example.com" />
+        <div style="font-size:11px;color:rgba(245,232,200,0.5);margin-top:4px;">
+          Used to pre-fill their sign-up. They can use a forwarded link with a different email — that's fine.
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Character</label>
+        <select class="form-input" id="invite-character-select">
+          <option value="__new__">+ Create a new character for them</option>
+        </select>
+      </div>
+      <div class="form-group" id="invite-newchar-fields" style="display:none;">
+        <label class="form-label">New character name</label>
+        <input class="form-input" id="invite-newchar-name" placeholder="e.g. Lyra Stormwind" />
+        <label class="form-label" style="margin-top:8px;">Class (optional)</label>
+        <input class="form-input" id="invite-newchar-class" placeholder="e.g. Wizard" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeInviteModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitInvite()">Generate invite link</button>
+      </div>
+    </div>
+    <div id="invite-modal-step2" style="display:none;">
+      <p style="color:#f5e8c8;margin-bottom:14px;">
+        Invite created. Copy this link and send it to your player however you like (Discord, text, email, etc.).
+      </p>
+      <div style="background:rgba(0,0,0,0.4);border:1px solid rgba(201,168,76,0.25);border-radius:6px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;color:#c9a84c;" id="invite-link-display"></div>
+      <div style="font-size:11px;color:rgba(245,232,200,0.5);margin-top:8px;">
+        Link expires in 7 days. Single use.
+      </div>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn" onclick="closeInviteModal()">Done</button>
+        <button class="btn btn-primary" id="invite-copy-btn" onclick="copyInviteLink()">Copy link</button>
+      </div>
     </div>
   </div>
 </div>

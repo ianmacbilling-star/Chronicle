@@ -3,10 +3,19 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
 const { getTier, isTrialExpired, TIERS } = require('../middleware/tiers');
+const { creditTokens } = require('./tokens');
+
+// Welcome grant for new accounts — enough tokens to actually try the
+// product end-to-end (build a character, generate a small storyboard,
+// regen a few panels). Without this, new signups would hit 0-tokens
+// immediately and have no way to experience Chronicle. Tracked in the
+// ledger as event_type='signup_grant' so we can later report on how
+// many grant-tokens have been issued vs. purchased.
+const SIGNUP_TOKEN_GRANT = 100;
 
 router.post('/register', async function(req, res) {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, invite_token } = req.body;
     if (!name || !email || !password) return res.json({ error: 'All fields required' });
     if (password.length < 8) return res.json({ error: 'Password must be at least 8 characters' });
 
@@ -24,11 +33,62 @@ router.post('/register', async function(req, res) {
       'INSERT INTO users (name, email, password, tier, created_at, trial_started_at) VALUES (?, ?, ?, ?, ?, ?)'
     ).run(name.trim(), email.toLowerCase().trim(), hash, 'platinum', now, now);
 
-    req.session.userId = result.lastInsertRowid;
+    const newUserId = result.lastInsertRowid;
+
+    // Welcome grant — credit the new account so they can immediately use
+    // the product. Wrapped in its own try/catch so a grant failure never
+    // breaks registration itself (worst case: user is created with 0
+    // tokens, admin can credit later via the testing widget).
+    try {
+      await creditTokens(newUserId, SIGNUP_TOKEN_GRANT, {
+        bucket: 'cot',
+        event_type: 'signup_grant',
+        source: 'welcome'
+      });
+    } catch (grantErr) {
+      console.error('Signup grant failed (non-fatal):', grantErr.message);
+    }
+
+    req.session.userId = newUserId;
     req.session.userName = name.trim();
     req.session.userEmail = email.toLowerCase().trim();
 
-    res.json({ success: true, name: name.trim(), email: email.toLowerCase().trim() });
+    // Phase 3: if registration came in via an invite link, auto-accept
+    // the invite now. Same all-or-nothing semantics as the signup grant:
+    // if the auto-accept fails, registration still succeeds — the user
+    // can revisit the invite link manually and click Accept.
+    let autoJoinedCampaignId = null;
+    if (invite_token && typeof invite_token === 'string') {
+      try {
+        const invite = await db.prepare(
+          'SELECT * FROM campaign_invites WHERE token = ?'
+        ).get(invite_token);
+        if (invite && !invite.used_at && new Date(invite.expires_at) >= new Date()) {
+          await db.prepare(
+            'INSERT INTO campaign_members (campaign_id, user_id, role) VALUES (?, ?, ?) ' +
+            'ON CONFLICT (campaign_id, user_id) DO NOTHING'
+          ).run(invite.campaign_id, newUserId, invite.role);
+          if (invite.character_id) {
+            await db.prepare(
+              'UPDATE characters SET owner_user_id = ?, is_claimed = true WHERE id = ?'
+            ).run(newUserId, invite.character_id);
+          }
+          await db.prepare(
+            'UPDATE campaign_invites SET used_at = ?, used_by = ? WHERE id = ?'
+          ).run(new Date().toISOString(), newUserId, invite.id);
+          autoJoinedCampaignId = invite.campaign_id;
+        }
+      } catch (inviteErr) {
+        console.error('Auto-accept invite on register failed (non-fatal):', inviteErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      auto_joined_campaign_id: autoJoinedCampaignId
+    });
   } catch(e) {
     console.error('Register error:', e.message);
     res.json({ error: 'Registration failed. Please try again.' });

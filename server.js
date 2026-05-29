@@ -74,6 +74,17 @@ app.use('/api/extract', require('./routes/extract'));
 app.use('/api/images', require('./routes/images'));
 app.use('/api/narrative', require('./routes/narrative'));
 app.use('/api/pdf', require('./routes/pdf'));
+// Phase 3 — invite endpoints. Mounted at /api so the router can serve
+// both /api/campaigns/:campaignId/invites and /api/invites/:token.
+app.use('/api', require('./routes/invites'));
+
+// Phase 3 — invite landing page. Standalone HTML served to logged-out
+// and logged-in users alike; it fetches metadata client-side and adapts
+// the UI based on auth state. Separate file (not the SPA) so unauth'd
+// visitors don't load the full app.js.
+app.get('/invite/:token', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'invite.html'));
+});
 
 app.get('*', function(req, res) {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
