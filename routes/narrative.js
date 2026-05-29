@@ -33,8 +33,37 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     return c.name + (c.player_name ? ' (played by ' + c.player_name + ')' : '') + ' — ' + (c.cls || '') + ': ' + (c.description || '');
   }).join('\n');
 
+  // Build the panel sequence with EXPLICIT per-gap anchoring. The
+  // previous version handed the AI a flat list of panels and left it to
+  // infer chronology from transcript context. That broke when a DM-note
+  // instruction inserted a panel into a new slot: the surrounding
+  // narrative blocks ended up describing events in the wrong order
+  // (e.g. the post-event prose appeared BEFORE the panel that depicted
+  // the event itself).
+  //
+  // The fix: structure the prompt as a sequence of GAPS, each gap
+  // explicitly bracketed by the panel before it and the panel after it.
+  // The AI is told to write prose for the EVENTS THAT OCCUR BETWEEN
+  // those two specific panels — nothing else. This forces the narrative
+  // to track the actual chronological position of each block.
   const momentsList = moments.map(function(m, i) {
-    return 'Panel ' + (i + 1) + ': ' + m.title + '\n' + m.description;
+    return 'PANEL ' + (i + 1) + ' — ' + m.title + '\n' +
+      '  Depicts: ' + m.description;
+  }).join('\n\n');
+
+  // Explicit per-gap descriptions for the AI to fill. Each gap is
+  // labeled with the two panels that bracket it.
+  const gapsList = moments.map(function(m, i) {
+    const isLast = (i === moments.length - 1);
+    const nextLabel = isLast
+      ? 'THE END OF THE SESSION'
+      : 'PANEL ' + (i + 2) + ' — "' + moments[i + 1].title + '"';
+    return 'GAP after panel ' + (i + 1) + ': sits between ' +
+      'PANEL ' + (i + 1) + ' — "' + m.title + '" AND ' + nextLabel + '.\n' +
+      '  Write prose describing ONLY the story events that occur AFTER panel ' + (i + 1) +
+      ' and BEFORE ' + (isLast ? 'the session ends' : 'panel ' + (i + 2)) + '. ' +
+      'Do not describe what panel ' + (i + 1) + ' itself shows — that is the image\'s job. ' +
+      'Do not describe events that belong in other gaps.';
   }).join('\n\n');
 
   const prompt =
@@ -43,32 +72,48 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'Session: ' + session.name + '\n' +
     'Date: ' + session.session_date + '\n\n' +
     'Characters:\n' + charList + '\n\n' +
-    'The session has been broken into ' + moments.length + ' key illustrated panels:\n\n' +
+    '═══════════════════════════════════════════════════════════\n' +
+    'THE PANEL SEQUENCE (in chronological order — do NOT reorder):\n' +
+    '═══════════════════════════════════════════════════════════\n\n' +
     momentsList + '\n\n' +
-    (session.session_notes ? 'DM Notes:\n' + session.session_notes + '\n\n' : '') +
-    'Full session transcript:\n' + session.transcript + '\n\n' +
-    'Your task: Write narrative prose for this graphic novel session. The prose should:\n' +
+    '═══════════════════════════════════════════════════════════\n' +
+    'YOUR JOB — fill the gaps between panels:\n' +
+    '═══════════════════════════════════════════════════════════\n\n' +
+    'Each "after" block in your response covers ONE specific gap in the timeline. ' +
+    'The panel sequence above is the authoritative chronology — events described ' +
+    'in any narrative block MUST belong to the gap that block represents.\n\n' +
+    'The gaps you need to fill:\n\n' +
+    gapsList + '\n\n' +
+    'You will also write an "intro" (before panel 1) and an "outro" (after the final panel).\n\n' +
+    (session.session_notes ? 'DM Notes (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + session.session_notes + '\n\n' : '') +
+    'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
+    'Style:\n' +
     '- Read like a fantasy novel or comic book caption — vivid, dramatic, engaging\n' +
-    '- NOT be a transcription of what players said\n' +
-    '- Bridge the story between illustrated panels naturally\n' +
+    '- NOT a transcription of what players said\n' +
     '- Use present tense, third person narrative voice\n' +
-    '- Be 2-4 sentences per section — punchy, not bloated\n' +
-    '- Capture the mood, tension, and drama of each moment\n' +
-    '- Reference characters by name\n\n' +
-    'Return ONLY valid JSON, no markdown:\n' +
+    '- 2-4 sentences per gap — punchy, not bloated\n' +
+    '- Reference characters by name when relevant\n' +
+    '- Capture mood, tension, and drama\n\n' +
+    'CRITICAL — chronological correctness:\n' +
+    '- Each gap\'s prose describes ONLY events between its two bracketing panels\n' +
+    '- Do not place post-event prose before the panel that depicts that event\n' +
+    '- Do not summarize panel content itself — that\'s what the image shows\n' +
+    '- If the transcript covers events that the panels skip (travel, deliberation, side moments), THOSE go in the gaps\n\n' +
+    'Return ONLY valid JSON, no markdown. The sections array must have EXACTLY ' + moments.length +
+    ' entries (one per panel), in order, with panel_index 0 through ' + (moments.length - 1) + ':\n' +
     '{\n' +
-    '  "intro": "Opening paragraph that sets the scene before the first panel (2-3 sentences)",\n' +
-    '  "intro_summary": "A terse outline of the opening — what the reader needs to know. As short as possible while capturing the key beats. Maximum 25 words; aim shorter if you can.",\n' +
+    '  "intro": "Opening paragraph that sets the scene BEFORE panel 1 (2-3 sentences)",\n' +
+    '  "intro_summary": "A terse outline of the opening — what the reader needs to know. Maximum 25 words; aim shorter.",\n' +
     '  "sections": [\n' +
     '    {\n' +
     '      "panel_index": 0,\n' +
     '      "before": "",\n' +
-    '      "after": "Prose that bridges FROM this panel to the next (2-3 sentences)",\n' +
-    '      "after_summary": "A terse outline of what happens between this panel and the next — captures real story events the panels skip (travel, debate, side encounters). As short as possible. Maximum 25 words; aim shorter if you can. Do NOT pad to length."\n' +
+    '      "after": "Prose for the gap AFTER panel 1 and BEFORE panel 2 (2-3 sentences)",\n' +
+    '      "after_summary": "A terse outline of what happens in this gap. Maximum 25 words; aim shorter. Do NOT pad to length."\n' +
     '    }\n' +
     '  ],\n' +
     '  "outro": "Closing paragraph after the final panel (2-3 sentences)",\n' +
-    '  "outro_summary": "A terse outline of the closing — how the session ends. As short as possible. Maximum 25 words; aim shorter if you can."\n' +
+    '  "outro_summary": "A terse outline of the closing. Maximum 25 words; aim shorter."\n' +
     '}';
 
   try {
