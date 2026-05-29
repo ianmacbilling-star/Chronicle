@@ -1,22 +1,15 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
 
-async function verifyCampaignOwner(req, res, next) {
-  const db = await getDb();
-  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=? AND user_id=?').get(req.params.campaignId, req.session.userId);
-  if (!campaign) return res.status(403).json({ error: 'Access denied' });
-  next();
-}
-
-router.get('/', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const moments = await db.prepare('SELECT * FROM moments WHERE session_id=? ORDER BY panel_order ASC').all(req.params.sessionId);
   res.json(moments);
 });
 
-router.post('/', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignDM, async function(req, res) {
   const { title, description, type, prompt, panel_order } = req.body;
   if (!title) return res.json({ error: 'Title required' });
   const db = await getDb();
@@ -28,7 +21,7 @@ router.post('/', requireAuth, verifyCampaignOwner, async function(req, res) {
   res.json(moment);
 });
 
-router.delete('/:momentId', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.delete('/:momentId', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   await db.prepare('DELETE FROM moments WHERE id=? AND session_id=?').run(req.params.momentId, req.params.sessionId);
   res.json({ success: true });
@@ -36,7 +29,7 @@ router.delete('/:momentId', requireAuth, verifyCampaignOwner, async function(req
 
 // PUT - edit a moment's prompt. Prompt editing is a Platinum-tier perk,
 // so the tier is enforced here on the server, not just in the UI.
-router.put('/:momentId', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.put('/:momentId', requireAuth, verifyCampaignDM, async function(req, res) {
   const { getTier } = require('../middleware/tiers');
   const db = await getDb();
 

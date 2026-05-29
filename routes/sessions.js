@@ -1,21 +1,13 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
 const { checkSessionLimit } = require('../middleware/tiers');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
 
-async function verifyCampaignOwner(req, res, next) {
-  const db = await getDb();
-  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=? AND user_id=?').get(req.params.campaignId, req.session.userId);
-  if (!campaign) return res.status(403).json({ error: 'Access denied' });
-  req.campaign = campaign;
-  next();
-}
-
 // GET last used art style and layout style
-router.get('/last-style', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/last-style', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(
     'SELECT art_style, layout_style FROM sessions WHERE campaign_id=? AND (art_style IS NOT NULL OR layout_style IS NOT NULL) ORDER BY session_date DESC, created_at DESC LIMIT 1'
@@ -27,7 +19,7 @@ router.get('/last-style', requireAuth, verifyCampaignOwner, async function(req, 
 });
 
 // GET novel/all - must come before /:id
-router.get('/novel/all', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/novel/all', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   const result = await Promise.all(sessions.map(async function(s) {
@@ -38,14 +30,14 @@ router.get('/novel/all', requireAuth, verifyCampaignOwner, async function(req, r
 });
 
 // GET all sessions
-router.get('/', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   res.json(sessions);
 });
 
 // GET single session
-router.get('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -54,7 +46,7 @@ router.get('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
 });
 
 // POST create session
-router.post('/', requireAuth, verifyCampaignOwner, checkSessionLimit, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignDM, checkSessionLimit, async function(req, res) {
   const { name, session_date } = req.body;
   if (!name || !session_date) return res.json({ error: 'Name and date required' });
   const db = await getDb();
@@ -67,7 +59,7 @@ router.post('/', requireAuth, verifyCampaignOwner, checkSessionLimit, async func
 });
 
 // PUT update session
-router.put('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.put('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -89,7 +81,7 @@ router.put('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
 });
 
 // DELETE session
-router.delete('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -100,7 +92,7 @@ router.delete('/:id', requireAuth, verifyCampaignOwner, async function(req, res)
 });
 
 // GET session character snapshots (Stage 2)
-router.get('/:id/characters', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/:id/characters', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const rows = await db.prepare(
     'SELECT sc.id, sc.character_id, sc.prompt, sc.change_note, sc.edited_at, ' +
@@ -113,7 +105,7 @@ router.get('/:id/characters', requireAuth, verifyCampaignOwner, async function(r
 });
 
 // PUT edit a session character snapshot prompt (Platinum only)
-router.put('/:id/characters/:characterId', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.put('/:id/characters/:characterId', requireAuth, verifyCampaignDM, async function(req, res) {
   const { getTier } = require('../middleware/tiers');
   const db = await getDb();
   const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
@@ -137,7 +129,7 @@ router.put('/:id/characters/:characterId', requireAuth, verifyCampaignOwner, asy
 // Body: { detail } — the (possibly edited) amended-appearance text.
 // Returns a new image URL; the DM reviews it, may regenerate again,
 // and only Approve commits it.
-router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const sessionId = req.params.id;
@@ -193,7 +185,7 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
 // POST approve a pending change. Body: { detail, image_url }.
 // Locks the approved image + text into THIS session, writes the change
 // forward into all LATER sessions for this character, clears the flag.
-router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const sessionId = req.params.id;
@@ -251,7 +243,7 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
 // POST reject a pending change. Marks it 'rejected' and clears the badge.
 // The rejected detail is kept on the row so re-extraction can tell the AI
 // not to re-flag the SAME change (a genuinely different change still flags).
-router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const now = new Date().toISOString();
@@ -271,7 +263,7 @@ router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCam
 // outline plus which characters and assets WILL be matched into each
 // panel. Reuses the exact matching logic from images.js so this preview
 // can never drift from what the storyboard actually generates.
-router.get('/:id/review', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/:id/review', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const sessionId = req.params.id;

@@ -447,7 +447,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     'SELECT m.* FROM moments m ' +
     'JOIN sessions s ON m.session_id = s.id ' +
     'JOIN campaigns c ON s.campaign_id = c.id ' +
-    'WHERE m.id = ? AND c.user_id = ?'
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE m.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
   ).get(moment_id, req.session.userId);
 
   if (!moment) return res.status(403).json({ error: 'Access denied' });
@@ -523,7 +523,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(
     'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
-    'WHERE s.id = ? AND c.user_id = ?'
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
   ).get(session_id, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });

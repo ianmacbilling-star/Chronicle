@@ -185,17 +185,18 @@ router.get('/usage', async function(req, res) {
     const uid = req.session.userId;
 
     const campaigns = await db.prepare(
-      'SELECT COUNT(*) AS c FROM campaigns WHERE user_id = ? AND is_active = true'
+      'SELECT COUNT(*) AS c FROM campaigns WHERE id IN (SELECT campaign_id FROM campaign_members WHERE user_id = ? AND role = \'dm\') AND is_active = true'
     ).get(uid);
 
     const sessions = await db.prepare(
-      'SELECT COUNT(*) AS c FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE c.user_id = ?'
+      'SELECT COUNT(*) AS c FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE cm.user_id = ? AND cm.role = \'dm\''
     ).get(uid);
 
     const storyboards = await db.prepare(
       'SELECT COUNT(DISTINCT m.session_id) AS c FROM moments m ' +
       'JOIN sessions s ON m.session_id = s.id ' +
-      'JOIN campaigns c ON s.campaign_id = c.id WHERE c.user_id = ?'
+      'JOIN campaigns c ON s.campaign_id = c.id ' +
+      "JOIN campaign_members cm ON cm.campaign_id = c.id WHERE cm.user_id = ? AND cm.role = 'dm'"
     ).get(uid);
 
     // Image generation counts. month_key is 'YYYY-MM'.

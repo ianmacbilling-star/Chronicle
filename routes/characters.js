@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
@@ -26,14 +26,6 @@ const uploadFields = upload.fields([
   { name: 'image_other', maxCount: 1 }
 ]);
 
-async function verifyCampaignOwner(req, res, next) {
-  const db = await getDb();
-  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
-  if (!campaign) return res.status(403).json({ error: 'Access denied' });
-  req.campaign = campaign;
-  next();
-}
-
 async function handleFileUpload(files, fieldname, oldUrl) {
   if (!files || !files[fieldname] || !files[fieldname][0]) return null;
   const file = files[fieldname][0];
@@ -46,14 +38,14 @@ async function handleFileUpload(files, fieldname, oldUrl) {
 }
 
 // GET all characters
-router.get('/', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ? ORDER BY created_at ASC').all(req.params.campaignId);
   res.json(characters);
 });
 
 // POST create character
-router.post('/', requireAuth, verifyCampaignOwner, uploadFields, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignDM, uploadFields, async function(req, res) {
   const { name, player_name, cls, description, is_npc } = req.body;
   if (!name) return res.json({ error: 'Character name is required' });
 
@@ -81,7 +73,7 @@ router.post('/', requireAuth, verifyCampaignOwner, uploadFields, async function(
 });
 
 // PUT update character
-router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, async function(req, res) {
+router.put('/:id', requireAuth, verifyCampaignDM, uploadFields, async function(req, res) {
   try {
     const db = await getDb();
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
@@ -126,7 +118,7 @@ router.put('/:id', requireAuth, verifyCampaignOwner, uploadFields, async functio
 });
 
 // DELETE character
-router.delete('/:id', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
@@ -145,7 +137,7 @@ router.delete('/:id', requireAuth, verifyCampaignOwner, async function(req, res)
 });
 
 // POST rebuild canonical character prompt — uses vision on uploaded images
-router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
@@ -246,7 +238,7 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignOwner, async funct
 });
 
 // PUT update just the canonical prompt (Platinum manual edit)
-router.put('/:id/canonical-prompt', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.put('/:id/canonical-prompt', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const { getTier } = require('../middleware/tiers');
     const db = await getDb();

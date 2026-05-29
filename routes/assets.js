@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const multer = require('multer');
 const path = require('path');
@@ -24,16 +24,6 @@ function cleanCategory(c) {
   return CATEGORIES.indexOf(c) !== -1 ? c : 'location';
 }
 
-async function verifyCampaignOwner(req, res, next) {
-  const db = await getDb();
-  const campaign = await db.prepare(
-    'SELECT * FROM campaigns WHERE id = ? AND user_id = ?'
-  ).get(req.params.campaignId, req.session.userId);
-  if (!campaign) return res.status(403).json({ error: 'Access denied' });
-  req.campaign = campaign;
-  next();
-}
-
 async function handleAssetUpload(file, oldUrl) {
   if (!file) return null;
   if (oldUrl) {
@@ -45,7 +35,7 @@ async function handleAssetUpload(file, oldUrl) {
 }
 
 // GET all assets for a campaign.
-router.get('/', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const assets = await db.prepare(
@@ -59,7 +49,7 @@ router.get('/', requireAuth, verifyCampaignOwner, async function(req, res) {
 });
 
 // POST create a new asset (with image upload).
-router.post('/', requireAuth, verifyCampaignOwner, uploadSingle, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignDM, uploadSingle, async function(req, res) {
   const name = (req.body && req.body.name || '').trim();
   const category = cleanCategory(req.body && req.body.category);
   if (!name) return res.json({ error: 'Asset name is required' });
@@ -82,7 +72,7 @@ router.post('/', requireAuth, verifyCampaignOwner, uploadSingle, async function(
 });
 
 // PUT update an asset's name/category, and optionally replace the image.
-router.put('/:assetId', requireAuth, verifyCampaignOwner, uploadSingle, async function(req, res) {
+router.put('/:assetId', requireAuth, verifyCampaignDM, uploadSingle, async function(req, res) {
   try {
     const db = await getDb();
     const existing = await db.prepare(
@@ -111,7 +101,7 @@ router.put('/:assetId', requireAuth, verifyCampaignOwner, uploadSingle, async fu
 });
 
 // DELETE an asset (and its image from storage).
-router.delete('/:assetId', requireAuth, verifyCampaignOwner, async function(req, res) {
+router.delete('/:assetId', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
     const existing = await db.prepare(

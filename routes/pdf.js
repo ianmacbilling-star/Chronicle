@@ -763,7 +763,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     const db = await getDb();
 
     const session = await db.prepare(
-      'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id WHERE s.id = ? AND c.user_id = ?'
+      'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
     ).get(req.params.sessionId, req.session.userId);
 
     if (!session) return res.status(403).json({ error: 'Access denied' });
@@ -792,7 +792,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
 
   const campaign = await db.prepare(
-    'SELECT c.* FROM campaigns c WHERE c.id = ? AND c.user_id = ?'
+    'SELECT c.* FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
   ).get(req.params.campaignId, req.session.userId);
 
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
