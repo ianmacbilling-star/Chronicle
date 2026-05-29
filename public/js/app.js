@@ -5624,7 +5624,7 @@ function openInviteModal() {
       unowned.forEach(function(c) {
         var opt = document.createElement('option');
         opt.value = String(c.id);
-        opt.textContent = c.name + (c.class ? ' (' + c.class + ')' : '');
+        opt.textContent = c.name + (c.cls ? ' (' + c.cls + ')' : '');
         sel.appendChild(opt);
       });
       // Wire change to toggle the new-character fields.

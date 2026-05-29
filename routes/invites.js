@@ -68,11 +68,13 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
   } else {
     // Create a stub PC awaiting claim. Marked is_claimed=false so the
     // Characters tab can show it as "awaiting invitee" in Deploy 2.
+    // Note: the characters table column for character class is 'cls'
+    // (not 'class' — 'class' is a reserved word in many SQL dialects).
     const now = new Date().toISOString();
     const stubName = character_name.trim();
     const stubClass = (character_class || '').trim();
     const ins = await db.prepare(
-      'INSERT INTO characters (campaign_id, name, class, is_npc, is_claimed, owner_user_id, created_at) ' +
+      'INSERT INTO characters (campaign_id, name, cls, is_npc, is_claimed, owner_user_id, created_at) ' +
       'VALUES (?, ?, ?, false, false, NULL, ?)'
     ).run(campaignId, stubName, stubClass, now);
     targetCharacterId = ins.lastInsertRowid;
@@ -123,7 +125,7 @@ router.get('/invites/:token', async function(req, res) {
   const row = await db.prepare(
     'SELECT i.token, i.campaign_id, i.character_id, i.role, i.email_hint, i.expires_at, i.used_at, ' +
     'c.name AS campaign_name, ' +
-    'ch.name AS character_name, ch.class AS character_class, ' +
+    'ch.name AS character_name, ch.cls AS character_class, ' +
     'u.name AS created_by_name ' +
     'FROM campaign_invites i ' +
     'JOIN campaigns c ON i.campaign_id = c.id ' +
