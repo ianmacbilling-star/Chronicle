@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb } = require('../database/db');
+const { getDb, getDmForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const path = require('path');
 
@@ -769,7 +769,8 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     if (!session) return res.status(403).json({ error: 'Access denied' });
 
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
-    const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
+    const dmForkId = await getDmForkId(db, session.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
     const narrative = {
@@ -815,7 +816,8 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
 
   // Load moments and narrative for each session
   const sessionsWithData = await Promise.all(sessions.map(async function(s) {
-    const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(s.id);
+    const dmForkId = await getDmForkId(db, s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
     return Object.assign({}, s, { moments: moments });
   }));
 

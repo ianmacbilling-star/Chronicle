@@ -758,4 +758,28 @@ async function getOrCreateDmFork(db, sessionId, dmUserId) {
   return r.lastInsertRowid;
 }
 
-module.exports = { getDb, isPostgres, getOrCreateDmFork };
+// getDmForkId: id of the session's DM (canonical) fork, or null. Read-only.
+async function getDmForkId(db, sessionId) {
+  const f = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND role = 'dm'").get(sessionId);
+  return f ? f.id : null;
+}
+
+// getViewableForkId: resolves which fork a member may READ for a session.
+//   - no requestedForkId  -> the DM fork (default = current behavior)
+//   - the DM fork         -> always visible to any member
+//   - your own fork       -> visible
+//   - another player's    -> visible only if its status is 'ready'
+// Returns the fork id to read, or null if not allowed (caller -> 403).
+async function getViewableForkId(db, sessionId, userId, requestedForkId) {
+  if (!requestedForkId) return await getDmForkId(db, sessionId);
+  const f = await db.prepare(
+    'SELECT id, user_id, role, player_access_status FROM session_forks WHERE id = ? AND session_id = ?'
+  ).get(requestedForkId, sessionId);
+  if (!f) return null;
+  if (f.role === 'dm') return f.id;
+  if (String(f.user_id) === String(userId)) return f.id;
+  if (f.player_access_status === 'ready') return f.id;
+  return null;
+}
+
+module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId };

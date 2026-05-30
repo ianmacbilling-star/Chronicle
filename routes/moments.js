@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork } = require('../database/db');
+const { getDb, getOrCreateDmFork, getViewableForkId } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 
 router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const moments = await db.prepare('SELECT * FROM moments WHERE session_id=? ORDER BY panel_order ASC').all(req.params.sessionId);
+  const viewForkId = await getViewableForkId(db, req.params.sessionId, req.session.userId, req.query.fork_id);
+  if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
+  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(viewForkId);
   res.json(moments);
 });
 

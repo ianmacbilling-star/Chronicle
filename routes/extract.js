@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { getTier, getMomentRange } = require('../middleware/tiers');
-const { getDb, getOrCreateDmFork } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { artStyle } = req.body;
@@ -111,15 +111,15 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
     // Auto-save moments to database
     if (parsed.moments && parsed.moments.length) {
-      await db.prepare('DELETE FROM moments WHERE session_id = ?').run(session.id);
+      // Step 1 (Phase 4) — regenerate replaces only the DM fork's moments.
+      const dmForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
+      await db.prepare('DELETE FROM moments WHERE fork_id = ?').run(dmForkId);
       const now = new Date().toISOString();
 
       // Save the art style used so future sessions can inherit it
       await db.prepare('UPDATE sessions SET art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
         .run(style, now, req.session.userId, session.id);
 
-      // Deploy 4.0 — moments belong to the session's DM fork.
-      const dmForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
       const insert = await db.prepare(
         'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
@@ -138,9 +138,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     // can route to the Characters tab instead of the Storyboard tab.
     let pendingChanges = 0;
     try {
+      const pcForkId = await getDmForkId(db, req.params.sessionId);
       const pc = await db.prepare(
-        "SELECT COUNT(*) AS c FROM session_characters WHERE session_id = ? AND change_status = 'pending'"
-      ).get(req.params.sessionId);
+        "SELECT COUNT(*) AS c FROM session_characters WHERE fork_id = ? AND change_status = 'pending'"
+      ).get(pcForkId);
       pendingChanges = pc ? pc.c : 0;
     } catch(pcErr) { pendingChanges = 0; }
 
@@ -213,13 +214,13 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now, f
     // rejected one must keep its detail so the AI won't re-flag the same
     // change. Only un-decided ('none'/'pending') rows are rebuilt.
     await db.prepare(
-      "DELETE FROM session_characters WHERE session_id = ? AND (change_status IS NULL OR change_status NOT IN ('accepted','rejected'))"
-    ).run(session.id);
+      "DELETE FROM session_characters WHERE fork_id = ? AND (change_status IS NULL OR change_status NOT IN ('accepted','rejected'))"
+    ).run(forkId);
 
     // Which characters already have a decided row this session — skip them.
     const acceptedRows = await db.prepare(
-      "SELECT character_id FROM session_characters WHERE session_id = ? AND change_status IN ('accepted','rejected')"
-    ).all(session.id);
+      "SELECT character_id FROM session_characters WHERE fork_id = ? AND change_status IN ('accepted','rejected')"
+    ).all(forkId);
     const acceptedIds = {};
     acceptedRows.forEach(function(r) { acceptedIds[r.character_id] = true; });
 
@@ -258,10 +259,11 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     // entirely (settled). Characters whose change is REJECTED stay in the
     // scan, but we pass the rejected detail to the AI so it won't re-flag
     // the SAME change (a genuinely different change still flags).
+    const ddForkId = await getDmForkId(db, session.id);
     const decidedRows = await db.prepare(
       "SELECT character_id, change_status, change_detail FROM session_characters " +
-      "WHERE session_id = ? AND change_status IN ('accepted','rejected')"
-    ).all(session.id);
+      "WHERE fork_id = ? AND change_status IN ('accepted','rejected')"
+    ).all(ddForkId);
     const acceptedIds = {};
     const rejectedDetail = {};
     decidedRows.forEach(function(r) {
@@ -275,8 +277,8 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     // Stage 4: fetch this session's moments in order, so the AI can say
     // WHICH moment a change happens at. moments[].panel_order is 0-based.
     const moments = await db.prepare(
-      'SELECT title, description, panel_order FROM moments WHERE session_id = ? ORDER BY panel_order ASC'
-    ).all(session.id);
+      'SELECT title, description, panel_order FROM moments WHERE fork_id = ? ORDER BY panel_order ASC'
+    ).all(ddForkId);
     const momentListText = moments.length
       ? moments.map(function(m) {
           return 'Moment ' + m.panel_order + ': ' + (m.title || '') +

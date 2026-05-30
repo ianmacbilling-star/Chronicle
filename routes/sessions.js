@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit } = require('../middleware/tiers');
 const imageHelpers = require('./images');
@@ -23,7 +23,8 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const db = await getDb();
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   const result = await Promise.all(sessions.map(async function(s) {
-    const moments = await db.prepare('SELECT * FROM moments WHERE session_id=? ORDER BY panel_order ASC').all(s.id);
+    const dmForkId = await getDmForkId(db, s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(dmForkId);
     return Object.assign({}, s, { moments });
   }));
   res.json(result);
@@ -38,7 +39,7 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // if no images have been generated yet (the row just shows no thumb).
   const sessions = await db.prepare(
     'SELECT s.*, ' +
-    '(SELECT image FROM moments m WHERE m.session_id = s.id AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
+    '(SELECT m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = s.id AND f.role = \'dm\' AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
     // Deploy 4.0 — player_access_status now lives on the DM fork. This
     // aliased column comes AFTER s.* so it wins in the row object,
     // keeping the JSON key identical (frontend session-list untouched).
@@ -58,8 +59,13 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork's status so the frontend keeps reading the same key.
   const dmFork = await db.prepare("SELECT player_access_status FROM session_forks WHERE session_id=? AND role='dm' LIMIT 1").get(session.id);
   if (dmFork) session.player_access_status = dmFork.player_access_status;
-  const moments = await db.prepare('SELECT * FROM moments WHERE session_id=? ORDER BY panel_order ASC').all(session.id);
-  res.json(Object.assign({}, session, { moments }));
+  // Step 1 (Phase 4) — read moments from the requested fork (default:
+  // DM fork). ?fork_id= lets a player view their own fork or another
+  // player's READY fork; getViewableForkId enforces who may see what.
+  const viewForkId = await getViewableForkId(db, session.id, req.session.userId, req.query.fork_id);
+  if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
+  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(viewForkId);
+  res.json(Object.assign({}, session, { moments, fork_id: viewForkId }));
 });
 
 // POST create session
@@ -96,7 +102,8 @@ router.put('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
     now, req.session.userId, session.id
   );
   const updated = await db.prepare('SELECT * FROM sessions WHERE id=?').get(session.id);
-  const moments = await db.prepare('SELECT * FROM moments WHERE session_id=? ORDER BY panel_order ASC').all(session.id);
+  const dmForkId = await getDmForkId(db, session.id);
+  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(dmForkId);
   res.json(Object.assign({}, updated, { moments }));
 });
 
@@ -145,13 +152,15 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
 // GET session character snapshots (Stage 2)
 router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
+  const viewForkId = await getViewableForkId(db, req.params.id, req.session.userId, req.query.fork_id);
+  if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
   const rows = await db.prepare(
     'SELECT sc.id, sc.character_id, sc.prompt, sc.change_note, sc.edited_at, ' +
     'sc.reference_url, sc.change_flag, sc.change_detail, sc.change_status, sc.change_moment_index, ' +
     'ch.name, ch.cls, ch.is_npc, ch.image_portrait, ch.image, ch.image_fullbody, ch.canonical_reference_url ' +
     'FROM session_characters sc JOIN characters ch ON ch.id = sc.character_id ' +
-    'WHERE sc.session_id = ? ORDER BY ch.is_npc ASC, ch.name ASC'
-  ).all(req.params.id);
+    'WHERE sc.fork_id = ? ORDER BY ch.is_npc ASC, ch.name ASC'
+  ).all(viewForkId);
   res.json(rows);
 });
 
@@ -322,9 +331,11 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     const sessionId = req.params.id;
     const campaignId = req.params.campaignId;
 
+    const viewForkId = await getViewableForkId(db, sessionId, req.session.userId, req.query.fork_id);
+    if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
     const moments = await db.prepare(
-      'SELECT id, title, description, type, prompt, panel_order FROM moments WHERE session_id = ? ORDER BY panel_order ASC'
-    ).all(sessionId);
+      'SELECT id, title, description, type, prompt, panel_order FROM moments WHERE fork_id = ? ORDER BY panel_order ASC'
+    ).all(viewForkId);
 
     // Characters for this campaign, joined to this session's snapshots —
     // identical query shape to the storyboard routes.
@@ -333,9 +344,9 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
       'sc.change_note, sc.change_moment_index, sc.change_status ' +
       'FROM characters ch ' +
-      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
       'WHERE ch.campaign_id = ?'
-    ).all(sessionId, campaignId);
+    ).all(viewForkId, campaignId);
     await imageHelpers.attachPriorReferences(db, chars, sessionId, campaignId);
 
     const assets = await db.prepare(

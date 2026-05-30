@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { getTier } = require('../middleware/tiers');
-const { getDb } = require('../database/db');
+const { getDb, getDmForkId } = require('../database/db');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
 
@@ -528,7 +528,8 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
 
-  const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session_id);
+  const dmForkId = await getDmForkId(db, session_id);
+  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
 
   // Load all campaign characters once; the per-panel block is built inside

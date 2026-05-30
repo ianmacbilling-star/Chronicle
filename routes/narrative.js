@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb } = require('../database/db');
+const { getDb, getDmForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 
 // ============================================================
@@ -22,7 +22,8 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   if (!session.transcript) return res.json({ error: 'No transcript found. Please add a transcript first.' });
 
   // Get moments in order
-  const moments = await db.prepare('SELECT * FROM moments WHERE session_id = ? ORDER BY panel_order ASC').all(session.id);
+  const dmForkId = await getDmForkId(db, session.id);
+  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
 
   // Get campaign and characters
