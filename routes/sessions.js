@@ -263,7 +263,9 @@ router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCam
 // outline plus which characters and assets WILL be matched into each
 // panel. Reuses the exact matching logic from images.js so this preview
 // can never drift from what the storyboard actually generates.
-router.get('/:id/review', requireAuth, verifyCampaignDM, async function(req, res) {
+// Phase 3: review is read-only — open to any campaign member (DM or
+// player). Players need this to see the Review tab populate.
+router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
     const sessionId = req.params.id;
