@@ -8,6 +8,8 @@ var state = {
   currentCampaign: null,
   layoutStyle: 'Classic',
   currentSession: null,
+  currentForkId: null,
+  sessionForks: [],
   characters: [],
   sessions: [],
   moments: [],
@@ -817,13 +819,14 @@ function deleteSession(id) {
 function selectSession(id) {
   // Clear previous session state
   state.moments = [];
+  state.currentForkId = null;
   state.narrativeData = { intro: '', sections: [], outro: '' };
   var sbEmpty = document.getElementById('sb-empty');
   var sbContent = document.getElementById('sb-content');
   if (sbEmpty) sbEmpty.style.display = 'block';
   if (sbContent) sbContent.style.display = 'none';
 
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id)
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
       state.currentSession = data;
@@ -865,6 +868,7 @@ function selectSession(id) {
       applyRoleVisibility();
       // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.player_access_status || 'draft');
+      if (typeof loadSessionForks === 'function') loadSessionForks(id);
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
@@ -960,7 +964,7 @@ function loadSessionCharacters() {
   var empty = document.getElementById('sc-empty');
   var content = document.getElementById('sc-content');
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-        state.currentSession.id + '/characters')
+        state.currentSession.id + '/characters' + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(rows) {
       rows = Array.isArray(rows) ? rows : [];
@@ -1461,7 +1465,7 @@ function loadReview() {
   if (list) list.innerHTML = '<div class="form-hint">Loading review...</div>';
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-        state.currentSession.id + '/review')
+        state.currentSession.id + '/review' + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
       var panels = (data && data.panels) || [];
@@ -3396,7 +3400,7 @@ function uploadPortraitToChar(charId, file) {
 var narrativeData = { intro: '', sections: [], outro: '' };
 
 function loadNarrative() {
-  fetch('/api/narrative/' + state.currentCampaign.id + '/' + state.currentSession.id)
+  fetch('/api/narrative/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
       narrativeData = data;
@@ -3797,6 +3801,8 @@ var state = {
   currentCampaign: null,
   layoutStyle: 'Classic',
   currentSession: null,
+  currentForkId: null,
+  sessionForks: [],
   characters: [],
   sessions: [],
   moments: [],
@@ -4213,13 +4219,14 @@ function deleteSession(id) {
 function selectSession(id) {
   // Clear previous session state
   state.moments = [];
+  state.currentForkId = null;
   state.narrativeData = { intro: '', sections: [], outro: '' };
   var sbEmpty = document.getElementById('sb-empty');
   var sbContent = document.getElementById('sb-content');
   if (sbEmpty) sbEmpty.style.display = 'block';
   if (sbContent) sbContent.style.display = 'none';
 
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id)
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
       state.currentSession = data;
@@ -4261,6 +4268,7 @@ function selectSession(id) {
       applyRoleVisibility();
       // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.player_access_status || 'draft');
+      if (typeof loadSessionForks === 'function') loadSessionForks(id);
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
@@ -5592,7 +5600,7 @@ function uploadPortraitToChar(charId, file) {
 var narrativeData = { intro: '', sections: [], outro: '' };
 
 function loadNarrative() {
-  fetch('/api/narrative/' + state.currentCampaign.id + '/' + state.currentSession.id)
+  fetch('/api/narrative/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
       narrativeData = data;
@@ -6448,6 +6456,96 @@ function saveAccessStatus(status) {
   });
 }
 
+// ============================================================
+// PHASE 4 STEP 2 — VERSION (FORK) SELECTOR
+// ============================================================
+// state.currentForkId === null means "viewing the DM canonical".
+function forkQ() {
+  return state.currentForkId ? ('?fork_id=' + encodeURIComponent(state.currentForkId)) : '';
+}
+
+function loadSessionForks(sessionId) {
+  if (!state.currentCampaign) return;
+  var sel = document.getElementById('session-fork-select');
+  var btn = document.getElementById('make-my-version-btn');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sessionId + '/forks')
+    .then(function(r) { return r.json(); })
+    .then(function(forks) {
+      forks = Array.isArray(forks) ? forks : [];
+      state.sessionForks = forks;
+      var dmFork = forks.filter(function(f) { return f.role === 'dm'; })[0];
+      if (sel) {
+        sel.innerHTML = '';
+        forks.forEach(function(f) {
+          var opt = document.createElement('option');
+          opt.value = f.fork_id;
+          opt.textContent = f.label;
+          sel.appendChild(opt);
+        });
+        var selId = state.currentForkId || (dmFork ? dmFork.fork_id : (forks[0] && forks[0].fork_id));
+        if (selId) sel.value = String(selId);
+        // Only worth showing once there's more than the canonical to pick.
+        sel.style.display = forks.length > 1 ? '' : 'none';
+      }
+      if (btn) {
+        var isPlayer = state.currentCampaign.my_role === 'player';
+        var sessReady = state.currentSession && state.currentSession.player_access_status === 'ready';
+        var hasMine = forks.some(function(f) { return f.is_mine; });
+        btn.style.display = (isPlayer && sessReady && !hasMine) ? '' : 'none';
+      }
+    })
+    .catch(function() {});
+}
+
+function onForkChange(forkId) {
+  var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
+  // Selecting the DM canonical clears currentForkId (default path).
+  state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
+  reloadSessionForFork();
+}
+
+function reloadSessionForFork() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var sid = state.currentSession.id;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sid + forkQ())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      state.currentSession = data;
+      state.moments = data.moments || [];
+      state.narrativeData = {
+        intro: data.narrative_intro || '',
+        sections: data.narrative_sections ? JSON.parse(data.narrative_sections) : [],
+        outro: data.narrative_outro || ''
+      };
+      if (typeof renderStoryboard === 'function') renderStoryboard();
+      // Other tabs lazy-reload on click via forkQ(); storyboard is the
+      // live view, so refresh it immediately.
+    });
+}
+
+function makeMyVersion() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var btn = document.getElementById('make-my-version-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating\u2026'; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
+      if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
+      state.currentForkId = data.fork_id;
+      loadSessionForks(state.currentSession.id);
+      reloadSessionForFork();
+    })
+    .catch(function(e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
+      if (typeof showAlert === 'function') { showAlert('Could not create your version: ' + e.message); } else { alert(e.message); }
+    });
+}
+
 // Render a lock banner on the Characters tab for players when the
 // campaign is locked. Called from showCampaignSection('characters').
 // Banner sits above the character grid; subtle but informative.
@@ -6470,7 +6568,7 @@ function renderCampaignLockBanner() {
   banner.innerHTML =
     '<span class="campaign-lock-banner-icon">&#128274;</span>' +
     '<strong>Campaign locked.</strong> A session has been marked Ready by the DM, so your character\'s canonical details are now read-only. ' +
-    'Fork editing &mdash; where you can tinker with your character in your own copy of a session &mdash; is coming in a future update.';
+    'Open a Ready session and choose <strong>Make My Version</strong> to tinker in your own copy.';
   // Insert before the char-grid
   grid.parentNode.insertBefore(banner, grid);
 }

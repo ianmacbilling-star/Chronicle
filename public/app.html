@@ -240,6 +240,18 @@
         <span id="session-access-status-chip"
               class="session-access-chip"
               style="display:none;margin-left:8px;"></span>
+        <!-- Phase 4 Step 2 — version selector. Lists DM canonical + any
+             versions the viewer may see; switching re-renders the
+             storyboard for that version. Hidden until >1 version exists. -->
+        <select id="session-fork-select"
+                class="form-input session-fork-select"
+                onchange="onForkChange(this.value)"
+                style="max-width:200px;margin-left:8px;display:none;"></select>
+        <!-- Player-only: make your own version of a Ready session. -->
+        <button id="make-my-version-btn"
+                class="btn btn-primary"
+                onclick="makeMyVersion()"
+                style="margin-left:8px;display:none;">Make My Version</button>
       </div>
 
       <div class="sess-tabs">
