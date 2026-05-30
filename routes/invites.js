@@ -15,7 +15,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { getDb } = require('../database/db');
-const { requireAuth, verifyCampaignDM, getCampaignRole } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM, verifyCampaignMember, getCampaignRole } = require('../middleware/auth');
 
 const INVITE_TTL_DAYS = 7;
 
@@ -218,6 +218,149 @@ router.delete('/campaigns/:campaignId/invites/:inviteId', requireAuth, verifyCam
     'UPDATE campaign_invites SET used_at = ?, used_by = NULL WHERE id = ?'
   ).run(new Date().toISOString(), inviteId);
   res.json({ success: true });
+});
+
+// ============================================================
+// PHASE 3 DEPLOY 2 — Members tab endpoints
+// ============================================================
+
+// GET /api/campaigns/:campaignId/members
+// Any member of the campaign can see who else is in it. Players can
+// view the Members tab read-only; the .dm-only convention hides the
+// action menus on the frontend.
+//
+// Returns one row per member with the fields the UI needs to render
+// the list: identity, role, character owned (if any), joined date.
+router.get('/campaigns/:campaignId/members', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  try {
+    const members = await db.prepare(
+      'SELECT cm.user_id, cm.role, cm.joined_at, ' +
+      'u.name AS user_name, u.email AS user_email, ' +
+      'ch.id AS character_id, ch.name AS character_name, ch.cls AS character_class ' +
+      'FROM campaign_members cm ' +
+      'JOIN users u ON u.id = cm.user_id ' +
+      'LEFT JOIN characters ch ON ch.owner_user_id = cm.user_id AND ch.campaign_id = cm.campaign_id ' +
+      'WHERE cm.campaign_id = ? ' +
+      "ORDER BY CASE cm.role WHEN 'dm' THEN 0 ELSE 1 END, cm.joined_at ASC"
+    ).all(req.params.campaignId);
+    res.json(members);
+  } catch (e) {
+    console.error('members list error:', e.message);
+    res.status(500).json({ error: 'Could not load members' });
+  }
+});
+
+// DELETE /api/campaigns/:campaignId/members/:userId
+// DM-only. Remove a player from the campaign. Side effects:
+// - delete the campaign_members row
+// - any character they owned in this campaign: owner_user_id → NULL,
+//   is_claimed → false (so the character is available for re-invite)
+// - pending invites for that user's email are left alone (DM may have
+//   sent other invites to the same email for different characters)
+// - the user's tokens and image_generations rows are user-level and stay
+//
+// The DM cannot remove themselves. A second DM removing the first is
+// not possible today (one-DM-per-campaign) — we'd revisit if that ever
+// changes.
+router.delete('/campaigns/:campaignId/members/:userId', requireAuth, verifyCampaignDM, async function(req, res) {
+  const db = await getDb();
+  const campaignId = parseInt(req.params.campaignId, 10);
+  const targetUserId = parseInt(req.params.userId, 10);
+
+  if (targetUserId === req.session.userId) {
+    return res.status(400).json({ error: 'You cannot remove yourself from the campaign' });
+  }
+
+  // Confirm the target is actually a member of this campaign.
+  const member = await db.prepare(
+    'SELECT user_id, role FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+  ).get(campaignId, targetUserId);
+  if (!member) return res.status(404).json({ error: 'Member not found in this campaign' });
+  if (member.role === 'dm') {
+    return res.status(400).json({ error: 'Cannot remove the DM' });
+  }
+
+  // Release any characters they owned in this campaign.
+  await db.prepare(
+    'UPDATE characters SET owner_user_id = NULL, is_claimed = false WHERE campaign_id = ? AND owner_user_id = ?'
+  ).run(campaignId, targetUserId);
+
+  // Drop the membership row.
+  await db.prepare(
+    'DELETE FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+  ).run(campaignId, targetUserId);
+
+  res.json({ success: true });
+});
+
+// GET /api/campaigns/:campaignId/invites
+// DM-only. List currently-pending invites for the Members tab. A
+// "pending" invite is one with no used_at set (i.e. not consumed and
+// not revoked). Both active AND expired-but-not-revoked invites are
+// returned — the UI shows "expires in X days" or "expired (reactivate?)"
+// distinctly. (Reactivation is a separate endpoint.)
+router.get('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, async function(req, res) {
+  const db = await getDb();
+  try {
+    const invites = await db.prepare(
+      'SELECT i.id, i.token, i.email_hint, i.expires_at, i.created_at, ' +
+      'ch.id AS character_id, ch.name AS character_name, ch.cls AS character_class ' +
+      'FROM campaign_invites i ' +
+      'LEFT JOIN characters ch ON ch.id = i.character_id ' +
+      'WHERE i.campaign_id = ? AND i.used_at IS NULL ' +
+      'ORDER BY i.created_at DESC'
+    ).all(req.params.campaignId);
+
+    const base = process.env.APP_URL || ('https://' + req.get('host'));
+    const baseTrimmed = base.replace(/\/$/, '');
+    const now = new Date();
+    const enriched = invites.map(function(i) {
+      const exp = new Date(i.expires_at);
+      const expired = exp < now;
+      return {
+        id: i.id,
+        token: i.token,
+        url: baseTrimmed + '/invite/' + i.token,
+        email_hint: i.email_hint,
+        character_id: i.character_id,
+        character_name: i.character_name,
+        character_class: i.character_class,
+        expires_at: i.expires_at,
+        created_at: i.created_at,
+        expired: expired
+      };
+    });
+    res.json(enriched);
+  } catch (e) {
+    console.error('invites list error:', e.message);
+    res.status(500).json({ error: 'Could not load invites' });
+  }
+});
+
+// POST /api/campaigns/:campaignId/invites/:inviteId/reactivate
+// DM-only. Silently bumps expires_at to now + 7 days. Used when the DM
+// hits Copy link on an expired invite — same token survives, link is
+// usable again. The token never changes (so any old URL the DM shared
+// via Discord/email still works after reactivation).
+router.post('/campaigns/:campaignId/invites/:inviteId/reactivate', requireAuth, verifyCampaignDM, async function(req, res) {
+  const db = await getDb();
+  const inviteId = parseInt(req.params.inviteId, 10);
+  const campaignId = parseInt(req.params.campaignId, 10);
+  const inv = await db.prepare(
+    'SELECT id, campaign_id, used_at, token FROM campaign_invites WHERE id = ?'
+  ).get(inviteId);
+  if (!inv || inv.campaign_id !== campaignId) {
+    return res.status(404).json({ error: 'Invite not found' });
+  }
+  if (inv.used_at) {
+    return res.status(409).json({ error: 'This invite has been used or revoked — create a new one' });
+  }
+  const newExpiry = inviteExpiresAt();
+  await db.prepare(
+    'UPDATE campaign_invites SET expires_at = ? WHERE id = ?'
+  ).run(newExpiry, inviteId);
+  res.json({ success: true, expires_at: newExpiry, token: inv.token });
 });
 
 module.exports = router;

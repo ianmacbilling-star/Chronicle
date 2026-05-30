@@ -505,7 +505,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -560,7 +560,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
@@ -571,6 +571,7 @@ function showCampaignSection(section) {
   if (section === 'characters') loadCharacters();
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
+  if (section === 'members') loadMembersTab();
 
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).
   applyRoleVisibility();
@@ -1934,6 +1935,21 @@ function renderCharacters() {
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
 
+    // Phase 3 ownership badges. Three mutually exclusive states for a PC:
+    // - owner_name present → claimed by a Chronicle user (Played by X)
+    // - is_claimed === false → stub awaiting invitee (Awaiting player)
+    // - otherwise → unowned PC, no badge
+    // NPCs get neither (they have the NPC badge already below).
+    var ownerBadge = '';
+    var isNpc = (c.is_npc === true || c.is_npc === 1 || c.is_npc === '1');
+    if (!isNpc) {
+      if (c.owner_name) {
+        ownerBadge = '<div class="char-owner-badge">&#127922; Played by ' + (typeof escapeHtml === 'function' ? escapeHtml(c.owner_name) : c.owner_name) + '</div>';
+      } else if (c.is_claimed === false) {
+        ownerBadge = '<div class="char-pending-badge">&#8987; Awaiting player</div>';
+      }
+    }
+
     return '<div class="char-card char-card-drop" id="char-card-' + c.id + '">' +
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
@@ -1943,10 +1959,11 @@ function renderCharacters() {
         '</div>' +
       '</div>' +
       '<div class="char-name">' + c.name + '</div>' +
+      ownerBadge +
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
-      ((c.is_npc === true || c.is_npc === 1 || c.is_npc === '1') ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
+      (isNpc ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
       imgGridHtml +
     '</div>';
   }).join('');
@@ -3745,7 +3762,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -3800,7 +3817,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
@@ -3811,6 +3828,7 @@ function showCampaignSection(section) {
   if (section === 'characters') loadCharacters();
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
+  if (section === 'members') loadMembersTab();
 
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).
   applyRoleVisibility();
@@ -4181,6 +4199,21 @@ function renderCharacters() {
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
 
+    // Phase 3 ownership badges. Three mutually exclusive states for a PC:
+    // - owner_name present → claimed by a Chronicle user (Played by X)
+    // - is_claimed === false → stub awaiting invitee (Awaiting player)
+    // - otherwise → unowned PC, no badge
+    // NPCs get neither (they have the NPC badge already below).
+    var ownerBadge = '';
+    var isNpc = (c.is_npc === true || c.is_npc === 1 || c.is_npc === '1');
+    if (!isNpc) {
+      if (c.owner_name) {
+        ownerBadge = '<div class="char-owner-badge">&#127922; Played by ' + (typeof escapeHtml === 'function' ? escapeHtml(c.owner_name) : c.owner_name) + '</div>';
+      } else if (c.is_claimed === false) {
+        ownerBadge = '<div class="char-pending-badge">&#8987; Awaiting player</div>';
+      }
+    }
+
     return '<div class="char-card char-card-drop" id="char-card-' + c.id + '">' +
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
@@ -4190,10 +4223,11 @@ function renderCharacters() {
         '</div>' +
       '</div>' +
       '<div class="char-name">' + c.name + '</div>' +
+      ownerBadge +
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
-      ((c.is_npc === true || c.is_npc === 1 || c.is_npc === '1') ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
+      (isNpc ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
       imgGridHtml +
     '</div>';
   }).join('');
@@ -5752,4 +5786,325 @@ function copyInviteLink() {
     sel.removeAllRanges();
     sel.addRange(range);
   }
+}
+
+// ============================================================
+// PHASE 3 DEPLOY 2 — Members tab
+// ============================================================
+
+// Run-time state for the Members tab. We cache the current list so the
+// ellipsis menu and confirm modal handlers can look up rows by id.
+state.members = [];
+state.pendingInvites = [];
+state._pendingRemoveUserId = null;
+state._pendingRemoveUserName = null;
+state._pendingRevokeInviteId = null;
+
+// Entry point — call when the Members section is shown.
+function loadMembersTab() {
+  var cur = state.currentCampaign;
+  if (!cur) return;
+  loadMembers();
+  // Only DMs see the pending-invites list (server enforces too).
+  if (cur.my_role === 'dm') {
+    loadPendingInvites();
+  } else {
+    // Hide entirely for players — the .dm-only on the container does
+    // this via CSS, but we still want to clear stale content.
+    var pi = document.getElementById('pending-invites-list');
+    if (pi) pi.innerHTML = '';
+  }
+}
+
+function loadMembers() {
+  var cur = state.currentCampaign;
+  if (!cur) return;
+  var list = document.getElementById('members-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">Loading members…</div>';
+
+  fetch('/api/campaigns/' + cur.id + '/members')
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+      if (rows && rows.error) {
+        list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">' + rows.error + '</div>';
+        return;
+      }
+      state.members = rows || [];
+      renderMembersList();
+    })
+    .catch(function(e) {
+      list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">Could not load members: ' + e.message + '</div>';
+    });
+}
+
+function renderMembersList() {
+  var list = document.getElementById('members-list');
+  if (!list) return;
+  if (!state.members.length) {
+    list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">No members yet.</div>';
+    return;
+  }
+  var meUserId = (state.user && state.user.id) || null;
+  list.innerHTML = state.members.map(function(m) {
+    var isDM = (m.role === 'dm');
+    var isMe = (m.user_id === meUserId);
+    var icon = isDM ? '&#128081;' : '&#127922;'; // crown vs game die
+    var roleBadge = isDM
+      ? '<span class="role-badge role-badge-dm">DM</span>'
+      : '<span class="role-badge role-badge-player">Player</span>';
+    var meTag = isMe ? '<span style="font-size:11px;color:rgba(245,232,200,0.5);">(you)</span>' : '';
+    var charInfo = m.character_name
+      ? 'Playing ' + escapeHtml(m.character_name) + (m.character_class ? ' (' + escapeHtml(m.character_class) + ')' : '')
+      : (isDM ? 'No character owned' : 'No character');
+    var joined = m.joined_at ? 'Joined ' + formatJoinedDate(m.joined_at) : '';
+    // Action menu: visible only to DM, and never for the DM's own row.
+    var actions = '';
+    if (!isDM && !isMe) {
+      actions =
+        '<div class="member-row-actions dm-only">' +
+          '<div class="row-menu">' +
+            '<button class="row-menu-btn" onclick="toggleRowMenu(\'member-menu-' + m.user_id + '\', event)">&#8943;</button>' +
+            '<div class="row-menu-dropdown" id="member-menu-' + m.user_id + '">' +
+              '<button class="row-menu-item row-menu-item-danger" onclick="openRemoveMemberConfirm(' + m.user_id + ')">Remove from campaign</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
+    return '<div class="member-row">' +
+      '<div class="member-row-icon">' + icon + '</div>' +
+      '<div class="member-row-body">' +
+        '<div class="member-row-name">' + escapeHtml(m.user_name || '') + ' ' + meTag + ' ' + roleBadge + '</div>' +
+        '<div class="member-row-email">' + escapeHtml(m.user_email || '') + '</div>' +
+        '<div class="member-row-meta">' + charInfo + (joined ? ' · ' + joined : '') + '</div>' +
+      '</div>' +
+      actions +
+    '</div>';
+  }).join('');
+}
+
+function loadPendingInvites() {
+  var cur = state.currentCampaign;
+  if (!cur) return;
+  var list = document.getElementById('pending-invites-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">Loading invites…</div>';
+
+  fetch('/api/campaigns/' + cur.id + '/invites')
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+      if (rows && rows.error) {
+        list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">' + rows.error + '</div>';
+        return;
+      }
+      state.pendingInvites = rows || [];
+      renderPendingInvites();
+    })
+    .catch(function(e) {
+      list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">Could not load invites: ' + e.message + '</div>';
+    });
+}
+
+function renderPendingInvites() {
+  var list = document.getElementById('pending-invites-list');
+  if (!list) return;
+  if (!state.pendingInvites.length) {
+    list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">No pending invites.</div>';
+    return;
+  }
+  list.innerHTML = state.pendingInvites.map(function(inv) {
+    var expiresLabel = inv.expired
+      ? '<span class="invite-row-expired-tag">Expired</span>'
+      : 'Expires ' + formatExpiresInDays(inv.expires_at);
+    var charInfo = inv.character_name
+      ? 'Invited as ' + escapeHtml(inv.character_name) + (inv.character_class ? ' (' + escapeHtml(inv.character_class) + ')' : '')
+      : 'No character linked';
+    return '<div class="invite-row">' +
+      '<div class="invite-row-icon">&#8987;</div>' + // hourglass
+      '<div class="invite-row-body">' +
+        '<div class="member-row-name">' + escapeHtml(inv.email_hint || '(no email)') + ' ' + expiresLabel + '</div>' +
+        '<div class="member-row-meta">' + charInfo + '</div>' +
+      '</div>' +
+      '<div class="invite-row-actions">' +
+        '<button class="btn btn-sm" onclick="copyExistingInviteLink(' + inv.id + ',' + (inv.expired ? 'true' : 'false') + ')">' +
+          (inv.expired ? 'Reactivate &amp; copy' : 'Copy link') +
+        '</button>' +
+        '<div class="row-menu">' +
+          '<button class="row-menu-btn" onclick="toggleRowMenu(\'invite-menu-' + inv.id + '\', event)">&#8943;</button>' +
+          '<div class="row-menu-dropdown" id="invite-menu-' + inv.id + '">' +
+            '<button class="row-menu-item row-menu-item-danger" onclick="openRevokeInviteConfirm(' + inv.id + ')">Revoke invite</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// Toggle a row's ellipsis dropdown. Closes other open dropdowns first.
+function toggleRowMenu(menuId, ev) {
+  if (ev) { ev.stopPropagation(); }
+  var all = document.querySelectorAll('.row-menu-dropdown');
+  all.forEach(function(d) { if (d.id !== menuId) d.classList.remove('open'); });
+  var el = document.getElementById(menuId);
+  if (el) el.classList.toggle('open');
+}
+
+// Clicking anywhere else closes any open menu.
+document.addEventListener('click', function(ev) {
+  // Only close if the click wasn't on a row-menu-btn (which has its own handler)
+  if (ev.target && ev.target.closest && ev.target.closest('.row-menu')) return;
+  document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+});
+
+// --- Remove member flow ---
+function openRemoveMemberConfirm(userId) {
+  var m = (state.members || []).find(function(x) { return x.user_id === userId; });
+  if (!m) return;
+  state._pendingRemoveUserId = userId;
+  state._pendingRemoveUserName = m.user_name;
+  var body = document.getElementById('confirm-remove-member-body');
+  if (body) {
+    var who = escapeHtml(m.user_name || 'this player');
+    var what = m.character_name ? ' Their character "' + escapeHtml(m.character_name) + '" will become available for re-invite.' : '';
+    body.innerHTML = 'Remove <strong>' + who + '</strong> from the campaign?' + what;
+  }
+  // Close any open ellipsis menus
+  document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+  document.getElementById('confirm-remove-member-modal').classList.remove('hidden');
+}
+
+function closeConfirmRemoveMember() {
+  state._pendingRemoveUserId = null;
+  state._pendingRemoveUserName = null;
+  document.getElementById('confirm-remove-member-modal').classList.add('hidden');
+}
+
+function confirmRemoveMember() {
+  var uid = state._pendingRemoveUserId;
+  var cur = state.currentCampaign;
+  if (!uid || !cur) { closeConfirmRemoveMember(); return; }
+  var btn = document.getElementById('confirm-remove-member-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing…'; }
+  fetch('/api/campaigns/' + cur.id + '/members/' + uid, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        showAlert(data.error);
+      }
+      closeConfirmRemoveMember();
+      loadMembersTab();
+    })
+    .catch(function(e) {
+      showAlert('Could not remove member: ' + e.message);
+      closeConfirmRemoveMember();
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Remove'; }
+    });
+}
+
+// --- Revoke invite flow ---
+function openRevokeInviteConfirm(inviteId) {
+  var inv = (state.pendingInvites || []).find(function(x) { return x.id === inviteId; });
+  if (!inv) return;
+  state._pendingRevokeInviteId = inviteId;
+  var body = document.getElementById('confirm-revoke-invite-body');
+  if (body) {
+    var who = escapeHtml(inv.email_hint || 'this invitee');
+    body.innerHTML = 'Revoke the invitation to <strong>' + who + '</strong>?';
+  }
+  document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+  document.getElementById('confirm-revoke-invite-modal').classList.remove('hidden');
+}
+
+function closeConfirmRevokeInvite() {
+  state._pendingRevokeInviteId = null;
+  document.getElementById('confirm-revoke-invite-modal').classList.add('hidden');
+}
+
+function confirmRevokeInvite() {
+  var iid = state._pendingRevokeInviteId;
+  var cur = state.currentCampaign;
+  if (!iid || !cur) { closeConfirmRevokeInvite(); return; }
+  var btn = document.getElementById('confirm-revoke-invite-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Revoking…'; }
+  fetch('/api/campaigns/' + cur.id + '/invites/' + iid, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) showAlert(data.error);
+      closeConfirmRevokeInvite();
+      loadPendingInvites();
+    })
+    .catch(function(e) {
+      showAlert('Could not revoke: ' + e.message);
+      closeConfirmRevokeInvite();
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Revoke'; }
+    });
+}
+
+// --- Copy existing invite link (with silent reactivation if expired) ---
+function copyExistingInviteLink(inviteId, expired) {
+  var inv = (state.pendingInvites || []).find(function(x) { return x.id === inviteId; });
+  if (!inv) return;
+  var cur = state.currentCampaign;
+  if (!cur) return;
+
+  if (expired) {
+    // Reactivate first, then copy. The token doesn't change — just bumps expires_at.
+    fetch('/api/campaigns/' + cur.id + '/invites/' + inviteId + '/reactivate', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) { showAlert(data.error); return; }
+        writeToClipboard(inv.url, 'Reactivated & copied');
+        // Refresh so the row no longer shows "expired"
+        loadPendingInvites();
+      })
+      .catch(function(e) { showAlert('Could not reactivate: ' + e.message); });
+  } else {
+    writeToClipboard(inv.url, 'Copied');
+  }
+}
+
+function writeToClipboard(text, flashText) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      // Brief feedback by showing a temporary toast-ish alert. Reuse showAlert.
+      if (flashText) showAlert(flashText);
+    });
+  } else {
+    // Fallback: prompt the user to copy manually
+    window.prompt('Copy this invite link:', text);
+  }
+}
+
+// --- Small format helpers ---
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatJoinedDate(iso) {
+  try {
+    var d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch (e) { return ''; }
+}
+
+function formatExpiresInDays(iso) {
+  try {
+    var d = new Date(iso);
+    var now = new Date();
+    var ms = d - now;
+    var days = Math.max(0, Math.round(ms / 86400000));
+    if (days === 0) return 'today';
+    if (days === 1) return 'in 1 day';
+    return 'in ' + days + ' days';
+  } catch (e) { return ''; }
 }

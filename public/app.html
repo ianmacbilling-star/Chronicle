@@ -67,12 +67,11 @@
           <div class="page-subtitle">Each session holds a transcript and generates a storyboard</div>
         </div>
         <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
           <button class="btn btn-primary dm-only" id="btn-new-session" onclick="openSessionModal()">+ New session</button>
-          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
-          <!-- Phase 3 Deploy 1: temporary invite button. Will move into a proper Members tab in Deploy 2. -->
-          <button class="btn btn-sm" id="campaign-invite-btn" onclick="openInviteModal()" style="display:none;">&#9993; Invite player</button>
+          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
         </div>
       </div>
       <div class="sessions-list" id="sessions-list"></div>
@@ -86,6 +85,7 @@
           <div class="page-subtitle">Characters appear in your storyboard panels</div>
         </div>
         <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
           <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
@@ -106,6 +106,7 @@
           <div class="page-subtitle">Locations, NPCs and items — referenced in your storyboard panels by name</div>
         </div>
         <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
@@ -126,6 +127,7 @@
           <div class="page-subtitle">Your complete campaign story</div>
         </div>
         <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
         </div>
@@ -181,6 +183,41 @@
             style="background:rgba(20,12,4,0.8);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);">
           </select>
           <button class="btn btn-sm" id="novel-pager-next-bottom" onclick="novelPageNext()">Next &#9654;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MEMBERS (Phase 3 Deploy 2) ==================== -->
+    <div id="view-members" class="view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <div class="page-title">Members</div>
+          <div class="page-subtitle">Who's in this campaign and what character they play</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
+          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
+        </div>
+      </div>
+
+      <!-- Members list section -->
+      <div style="margin-top:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;">Current members</div>
+          <button class="btn btn-primary btn-sm dm-only" onclick="openInviteModal()">&#9993; Invite player</button>
+        </div>
+        <div id="members-list" style="display:flex;flex-direction:column;gap:8px;">
+          <div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">Loading members…</div>
+        </div>
+      </div>
+
+      <!-- Pending invites section (DM-only) -->
+      <div class="dm-only" style="margin-top:24px;">
+        <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Pending invites</div>
+        <div id="pending-invites-list" style="display:flex;flex-direction:column;gap:8px;">
+          <div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">Loading invites…</div>
         </div>
       </div>
     </div>
@@ -795,6 +832,46 @@
         <button class="btn" onclick="closeInviteModal()">Done</button>
         <button class="btn btn-primary" id="invite-copy-btn" onclick="copyInviteLink()">Copy link</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Phase 3 Deploy 2 — confirm modal for removing a campaign member. -->
+<div class="modal-overlay hidden" id="confirm-remove-member-modal" onclick="if(event.target===this)closeConfirmRemoveMember()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Remove Member</div>
+      <button class="modal-close" onclick="closeConfirmRemoveMember()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:8px;" id="confirm-remove-member-body">
+      Remove this player from the campaign?
+    </p>
+    <p style="color:rgba(245,232,200,0.6);font-size:13px;margin-bottom:14px;">
+      Their character will be released and become available to re-invite. Their tokens and account stay intact. They lose access to this campaign immediately.
+    </p>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfirmRemoveMember()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-remove-member-btn" onclick="confirmRemoveMember()">Remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- Phase 3 Deploy 2 — confirm modal for revoking a pending invite. -->
+<div class="modal-overlay hidden" id="confirm-revoke-invite-modal" onclick="if(event.target===this)closeConfirmRevokeInvite()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Revoke Invite</div>
+      <button class="modal-close" onclick="closeConfirmRevokeInvite()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:8px;" id="confirm-revoke-invite-body">
+      Revoke this invitation?
+    </p>
+    <p style="color:rgba(245,232,200,0.6);font-size:13px;margin-bottom:14px;">
+      The link will stop working. If the invitee already clicked it, they'll see an "invitation no longer valid" message. You can always create a new invite later.
+    </p>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfirmRevokeInvite()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-revoke-invite-btn" onclick="confirmRevokeInvite()">Revoke</button>
     </div>
   </div>
 </div>

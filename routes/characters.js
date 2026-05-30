@@ -40,7 +40,15 @@ async function handleFileUpload(files, fieldname, oldUrl) {
 // GET all characters
 router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ? ORDER BY created_at ASC').all(req.params.campaignId);
+  // LEFT JOIN to users to resolve owner_user_id → owner_name for the
+  // "Played by X" badge on the Characters tab. Owner is NULL for NPCs,
+  // unowned PCs, and stub characters still awaiting their invitee.
+  const characters = await db.prepare(
+    'SELECT c.*, u.name AS owner_name ' +
+    'FROM characters c ' +
+    'LEFT JOIN users u ON u.id = c.owner_user_id ' +
+    'WHERE c.campaign_id = ? ORDER BY c.created_at ASC'
+  ).all(req.params.campaignId);
   res.json(characters);
 });
 

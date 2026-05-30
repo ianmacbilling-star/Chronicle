@@ -1191,3 +1191,167 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    hidden via display:none. !important is used because some inline
    styles or layout containers may set display via JS otherwise. */
 body.role-player .dm-only { display: none !important; }
+
+/* ============================================================
+   PHASE 3 DEPLOY 2 — Members tab styles
+   ============================================================ */
+
+/* A single row in the members list or pending-invites list. Flex layout:
+   icon | identity block | meta block | actions menu. */
+.member-row, .invite-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(20,12,4,0.75);
+  border: 1px solid rgba(201,168,76,0.15);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  position: relative;
+}
+
+.member-row-icon, .invite-row-icon {
+  font-size: 24px;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.member-row-body, .invite-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-row-name {
+  font-size: 15px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.member-row-email, .invite-row-email {
+  font-size: 12px;
+  color: rgba(245,232,200,0.55);
+  margin-top: 2px;
+}
+
+.member-row-meta, .invite-row-meta {
+  font-size: 12px;
+  color: rgba(245,232,200,0.7);
+  margin-top: 4px;
+}
+
+.member-row-actions, .invite-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Role badges — DM crown, Player */
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: var(--font-display);
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.role-badge-dm {
+  background: rgba(201,168,76,0.18);
+  color: var(--gold);
+  border: 1px solid rgba(201,168,76,0.35);
+}
+.role-badge-player {
+  background: rgba(80,140,200,0.18);
+  color: #94c0e8;
+  border: 1px solid rgba(120,170,210,0.35);
+}
+
+/* Ellipsis menu (⋯) — opens a small dropdown for destructive actions */
+.row-menu {
+  position: relative;
+  display: inline-block;
+}
+.row-menu-btn {
+  background: transparent;
+  border: 1px solid rgba(201,168,76,0.2);
+  color: var(--text);
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.row-menu-btn:hover {
+  background: rgba(201,168,76,0.1);
+  border-color: rgba(201,168,76,0.4);
+}
+.row-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 34px;
+  background: rgba(20,12,4,0.98);
+  border: 1px solid rgba(201,168,76,0.3);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 130px;
+  z-index: 100;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  display: none;
+}
+.row-menu-dropdown.open { display: block; }
+.row-menu-item {
+  display: block;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+.row-menu-item:hover { background: rgba(201,168,76,0.12); }
+.row-menu-item-danger { color: #f5b0a8; }
+.row-menu-item-danger:hover { background: rgba(180,40,30,0.18); }
+
+/* Pending-invite specific touches */
+.invite-row-expired-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(180,60,40,0.18);
+  color: #f5b0a8;
+  border: 1px solid rgba(220,120,100,0.35);
+  margin-left: 8px;
+}
+
+/* Character-tab badges (Phase 3 Deploy 2) */
+.char-owner-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(80,140,200,0.18);
+  color: #94c0e8;
+  border: 1px solid rgba(120,170,210,0.35);
+  margin-top: 4px;
+}
+.char-pending-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(201,168,76,0.15);
+  color: var(--gold);
+  border: 1px dashed rgba(201,168,76,0.4);
+  margin-top: 4px;
+}
