@@ -1191,6 +1191,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    hidden via display:none. !important is used because some inline
    styles or layout containers may set display via JS otherwise. */
 body.role-player .dm-only { display: none !important; }
+/* Phase 4 Step 3 — when a player is viewing THEIR OWN version, the
+   per-panel edit + regenerate controls become available again. Higher
+   specificity than the rule above so it wins. */
+body.role-player.can-edit-fork .moment-prompt-edit-btn,
+body.role-player.can-edit-fork .moment-regen-btn { display: inline-block !important; }
 
 /* ============================================================
    PHASE 3 DEPLOY 2 — Members tab styles

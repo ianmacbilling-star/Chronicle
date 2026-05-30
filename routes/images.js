@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
 const { fal } = require('@fal-ai/client');
@@ -306,13 +306,13 @@ function getStylePrefix(style) {
 // source = what kind of image ('moment', 'character_reference', etc).
 // refId = id of whatever it was for; interpret it using source.
 // Failures here must never break image generation — wrapped in try/catch.
-async function logImageGeneration(db, userId, source, refId) {
+async function logImageGeneration(db, userId, source, refId, forkId) {
   try {
     var d = new Date();
     var monthKey = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
     await db.prepare(
-      'INSERT INTO image_generations (user_id, source, ref_id, month_key, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(userId, source || 'moment', refId || null, monthKey, d.toISOString());
+      'INSERT INTO image_generations (user_id, source, ref_id, fork_id, month_key, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, source || 'moment', refId || null, forkId || null, monthKey, d.toISOString());
   } catch (e) {
     console.error('logImageGeneration failed (non-fatal):', e.message);
   }
@@ -443,14 +443,19 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   if (!prompt) return res.json({ error: 'Prompt required' });
 
   const db = await getDb();
+  // Authorize the DM (canonical) OR the player who owns this moment's fork.
   const moment = await db.prepare(
-    'SELECT m.* FROM moments m ' +
+    'SELECT m.*, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+    'FROM moments m ' +
     'JOIN sessions s ON m.session_id = s.id ' +
-    'JOIN campaigns c ON s.campaign_id = c.id ' +
-    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE m.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
-  ).get(moment_id, req.session.userId);
-
-  if (!moment) return res.status(403).json({ error: 'Access denied' });
+    'JOIN session_forks sf ON sf.id = m.fork_id ' +
+    'WHERE m.id = ?'
+  ).get(moment_id);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  const myRole = await getCampaignRole(req.session.userId, moment.campaign_id);
+  if (!myRole) return res.status(403).json({ error: 'Access denied' });
+  const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
+  if (myRole !== 'dm' && !ownsThisFork) return res.status(403).json({ error: 'You can only regenerate your own version' });
 
   try {
     // Get characters for this campaign for consistency
@@ -461,9 +466,9 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
       'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
       'sc.change_note, sc.change_moment_index, sc.change_status ' +
       'FROM characters ch ' +
-      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
       'WHERE ch.campaign_id = ?'
-    ).all(moment.session_id, campId);
+    ).all(moment.fork_id, campId);
     // Stage 4: for any character with an accepted mid-session change, fetch
     // the PRIOR session's reference so pre-change panels show the old look.
     await attachPriorReferences(db, chars, moment.session_id, campId);
@@ -499,13 +504,18 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const now = new Date().toISOString();
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
-    await logImageGeneration(db, req.session.userId, 'moment', moment_id);
+    await logImageGeneration(db, req.session.userId, 'moment', moment_id, moment.fork_id);
     // Spend AFTER success — failed generations never reach here.
     await spendTokens(req.session.userId, cost, {
       related_campaign_id: campId,
       source: 'panel_regen',
       event_type: 'generation_spend'
     });
+    // DM-bonus hook: stamp the player's most-recent campaign (read at
+    // Stripe purchase time to credit the right DM).
+    if (myRole === 'player') {
+      try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campId, req.session.userId); } catch (e) {}
+    }
     const balance = await getBalance(req.session.userId);
     res.json({ success: true, image_url: imageUrl, moment_id: moment_id, balance: balance });
   } catch(e) {

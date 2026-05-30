@@ -31,16 +31,26 @@ router.delete('/:momentId', requireAuth, verifyCampaignDM, async function(req, r
   res.json({ success: true });
 });
 
-// PUT - edit a moment's prompt. Prompt editing is a Platinum-tier perk,
-// so the tier is enforced here on the server, not just in the UI.
-router.put('/:momentId', requireAuth, verifyCampaignDM, async function(req, res) {
-  const { getTier } = require('../middleware/tiers');
+// PUT - edit a moment's prompt. DM may edit canonical (Platinum-gated);
+// a player may edit prompts freely on their OWN version (tokens are the
+// meter for forks, not tier).
+router.put('/:momentId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-
-  const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
-  const tier = getTier(user ? user.tier : 'copper');
-  if (!tier.can_edit_prompts) {
-    return res.status(403).json({ error: 'Prompt editing is available on the Platinum plan.' });
+  const moment = await db.prepare(
+    'SELECT m.id, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
+  ).get(req.params.momentId, req.params.sessionId);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  const isDM = req.campaignRole === 'dm';
+  const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
+  if (!isDM && !ownsThisFork) return res.status(403).json({ error: 'You can only edit your own version' });
+  // Tier gate applies only to DM canonical editing.
+  if (isDM) {
+    const { getTier } = require('../middleware/tiers');
+    const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    const tier = getTier(user ? user.tier : 'copper');
+    if (!tier.can_edit_prompts) {
+      return res.status(403).json({ error: 'Prompt editing is available on the Platinum plan.' });
+    }
   }
 
   const { prompt } = req.body;
@@ -51,8 +61,8 @@ router.put('/:momentId', requireAuth, verifyCampaignDM, async function(req, res)
     'UPDATE moments SET prompt = ?, edited_at = ?, edited_by = ? WHERE id = ? AND session_id = ?'
   ).run(prompt, now, req.session.userId, req.params.momentId, req.params.sessionId);
 
-  const moment = await db.prepare('SELECT * FROM moments WHERE id = ?').get(req.params.momentId);
-  res.json({ success: true, moment: moment });
+  const updatedMoment = await db.prepare('SELECT * FROM moments WHERE id = ?').get(req.params.momentId);
+  res.json({ success: true, moment: updatedMoment });
 });
 
 module.exports = router;

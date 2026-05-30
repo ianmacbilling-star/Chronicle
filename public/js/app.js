@@ -6460,6 +6460,14 @@ function saveAccessStatus(status) {
 // PHASE 4 STEP 2 — VERSION (FORK) SELECTOR
 // ============================================================
 // state.currentForkId === null means "viewing the DM canonical".
+// A player may edit only when viewing their OWN version; toggling the
+// body class flips the per-panel edit/regen controls on for them.
+function updateForkEditability() {
+  var role = state.currentCampaign && state.currentCampaign.my_role;
+  var canEdit = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+  document.body.classList.toggle('can-edit-fork', !!canEdit);
+}
+
 function forkQ() {
   return state.currentForkId ? ('?fork_id=' + encodeURIComponent(state.currentForkId)) : '';
 }
@@ -6496,6 +6504,7 @@ function loadSessionForks(sessionId) {
       }
       var delBtn = document.getElementById('delete-my-version-btn');
       if (delBtn) delBtn.style.display = mineFork ? '' : 'none';
+      updateForkEditability();
     })
     .catch(function() {});
 }
@@ -6504,6 +6513,7 @@ function onForkChange(forkId) {
   var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
+  updateForkEditability();
   reloadSessionForFork();
 }
 
