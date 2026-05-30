@@ -713,17 +713,35 @@ function renderSessions() {
   });
 
   list.innerHTML = ordered.map(function(s) {
+    var thumb = s.first_image_url
+      ? '<img class="session-thumb" src="' + s.first_image_url + '" alt="" loading="lazy" />'
+      : '';
+    var readyChip = (s.player_access_status === 'ready')
+      ? '<span class="session-badge">Ready</span>'
+      : '<span class="session-badge session-badge-draft">Draft</span>';
+    var transcriptChip = s.transcript
+      ? '<span class="session-badge">Has transcript</span>'
+      : '<span class="session-badge empty">No transcript</span>';
+    var menuId = 'session-menu-' + s.id;
+    var deleteMenu =
+      '<div class="row-menu dm-only">' +
+        '<button class="row-menu-btn" onclick="event.stopPropagation();toggleRowMenu(\'' + menuId + '\', event)">&#8943;</button>' +
+        '<div class="row-menu-dropdown" id="' + menuId + '">' +
+          '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
+        '</div>' +
+      '</div>';
     return '<div class="session-item" onclick="selectSession(' + s.id + ')">' +
       '<div class="session-item-left">' +
+        thumb +
         '<div>' +
           '<div class="session-name">' + s.name + '</div>' +
           '<div class="session-date">' + formatSessionDate(s.session_date) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="flex gap-1 items-center">' +
-        '<span class="session-access-chip session-access-chip-' + (s.player_access_status === 'ready' ? 'ready' : 'draft') + '">' + (s.player_access_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
-        (s.transcript ? '<span class="session-badge">Has transcript</span>' : '<span class="session-badge empty">No transcript</span>') +
-        '<button class="btn btn-sm btn-danger dm-only" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
+        readyChip +
+        transcriptChip +
+        deleteMenu +
       '</div>' +
     '</div>';
   }).join('');
@@ -4074,17 +4092,35 @@ function renderSessions() {
   });
 
   list.innerHTML = ordered.map(function(s) {
+    var thumb = s.first_image_url
+      ? '<img class="session-thumb" src="' + s.first_image_url + '" alt="" loading="lazy" />'
+      : '';
+    var readyChip = (s.player_access_status === 'ready')
+      ? '<span class="session-badge">Ready</span>'
+      : '<span class="session-badge session-badge-draft">Draft</span>';
+    var transcriptChip = s.transcript
+      ? '<span class="session-badge">Has transcript</span>'
+      : '<span class="session-badge empty">No transcript</span>';
+    var menuId = 'session-menu-' + s.id;
+    var deleteMenu =
+      '<div class="row-menu dm-only">' +
+        '<button class="row-menu-btn" onclick="event.stopPropagation();toggleRowMenu(\'' + menuId + '\', event)">&#8943;</button>' +
+        '<div class="row-menu-dropdown" id="' + menuId + '">' +
+          '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
+        '</div>' +
+      '</div>';
     return '<div class="session-item" onclick="selectSession(' + s.id + ')">' +
       '<div class="session-item-left">' +
+        thumb +
         '<div>' +
           '<div class="session-name">' + s.name + '</div>' +
           '<div class="session-date">' + formatSessionDate(s.session_date) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="flex gap-1 items-center">' +
-        '<span class="session-access-chip session-access-chip-' + (s.player_access_status === 'ready' ? 'ready' : 'draft') + '">' + (s.player_access_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
-        (s.transcript ? '<span class="session-badge">Has transcript</span>' : '<span class="session-badge empty">No transcript</span>') +
-        '<button class="btn btn-sm btn-danger dm-only" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
+        readyChip +
+        transcriptChip +
+        deleteMenu +
       '</div>' +
     '</div>';
   }).join('');

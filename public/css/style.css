@@ -1410,3 +1410,33 @@ body.role-player .dm-only { display: none !important; }
   margin-right: 8px;
   font-size: 16px;
 }
+
+/* ============================================================
+   Session list — Draft/Ready as badges + thumbnail + ⋯ menu
+   ============================================================ */
+
+/* Reuse .session-badge styling for the access-status pill on the list.
+   Ready inherits the default green-success treatment. Draft uses a
+   muted gold tint so it harmonizes with Chronicle's palette without
+   competing with the Ready or "Has transcript" badges. */
+.session-badge.session-badge-draft {
+  background: rgba(201,168,76,0.18);
+  color: var(--gold);
+  border: 1px solid rgba(201,168,76,0.35);
+}
+
+/* Thumbnail to the left of the session name. Square, slightly rounded.
+   Hidden when no image is available (the JS only renders it when
+   first_image_url is set). */
+.session-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(201,168,76,0.2);
+  background: rgba(20,12,4,0.6);
+}
+
+/* The .session-item-left already uses flex layout for name + date
+   (defined earlier in this file). Thumbnail slots into that flex row. */

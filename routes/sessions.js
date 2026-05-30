@@ -32,7 +32,16 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
 // GET all sessions
 router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
+  // Phase 3 polish — include the first generated storyboard image with
+  // each session for the session-list thumbnail. Subquery picks the
+  // moment with the lowest panel_order that has an image URL set. NULL
+  // if no images have been generated yet (the row just shows no thumb).
+  const sessions = await db.prepare(
+    'SELECT s.*, ' +
+    '(SELECT image FROM moments m WHERE m.session_id = s.id AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url ' +
+    'FROM sessions s ' +
+    'WHERE s.campaign_id=? ORDER BY s.session_date ASC'
+  ).all(req.params.campaignId);
   res.json(sessions);
 });
 
