@@ -958,22 +958,22 @@ function renderSessionCharacters(rows) {
     var acceptedChange = (r.change_status === 'accepted');
     var changeBadge = '';
     if (pendingChange) {
-      changeBadge = '<div class="sc-change-badge" onclick="openChangeReview(' + r.character_id + ')">' +
+      changeBadge = '<div class="sc-change-badge dm-only" onclick="openChangeReview(' + r.character_id + ')">' +
         '&#9888; Change detected &mdash; review</div>';
     } else if (acceptedChange) {
-      changeBadge = '<div class="sc-change-badge sc-change-badge-accepted" ' +
+      changeBadge = '<div class="sc-change-badge sc-change-badge-accepted dm-only" ' +
         'onclick="openChangeReview(' + r.character_id + ')">' +
         '&#10003; Change applied &mdash; edit</div>';
     }
 
     var editBtn = '';
     if (canEdit) {
-      editBtn = '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit Description</button>';
+      editBtn = '<button class="btn btn-sm dm-only" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit Description</button>';
       // "Amend appearance" — manually start the review flow even when the
       // AI flagged nothing. Hidden if a change is already pending/accepted
       // (the badge already opens the review screen for those).
       if (!pendingChange && !acceptedChange) {
-        editBtn += '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">' +
+        editBtn += '<button class="btn btn-sm dm-only" onclick="openChangeReview(' + r.character_id + ')">' +
           '&#10010; Amend appearance</button>';
       }
     }
