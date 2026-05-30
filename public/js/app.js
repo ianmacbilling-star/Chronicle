@@ -721,6 +721,7 @@ function renderSessions() {
         '</div>' +
       '</div>' +
       '<div class="flex gap-1 items-center">' +
+        '<span class="session-access-chip session-access-chip-' + (s.player_access_status === 'ready' ? 'ready' : 'draft') + '">' + (s.player_access_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         (s.transcript ? '<span class="session-badge">Has transcript</span>' : '<span class="session-badge empty">No transcript</span>') +
         '<button class="btn btn-sm btn-danger dm-only" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
       '</div>' +
@@ -3994,6 +3995,7 @@ function renderSessions() {
         '</div>' +
       '</div>' +
       '<div class="flex gap-1 items-center">' +
+        '<span class="session-access-chip session-access-chip-' + (s.player_access_status === 'ready' ? 'ready' : 'draft') + '">' + (s.player_access_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         (s.transcript ? '<span class="session-badge">Has transcript</span>' : '<span class="session-badge empty">No transcript</span>') +
         '<button class="btn btn-sm btn-danger dm-only" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
       '</div>' +
