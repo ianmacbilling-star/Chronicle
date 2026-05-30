@@ -5813,15 +5813,10 @@ function loadMembersTab() {
   var cur = state.currentCampaign;
   if (!cur) return;
   loadMembers();
-  // Only DMs see the pending-invites list (server enforces too).
-  if (cur.my_role === 'dm') {
-    loadPendingInvites();
-  } else {
-    // Hide entirely for players — the .dm-only on the container does
-    // this via CSS, but we still want to clear stale content.
-    var pi = document.getElementById('pending-invites-list');
-    if (pi) pi.innerHTML = '';
-  }
+  // All members can see the pending invites list (per design — players
+  // get to see who else is joining). Action buttons are dm-only at the
+  // CSS level. Backend enforces verifyCampaignMember on the GET.
+  loadPendingInvites();
 }
 
 function loadMembers() {
@@ -5933,7 +5928,7 @@ function renderPendingInvites() {
         '<div class="member-row-name">' + escapeHtml(inv.email_hint || '(no email)') + ' ' + expiresLabel + '</div>' +
         '<div class="member-row-meta">' + charInfo + '</div>' +
       '</div>' +
-      '<div class="invite-row-actions">' +
+      '<div class="invite-row-actions dm-only">' +
         '<button class="btn btn-sm" onclick="copyExistingInviteLink(' + inv.id + ',' + (inv.expired ? 'true' : 'false') + ')">' +
           (inv.expired ? 'Reactivate &amp; copy' : 'Copy link') +
         '</button>' +

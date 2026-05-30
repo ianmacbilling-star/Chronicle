@@ -207,8 +207,10 @@
         </div>
       </div>
 
-      <!-- Pending invites section (DM-only) -->
-      <div class="dm-only" style="margin-top:24px;">
+      <!-- Pending invites section — visible to all members. Per-row
+           action buttons (Copy link, Revoke) are individually marked
+           dm-only so players see the list but can't act on it. -->
+      <div style="margin-top:24px;">
         <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Pending invites</div>
         <div id="pending-invites-list" style="display:flex;flex-direction:column;gap:8px;">
           <div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">Loading invites…</div>

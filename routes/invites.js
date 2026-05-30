@@ -297,12 +297,15 @@ router.delete('/campaigns/:campaignId/members/:userId', requireAuth, verifyCampa
 });
 
 // GET /api/campaigns/:campaignId/invites
-// DM-only. List currently-pending invites for the Members tab. A
-// "pending" invite is one with no used_at set (i.e. not consumed and
-// not revoked). Both active AND expired-but-not-revoked invites are
-// returned — the UI shows "expires in X days" or "expired (reactivate?)"
-// distinctly. (Reactivation is a separate endpoint.)
-router.get('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, async function(req, res) {
+// Any member can see pending invites (per design decision May 30 2026:
+// players see the list so they can anticipate who else is joining; the
+// privacy implication of exposing invitee emails is accepted for now).
+// Action endpoints (revoke, reactivate, create) stay DM-only — players
+// see the list but can't act on it.
+// "Pending" = no used_at set (not consumed and not revoked). Both
+// active AND expired-but-not-revoked invites are returned — the UI
+// shows "expires in X days" or an "expired" tag distinctly.
+router.get('/campaigns/:campaignId/invites', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   try {
     const invites = await db.prepare(
