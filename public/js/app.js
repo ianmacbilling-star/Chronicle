@@ -5757,6 +5757,14 @@ function submitInvite() {
     document.getElementById('invite-link-display').textContent = data.url;
     document.getElementById('invite-modal-step1').style.display = 'none';
     document.getElementById('invite-modal-step2').style.display = '';
+    // Phase 3 Deploy 2: if the DM is on the Members tab, refresh the
+    // pending invites list in the background so the new invite is
+    // visible immediately after they close the modal. Also refresh
+    // characters in case a new stub PC was created. Both calls are
+    // no-ops if the user isn't viewing those tabs — they just stage
+    // fresh data for the next visit.
+    if (typeof loadPendingInvites === 'function') loadPendingInvites();
+    if (typeof loadCharacters === 'function') loadCharacters();
   })
   .catch(function(e) {
     errEl.textContent = 'Network error: ' + e.message;

@@ -1231,14 +1231,14 @@ body.role-player .dm-only { display: none !important; }
 }
 
 .member-row-email, .invite-row-email {
-  font-size: 12px;
-  color: rgba(245,232,200,0.55);
-  margin-top: 2px;
+  font-size: 13px;
+  color: rgba(245,232,200,0.85);
+  margin-top: 3px;
 }
 
 .member-row-meta, .invite-row-meta {
   font-size: 12px;
-  color: rgba(245,232,200,0.7);
+  color: rgba(245,232,200,0.9);
   margin-top: 4px;
 }
 
