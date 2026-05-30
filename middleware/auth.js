@@ -129,12 +129,35 @@ async function isCampaignLocked(campaignId) {
   }
 }
 
+// Phase 4 Step 2 — write-guard for fork-scoped routes. Passes if the
+// caller is the campaign DM, OR owns the fork identified by
+// req.params.forkId / body.fork_id / query.fork_id. Used by Step 3
+// fork-editing routes. DM may touch any fork; a player only their own.
+async function verifyForkOwnerOrDm(req, res, next) {
+  const campaignId = req.params.campaignId;
+  const forkId = req.params.forkId || (req.body && req.body.fork_id) || req.query.fork_id;
+  const userId = req.session.userId;
+  const role = await getCampaignRole(userId, campaignId);
+  if (!role) return res.status(403).json({ error: 'Access denied' });
+  const db = await getDb();
+  req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  if (role === 'dm') { req.campaignRole = 'dm'; return next(); }
+  if (!forkId) return res.status(403).json({ error: 'Version required' });
+  const fork = await db.prepare('SELECT id, user_id, role FROM session_forks WHERE id = ?').get(forkId);
+  if (!fork) return res.status(404).json({ error: 'Version not found' });
+  if (String(fork.user_id) !== String(userId)) return res.status(403).json({ error: 'You can only edit your own version' });
+  req.campaignRole = 'player';
+  req.fork = fork;
+  next();
+}
+
 module.exports = {
   requireAuth,
   getCampaignRole,
   verifyCampaignMember,
   verifyCampaignDM,
   verifyCampaignDmOrCharacterOwner,
+  verifyForkOwnerOrDm,
   isCampaignLocked,
   memberSubquery,
   dmSubquery

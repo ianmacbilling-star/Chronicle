@@ -177,10 +177,11 @@ router.put('/:id/characters/:characterId', requireAuth, verifyCampaignDM, async 
   if (typeof prompt !== 'string') return res.json({ error: 'Prompt required' });
 
   const now = new Date().toISOString();
+  const dmForkId = await getDmForkId(db, req.params.id);
   await db.prepare(
     'UPDATE session_characters SET prompt = ?, edited_at = ?, edited_by = ? ' +
-    'WHERE session_id = ? AND character_id = ?'
-  ).run(prompt, now, req.session.userId, req.params.id, req.params.characterId);
+    'WHERE fork_id = ? AND character_id = ?'
+  ).run(prompt, now, req.session.userId, dmForkId, req.params.characterId);
 
   res.json({ success: true, prompt: prompt });
 });
@@ -199,9 +200,10 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     const ch = await db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
     if (!ch) return res.json({ error: 'Character not found' });
 
+    const dmForkId = await getDmForkId(db, sessionId);
     const sc = await db.prepare(
-      'SELECT * FROM session_characters WHERE session_id = ? AND character_id = ?'
-    ).get(sessionId, characterId);
+      'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
+    ).get(dmForkId, characterId);
 
     const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
     if (!falKey) return res.json({ error: 'Image generation not configured.' });
@@ -260,9 +262,10 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     const thisSession = await db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
     if (!thisSession) return res.json({ error: 'Session not found' });
 
+    const dmForkId = await getDmForkId(db, sessionId);
     const sc = await db.prepare(
-      'SELECT * FROM session_characters WHERE session_id = ? AND character_id = ?'
-    ).get(sessionId, characterId);
+      'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
+    ).get(dmForkId, characterId);
     if (!sc) return res.json({ error: 'Session character not found' });
 
     // The amended text = base prompt + the approved change detail.
@@ -275,22 +278,25 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     await db.prepare(
       'UPDATE session_characters SET prompt = ?, reference_url = ?, change_note = ?, ' +
       'change_moment_index = ?, change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
-      'WHERE session_id = ? AND character_id = ?'
-    ).run(amendedText, imageUrl, detail, momentIndex, 0, 'accepted', now, req.session.userId, sessionId, characterId);
+      'WHERE fork_id = ? AND character_id = ?'
+    ).run(amendedText, imageUrl, detail, momentIndex, 0, 'accepted', now, req.session.userId, dmForkId, characterId);
 
     // 2. Write the change FORWARD into all later sessions for this character.
     // Self-contained sessions don't auto-chain, so propagation is explicit.
+    // Propagate only to LATER sessions' DM (canonical) forks that have a
+    // snapshot for this character. Player versions are never touched.
     const laterRows = await db.prepare(
-      'SELECT sc.session_id FROM session_characters sc ' +
-      'JOIN sessions s ON sc.session_id = s.id ' +
-      'WHERE sc.character_id = ? AND s.campaign_id = ? AND s.session_date > ?'
-    ).all(characterId, thisSession.campaign_id, thisSession.session_date);
+      "SELECT sf.id AS fork_id FROM session_forks sf " +
+      "JOIN sessions s ON s.id = sf.session_id " +
+      "WHERE sf.role = 'dm' AND s.campaign_id = ? AND s.session_date > ? " +
+      "AND EXISTS (SELECT 1 FROM session_characters scx WHERE scx.fork_id = sf.id AND scx.character_id = ?)"
+    ).all(thisSession.campaign_id, thisSession.session_date, characterId);
 
     for (const row of laterRows) {
       await db.prepare(
         'UPDATE session_characters SET prompt = ?, reference_url = ?, edited_at = ?, edited_by = ? ' +
-        'WHERE session_id = ? AND character_id = ?'
-      ).run(amendedText, imageUrl, now, req.session.userId, row.session_id, characterId);
+        'WHERE fork_id = ? AND character_id = ?'
+      ).run(amendedText, imageUrl, now, req.session.userId, row.fork_id, characterId);
     }
 
     res.json({ success: true, forwarded: laterRows.length });
@@ -307,10 +313,11 @@ router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCam
   try {
     const db = await getDb();
     const now = new Date().toISOString();
+    const dmForkId = await getDmForkId(db, req.params.id);
     await db.prepare(
       'UPDATE session_characters SET change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
-      'WHERE session_id = ? AND character_id = ?'
-    ).run(0, 'rejected', now, req.session.userId, req.params.id, req.params.characterId);
+      'WHERE fork_id = ? AND character_id = ?'
+    ).run(0, 'rejected', now, req.session.userId, dmForkId, req.params.characterId);
     // change_detail is intentionally left in place — re-extraction reads it.
     res.json({ success: true });
   } catch(e) {
@@ -435,6 +442,83 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     console.error('session review error:', e.message);
     res.json({ error: 'Could not build the review.' });
   }
+});
+
+// ============================================================
+// PHASE 4 STEP 2 — PLAYER VERSIONS (forks)
+// ============================================================
+
+// GET the versions of a session the caller may see: the DM canonical
+// fork (always), the caller's own version, and other players' READY
+// versions. Returns friendly labels for the member dropdown.
+router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const me = req.session.userId;
+  const rows = await db.prepare(
+    "SELECT sf.id, sf.user_id, sf.role, sf.player_access_status, u.name AS user_name, u.email AS user_email " +
+    "FROM session_forks sf JOIN users u ON u.id = sf.user_id " +
+    "WHERE sf.session_id = ? ORDER BY (sf.role = 'dm') DESC, sf.created_at ASC"
+  ).all(req.params.id);
+  const visible = rows.filter(function(f) {
+    return f.role === 'dm' || String(f.user_id) === String(me) || f.player_access_status === 'ready';
+  }).map(function(f) {
+    const mine = String(f.user_id) === String(me);
+    return {
+      fork_id: f.id,
+      role: f.role,
+      status: f.player_access_status,
+      is_mine: mine,
+      label: f.role === 'dm' ? 'DM \u2014 Canonical' : (mine ? 'You (your version)' : (f.user_name || f.user_email || 'Player'))
+    };
+  });
+  res.json(visible);
+});
+
+// POST create the caller's own version of a session (lazy — fires only
+// when the player clicks "Make My Version"). Requires: caller is a
+// PLAYER member, and the DM fork is 'ready'. One version per player per
+// session (returns the existing one on re-call). Copies the DM fork's
+// moments + character snapshots + narrative; images shared by URL until
+// the player regenerates their own.
+router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const sessionId = req.params.id;
+  if (req.campaignRole !== 'player') return res.status(403).json({ error: 'Only players make their own version' });
+  const dmFork = await db.prepare("SELECT id, player_access_status FROM session_forks WHERE session_id = ? AND role = 'dm'").get(sessionId);
+  if (!dmFork) return res.status(404).json({ error: 'Session has no canonical version' });
+  if (dmFork.player_access_status !== 'ready') return res.status(423).json({ error: 'This session is not Ready yet' });
+  const existing = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(sessionId, req.session.userId);
+  if (existing) return res.json({ fork_id: existing.id, existing: true });
+  const now = new Date().toISOString();
+  const created = await db.prepare(
+    "INSERT INTO session_forks (session_id, user_id, role, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, created_at) " +
+    "SELECT ?, ?, 'player', 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, ? FROM session_forks WHERE id = ?"
+  ).run(sessionId, req.session.userId, now, dmFork.id);
+  const newForkId = created.lastInsertRowid;
+  await db.prepare(
+    "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, image, panel_order, created_at, created_by) " +
+    "SELECT session_id, ?, title, description, type, prompt, emphasis, image, panel_order, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
+  ).run(newForkId, now, req.session.userId, dmFork.id);
+  await db.prepare(
+    "INSERT INTO session_characters (session_id, fork_id, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, created_at) " +
+    "SELECT session_id, ?, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, ? FROM session_characters WHERE fork_id = ?"
+  ).run(newForkId, now, dmFork.id);
+  res.json({ fork_id: newForkId, existing: false });
+});
+
+// DELETE a version. Owner may delete their own; DM may delete any
+// player version. The DM canonical fork cannot be deleted here.
+router.delete('/:id/fork/:forkId', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const fork = await db.prepare('SELECT * FROM session_forks WHERE id = ? AND session_id = ?').get(req.params.forkId, req.params.id);
+  if (!fork) return res.status(404).json({ error: 'Version not found' });
+  if (fork.role === 'dm') return res.status(403).json({ error: 'The canonical version cannot be deleted here' });
+  const isOwner = String(fork.user_id) === String(req.session.userId);
+  if (!isOwner && req.campaignRole !== 'dm') return res.status(403).json({ error: 'You can only delete your own version' });
+  await db.prepare('DELETE FROM moments WHERE fork_id = ?').run(fork.id);
+  await db.prepare('DELETE FROM session_characters WHERE fork_id = ?').run(fork.id);
+  await db.prepare('DELETE FROM session_forks WHERE id = ?').run(fork.id);
+  res.json({ success: true });
 });
 
 module.exports = router;
