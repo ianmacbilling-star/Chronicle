@@ -16,6 +16,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, getCampaignRole } = require('../middleware/auth');
+const { sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 
 const INVITE_TTL_DAYS = 7;
 
@@ -108,13 +109,46 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
   const base = process.env.APP_URL || ('https://' + req.get('host'));
   const url = base.replace(/\/$/, '') + '/invite/' + token;
 
+  // Phase 3 Deploy 3 — also email the invitee. Look up the campaign name
+  // and DM name for the email body. Email is non-fatal (sendInviteEmail
+  // logs but doesn't throw). The frontend still shows the copyable URL
+  // as a backup; the email is the new normal flow.
+  let emailSent = false;
+  try {
+    const ctx = await db.prepare(
+      'SELECT c.name AS campaign_name, u.name AS dm_name ' +
+      'FROM campaigns c JOIN users u ON u.id = ? WHERE c.id = ?'
+    ).get(req.session.userId, campaignId);
+    let charInfo = null;
+    if (targetCharacterId) {
+      charInfo = await db.prepare(
+        'SELECT name, cls FROM characters WHERE id = ?'
+      ).get(targetCharacterId);
+    }
+    if (ctx && ctx.campaign_name) {
+      await sendInviteEmail({
+        to_email: normalizedEmail,
+        dm_name: ctx.dm_name || 'Your DM',
+        campaign_name: ctx.campaign_name,
+        character_name: charInfo ? charInfo.name : null,
+        character_class: charInfo ? charInfo.cls : null,
+        invite_url: url,
+        expires_at: expires
+      });
+      emailSent = true;
+    }
+  } catch (e) {
+    console.error('Invite email dispatch error:', e.message);
+  }
+
   res.json({
     id: result.lastInsertRowid,
     token: token,
     url: url,
     expires_at: expires,
     character_id: targetCharacterId,
-    email_hint: normalizedEmail
+    email_hint: normalizedEmail,
+    email_sent: emailSent
   });
 });
 
@@ -191,6 +225,52 @@ router.post('/invites/:token/accept', requireAuth, async function(req, res) {
   await db.prepare(
     'UPDATE campaign_invites SET used_at = ?, used_by = ? WHERE id = ?'
   ).run(new Date().toISOString(), req.session.userId, invite.id);
+
+  // Phase 3 Deploy 3 — fire the two join-lifecycle emails:
+  // 1. notify the DM that the invitee accepted
+  // 2. send the new player a welcome email
+  // Both are non-fatal — failures are logged but never break accept.
+  try {
+    const ctx = await db.prepare(
+      'SELECT c.name AS campaign_name, dm.email AS dm_email, dm.name AS dm_name, ' +
+      'p.email AS player_email, p.name AS player_name ' +
+      'FROM campaigns c ' +
+      'JOIN users dm ON dm.id = ? ' +
+      'JOIN users p ON p.id = ? ' +
+      'WHERE c.id = ?'
+    ).get(invite.created_by, req.session.userId, invite.campaign_id);
+    let charInfo = null;
+    if (invite.character_id) {
+      charInfo = await db.prepare(
+        'SELECT name, cls FROM characters WHERE id = ?'
+      ).get(invite.character_id);
+    }
+    if (ctx) {
+      const base = process.env.APP_URL || ('https://' + req.get('host'));
+      const campaignUrl = base.replace(/\/$/, '') + '/app.html#campaign=' + invite.campaign_id;
+      await sendJoinNotificationEmail({
+        dm_email: ctx.dm_email,
+        dm_name: ctx.dm_name || 'DM',
+        player_name: ctx.player_name || 'Player',
+        player_email: ctx.player_email || '',
+        campaign_name: ctx.campaign_name,
+        character_name: charInfo ? charInfo.name : null,
+        character_class: charInfo ? charInfo.cls : null,
+        campaign_url: campaignUrl
+      });
+      await sendPlayerJoinedWelcomeEmail({
+        player_email: ctx.player_email,
+        player_name: ctx.player_name || 'Adventurer',
+        dm_name: ctx.dm_name || 'your DM',
+        campaign_name: ctx.campaign_name,
+        character_name: charInfo ? charInfo.name : null,
+        character_class: charInfo ? charInfo.cls : null,
+        campaign_url: campaignUrl
+      });
+    }
+  } catch (e) {
+    console.error('Join-lifecycle email error:', e.message);
+  }
 
   res.json({
     success: true,
@@ -347,13 +427,14 @@ router.get('/campaigns/:campaignId/invites', requireAuth, verifyCampaignMember, 
 // DM-only. Silently bumps expires_at to now + 7 days. Used when the DM
 // hits Copy link on an expired invite — same token survives, link is
 // usable again. The token never changes (so any old URL the DM shared
-// via Discord/email still works after reactivation).
+// via Discord/email still works after reactivation). Also re-sends the
+// invite email since reactivation is effectively a "ping again" gesture.
 router.post('/campaigns/:campaignId/invites/:inviteId/reactivate', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
   const inviteId = parseInt(req.params.inviteId, 10);
   const campaignId = parseInt(req.params.campaignId, 10);
   const inv = await db.prepare(
-    'SELECT id, campaign_id, used_at, token FROM campaign_invites WHERE id = ?'
+    'SELECT id, campaign_id, used_at, token, email_hint, character_id FROM campaign_invites WHERE id = ?'
   ).get(inviteId);
   if (!inv || inv.campaign_id !== campaignId) {
     return res.status(404).json({ error: 'Invite not found' });
@@ -365,6 +446,36 @@ router.post('/campaigns/:campaignId/invites/:inviteId/reactivate', requireAuth, 
   await db.prepare(
     'UPDATE campaign_invites SET expires_at = ? WHERE id = ?'
   ).run(newExpiry, inviteId);
+
+  // Re-send the invite email — non-fatal.
+  try {
+    const ctx = await db.prepare(
+      'SELECT c.name AS campaign_name, u.name AS dm_name ' +
+      'FROM campaigns c JOIN users u ON u.id = ? WHERE c.id = ?'
+    ).get(req.session.userId, campaignId);
+    let charInfo = null;
+    if (inv.character_id) {
+      charInfo = await db.prepare(
+        'SELECT name, cls FROM characters WHERE id = ?'
+      ).get(inv.character_id);
+    }
+    if (ctx && ctx.campaign_name && inv.email_hint) {
+      const base = process.env.APP_URL || ('https://' + req.get('host'));
+      const inviteUrl = base.replace(/\/$/, '') + '/invite/' + inv.token;
+      await sendInviteEmail({
+        to_email: inv.email_hint,
+        dm_name: ctx.dm_name || 'Your DM',
+        campaign_name: ctx.campaign_name,
+        character_name: charInfo ? charInfo.name : null,
+        character_class: charInfo ? charInfo.cls : null,
+        invite_url: inviteUrl,
+        expires_at: newExpiry
+      });
+    }
+  } catch (e) {
+    console.error('Reactivate email error:', e.message);
+  }
+
   res.json({ success: true, expires_at: newExpiry, token: inv.token });
 });
 

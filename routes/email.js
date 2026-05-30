@@ -193,4 +193,228 @@ async function sendWelcomeEmail(name, email) {
   }
 }
 
-module.exports = { router, sendWelcomeEmail };
+// ============================================================
+// PHASE 3 DEPLOY 3 — Invite/join lifecycle emails
+// ============================================================
+// Three email types, all triggered by the invite flow:
+// - inviteEmail: to the invitee when DM creates (or reactivates) an invite
+// - joinNotificationEmail: to the DM when the invitee accepts
+// - playerJoinedWelcomeEmail: to the new player after accepting
+//
+// All three are wrapped at the call site in try/catch so an email
+// failure never breaks the underlying action (create-invite, accept,
+// register-with-invite). Logged for debugging.
+
+function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, character_class, invite_url, expires_at) {
+  const charLine = character_name
+    ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
+    : 'your character';
+  const expiresDate = expires_at ? new Date(expires_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: rgba(20,15,8,0.95); border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    .header { background: #1a0f08; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
+    .logo { font-family: Georgia, serif; font-size: 28px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; }
+    .body { padding: 32px; }
+    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
+    .details { background: rgba(0,0,0,0.3); border: 1px solid rgba(201,168,76,0.18); border-radius: 8px; padding: 16px 18px; margin: 16px 0; }
+    .details-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(201,168,76,0.7); margin-top: 10px; }
+    .details-label:first-child { margin-top: 0; }
+    .details-value { font-size: 15px; color: #e8d5a3; margin-top: 2px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c9a84c; color: #1a0f08; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
+    .small { font-size: 12px; color: rgba(201,168,76,0.5); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">CHRONICLE</div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">YOU'VE BEEN INVITED</div>
+    </div>
+    <div class="body">
+      <div class="title">${dm_name} invited you to a campaign</div>
+      <div class="text">A seat awaits you at the table.</div>
+      <div class="details">
+        <div class="details-label">Campaign</div>
+        <div class="details-value">${campaign_name}</div>
+        <div class="details-label">Playing as</div>
+        <div class="details-value">${charLine}</div>
+        ${expiresDate ? `<div class="details-label">Invitation expires</div><div class="details-value">${expiresDate}</div>` : ''}
+      </div>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${invite_url}" class="btn">Accept Invitation</a>
+      </div>
+      <div class="text small">If you don't have a Chronicle account yet, the link will let you create one and join in the same step.</div>
+      <div class="text small">If the button doesn't work, paste this link into your browser:<br/><span style="color:#c9a84c;word-break:break-all;">${invite_url}</span></div>
+    </div>
+    <div class="footer">
+      chroniclemygame.com &nbsp;·&nbsp; The Chronicle of Your Campaign
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function joinNotificationHTML(dm_name, player_name, player_email, campaign_name, character_name, character_class, campaign_url) {
+  const charLine = character_name
+    ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
+    : 'a character';
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: rgba(20,15,8,0.95); border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    .header { background: #1a0f08; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
+    .logo { font-family: Georgia, serif; font-size: 28px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; }
+    .body { padding: 32px; }
+    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
+    .details { background: rgba(0,0,0,0.3); border: 1px solid rgba(201,168,76,0.18); border-radius: 8px; padding: 16px 18px; margin: 16px 0; }
+    .details-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(201,168,76,0.7); margin-top: 10px; }
+    .details-label:first-child { margin-top: 0; }
+    .details-value { font-size: 15px; color: #e8d5a3; margin-top: 2px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c9a84c; color: #1a0f08; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">CHRONICLE</div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">A NEW PLAYER HAS JOINED</div>
+    </div>
+    <div class="body">
+      <div class="title">${player_name} joined ${campaign_name}</div>
+      <div class="text">Greetings, ${dm_name}.</div>
+      <div class="text">Your invitation has been accepted. The party grows.</div>
+      <div class="details">
+        <div class="details-label">Player</div>
+        <div class="details-value">${player_name} <span style="color:rgba(201,168,76,0.6);font-size:13px;">&nbsp;${player_email}</span></div>
+        <div class="details-label">Now playing</div>
+        <div class="details-value">${charLine}</div>
+        <div class="details-label">In campaign</div>
+        <div class="details-value">${campaign_name}</div>
+      </div>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${campaign_url}" class="btn">Open Campaign</a>
+      </div>
+    </div>
+    <div class="footer">
+      chroniclemygame.com &nbsp;·&nbsp; The Chronicle of Your Campaign
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_name, character_class, campaign_url) {
+  const charLine = character_name
+    ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
+    : 'your character';
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: rgba(20,15,8,0.95); border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    .header { background: #1a0f08; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
+    .logo { font-family: Georgia, serif; font-size: 28px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; }
+    .body { padding: 32px; }
+    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
+    .details { background: rgba(0,0,0,0.3); border: 1px solid rgba(201,168,76,0.18); border-radius: 8px; padding: 16px 18px; margin: 16px 0; }
+    .details-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(201,168,76,0.7); margin-top: 10px; }
+    .details-label:first-child { margin-top: 0; }
+    .details-value { font-size: 15px; color: #e8d5a3; margin-top: 2px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c9a84c; color: #1a0f08; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
+    .small { font-size: 12px; color: rgba(201,168,76,0.5); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">CHRONICLE</div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">WELCOME TO THE TABLE</div>
+    </div>
+    <div class="body">
+      <div class="title">Welcome to ${campaign_name}</div>
+      <div class="text">Greetings, ${player_name}.</div>
+      <div class="text">You've successfully joined ${dm_name}'s campaign. Your seat at the table is secured.</div>
+      <div class="details">
+        <div class="details-label">Campaign</div>
+        <div class="details-value">${campaign_name}</div>
+        <div class="details-label">Your character</div>
+        <div class="details-value">${charLine}</div>
+        <div class="details-label">Run by</div>
+        <div class="details-value">${dm_name}</div>
+      </div>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${campaign_url}" class="btn">Enter the Campaign</a>
+      </div>
+      <div class="text small">From here you can view storyboards, see your fellow adventurers, and follow the chronicle as it unfolds. When your character isn't locked, you can edit its appearance and identity.</div>
+    </div>
+    <div class="footer">
+      chroniclemygame.com &nbsp;·&nbsp; The Chronicle of Your Campaign
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Send an invite email. Used when a DM creates a new invite AND when
+// they reactivate an existing one.
+async function sendInviteEmail(opts) {
+  // opts: { to_email, dm_name, campaign_name, character_name, character_class, invite_url, expires_at }
+  try {
+    const subject = `${opts.dm_name} invited you to ${opts.campaign_name}`;
+    const html = inviteEmailHTML(opts.to_email, opts.dm_name, opts.campaign_name, opts.character_name, opts.character_class, opts.invite_url, opts.expires_at);
+    await sendEmail(opts.to_email, subject, html);
+  } catch (e) {
+    console.error('Invite email error:', e.message); // Non-fatal
+  }
+}
+
+// Send a join-notification email to the DM when an invitee accepts.
+async function sendJoinNotificationEmail(opts) {
+  // opts: { dm_email, dm_name, player_name, player_email, campaign_name, character_name, character_class, campaign_url }
+  try {
+    const subject = `${opts.player_name} joined ${opts.campaign_name}`;
+    const html = joinNotificationHTML(opts.dm_name, opts.player_name, opts.player_email, opts.campaign_name, opts.character_name, opts.character_class, opts.campaign_url);
+    await sendEmail(opts.dm_email, subject, html);
+  } catch (e) {
+    console.error('Join notification email error:', e.message); // Non-fatal
+  }
+}
+
+// Send a welcome email to the new player after they accept an invite.
+async function sendPlayerJoinedWelcomeEmail(opts) {
+  // opts: { player_email, player_name, dm_name, campaign_name, character_name, character_class, campaign_url }
+  try {
+    const subject = `Welcome to ${opts.campaign_name}`;
+    const html = playerJoinedWelcomeHTML(opts.player_name, opts.dm_name, opts.campaign_name, opts.character_name, opts.character_class, opts.campaign_url);
+    await sendEmail(opts.player_email, subject, html);
+  } catch (e) {
+    console.error('Player welcome email error:', e.message); // Non-fatal
+  }
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail };

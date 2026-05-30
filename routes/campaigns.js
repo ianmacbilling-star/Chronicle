@@ -11,8 +11,13 @@ const { checkCampaignLimit } = require('../middleware/tiers');
 // creator was backfilled as a 'dm' member at Phase 1).
 router.get('/', requireAuth, async function(req, res) {
   const db = await getDb();
+  // Phase 3 Deploy 3 — `locked` indicates this campaign has at least
+  // one session in 'ready' state, which gates player canonical-editing
+  // (until forks land in Phase 4). EXISTS subquery is cheap on the
+  // small per-user campaign set.
   const campaigns = await db.prepare(
-    'SELECT c.*, cm.role AS my_role ' +
+    'SELECT c.*, cm.role AS my_role, ' +
+    "EXISTS (SELECT 1 FROM sessions s WHERE s.campaign_id = c.id AND s.player_access_status = 'ready') AS locked " +
     'FROM campaigns c ' +
     'JOIN campaign_members cm ON cm.campaign_id = c.id ' +
     'WHERE cm.user_id = ? ' +

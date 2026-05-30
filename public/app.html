@@ -226,6 +226,20 @@
           class="form-input session-detail-date"
           onchange="updateSessionDate(this.value)"
         />
+        <!-- Phase 3 Deploy 3 — session access status. DM sees an editable
+             dropdown; players see a read-only chip. JS toggles which is
+             visible based on role. The dropdown architected as a select
+             so future states (Archived, Private) can be added in one place. -->
+        <select id="session-access-status-select"
+                class="form-input session-access-status-select dm-only"
+                onchange="onAccessStatusChange(this.value)"
+                style="max-width:140px;margin-left:8px;">
+          <option value="draft">Draft</option>
+          <option value="ready">Ready</option>
+        </select>
+        <span id="session-access-status-chip"
+              class="session-access-chip"
+              style="display:none;margin-left:8px;"></span>
       </div>
 
       <div class="sess-tabs">
@@ -635,7 +649,7 @@
       <label class="form-label">Player name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— helps AI match transcript to character</span></label>
       <input class="form-input" id="char-player" placeholder="e.g. Dave" />
     </div>
-    <div class="form-group">
+    <div class="form-group dm-only">
       <label class="form-checkbox-row">
         <input type="checkbox" id="char-is-npc" />
         <span>This is an NPC <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— a recurring, important non-player character to track across the campaign. For minor or one-off NPCs, use the campaign Asset Library instead.</span></span>
@@ -817,7 +831,7 @@
       </div>
     </div>
     <div id="invite-modal-step2" style="display:none;">
-      <p style="color:var(--text);margin-bottom:14px;">
+      <p style="color:var(--text);margin-bottom:14px;" id="invite-modal-step2-status">
         Invite created. Copy this link and send it to your player however you like (Discord, text, email, etc.).
       </p>
       <div style="background:rgba(0,0,0,0.4);border:1px solid rgba(201,168,76,0.25);border-radius:6px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;color:var(--gold);" id="invite-link-display"></div>
@@ -868,6 +882,31 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeConfirmRevokeInvite()">Cancel</button>
       <button class="btn btn-danger" id="confirm-revoke-invite-btn" onclick="confirmRevokeInvite()">Revoke</button>
+    </div>
+  </div>
+</div>
+
+<!-- Phase 3 Deploy 3 — confirm modal for marking session Ready. Shown
+     only on the high-consequence Draft → Ready transition; Ready →
+     Draft is permissive and toggles without a confirm. -->
+<div class="modal-overlay hidden" id="confirm-ready-modal" onclick="if(event.target===this)closeConfirmReady()">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Mark Session Ready</div>
+      <button class="modal-close" onclick="closeConfirmReady()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:8px;">
+      Marking this session <strong>Ready</strong> publishes it to your players.
+    </p>
+    <p style="color:rgba(245,232,200,0.85);font-size:13px;margin-bottom:14px;">
+      Once any session in the campaign is Ready, players can no longer edit their own canonical characters &mdash; they'll have to fork the session to make changes. (Forking support is coming in a future update.)
+    </p>
+    <p style="color:rgba(245,232,200,0.7);font-size:12px;margin-bottom:14px;">
+      You can switch back to Draft at any time. No data is lost when you do.
+    </p>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfirmReady()">Cancel</button>
+      <button class="btn btn-primary" id="confirm-ready-btn" onclick="confirmMarkReady()">Mark Ready</button>
     </div>
   </div>
 </div>

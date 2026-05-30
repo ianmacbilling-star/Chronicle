@@ -80,6 +80,29 @@ router.put('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   res.json(Object.assign({}, updated, { moments }));
 });
 
+// PUT update session's player_access_status (Phase 3 Deploy 3)
+// DM-only. Values: 'draft' | 'ready'. Future states (archived, private)
+// can be added by extending the validation list — UI is built around a
+// dropdown so adding states is a one-place change.
+//
+// FORK MIGRATION NOTE: today the status lives on the sessions row. In
+// Phase 4 when session_forks lands, this status migrates to the DM's
+// fork (one row per session in session_forks, with the DM's fork being
+// the canonical one). The endpoint signature stays the same; only the
+// underlying storage moves.
+router.put('/:id/access-status', requireAuth, verifyCampaignDM, async function(req, res) {
+  const ALLOWED = ['draft', 'ready'];
+  const status = (req.body && req.body.status) || '';
+  if (ALLOWED.indexOf(status) === -1) {
+    return res.status(400).json({ error: 'Invalid status. Must be one of: ' + ALLOWED.join(', ') });
+  }
+  const db = await getDb();
+  const session = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  await db.prepare('UPDATE sessions SET player_access_status=? WHERE id=?').run(status, session.id);
+  res.json({ success: true, player_access_status: status });
+});
+
 // DELETE session
 router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();

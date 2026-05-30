@@ -568,7 +568,7 @@ function showCampaignSection(section) {
   ]);
 
   if (section === 'sessions') loadSessions();
-  if (section === 'characters') loadCharacters();
+  if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
   if (section === 'members') loadMembersTab();
@@ -827,6 +827,8 @@ function selectSession(id) {
       switchSessionTab('notes');
       // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
       applyRoleVisibility();
+      // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
+      if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.player_access_status || 'draft');
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
@@ -1954,8 +1956,22 @@ function renderCharacters() {
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
-          '<button class="char-btn dm-only" onclick="openCharModal(' + c.id + ')">Edit</button>' +
-          '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>' +
+          (function() {
+            // Phase 3 Deploy 3 — per-card edit visibility.
+            var meId = (state.user && state.user.id) || null;
+            var cur = state.currentCampaign;
+            var isDM = (cur && cur.my_role === 'dm');
+            var isOwner = (meId && c.owner_user_id === meId);
+            var locked = !!(cur && cur.locked);
+            var canEdit = isDM || (isOwner && !locked);
+            var btns = '';
+            if (canEdit) {
+              btns += '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>';
+            }
+            // Delete stays DM-only — players cannot delete any character.
+            btns += '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>';
+            return btns;
+          })() +
         '</div>' +
       '</div>' +
       '<div class="char-name">' + c.name + '</div>' +
@@ -3825,7 +3841,7 @@ function showCampaignSection(section) {
   ]);
 
   if (section === 'sessions') loadSessions();
-  if (section === 'characters') loadCharacters();
+  if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
   if (section === 'members') loadMembersTab();
@@ -4084,6 +4100,8 @@ function selectSession(id) {
       switchSessionTab('notes');
       // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
       applyRoleVisibility();
+      // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
+      if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.player_access_status || 'draft');
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
@@ -4218,8 +4236,22 @@ function renderCharacters() {
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
-          '<button class="char-btn dm-only" onclick="openCharModal(' + c.id + ')">Edit</button>' +
-          '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>' +
+          (function() {
+            // Phase 3 Deploy 3 — per-card edit visibility.
+            var meId = (state.user && state.user.id) || null;
+            var cur = state.currentCampaign;
+            var isDM = (cur && cur.my_role === 'dm');
+            var isOwner = (meId && c.owner_user_id === meId);
+            var locked = !!(cur && cur.locked);
+            var canEdit = isDM || (isOwner && !locked);
+            var btns = '';
+            if (canEdit) {
+              btns += '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>';
+            }
+            // Delete stays DM-only — players cannot delete any character.
+            btns += '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>';
+            return btns;
+          })() +
         '</div>' +
       '</div>' +
       '<div class="char-name">' + c.name + '</div>' +
@@ -5755,6 +5787,19 @@ function submitInvite() {
     // Stash the link for the copy button and switch the modal to step 2.
     window.__lastInviteUrl = data.url;
     document.getElementById('invite-link-display').textContent = data.url;
+    // Phase 3 Deploy 3: backend now emails the invitee directly. Status
+    // line reflects whether the email actually went out. The URL stays
+    // visible as a backup in either case (DM may still want to share
+    // via Discord/text).
+    var statusEl = document.getElementById('invite-modal-step2-status');
+    if (statusEl) {
+      var who = (data.email_hint ? data.email_hint : 'the invitee');
+      if (data.email_sent) {
+        statusEl.innerHTML = '&#9989; Invite emailed to <strong>' + who + '</strong>. The link below is a backup if they need it.';
+      } else {
+        statusEl.textContent = 'Invite created. Copy this link and send it to your player however you like (Discord, text, email, etc.).';
+      }
+    }
     document.getElementById('invite-modal-step1').style.display = 'none';
     document.getElementById('invite-modal-step2').style.display = '';
     // Phase 3 Deploy 2: if the DM is on the Members tab, refresh the
@@ -6110,4 +6155,150 @@ function formatExpiresInDays(iso) {
     if (days === 1) return 'in 1 day';
     return 'in ' + days + ' days';
   } catch (e) { return ''; }
+}
+
+// ============================================================
+// PHASE 3 DEPLOY 3 — Session access-status UI (Draft / Ready)
+// ============================================================
+// On session-view open we set the dropdown (DM) or chip (player) based
+// on the session's current player_access_status. Changing the dropdown
+// fires onAccessStatusChange — Draft→Ready shows a confirm modal,
+// Ready→Draft toggles immediately.
+
+state._pendingAccessStatus = null;
+
+function initAccessStatusUI(status) {
+  var safeStatus = (status === 'ready') ? 'ready' : 'draft';
+  var sel = document.getElementById('session-access-status-select');
+  var chip = document.getElementById('session-access-status-chip');
+  var isDM = (state.currentCampaign && state.currentCampaign.my_role === 'dm');
+
+  if (sel) {
+    sel.value = safeStatus;
+    sel.style.display = isDM ? '' : 'none';
+  }
+  if (chip) {
+    if (isDM) {
+      chip.style.display = 'none';
+    } else {
+      chip.style.display = '';
+      chip.className = 'session-access-chip session-access-chip-' + safeStatus;
+      chip.textContent = safeStatus === 'ready' ? 'Ready' : 'Draft';
+    }
+  }
+  // Cache so we can revert the select if user cancels the confirm modal.
+  state._currentAccessStatus = safeStatus;
+}
+
+function onAccessStatusChange(newValue) {
+  var current = state._currentAccessStatus || 'draft';
+  if (newValue === current) return;
+
+  if (newValue === 'ready' && current === 'draft') {
+    // High-consequence transition — confirm.
+    state._pendingAccessStatus = newValue;
+    document.getElementById('confirm-ready-modal').classList.remove('hidden');
+  } else {
+    // Ready → Draft is permissive — apply immediately.
+    saveAccessStatus(newValue);
+  }
+}
+
+function closeConfirmReady() {
+  // User canceled — revert the dropdown back to the cached current value.
+  var sel = document.getElementById('session-access-status-select');
+  if (sel) sel.value = state._currentAccessStatus || 'draft';
+  state._pendingAccessStatus = null;
+  document.getElementById('confirm-ready-modal').classList.add('hidden');
+}
+
+function confirmMarkReady() {
+  var pending = state._pendingAccessStatus;
+  state._pendingAccessStatus = null;
+  document.getElementById('confirm-ready-modal').classList.add('hidden');
+  if (pending) saveAccessStatus(pending);
+}
+
+function saveAccessStatus(status) {
+  var cur = state.currentCampaign;
+  var sess = state.currentSession;
+  if (!cur || !sess) return;
+  var btn = document.getElementById('confirm-ready-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  fetch('/api/campaigns/' + cur.id + '/sessions/' + sess.id + '/access-status', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: status })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      showAlert(data.error);
+      // Revert dropdown
+      var sel = document.getElementById('session-access-status-select');
+      if (sel) sel.value = state._currentAccessStatus || 'draft';
+      return;
+    }
+    state._currentAccessStatus = status;
+    if (state.currentSession) state.currentSession.player_access_status = status;
+    // Update the local locked flag immediately so the UI feels responsive.
+    // Then re-fetch /api/campaigns to get the authoritative value (handles
+    // the edge case where another session is still Ready after this one
+    // goes back to Draft).
+    if (state.currentCampaign) {
+      if (status === 'ready') {
+        state.currentCampaign.locked = true;
+      }
+      // If we went ready → draft, leave .locked alone until the refetch
+      // tells us the truth — other sessions might still be Ready.
+    }
+    // Re-fetch authoritative campaigns list. After loadCampaigns runs,
+    // re-point state.currentCampaign to the refreshed object so anything
+    // reading .locked sees the latest.
+    fetch('/api/campaigns')
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        state.campaigns = Array.isArray(rows) ? rows : [];
+        if (state.currentCampaign) {
+          var refreshed = state.campaigns.find(function(c) { return c.id === state.currentCampaign.id; });
+          if (refreshed) state.currentCampaign = refreshed;
+        }
+      })
+      .catch(function() { /* non-fatal */ });
+  })
+  .catch(function(e) {
+    showAlert('Could not update status: ' + e.message);
+    var sel = document.getElementById('session-access-status-select');
+    if (sel) sel.value = state._currentAccessStatus || 'draft';
+  })
+  .finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = 'Mark Ready'; }
+  });
+}
+
+// Render a lock banner on the Characters tab for players when the
+// campaign is locked. Called from showCampaignSection('characters').
+// Banner sits above the character grid; subtle but informative.
+function renderCampaignLockBanner() {
+  var grid = document.getElementById('char-grid');
+  if (!grid) return;
+  // Remove any prior banner first
+  var existing = document.getElementById('campaign-lock-banner');
+  if (existing) existing.remove();
+
+  var cur = state.currentCampaign;
+  if (!cur) return;
+  // Banner only for players viewing a locked campaign.
+  if (cur.my_role !== 'player') return;
+  if (!cur.locked) return;
+
+  var banner = document.createElement('div');
+  banner.id = 'campaign-lock-banner';
+  banner.className = 'campaign-lock-banner';
+  banner.innerHTML =
+    '<span class="campaign-lock-banner-icon">&#128274;</span>' +
+    '<strong>Campaign locked.</strong> A session has been marked Ready by the DM, so your character\'s canonical details are now read-only. ' +
+    'Fork editing &mdash; where you can tinker with your character in your own copy of a session &mdash; is coming in a future update.';
+  // Insert before the char-grid
+  grid.parentNode.insertBefore(banner, grid);
 }

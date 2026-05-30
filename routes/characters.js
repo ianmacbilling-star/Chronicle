@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
@@ -81,11 +81,20 @@ router.post('/', requireAuth, verifyCampaignDM, uploadFields, async function(req
 });
 
 // PUT update character
-router.put('/:id', requireAuth, verifyCampaignDM, uploadFields, async function(req, res) {
+router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, uploadFields, async function(req, res) {
   try {
     const db = await getDb();
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
     if (!char) return res.status(404).json({ error: 'Character not found' });
+
+    // Phase 3 Deploy 3 — campaign lock check. Players can't canonical-edit
+    // once any session is Ready (fork-editing in Phase 4 will replace
+    // this path). DM always bypasses the lock.
+    if (req.campaignRole === 'player') {
+      if (await isCampaignLocked(req.params.campaignId)) {
+        return res.status(423).json({ error: 'This campaign has a Ready session — character editing is locked. Forking support coming soon.' });
+      }
+    }
 
     const now = new Date().toISOString();
     const imageFields = ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other'];
@@ -102,8 +111,11 @@ router.put('/:id', requireAuth, verifyCampaignDM, uploadFields, async function(r
       }
     }
 
+    // is_npc toggle stays DM-only — silently preserve the existing value
+    // when a player is editing. NPC conversion is a campaign authoring
+    // act, not a player one.
     var npcVal = char.is_npc;
-    if (req.body.is_npc !== undefined) {
+    if (req.campaignRole === 'dm' && req.body.is_npc !== undefined) {
       npcVal = (req.body.is_npc === true || req.body.is_npc === 'true' || req.body.is_npc === 1 || req.body.is_npc === '1');
     }
     await db.prepare(
@@ -145,12 +157,19 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
 });
 
 // POST rebuild canonical character prompt — uses vision on uploaded images
-router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDM, async function(req, res) {
+router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner, async function(req, res) {
   try {
     const db = await getDb();
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
     if (!char) return res.status(404).json({ error: 'Character not found' });
 
+    // Phase 3 Deploy 3 — lock check. Player can't rebuild prompt once
+    // any session is Ready. DM bypasses.
+    if (req.campaignRole === 'player') {
+      if (await isCampaignLocked(req.params.campaignId)) {
+        return res.status(423).json({ error: 'This campaign has a Ready session — character editing is locked. Forking support coming soon.' });
+      }
+    }
     const key = process.env.ANTHROPIC_API_KEY || req.body.key;
     if (!key) return res.json({ error: 'AI service is not configured.' });
 

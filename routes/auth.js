@@ -1,321 +1,140 @@
-const express = require('express');
-const router = express.Router();
-const bcrypt = require('bcryptjs');
+// Shared auth middleware. All campaign authorization flows through here
+// after the Phase 2 refactor — single source of truth for "can this user
+// see / modify this campaign?"
+//
+// Membership model (Phase 1 schema):
+// - A user can be a member of a campaign with role 'dm' or 'player'
+// - One role per user per campaign (UNIQUE constraint)
+// - The campaign creator gets a 'dm' row at creation time (backfilled
+//   on existing campaigns)
+
 const { getDb } = require('../database/db');
-const { getTier, isTrialExpired, TIERS } = require('../middleware/tiers');
-const { creditTokens } = require('./tokens');
 
-// Welcome grant for new accounts — enough tokens to actually try the
-// product end-to-end (build a character, generate a small storyboard,
-// regen a few panels). Without this, new signups would hit 0-tokens
-// immediately and have no way to experience Chronicle. Tracked in the
-// ledger as event_type='signup_grant' so we can later report on how
-// many grant-tokens have been issued vs. purchased.
-const SIGNUP_TOKEN_GRANT = 100;
-
-router.post('/register', async function(req, res) {
-  try {
-    const { name, email, password, invite_token } = req.body;
-    if (!name || !email || !password) return res.json({ error: 'All fields required' });
-    if (password.length < 8) return res.json({ error: 'Password must be at least 8 characters' });
-
-    const db = await getDb();
-    const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
-    if (existing) return res.json({ error: 'An account with this email already exists' });
-
-    const hash = await bcrypt.hash(password, 10);
-    const now = new Date().toISOString();
-    // NOTE: New accounts default to PLATINUM during early testing so
-    // testers don't hit tier limits. Flip this back (or remove the
-    // explicit value to let the schema default decide) when monetization
-    // goes live.
-    const result = await db.prepare(
-      'INSERT INTO users (name, email, password, tier, created_at, trial_started_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, 'platinum', now, now);
-
-    const newUserId = result.lastInsertRowid;
-
-    // Welcome grant — credit the new account so they can immediately use
-    // the product. Wrapped in its own try/catch so a grant failure never
-    // breaks registration itself (worst case: user is created with 0
-    // tokens, admin can credit later via the testing widget).
-    try {
-      await creditTokens(newUserId, SIGNUP_TOKEN_GRANT, {
-        bucket: 'cot',
-        event_type: 'signup_grant',
-        source: 'welcome'
-      });
-    } catch (grantErr) {
-      console.error('Signup grant failed (non-fatal):', grantErr.message);
-    }
-
-    req.session.userId = newUserId;
-    req.session.userName = name.trim();
-    req.session.userEmail = email.toLowerCase().trim();
-
-    // Phase 3: if registration came in via an invite link, auto-accept
-    // the invite now. Same all-or-nothing semantics as the signup grant:
-    // if the auto-accept fails, registration still succeeds — the user
-    // can revisit the invite link manually and click Accept.
-    let autoJoinedCampaignId = null;
-    if (invite_token && typeof invite_token === 'string') {
-      try {
-        const invite = await db.prepare(
-          'SELECT * FROM campaign_invites WHERE token = ?'
-        ).get(invite_token);
-        if (invite && !invite.used_at && new Date(invite.expires_at) >= new Date()) {
-          await db.prepare(
-            'INSERT INTO campaign_members (campaign_id, user_id, role) VALUES (?, ?, ?) ' +
-            'ON CONFLICT (campaign_id, user_id) DO NOTHING'
-          ).run(invite.campaign_id, newUserId, invite.role);
-          if (invite.character_id) {
-            await db.prepare(
-              'UPDATE characters SET owner_user_id = ?, is_claimed = true WHERE id = ?'
-            ).run(newUserId, invite.character_id);
-          }
-          await db.prepare(
-            'UPDATE campaign_invites SET used_at = ?, used_by = ? WHERE id = ?'
-          ).run(new Date().toISOString(), newUserId, invite.id);
-          autoJoinedCampaignId = invite.campaign_id;
-        }
-      } catch (inviteErr) {
-        console.error('Auto-accept invite on register failed (non-fatal):', inviteErr.message);
-      }
-    }
-
-    res.json({
-      success: true,
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      auto_joined_campaign_id: autoJoinedCampaignId
-    });
-  } catch(e) {
-    console.error('Register error:', e.message);
-    res.json({ error: 'Registration failed. Please try again.' });
+// Session check — must be logged in.
+function requireAuth(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
   }
-});
+  next();
+}
 
-router.post('/login', async function(req, res) {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.json({ error: 'Email and password required' });
-
-    const db = await getDb();
-    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
-    if (!user) return res.json({ error: 'Invalid email or password' });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.json({ error: 'Invalid email or password' });
-
-    req.session.userId = user.id;
-    req.session.userName = user.name;
-    req.session.userEmail = user.email;
-
-    res.json({ success: true, name: user.name, email: user.email });
-  } catch(e) {
-    console.error('Login error:', e.message);
-    res.json({ error: 'Login failed. Please try again.' });
-  }
-});
-
-router.get('/me', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.json({ authenticated: false });
+// Returns 'dm' | 'player' | null. Plain helper — use inside route bodies
+// when you need to KNOW the role (e.g. to gate certain UI fields). Use
+// the verify* middleware below when you just need to GATE access.
+async function getCampaignRole(userId, campaignId) {
+  if (!userId || !campaignId) return null;
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end FROM users WHERE id = ?').get(req.session.userId);
-    if (!user) return res.json({ authenticated: false });
-
-    const tier = getTier(user.tier || 'copper');
-    const trialExpired = isTrialExpired(user);
-
-    // Calculate trial days remaining
-    let trialDaysLeft = null;
-    if (user.tier === 'copper' && user.trial_started_at) {
-      const started = new Date(user.trial_started_at);
-      const expires = new Date(started.getTime() + 30 * 24 * 60 * 60 * 1000);
-      trialDaysLeft = Math.max(0, Math.ceil((expires - new Date()) / (24 * 60 * 60 * 1000)));
-    }
-
-    // Is this user an admin? Source of truth = ADMIN_EMAILS env var.
-    // Surfaced to the frontend so admin-only UI (e.g. testing widgets)
-    // can show/hide cleanly. Backend endpoints still enforce admin
-    // gating server-side; this is just for UI.
-    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
-    const isAdmin = adminEmails.includes(user.email);
-
-    res.json({
-      authenticated: true,
-      name: user.name,
-      email: user.email,
-      id: user.id,
-      tier: user.tier || 'copper',
-      tierName: tier.name,
-      tierFeatures: tier,
-      trialExpired: trialExpired,
-      trialDaysLeft: trialDaysLeft,
-      subscriptionStatus: user.subscription_status || 'trialing',
-      is_admin: isAdmin,
-      allTiers: TIERS
-    });
-  } catch(e) {
-    res.json({ authenticated: false });
+    const row = await db.prepare(
+      'SELECT role FROM campaign_members WHERE user_id = ? AND campaign_id = ?'
+    ).get(userId, campaignId);
+    return row ? row.role : null;
+  } catch (e) {
+    return null;
   }
-});
+}
 
-router.post('/logout', function(req, res) {
-  req.session.destroy();
-  res.json({ success: true });
-});
-
-router.put('/profile', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { name, email } = req.body;
+// Middleware: any campaign member (DM or player) may proceed.
+// For READ-style routes — viewing a campaign, its sessions, its
+// storyboard, etc. Phase 4 (forks) will heavily lean on this for the
+// player experience.
+async function verifyCampaignMember(req, res, next) {
+  const campaignId = req.params.campaignId;
+  const role = await getCampaignRole(req.session.userId, campaignId);
+  if (!role) return res.status(403).json({ error: 'Access denied' });
+  req.campaignRole = role;
+  // Backward compat: existing route code reads req.campaign — fetch it.
   const db = await getDb();
-  const now = new Date().toISOString();
-  await db.prepare('UPDATE users SET name=?, email=?, edited_at=?, edited_by=? WHERE id=?')
-    .run(name, email, now, req.session.userId, req.session.userId);
-  req.session.userName = name;
-  req.session.userEmail = email;
-  res.json({ success: true });
-});
+  req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  next();
+}
 
-router.put('/password', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { currentPassword, newPassword } = req.body;
+// Middleware: DM-only. For WRITE-style routes — editing characters,
+// creating sessions, deleting things, etc. Today most existing routes
+// fall here because no role-aware UI exists yet; Phase 4 may relax some
+// of these for players (e.g. fork-scoped writes).
+async function verifyCampaignDM(req, res, next) {
+  const campaignId = req.params.campaignId;
+  const role = await getCampaignRole(req.session.userId, campaignId);
+  if (role !== 'dm') return res.status(403).json({ error: 'DM access required' });
+  req.campaignRole = role;
   const db = await getDb();
-  const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
-  if (!user) return res.json({ error: 'User not found' });
-  const match = await bcrypt.compare(currentPassword, user.password);
-  if (!match) return res.json({ error: 'Current password is incorrect' });
-  const hash = await bcrypt.hash(newPassword, 10);
-  await db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, req.session.userId);
-  res.json({ success: true });
-});
+  req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  next();
+}
 
-router.put('/apikey', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { api_key, fal_key } = req.body;
-  const db = await getDb();
-  const now = new Date().toISOString();
-  if (api_key !== undefined) {
-    await db.prepare('UPDATE users SET api_key=?, edited_at=?, edited_by=? WHERE id=?')
-      .run(api_key || null, now, req.session.userId, req.session.userId);
+// Convenience: SQL subquery fragments for inline membership checks. Use
+// in routes where the campaign is reached via JOIN and full middleware
+// wrapping is awkward (e.g. when only session_id is in the URL params
+// and the campaign is derived through the join). Caller binds user_id.
+const memberSubquery = '(SELECT campaign_id FROM campaign_members WHERE user_id = ?)';
+const dmSubquery = "(SELECT campaign_id FROM campaign_members WHERE user_id = ? AND role = 'dm')";
+
+// Phase 3 Deploy 3 — middleware for routes a player may invoke on their
+// OWN character. Passes if user is DM of the campaign, OR is the
+// owner_user_id of the character identified by req.params.id (the
+// character-id URL segment used by the characters routes). The route
+// must additionally enforce campaign-lock state where appropriate (use
+// isCampaignLocked() below).
+async function verifyCampaignDmOrCharacterOwner(req, res, next) {
+  const campaignId = req.params.campaignId;
+  const characterId = req.params.id || req.params.characterId;
+  const userId = req.session.userId;
+  const role = await getCampaignRole(userId, campaignId);
+  if (!role) return res.status(403).json({ error: 'Access denied' });
+  if (role === 'dm') {
+    req.campaignRole = 'dm';
+    const db = await getDb();
+    req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+    return next();
   }
-  if (fal_key !== undefined) {
-    await db.prepare('UPDATE users SET fal_key=?, edited_at=?, edited_by=? WHERE id=?')
-      .run(fal_key || null, now, req.session.userId, req.session.userId);
-  }
-  res.json({ success: true });
-});
-
-router.get('/apikey', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  // role === 'player' — check character ownership
+  if (!characterId) return res.status(403).json({ error: 'DM access required' });
   const db = await getDb();
-  const user = await db.prepare('SELECT api_key, fal_key FROM users WHERE id=?').get(req.session.userId);
-  res.json({ api_key: user ? (user.api_key || '') : '', fal_key: user ? (user.fal_key || '') : '' });
-});
-
-// PUT /api/auth/tier - admin only tier change
-router.put('/tier', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { user_id, tier } = req.body;
-  const validTiers = ['copper', 'silver', 'gold', 'platinum'];
-
-  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
-  const db = await getDb();
-  const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
-  if (!user || !adminEmails.includes(user.email)) {
-    return res.status(403).json({ error: 'Admin access required' });
+  const ch = await db.prepare(
+    'SELECT id, owner_user_id, campaign_id FROM characters WHERE id = ?'
+  ).get(characterId);
+  if (!ch || String(ch.campaign_id) !== String(campaignId)) {
+    return res.status(404).json({ error: 'Character not found in this campaign' });
   }
+  if (ch.owner_user_id !== userId) {
+    return res.status(403).json({ error: 'You can only edit your own character' });
+  }
+  req.campaignRole = 'player';
+  req.character = ch;
+  req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  next();
+}
 
-  if (!validTiers.includes(tier)) return res.json({ error: 'Invalid tier' });
-
-  const now = new Date().toISOString();
-  await db.prepare('UPDATE users SET tier = ?, edited_at = ? WHERE id = ?')
-    .run(tier, now, user_id || req.session.userId);
-
-  res.json({ success: true });
-});
-
-// GET /api/auth/usage - current usage counts for the account page
-router.get('/usage', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+// Phase 3 Deploy 3 — campaign lock check. "Locked" means any session in
+// the campaign has player_access_status === 'ready'. Once locked,
+// players can no longer canonical-edit their characters — they'd edit
+// via forks in Phase 4. Returns boolean.
+//
+// IMPORTANT (forks migration note): today this reads sessions.player_access_status.
+// In Phase 4, this column moves to session_forks.player_access_status —
+// the lock semantics will refer to the DM's fork being ready. Update
+// this function accordingly when forks land.
+async function isCampaignLocked(campaignId) {
+  if (!campaignId) return false;
   try {
     const db = await getDb();
-    const uid = req.session.userId;
-
-    const campaigns = await db.prepare(
-      'SELECT COUNT(*) AS c FROM campaigns WHERE id IN (SELECT campaign_id FROM campaign_members WHERE user_id = ? AND role = \'dm\') AND is_active = true'
-    ).get(uid);
-
-    const sessions = await db.prepare(
-      'SELECT COUNT(*) AS c FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE cm.user_id = ? AND cm.role = \'dm\''
-    ).get(uid);
-
-    const storyboards = await db.prepare(
-      'SELECT COUNT(DISTINCT m.session_id) AS c FROM moments m ' +
-      'JOIN sessions s ON m.session_id = s.id ' +
-      'JOIN campaigns c ON s.campaign_id = c.id ' +
-      "JOIN campaign_members cm ON cm.campaign_id = c.id WHERE cm.user_id = ? AND cm.role = 'dm'"
-    ).get(uid);
-
-    // Image generation counts. month_key is 'YYYY-MM'.
-    // When Stripe lands, swap the monthly count to the billing-cycle range.
-    var d = new Date();
-    var monthKey = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
-
-    const imagesAllTime = await db.prepare(
-      'SELECT COUNT(*) AS c FROM image_generations WHERE user_id = ?'
-    ).get(uid);
-
-    const imagesThisMonth = await db.prepare(
-      'SELECT COUNT(*) AS c FROM image_generations WHERE user_id = ? AND month_key = ?'
-    ).get(uid, monthKey);
-
-    res.json({
-      campaigns: campaigns ? campaigns.c : 0,
-      sessions: sessions ? sessions.c : 0,
-      storyboards: storyboards ? storyboards.c : 0,
-      imagesAllTime: imagesAllTime ? imagesAllTime.c : 0,
-      imagesThisMonth: imagesThisMonth ? imagesThisMonth.c : 0
-    });
-  } catch(e) {
-    res.json({ campaigns: 0, sessions: 0, storyboards: 0, imagesAllTime: 0, imagesThisMonth: 0 });
+    const row = await db.prepare(
+      "SELECT 1 AS hit FROM sessions WHERE campaign_id = ? AND player_access_status = 'ready' LIMIT 1"
+    ).get(campaignId);
+    return !!row;
+  } catch (e) {
+    return false;
   }
-});
+}
 
-// GET /api/auth/image-model - current global image model setting
-router.get('/image-model', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  try {
-    const db = await getDb();
-    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'image_model'").get();
-    res.json({ model: row && row.value ? row.value : 'nano2' });
-  } catch(e) {
-    res.json({ model: 'nano2' });
-  }
-});
-
-// PUT /api/auth/image-model - change the global image model setting
-router.put('/image-model', async function(req, res) {
-  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const validModels = ['schnell', 'nano2'];
-  const model = req.body.model;
-  if (!validModels.includes(model)) return res.json({ error: 'Invalid model' });
-  try {
-    const db = await getDb();
-    // Upsert the single 'image_model' row.
-    const existing = await db.prepare("SELECT setting_key FROM app_settings WHERE setting_key = 'image_model'").get();
-    if (existing) {
-      await db.prepare("UPDATE app_settings SET value = ? WHERE setting_key = 'image_model'").run(model);
-    } else {
-      await db.prepare("INSERT INTO app_settings (setting_key, value) VALUES ('image_model', ?)").run(model);
-    }
-    res.json({ success: true, model: model });
-  } catch(e) {
-    console.error('image-model save error:', e.message);
-    res.json({ error: 'Could not save setting' });
-  }
-});
-
-module.exports = router;
+module.exports = {
+  requireAuth,
+  getCampaignRole,
+  verifyCampaignMember,
+  verifyCampaignDM,
+  verifyCampaignDmOrCharacterOwner,
+  isCampaignLocked,
+  memberSubquery,
+  dmSubquery
+};
