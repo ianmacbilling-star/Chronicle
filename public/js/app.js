@@ -824,6 +824,8 @@ function selectSession(id) {
 
       // Now that view is visible, populate fields
       switchSessionTab('notes');
+      // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
+      applyRoleVisibility();
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
@@ -3496,7 +3498,7 @@ function buildPromptBlock(m) {
   }
   return '<div class="moment-prompt-wrap" id="prompt-wrap-' + m.id + '">' +
     '<div class="moment-prompt-text" id="prompt-text-' + m.id + '">' + safe + '</div>' +
-    '<button class="moment-prompt-edit-btn" onclick="startEditPrompt(' + m.id + ')">' +
+    '<button class="moment-prompt-edit-btn dm-only" onclick="startEditPrompt(' + m.id + ')">' +
       '&#9998; Edit prompt</button>' +
   '</div>';
 }
@@ -3523,7 +3525,7 @@ function cancelEditPrompt(momentId) {
   if (wrap && moment) {
     wrap.innerHTML =
       '<div class="moment-prompt-text" id="prompt-text-' + momentId + '">' + (moment.prompt || '') + '</div>' +
-      '<button class="moment-prompt-edit-btn" onclick="startEditPrompt(' + momentId + ')">' +
+      '<button class="moment-prompt-edit-btn dm-only" onclick="startEditPrompt(' + momentId + ')">' +
         '&#9998; Edit prompt</button>';
   }
 }
@@ -3593,7 +3595,7 @@ function renderStoryboard() {
     return '<div class="narrative-panel" id="' + id + '">' +
       '<div class="narrative-block-header">' +
         '<span>&#9998; ' + label + '</span>' +
-        '<button class="narrative-regen-btn" onclick="' + regenCall + '">&#8635; Regen</button>' +
+        '<button class="narrative-regen-btn dm-only" onclick="' + regenCall + '">&#8635; Regen</button>' +
       '</div>' +
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (autosave ? ' oninput="scheduleNarrativeSave()"' : '') + '>' +
@@ -4062,6 +4064,8 @@ function selectSession(id) {
 
       // Now that view is visible, populate fields
       switchSessionTab('notes');
+      // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
+      applyRoleVisibility();
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
         var notesEl = document.getElementById('session-notes-input');
@@ -5586,9 +5590,10 @@ function showAlert(msg) {
 function applyRoleVisibility() {
   var cur = state.currentCampaign;
   var role = cur ? cur.my_role : null;
+  var isPlayer = (role === 'player');
 
   // body.role-player drives CSS to hide every .dm-only element.
-  if (role === 'player') {
+  if (isPlayer) {
     document.body.classList.add('role-player');
   } else {
     document.body.classList.remove('role-player');
@@ -5599,6 +5604,20 @@ function applyRoleVisibility() {
   if (inviteBtn) {
     inviteBtn.style.display = (role === 'dm') ? '' : 'none';
   }
+
+  // Text inputs that players can SEE but shouldn't EDIT (transcript,
+  // session notes). CSS can't set readonly — it's an HTML attribute —
+  // so we toggle it here whenever a campaign view re-renders.
+  var readOnlyTargets = ['transcript-input', 'session-notes-input'];
+  readOnlyTargets.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (isPlayer) {
+      el.setAttribute('readonly', 'readonly');
+    } else {
+      el.removeAttribute('readonly');
+    }
+  });
 }
 
 // Backward-compatible alias — older code may still call this name.

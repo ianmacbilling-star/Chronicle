@@ -199,8 +199,14 @@ router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res)
 // ============================================================
 router.get('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const db = await getDb();
+  // Phase 3: narrative READ is open to any campaign member (DM or
+  // player) — players need this to see the Review tab and storyboard.
+  // Writes (regenerate, save) remain DM-only via inline checks in
+  // those endpoints.
   const session = await db.prepare(
-    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
+    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
+    'JOIN campaign_members cm ON cm.campaign_id = c.id ' +
+    'WHERE s.id = ? AND cm.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
