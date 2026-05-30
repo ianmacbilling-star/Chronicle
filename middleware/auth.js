@@ -70,11 +70,71 @@ async function verifyCampaignDM(req, res, next) {
 const memberSubquery = '(SELECT campaign_id FROM campaign_members WHERE user_id = ?)';
 const dmSubquery = "(SELECT campaign_id FROM campaign_members WHERE user_id = ? AND role = 'dm')";
 
+// Phase 3 Deploy 3 — middleware for routes a player may invoke on their
+// OWN character. Passes if user is DM of the campaign, OR is the
+// owner_user_id of the character identified by req.params.id (the
+// character-id URL segment used by the characters routes). The route
+// must additionally enforce campaign-lock state where appropriate (use
+// isCampaignLocked() below).
+async function verifyCampaignDmOrCharacterOwner(req, res, next) {
+  const campaignId = req.params.campaignId;
+  const characterId = req.params.id || req.params.characterId;
+  const userId = req.session.userId;
+  const role = await getCampaignRole(userId, campaignId);
+  if (!role) return res.status(403).json({ error: 'Access denied' });
+  if (role === 'dm') {
+    req.campaignRole = 'dm';
+    const db = await getDb();
+    req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+    return next();
+  }
+  // role === 'player' — check character ownership
+  if (!characterId) return res.status(403).json({ error: 'DM access required' });
+  const db = await getDb();
+  const ch = await db.prepare(
+    'SELECT id, owner_user_id, campaign_id FROM characters WHERE id = ?'
+  ).get(characterId);
+  if (!ch || String(ch.campaign_id) !== String(campaignId)) {
+    return res.status(404).json({ error: 'Character not found in this campaign' });
+  }
+  if (ch.owner_user_id !== userId) {
+    return res.status(403).json({ error: 'You can only edit your own character' });
+  }
+  req.campaignRole = 'player';
+  req.character = ch;
+  req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  next();
+}
+
+// Phase 3 Deploy 3 — campaign lock check. "Locked" means any session in
+// the campaign has player_access_status === 'ready'. Once locked,
+// players can no longer canonical-edit their characters — they'd edit
+// via forks in Phase 4. Returns boolean.
+//
+// IMPORTANT (forks migration note): today this reads sessions.player_access_status.
+// In Phase 4, this column moves to session_forks.player_access_status —
+// the lock semantics will refer to the DM's fork being ready. Update
+// this function accordingly when forks land.
+async function isCampaignLocked(campaignId) {
+  if (!campaignId) return false;
+  try {
+    const db = await getDb();
+    const row = await db.prepare(
+      "SELECT 1 AS hit FROM sessions WHERE campaign_id = ? AND player_access_status = 'ready' LIMIT 1"
+    ).get(campaignId);
+    return !!row;
+  } catch (e) {
+    return false;
+  }
+}
+
 module.exports = {
   requireAuth,
   getCampaignRole,
   verifyCampaignMember,
   verifyCampaignDM,
+  verifyCampaignDmOrCharacterOwner,
+  isCampaignLocked,
   memberSubquery,
   dmSubquery
 };
