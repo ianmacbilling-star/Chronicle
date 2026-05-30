@@ -345,8 +345,7 @@ async function initPostgres() {
       fork_id INTEGER,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       edited_at TIMESTAMP,
-      edited_by INTEGER,
-      UNIQUE (session_id, character_id)
+      edited_by INTEGER
     )
   `);
 
@@ -742,6 +741,13 @@ async function migrateForks(pool) {
   } else {
     console.error('  [migrateForks] ABORT NOT NULL — orphan rows. moments:', mNull.rows[0].c, 'session_characters:', sNull.rows[0].c);
   }
+
+  // session_characters uniqueness is now per-FORK (each fork keeps its
+  // own snapshot of a character), not per-session. Without this swap a
+  // player version cannot copy the DM fork snapshots (same session_id +
+  // character_id, different fork_id -> the old constraint blocks it).
+  try { await pool.query('ALTER TABLE session_characters DROP CONSTRAINT IF EXISTS session_characters_session_id_character_id_key'); } catch (e) {}
+  try { await pool.query('ALTER TABLE session_characters ADD CONSTRAINT session_characters_fork_character_key UNIQUE (fork_id, character_id)'); } catch (e) {}
 }
 
 // getOrCreateDmFork: returns the id of the session's DM fork, creating

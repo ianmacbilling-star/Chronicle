@@ -6487,12 +6487,15 @@ function loadSessionForks(sessionId) {
         // Only worth showing once there's more than the canonical to pick.
         sel.style.display = forks.length > 1 ? '' : 'none';
       }
+      var mineFork = forks.filter(function(f) { return f.is_mine; })[0];
+      state.myForkId = mineFork ? mineFork.fork_id : null;
       if (btn) {
         var isPlayer = state.currentCampaign.my_role === 'player';
         var sessReady = state.currentSession && state.currentSession.player_access_status === 'ready';
-        var hasMine = forks.some(function(f) { return f.is_mine; });
-        btn.style.display = (isPlayer && sessReady && !hasMine) ? '' : 'none';
+        btn.style.display = (isPlayer && sessReady && !mineFork) ? '' : 'none';
       }
+      var delBtn = document.getElementById('delete-my-version-btn');
+      if (delBtn) delBtn.style.display = mineFork ? '' : 'none';
     })
     .catch(function() {});
 }
@@ -6544,6 +6547,21 @@ function makeMyVersion() {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
       if (typeof showAlert === 'function') { showAlert('Could not create your version: ' + e.message); } else { alert(e.message); }
     });
+}
+
+function deleteMyVersion() {
+  if (!state.currentCampaign || !state.currentSession || !state.myForkId) return;
+  if (!confirm('Delete your version of this session? This cannot be undone.')) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + state.myForkId, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
+      state.currentForkId = null;
+      state.myForkId = null;
+      loadSessionForks(state.currentSession.id);
+      reloadSessionForFork();
+    })
+    .catch(function(e) { if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert(e.message); } });
 }
 
 // Render a lock banner on the Characters tab for players when the
