@@ -793,8 +793,25 @@ function updateSessionDate(value) {
 
 function deleteSession(id) {
   if (!confirm('Delete this session and all its moments? This cannot be undone.')) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id, {method:'DELETE'})
-    .then(function() { loadSessions(); });
+  // Backend requires a confirmation flag in the body; without it the
+  // route returns {error:'Confirmation required'} (HTTP 200) and the
+  // delete silently no-ops. Send it, and surface any real error.
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmed: true })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) {
+        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        return;
+      }
+      loadSessions();
+    })
+    .catch(function(e) {
+      if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
+    });
 }
 
 function selectSession(id) {
@@ -4172,8 +4189,25 @@ function updateSessionDate(value) {
 
 function deleteSession(id) {
   if (!confirm('Delete this session and all its moments? This cannot be undone.')) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id, {method:'DELETE'})
-    .then(function() { loadSessions(); });
+  // Backend requires a confirmation flag in the body; without it the
+  // route returns {error:'Confirmation required'} (HTTP 200) and the
+  // delete silently no-ops. Send it, and surface any real error.
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmed: true })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) {
+        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        return;
+      }
+      loadSessions();
+    })
+    .catch(function(e) {
+      if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert('Delete failed: ' + e.message); }
+    });
 }
 
 function selectSession(id) {
