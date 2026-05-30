@@ -131,7 +131,13 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
   if (!req.body.confirmed) return res.json({ error: 'Confirmation required' });
+  // Deploy 4.0 — delete children before the session (FK order):
+  // moments and session_characters reference session_forks(id), and
+  // session_forks references sessions(id). Removing the fork row last
+  // (before the session) clears the session_forks -> sessions FK.
   await db.prepare('DELETE FROM moments WHERE session_id=?').run(session.id);
+  await db.prepare('DELETE FROM session_characters WHERE session_id=?').run(session.id);
+  await db.prepare('DELETE FROM session_forks WHERE session_id=?').run(session.id);
   await db.prepare('DELETE FROM sessions WHERE id=?').run(session.id);
   res.json({ success: true });
 });
