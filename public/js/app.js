@@ -1807,6 +1807,80 @@ function renderCharModalPrompt(char) {
 }
 
 function rebuildCharPrompt(charId) {
+  // Save-first guard. The character form in the modal may have pending
+  // changes (uploaded reference images, edited description, etc.) that
+  // haven't been persisted yet. Without this, the AI build runs against
+  // stale database data and ignores whatever the user just changed —
+  // wasting a token and producing a wrong result.
+  //
+  // The save runs silently (no modal close, no nudge, no success toast).
+  // If save fails, we abort the build and surface the error.
+  saveCharFormSilently(charId, function(err) {
+    if (err) {
+      showModalError('char-modal-error', err);
+      return;
+    }
+    // Save succeeded — refresh the cached character from the saved data
+    // (loadCharacters fires inside the save), then run the actual build.
+    rebuildCharPromptCore(charId);
+  });
+}
+
+// Internal: silently save the open character form, then call cb(err).
+// Mirrors saveChar()'s FormData submit but doesn't touch the modal UI
+// (no close, no "guided nudge", no transition into edit mode). Used as
+// a pre-flight from rebuildCharPrompt.
+function saveCharFormSilently(charId, cb) {
+  var nameEl = document.getElementById('char-name');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { cb('Character name is required.'); return; }
+
+  var player = document.getElementById('char-player').value.trim();
+  var cls = document.getElementById('char-cls').value.trim();
+  var desc = document.getElementById('char-desc').value.trim();
+
+  var formData = new FormData();
+  formData.append('name', name);
+  formData.append('player_name', player);
+  formData.append('cls', cls || 'Adventurer');
+  formData.append('description', desc);
+  var npcEl = document.getElementById('char-is-npc');
+  // Only DM sees the NPC checkbox; for players it's hidden but we still
+  // submit the field. Backend ignores it for non-DM role anyway.
+  formData.append('is_npc', (npcEl && npcEl.checked) ? 'true' : 'false');
+
+  var slots = ['image_portrait', 'image_fullbody', 'image_action', 'image_other'];
+  slots.forEach(function(slot) {
+    if (slotFiles[slot]) {
+      formData.append(slot, slotFiles[slot]);
+    }
+    if (slotFiles[slot + '_clear']) {
+      formData.append('clear_' + slot, 'true');
+    }
+  });
+
+  var url = '/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId;
+  fetch(url, { method: 'PUT', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) { cb(data.error); return; }
+      // Update the cached character in state so the build step uses
+      // the just-saved version, not the stale one.
+      if (data && data.id && Array.isArray(state.characters)) {
+        var idx = state.characters.findIndex(function(c) { return c.id === data.id; });
+        if (idx >= 0) state.characters[idx] = data;
+      }
+      // Don't close, don't nudge, don't transition — just return.
+      cb(null);
+    })
+    .catch(function(e) {
+      cb('Save failed: ' + (e && e.message ? e.message : 'network error'));
+    });
+}
+
+// The original build logic, factored out of rebuildCharPrompt so the
+// save-first wrapper can call it after a successful save.
+function rebuildCharPromptCore(charId) {
   var btn = document.getElementById('char-prompt-rebuild-' + charId);
   var textEl = document.getElementById('char-prompt-text-' + charId);
   if (btn) { btn.disabled = true; btn.textContent = 'Building...'; }
