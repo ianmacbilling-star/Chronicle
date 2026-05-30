@@ -70,13 +70,15 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
     // Characters tab can show it as "awaiting invitee" in Deploy 2.
     // Note: the characters table column for character class is 'cls'
     // (not 'class' — 'class' is a reserved word in many SQL dialects).
+    // `created_by` is NOT NULL on the characters table — we stamp the
+    // DM who's creating the invite as the character's creator.
     const now = new Date().toISOString();
     const stubName = character_name.trim();
     const stubClass = (character_class || '').trim();
     const ins = await db.prepare(
-      'INSERT INTO characters (campaign_id, name, cls, is_npc, is_claimed, owner_user_id, created_at) ' +
-      'VALUES (?, ?, ?, false, false, NULL, ?)'
-    ).run(campaignId, stubName, stubClass, now);
+      'INSERT INTO characters (campaign_id, name, cls, is_npc, is_claimed, owner_user_id, created_by, created_at) ' +
+      'VALUES (?, ?, ?, false, false, NULL, ?, ?)'
+    ).run(campaignId, stubName, stubClass, req.session.userId, now);
     targetCharacterId = ins.lastInsertRowid;
   }
 
