@@ -68,8 +68,8 @@
         </div>
         <div class="flex gap-1">
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
-          <button class="btn btn-primary" onclick="openSessionModal()">+ New session</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
+          <button class="btn btn-primary dm-only" id="btn-new-session" onclick="openSessionModal()">+ New session</button>
+          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
           <!-- Phase 3 Deploy 1: temporary invite button. Will move into a proper Members tab in Deploy 2. -->
           <button class="btn btn-sm" id="campaign-invite-btn" onclick="openInviteModal()" style="display:none;">&#9993; Invite player</button>
@@ -88,11 +88,11 @@
         <div class="flex gap-1">
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
+          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
         </div>
       </div>
       <div class="char-grid" id="char-grid">
-        <div class="add-char-card" onclick="openCharModal()">
+        <div class="add-char-card dm-only" onclick="openCharModal()">
           <div class="plus">+</div><span>Add character</span>
         </div>
       </div>
@@ -112,7 +112,7 @@
         </div>
       </div>
       <div class="char-grid" id="asset-grid">
-        <div class="add-char-card" onclick="openAssetModal()">
+        <div class="add-char-card dm-only" onclick="openAssetModal()">
           <div class="plus">+</div><span>Add asset</span>
         </div>
       </div>
@@ -216,7 +216,7 @@
             <button class="btn btn-xs" onclick="findReplaceSession()">Replace all</button>
             <span class="fr-result" id="fr-result"></span>
           </div>
-          <button class="btn btn-primary" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+          <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
         </div>
 
         <!-- Slim progress row -->
@@ -295,7 +295,7 @@
                   <div class="chip" onclick="selStyle(this,'Classic pen and ink')">Pen and ink</div>
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
             </div>
             <div style="margin-top:8px;font-size:11px;color:rgba(201,168,76,0.4);">&#9998; Review moments and narrative below. When happy, click Generate all images.</div>
             <div id="generate-progress" style="display:none;margin-top:10px;">

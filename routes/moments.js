@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 
-router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const moments = await db.prepare('SELECT * FROM moments WHERE session_id=? ORDER BY panel_order ASC').all(req.params.sessionId);
   res.json(moments);

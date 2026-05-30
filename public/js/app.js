@@ -572,8 +572,8 @@ function showCampaignSection(section) {
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
 
-  // Phase 3 — show the invite button only for DMs of this campaign.
-  refreshInviteButtonVisibility();
+  // Phase 3 — apply role-based visibility (hide DM-only UI for players).
+  applyRoleVisibility();
 }
 
 // ============================================================
@@ -1936,8 +1936,8 @@ function renderCharacters() {
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
-          '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>' +
-          '<button class="char-btn char-btn-delete" onclick="deleteChar(' + c.id + ')">Delete</button>' +
+          '<button class="char-btn dm-only" onclick="openCharModal(' + c.id + ')">Edit</button>' +
+          '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>' +
         '</div>' +
       '</div>' +
       '<div class="char-name">' + c.name + '</div>' +
@@ -1948,7 +1948,7 @@ function renderCharacters() {
       imgGridHtml +
     '</div>';
   }).join('');
-  html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
+  html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }
@@ -3578,7 +3578,7 @@ function renderStoryboard() {
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
         imgHtml +
-        '<button class="moment-regen-btn" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>' +
+        '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
@@ -3810,8 +3810,8 @@ function showCampaignSection(section) {
   if (section === 'novel') loadNovelSummary();
   if (section === 'assets') loadAssets();
 
-  // Phase 3 — show the invite button only for DMs of this campaign.
-  refreshInviteButtonVisibility();
+  // Phase 3 — apply role-based visibility (hide DM-only UI for players).
+  applyRoleVisibility();
 }
 
 // ============================================================
@@ -4181,8 +4181,8 @@ function renderCharacters() {
       '<div class="char-card-header">' +
         '<div class="char-avatar" style="background:' + bg + ';">' + portrait + '</div>' +
         '<div class="char-actions">' +
-          '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>' +
-          '<button class="char-btn char-btn-delete" onclick="deleteChar(' + c.id + ')">Delete</button>' +
+          '<button class="char-btn dm-only" onclick="openCharModal(' + c.id + ')">Edit</button>' +
+          '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>' +
         '</div>' +
       '</div>' +
       '<div class="char-name">' + c.name + '</div>' +
@@ -4193,7 +4193,7 @@ function renderCharacters() {
       imgGridHtml +
     '</div>';
   }).join('');
-  html += '<div class="add-char-card" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
+  html += '<div class="add-char-card dm-only" onclick="openCharModal()"><div class="plus">+</div><span>Add character</span></div>';
   document.getElementById('char-grid').innerHTML = html;
   setupCardDragDrop();
 }
@@ -5575,20 +5575,34 @@ function showAlert(msg) {
 // tab lives in Deploy 2; this is the bare-minimum modal so the flow is
 // testable end-to-end on staging.
 
-// Show/hide the "Invite player" button based on whether the current
-// user is a DM of the current campaign. Called from showCampaignSection.
-function refreshInviteButtonVisibility() {
-  var btn = document.getElementById('campaign-invite-btn');
-  if (!btn) return;
+// Show/hide DM-only UI elements based on the current user's role in
+// the current campaign. Toggles a 'role-player' class on <body>; CSS
+// rules then hide everything marked .dm-only. Centralized here so every
+// view-switch / re-render goes through one helper.
+//
+// Also handles the invite button which uses an explicit ID toggle
+// (it's DM-only but lives outside the .dm-only convention because we
+// already had it before Phase 3 Deploy 1 wrap-up).
+function applyRoleVisibility() {
   var cur = state.currentCampaign;
-  // my_role lands on the campaign objects from the membership-aware
-  // JOIN query in routes/campaigns.js. Only DMs can invite.
-  if (cur && cur.my_role === 'dm') {
-    btn.style.display = '';
+  var role = cur ? cur.my_role : null;
+
+  // body.role-player drives CSS to hide every .dm-only element.
+  if (role === 'player') {
+    document.body.classList.add('role-player');
   } else {
-    btn.style.display = 'none';
+    document.body.classList.remove('role-player');
+  }
+
+  // Invite button: DM-only, has its own ID-targeted toggle.
+  var inviteBtn = document.getElementById('campaign-invite-btn');
+  if (inviteBtn) {
+    inviteBtn.style.display = (role === 'dm') ? '' : 'none';
   }
 }
+
+// Backward-compatible alias — older code may still call this name.
+function refreshInviteButtonVisibility() { applyRoleVisibility(); }
 
 // Open the invite-creation modal. Fetches the campaign's characters so
 // the dropdown can list unowned PCs. The first option is always

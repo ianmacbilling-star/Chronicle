@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
@@ -38,7 +38,7 @@ async function handleFileUpload(files, fieldname, oldUrl) {
 }
 
 // GET all characters
-router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ? ORDER BY created_at ASC').all(req.params.campaignId);
   res.json(characters);

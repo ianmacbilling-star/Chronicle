@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const multer = require('multer');
 const path = require('path');
@@ -35,7 +35,7 @@ async function handleAssetUpload(file, oldUrl) {
 }
 
 // GET all assets for a campaign.
-router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
     const assets = await db.prepare(

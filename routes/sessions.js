@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth, verifyCampaignDM } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit } = require('../middleware/tiers');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
 
 // GET last used art style and layout style
-router.get('/last-style', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/last-style', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(
     'SELECT art_style, layout_style FROM sessions WHERE campaign_id=? AND (art_style IS NOT NULL OR layout_style IS NOT NULL) ORDER BY session_date DESC, created_at DESC LIMIT 1'
@@ -19,7 +19,7 @@ router.get('/last-style', requireAuth, verifyCampaignDM, async function(req, res
 });
 
 // GET novel/all - must come before /:id
-router.get('/novel/all', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   const result = await Promise.all(sessions.map(async function(s) {
@@ -30,14 +30,14 @@ router.get('/novel/all', requireAuth, verifyCampaignDM, async function(req, res)
 });
 
 // GET all sessions
-router.get('/', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   res.json(sessions);
 });
 
 // GET single session
-router.get('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -92,7 +92,7 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
 });
 
 // GET session character snapshots (Stage 2)
-router.get('/:id/characters', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const rows = await db.prepare(
     'SELECT sc.id, sc.character_id, sc.prompt, sc.change_note, sc.edited_at, ' +

@@ -1183,3 +1183,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   border-radius: var(--radius);
   padding: 10px 12px;
 }
+
+/* Phase 3 — hide DM-only UI elements when the current user is a player.
+   The body.role-player class is toggled by applyRoleVisibility() in
+   app.js whenever a campaign view is rendered. Elements marked
+   .dm-only (statically in HTML or rendered dynamically in JS) get
+   hidden via display:none. !important is used because some inline
+   styles or layout containers may set display via JS otherwise. */
+body.role-player .dm-only { display: none !important; }
