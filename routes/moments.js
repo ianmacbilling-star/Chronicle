@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb } = require('../database/db');
+const { getDb, getOrCreateDmFork } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 
 router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
@@ -14,9 +14,11 @@ router.post('/', requireAuth, verifyCampaignDM, async function(req, res) {
   if (!title) return res.json({ error: 'Title required' });
   const db = await getDb();
   const now = new Date().toISOString();
+  // Deploy 4.0 — manual moments belong to the DM fork.
+  const dmForkId = await getOrCreateDmFork(db, req.params.sessionId, req.session.userId);
   const result = await db.prepare(
-    'INSERT INTO moments (session_id, title, description, type, prompt, panel_order, created_at, created_by) VALUES (?,?,?,?,?,?,?,?)'
-  ).run(req.params.sessionId, title, description || '', type || 'drama', prompt || '', panel_order || 0, now, req.session.userId);
+    'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, panel_order, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).run(req.params.sessionId, dmForkId, title, description || '', type || 'drama', prompt || '', panel_order || 0, now, req.session.userId);
   const moment = await db.prepare('SELECT * FROM moments WHERE id=?').get(result.lastInsertRowid);
   res.json(moment);
 });

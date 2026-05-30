@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { getTier, getMomentRange } = require('../middleware/tiers');
-const { getDb } = require('../database/db');
+const { getDb, getOrCreateDmFork } = require('../database/db');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { artStyle } = req.body;
@@ -118,15 +118,17 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       await db.prepare('UPDATE sessions SET art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
         .run(style, now, req.session.userId, session.id);
 
+      // Deploy 4.0 — moments belong to the session's DM fork.
+      const dmForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
       const insert = await db.prepare(
-        'INSERT INTO moments (session_id, title, description, type, prompt, emphasis, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
       parsed.moments.forEach(function(m, i) {
-        insert.run(session.id, m.title, m.description, m.type, m.prompt, m.emphasis || null, i, now, req.session.userId);
+        insert.run(session.id, dmForkId, m.title, m.description, m.type, m.prompt, m.emphasis || null, i, now, req.session.userId);
       });
 
       // Snapshot each character present in this session (self-contained).
-      await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now);
+      await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now, dmForkId);
 
       // Stage 3: scan for major permanent changes and flag them for review.
       await detectCharacterChanges(db, session, req.params.campaignId, key, now);
@@ -195,7 +197,10 @@ async function resolveCarryForward(db, character, currentSession) {
 // Build snapshot rows for every character present in this session.
 // Each row is self-contained: its own prompt + reference_url, copied
 // forward. change_flag / change_detail are filled by detectCharacterChanges.
-async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
+async function snapshotSessionCharacters(db, session, campaignId, userId, now, forkId) {
+  // Deploy 4.0 — resolve the DM fork if not passed in (single call site
+  // passes it, but stay robust).
+  if (!forkId) forkId = await getOrCreateDmFork(db, session.id, userId);
   try {
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
     if (!characters.length) return;
@@ -224,9 +229,9 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now) {
       const carry = await resolveCarryForward(db, ch, session);
       await db.prepare(
         'INSERT INTO session_characters ' +
-        '(session_id, character_id, prompt, reference_url, change_note, change_flag, change_status, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(session.id, ch.id, carry.prompt, carry.referenceUrl, null, 0, 'none', now);
+        '(session_id, fork_id, character_id, prompt, reference_url, change_note, change_flag, change_status, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(session.id, forkId, ch.id, carry.prompt, carry.referenceUrl, null, 0, 'none', now);
     }
   } catch(e) {
     console.error('snapshotSessionCharacters error:', e.message);

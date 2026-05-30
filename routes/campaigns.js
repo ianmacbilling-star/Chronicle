@@ -17,7 +17,8 @@ router.get('/', requireAuth, async function(req, res) {
   // small per-user campaign set.
   const campaigns = await db.prepare(
     'SELECT c.*, cm.role AS my_role, ' +
-    "EXISTS (SELECT 1 FROM sessions s WHERE s.campaign_id = c.id AND s.player_access_status = 'ready') AS locked " +
+    "EXISTS (SELECT 1 FROM session_forks f JOIN sessions s ON s.id = f.session_id " +
+    "WHERE s.campaign_id = c.id AND f.role = 'dm' AND f.player_access_status = 'ready') AS locked " +
     'FROM campaigns c ' +
     'JOIN campaign_members cm ON cm.campaign_id = c.id ' +
     'WHERE cm.user_id = ? ' +

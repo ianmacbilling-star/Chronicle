@@ -301,6 +301,11 @@ async function initPostgres() {
     // so per-model cost can be set from real data later).
     'ALTER TABLE image_generations ADD COLUMN IF NOT EXISTS fork_id INTEGER',
     'ALTER TABLE image_generations ADD COLUMN IF NOT EXISTS model TEXT',
+    // Phase 4 Deploy 4.0 — content tables gain fork_id. Added nullable
+    // here for existing DBs; backfilled and tightened to NOT NULL in
+    // migrateForks() (called at the end of initPostgres).
+    'ALTER TABLE moments ADD COLUMN IF NOT EXISTS fork_id INTEGER',
+    'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS fork_id INTEGER',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -317,6 +322,7 @@ async function initPostgres() {
       emphasis TEXT,
       image TEXT,
       panel_order INTEGER DEFAULT 0,
+      fork_id INTEGER,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_by INTEGER NOT NULL,
       edited_at TIMESTAMP,
@@ -336,6 +342,7 @@ async function initPostgres() {
       change_detail TEXT,
       change_moment_index INTEGER,
       change_status TEXT DEFAULT 'none',
+      fork_id INTEGER,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       edited_at TIMESTAMP,
       edited_by INTEGER,
@@ -500,6 +507,12 @@ async function initPostgres() {
     ON CONFLICT (campaign_id, user_id) DO NOTHING
   `);
 
+  // Phase 4 Deploy 4.0 — stand up session_forks, give every session a DM
+  // fork, backfill content fork_id, then tighten to NOT NULL. Runs LAST
+  // so all referenced tables (sessions, moments, session_characters,
+  // campaign_members) and the campaign_members DM backfill exist first.
+  await migrateForks(pool);
+
   console.log('  PostgreSQL schema ready!');
   return db;
 }
@@ -652,4 +665,97 @@ async function getDb() {
 
 function isPostgres() { return usePostgres; }
 
-module.exports = { getDb, isPostgres };
+// ============================================================
+// PHASE 4 DEPLOY 4.0 — FORK MIGRATION + HELPER
+// ============================================================
+// migrateForks: idempotent. Safe to run on every boot.
+//   1. CREATE session_forks (one fork per user per session; the DM's
+//      canonical work is literally a role='dm' fork row).
+//   2. Backfill a DM fork for every session, carrying its current
+//      player_access_status + narrative.
+//   3. Backfill moments/session_characters fork_id -> the DM fork.
+//   4. GUARDED tighten to NOT NULL (only if zero orphan rows) + FK.
+// NOT in the swallow-all alterations[] loop on purpose: order matters
+// and a silent failure here must NOT pass unnoticed.
+async function migrateForks(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS session_forks (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      role TEXT NOT NULL,
+      player_access_status TEXT DEFAULT 'draft',
+      narrative_intro TEXT,
+      narrative_sections TEXT,
+      narrative_outro TEXT,
+      narrative_intro_summary TEXT,
+      narrative_outro_summary TEXT,
+      art_style_override TEXT,
+      fork_notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      edited_at TIMESTAMP,
+      edited_by INTEGER,
+      UNIQUE (session_id, user_id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_session ON session_forks(session_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_user ON session_forks(user_id)');
+
+  // Backfill: one DM fork per session, owned by the campaign's DM.
+  await pool.query(`
+    INSERT INTO session_forks
+      (session_id, user_id, role, player_access_status,
+       narrative_intro, narrative_sections, narrative_outro,
+       narrative_intro_summary, narrative_outro_summary, created_at)
+    SELECT s.id, cm.user_id, 'dm', s.player_access_status,
+           s.narrative_intro, s.narrative_sections, s.narrative_outro,
+           s.narrative_intro_summary, s.narrative_outro_summary, NOW()
+    FROM sessions s
+    JOIN campaign_members cm
+      ON cm.campaign_id = s.campaign_id AND cm.role = 'dm'
+    ON CONFLICT (session_id, user_id) DO NOTHING
+  `);
+
+  // Backfill content fork_id -> the session's DM fork.
+  await pool.query(`
+    UPDATE moments m SET fork_id = f.id
+    FROM session_forks f
+    WHERE f.session_id = m.session_id AND f.role = 'dm' AND m.fork_id IS NULL
+  `);
+  await pool.query(`
+    UPDATE session_characters sc SET fork_id = f.id
+    FROM session_forks f
+    WHERE f.session_id = sc.session_id AND f.role = 'dm' AND sc.fork_id IS NULL
+  `);
+
+  // GUARD: only tighten to NOT NULL if there are no orphan rows.
+  const mNull = await pool.query('SELECT COUNT(*)::int AS c FROM moments WHERE fork_id IS NULL');
+  const sNull = await pool.query('SELECT COUNT(*)::int AS c FROM session_characters WHERE fork_id IS NULL');
+  if (mNull.rows[0].c === 0 && sNull.rows[0].c === 0) {
+    await pool.query('ALTER TABLE moments ALTER COLUMN fork_id SET NOT NULL');
+    await pool.query('ALTER TABLE session_characters ALTER COLUMN fork_id SET NOT NULL');
+    // FK constraints — try/catch makes the re-run a no-op (PG has no
+    // ADD CONSTRAINT IF NOT EXISTS for FKs).
+    try { await pool.query('ALTER TABLE moments ADD CONSTRAINT moments_fork_fk FOREIGN KEY (fork_id) REFERENCES session_forks(id)'); } catch (e) {}
+    try { await pool.query('ALTER TABLE session_characters ADD CONSTRAINT sc_fork_fk FOREIGN KEY (fork_id) REFERENCES session_forks(id)'); } catch (e) {}
+    console.log('  Fork migration: fork_id NOT NULL + FK applied.');
+  } else {
+    console.error('  [migrateForks] ABORT NOT NULL — orphan rows. moments:', mNull.rows[0].c, 'session_characters:', sNull.rows[0].c);
+  }
+}
+
+// getOrCreateDmFork: returns the id of the session's DM fork, creating
+// it if absent. Used by every route that INSERTs moments/session_characters
+// (which now require fork_id) and by session creation / access-status.
+async function getOrCreateDmFork(db, sessionId, dmUserId) {
+  const existing = await db.prepare(
+    "SELECT id FROM session_forks WHERE session_id = ? AND role = 'dm'"
+  ).get(sessionId);
+  if (existing) return existing.id;
+  const r = await db.prepare(
+    "INSERT INTO session_forks (session_id, user_id, role, created_at) VALUES (?, ?, 'dm', ?)"
+  ).run(sessionId, dmUserId, new Date().toISOString());
+  return r.lastInsertRowid;
+}
+
+module.exports = { getDb, isPostgres, getOrCreateDmFork };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb } = require('../database/db');
+const { getDb, getOrCreateDmFork } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit } = require('../middleware/tiers');
 const imageHelpers = require('./images');
@@ -38,7 +38,11 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // if no images have been generated yet (the row just shows no thumb).
   const sessions = await db.prepare(
     'SELECT s.*, ' +
-    '(SELECT image FROM moments m WHERE m.session_id = s.id AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url ' +
+    '(SELECT image FROM moments m WHERE m.session_id = s.id AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
+    // Deploy 4.0 — player_access_status now lives on the DM fork. This
+    // aliased column comes AFTER s.* so it wins in the row object,
+    // keeping the JSON key identical (frontend session-list untouched).
+    "(SELECT f.player_access_status FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm' LIMIT 1) AS player_access_status " +
     'FROM sessions s ' +
     'WHERE s.campaign_id=? ORDER BY s.session_date ASC'
   ).all(req.params.campaignId);
@@ -50,6 +54,10 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
+  // Deploy 4.0 — override the (now-stale) sessions column with the DM
+  // fork's status so the frontend keeps reading the same key.
+  const dmFork = await db.prepare("SELECT player_access_status FROM session_forks WHERE session_id=? AND role='dm' LIMIT 1").get(session.id);
+  if (dmFork) session.player_access_status = dmFork.player_access_status;
   const moments = await db.prepare('SELECT * FROM moments WHERE session_id=? ORDER BY panel_order ASC').all(session.id);
   res.json(Object.assign({}, session, { moments }));
 });
@@ -63,6 +71,9 @@ router.post('/', requireAuth, verifyCampaignDM, checkSessionLimit, async functio
   const result = await db.prepare(
     'INSERT INTO sessions (campaign_id, name, session_date, created_at, created_by) VALUES (?,?,?,?,?)'
   ).run(req.params.campaignId, name.trim(), session_date, now, req.session.userId);
+  // Deploy 4.0 — every session is born with a DM fork row. All its
+  // moments / session_characters reference this fork_id.
+  await getOrCreateDmFork(db, result.lastInsertRowid, req.session.userId);
   const session = await db.prepare('SELECT * FROM sessions WHERE id=?').get(result.lastInsertRowid);
   res.json(session);
 });
@@ -108,7 +119,9 @@ router.put('/:id/access-status', requireAuth, verifyCampaignDM, async function(r
   const db = await getDb();
   const session = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
-  await db.prepare('UPDATE sessions SET player_access_status=? WHERE id=?').run(status, session.id);
+  // Deploy 4.0 — status lives on the DM fork now (mint if somehow absent).
+  const dmForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
+  await db.prepare('UPDATE session_forks SET player_access_status=? WHERE id=?').run(status, dmForkId);
   res.json({ success: true, player_access_status: status });
 });
 

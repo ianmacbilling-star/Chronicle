@@ -120,7 +120,8 @@ async function isCampaignLocked(campaignId) {
   try {
     const db = await getDb();
     const row = await db.prepare(
-      "SELECT 1 AS hit FROM sessions WHERE campaign_id = ? AND player_access_status = 'ready' LIMIT 1"
+      "SELECT 1 AS hit FROM session_forks f JOIN sessions s ON s.id = f.session_id " +
+      "WHERE s.campaign_id = ? AND f.role = 'dm' AND f.player_access_status = 'ready' LIMIT 1"
     ).get(campaignId);
     return !!row;
   } catch (e) {
