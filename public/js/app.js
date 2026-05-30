@@ -5971,7 +5971,7 @@ function loadMembers() {
   if (!cur) return;
   var list = document.getElementById('members-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">Loading members…</div>';
+  list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading members…</div>';
 
   fetch('/api/campaigns/' + cur.id + '/members')
     .then(function(r) { return r.json(); })
@@ -5992,7 +5992,7 @@ function renderMembersList() {
   var list = document.getElementById('members-list');
   if (!list) return;
   if (!state.members.length) {
-    list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">No members yet.</div>';
+    list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">No members yet.</div>';
     return;
   }
   var meUserId = (state.user && state.user.id) || null;
@@ -6003,7 +6003,7 @@ function renderMembersList() {
     var roleBadge = isDM
       ? '<span class="role-badge role-badge-dm">DM</span>'
       : '<span class="role-badge role-badge-player">Player</span>';
-    var meTag = isMe ? '<span style="font-size:11px;color:rgba(245,232,200,0.5);">(you)</span>' : '';
+    var meTag = isMe ? '<span style="font-size:11px;color:rgba(245,232,200,0.75);">(you)</span>' : '';
     var charInfo = m.character_name
       ? 'Playing ' + escapeHtml(m.character_name) + (m.character_class ? ' (' + escapeHtml(m.character_class) + ')' : '')
       : (isDM ? 'No character owned' : 'No character');
@@ -6038,7 +6038,7 @@ function loadPendingInvites() {
   if (!cur) return;
   var list = document.getElementById('pending-invites-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">Loading invites…</div>';
+  list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading invites…</div>';
 
   fetch('/api/campaigns/' + cur.id + '/invites')
     .then(function(r) { return r.json(); })
@@ -6059,7 +6059,7 @@ function renderPendingInvites() {
   var list = document.getElementById('pending-invites-list');
   if (!list) return;
   if (!state.pendingInvites.length) {
-    list.innerHTML = '<div style="color:rgba(245,232,200,0.5);font-size:13px;padding:8px;">No pending invites.</div>';
+    list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">No pending invites.</div>';
     return;
   }
   list.innerHTML = state.pendingInvites.map(function(inv) {
