@@ -3207,7 +3207,14 @@ function setSlotFile(slot, file) {
     var clearBtn = document.getElementById('clear-' + slot);
     preview.src = ev.target.result;
     preview.classList.remove('hidden');
-    preview.onclick = function() { openLightbox(ev.target.result, slot.replace('image_', '').replace('_', ' ')); };
+    // stopPropagation: the surrounding .image-upload-area div has its own
+    // onclick that opens the file-picker. Without this stop, clicking the
+    // preview image opens the lightbox AND ALSO bubbles up to fire the
+    // file picker — looks to the user like a download/save dialog.
+    preview.onclick = function(e) {
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      openLightbox(ev.target.result, slot.replace('image_', '').replace('_', ' '));
+    };
     if (placeholder) placeholder.style.display = 'none';
     if (clearBtn) clearBtn.style.display = 'inline-flex';
   };
@@ -3242,7 +3249,13 @@ function loadSlotPreviews(char) {
     if (url) {
       preview.src = url;
       preview.classList.remove('hidden');
-      preview.onclick = function() { openLightbox(url, slot.replace('image_', '').replace('_', ' ')); };
+      // stopPropagation: same reason as setSlotFile — keep the click from
+      // bubbling to the wrapping .image-upload-area which would fire the
+      // file picker.
+      preview.onclick = function(e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        openLightbox(url, slot.replace('image_', '').replace('_', ' '));
+      };
       if (placeholder) placeholder.style.display = 'none';
       if (clearBtn) clearBtn.style.display = 'inline-flex';
     } else {
@@ -5355,7 +5368,14 @@ function setSlotFile(slot, file) {
     var clearBtn = document.getElementById('clear-' + slot);
     preview.src = ev.target.result;
     preview.classList.remove('hidden');
-    preview.onclick = function() { openLightbox(ev.target.result, slot.replace('image_', '').replace('_', ' ')); };
+    // stopPropagation: the surrounding .image-upload-area div has its own
+    // onclick that opens the file-picker. Without this stop, clicking the
+    // preview image opens the lightbox AND ALSO bubbles up to fire the
+    // file picker — looks to the user like a download/save dialog.
+    preview.onclick = function(e) {
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      openLightbox(ev.target.result, slot.replace('image_', '').replace('_', ' '));
+    };
     if (placeholder) placeholder.style.display = 'none';
     if (clearBtn) clearBtn.style.display = 'inline-flex';
   };
@@ -5390,7 +5410,13 @@ function loadSlotPreviews(char) {
     if (url) {
       preview.src = url;
       preview.classList.remove('hidden');
-      preview.onclick = function() { openLightbox(url, slot.replace('image_', '').replace('_', ' ')); };
+      // stopPropagation: same reason as setSlotFile — keep the click from
+      // bubbling to the wrapping .image-upload-area which would fire the
+      // file picker.
+      preview.onclick = function(e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        openLightbox(url, slot.replace('image_', '').replace('_', ' '));
+      };
       if (placeholder) placeholder.style.display = 'none';
       if (clearBtn) clearBtn.style.display = 'inline-flex';
     } else {
