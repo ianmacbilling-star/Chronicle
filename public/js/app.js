@@ -721,7 +721,7 @@ function renderSessions() {
       '</div>' +
       '<div class="flex gap-1 items-center">' +
         (s.transcript ? '<span class="session-badge">Has transcript</span>' : '<span class="session-badge empty">No transcript</span>') +
-        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
+        '<button class="btn btn-sm btn-danger dm-only" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -3961,7 +3961,7 @@ function renderSessions() {
       '</div>' +
       '<div class="flex gap-1 items-center">' +
         (s.transcript ? '<span class="session-badge">Has transcript</span>' : '<span class="session-badge empty">No transcript</span>') +
-        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
+        '<button class="btn btn-sm btn-danger dm-only" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete</button>' +
       '</div>' +
     '</div>';
   }).join('');
