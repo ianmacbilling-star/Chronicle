@@ -280,6 +280,17 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
       return res.json({ error: 'Describe the change before regenerating.' });
     }
 
+    // Save the amended-appearance text now (save-like-a-normal-save) so it
+    // persists and survives a reload. The regenerated image stays a draft
+    // until Approve; only the text is committed here.
+    if (sc) {
+      if (sc.change_status === 'accepted') {
+        await db.prepare('UPDATE session_characters SET change_note = ? WHERE fork_id = ? AND character_id = ?').run(detail, fork, characterId);
+      } else {
+        await db.prepare("UPDATE session_characters SET change_detail = ?, change_status = 'pending', change_flag = true WHERE fork_id = ? AND character_id = ?").run(detail, fork, characterId);
+      }
+    }
+
     // Edit FROM the current reference — session first, then canonical,
     // then an uploaded portrait — so amendments accumulate correctly.
     const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
