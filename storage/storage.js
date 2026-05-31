@@ -147,4 +147,39 @@ async function releaseImage(db, fileUrl) {
   }
 }
 
-module.exports = { initStorage, uploadFile, deleteFile, releaseImage };
+// persistToR2: download a remote (fal.media) image and re-host it in our
+// own R2 bucket so it survives fal's ~24h CDN expiry. Returns the new R2
+// URL, or — fail-soft — the original URL if the copy fails, so a storage
+// hiccup never breaks (or double-charges) a successful generation. A rare
+// fallback can be repaired later by a background sweep.
+async function persistToR2(remoteUrl) {
+  if (!remoteUrl) return remoteUrl;
+  const base = process.env.R2_PUBLIC_URL || '';
+  // Already one of ours (R2 public URL or local upload)? Don't re-copy.
+  if ((base && remoteUrl.indexOf(base) === 0) || remoteUrl.indexOf('/uploads/') === 0) return remoteUrl;
+  try {
+    const axios = require('axios');
+    const https = require('https');
+    const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+    const resp = await axios.get(remoteUrl, {
+      responseType: 'arraybuffer',
+      httpsAgent: agent,
+      timeout: 60000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
+    const buf = Buffer.from(resp.data);
+    const ct = String(resp.headers['content-type'] || 'image/png').split(';')[0].trim();
+    const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
+    const filename = 'gen-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + '.' + ext;
+    const url = await uploadFile(buf, filename, ct);
+    console.log('  Persisted to R2:', url);
+    return url;
+  } catch (e) {
+    const msg = e.response ? (e.response.status + ' ' + e.message) : e.message;
+    console.error('persistToR2 failed, keeping source URL:', msg);
+    return remoteUrl;
+  }
+}
+
+module.exports = { initStorage, uploadFile, deleteFile, releaseImage, persistToR2 };

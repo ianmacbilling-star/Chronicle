@@ -3,7 +3,7 @@ const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
-const { releaseImage } = require('../storage/storage');
+const { releaseImage, persistToR2 } = require('../storage/storage');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
 
@@ -137,7 +137,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     throw new Error('No image returned from fal.ai');
   }
 
-  return result.data.images[0].url;
+  return await persistToR2(result.data.images[0].url);
 }
 
 // Deterministic seed from a campaign id — same campaign, same seed every time.
@@ -374,7 +374,7 @@ async function generateReferenceImage(falKey, descriptionText, portraitUrl, mode
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No reference image returned from fal.ai');
   }
-  return result.data.images[0].url;
+  return await persistToR2(result.data.images[0].url);
 }
 
 // Edit an EXISTING reference image to apply an amendment (Stage 3 Piece 5).
@@ -421,7 +421,7 @@ async function editReferenceImage(falKey, baseImageUrl, changeText, charName, mo
     if (result.data.has_nsfw_concepts && result.data.has_nsfw_concepts[0] === true) {
       throw new Error('image was flagged by the safety filter (returned blank)');
     }
-    return result.data.images[0].url;
+    return await persistToR2(result.data.images[0].url);
   }
 
   // Fallback: no editing model or no base image — build from text instead.
