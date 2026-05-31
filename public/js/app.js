@@ -2253,7 +2253,8 @@ function loadPreview(layout) {
   if (!iframe) return;
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
-    '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic');
+    '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '');
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
@@ -3561,7 +3562,8 @@ function exportSessionPDF() {
     return;
   }
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
-    '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic');
+    '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic') +
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '');
   var win = window.open(url, '_blank');
   setTimeout(function() { if (win) win.print(); }, 4000);
 }
@@ -4474,7 +4476,8 @@ function loadPreview(layout) {
   if (!iframe) return;
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
-    '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic');
+    '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '');
 
   // Show loading state
   if (loading) loading.style.display = 'flex';

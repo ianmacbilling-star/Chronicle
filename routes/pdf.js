@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const path = require('path');
 
@@ -763,18 +763,22 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     const db = await getDb();
 
     const session = await db.prepare(
-      'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
+      'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
     ).get(req.params.sessionId, req.session.userId);
 
     if (!session) return res.status(403).json({ error: 'Access denied' });
 
+    // Phase 4 — preview/export the VIEWED version (DM canonical by default, or
+    // a ?fork_id= the caller is allowed to see, e.g. a player's own version).
+    const viewForkId = await getViewableForkId(db, session.id, req.session.userId, req.query.fork_id);
+    if (!viewForkId) return res.status(403).json({ error: 'Access denied' });
+
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
-    const dmForkId = await getDmForkId(db, session.id);
-    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(viewForkId);
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
-    // Phase 4 — narrative lives on the fork now; read the DM (canonical) fork.
-    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(dmForkId);
+    // Narrative lives on the fork; read the viewed version's.
+    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(viewForkId);
     const narrative = {
       intro: nfk && nfk.narrative_intro ? nfk.narrative_intro : '',
       sections: nfk && nfk.narrative_sections ? JSON.parse(nfk.narrative_sections) : [],
