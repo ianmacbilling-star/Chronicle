@@ -99,7 +99,7 @@ router.post('/register', async function(req, res) {
               const campaignUrl = base.replace(/\/$/, '') + '/app.html#campaign=' + invite.campaign_id;
               await sendJoinNotificationEmail({
                 dm_email: ctx.dm_email,
-                dm_name: ctx.dm_name || 'DM',
+                dm_name: ctx.dm_name || 'Story Master',
                 player_name: name.trim(),
                 player_email: email.toLowerCase().trim(),
                 campaign_name: ctx.campaign_name,

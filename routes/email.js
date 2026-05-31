@@ -268,53 +268,38 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
   const charLine = character_name
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'a character';
+  // NOTE: styles are INLINE on purpose. Several mail clients (Gmail, Outlook)
+  // strip <head><style> blocks, which left this email rendering as unstyled
+  // text on white. Inline styles survive everywhere.
   return `
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: rgba(20,15,8,0.95); border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
-    .header { background: #1a0f08; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
-    .logo { font-family: Georgia, serif; font-size: 28px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; }
-    .body { padding: 32px; }
-    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
-    .details { background: rgba(0,0,0,0.3); border: 1px solid rgba(201,168,76,0.18); border-radius: 8px; padding: 16px 18px; margin: 16px 0; }
-    .details-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(201,168,76,0.7); margin-top: 10px; }
-    .details-label:first-child { margin-top: 0; }
-    .details-value { font-size: 15px; color: #e8d5a3; margin-top: 2px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c9a84c; color: #1a0f08; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
-    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">CHRONICLE</div>
-      <div class="divider"></div>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0a0806;">
+  <div style="max-width:520px;margin:0 auto;background:#140f08;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+    <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CHRONICLE</div>
+      <div style="width:40px;height:1px;background:rgba(201,168,76,0.4);margin:16px auto;"></div>
       <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">A NEW PLAYER HAS JOINED</div>
     </div>
-    <div class="body">
-      <div class="title">${player_name} joined ${campaign_name}</div>
-      <div class="text">Greetings, ${dm_name}.</div>
-      <div class="text">Your invitation has been accepted. The party grows.</div>
-      <div class="details">
-        <div class="details-label">Player</div>
-        <div class="details-value">${player_name} <span style="color:rgba(201,168,76,0.6);font-size:13px;">&nbsp;${player_email}</span></div>
-        <div class="details-label">Now playing</div>
-        <div class="details-value">${charLine}</div>
-        <div class="details-label">In campaign</div>
-        <div class="details-value">${campaign_name}</div>
+    <div style="padding:32px;">
+      <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">${player_name} joined ${campaign_name}</div>
+      <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Greetings, ${dm_name}.</div>
+      <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Your invitation has been accepted. The party grows.</div>
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Player</div>
+        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${player_name} <span style="color:rgba(201,168,76,0.6);font-size:13px;">&nbsp;${player_email}</span></div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Now playing</div>
+        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">In campaign</div>
+        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="${campaign_url}" class="btn">Open Campaign</a>
+        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c9a84c;color:#1a0f08;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:1px;">Open Campaign</a>
       </div>
     </div>
-    <div class="footer">
-      chroniclemygame.com &nbsp;·&nbsp; The Chronicle of Your Campaign
+    <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
+      chroniclemygame.com &nbsp;&middot;&nbsp; The Chronicle of Your Campaign
     </div>
   </div>
 </body>
