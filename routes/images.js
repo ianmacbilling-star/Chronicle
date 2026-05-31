@@ -3,6 +3,7 @@ const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
+const { releaseImage } = require('../storage/storage');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
 
@@ -502,8 +503,10 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
 
     const imageUrl = await generateImage(prompt, style, fal_key, panelBlock, randomSeed, modelKey);
     const now = new Date().toISOString();
+    const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
     await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(imageUrl, now, req.session.userId, moment_id);
+    if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
     await logImageGeneration(db, req.session.userId, 'moment', moment_id, moment.fork_id);
     // Spend AFTER success — failed generations never reach here.
     await spendTokens(req.session.userId, cost, {
@@ -610,8 +613,10 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         };
         const imageUrl = await generateImage(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey);
         const now = new Date().toISOString();
+        const prevImg = m.image;
         await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
           .run(imageUrl, now, req.session.userId, m.id);
+        if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
         return { moment_id: m.id, image_url: imageUrl, success: true };
       } catch(e) {
         console.error('Error generating image for moment', m.id, e.message);

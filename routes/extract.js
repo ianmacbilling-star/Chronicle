@@ -3,6 +3,7 @@ const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange } = require('../middleware/tiers');
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
+const { releaseImage } = require('../storage/storage');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { artStyle } = req.body;
@@ -130,7 +131,11 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     if (parsed.moments && parsed.moments.length) {
       // Phase 4 — regenerate replaces only the CALLER's version's moments.
       const dmForkId = targetForkId;
+      // Release the about-to-be-orphaned images of this version's old moments
+      // (reference-counted: copies shared with other forks are spared).
+      const oldImgs = await db.prepare('SELECT image FROM moments WHERE fork_id = ?').all(dmForkId);
       await db.prepare('DELETE FROM moments WHERE fork_id = ?').run(dmForkId);
+      for (let oi = 0; oi < oldImgs.length; oi++) { await releaseImage(db, oldImgs[oi].image); }
       const now = new Date().toISOString();
 
       // Save the art style used so future sessions can inherit it (canonical

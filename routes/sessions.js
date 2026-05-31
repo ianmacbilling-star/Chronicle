@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId } = require('../database/db');
+const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit } = require('../middleware/tiers');
 const imageHelpers = require('./images');
@@ -227,10 +228,14 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   // moments and session_characters reference session_forks(id), and
   // session_forks references sessions(id). Removing the fork row last
   // (before the session) clears the session_forks -> sessions FK.
+  const oldMomImgs = await db.prepare('SELECT image FROM moments WHERE session_id=?').all(session.id);
+  const oldRefImgs = await db.prepare('SELECT reference_url FROM session_characters WHERE session_id=?').all(session.id);
   await db.prepare('DELETE FROM moments WHERE session_id=?').run(session.id);
   await db.prepare('DELETE FROM session_characters WHERE session_id=?').run(session.id);
   await db.prepare('DELETE FROM session_forks WHERE session_id=?').run(session.id);
   await db.prepare('DELETE FROM sessions WHERE id=?').run(session.id);
+  for (let i = 0; i < oldMomImgs.length; i++) { await releaseImage(db, oldMomImgs[i].image); }
+  for (let i = 0; i < oldRefImgs.length; i++) { await releaseImage(db, oldRefImgs[i].reference_url); }
   res.json({ success: true });
 });
 
@@ -635,9 +640,13 @@ router.delete('/:id/fork/:forkId', requireAuth, verifyCampaignMember, async func
   if (fork.role === 'dm') return res.status(403).json({ error: 'The canonical version cannot be deleted here' });
   const isOwner = String(fork.user_id) === String(req.session.userId);
   if (!isOwner && req.campaignRole !== 'dm') return res.status(403).json({ error: 'You can only delete your own version' });
+  const oldMomImgs = await db.prepare('SELECT image FROM moments WHERE fork_id = ?').all(fork.id);
+  const oldRefImgs = await db.prepare('SELECT reference_url FROM session_characters WHERE fork_id = ?').all(fork.id);
   await db.prepare('DELETE FROM moments WHERE fork_id = ?').run(fork.id);
   await db.prepare('DELETE FROM session_characters WHERE fork_id = ?').run(fork.id);
   await db.prepare('DELETE FROM session_forks WHERE id = ?').run(fork.id);
+  for (let i = 0; i < oldMomImgs.length; i++) { await releaseImage(db, oldMomImgs[i].image); }
+  for (let i = 0; i < oldRefImgs.length; i++) { await releaseImage(db, oldRefImgs[i].reference_url); }
   res.json({ success: true });
 });
 

@@ -85,7 +85,33 @@ async function uploadFile(fileBuffer, filename, mimetype) {
 }
 
 async function deleteFile(fileUrl) {
-  if (!fileUrl || useCloud) return; // Skip R2 deletes for now
+  if (!fileUrl) return;
+  if (useCloud) {
+    // Real R2 object delete. Derive the bucket key from the public URL.
+    try {
+      const base = process.env.R2_PUBLIC_URL || '';
+      let key = null;
+      if (base && fileUrl.indexOf(base) === 0) {
+        key = fileUrl.slice(base.length).replace(/^\/+/, '');
+      } else {
+        const m = fileUrl.match(/\/((?:uploads|archives)\/[^?#]+)$/);
+        if (m) key = m[1];
+      }
+      if (!key) { console.error('R2 delete: could not derive key from', fileUrl); return; }
+      const body = Buffer.alloc(0);
+      const signed = signRequest('DELETE', key, 'application/octet-stream', body);
+      const axios = require('axios');
+      const https = require('https');
+      const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+      const resp = await axios.delete(signed.url, { headers: signed.headers, httpsAgent: agent });
+      console.log('  R2 deleted:', resp.status, key);
+    } catch(e) {
+      const msg = e.response ? (e.response.status + ' ' + JSON.stringify(e.response.data)) : e.message;
+      console.error('R2 delete error:', msg);
+    }
+    return;
+  }
+  // Local filesystem
   try {
     if (fileUrl.startsWith('/uploads/')) {
       const fp = path.join(__dirname, '..', fileUrl);
@@ -94,4 +120,31 @@ async function deleteFile(fileUrl) {
   } catch(e) { console.error('Delete error:', e.message); }
 }
 
-module.exports = { initStorage, uploadFile, deleteFile };
+// releaseImage: reference-counted delete. Chronicle shares image URLs by
+// reference — a player's fork copies the DM's image URL at fork time,
+// character references are reused across snapshots, etc. — so one file may
+// be pointed at by many rows. Only delete the underlying R2/local object
+// once NO row anywhere still references it. Always non-fatal: an orphan is
+// better than a broken user action. Pass the route's db (db.prepare(...)).
+async function releaseImage(db, fileUrl) {
+  if (!fileUrl) return;
+  try {
+    const checks = [
+      ['SELECT 1 FROM moments WHERE image = ? LIMIT 1', [fileUrl]],
+      ['SELECT 1 FROM session_characters WHERE reference_url = ? LIMIT 1', [fileUrl]],
+      ['SELECT 1 FROM characters WHERE image = ? OR image_portrait = ? OR image_fullbody = ? OR image_action = ? OR image_other = ? OR canonical_reference_url = ? LIMIT 1',
+        [fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl]],
+      ['SELECT 1 FROM campaign_assets WHERE image_url = ? LIMIT 1', [fileUrl]],
+      ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]]
+    ];
+    for (let i = 0; i < checks.length; i++) {
+      const row = await db.prepare(checks[i][0]).get(...checks[i][1]);
+      if (row) return; // still referenced somewhere — keep the file
+    }
+    await deleteFile(fileUrl);
+  } catch(e) {
+    console.error('releaseImage error (left in place):', e.message);
+  }
+}
+
+module.exports = { initStorage, uploadFile, deleteFile, releaseImage };

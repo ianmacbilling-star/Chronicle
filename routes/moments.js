@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getOrCreateDmFork, getViewableForkId } = require('../database/db');
+const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 
 router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
@@ -27,7 +28,9 @@ router.post('/', requireAuth, verifyCampaignDM, async function(req, res) {
 
 router.delete('/:momentId', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
+  const prev = await db.prepare('SELECT image FROM moments WHERE id=? AND session_id=?').get(req.params.momentId, req.params.sessionId);
   await db.prepare('DELETE FROM moments WHERE id=? AND session_id=?').run(req.params.momentId, req.params.sessionId);
+  if (prev && prev.image) await releaseImage(db, prev.image);
   res.json({ success: true });
 });
 

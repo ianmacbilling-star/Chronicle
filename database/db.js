@@ -512,6 +512,10 @@ async function initPostgres() {
   // campaign_members) and the campaign_members DM backfill exist first.
   await migrateForks(pool);
 
+  // Campaign Archives — saved-off images that survive regen/re-extract.
+  // After migrateForks so session_forks + moments exist for the FKs.
+  await migrateArchives(pool);
+
   console.log('  PostgreSQL schema ready!');
   return db;
 }
@@ -748,6 +752,35 @@ async function migrateForks(pool) {
   // character_id, different fork_id -> the old constraint blocks it).
   try { await pool.query('ALTER TABLE session_characters DROP CONSTRAINT IF EXISTS session_characters_session_id_character_id_key'); } catch (e) {}
   try { await pool.query('ALTER TABLE session_characters ADD CONSTRAINT session_characters_fork_character_key UNIQUE (fork_id, character_id)'); } catch (e) {}
+}
+
+// migrateArchives: idempotent (runs every boot). Campaign Archives lets any
+// member save off an image they love so a later regen/re-extract can't lose
+// it. At archive time the image BYTES are copied into an R2 archives/ key
+// (the archive owns its copy), so reference-counted cleanup of moment and
+// character images never deletes an archived picture. Provenance IDs use
+// ON DELETE SET NULL; campaign_id is the per-campaign list anchor and
+// CASCADEs. image_type is a hard-coded set today: 'character' | 'moment'.
+async function migrateArchives(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_archives (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+      fork_id INTEGER REFERENCES session_forks(id) ON DELETE SET NULL,
+      moment_id INTEGER REFERENCES moments(id) ON DELETE SET NULL,
+      image_type TEXT NOT NULL,
+      title TEXT,
+      image_url TEXT NOT NULL,
+      image_prompt TEXT,
+      archived_by INTEGER NOT NULL REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_campaign ON campaign_archives(campaign_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_session ON campaign_archives(session_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_fork ON campaign_archives(fork_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_moment ON campaign_archives(moment_id)');
 }
 
 // getOrCreateDmFork: returns the id of the session's DM fork, creating
