@@ -531,15 +531,18 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
 
   const db = await getDb();
-  const session = await db.prepare(
-    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
-    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
-  ).get(session_id, req.session.userId);
-
-  if (!session) return res.status(403).json({ error: 'Access denied' });
-
-  const dmForkId = await getDmForkId(db, session_id);
-  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
+  // Authorize the DM (canonical) OR a player generating their OWN version.
+  const myRole = await getCampaignRole(req.session.userId, campaign_id);
+  if (!myRole) return res.status(403).json({ error: 'Access denied' });
+  let targetForkId;
+  if (myRole === 'dm') {
+    targetForkId = req.body.fork_id ? Number(req.body.fork_id) : await getDmForkId(db, session_id);
+  } else {
+    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(session_id, req.session.userId);
+    if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
+    targetForkId = myFork.id;
+  }
+  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
 
   // Load all campaign characters once; the per-panel block is built inside
@@ -549,9 +552,9 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
     'sc.change_note, sc.change_moment_index, sc.change_status ' +
     'FROM characters ch ' +
-    'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.session_id = ? ' +
+    'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
     'WHERE ch.campaign_id = ?'
-  ).all(session_id, campaign_id);
+  ).all(targetForkId, campaign_id);
   // Stage 4: attach each changed character's prior-session reference image.
   await attachPriorReferences(db, chars, session_id, campaign_id);
 
@@ -622,7 +625,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // Log one usage row per successfully generated image.
   for (var i = 0; i < generated.length; i++) {
     if (generated[i] && generated[i].success) {
-      await logImageGeneration(db, req.session.userId, 'moment', generated[i].moment_id);
+      await logImageGeneration(db, req.session.userId, 'moment', generated[i].moment_id, targetForkId);
     }
   }
 
@@ -635,6 +638,9 @@ router.post('/generate-all', requireAuth, async function(req, res) {
       source: 'panel_batch',
       event_type: 'generation_spend'
     });
+  }
+  if (myRole === 'player' && successCount > 0) {
+    try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campaign_id, req.session.userId); } catch (e) {}
   }
   balance = await getBalance(req.session.userId);
 

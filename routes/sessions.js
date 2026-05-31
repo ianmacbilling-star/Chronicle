@@ -65,7 +65,11 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   const viewForkId = await getViewableForkId(db, session.id, req.session.userId, req.query.fork_id);
   if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(viewForkId);
-  res.json(Object.assign({}, session, { moments, fork_id: viewForkId }));
+  // fork_status = the VIEWED fork's own status (the access-status dropdown
+  // reflects whichever version you're looking at). player_access_status
+  // above stays the DM-canonical value (campaign-lock semantics).
+  const viewForkRow = await db.prepare('SELECT player_access_status FROM session_forks WHERE id=?').get(viewForkId);
+  res.json(Object.assign({}, session, { moments, fork_id: viewForkId, fork_status: viewForkRow ? viewForkRow.player_access_status : (session.player_access_status || 'draft') }));
 });
 
 // POST create session
@@ -117,7 +121,7 @@ router.put('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
 // fork (one row per session in session_forks, with the DM's fork being
 // the canonical one). The endpoint signature stays the same; only the
 // underlying storage moves.
-router.put('/:id/access-status', requireAuth, verifyCampaignDM, async function(req, res) {
+router.put('/:id/access-status', requireAuth, verifyCampaignMember, async function(req, res) {
   const ALLOWED = ['draft', 'ready'];
   const status = (req.body && req.body.status) || '';
   if (ALLOWED.indexOf(status) === -1) {
@@ -126,9 +130,18 @@ router.put('/:id/access-status', requireAuth, verifyCampaignDM, async function(r
   const db = await getDb();
   const session = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
-  // Deploy 4.0 — status lives on the DM fork now (mint if somehow absent).
-  const dmForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
-  await db.prepare('UPDATE session_forks SET player_access_status=? WHERE id=?').run(status, dmForkId);
+  // The DM sets the canonical (DM fork) status; a player sets the status of
+  // THEIR OWN version. Marking a player version Ready is what exposes it to
+  // the other members' version dropdown.
+  let targetForkId;
+  if (req.campaignRole === 'dm') {
+    targetForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
+  } else {
+    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=?').get(session.id, req.session.userId);
+    if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
+    targetForkId = myFork.id;
+  }
+  await db.prepare('UPDATE session_forks SET player_access_status=? WHERE id=?').run(status, targetForkId);
   res.json({ success: true, player_access_status: status });
 });
 

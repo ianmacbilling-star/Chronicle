@@ -867,7 +867,7 @@ function selectSession(id) {
       // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
       applyRoleVisibility();
       // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
-      if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.player_access_status || 'draft');
+      if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof loadSessionForks === 'function') loadSessionForks(id);
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
@@ -4267,7 +4267,7 @@ function selectSession(id) {
       // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
       applyRoleVisibility();
       // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
-      if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.player_access_status || 'draft');
+      if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof loadSessionForks === 'function') loadSessionForks(id);
       setTimeout(function() {
         var transcriptEl = document.getElementById('transcript-input');
@@ -6347,18 +6347,26 @@ function formatExpiresInDays(iso) {
 
 state._pendingAccessStatus = null;
 
+function canEditCurrentStatus() {
+  var role = state.currentCampaign && state.currentCampaign.my_role;
+  // DM edits the canonical (DM fork) status; a player edits the status of
+  // their OWN version. Read-only for any other view.
+  if (role === 'dm') return !state.currentForkId;
+  return !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+}
+
 function initAccessStatusUI(status) {
   var safeStatus = (status === 'ready') ? 'ready' : 'draft';
   var sel = document.getElementById('session-access-status-select');
   var chip = document.getElementById('session-access-status-chip');
-  var isDM = (state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  var editable = canEditCurrentStatus();
 
   if (sel) {
     sel.value = safeStatus;
-    sel.style.display = isDM ? '' : 'none';
+    sel.style.display = editable ? '' : 'none';
   }
   if (chip) {
-    if (isDM) {
+    if (editable) {
       chip.style.display = 'none';
     } else {
       chip.style.display = '';
@@ -6374,12 +6382,13 @@ function onAccessStatusChange(newValue) {
   var current = state._currentAccessStatus || 'draft';
   if (newValue === current) return;
 
-  if (newValue === 'ready' && current === 'draft') {
-    // High-consequence transition — confirm.
+  var isDMCanonical = (state.currentCampaign && state.currentCampaign.my_role === 'dm') && !state.currentForkId;
+  if (newValue === 'ready' && current === 'draft' && isDMCanonical) {
+    // High-consequence DM transition (locks canonical editing) — confirm.
     state._pendingAccessStatus = newValue;
     document.getElementById('confirm-ready-modal').classList.remove('hidden');
   } else {
-    // Ready → Draft is permissive — apply immediately.
+    // Player marking their own version, or any Ready → Draft — apply now.
     saveAccessStatus(newValue);
   }
 }
@@ -6531,6 +6540,7 @@ function reloadSessionForFork() {
         outro: data.narrative_outro || ''
       };
       if (typeof renderStoryboard === 'function') renderStoryboard();
+      if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       // Other tabs lazy-reload on click via forkQ(); storyboard is the
       // live view, so refresh it immediately.
     });
