@@ -3726,6 +3726,11 @@ function renderStoryboard() {
   document.getElementById('sb-content').style.display = 'block';
 
   var narrative = state.narrativeData || { intro: '', sections: [], outro: '' };
+  // Narrative is editable on the version you OWN: the DM on canonical, or a
+  // player on their own version. Read-only when viewing anyone else's.
+  var _nRole = state.currentCampaign && state.currentCampaign.my_role;
+  var canEditNarr = (_nRole === 'dm' && !state.currentForkId) ||
+    ((_nRole === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId)));
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
 
   // True alternating grid — narrative and image panels flow together
@@ -3754,13 +3759,18 @@ function renderStoryboard() {
   }
 
   function buildNarrative(id, label, textareaId, placeholder, value, regenCall, autosave) {
+    var regenBtn = canEditNarr
+      ? '<button class="narrative-regen-btn" onclick="' + regenCall + '">&#8635; Regen</button>'
+      : '';
+    // When editable, every box auto-saves on input (so between-panel prose
+    // persists too, not just opening/closing); otherwise it is read-only.
     return '<div class="narrative-panel" id="' + id + '">' +
       '<div class="narrative-block-header">' +
         '<span>&#9998; ' + label + '</span>' +
-        '<button class="narrative-regen-btn dm-only" onclick="' + regenCall + '">&#8635; Regen</button>' +
+        regenBtn +
       '</div>' +
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
-        (autosave ? ' oninput="scheduleNarrativeSave()"' : '') + '>' +
+        (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
       (value || '') + '</textarea>' +
     '</div>';
   }
