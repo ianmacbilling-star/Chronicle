@@ -6087,7 +6087,7 @@ function renderMembersList() {
     var isMe = (m.user_id === meUserId);
     var icon = isDM ? '&#128081;' : '&#127922;'; // crown vs game die
     var roleBadge = isDM
-      ? '<span class="role-badge role-badge-dm">DM</span>'
+      ? '<span class="role-badge role-badge-dm">Story Master</span>'
       : '<span class="role-badge role-badge-player">Player</span>';
     var meTag = isMe ? '<span style="font-size:11px;color:rgba(245,232,200,0.75);">(you)</span>' : '';
     var charInfo = m.character_name
@@ -6660,7 +6660,7 @@ function renderCampaignLockBanner() {
   banner.className = 'campaign-lock-banner';
   banner.innerHTML =
     '<span class="campaign-lock-banner-icon">&#128274;</span>' +
-    '<strong>Campaign locked.</strong> A session has been marked Ready by the DM, so your character\'s canonical details are now read-only. ' +
+    '<strong>Campaign locked.</strong> A session has been marked Ready by the Story Master, so your character\'s canonical details are now read-only. ' +
     'Open a Ready session and choose <strong>Make My Version</strong> to tinker in your own copy.';
   // Insert before the char-grid
   grid.parentNode.insertBefore(banner, grid);

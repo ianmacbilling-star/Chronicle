@@ -615,7 +615,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   }).join('');
 
   // Get DM name from campaign
-  const dmName = campaign.dm_name || 'The Dungeon Master';
+  const dmName = campaign.dm_name || 'The Story Master';
 
   // Build session content. When paginated, only one session is rendered,
   // but it keeps its real session number, and the chapter seam is suppressed
@@ -740,7 +740,7 @@ ${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
   <div class="cast-page-title">The Company</div>
   <div class="cast-page-subtitle">${campaign.description || ''}</div>
   <div class="cast-divider"></div>
-  <div class="cast-page-dm">Dungeon Master: ${dmName} &nbsp;&nbsp;|&nbsp;&nbsp; ${dateRange}</div>
+  <div class="cast-page-dm">Story Master: ${dmName} &nbsp;&nbsp;|&nbsp;&nbsp; ${dateRange}</div>
   <div class="cast-grid">${castHTML}</div>
 </div>` : ''}
 

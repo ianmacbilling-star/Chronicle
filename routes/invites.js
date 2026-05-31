@@ -128,7 +128,7 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
     if (ctx && ctx.campaign_name) {
       await sendInviteEmail({
         to_email: normalizedEmail,
-        dm_name: ctx.dm_name || 'Your DM',
+        dm_name: ctx.dm_name || 'Your Story Master',
         campaign_name: ctx.campaign_name,
         character_name: charInfo ? charInfo.name : null,
         character_class: charInfo ? charInfo.cls : null,
@@ -250,7 +250,7 @@ router.post('/invites/:token/accept', requireAuth, async function(req, res) {
       const campaignUrl = base.replace(/\/$/, '') + '/app.html#campaign=' + invite.campaign_id;
       await sendJoinNotificationEmail({
         dm_email: ctx.dm_email,
-        dm_name: ctx.dm_name || 'DM',
+        dm_name: ctx.dm_name || 'Story Master',
         player_name: ctx.player_name || 'Player',
         player_email: ctx.player_email || '',
         campaign_name: ctx.campaign_name,
@@ -261,7 +261,7 @@ router.post('/invites/:token/accept', requireAuth, async function(req, res) {
       await sendPlayerJoinedWelcomeEmail({
         player_email: ctx.player_email,
         player_name: ctx.player_name || 'Adventurer',
-        dm_name: ctx.dm_name || 'your DM',
+        dm_name: ctx.dm_name || 'your Story Master',
         campaign_name: ctx.campaign_name,
         character_name: charInfo ? charInfo.name : null,
         character_class: charInfo ? charInfo.cls : null,
@@ -360,7 +360,7 @@ router.delete('/campaigns/:campaignId/members/:userId', requireAuth, verifyCampa
   ).get(campaignId, targetUserId);
   if (!member) return res.status(404).json({ error: 'Member not found in this campaign' });
   if (member.role === 'dm') {
-    return res.status(400).json({ error: 'Cannot remove the DM' });
+    return res.status(400).json({ error: 'Cannot remove the Story Master' });
   }
 
   // Release any characters they owned in this campaign.
@@ -464,7 +464,7 @@ router.post('/campaigns/:campaignId/invites/:inviteId/reactivate', requireAuth, 
       const inviteUrl = base.replace(/\/$/, '') + '/invite/' + inv.token;
       await sendInviteEmail({
         to_email: inv.email_hint,
-        dm_name: ctx.dm_name || 'Your DM',
+        dm_name: ctx.dm_name || 'Your Story Master',
         campaign_name: ctx.campaign_name,
         character_name: charInfo ? charInfo.name : null,
         character_class: charInfo ? charInfo.cls : null,

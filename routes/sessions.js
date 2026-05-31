@@ -554,7 +554,7 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
       role: f.role,
       status: f.player_access_status,
       is_mine: mine,
-      label: f.role === 'dm' ? 'DM \u2014 Canonical' : (mine ? 'You (your version)' : (f.user_name || f.user_email || 'Player'))
+      label: f.role === 'dm' ? 'Story Master \u2014 Canonical' : (mine ? 'You (your version)' : (f.user_name || f.user_email || 'Player'))
     };
   });
   res.json(visible);
