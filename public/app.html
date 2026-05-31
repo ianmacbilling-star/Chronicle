@@ -221,42 +221,44 @@
     <!-- ==================== SESSION DETAIL ==================== -->
     <div id="view-session-detail" class="view" style="display:none;">
       <div class="session-detail-head">
-        <div class="page-title" id="session-detail-name">Session</div>
-        <input type="date" id="session-detail-date-input"
-          class="form-input session-detail-date"
-          onchange="updateSessionDate(this.value)"
-        />
-        <!-- Phase 3 Deploy 3 — session access status. DM sees an editable
-             dropdown; players see a read-only chip. JS toggles which is
-             visible based on role. The dropdown architected as a select
-             so future states (Archived, Private) can be added in one place. -->
-        <select id="session-access-status-select"
-                class="form-input session-access-status-select"
-                onchange="onAccessStatusChange(this.value)"
-                style="max-width:140px;margin-left:8px;">
-          <option value="draft">Draft</option>
-          <option value="ready">Ready</option>
-        </select>
-        <span id="session-access-status-chip"
-              class="session-access-chip"
-              style="display:none;margin-left:8px;"></span>
-        <!-- Phase 4 Step 2 — version selector. Lists DM canonical + any
-             versions the viewer may see; switching re-renders the
-             storyboard for that version. Hidden until >1 version exists. -->
-        <select id="session-fork-select"
-                class="form-input session-fork-select"
-                onchange="onForkChange(this.value)"
-                style="max-width:200px;margin-left:8px;display:none;"></select>
-        <!-- Player-only: make your own version of a Ready session. -->
-        <button id="make-my-version-btn"
-                class="btn btn-primary"
-                onclick="makeMyVersion()"
-                style="margin-left:8px;display:none;">Make My Version</button>
-        <!-- Player-only: remove your own version (also used to recover/re-make). -->
-        <button id="delete-my-version-btn"
-                class="btn"
-                onclick="deleteMyVersion()"
-                style="margin-left:8px;display:none;">Delete My Version</button>
+        <div class="sdh-left">
+          <div class="page-title" id="session-detail-name">Session</div>
+          <input type="date" id="session-detail-date-input"
+            class="form-input session-detail-date"
+            onchange="updateSessionDate(this.value)"
+          />
+        </div>
+        <div class="sdh-right">
+          <!-- DM sees an editable Draft/Ready dropdown; players see a read-only chip. -->
+          <select id="session-access-status-select"
+                  class="form-input session-access-status-select"
+                  onchange="onAccessStatusChange(this.value)"
+                  style="max-width:140px;">
+            <option value="draft">Draft</option>
+            <option value="ready">Ready</option>
+          </select>
+          <span id="session-access-status-chip"
+                class="session-access-chip"
+                style="display:none;"></span>
+          <!-- Version selector - DM canonical + any versions the viewer may see. -->
+          <select id="session-fork-select"
+                  class="form-input session-fork-select"
+                  onchange="onForkChange(this.value)"
+                  style="max-width:200px;display:none;"></select>
+          <!-- Player-only: make your own version of a Ready session. -->
+          <button id="make-my-version-btn"
+                  class="btn btn-primary"
+                  onclick="makeMyVersion()"
+                  style="display:none;">Make My Version</button>
+          <!-- Player-only: ellipsis menu holding Delete My Version. Shown only
+               when the viewer has their own version (JS toggles this wrapper). -->
+          <div class="row-menu" id="session-version-menu" style="display:none;">
+            <button class="row-menu-btn" onclick="toggleRowMenu('session-version-dropdown', event)">&#8943;</button>
+            <div class="row-menu-dropdown" id="session-version-dropdown">
+              <button class="row-menu-item row-menu-item-danger" onclick="deleteMyVersion()">Delete My Version</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="sess-tabs">

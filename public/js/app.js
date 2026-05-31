@@ -6519,8 +6519,8 @@ function loadSessionForks(sessionId) {
         var sessReady = state.currentSession && state.currentSession.player_access_status === 'ready';
         btn.style.display = (isPlayer && sessReady && !mineFork) ? '' : 'none';
       }
-      var delBtn = document.getElementById('delete-my-version-btn');
-      if (delBtn) delBtn.style.display = mineFork ? '' : 'none';
+      var verMenu = document.getElementById('session-version-menu');
+      if (verMenu) verMenu.style.display = mineFork ? '' : 'none';
       updateForkEditability();
     })
     .catch(function() {});
