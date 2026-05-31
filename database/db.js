@@ -777,14 +777,35 @@ async function getDmForkId(db, sessionId) {
 //   - another player's    -> visible only if its status is 'ready'
 // Returns the fork id to read, or null if not allowed (caller -> 403).
 async function getViewableForkId(db, sessionId, userId, requestedForkId) {
-  if (!requestedForkId) return await getDmForkId(db, sessionId);
+  // Resolve the DM (canonical) fork once, with its owner + status.
+  const dm = await db.prepare(
+    "SELECT id, user_id, player_access_status FROM session_forks WHERE session_id = ? AND role = 'dm' LIMIT 1"
+  ).get(sessionId);
+  const isDM = dm && String(dm.user_id) === String(userId);
+  // Has this caller made their OWN version of this session?
+  const own = await db.prepare(
+    "SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'"
+  ).get(sessionId, userId);
+  // The DM (canonical) version is visible to the DM always; to a player only
+  // once it is Ready, or once that player has made their own version. A DM
+  // Draft session is otherwise hidden from players entirely.
+  function dmVisible() {
+    if (!dm) return false;
+    if (isDM) return true;
+    if (dm.player_access_status === 'ready') return true;
+    if (own) return true;
+    return false;
+  }
+  if (!requestedForkId) {
+    return dmVisible() ? dm.id : null;
+  }
   const f = await db.prepare(
     'SELECT id, user_id, role, player_access_status FROM session_forks WHERE id = ? AND session_id = ?'
   ).get(requestedForkId, sessionId);
   if (!f) return null;
-  if (f.role === 'dm') return f.id;
-  if (String(f.user_id) === String(userId)) return f.id;
-  if (f.player_access_status === 'ready') return f.id;
+  if (f.role === 'dm') return dmVisible() ? f.id : null;
+  if (String(f.user_id) === String(userId)) return f.id;        // own version
+  if (f.player_access_status === 'ready') return f.id;          // another player's Ready version
   return null;
 }
 

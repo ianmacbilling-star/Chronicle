@@ -46,6 +46,15 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // each session for the session-list thumbnail. Subquery picks the
   // moment with the lowest panel_order that has an image URL set. NULL
   // if no images have been generated yet (the row just shows no thumb).
+  // Players do not see the DM's Draft sessions unless they have already
+  // made their own version of that session. The DM sees everything.
+  var visFilter = '';
+  var listParams = [req.params.campaignId];
+  if (req.campaignRole !== 'dm') {
+    visFilter = " AND ( (SELECT f.player_access_status FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm' LIMIT 1) = 'ready'" +
+      " OR EXISTS (SELECT 1 FROM session_forks fo WHERE fo.session_id = s.id AND fo.user_id = ? AND fo.role = 'player') )";
+    listParams.push(req.session.userId);
+  }
   const sessions = await db.prepare(
     'SELECT s.*, ' +
     '(SELECT m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = s.id AND f.role = \'dm\' AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
@@ -54,8 +63,8 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
     // keeping the JSON key identical (frontend session-list untouched).
     "(SELECT f.player_access_status FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm' LIMIT 1) AS player_access_status " +
     'FROM sessions s ' +
-    'WHERE s.campaign_id=? ORDER BY s.session_date ASC'
-  ).all(req.params.campaignId);
+    'WHERE s.campaign_id=?' + visFilter + ' ORDER BY s.session_date ASC'
+  ).all(...listParams);
   res.json(sessions);
 });
 
