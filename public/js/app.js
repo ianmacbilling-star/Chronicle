@@ -870,22 +870,7 @@ function selectSession(id) {
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof loadSessionForks === 'function') loadSessionForks(id);
       setTimeout(function() {
-        var transcriptEl = document.getElementById('transcript-input');
-        var notesEl = document.getElementById('session-notes-input');
-        if (transcriptEl) {
-          transcriptEl.value = data.transcript || '';
-          // Auto-save the transcript when the DM clicks away from the box.
-          transcriptEl.onblur = function() {
-            saveSessionField('transcript', transcriptEl.value.trim());
-          };
-        }
-        if (notesEl) {
-          notesEl.value = data.session_notes || '';
-          // Auto-save the notes when the DM clicks away from the box.
-          notesEl.onblur = function() {
-            saveSessionField('session_notes', notesEl.value.trim());
-          };
-        }
+        updateNotesBox(data);
       }, 50);
 
       // Update sidebar
@@ -4270,22 +4255,7 @@ function selectSession(id) {
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof loadSessionForks === 'function') loadSessionForks(id);
       setTimeout(function() {
-        var transcriptEl = document.getElementById('transcript-input');
-        var notesEl = document.getElementById('session-notes-input');
-        if (transcriptEl) {
-          transcriptEl.value = data.transcript || '';
-          // Auto-save the transcript when the DM clicks away from the box.
-          transcriptEl.onblur = function() {
-            saveSessionField('transcript', transcriptEl.value.trim());
-          };
-        }
-        if (notesEl) {
-          notesEl.value = data.session_notes || '';
-          // Auto-save the notes when the DM clicks away from the box.
-          notesEl.onblur = function() {
-            saveSessionField('session_notes', notesEl.value.trim());
-          };
-        }
+        updateNotesBox(data);
       }, 50);
 
       // Update sidebar
@@ -5854,7 +5824,7 @@ function applyRoleVisibility() {
   // Text inputs that players can SEE but shouldn't EDIT (transcript,
   // session notes). CSS can't set readonly — it's an HTML attribute —
   // so we toggle it here whenever a campaign view re-renders.
-  var readOnlyTargets = ['transcript-input', 'session-notes-input'];
+  var readOnlyTargets = ['transcript-input'];
   readOnlyTargets.forEach(function(id) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -6526,6 +6496,43 @@ function onForkChange(forkId) {
   reloadSessionForFork();
 }
 
+function updateNotesBox(data) {
+  var role = state.currentCampaign && state.currentCampaign.my_role;
+  var ownFork = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+  var notesEl = document.getElementById('session-notes-input');
+  if (notesEl) {
+    notesEl.value = state.currentForkId ? (data.fork_notes || '') : (data.session_notes || '');
+    var notesEditable = ownFork || (role === 'dm' && !state.currentForkId);
+    if (notesEditable) { notesEl.removeAttribute('readonly'); } else { notesEl.setAttribute('readonly', 'readonly'); }
+    notesEl.onblur = function() {
+      if (ownFork) { saveForkNotes(notesEl.value.trim()); }
+      else if (role === 'dm' && !state.currentForkId) { saveSessionField('session_notes', notesEl.value.trim()); }
+    };
+  }
+  var transcriptEl = document.getElementById('transcript-input');
+  if (transcriptEl) {
+    transcriptEl.value = data.transcript || '';
+    if (role === 'dm') { transcriptEl.removeAttribute('readonly'); } else { transcriptEl.setAttribute('readonly', 'readonly'); }
+    transcriptEl.onblur = function() {
+      if (role === 'dm') { saveSessionField('transcript', transcriptEl.value.trim()); }
+    };
+  }
+}
+
+function saveForkNotes(value) {
+  if (!state.currentCampaign || !state.currentSession || !state.currentForkId) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork-notes', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes: value })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function() {
+    var saved = document.getElementById('notes-saved');
+    if (saved) { saved.textContent = 'Notes saved'; saved.classList.remove('hidden'); setTimeout(function() { saved.classList.add('hidden'); }, 1800); }
+  })
+  .catch(function() {});
+}
+
 function reloadSessionForFork() {
   if (!state.currentCampaign || !state.currentSession) return;
   var sid = state.currentSession.id;
@@ -6541,6 +6548,7 @@ function reloadSessionForFork() {
       };
       if (typeof renderStoryboard === 'function') renderStoryboard();
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
+      if (typeof updateNotesBox === 'function') updateNotesBox(data);
       // Other tabs lazy-reload on click via forkQ(); storyboard is the
       // live view, so refresh it immediately.
     });

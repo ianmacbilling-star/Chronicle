@@ -68,8 +68,8 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
-  const viewForkRow = await db.prepare('SELECT player_access_status FROM session_forks WHERE id=?').get(viewForkId);
-  res.json(Object.assign({}, session, { moments, fork_id: viewForkId, fork_status: viewForkRow ? viewForkRow.player_access_status : (session.player_access_status || 'draft') }));
+  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes FROM session_forks WHERE id=?').get(viewForkId);
+  res.json(Object.assign({}, session, { moments, fork_id: viewForkId, fork_status: viewForkRow ? viewForkRow.player_access_status : (session.player_access_status || 'draft'), fork_notes: viewForkRow ? (viewForkRow.fork_notes || '') : '' }));
 });
 
 // POST create session
@@ -143,6 +143,26 @@ router.put('/:id/access-status', requireAuth, verifyCampaignMember, async functi
   }
   await db.prepare('UPDATE session_forks SET player_access_status=? WHERE id=?').run(status, targetForkId);
   res.json({ success: true, player_access_status: status });
+});
+
+// PUT a per-version notes scratchpad. The DM owns the canonical transcript
+// (DM-only elsewhere); THIS endpoint lets a player tweak the notes on their
+// OWN version without touching anyone else's.
+router.put('/:id/fork-notes', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const session = await db.prepare('SELECT id FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  let forkId;
+  if (req.campaignRole === 'dm') {
+    forkId = await getOrCreateDmFork(db, session.id, req.session.userId);
+  } else {
+    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=?').get(session.id, req.session.userId);
+    if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
+    forkId = myFork.id;
+  }
+  const notes = (req.body && typeof req.body.notes === 'string') ? req.body.notes : '';
+  await db.prepare('UPDATE session_forks SET fork_notes=?, edited_at=?, edited_by=? WHERE id=?').run(notes, new Date().toISOString(), req.session.userId, forkId);
+  res.json({ success: true });
 });
 
 // DELETE session
