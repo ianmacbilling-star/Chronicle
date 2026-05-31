@@ -3032,7 +3032,10 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
+        '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+          '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
+          '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
+        '</span>' +
       '</div>' +
       '<div class="novel-session-moments">' + momentsHtml + '</div>' +
     '</div>';
@@ -5237,7 +5240,10 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
+        '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+          '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
+          '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
+        '</span>' +
       '</div>' +
       '<div class="novel-session-moments">' + momentsHtml + '</div>' +
     '</div>';

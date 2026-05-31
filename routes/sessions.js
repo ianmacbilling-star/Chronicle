@@ -42,7 +42,8 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
-    return Object.assign({}, s, { moments });
+    const fk = await db.prepare('SELECT player_access_status FROM session_forks WHERE id = ?').get(forkId);
+    return Object.assign({}, s, { moments, fork_status: fk ? fk.player_access_status : 'draft' });
   }));
   res.json(result);
 });
