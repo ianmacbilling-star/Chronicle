@@ -966,7 +966,14 @@ function loadSessionCharacters() {
 }
 
 function renderSessionCharacters(rows) {
-  var canEdit = state.userTier && state.userTier.can_edit_prompts;
+  // Phase 4 Step 3c — amendment controls show for the DM on canonical OR a
+  // player on their OWN version. Player fork editing is free (token-metered);
+  // DM canonical editing keeps the Platinum gate.
+  var role = state.currentCampaign && state.currentCampaign.my_role;
+  var ownFork = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+  var canAct = (role === 'dm' && !state.currentForkId) || ownFork;
+  var tierOk = state.userTier && state.userTier.can_edit_prompts;
+  var canEditPrompt = canAct && (ownFork || tierOk);
   var list = document.getElementById('sc-list');
   if (!list) return;
   list.innerHTML = rows.map(function(r) {
@@ -985,23 +992,23 @@ function renderSessionCharacters(rows) {
     // screen — so the DM can adjust the moment, re-image, or un-approve.
     var acceptedChange = (r.change_status === 'accepted');
     var changeBadge = '';
-    if (pendingChange) {
-      changeBadge = '<div class="sc-change-badge dm-only" onclick="openChangeReview(' + r.character_id + ')">' +
+    if (pendingChange && canAct) {
+      changeBadge = '<div class="sc-change-badge" onclick="openChangeReview(' + r.character_id + ')">' +
         '&#9888; Change detected &mdash; review</div>';
-    } else if (acceptedChange) {
-      changeBadge = '<div class="sc-change-badge sc-change-badge-accepted dm-only" ' +
+    } else if (acceptedChange && canAct) {
+      changeBadge = '<div class="sc-change-badge sc-change-badge-accepted" ' +
         'onclick="openChangeReview(' + r.character_id + ')">' +
         '&#10003; Change applied &mdash; edit</div>';
     }
 
     var editBtn = '';
-    if (canEdit) {
-      editBtn = '<button class="btn btn-sm dm-only" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit Description</button>';
+    if (canEditPrompt) {
+      editBtn = '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit Description</button>';
       // "Amend appearance" — manually start the review flow even when the
       // AI flagged nothing. Hidden if a change is already pending/accepted
       // (the badge already opens the review screen for those).
       if (!pendingChange && !acceptedChange) {
-        editBtn += '<button class="btn btn-sm dm-only" onclick="openChangeReview(' + r.character_id + ')">' +
+        editBtn += '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">' +
           '&#10010; Amend appearance</button>';
       }
     }
@@ -6549,6 +6556,9 @@ function reloadSessionForFork() {
       if (typeof renderStoryboard === 'function') renderStoryboard();
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof updateNotesBox === 'function') updateNotesBox(data);
+      // Refresh the session-character list so amendment controls reflect
+      // the newly-selected version (editable on your own, read-only else).
+      if (typeof loadSessionCharacters === 'function') loadSessionCharacters();
       // Other tabs lazy-reload on click via forkQ(); storyboard is the
       // live view, so refresh it immediately.
     });

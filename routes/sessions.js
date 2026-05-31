@@ -7,6 +7,15 @@ const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
 
 // GET last used art style and layout style
+// Phase 4 Step 3c — resolve which version the caller is acting on: the DM
+// acts on the canonical (DM) fork; a player acts on their OWN version.
+// Returns null if a player has no version of this session yet.
+async function callerForkId(db, sessionId, userId, role) {
+  if (role === 'dm') return await getDmForkId(db, sessionId);
+  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(sessionId, userId);
+  return f ? f.id : null;
+}
+
 router.get('/last-style', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(
@@ -198,23 +207,28 @@ router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(
 });
 
 // PUT edit a session character snapshot prompt (Platinum only)
-router.put('/:id/characters/:characterId', requireAuth, verifyCampaignDM, async function(req, res) {
-  const { getTier } = require('../middleware/tiers');
+router.put('/:id/characters/:characterId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
-  const tier = getTier(user ? user.tier : 'copper');
-  if (!tier.can_edit_prompts) {
-    return res.status(403).json({ error: 'Editing session character prompts is a Platinum feature.' });
+  const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
+  if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
+  // Tier gate applies only to DM canonical editing; a player edits their
+  // own version freely (tokens are the meter for forks, not tier).
+  if (req.campaignRole === 'dm') {
+    const { getTier } = require('../middleware/tiers');
+    const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    const tier = getTier(user ? user.tier : 'copper');
+    if (!tier.can_edit_prompts) {
+      return res.status(403).json({ error: 'Editing session character prompts is a Platinum feature.' });
+    }
   }
   const { prompt } = req.body;
   if (typeof prompt !== 'string') return res.json({ error: 'Prompt required' });
 
   const now = new Date().toISOString();
-  const dmForkId = await getDmForkId(db, req.params.id);
   await db.prepare(
     'UPDATE session_characters SET prompt = ?, edited_at = ?, edited_by = ? ' +
     'WHERE fork_id = ? AND character_id = ?'
-  ).run(prompt, now, req.session.userId, dmForkId, req.params.characterId);
+  ).run(prompt, now, req.session.userId, fork, req.params.characterId);
 
   res.json({ success: true, prompt: prompt });
 });
@@ -223,7 +237,7 @@ router.put('/:id/characters/:characterId', requireAuth, verifyCampaignDM, async 
 // Body: { detail } — the (possibly edited) amended-appearance text.
 // Returns a new image URL; the DM reviews it, may regenerate again,
 // and only Approve commits it.
-router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, verifyCampaignDM, async function(req, res) {
+router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
     const sessionId = req.params.id;
@@ -233,10 +247,11 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     const ch = await db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
     if (!ch) return res.json({ error: 'Character not found' });
 
-    const dmForkId = await getDmForkId(db, sessionId);
+    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole);
+    if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
     const sc = await db.prepare(
       'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
-    ).get(dmForkId, characterId);
+    ).get(fork, characterId);
 
     const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
     if (!falKey) return res.json({ error: 'Image generation not configured.' });
@@ -261,13 +276,16 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
 
     const newUrl = await imageHelpers.editReferenceImage(falKey, baseImage, detail, ch.name, modelKey);
 
-    await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId);
+    await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId, fork);
     // Spend AFTER success — failed generation never reaches here.
     await spendTokens(req.session.userId, cost, {
       related_campaign_id: req.params.campaignId,
       source: 'amendment_reference',
       event_type: 'generation_spend'
     });
+    if (req.campaignRole === 'player') {
+      try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(req.params.campaignId, req.session.userId); } catch (e) {}
+    }
 
     // Return the draft URL — NOT saved as final until Approve.
     res.json({ success: true, image_url: newUrl });
@@ -280,7 +298,7 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
 // POST approve a pending change. Body: { detail, image_url }.
 // Locks the approved image + text into THIS session, writes the change
 // forward into all LATER sessions for this character, clears the flag.
-router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCampaignDM, async function(req, res) {
+router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
     const sessionId = req.params.id;
@@ -295,10 +313,11 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     const thisSession = await db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
     if (!thisSession) return res.json({ error: 'Session not found' });
 
-    const dmForkId = await getDmForkId(db, sessionId);
+    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole);
+    if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
     const sc = await db.prepare(
       'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
-    ).get(dmForkId, characterId);
+    ).get(fork, characterId);
     if (!sc) return res.json({ error: 'Session character not found' });
 
     // The amended text = base prompt + the approved change detail.
@@ -312,18 +331,31 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
       'UPDATE session_characters SET prompt = ?, reference_url = ?, change_note = ?, ' +
       'change_moment_index = ?, change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
       'WHERE fork_id = ? AND character_id = ?'
-    ).run(amendedText, imageUrl, detail, momentIndex, 0, 'accepted', now, req.session.userId, dmForkId, characterId);
+    ).run(amendedText, imageUrl, detail, momentIndex, 0, 'accepted', now, req.session.userId, fork, characterId);
 
     // 2. Write the change FORWARD into all later sessions for this character.
     // Self-contained sessions don't auto-chain, so propagation is explicit.
     // Propagate only to LATER sessions' DM (canonical) forks that have a
     // snapshot for this character. Player versions are never touched.
-    const laterRows = await db.prepare(
-      "SELECT sf.id AS fork_id FROM session_forks sf " +
-      "JOIN sessions s ON s.id = sf.session_id " +
-      "WHERE sf.role = 'dm' AND s.campaign_id = ? AND s.session_date > ? " +
-      "AND EXISTS (SELECT 1 FROM session_characters scx WHERE scx.fork_id = sf.id AND scx.character_id = ?)"
-    ).all(thisSession.campaign_id, thisSession.session_date, characterId);
+    // The DM's accepted change carries forward into later CANONICAL (DM)
+    // versions; a player's change carries forward only into THEIR OWN later
+    // versions. Neither ever touches the other's content.
+    let laterRows;
+    if (req.campaignRole === 'dm') {
+      laterRows = await db.prepare(
+        "SELECT sf.id AS fork_id FROM session_forks sf " +
+        "JOIN sessions s ON s.id = sf.session_id " +
+        "WHERE sf.role = 'dm' AND s.campaign_id = ? AND s.session_date > ? " +
+        "AND EXISTS (SELECT 1 FROM session_characters scx WHERE scx.fork_id = sf.id AND scx.character_id = ?)"
+      ).all(thisSession.campaign_id, thisSession.session_date, characterId);
+    } else {
+      laterRows = await db.prepare(
+        "SELECT sf.id AS fork_id FROM session_forks sf " +
+        "JOIN sessions s ON s.id = sf.session_id " +
+        "WHERE sf.user_id = ? AND s.campaign_id = ? AND s.session_date > ? " +
+        "AND EXISTS (SELECT 1 FROM session_characters scx WHERE scx.fork_id = sf.id AND scx.character_id = ?)"
+      ).all(req.session.userId, thisSession.campaign_id, thisSession.session_date, characterId);
+    }
 
     for (const row of laterRows) {
       await db.prepare(
@@ -342,15 +374,16 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
 // POST reject a pending change. Marks it 'rejected' and clears the badge.
 // The rejected detail is kept on the row so re-extraction can tell the AI
 // not to re-flag the SAME change (a genuinely different change still flags).
-router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCampaignDM, async function(req, res) {
+router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
     const now = new Date().toISOString();
-    const dmForkId = await getDmForkId(db, req.params.id);
+    const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
+    if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
     await db.prepare(
       'UPDATE session_characters SET change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
       'WHERE fork_id = ? AND character_id = ?'
-    ).run(0, 'rejected', now, req.session.userId, dmForkId, req.params.characterId);
+    ).run(0, 'rejected', now, req.session.userId, fork, req.params.characterId);
     // change_detail is intentionally left in place — re-extraction reads it.
     res.json({ success: true });
   } catch(e) {
