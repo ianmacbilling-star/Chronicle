@@ -2581,7 +2581,9 @@ function regenNarrativeSection(type, panelIndex) {
 // in place. Used after image generation so new images appear without a reload.
 function refreshStoryboardImages() {
   if (!state.currentCampaign || !state.currentSession) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id)
+  // Reload the CURRENT version's moments (forkQ keeps us on the player's own
+  // version after generation — without it we fall back to the DM canonical).
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (!data || data.error) return;
