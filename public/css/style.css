@@ -59,7 +59,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   display:flex;
   align-items:center;
   gap:12px;
-  height:56px;
+  height:44px;
   position:relative;
   z-index:50;
   border-bottom:1px solid rgba(201,168,76,0.15);
@@ -80,12 +80,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   text-shadow:0 0 20px rgba(201,168,76,0.3);
 }
 .app-header-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.app-header-right > .btn,.app-header-right > #token-balance-label{height:30px;}
 
 /* USER MENU */
 .user-menu-wrap{position:relative;}
-.user-menu-btn{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--radius);cursor:pointer;border:1px solid rgba(201,168,76,0.2);background:rgba(255,255,255,0.05);color:rgba(201,168,76,0.8);font-size:13px;transition:all 0.15s;}
+.user-menu-btn{display:flex;align-items:center;gap:8px;padding:0 10px;height:30px;border-radius:var(--radius);cursor:pointer;border:1px solid rgba(201,168,76,0.2);background:rgba(255,255,255,0.05);color:rgba(201,168,76,0.8);font-size:13px;transition:all 0.15s;}
 .user-menu-btn:hover{background:rgba(255,255,255,0.1);border-color:rgba(201,168,76,0.4);}
-.user-avatar{width:28px;height:28px;border-radius:50%;background:var(--gold);color:var(--ink);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--font-display);}
+.user-avatar{width:22px;height:22px;border-radius:50%;background:var(--gold);color:var(--ink);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--font-display);}
 .user-menu-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--ink);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);box-shadow:0 8px 24px rgba(0,0,0,0.5);min-width:190px;overflow:hidden;display:none;z-index:100;}
 .user-menu-dropdown.open{display:block;}
 .user-menu-item{padding:10px 14px;font-size:13px;color:var(--gold-light);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background 0.1s;}
@@ -103,7 +104,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .breadcrumb-current{color:var(--gold-light);font-weight:500;}
 
 /* LAYOUT */
-.app-layout{display:flex;min-height:calc(100vh - 56px - 35px);}
+.app-layout{display:flex;min-height:calc(100vh - 44px - 35px);}
 .sidebar{width:220px;background:rgba(20,15,8,0.82);border-right:1px solid rgba(201,168,76,0.15);flex-shrink:0;padding:12px 0;backdrop-filter:blur(8px);}
 .sidebar-section{margin-bottom:4px;}
 .sidebar-label{font-size:10px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.1em;padding:0 14px;margin-bottom:3px;margin-top:10px;font-family:var(--font-display);}
@@ -115,7 +116,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* ===== CAMPAIGNS VIEW — epic background ===== */
 #view-campaigns{
-  min-height:calc(100vh - 56px - 35px);
+  min-height:calc(100vh - 44px - 35px);
   background:#0a0806;
   background-image:url('/images/Chronicle_background.png');
   background-size:cover;
@@ -157,7 +158,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #view-sessions,#view-characters,#view-novel,
 #view-session-detail,#view-settings{
   background:rgba(12,8,4,0.72);
-  min-height:calc(100vh - 56px - 35px);
+  min-height:calc(100vh - 44px - 35px);
   backdrop-filter:blur(10px);
 }
 #view-sessions .page-title,#view-characters .page-title,
