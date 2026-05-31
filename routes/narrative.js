@@ -1,7 +1,15 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getDmForkId } = require('../database/db');
-const { requireAuth } = require('../middleware/auth');
+const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('../database/db');
+const { requireAuth, getCampaignRole } = require('../middleware/auth');
+
+// Phase 4 — resolve the caller's version: DM -> canonical (DM fork);
+// player -> their own version (null if they have none).
+async function callerForkId(db, sessionId, userId, role) {
+  if (role === 'dm') return await getOrCreateDmFork(db, sessionId, userId);
+  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(sessionId, userId);
+  return f ? f.id : null;
+}
 
 // ============================================================
 // GENERATE narrative prose for a session
@@ -13,17 +21,23 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
   const db = await getDb();
 
-  // Verify ownership and get session
+  // Verify membership and get session
   const session = await db.prepare(
-    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
+    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
   if (!session.transcript) return res.json({ error: 'No transcript found. Please add a transcript first.' });
 
-  // Get moments in order
-  const dmForkId = await getDmForkId(db, session.id);
-  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
+  // Phase 4 — the DM generates the canonical narrative; a player generates
+  // their OWN version's narrative. Each writes only to its own fork row.
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  // Get moments in order (from the caller's version)
+  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
 
   // Get campaign and characters
@@ -144,7 +158,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     // after_summary; intro/outro summaries get their own columns.
     const now = new Date().toISOString();
     await db.prepare(
-      'UPDATE sessions SET narrative_intro=?, narrative_intro_summary=?, ' +
+      'UPDATE session_forks SET narrative_intro=?, narrative_intro_summary=?, ' +
       'narrative_sections=?, narrative_outro=?, narrative_outro_summary=?, ' +
       'edited_at=?, edited_by=? WHERE id=?'
     ).run(
@@ -153,7 +167,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       JSON.stringify(parsed.sections || []),
       parsed.outro || '',
       parsed.outro_summary || '',
-      now, req.session.userId, session.id
+      now, req.session.userId, targetForkId
     );
 
     res.json({
@@ -177,19 +191,24 @@ router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res)
 
   const db = await getDb();
   const session = await db.prepare(
-    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
+    'SELECT s.* FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
 
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
   const now = new Date().toISOString();
   await db.prepare(
-    'UPDATE sessions SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
+    'UPDATE session_forks SET narrative_intro=?, narrative_sections=?, narrative_outro=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
     intro || '',
     JSON.stringify(sections || []),
     outro || '',
-    now, req.session.userId, session.id
+    now, req.session.userId, targetForkId
   );
 
   res.json({ success: true });
@@ -212,10 +231,16 @@ router.get('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
 
+  // Read the narrative from the VIEWED version (DM canonical by default, or
+  // a ?fork_id= the caller is allowed to see).
+  const viewForkId = await getViewableForkId(db, session.id, req.session.userId, req.query.fork_id);
+  if (!viewForkId) return res.status(403).json({ error: 'Access denied' });
+  const fk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(viewForkId);
+
   res.json({
-    intro: session.narrative_intro || '',
-    sections: session.narrative_sections ? JSON.parse(session.narrative_sections) : [],
-    outro: session.narrative_outro || ''
+    intro: fk && fk.narrative_intro ? fk.narrative_intro : '',
+    sections: fk && fk.narrative_sections ? JSON.parse(fk.narrative_sections) : [],
+    outro: fk && fk.narrative_outro ? fk.narrative_outro : ''
   });
 });
 

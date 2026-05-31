@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange } = require('../middleware/tiers');
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
 
@@ -12,13 +12,30 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   const db = await getDb();
 
-  // Verify ownership
+  // Verify membership (any member can load; the fork resolution below
+  // decides what they may write to).
   const session = await db.prepare(
-    'SELECT s.*, c.art_style as campaign_style FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
+    'SELECT s.*, c.art_style as campaign_style FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
   if (!session.transcript) return res.json({ error: 'No transcript found for this session' });
+
+  // Phase 4 — the DM re-extracts the CANONICAL version; a player re-extracts
+  // THEIR OWN version. The transcript is always the DM's (read-only to the
+  // player); the notes that steer extraction are the caller's own (the DM's
+  // session notes, or the player's per-version fork notes).
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  let targetForkId;
+  if (callerRole === 'dm') {
+    targetForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
+  } else {
+    const myFork = await db.prepare('SELECT id, fork_notes FROM session_forks WHERE session_id = ? AND user_id = ?').get(session.id, req.session.userId);
+    if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
+    targetForkId = myFork.id;
+    session.session_notes = myFork.fork_notes || '';
+  }
 
   // Get characters for this campaign
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
@@ -111,14 +128,17 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
     // Auto-save moments to database
     if (parsed.moments && parsed.moments.length) {
-      // Step 1 (Phase 4) — regenerate replaces only the DM fork's moments.
-      const dmForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
+      // Phase 4 — regenerate replaces only the CALLER's version's moments.
+      const dmForkId = targetForkId;
       await db.prepare('DELETE FROM moments WHERE fork_id = ?').run(dmForkId);
       const now = new Date().toISOString();
 
-      // Save the art style used so future sessions can inherit it
-      await db.prepare('UPDATE sessions SET art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-        .run(style, now, req.session.userId, session.id);
+      // Save the art style used so future sessions can inherit it (canonical
+      // session field is DM-owned; a player's style choice stays on their fork).
+      if (callerRole === 'dm') {
+        await db.prepare('UPDATE sessions SET art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+          .run(style, now, req.session.userId, session.id);
+      }
 
       const insert = await db.prepare(
         'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -131,14 +151,14 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now, dmForkId);
 
       // Stage 3: scan for major permanent changes and flag them for review.
-      await detectCharacterChanges(db, session, req.params.campaignId, key, now);
+      await detectCharacterChanges(db, session, req.params.campaignId, key, now, targetForkId);
     }
 
     // Tell the frontend whether any character changes need review, so it
     // can route to the Characters tab instead of the Storyboard tab.
     let pendingChanges = 0;
     try {
-      const pcForkId = await getDmForkId(db, req.params.sessionId);
+      const pcForkId = targetForkId;
       const pc = await db.prepare(
         "SELECT COUNT(*) AS c FROM session_characters WHERE fork_id = ? AND change_status = 'pending'"
       ).get(pcForkId);
@@ -242,7 +262,7 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now, f
 // Dedicated AI call: scan the transcript for MAJOR PERMANENT physical
 // changes to known characters. Flags the session_characters row.
 // Conservative — temporary states (Long Rest, bloodied, etc) are ignored.
-async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
+async function detectCharacterChanges(db, session, campaignId, apiKey, now, forkId) {
   try {
     if (!apiKey) return;
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaignId);
@@ -259,7 +279,7 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now) {
     // entirely (settled). Characters whose change is REJECTED stay in the
     // scan, but we pass the rejected detail to the AI so it won't re-flag
     // the SAME change (a genuinely different change still flags).
-    const ddForkId = await getDmForkId(db, session.id);
+    const ddForkId = forkId || await getDmForkId(db, session.id);
     const decidedRows = await db.prepare(
       "SELECT character_id, change_status, change_detail FROM session_characters " +
       "WHERE fork_id = ? AND change_status IN ('accepted','rejected')"

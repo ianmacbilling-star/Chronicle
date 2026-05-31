@@ -2336,16 +2336,24 @@ function extractMoments() {
     }
   }
 
-  // Auto save notes AND transcript
+  // Auto-save before extracting: the DM persists transcript + canonical
+  // notes; a player persists only their OWN version's notes (the transcript
+  // is DM-owned and read-only to players).
   var notesVal = document.getElementById('session-notes-input');
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      transcript: transcript,
-      session_notes: notesVal ? notesVal.value.trim() : ''
-    })
-  });
+  var _role = state.currentCampaign && state.currentCampaign.my_role;
+  var _ownFork = (_role === 'player') && state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId);
+  if (_ownFork) {
+    if (typeof saveForkNotes === 'function') saveForkNotes(notesVal ? notesVal.value.trim() : '');
+  } else if (_role === 'dm' && !state.currentForkId) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        transcript: transcript,
+        session_notes: notesVal ? notesVal.value.trim() : ''
+      })
+    });
+  }
 
   var btn = document.getElementById('extract-btn');
   var wrap = document.getElementById('progress-wrap');
@@ -4537,16 +4545,24 @@ function extractMoments() {
     }
   }
 
-  // Auto save notes AND transcript
+  // Auto-save before extracting: the DM persists transcript + canonical
+  // notes; a player persists only their OWN version's notes (the transcript
+  // is DM-owned and read-only to players).
   var notesVal = document.getElementById('session-notes-input');
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      transcript: transcript,
-      session_notes: notesVal ? notesVal.value.trim() : ''
-    })
-  });
+  var _role = state.currentCampaign && state.currentCampaign.my_role;
+  var _ownFork = (_role === 'player') && state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId);
+  if (_ownFork) {
+    if (typeof saveForkNotes === 'function') saveForkNotes(notesVal ? notesVal.value.trim() : '');
+  } else if (_role === 'dm' && !state.currentForkId) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        transcript: transcript,
+        session_notes: notesVal ? notesVal.value.trim() : ''
+      })
+    });
+  }
 
   var btn = document.getElementById('extract-btn');
   var wrap = document.getElementById('progress-wrap');

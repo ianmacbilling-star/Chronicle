@@ -1201,6 +1201,7 @@ body.role-player.can-edit-fork .moment-regen-btn { display: inline-block !import
    "Generate all images" (Storyboard tab). Backend infers their fork. */
 body.role-player.can-edit-fork #review-generate-btn,
 body.role-player.can-edit-fork #generate-all-btn { display: inline-block !important; }
+body.role-player.can-edit-fork #extract-btn { display: inline-block !important; }
 
 /* ============================================================
    PHASE 3 DEPLOY 2 — Members tab styles

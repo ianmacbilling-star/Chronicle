@@ -773,10 +773,12 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
+    // Phase 4 — narrative lives on the fork now; read the DM (canonical) fork.
+    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(dmForkId);
     const narrative = {
-      intro: session.narrative_intro || '',
-      sections: session.narrative_sections ? JSON.parse(session.narrative_sections) : [],
-      outro: session.narrative_outro || '',
+      intro: nfk && nfk.narrative_intro ? nfk.narrative_intro : '',
+      sections: nfk && nfk.narrative_sections ? JSON.parse(nfk.narrative_sections) : [],
+      outro: nfk && nfk.narrative_outro ? nfk.narrative_outro : '',
       layout_style: req.query.layout || session.layout_style || 'Classic'
     };
 
@@ -818,7 +820,15 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const sessionsWithData = await Promise.all(sessions.map(async function(s) {
     const dmForkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
-    return Object.assign({}, s, { moments: moments });
+    // Phase 4 — narrative lives on the fork; pull the DM fork's so the book
+    // renders the canonical story (s.narrative_* on the session row is stale).
+    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(dmForkId);
+    return Object.assign({}, s, {
+      moments: moments,
+      narrative_intro: nfk ? (nfk.narrative_intro || '') : '',
+      narrative_sections: nfk ? (nfk.narrative_sections || null) : null,
+      narrative_outro: nfk ? (nfk.narrative_outro || '') : ''
+    });
   }));
 
   const layoutStyle = req.query.layout || 'Classic';
