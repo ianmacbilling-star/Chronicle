@@ -42,7 +42,7 @@ router.put('/:momentId', requireAuth, verifyCampaignMember, async function(req, 
   if (!moment) return res.status(404).json({ error: 'Moment not found' });
   const isDM = req.campaignRole === 'dm';
   const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
-  if (!isDM && !ownsThisFork) return res.status(403).json({ error: 'You can only edit your own version' });
+  if (!ownsThisFork) return res.status(403).json({ error: 'You can only edit your own version' });
   // Tier gate applies only to DM canonical editing.
   if (isDM) {
     const { getTier } = require('../middleware/tiers');

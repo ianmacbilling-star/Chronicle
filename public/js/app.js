@@ -6483,6 +6483,12 @@ function updateForkEditability() {
   var role = state.currentCampaign && state.currentCampaign.my_role;
   var canEdit = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
   document.body.classList.toggle('can-edit-fork', !!canEdit);
+  // Can the viewer edit the CURRENTLY shown fork? DM may edit only canonical
+  // (no currentForkId); a player only their own version. Any other view
+  // (e.g. DM looking at a player's version) is read-only.
+  var canEditCurrent = (role === 'dm') ? !state.currentForkId
+    : !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+  document.body.classList.toggle('viewing-foreign-fork', !canEditCurrent);
 }
 
 function forkQ() {

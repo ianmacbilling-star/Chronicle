@@ -455,7 +455,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   const myRole = await getCampaignRole(req.session.userId, moment.campaign_id);
   if (!myRole) return res.status(403).json({ error: 'Access denied' });
   const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
-  if (myRole !== 'dm' && !ownsThisFork) return res.status(403).json({ error: 'You can only regenerate your own version' });
+  if (!ownsThisFork) return res.status(403).json({ error: 'You can only regenerate your own version' });
 
   try {
     // Get characters for this campaign for consistency
@@ -536,7 +536,8 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!myRole) return res.status(403).json({ error: 'Access denied' });
   let targetForkId;
   if (myRole === 'dm') {
-    targetForkId = req.body.fork_id ? Number(req.body.fork_id) : await getDmForkId(db, session_id);
+    // DM always generates into the canonical (DM) fork - never a player's version.
+    targetForkId = await getDmForkId(db, session_id);
   } else {
     const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(session_id, req.session.userId);
     if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
