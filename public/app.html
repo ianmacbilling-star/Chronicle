@@ -123,7 +123,15 @@
     <div id="view-novel" class="view" style="display:none;">
       <div class="page-header">
         <div>
-          <div class="page-title">Graphic Novel</div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div class="page-title">Graphic Novel</div>
+            <!-- Version picker: the Story Master can assemble & export any
+                 player's novel (their versions per session, canonical where none). -->
+            <div id="novel-version-row" style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:12px;color:rgba(201,168,76,0.7);">Generating novel for:</span>
+              <select id="novel-version-select" class="form-input" style="max-width:260px;height:30px;width:auto;flex:0 0 auto;font-size:11px;padding:0 10px;" onchange="onNovelVersionChange(this.value)"></select>
+            </div>
+          </div>
           <div class="page-subtitle">Your complete campaign story</div>
         </div>
         <div class="flex gap-1">
@@ -131,13 +139,6 @@
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
         </div>
-      </div>
-
-      <!-- Version picker: the Story Master can assemble & export any player's
-           novel (their versions per session, canonical where they have none). -->
-      <div id="novel-version-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-        <span style="font-size:12px;color:rgba(201,168,76,0.7);">Generating novel for:</span>
-        <select id="novel-version-select" class="form-input" style="max-width:260px;height:30px;width:auto;flex:0 0 auto;" onchange="onNovelVersionChange(this.value)"></select>
       </div>
 
       <!-- Novel tabs -->
