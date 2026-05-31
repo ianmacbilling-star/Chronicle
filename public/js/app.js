@@ -6489,6 +6489,27 @@ function forkQ() {
   return state.currentForkId ? ('?fork_id=' + encodeURIComponent(state.currentForkId)) : '';
 }
 
+// Phase 4 — swap the faint background "ghost" to the character owned by the
+// person whose version is being viewed. Nothing for the DM canonical.
+function updateForkBackground() {
+  var ghost = document.getElementById('fork-bg-ghost');
+  if (!ghost) return;
+  var forks = state.sessionForks || [];
+  var cur;
+  if (state.currentForkId) {
+    cur = forks.filter(function(f) { return String(f.fork_id) === String(state.currentForkId); })[0];
+  } else {
+    cur = forks.filter(function(f) { return f.role === 'dm'; })[0];
+  }
+  var img = (cur && cur.role !== 'dm') ? cur.owner_character_image : null;
+  if (img) {
+    ghost.style.backgroundImage = 'url("' + img + '")';
+    ghost.classList.add('show');
+  } else {
+    ghost.classList.remove('show');
+  }
+}
+
 function loadSessionForks(sessionId) {
   if (!state.currentCampaign) return;
   var sel = document.getElementById('session-fork-select');
@@ -6522,6 +6543,7 @@ function loadSessionForks(sessionId) {
       var verMenu = document.getElementById('session-version-menu');
       if (verMenu) verMenu.style.display = mineFork ? '' : 'none';
       updateForkEditability();
+      updateForkBackground();
     })
     .catch(function() {});
 }
@@ -6531,6 +6553,7 @@ function onForkChange(forkId) {
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
   updateForkEditability();
+  updateForkBackground();
   reloadSessionForFork();
 }
 

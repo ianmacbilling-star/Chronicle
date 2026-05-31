@@ -256,6 +256,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   gap:16px;flex-wrap:wrap;margin-bottom:6px;}
 .session-detail-date{max-width:150px;font-size:10px;padding:0 8px;}
 .main-content > div#view-session-detail{padding-top:0.75rem;}
+#view-session-detail{position:relative;}
+#fork-bg-ghost{position:absolute;inset:0;z-index:-1;pointer-events:none;background-repeat:no-repeat;background-position:center top;background-size:cover;opacity:0;transition:opacity .4s ease;filter:blur(2px) saturate(0.85);}
+#fork-bg-ghost.show{opacity:0.10;}
 .sdh-left{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;}
 .sdh-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;}
 .session-detail-head .form-input{height:30px;box-sizing:border-box;padding-top:0;padding-bottom:0;width:auto;flex:0 0 auto;}

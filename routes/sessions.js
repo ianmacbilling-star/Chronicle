@@ -541,10 +541,14 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
   const db = await getDb();
   const me = req.session.userId;
   const rows = await db.prepare(
-    "SELECT sf.id, sf.user_id, sf.role, sf.player_access_status, u.name AS user_name, u.email AS user_email " +
+    "SELECT sf.id, sf.user_id, sf.role, sf.player_access_status, u.name AS user_name, u.email AS user_email, " +
+    "CASE WHEN sf.role = 'player' THEN (SELECT COALESCE(c.canonical_reference_url, c.image_fullbody, c.image_portrait, c.image) " +
+    "FROM characters c WHERE c.owner_user_id = sf.user_id AND c.campaign_id = ? " +
+    "AND COALESCE(c.canonical_reference_url, c.image_fullbody, c.image_portrait, c.image) IS NOT NULL " +
+    "ORDER BY c.id ASC LIMIT 1) ELSE NULL END AS owner_character_image " +
     "FROM session_forks sf JOIN users u ON u.id = sf.user_id " +
     "WHERE sf.session_id = ? ORDER BY (sf.role = 'dm') DESC, sf.created_at ASC"
-  ).all(req.params.id);
+  ).all(req.params.campaignId, req.params.id);
   const visible = rows.filter(function(f) {
     return f.role === 'dm' || String(f.user_id) === String(me) || f.player_access_status === 'ready';
   }).map(function(f) {
@@ -554,6 +558,7 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
       role: f.role,
       status: f.player_access_status,
       is_mine: mine,
+      owner_character_image: f.owner_character_image,
       label: f.role === 'dm' ? 'Story Master \u2014 Canonical' : (mine ? 'You (your version)' : (f.user_name || f.user_email || 'Player'))
     };
   });
