@@ -30,13 +30,35 @@ router.get('/last-style', requireAuth, verifyCampaignMember, async function(req,
 // GET novel/all - must come before /:id
 router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
+  // The DM may assemble a player's novel via ?as_user=<userId>; for any
+  // session that player hasn't versioned, fall back to the DM canonical fork.
+  const asUser = (req.campaignRole === 'dm' && req.query.as_user) ? Number(req.query.as_user) : null;
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   const result = await Promise.all(sessions.map(async function(s) {
-    const dmForkId = await getDmForkId(db, s.id);
-    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(dmForkId);
+    let forkId = null;
+    if (asUser) {
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      if (pf) forkId = pf.id;
+    }
+    if (!forkId) forkId = await getDmForkId(db, s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
     return Object.assign({}, s, { moments });
   }));
   res.json(result);
+});
+
+// GET novel/people - the Story Master + any players who have at least one
+// version, for the Graphic Novel page's person picker. Must come before /:id.
+router.get('/novel/people', requireAuth, verifyCampaignDM, async function(req, res) {
+  const db = await getDb();
+  const rows = await db.prepare(
+    "SELECT u.id AS user_id, u.name, u.email, cm.role, " +
+    "EXISTS(SELECT 1 FROM session_forks sf JOIN sessions s ON s.id = sf.session_id " +
+    "WHERE s.campaign_id = ? AND sf.user_id = u.id AND sf.role = 'player') AS has_version " +
+    "FROM campaign_members cm JOIN users u ON u.id = cm.user_id " +
+    "WHERE cm.campaign_id = ? ORDER BY (cm.role = 'dm') DESC, u.name ASC"
+  ).all(req.params.campaignId, req.params.campaignId);
+  res.json(rows);
 });
 
 // GET all sessions

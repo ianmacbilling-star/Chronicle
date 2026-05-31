@@ -571,7 +571,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') loadNovelSummary();
+  if (section === 'novel') { loadNovelPeople(); loadNovelSummary(); }
   if (section === 'assets') loadAssets();
   if (section === 'members') loadMembersTab();
 
@@ -2744,6 +2744,46 @@ function selNovelLayout(el, layout) {
   loadNovelPreview(layout);
 }
 
+// Phase 4 - the Story Master can produce a player's graphic novel (the player
+// cannot export their own across-sessions book). state.novelAsUser is the
+// chosen person's user id, or null for the Story Master's own canonical book.
+function novelAsUserQ(prefix) {
+  return state.novelAsUser ? (prefix + 'as_user=' + encodeURIComponent(state.novelAsUser)) : '';
+}
+
+function loadNovelPeople() {
+  var sel = document.getElementById('novel-version-select');
+  if (!sel) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/people')
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      // Default to the Story Master's canonical book on entry.
+      state.novelAsUser = null;
+      var opts = '<option value="">Story Master \u2014 Canonical</option>';
+      rows.forEach(function(p) {
+        var hasV = (p.has_version === true || p.has_version === 1 || p.has_version === '1' || p.has_version === 't');
+        if (p.role === 'player' && hasV) {
+          var label = (p.name || p.email || 'Player') + '\u2019s version';
+          opts += '<option value="' + p.user_id + '">' + label + '</option>';
+        }
+      });
+      sel.innerHTML = opts;
+      sel.value = '';
+    })
+    .catch(function(){});
+}
+
+function onNovelVersionChange(val) {
+  state.novelAsUser = val || null;
+  loadNovelSummary();
+  var prev = document.getElementById('novel-tab-preview');
+  if (prev && prev.style.display !== 'none') {
+    if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
+    loadNovelPreview(novelLayoutStyle);
+  }
+}
+
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
@@ -2756,7 +2796,7 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle);
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
@@ -2933,13 +2973,13 @@ function previewNovelPDF() {
 }
 
 function exportNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle);
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
   var win = window.open(url, '_blank');
   setTimeout(function() { if (win) win.print(); }, 5000);
 }
 
 function loadNovelSummary() {
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all' + novelAsUserQ('?'))
     .then(function(r) { return r.json(); })
     .then(function(data) {
       // Sort ascending by date (oldest first) using a normalized YYYY-MM-DD key
@@ -3003,7 +3043,7 @@ function renderNovelSummary(sessions) {
 }
 
 function showNovelPreview() {
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all' + novelAsUserQ('?'))
     .then(function(r) { return r.json(); })
     .then(function(data) { renderNovelPreview(Array.isArray(data) ? data : []); });
 }
@@ -3985,7 +4025,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') loadNovelSummary();
+  if (section === 'novel') { loadNovelPeople(); loadNovelSummary(); }
   if (section === 'assets') loadAssets();
   if (section === 'members') loadMembersTab();
 
@@ -4961,7 +5001,7 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle);
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
@@ -5138,13 +5178,13 @@ function previewNovelPDF() {
 }
 
 function exportNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle);
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
   var win = window.open(url, '_blank');
   setTimeout(function() { if (win) win.print(); }, 5000);
 }
 
 function loadNovelSummary() {
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all' + novelAsUserQ('?'))
     .then(function(r) { return r.json(); })
     .then(function(data) {
       // Sort ascending by date (oldest first) using a normalized YYYY-MM-DD key
@@ -5208,7 +5248,7 @@ function renderNovelSummary(sessions) {
 }
 
 function showNovelPreview() {
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all')
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all' + novelAsUserQ('?'))
     .then(function(r) { return r.json(); })
     .then(function(data) { renderNovelPreview(Array.isArray(data) ? data : []); });
 }

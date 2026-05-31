@@ -820,13 +820,20 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     return sessionDateKey(a).localeCompare(sessionDateKey(b));
   });
 
+  // Optional: assemble a specific player's book (?as_user=). For any session
+  // the player hasn't versioned, fall back to the DM canonical fork.
+  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   // Load moments and narrative for each session
   const sessionsWithData = await Promise.all(sessions.map(async function(s) {
-    const dmForkId = await getDmForkId(db, s.id);
-    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(dmForkId);
-    // Phase 4 — narrative lives on the fork; pull the DM fork's so the book
-    // renders the canonical story (s.narrative_* on the session row is stale).
-    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(dmForkId);
+    let forkId = null;
+    if (asUser) {
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      if (pf) forkId = pf.id;
+    }
+    if (!forkId) forkId = await getDmForkId(db, s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
+    // Narrative lives on the fork; pull the resolved version's.
+    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
     return Object.assign({}, s, {
       moments: moments,
       narrative_intro: nfk ? (nfk.narrative_intro || '') : '',

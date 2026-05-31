@@ -133,6 +133,13 @@
         </div>
       </div>
 
+      <!-- Version picker: the Story Master can assemble & export any player's
+           novel (their versions per session, canonical where they have none). -->
+      <div id="novel-version-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <span style="font-size:12px;color:rgba(201,168,76,0.7);">Generating novel for:</span>
+        <select id="novel-version-select" class="form-input" style="max-width:260px;height:30px;width:auto;flex:0 0 auto;" onchange="onNovelVersionChange(this.value)"></select>
+      </div>
+
       <!-- Novel tabs -->
       <div class="sess-tabs" style="margin-bottom:16px;">
         <div class="sess-tab active" id="ntab-sessions" onclick="switchNovelTab('sessions')">&#128203; Sessions</div>
