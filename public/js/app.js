@@ -6573,7 +6573,18 @@ function loadSessionForks(sessionId) {
       }
       var verMenu = document.getElementById('session-version-menu');
       if (verMenu) verMenu.style.display = mineFork ? '' : 'none';
+      // Phase 4 - default a player onto their OWN version of this session
+      // when they have one. The Story Master (and players with no version)
+      // stay on the canonical. Only applies on a fresh load (currentForkId
+      // not yet chosen); an explicit dropdown pick goes through onForkChange.
+      var _defaultedToOwn = false;
+      if (!state.currentForkId && mineFork && mineFork.role !== 'dm') {
+        state.currentForkId = mineFork.fork_id;
+        if (sel) sel.value = String(mineFork.fork_id);
+        _defaultedToOwn = true;
+      }
       updateForkEditability();
+      if (_defaultedToOwn && typeof reloadSessionForFork === 'function') reloadSessionForFork();
     })
     .catch(function() {});
 }
