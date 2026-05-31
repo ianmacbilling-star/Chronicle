@@ -6590,6 +6590,12 @@ function reloadSessionForFork() {
       // Refresh the session-character list so amendment controls reflect
       // the newly-selected version (editable on your own, read-only else).
       if (typeof loadSessionCharacters === 'function') loadSessionCharacters();
+      // If the Publish/Preview tab is open, re-render the preview for the
+      // newly-selected version (it reads fork_id from state.currentForkId).
+      var _exp = document.getElementById('session-tab-export');
+      if (_exp && _exp.style.display !== 'none' && typeof loadPreview === 'function') {
+        loadPreview(state.layoutStyle || 'Classic');
+      }
       // Other tabs lazy-reload on click via forkQ(); storyboard is the
       // live view, so refresh it immediately.
     });

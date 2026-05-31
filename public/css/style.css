@@ -1202,7 +1202,9 @@ body.role-player.can-edit-fork .moment-regen-btn { display: inline-block !import
 body.role-player.can-edit-fork #review-generate-btn,
 body.role-player.can-edit-fork #generate-all-btn { display: inline-block !important; }
 body.role-player.can-edit-fork #extract-btn { display: inline-block !important; }
-body.role-player.can-edit-fork #stab-export { display: block !important; }
+/* Publish/Preview is a READ capability — a player may preview any version
+   they can see (canonical, their own, or another player's Ready version). */
+body.role-player #stab-export { display: block !important; }
 
 /* ============================================================
    PHASE 3 DEPLOY 2 — Members tab styles
