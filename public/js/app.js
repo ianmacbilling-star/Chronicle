@@ -3859,7 +3859,7 @@ function renderStoryboard() {
       : '';
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + lockBtn + archiveBtn + regenBtn +
+        imgHtml + '<div class="panel-img-tl">' + lockBtn + archiveBtn + '</div>' + regenBtn +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
