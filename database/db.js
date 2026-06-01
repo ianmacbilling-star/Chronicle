@@ -309,6 +309,7 @@ async function initPostgres() {
     // Image locking — a locked storyboard moment is skipped by generate-all
     // and blocks Generate Story (re-extract) for its version. Per-fork.
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS locked INTEGER DEFAULT 0',
+    'ALTER TABLE moments ADD COLUMN IF NOT EXISTS style TEXT',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -791,6 +792,7 @@ async function migrateArchives(pool) {
   // source_url = the ORIGINAL image URL that was archived (the archived copy
   // lives in image_url). Lets the chest reflect whether THIS image is saved.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS source_url TEXT');
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS art_style TEXT');
 }
 
 // getOrCreateDmFork: returns the id of the session's DM fork, creating

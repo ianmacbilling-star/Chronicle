@@ -505,8 +505,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const imageUrl = await generateImage(prompt, style, fal_key, panelBlock, randomSeed, modelKey);
     const now = new Date().toISOString();
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
-    await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(imageUrl, now, req.session.userId, moment_id);
+    await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(imageUrl, style || null, now, req.session.userId, moment_id);
     if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
     await logImageGeneration(db, req.session.userId, 'moment', moment_id, moment.fork_id);
     // Spend AFTER success — failed generations never reach here.
@@ -621,8 +621,8 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         const imageUrl = await generateImage(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey);
         const now = new Date().toISOString();
         const prevImg = m.image;
-        await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-          .run(imageUrl, now, req.session.userId, m.id);
+        await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+          .run(imageUrl, style || null, now, req.session.userId, m.id);
         if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
         return { moment_id: m.id, image_url: imageUrl, success: true };
       } catch(e) {

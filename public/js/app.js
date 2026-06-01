@@ -3793,6 +3793,7 @@ function getFilteredArchives() {
   if (f.moment) rows = rows.filter(function(a){ return String(a.moment_id) === String(f.moment); });
   if (f.creator) rows = rows.filter(function(a){ return String(a.archived_by) === String(f.creator); });
   if (f.type) rows = rows.filter(function(a){ return a.image_type === f.type; });
+  if (f.style) rows = rows.filter(function(a){ return String(a.art_style) === String(f.style); });
   rows.sort(function(a,b){
     var ta = new Date(a.created_at || 0).getTime();
     var tb = new Date(b.created_at || 0).getTime();
@@ -3805,17 +3806,18 @@ function renderArchiveFilters() {
   var host = document.getElementById('archives-filters');
   if (!host) return;
   var rows = state.archives || [];
-  if (!state.archiveFilters) state.archiveFilters = { session:'', moment:'', creator:'', type:'', sort:'newest' };
+  if (!state.archiveFilters) state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', sort:'newest' };
   var f = state.archiveFilters;
-  var sessions = {}, moments = {}, creators = {};
+  var sessions = {}, moments = {}, creators = {}, styles = {};
   rows.forEach(function(a){
     if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
     if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
     if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
+    if (a.art_style) styles[a.art_style] = a.art_style;
   });
   function opts(map, sel) {
     return Object.keys(map).map(function(k){
-      return '<option value="' + k + '"' + (String(sel) === String(k) ? ' selected' : '') + '>' + escapeHtml(map[k]) + '</option>';
+      return '<option value="' + escapeHtml(k) + '"' + (String(sel) === String(k) ? ' selected' : '') + '>' + escapeHtml(map[k]) + '</option>';
     }).join('');
   }
   host.innerHTML =
@@ -3825,9 +3827,16 @@ function renderArchiveFilters() {
     '<select class="archive-filter" onchange="setArchiveFilter(\'type\', this.value)"><option value="">All types</option>' +
       '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
       '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option></select>' +
+    '<select class="archive-filter" onchange="setArchiveFilter(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'sort\', this.value)">' +
       '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
-      '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>';
+      '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>' +
+    '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>';
+}
+
+function clearArchiveFilters() {
+  state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', sort:'newest' };
+  renderArchives();
 }
 
 function viewArchivePrompt(id) {
@@ -3881,6 +3890,7 @@ function renderArchives() {
     if (a.session_title) meta += '<div class="archive-row"><span>Session</span><b>' + escapeHtml(a.session_title) + '</b></div>';
     if (ver) meta += '<div class="archive-row"><span>Version</span><b>' + escapeHtml(ver) + '</b></div>';
     if (mom) meta += '<div class="archive-row"><span>Moment</span><b>' + escapeHtml(mom) + '</b></div>';
+    if (a.art_style) meta += '<div class="archive-row"><span>Style</span><b>' + escapeHtml(a.art_style) + '</b></div>';
     if (a.character_name) meta += '<div class="archive-row"><span>Character</span><b>' + escapeHtml(a.character_name) + '</b></div>';
     meta += '<div class="archive-row"><span>Archived by</span><b>' + escapeHtml(a.archived_by_name || 'someone') + (when ? ' &middot; ' + when : '') + '</b></div>';
     var promptBtn = a.image_prompt ? '<button class="archive-prompt-btn" onclick="viewArchivePrompt(' + a.id + ')" title="View the prompt for this image">&#128196; View Prompt</button>' : '';
