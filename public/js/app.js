@@ -988,25 +988,23 @@ function renderSessionCharacters(rows) {
     // Stage 3: a pending change shows a review badge.
     var pendingChange = (r.change_flag === true || r.change_flag === 1 || r.change_flag === '1')
       && r.change_status === 'pending';
-    // An accepted change shows a quieter badge that re-opens the review
-    // screen — so the DM can adjust the moment, re-image, or un-approve.
+    // An accepted change is now shown on the Edit button label itself,
+    // so there is no separate "Change applied" badge row.
     var acceptedChange = (r.change_status === 'accepted');
     var changeBadge = '';
     if (pendingChange && canAct) {
       changeBadge = '<div class="sc-change-badge" onclick="openChangeReview(' + r.character_id + ')">' +
         '&#9888; Change detected &mdash; review</div>';
-    } else if (acceptedChange && canAct) {
-      changeBadge = '<div class="sc-change-badge sc-change-badge-accepted" ' +
-        'onclick="openChangeReview(' + r.character_id + ')">' +
-        '&#10003; Change applied &mdash; edit</div>';
     }
 
     var editBtn = '';
     if (canEditPrompt) {
       // Single "Edit" — always available (even after a change is approved,
       // so appearance amendments can be redone). Opens ONE panel with both the
-      // description editor and the appearance-change section.
-      editBtn = '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">&#9998; Edit</button>';
+      // description editor and the appearance-change section. When a change has
+      // already been applied, the button label shows it (no separate badge row).
+      var editLabel = acceptedChange ? '&#10003; Change applied — Edit' : '&#9998; Edit';
+      editBtn = '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">' + editLabel + '</button>';
     }
 
     return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
