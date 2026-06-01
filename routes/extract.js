@@ -38,6 +38,14 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     session.session_notes = myFork.fork_notes || '';
   }
 
+  // Image locking — Generate Story re-extracts by DELETEing and rebuilding
+  // every moment on this version, which would destroy locked panels. Refuse
+  // up front (before the AI call) if this version has any locked moment.
+  const lockedHere = await db.prepare('SELECT COUNT(*) AS n FROM moments WHERE fork_id = ? AND locked = 1').get(targetForkId);
+  if (lockedHere && lockedHere.n > 0) {
+    return res.json({ error: 'LOCKED_MOMENTS', message: 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.' });
+  }
+
   // Get characters for this campaign
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
   const charList = characters.map(function(c) {

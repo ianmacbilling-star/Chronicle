@@ -40,12 +40,13 @@ router.delete('/:momentId', requireAuth, verifyCampaignDM, async function(req, r
 router.put('/:momentId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const moment = await db.prepare(
-    'SELECT m.id, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
+    'SELECT m.id, m.locked, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
   ).get(req.params.momentId, req.params.sessionId);
   if (!moment) return res.status(404).json({ error: 'Moment not found' });
   const isDM = req.campaignRole === 'dm';
   const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
   if (!ownsThisFork) return res.status(403).json({ error: 'You can only edit your own version' });
+  if (moment.locked) return res.status(403).json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to edit the prompt.' });
   // Tier gate applies only to DM canonical editing.
   if (isDM) {
     const { getTier } = require('../middleware/tiers');
@@ -66,6 +67,24 @@ router.put('/:momentId', requireAuth, verifyCampaignMember, async function(req, 
 
   const updatedMoment = await db.prepare('SELECT * FROM moments WHERE id = ?').get(req.params.momentId);
   res.json({ success: true, moment: updatedMoment });
+});
+
+// PUT lock toggle — mark/unmark a storyboard moment as locked on the
+// caller's OWN version. A locked moment is skipped by generate-all and
+// blocks Generate Story (re-extract) for that fork. Owner-only, no tier gate.
+router.put('/:momentId/lock', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const moment = await db.prepare(
+    'SELECT m.id, m.locked, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
+  ).get(req.params.momentId, req.params.sessionId);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
+  if (!ownsThisFork) return res.status(403).json({ error: 'You can only lock moments on your own version' });
+  const locked = req.body.locked ? 1 : 0;
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE moments SET locked = ?, edited_at = ?, edited_by = ? WHERE id = ? AND session_id = ?')
+    .run(locked, now, req.session.userId, req.params.momentId, req.params.sessionId);
+  res.json({ success: true, locked: locked });
 });
 
 module.exports = router;

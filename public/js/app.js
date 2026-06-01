@@ -2321,6 +2321,13 @@ function extractMoments() {
   var errorEl = document.getElementById('extract-error');
   errorEl.classList.add('hidden');
 
+  // Image locking — re-extract would destroy locked panels; block it.
+  if ((state.moments || []).some(function(m){ return m.locked; })) {
+    errorEl.textContent = 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
   if (transcript.length < 50) {
     errorEl.textContent = 'Please paste a longer transcript first.';
     errorEl.classList.remove('hidden');
@@ -3700,6 +3707,9 @@ function showAlert(msg) {
 function buildPromptBlock(m) {
   var canEdit = state.userTier && state.userTier.can_edit_prompts;
   var safe = (m.prompt || '');
+  if (m.locked) {
+    return '<div class="moment-prompt-text" id="prompt-text-' + m.id + '">' + safe + '</div>';
+  }
   if (!canEdit) {
     return '<div class="moment-prompt-text" id="prompt-text-' + m.id + '">' + safe + '</div>';
   }
@@ -3708,6 +3718,29 @@ function buildPromptBlock(m) {
     '<button class="moment-prompt-edit-btn dm-only" onclick="startEditPrompt(' + m.id + ')">' +
       '&#9998; Edit prompt</button>' +
   '</div>';
+}
+
+function toggleMomentLock(momentId) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
+  if (!moment) return;
+  var newLocked = moment.locked ? false : true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/moments/' + momentId + '/lock', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ locked: newLocked })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        moment.locked = data.locked;
+        renderStoryboard();
+      } else {
+        alert((data && data.error) || 'Could not change the lock.');
+      }
+    })
+    .catch(function() { alert('Could not change the lock.'); });
 }
 
 function startEditPrompt(momentId) {
@@ -3789,10 +3822,19 @@ function renderStoryboard() {
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
           '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
         '</div>';
+    var _canLock = canEditCurrentStatus();
+    var lockBtn = '';
+    if (m.image && _canLock) {
+      lockBtn = '<button class="moment-lock-btn' + (m.locked ? ' is-locked' : '') + '" onclick="toggleMomentLock(' + m.id + ')" title="' + (m.locked ? 'Locked \u2014 click to unlock' : 'Lock this image (Regenerate All skips it)') + '">' + (m.locked ? '&#128274;' : '&#128275;') + '</button>';
+    } else if (m.locked) {
+      lockBtn = '<span class="moment-lock-btn is-locked is-static" title="Locked by the version owner">&#128274;</span>';
+    }
+    var regenBtn = m.locked
+      ? '<button class="moment-regen-btn dm-only" disabled title="Unlock to regenerate">&#8635; Regenerate image</button>'
+      : '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>';
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml +
-        '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>' +
+        imgHtml + lockBtn + regenBtn +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
@@ -4586,6 +4628,13 @@ function extractMoments() {
   var transcript = document.getElementById('transcript-input').value.trim();
   var errorEl = document.getElementById('extract-error');
   errorEl.classList.add('hidden');
+
+  // Image locking — re-extract would destroy locked panels; block it.
+  if ((state.moments || []).some(function(m){ return m.locked; })) {
+    errorEl.textContent = 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
 
   if (transcript.length < 50) {
     errorEl.textContent = 'Please paste a longer transcript first.';

@@ -457,6 +457,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   if (!myRole) return res.status(403).json({ error: 'Access denied' });
   const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
   if (!ownsThisFork) return res.status(403).json({ error: 'You can only regenerate your own version' });
+  if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to regenerate.' });
 
   try {
     // Get characters for this campaign for consistency
@@ -548,6 +549,12 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   }
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found for this session' });
+  // Image locking — skip locked panels (don't regenerate, don't charge for them).
+  const lockedCount = moments.filter(function(m){ return m.locked; }).length;
+  const toGenerate = moments.filter(function(m){ return !m.locked; });
+  if (!toGenerate.length) {
+    return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, message: 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.' });
+  }
 
   // Load all campaign characters once; the per-panel block is built inside
   // the loop so each panel only includes the characters actually in it.
@@ -584,7 +591,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // images that actually succeed (spend-on-success), so failures aren't
   // charged — but the upfront check guarantees they can cover a full run.
   const perImageCost = await getTokenCost(modelKey);
-  const batchCost = perImageCost * moments.length;
+  const batchCost = perImageCost * toGenerate.length;
   if (!(await canAfford(req.session.userId, batchCost))) {
     const bal = await getBalance(req.session.userId);
     return res.json({
@@ -597,7 +604,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
 
   // Generate all images in parallel
   const results = await Promise.allSettled(
-    moments.map(async function(m) {
+    toGenerate.map(async function(m) {
       try {
         const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
         // Only the characters named in THIS panel — prevents feature bleed
@@ -650,7 +657,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   }
   balance = await getBalance(req.session.userId);
 
-  res.json({ success: true, generated: generated, count: successCount, total: moments.length, balance: balance });
+  res.json({ success: true, generated: generated, count: successCount, total: moments.length, skipped_locked: lockedCount, balance: balance });
 });
 
 module.exports = router;

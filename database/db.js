@@ -306,6 +306,9 @@ async function initPostgres() {
     // migrateForks() (called at the end of initPostgres).
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS fork_id INTEGER',
     'ALTER TABLE session_characters ADD COLUMN IF NOT EXISTS fork_id INTEGER',
+    // Image locking — a locked storyboard moment is skipped by generate-all
+    // and blocks Generate Story (re-extract) for its version. Per-fork.
+    'ALTER TABLE moments ADD COLUMN IF NOT EXISTS locked INTEGER DEFAULT 0',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
