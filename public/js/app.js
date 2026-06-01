@@ -3748,6 +3748,23 @@ function toggleMomentLock(momentId) {
     .catch(function() { alert('Could not change the lock.'); });
 }
 
+function archiveMoment(momentId) {
+  if (!state.currentCampaign) return;
+  var moment = (state.moments || []).find(function(m){ return m.id === momentId; });
+  if (!moment || !moment.image) { alert('This panel has no image to archive yet.'); return; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ image_type: 'moment', moment_id: momentId })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.success) { showAlert('Image saved to the campaign Archive.'); }
+      else { alert((data && data.error) || 'Could not archive the image.'); }
+    })
+    .catch(function(){ alert('Could not archive the image.'); });
+}
+
 function startEditPrompt(momentId) {
   var wrap = document.getElementById('prompt-wrap-' + momentId);
   if (!wrap) return;
@@ -3837,9 +3854,12 @@ function renderStoryboard() {
     var regenBtn = m.locked
       ? '<button class="moment-regen-btn dm-only" disabled title="Unlock to regenerate">&#8635; Regenerate image</button>'
       : '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>';
+    var archiveBtn = m.image
+      ? '<button class="moment-archive-btn" onclick="archiveMoment(' + m.id + ')" title="Save this image to the campaign Archive">&#128278;</button>'
+      : '';
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + lockBtn + regenBtn +
+        imgHtml + lockBtn + archiveBtn + regenBtn +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +

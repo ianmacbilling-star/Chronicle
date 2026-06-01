@@ -1477,3 +1477,8 @@ body.role-player #stab-export { display: block !important; }
 
 /* The .session-item-left already uses flex layout for name + date
    (defined earlier in this file). Thumbnail slots into that flex row. */
+
+/* Archive button (top-right, visible to any member) + regen nudged below it */
+.moment-archive-btn{position:absolute;top:8px;right:8px;z-index:3;padding:3px 8px;font-size:10px;line-height:1.4;background:rgba(0,0,0,0.6);color:rgba(201,168,76,0.8);border:1px solid rgba(201,168,76,0.3);border-radius:6px;cursor:pointer;opacity:0.85;transition:opacity 0.15s;}
+.moment-archive-btn:hover{opacity:1;background:rgba(0,0,0,0.8);color:var(--gold);}
+.storyboard-panel .moment-regen-btn{top:40px;}

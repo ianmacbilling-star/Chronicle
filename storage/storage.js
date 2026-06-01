@@ -48,10 +48,11 @@ function signRequest(method, key, contentType, body) {
   };
 }
 
-async function uploadFile(fileBuffer, filename, mimetype) {
+async function uploadFile(fileBuffer, filename, mimetype, prefix) {
+  prefix = prefix || 'uploads';
   if (useCloud) {
     try {
-      const key = 'uploads/' + filename;
+      const key = prefix + '/' + filename;
       const signed = signRequest('PUT', key, mimetype, fileBuffer);
       console.log('  R2 uploading to:', signed.url.substring(0, 60));
 
@@ -182,4 +183,20 @@ async function persistToR2(remoteUrl) {
   }
 }
 
-module.exports = { initStorage, uploadFile, deleteFile, releaseImage, persistToR2 };
+// archiveCopy: copy an existing image into the protected archives/ prefix
+// so it survives regen/cleanup forever. NOT fail-soft — if the copy fails
+// the archive must not be created (no point pointing it at a vanishing src).
+async function archiveCopy(sourceUrl) {
+  if (!sourceUrl) throw new Error('No source image to archive');
+  const axios = require('axios');
+  const https = require('https');
+  const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+  const resp = await axios.get(sourceUrl, { responseType: 'arraybuffer', httpsAgent: agent, timeout: 60000, maxContentLength: Infinity, maxBodyLength: Infinity });
+  const buf = Buffer.from(resp.data);
+  const ct = String(resp.headers['content-type'] || 'image/png').split(';')[0].trim();
+  const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
+  const filename = 'arch-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + '.' + ext;
+  return await uploadFile(buf, filename, ct, 'archives');
+}
+
+module.exports = { initStorage, uploadFile, deleteFile, releaseImage, persistToR2, archiveCopy };
