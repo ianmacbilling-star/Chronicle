@@ -3885,6 +3885,57 @@ function archiveFilterBarHTML(f, onchange) {
       '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>';
 }
 
+function openRetouch(momentId) {
+  state.retouchMomentId = momentId;
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+function closeRetouch() {
+  var modal = document.getElementById('retouch-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function submitRetouch() {
+  var momentId = state.retouchMomentId;
+  var ta = document.getElementById('retouch-instruction');
+  var instruction = ta ? ta.value.trim() : '';
+  if (!instruction) { if (ta) ta.focus(); return; }
+  var moment = state.moments.find(function(m){ return m.id === momentId; });
+  if (!moment) return;
+  closeRetouch();
+  showPanelBusy(momentId, 'Retouching');
+  fetch('/api/images/retouch-moment', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      moment_id: momentId,
+      session_id: state.currentSession.id,
+      campaign_id: state.currentCampaign.id,
+      instruction: instruction,
+      style: state.artStyle,
+      fal_key: getFalKey() || 'platform'
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.error) {
+      if (data.error === 'INSUFFICIENT_TOKENS') showPanelError(momentId, insufficientTokensHtml(data.message), true);
+      else showPanelError(momentId, 'Could not retouch: ' + (data.message || data.error));
+      return;
+    }
+    moment.image = data.image_url;
+    moment.archived = false;
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    renderStoryboard();
+    renderNovelWithImages();
+  })
+  .catch(function(e){ showPanelError(momentId, 'Could not retouch: ' + e.message); });
+}
+
 function openReplacePicker(mode, id) {
   state.pickerCtx = { mode: mode };
   var f = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
@@ -4228,27 +4279,30 @@ function renderStoryboard() {
     var _canLock = canEditCurrentStatus();
     var lockBtn = '';
     if (m.image && _canLock) {
-      lockBtn = '<button class="moment-lock-btn' + (m.locked ? ' is-locked' : '') + '" onclick="toggleMomentLock(' + m.id + ')" title="' + (m.locked ? 'Locked \u2014 click to unlock' : 'Lock this image (Regenerate All skips it)') + '">' + (m.locked ? '&#128274;' : '&#128275;') + '</button>';
+      lockBtn = '<button class="panel-pill' + (m.locked ? ' is-on' : '') + '" onclick="toggleMomentLock(' + m.id + ')" title="' + (m.locked ? 'Locked - click to unlock (Regenerate All skips it)' : 'Lock this image (Regenerate All skips it)') + '">' + (m.locked ? 'Unlock' : 'Lock') + '</button>';
     } else if (m.locked) {
-      lockBtn = '<span class="moment-lock-btn is-locked is-static" title="Locked by the version owner">&#128274;</span>';
+      lockBtn = '<span class="panel-pill is-on is-static" title="Locked by the version owner">Locked</span>';
     }
     var regenBtn = m.locked
-      ? '<button class="moment-regen-btn dm-only" disabled title="Unlock to regenerate">&#8635; Regenerate image</button>'
-      : '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image">&#8635; Regenerate image</button>';
+      ? '<button class="panel-pill dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
+      : '<button class="panel-pill dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
+    var retouchBtn = m.locked
+      ? '<button class="panel-pill dm-only" disabled title="Unlock to retouch">Retouch</button>'
+      : '<button class="panel-pill dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>';
     var replaceBtn = m.locked
-      ? '<button class="moment-replace-btn dm-only" disabled title="Unlock to replace">&#8646; Replace</button>'
-      : '<button class="moment-replace-btn dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">&#8646; Replace</button>';
+      ? '<button class="panel-pill dm-only" disabled title="Unlock to replace">Replace</button>'
+      : '<button class="panel-pill dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">Replace</button>';
     var archiveBtn = '';
     if (m.image) {
       var _arched = isMomentArchived(m);
-      archiveBtn = '<button class="moment-archive-btn' + (_arched ? ' is-archived' : '') +
+      archiveBtn = '<button class="panel-pill' + (_arched ? ' is-on' : '') +
         '" onclick="toggleArchiveMoment(' + m.id + ')" title="' +
-        (_arched ? 'In your Archive \u2014 click to remove' : 'Save this image to your Archive') +
-        '">' + archiveChestIcon(_arched) + '</button>';
+        (_arched ? 'In your Archive - click to remove' : 'Save this image to your Archive') +
+        '">' + (_arched ? 'Archived' : 'Archive') + '</button>';
     }
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + '<div class="panel-img-tl">' + lockBtn + archiveBtn + '</div>' + '<div class="panel-img-actions">' + regenBtn + replaceBtn + '</div>' +
+        imgHtml + '<div class="panel-img-actions">' + regenBtn + retouchBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +

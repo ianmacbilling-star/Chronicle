@@ -140,6 +140,35 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   return await persistToR2(result.data.images[0].url);
 }
 
+// retouchImage: in-context edit. Feed the CURRENT panel image back in as the
+// SOLE reference and tell the model to keep everything identical except the
+// one requested change. Always uses Nano Banana 2 /edit (the only model that
+// conditions on an input image).
+async function retouchImage(currentImageUrl, instruction, style, falKey) {
+  fal.config({ credentials: falKey });
+  const stylePrefix = getStylePrefix(style);
+  const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
+    'You are editing an EXISTING comic panel, provided as Image 1. Reproduce it '+
+    'EXACTLY \u2014 identical composition, characters, faces, poses, framing, '+
+    'background, colors, lighting, and art style \u2014 and change ONLY the '+
+    'following, leaving everything else untouched:\n\n' + instruction;
+  const result = await fal.subscribe('fal-ai/nano-banana-2/edit', {
+    input: {
+      prompt: editPrompt,
+      image_urls: [currentImageUrl],
+      num_images: 1,
+      aspect_ratio: '4:3',
+      output_format: 'png',
+      safety_tolerance: '5',
+      resolution: '1K'
+    }
+  });
+  if (!result.data || !result.data.images || !result.data.images[0]) {
+    throw new Error('No image returned from fal.ai');
+  }
+  return await persistToR2(result.data.images[0].url);
+}
+
 // Deterministic seed from a campaign id — same campaign, same seed every time.
 function campaignSeed(campaignId) {
   var n = parseInt(campaignId, 10);
@@ -524,6 +553,55 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     res.json({ success: true, image_url: imageUrl, moment_id: moment_id, balance: balance });
   } catch(e) {
     console.error('Image generation error:', e.message);
+    res.json({ error: e.message });
+  }
+});
+
+// POST /api/images/retouch-moment
+// In-context edit: keep the current panel image and change only what the user
+// asks. Owner-only, blocked when locked, 1 token spend-on-success.
+router.post('/retouch-moment', requireAuth, async function(req, res) {
+  const { moment_id, instruction, style } = req.body;
+  const fal_key = process.env.FAL_API_KEY || req.body.fal_key;
+  if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
+  if (!instruction || !String(instruction).trim()) return res.json({ error: 'Describe the change you want.' });
+  const db = await getDb();
+  const moment = await db.prepare(
+    'SELECT m.id, m.image, m.locked, m.session_id, m.fork_id, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+    'FROM moments m JOIN sessions s ON m.session_id = s.id JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ?'
+  ).get(moment_id);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  const myRole = await getCampaignRole(req.session.userId, moment.campaign_id);
+  if (!myRole) return res.status(403).json({ error: 'Access denied' });
+  if (String(moment.fork_owner) !== String(req.session.userId))
+    return res.status(403).json({ error: 'You can only retouch your own version' });
+  if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to retouch.' });
+  if (!moment.image) return res.json({ error: 'This panel has no image to retouch yet.' });
+  try {
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    }
+    const imageUrl = await retouchImage(moment.image, instruction, style, fal_key);
+    const now = new Date().toISOString();
+    const prevImg = moment.image;
+    await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(imageUrl, now, req.session.userId, moment.id);
+    if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
+    await logImageGeneration(db, req.session.userId, 'retouch', moment.id, moment.fork_id);
+    await spendTokens(req.session.userId, cost, {
+      related_campaign_id: moment.campaign_id,
+      source: 'panel_retouch',
+      event_type: 'generation_spend'
+    });
+    if (myRole === 'player') {
+      try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(moment.campaign_id, req.session.userId); } catch (e) {}
+    }
+    const balance = await getBalance(req.session.userId);
+    res.json({ success: true, image_url: imageUrl, moment_id: moment.id, balance: balance });
+  } catch (e) {
+    console.error('retouch error:', e.message);
     res.json({ error: e.message });
   }
 });

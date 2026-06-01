@@ -953,6 +953,20 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="retouch-modal">
+  <div class="modal archive-picker" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Retouch panel</div>
+      <button class="modal-close" onclick="closeRetouch()">&times;</button>
+    </div>
+    <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">Keep this image exactly as-is and change only what you describe. Uses the current image as the reference &mdash; costs 1 token.</p>
+    <textarea class="form-textarea" id="retouch-instruction" placeholder="e.g. make it nighttime &middot; remove the sword &middot; give him a red cloak" style="min-height:90px;"></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-sm" onclick="closeRetouch()">Cancel</button>
+      <button class="btn btn-sm btn-primary" onclick="submitRetouch()">Retouch image</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="replace-picker-modal">
   <div class="modal archive-picker">
     <div class="modal-header">
