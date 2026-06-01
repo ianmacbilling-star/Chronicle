@@ -27,10 +27,10 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
       const archivedUrl = await archiveCopy(moment.image);
       const now = new Date().toISOString();
       const result = await db.prepare(
-        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, image_prompt, archived_by, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, archived_by, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(req.params.campaignId, moment.session_id, moment.fork_id, moment.id, 'moment',
-            moment.title || null, archivedUrl, moment.prompt || null, req.session.userId, now);
+            moment.title || null, archivedUrl, moment.image, moment.prompt || null, req.session.userId, now);
       const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
       return res.json({ success: true, archive: row });
     }
@@ -62,10 +62,10 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
       const archivedUrl = await archiveCopy(sourceUrl);
       const now = new Date().toISOString();
       const result = await db.prepare(
-        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, character_id, image_type, title, image_url, image_prompt, archived_by, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, character_id, image_type, title, image_url, source_url, image_prompt, archived_by, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(req.params.campaignId, sessionId, forkId, characterId, 'character',
-            ch.name || null, archivedUrl, prompt || null, req.session.userId, now);
+            ch.name || null, archivedUrl, sourceUrl, prompt || null, req.session.userId, now);
       const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
       return res.json({ success: true, archive: row });
     }
@@ -89,16 +89,17 @@ router.delete('/', requireAuth, verifyCampaignMember, async function(req, res) {
 
     if (imageType === 'moment') {
       const moment = await db.prepare(
-        'SELECT m.id, s.campaign_id FROM moments m JOIN sessions s ON s.id = m.session_id WHERE m.id = ?'
+        'SELECT m.id, m.image, s.campaign_id FROM moments m JOIN sessions s ON s.id = m.session_id WHERE m.id = ?'
       ).get(req.body.moment_id);
       if (!moment) return res.status(404).json({ error: 'Moment not found' });
       if (String(moment.campaign_id) !== String(req.params.campaignId)) {
         return res.status(403).json({ error: 'That moment is not in this campaign' });
       }
 
+      // Per-image: only remove MY archive of the image currently on the panel.
       const mine = await db.prepare(
-        'SELECT id, image_url FROM campaign_archives WHERE moment_id = ? AND archived_by = ?'
-      ).all(req.body.moment_id, req.session.userId);
+        'SELECT id, image_url FROM campaign_archives WHERE moment_id = ? AND archived_by = ? AND source_url IS NOT DISTINCT FROM ?'
+      ).all(req.body.moment_id, req.session.userId, moment.image);
       if (!mine || mine.length === 0) return res.json({ success: true, removed: 0 });
 
       for (const a of mine) {
@@ -115,9 +116,17 @@ router.delete('/', requireAuth, verifyCampaignMember, async function(req, res) {
     if (imageType === 'character') {
       const characterId = req.body.character_id;
       const forkId = req.body.fork_id || null;
+      // Resolve the image currently shown (snapshot reference, else canonical)
+      // so we only remove MY archive of that exact image.
+      const ch = await db.prepare('SELECT canonical_reference_url FROM characters WHERE id = ?').get(characterId);
+      let curUrl = ch ? ch.canonical_reference_url : null;
+      if (forkId) {
+        const sc = await db.prepare('SELECT reference_url FROM session_characters WHERE fork_id = ? AND character_id = ?').get(forkId, characterId);
+        curUrl = (sc && sc.reference_url) ? sc.reference_url : (ch ? ch.canonical_reference_url : null);
+      }
       const mine = await db.prepare(
-        'SELECT id, image_url FROM campaign_archives WHERE character_id = ? AND archived_by = ? AND fork_id IS NOT DISTINCT FROM ?'
-      ).all(characterId, req.session.userId, forkId);
+        'SELECT id, image_url FROM campaign_archives WHERE character_id = ? AND archived_by = ? AND fork_id IS NOT DISTINCT FROM ? AND source_url IS NOT DISTINCT FROM ?'
+      ).all(characterId, req.session.userId, forkId, curUrl);
       if (!mine || mine.length === 0) return res.json({ success: true, removed: 0 });
       for (const a of mine) {
         await db.prepare('DELETE FROM campaign_archives WHERE id = ?').run(a.id);

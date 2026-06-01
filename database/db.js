@@ -788,6 +788,9 @@ async function migrateArchives(pool) {
   // fork_id is NULL, or a per-fork snapshot). Added post-table; idempotent.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_character ON campaign_archives(character_id)');
+  // source_url = the ORIGINAL image URL that was archived (the archived copy
+  // lives in image_url). Lets the chest reflect whether THIS image is saved.
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS source_url TEXT');
 }
 
 // getOrCreateDmFork: returns the id of the session's DM fork, creating

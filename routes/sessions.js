@@ -107,7 +107,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   const viewForkId = await getViewableForkId(db, session.id, req.session.userId, req.query.fork_id);
   if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
   const moments = await db.prepare(
-    'SELECT m.*, EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.moment_id = m.id AND ca.archived_by = ?) AS archived ' +
+    'SELECT m.*, EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.moment_id = m.id AND ca.source_url = m.image AND ca.archived_by = ?) AS archived ' +
     'FROM moments m WHERE m.fork_id=? ORDER BY m.panel_order ASC'
   ).all(req.session.userId, viewForkId);
   // fork_status = the VIEWED fork's own status (the access-status dropdown
@@ -251,7 +251,7 @@ router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(
     'SELECT sc.id, sc.character_id, sc.fork_id, sc.prompt, sc.change_note, sc.edited_at, ' +
     'sc.reference_url, sc.change_flag, sc.change_detail, sc.change_status, sc.change_moment_index, ' +
     'ch.name, ch.cls, ch.is_npc, ch.image_portrait, ch.image, ch.image_fullbody, ch.canonical_reference_url, ' +
-    'EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.character_id = sc.character_id AND ca.fork_id = sc.fork_id AND ca.archived_by = ?) AS archived ' +
+    'EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.character_id = sc.character_id AND ca.fork_id = sc.fork_id AND ca.source_url = COALESCE(sc.reference_url, ch.canonical_reference_url) AND ca.archived_by = ?) AS archived ' +
     'FROM session_characters sc JOIN characters ch ON ch.id = sc.character_id ' +
     'WHERE sc.fork_id = ? ORDER BY ch.is_npc ASC, ch.name ASC'
   ).all(req.session.userId, viewForkId);

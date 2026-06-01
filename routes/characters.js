@@ -43,7 +43,7 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // unowned PCs, and stub characters still awaiting their invitee.
   const characters = await db.prepare(
     'SELECT c.*, u.name AS owner_name, ' +
-    'EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.character_id = c.id AND ca.fork_id IS NULL AND ca.archived_by = ?) AS archived ' +
+    'EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.character_id = c.id AND ca.fork_id IS NULL AND ca.source_url = c.canonical_reference_url AND ca.archived_by = ?) AS archived ' +
     'FROM characters c ' +
     'LEFT JOIN users u ON u.id = c.owner_user_id ' +
     'WHERE c.campaign_id = ? ORDER BY c.created_at ASC'
