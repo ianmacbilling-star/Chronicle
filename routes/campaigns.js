@@ -3,6 +3,7 @@ const router = express.Router();
 const { getDb } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { checkCampaignLimit } = require('../middleware/tiers');
+const { deleteFile } = require('../storage/storage');
 
 // List campaigns the user is a member of (any role — DM or player). This
 // is the entry point users hit after login, and Phase 2 makes it
@@ -77,7 +78,24 @@ router.delete('/:id', requireAuth, async function(req, res) {
     'SELECT role FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
   ).get(req.params.id, req.session.userId);
   if (!role || role.role !== 'dm') return res.status(403).json({ error: 'DM access required' });
+
+  // Gather every R2 object this campaign owns BEFORE the cascade wipes the
+  // rows; the FK cascade deletes rows, not the R2 bytes. We free them after.
+  var urls = [];
+  var cid = req.params.id;
+  async function grab(sql){ try { (await db.prepare(sql).all(cid)).forEach(function(r){ if (r && r.u) urls.push(r.u); }); } catch(e){ console.error('campaign-delete gather:', e.message); } }
+  await grab("SELECT m.image AS u FROM moments m JOIN sessions s ON s.id = m.session_id WHERE s.campaign_id = ?");
+  await grab("SELECT sc.reference_url AS u FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id JOIN sessions s ON s.id = sf.session_id WHERE s.campaign_id = ?");
+  await grab("SELECT canonical_reference_url AS u FROM characters WHERE campaign_id = ?");
+  await grab("SELECT image_url AS u FROM campaign_assets WHERE campaign_id = ?");
+  await grab("SELECT image_url AS u FROM campaign_archives WHERE campaign_id = ?");
+
   await db.prepare('DELETE FROM campaigns WHERE id=?').run(req.params.id);
+
+  // Free the orphaned objects (campaign + all its rows are gone now). Best-
+  // effort, fire-and-forget, de-duped; never blocks or fails the response.
+  (async function(){ var seen = {}; for (var i=0;i<urls.length;i++){ var u=urls[i]; if(!u||seen[u])continue; seen[u]=true; try{ await deleteFile(u); }catch(e){ console.error('campaign-delete release:', e.message); } } })();
+
   res.json({ success: true });
 });
 

@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb } = require('../database/db');
+const { getDb, getDmForkId } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
-const { archiveCopy, releaseImage } = require('../storage/storage');
+const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage');
 
 // POST /api/campaigns/:campaignId/archives
 // Save an image off to the campaign archive. Open to ANY member: you can
@@ -194,6 +194,66 @@ router.delete('/:archiveId', requireAuth, verifyCampaignMember, async function(r
   } catch (e) {
     console.error('archive delete-by-id error:', e.message);
     res.json({ error: 'Could not remove the archive. Please try again.' });
+  }
+});
+
+// POST /api/campaigns/:campaignId/archives/:archiveId/apply
+// Replace a target image (a moment panel, or a session-character snapshot)
+// with the chosen archived image. The archive's protected bytes are copied
+// into a FRESH live object; the target repoints to it and the old image is
+// released by refcount. The archive entry itself is left untouched.
+router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const archive = await db.prepare(
+      'SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?'
+    ).get(req.params.archiveId, req.params.campaignId);
+    if (!archive || !archive.image_url) return res.json({ error: 'Archived image not found.' });
+    const targetType = req.body && req.body.target_type;
+    const now = new Date().toISOString();
+
+    if (targetType === 'moment') {
+      const moment = await db.prepare(
+        'SELECT m.id, m.image, m.locked, sf.user_id AS fork_owner ' +
+        'FROM moments m JOIN session_forks sf ON sf.id = m.fork_id ' +
+        'JOIN sessions s ON s.id = m.session_id ' +
+        'WHERE m.id = ? AND s.campaign_id = ?'
+      ).get(req.body.target_moment_id, req.params.campaignId);
+      if (!moment) return res.json({ error: 'The target panel no longer exists.' });
+      if (String(moment.fork_owner) !== String(req.session.userId))
+        return res.status(403).json({ error: 'You can only replace images on your own version.' });
+      if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to replace the image.' });
+      const freshUrl = await restoreCopy(archive.image_url);
+      const prevImg = moment.image;
+      await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+        .run(freshUrl, archive.art_style || null, now, req.session.userId, moment.id);
+      if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
+      return res.json({ success: true, image_url: freshUrl });
+    }
+
+    if (targetType === 'character') {
+      let forkId = req.body.fork_id;
+      if (!forkId) forkId = await getDmForkId(db, req.body.session_id);
+      const sc = await db.prepare(
+        'SELECT sc.id, sc.reference_url, sf.user_id AS fork_owner ' +
+        'FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id ' +
+        'WHERE sc.fork_id = ? AND sc.character_id = ?'
+      ).get(forkId, req.body.target_character_id);
+      if (!sc) return res.json({ error: 'The target character image no longer exists.' });
+      if (String(sc.fork_owner) !== String(req.session.userId))
+        return res.status(403).json({ error: 'You can only replace images on your own version.' });
+      const freshUrl = await restoreCopy(archive.image_url);
+      const prevRef = sc.reference_url;
+      await db.prepare('UPDATE session_characters SET reference_url = ?, edited_at = ? WHERE id = ?')
+        .run(freshUrl, now, sc.id);
+      if (prevRef && prevRef !== freshUrl) await releaseImage(db, prevRef);
+      return res.json({ success: true, image_url: freshUrl });
+    }
+
+    return res.json({ error: 'Unknown replace target.' });
+  } catch (e) {
+    console.error('archive apply error:', e.message);
+    res.json({ error: 'Replace failed: ' + e.message });
   }
 });
 

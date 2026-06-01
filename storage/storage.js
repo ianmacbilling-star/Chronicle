@@ -199,4 +199,20 @@ async function archiveCopy(sourceUrl) {
   return await uploadFile(buf, filename, ct, 'archives');
 }
 
-module.exports = { initStorage, uploadFile, deleteFile, releaseImage, persistToR2, archiveCopy };
+// restoreCopy: copy an archived image (a protected archives/ object) into the
+// LIVE uploads/ prefix as a FRESH object, so a panel/character can point at its
+// own live image again while archives/ stays untouched. NOT fail-soft.
+async function restoreCopy(sourceUrl) {
+  if (!sourceUrl) throw new Error('No source image to restore');
+  const axios = require('axios');
+  const https = require('https');
+  const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+  const resp = await axios.get(sourceUrl, { responseType: 'arraybuffer', httpsAgent: agent, timeout: 60000, maxContentLength: Infinity, maxBodyLength: Infinity });
+  const buf = Buffer.from(resp.data);
+  const ct = String(resp.headers['content-type'] || 'image/png').split(';')[0].trim();
+  const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
+  const filename = 'rest-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + '.' + ext;
+  return await uploadFile(buf, filename, ct);
+}
+
+module.exports = { initStorage, uploadFile, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy };

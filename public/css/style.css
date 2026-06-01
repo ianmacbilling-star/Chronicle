@@ -1110,6 +1110,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .archive-filter { padding: 6px 10px; background: rgba(0,0,0,0.3); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.25); border-radius: 8px; font-size: 12px; }
 .archive-filter option { background: #1b1b20; color: var(--gold-light); }
 .archive-clear { cursor: pointer; }
+.moment-replace-btn{position:absolute;top:6px;right:6px;padding:3px 8px;font-size:10px;background:rgba(0,0,0,0.6);color:rgba(201,168,76,0.8);border:1px solid rgba(201,168,76,0.3);border-radius:6px;cursor:pointer;opacity:0;transition:opacity 0.15s;}
+.moment-card:hover .moment-replace-btn{opacity:1;}
+.moment-replace-btn:hover{background:rgba(0,0,0,0.8);color:var(--gold);}
+.moment-replace-btn[disabled]{cursor:not-allowed;color:rgba(201,168,76,0.3);}
+.storyboard-panel .moment-replace-btn{position:absolute;top:38px;right:8px;opacity:0;}
+.storyboard-panel:hover .moment-replace-btn{opacity:1;}
+body.role-player.can-edit-fork .moment-replace-btn{display:inline-block !important;}
+.modal.archive-picker{max-width:880px;}
+.archive-picker-filters{display:flex;flex-wrap:wrap;gap:8px;}
+.archive-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:14px;max-height:60vh;overflow-y:auto;}
+.archive-pick-item{border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.25);display:flex;flex-direction:column;}
+.archive-pick-item img{width:100%;height:130px;object-fit:cover;display:block;cursor:pointer;}
+.archive-pick-cap{padding:6px 8px;font-size:11px;color:var(--gold-dim);line-height:1.35;flex:1;}
+.archive-pick-cap b{color:var(--gold-light);font-weight:600;}
+.archive-pick-use{margin:0 8px 8px;padding:5px;font-size:11px;cursor:pointer;background:var(--gold);color:#1a1410;border:none;border-radius:6px;font-weight:600;}
+.archive-pick-use:hover{filter:brightness(1.08);}
+.archive-pick-empty{padding:24px;text-align:center;color:var(--gold-dim);font-size:13px;}
 #view-archives .page-header { margin-bottom: 10px; }
 #view-archives .page-subtitle { margin-top: 2px; }
 .prompt-modal-box { max-width: 640px; width: 90%; max-height: 80vh; overflow: auto; background: #1b1b20; border: 1px solid rgba(201,168,76,0.3); border-radius: 12px; padding: 20px 22px; }

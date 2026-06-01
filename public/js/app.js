@@ -1141,6 +1141,7 @@ function openChangeReview(charId) {
       '<div class="char-prompt-actions">' +
         '<button class="btn btn-sm" id="sc-regen-' + charId + '" ' +
           'onclick="regenerateReference(' + charId + ')">&#10227; Regenerate image</button>' +
+        '<button class="btn btn-sm" onclick="openReplacePicker(\'character\', ' + charId + ')">&#8646; Replace from Archive</button>' +
         '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
           'onclick="approveChange(' + charId + ')">&#10003; ' +
           (isAccepted ? 'Save changes' : 'Approve change') + '</button>' +
@@ -3786,14 +3787,16 @@ function setArchiveFilter(key, val) {
   renderArchives();
 }
 
-function getFilteredArchives() {
-  var f = state.archiveFilters || {};
+function getFilteredArchives(f) {
+  f = f || state.archiveFilters || {};
   var rows = (state.archives || []).slice();
   if (f.session) rows = rows.filter(function(a){ return String(a.session_id) === String(f.session); });
   if (f.moment) rows = rows.filter(function(a){ return String(a.moment_id) === String(f.moment); });
   if (f.creator) rows = rows.filter(function(a){ return String(a.archived_by) === String(f.creator); });
   if (f.type) rows = rows.filter(function(a){ return a.image_type === f.type; });
   if (f.style) rows = rows.filter(function(a){ return String(a.art_style) === String(f.style); });
+  if (f.version) rows = rows.filter(function(a){ return String(a.fork_id) === String(f.version); });
+  if (f.character) rows = rows.filter(function(a){ return String(a.character_id) === String(f.character); });
   rows.sort(function(a,b){
     var ta = new Date(a.created_at || 0).getTime();
     var tb = new Date(b.created_at || 0).getTime();
@@ -3806,14 +3809,16 @@ function renderArchiveFilters() {
   var host = document.getElementById('archives-filters');
   if (!host) return;
   var rows = state.archives || [];
-  if (!state.archiveFilters) state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', sort:'newest' };
+  if (!state.archiveFilters) state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
   var f = state.archiveFilters;
-  var sessions = {}, moments = {}, creators = {}, styles = {};
+  var sessions = {}, moments = {}, creators = {}, styles = {}, versions = {}, characters = {};
   rows.forEach(function(a){
     if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
     if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
     if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
     if (a.art_style) styles[a.art_style] = a.art_style;
+    if (a.fork_id) versions[a.fork_id] = (a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
+    if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
   });
   function opts(map, sel) {
     return Object.keys(map).map(function(k){
@@ -3822,7 +3827,9 @@ function renderArchiveFilters() {
   }
   host.innerHTML =
     '<select class="archive-filter" onchange="setArchiveFilter(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
+    '<select class="archive-filter" onchange="setArchiveFilter(\'version\', this.value)"><option value="">All versions</option>' + opts(versions, f.version) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'moment\', this.value)"><option value="">All moments</option>' + opts(moments, f.moment) + '</select>' +
+    '<select class="archive-filter" onchange="setArchiveFilter(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'type\', this.value)"><option value="">All types</option>' +
       '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
@@ -3835,8 +3842,129 @@ function renderArchiveFilters() {
 }
 
 function clearArchiveFilters() {
-  state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', sort:'newest' };
+  state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
   renderArchives();
+}
+
+function ensureArchivesLoaded(cb) {
+  if (state.archives && state.archives.length) { cb(); return; }
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) { cb(); return; }
+  fetch('/api/campaigns/' + cid + '/archives').then(function(r){ return r.json(); }).then(function(rows){
+    state.archives = Array.isArray(rows) ? rows : [];
+    cb();
+  }).catch(function(){ state.archives = state.archives || []; cb(); });
+}
+
+function archiveFilterBarHTML(f, onchange) {
+  var rows = state.archives || [];
+  var sessions = {}, moments = {}, creators = {}, styles = {}, versions = {}, characters = {};
+  rows.forEach(function(a){
+    if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
+    if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
+    if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
+    if (a.art_style) styles[a.art_style] = a.art_style;
+    if (a.fork_id) versions[a.fork_id] = (a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
+    if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
+  });
+  function opts(map, sel) {
+    return Object.keys(map).map(function(k){
+      return '<option value="' + escapeHtml(k) + '"' + (String(sel) === String(k) ? ' selected' : '') + '>' + escapeHtml(map[k]) + '</option>';
+    }).join('');
+  }
+  return '<select class="archive-filter" onchange="' + onchange + '(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
+    '<select class="archive-filter" onchange="' + onchange + '(\'version\', this.value)"><option value="">All versions</option>' + opts(versions, f.version) + '</select>' +
+    '<select class="archive-filter" onchange="' + onchange + '(\'moment\', this.value)"><option value="">All moments</option>' + opts(moments, f.moment) + '</select>' +
+    '<select class="archive-filter" onchange="' + onchange + '(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
+    '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
+    '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
+      '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
+      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option></select>' +
+    '<select class="archive-filter" onchange="' + onchange + '(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
+    '<select class="archive-filter" onchange="' + onchange + '(\'sort\', this.value)">' +
+      '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
+      '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>';
+}
+
+function openReplacePicker(mode, id) {
+  state.pickerCtx = { mode: mode };
+  var f = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
+  var tEl = document.getElementById('replace-picker-title');
+  if (mode === 'moment') {
+    state.pickerCtx.momentId = id;
+    state.pickerCtx.sessionId = state.currentSession ? state.currentSession.id : null;
+    state.pickerCtx.forkId = state.currentForkId || null;
+    if (state.pickerCtx.sessionId) f.session = String(state.pickerCtx.sessionId);
+    f.moment = String(id);
+    if (state.currentForkId) f.version = String(state.currentForkId);
+    if (tEl) tEl.textContent = 'Replace panel image from Archive';
+  } else {
+    state.pickerCtx.characterId = id;
+    state.pickerCtx.sessionId = state.currentSession ? state.currentSession.id : null;
+    state.pickerCtx.forkId = state.currentForkId || null;
+    f.type = 'character';
+    f.character = String(id);
+    if (tEl) tEl.textContent = 'Replace character image from Archive';
+  }
+  state.pickerFilters = f;
+  var modal = document.getElementById('replace-picker-modal');
+  if (modal) modal.classList.remove('hidden');
+  ensureArchivesLoaded(renderPicker);
+}
+
+function closeReplacePicker() {
+  var modal = document.getElementById('replace-picker-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function setPickerFilter(key, val) {
+  if (!state.pickerFilters) state.pickerFilters = {};
+  state.pickerFilters[key] = val;
+  renderPicker();
+}
+
+function clearPickerFilters() {
+  state.pickerFilters = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
+  renderPicker();
+}
+
+function renderPicker() {
+  var fhost = document.getElementById('replace-picker-filters');
+  if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
+    '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>';
+  var grid = document.getElementById('replace-picker-grid');
+  if (!grid) return;
+  var rows = getFilteredArchives(state.pickerFilters);
+  if (!rows.length) { grid.innerHTML = '<div class="archive-pick-empty">No archived images match these filters. Widen them to pull from another version, session, or character.</div>'; return; }
+  grid.innerHTML = rows.map(function(a){
+    var cap = '<b>' + escapeHtml(a.image_type === 'character' ? (a.character_name || 'Character') : (archiveMomentLabel(a) || 'Panel')) + '</b>';
+    if (a.session_title) cap += '<br>' + escapeHtml(a.session_title);
+    var ver = (!a.fork_id || a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
+    cap += '<br>' + escapeHtml(ver);
+    if (a.art_style) cap += '<br>' + escapeHtml(a.art_style);
+    return '<div class="archive-pick-item">' +
+      '<img src="' + escapeHtml(a.image_url) + '" loading="lazy" onclick="applyArchiveToTarget(' + a.id + ')">' +
+      '<div class="archive-pick-cap">' + cap + '</div>' +
+      '<button class="archive-pick-use" onclick="applyArchiveToTarget(' + a.id + ')">Use this image</button>' +
+    '</div>';
+  }).join('');
+}
+
+function applyArchiveToTarget(archiveId) {
+  var ctx = state.pickerCtx || {};
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  var body = (ctx.mode === 'moment')
+    ? { target_type: 'moment', target_moment_id: ctx.momentId }
+    : { target_type: 'character', target_character_id: ctx.characterId, session_id: ctx.sessionId, fork_id: ctx.forkId };
+  fetch('/api/campaigns/' + cid + '/archives/' + archiveId + '/apply', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data && data.error) { alert(data.message || data.error); return; }
+    closeReplacePicker();
+    if (ctx.mode === 'moment') { if (typeof refreshStoryboardImages === 'function') refreshStoryboardImages(); }
+    else { if (typeof loadSessionCharacters === 'function') loadSessionCharacters(); }
+  }).catch(function(e){ alert('Replace failed: ' + e.message); });
 }
 
 function viewArchivePrompt(id) {
@@ -4108,6 +4236,9 @@ function renderStoryboard() {
     var regenBtn = m.locked
       ? '<button class="moment-regen-btn dm-only" disabled title="Unlock to regenerate">&#8635; Regenerate image</button>'
       : '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image">&#8635; Regenerate image</button>';
+    var replaceBtn = m.locked
+      ? '<button class="moment-replace-btn dm-only" disabled title="Unlock to replace">&#8646; Replace</button>'
+      : '<button class="moment-replace-btn dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">&#8646; Replace</button>';
     var archiveBtn = '';
     if (m.image) {
       var _arched = isMomentArchived(m);
@@ -4118,7 +4249,7 @@ function renderStoryboard() {
     }
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + '<div class="panel-img-tl">' + lockBtn + archiveBtn + '</div>' + regenBtn +
+        imgHtml + '<div class="panel-img-tl">' + lockBtn + archiveBtn + '</div>' + regenBtn + replaceBtn +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
