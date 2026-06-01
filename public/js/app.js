@@ -2323,8 +2323,10 @@ function extractMoments() {
 
   // Image locking — re-extract would destroy locked panels; block it.
   if ((state.moments || []).some(function(m){ return m.locked; })) {
-    errorEl.textContent = 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.';
+    var _lockMsg = 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.';
+    errorEl.textContent = _lockMsg;
     errorEl.classList.remove('hidden');
+    alert(_lockMsg);
     return;
   }
 
@@ -4631,8 +4633,10 @@ function extractMoments() {
 
   // Image locking — re-extract would destroy locked panels; block it.
   if ((state.moments || []).some(function(m){ return m.locked; })) {
-    errorEl.textContent = 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.';
+    var _lockMsg = 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.';
+    errorEl.textContent = _lockMsg;
     errorEl.classList.remove('hidden');
+    alert(_lockMsg);
     return;
   }
 
