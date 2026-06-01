@@ -1003,14 +1003,10 @@ function renderSessionCharacters(rows) {
 
     var editBtn = '';
     if (canEditPrompt) {
-      editBtn = '<button class="btn btn-sm" onclick="startEditSnapshot(' + r.character_id + ')">&#9998; Edit Description</button>';
-      // "Amend appearance" — manually start the review flow even when the
-      // AI flagged nothing. Hidden if a change is already pending/accepted
-      // (the badge already opens the review screen for those).
-      if (!pendingChange && !acceptedChange) {
-        editBtn += '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">' +
-          '&#10010; Amend appearance</button>';
-      }
+      // Single "Edit" — always available (even after a change is approved,
+      // so appearance amendments can be redone). Opens ONE panel with both the
+      // description editor and the appearance-change section.
+      editBtn = '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">&#9998; Edit</button>';
     }
 
     return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
@@ -1129,6 +1125,11 @@ function openChangeReview(charId) {
       '<div class="sc-review-title">' + titleText + '</div>' +
       '<div class="sc-review-name">' + r.name + '</div>' +
       detectedLine +
+      '<label class="sc-review-label">Description (this session):</label>' +
+      '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + (r.prompt || '') + '</textarea>' +
+      '<div class="char-prompt-actions" style="margin-bottom:10px;">' +
+        '<button class="btn btn-sm" onclick="saveSnapshot(' + charId + ')">Save description</button>' +
+      '</div>' +
       '<label class="sc-review-label">Amended appearance (edit if needed before approving):</label>' +
       '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
         'placeholder="e.g. left horn broken off to a jagged stump">' +
