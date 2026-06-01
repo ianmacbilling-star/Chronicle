@@ -8,7 +8,10 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const viewForkId = await getViewableForkId(db, req.params.sessionId, req.session.userId, req.query.fork_id);
   if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
-  const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(viewForkId);
+  const moments = await db.prepare(
+    'SELECT m.*, EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.moment_id = m.id AND ca.archived_by = ?) AS archived ' +
+    'FROM moments m WHERE m.fork_id=? ORDER BY m.panel_order ASC'
+  ).all(req.session.userId, viewForkId);
   res.json(moments);
 });
 

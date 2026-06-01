@@ -3749,21 +3749,40 @@ function toggleMomentLock(momentId) {
     .catch(function() { alert('Could not change the lock.'); });
 }
 
-function archiveMoment(momentId) {
+// Treasure-chest icons. Closed lid = archived (in YOUR archive); open lid = not.
+function archiveChestIcon(isClosed) {
+  if (isClosed) {
+    return "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9'/><path d='M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4'/><path d='M4 13h16'/><path d='M11 13v2.5h2V13'/></svg>";
+  }
+  return "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7'/><path d='M3.5 12l1.8-4.6A2.5 2.5 0 0 1 7.6 6h8.8a2.5 2.5 0 0 1 2.3 1.4L20.5 12z'/><path d='M5 12h14'/><circle cx='12' cy='15.5' r='1.1' fill='currentColor' stroke='none'/></svg>";
+}
+
+function isMomentArchived(m) {
+  return m && (m.archived === true || m.archived === 1 || m.archived === '1' || m.archived === 't');
+}
+
+// Toggle: archive my copy if not archived, else remove MY archive entry.
+function toggleArchiveMoment(momentId) {
   if (!state.currentCampaign) return;
   var moment = (state.moments || []).find(function(m){ return m.id === momentId; });
   if (!moment || !moment.image) { alert('This panel has no image to archive yet.'); return; }
+  var isArchived = isMomentArchived(moment);
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', {
-    method: 'POST',
+    method: isArchived ? 'DELETE' : 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ image_type: 'moment', moment_id: momentId })
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if (data && data.success) { showAlert('Image saved to the campaign Archive.'); }
-      else { alert((data && data.error) || 'Could not archive the image.'); }
+      if (data && data.success) {
+        moment.archived = !isArchived;
+        showAlert(isArchived ? 'Removed from your Archive.' : 'Image saved to your Archive.');
+        renderStoryboard();
+      } else {
+        alert((data && data.error) || 'Could not update the Archive.');
+      }
     })
-    .catch(function(){ alert('Could not archive the image.'); });
+    .catch(function(){ alert('Could not update the Archive.'); });
 }
 
 function startEditPrompt(momentId) {
@@ -3854,10 +3873,15 @@ function renderStoryboard() {
     }
     var regenBtn = m.locked
       ? '<button class="moment-regen-btn dm-only" disabled title="Unlock to regenerate">&#8635; Regenerate image</button>'
-      : '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')">&#8635; Regenerate image</button>';
-    var archiveBtn = m.image
-      ? '<button class="moment-archive-btn" onclick="archiveMoment(' + m.id + ')" title="Save this image to the campaign Archive">&#128278;</button>'
-      : '';
+      : '<button class="moment-regen-btn dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image">&#8635; Regenerate image</button>';
+    var archiveBtn = '';
+    if (m.image) {
+      var _arched = isMomentArchived(m);
+      archiveBtn = '<button class="moment-archive-btn' + (_arched ? ' is-archived' : '') +
+        '" onclick="toggleArchiveMoment(' + m.id + ')" title="' +
+        (_arched ? 'In your Archive \u2014 click to remove' : 'Save this image to your Archive') +
+        '">' + archiveChestIcon(_arched) + '</button>';
+    }
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
         imgHtml + '<div class="panel-img-tl">' + lockBtn + archiveBtn + '</div>' + regenBtn +

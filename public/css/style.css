@@ -1484,3 +1484,5 @@ body.role-player #stab-export { display: block !important; }
 .panel-img-tl .moment-archive-btn{position:static;top:auto;left:auto;right:auto;}
 .moment-archive-btn{padding:3px 8px;font-size:10px;line-height:1.4;background:rgba(0,0,0,0.6);color:rgba(201,168,76,0.8);border:1px solid rgba(201,168,76,0.3);border-radius:6px;cursor:pointer;opacity:0.85;transition:opacity 0.15s;}
 .moment-archive-btn:hover{opacity:1;background:rgba(0,0,0,0.8);color:var(--gold);}
+.moment-archive-btn.is-archived{color:var(--gold);border-color:var(--gold);opacity:1;}
+.moment-archive-btn svg{display:block;}
