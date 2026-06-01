@@ -142,11 +142,16 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
     const rows = await db.prepare(
-      'SELECT a.*, u.name AS archived_by_name, s.name AS session_title, ch.name AS character_name ' +
+      'SELECT a.*, u.name AS archived_by_name, s.name AS session_title, ch.name AS character_name, ' +
+      'sf.role AS fork_role, fu.name AS fork_owner_name, ' +
+      'm.title AS moment_title, m.panel_order AS moment_panel_order ' +
       'FROM campaign_archives a ' +
       'LEFT JOIN users u ON u.id = a.archived_by ' +
       'LEFT JOIN sessions s ON s.id = a.session_id ' +
       'LEFT JOIN characters ch ON ch.id = a.character_id ' +
+      'LEFT JOIN session_forks sf ON sf.id = a.fork_id ' +
+      'LEFT JOIN users fu ON fu.id = sf.user_id ' +
+      'LEFT JOIN moments m ON m.id = a.moment_id ' +
       'WHERE a.campaign_id = ? ORDER BY a.created_at DESC, a.id DESC'
     ).all(req.params.campaignId);
     res.json(rows);

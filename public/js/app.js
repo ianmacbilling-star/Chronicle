@@ -3766,34 +3766,131 @@ function loadArchives() {
     .catch(function(){ if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Could not load the archive.</div>'; });
 }
 
-function archiveContextLabel(a) {
-  var parts = [];
-  if (a.character_name) parts.push(a.character_name);
-  if (a.session_title) parts.push(a.session_title);
-  return parts.join(' — ');
+// --- Archives screen: filters + enriched cards + prompt viewer ---
+function archiveVersionLabel(a) {
+  if (!a.fork_id) return null;
+  if (a.fork_role === 'dm') return 'Canonical';
+  return a.fork_owner_name ? (a.fork_owner_name + "'s version") : 'A version';
+}
+
+function archiveMomentLabel(a) {
+  if (a.moment_title) return a.moment_title;
+  if (a.moment_panel_order !== null && a.moment_panel_order !== undefined) return 'Panel ' + (a.moment_panel_order + 1);
+  return null;
+}
+
+function setArchiveFilter(key, val) {
+  if (!state.archiveFilters) state.archiveFilters = {};
+  state.archiveFilters[key] = val;
+  renderArchives();
+}
+
+function getFilteredArchives() {
+  var f = state.archiveFilters || {};
+  var rows = (state.archives || []).slice();
+  if (f.session) rows = rows.filter(function(a){ return String(a.session_id) === String(f.session); });
+  if (f.moment) rows = rows.filter(function(a){ return String(a.moment_id) === String(f.moment); });
+  if (f.creator) rows = rows.filter(function(a){ return String(a.archived_by) === String(f.creator); });
+  if (f.type) rows = rows.filter(function(a){ return a.image_type === f.type; });
+  rows.sort(function(a,b){
+    var ta = new Date(a.created_at || 0).getTime();
+    var tb = new Date(b.created_at || 0).getTime();
+    return f.sort === 'oldest' ? (ta - tb) : (tb - ta);
+  });
+  return rows;
+}
+
+function renderArchiveFilters() {
+  var host = document.getElementById('archives-filters');
+  if (!host) return;
+  var rows = state.archives || [];
+  if (!state.archiveFilters) state.archiveFilters = { session:'', moment:'', creator:'', type:'', sort:'newest' };
+  var f = state.archiveFilters;
+  var sessions = {}, moments = {}, creators = {};
+  rows.forEach(function(a){
+    if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
+    if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
+    if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
+  });
+  function opts(map, sel) {
+    return Object.keys(map).map(function(k){
+      return '<option value="' + k + '"' + (String(sel) === String(k) ? ' selected' : '') + '>' + escapeHtml(map[k]) + '</option>';
+    }).join('');
+  }
+  host.innerHTML =
+    '<select class="archive-filter" onchange="setArchiveFilter(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
+    '<select class="archive-filter" onchange="setArchiveFilter(\'moment\', this.value)"><option value="">All moments</option>' + opts(moments, f.moment) + '</select>' +
+    '<select class="archive-filter" onchange="setArchiveFilter(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
+    '<select class="archive-filter" onchange="setArchiveFilter(\'type\', this.value)"><option value="">All types</option>' +
+      '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
+      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option></select>' +
+    '<select class="archive-filter" onchange="setArchiveFilter(\'sort\', this.value)">' +
+      '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
+      '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>';
+}
+
+function viewArchivePrompt(id) {
+  var a = (state.archives || []).find(function(x){ return x.id === id; });
+  if (!a) return;
+  openPromptModal(a.image_prompt, a.title || 'Prompt');
+}
+
+function openPromptModal(text, title) {
+  closeLightbox();
+  var overlay = document.createElement('div');
+  overlay.className = 'lightbox-overlay';
+  overlay.id = 'lightbox';
+  overlay.onclick = function(e){ if (e.target === overlay || e.target.classList.contains('lightbox-close')) closeLightbox(); };
+  var close = document.createElement('div');
+  close.className = 'lightbox-close';
+  close.innerHTML = '&times;';
+  close.onclick = closeLightbox;
+  var box = document.createElement('div');
+  box.className = 'prompt-modal-box';
+  var h = document.createElement('div'); h.className = 'prompt-modal-title'; h.textContent = title || 'Prompt';
+  var bodyEl = document.createElement('div'); bodyEl.className = 'prompt-modal-text';
+  bodyEl.textContent = (text && String(text).trim()) ? text : '(No prompt was saved with this image.)';
+  box.appendChild(h); box.appendChild(bodyEl);
+  overlay.appendChild(close); overlay.appendChild(box);
+  document.body.appendChild(overlay);
 }
 
 function renderArchives() {
+  renderArchiveFilters();
   var grid = document.getElementById('archives-grid');
   if (!grid) return;
   var meId = (state.user && state.user.id) || null;
   var isDM = (state.currentCampaign && state.currentCampaign.my_role === 'dm');
-  var rows = state.archives || [];
-  if (!rows.length) {
+  if (!(state.archives || []).length) {
     grid.innerHTML = '<div class="muted" style="padding:20px;">Nothing archived yet. Use the treasure-chest button on any image to save a copy here.</div>';
+    return;
+  }
+  var rows = getFilteredArchives();
+  if (!rows.length) {
+    grid.innerHTML = '<div class="muted" style="padding:20px;">No archives match these filters.</div>';
     return;
   }
   grid.innerHTML = rows.map(function(a){
     var canDelete = isDM || (meId && a.archived_by === meId);
-    var ctx = archiveContextLabel(a);
-    var when = a.created_at ? new Date(a.created_at).toLocaleString() : '';
+    var when = a.created_at ? new Date(a.created_at).toLocaleDateString() : '';
     var typeLabel = a.image_type === 'character' ? 'Character' : 'Panel';
+    var ver = archiveVersionLabel(a);
+    var mom = archiveMomentLabel(a);
+    var meta = '<div class="archive-row"><span>Type</span><b>' + typeLabel + '</b></div>';
+    if (a.session_title) meta += '<div class="archive-row"><span>Session</span><b>' + escapeHtml(a.session_title) + '</b></div>';
+    if (ver) meta += '<div class="archive-row"><span>Version</span><b>' + escapeHtml(ver) + '</b></div>';
+    if (mom) meta += '<div class="archive-row"><span>Moment</span><b>' + escapeHtml(mom) + '</b></div>';
+    if (a.character_name) meta += '<div class="archive-row"><span>Character</span><b>' + escapeHtml(a.character_name) + '</b></div>';
+    meta += '<div class="archive-row"><span>Archived by</span><b>' + escapeHtml(a.archived_by_name || 'someone') + (when ? ' &middot; ' + when : '') + '</b></div>';
+    var promptBtn = a.image_prompt ? '<button class="archive-prompt-btn" onclick="viewArchivePrompt(' + a.id + ')" title="View the prompt for this image">&#128196; View Prompt</button>' : '';
     return '<div class="archive-card">' +
-      '<div class="archive-thumb"><img src="' + a.image_url + '" alt="' + (a.title || 'archived image') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>' +
+      '<div class="archive-thumb">' +
+        '<img loading="lazy" src="' + a.image_url + '" alt="' + escapeHtml(a.title || 'archived image') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
+        promptBtn +
+      '</div>' +
       '<div class="archive-meta">' +
-        '<div class="archive-title">' + (a.title || '(untitled)') + '</div>' +
-        '<div class="archive-sub">' + typeLabel + (ctx ? ' &middot; ' + ctx : '') + '</div>' +
-        '<div class="archive-sub">Archived by ' + (a.archived_by_name || 'someone') + (when ? ' &middot; ' + when : '') + '</div>' +
+        '<div class="archive-title">' + escapeHtml(a.title || '(untitled)') + '</div>' +
+        meta +
         (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
       '</div>' +
     '</div>';
