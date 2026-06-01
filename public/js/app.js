@@ -3762,7 +3762,7 @@ function toggleMomentLock(momentId) {
 function loadArchives() {
   var grid = document.getElementById('archives-grid');
   if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Loading…</div>';
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives')
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
     .then(function(data){ state.archives = Array.isArray(data) ? data : []; renderArchives(); })
     .catch(function(){ if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Could not load the archive.</div>'; });
@@ -3847,10 +3847,9 @@ function clearArchiveFilters() {
 }
 
 function ensureArchivesLoaded(cb) {
-  if (state.archives && state.archives.length) { cb(); return; }
   var cid = state.currentCampaign && state.currentCampaign.id;
   if (!cid) { cb(); return; }
-  fetch('/api/campaigns/' + cid + '/archives').then(function(r){ return r.json(); }).then(function(rows){
+  fetch('/api/campaigns/' + cid + '/archives', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(rows){
     state.archives = Array.isArray(rows) ? rows : [];
     cb();
   }).catch(function(){ state.archives = state.archives || []; cb(); });
@@ -4249,7 +4248,7 @@ function renderStoryboard() {
     }
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + '<div class="panel-img-tl">' + lockBtn + archiveBtn + '</div>' + regenBtn + replaceBtn +
+        imgHtml + '<div class="panel-img-tl">' + lockBtn + archiveBtn + '</div>' + '<div class="panel-img-actions">' + regenBtn + replaceBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
