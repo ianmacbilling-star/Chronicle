@@ -2612,7 +2612,7 @@ function generateAllImages() {
   // Warn if images already exist
   var hasImages = state.moments && state.moments.some(function(m) { return m.image; });
   if (hasImages) {
-    if (!confirm('This will replace all existing panel images. Are you sure?')) {
+    if (!confirm('This will replace all existing panel images that are not locked. Are you sure?')) {
       return;
     }
   }
@@ -2625,13 +2625,14 @@ function generateAllImages() {
   btn.disabled = true;
   progressWrap.style.display = 'block';
   fill.style.width = '5%';
-  msg.textContent = 'Generating ' + state.moments.length + ' images with Flux AI...';
+  var _toGen = (state.moments || []).filter(function(m){ return !m.locked; }).length;
+  msg.textContent = 'Generating ' + _toGen + ' image' + (_toGen === 1 ? '' : 's') + '...';
 
   // Non-destructive busy overlay on each panel — existing images stay
   // in the DOM underneath, dimmed. On refusal/failure we remove overlays
   // and the user's previous images are still right there.
   state.moments.forEach(function(m) {
-    showPanelBusy(m.id, 'Generating');
+    if (!m.locked) showPanelBusy(m.id, 'Generating');
   });
 
   fetch('/api/images/generate-all', {
@@ -2663,7 +2664,9 @@ function generateAllImages() {
     }
 
     fill.style.width = '100%';
-    msg.textContent = data.count + ' of ' + data.total + ' images generated!';
+    var _doneMsg = data.count + ' image' + (data.count === 1 ? '' : 's') + ' generated';
+    if (data.skipped_locked) { _doneMsg += ' (' + data.skipped_locked + ' locked panel' + (data.skipped_locked === 1 ? '' : 's') + ' skipped)'; }
+    msg.textContent = _doneMsg + '!';
 
     // Tokens were spent — update the header balance.
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -4904,7 +4907,7 @@ function generateAllImages() {
   // Warn if images already exist
   var hasImages = state.moments && state.moments.some(function(m) { return m.image; });
   if (hasImages) {
-    if (!confirm('This will replace all existing panel images. Are you sure?')) {
+    if (!confirm('This will replace all existing panel images that are not locked. Are you sure?')) {
       return;
     }
   }
@@ -4917,13 +4920,14 @@ function generateAllImages() {
   btn.disabled = true;
   progressWrap.style.display = 'block';
   fill.style.width = '5%';
-  msg.textContent = 'Generating ' + state.moments.length + ' images with Flux AI...';
+  var _toGen = (state.moments || []).filter(function(m){ return !m.locked; }).length;
+  msg.textContent = 'Generating ' + _toGen + ' image' + (_toGen === 1 ? '' : 's') + '...';
 
   // Non-destructive busy overlay on each panel — existing images stay
   // in the DOM underneath, dimmed. On refusal/failure we remove overlays
   // and the user's previous images are still right there.
   state.moments.forEach(function(m) {
-    showPanelBusy(m.id, 'Generating');
+    if (!m.locked) showPanelBusy(m.id, 'Generating');
   });
 
   fetch('/api/images/generate-all', {
@@ -4955,7 +4959,9 @@ function generateAllImages() {
     }
 
     fill.style.width = '100%';
-    msg.textContent = data.count + ' of ' + data.total + ' images generated!';
+    var _doneMsg = data.count + ' image' + (data.count === 1 ? '' : 's') + ' generated';
+    if (data.skipped_locked) { _doneMsg += ' (' + data.skipped_locked + ' locked panel' + (data.skipped_locked === 1 ? '' : 's') + ' skipped)'; }
+    msg.textContent = _doneMsg + '!';
 
     // Tokens were spent — update the header balance.
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
