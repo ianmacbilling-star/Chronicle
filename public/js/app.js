@@ -1133,7 +1133,9 @@ function openChangeReview(charId) {
         'placeholder="e.g. left horn broken off to a jagged stump">' +
         detailText + '</textarea>' +
       momentSelector +
-      '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + '</div>' +
+      '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml +
+        (currentImg ? '<button class="moment-archive-btn sc-review-archive' + (isMomentArchived(r) ? ' is-archived' : '') + '" id="sc-archive-' + charId + '" onclick="toggleArchiveCharSnapshot(' + charId + ')" title="' + (isMomentArchived(r) ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + archiveChestIcon(isMomentArchived(r)) + '</button>' : '') +
+      '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions">' +
         '<button class="btn btn-sm" id="sc-regen-' + charId + '" ' +
@@ -3776,6 +3778,37 @@ function toggleArchiveMoment(momentId) {
         moment.archived = !isArchived;
         showAlert(isArchived ? 'Removed from your Archive.' : 'Image saved to your Archive.');
         renderStoryboard();
+      } else {
+        alert((data && data.error) || 'Could not update the Archive.');
+      }
+    })
+    .catch(function(){ alert('Could not update the Archive.'); });
+}
+
+// Archive toggle for a character's per-version reference image (Stage-3 panel).
+function toggleArchiveCharSnapshot(characterId) {
+  var rows = state.sessionCharacterRows || [];
+  var r = rows.find(function(x){ return x.character_id === characterId; });
+  if (!r) return;
+  if (!(r.reference_url || r.canonical_reference_url)) { alert('No reference image to archive yet.'); return; }
+  var isArchived = isMomentArchived(r);
+  var btn = document.getElementById('sc-archive-' + characterId);
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', {
+    method: isArchived ? 'DELETE' : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ image_type: 'character', character_id: characterId,
+                           session_id: state.currentSession.id, fork_id: state.currentForkId })
+  })
+    .then(function(res){ return res.json(); })
+    .then(function(data){
+      if (data && data.success) {
+        r.archived = !isArchived;
+        showAlert(isArchived ? 'Removed from your Archive.' : 'Reference image saved to your Archive.');
+        if (btn) {
+          btn.className = 'moment-archive-btn sc-review-archive' + (r.archived ? ' is-archived' : '');
+          btn.title = r.archived ? 'In your Archive — click to remove' : 'Save this reference image to your Archive';
+          btn.innerHTML = archiveChestIcon(r.archived);
+        }
       } else {
         alert((data && data.error) || 'Could not update the Archive.');
       }

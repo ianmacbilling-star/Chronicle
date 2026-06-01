@@ -784,6 +784,10 @@ async function migrateArchives(pool) {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_session ON campaign_archives(session_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_fork ON campaign_archives(fork_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_moment ON campaign_archives(moment_id)');
+  // character_id ties a 'character' archive to its character (canonical when
+  // fork_id is NULL, or a per-fork snapshot). Added post-table; idempotent.
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_archives_character ON campaign_archives(character_id)');
 }
 
 // getOrCreateDmFork: returns the id of the session's DM fork, creating
