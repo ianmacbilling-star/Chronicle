@@ -507,7 +507,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -562,7 +562,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members', archives:'Archives'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
@@ -573,6 +573,7 @@ function showCampaignSection(section) {
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
   if (section === 'novel') { loadNovelPeople(); loadNovelSummary(); }
   if (section === 'assets') loadAssets();
+  if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
 
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).
@@ -3753,6 +3754,68 @@ function toggleMomentLock(momentId) {
 }
 
 // Treasure-chest icons. Closed lid = archived (in YOUR archive); open lid = not.
+// ============================================================
+// ARCHIVES (campaign-wide gallery of saved image copies)
+// ============================================================
+function loadArchives() {
+  var grid = document.getElementById('archives-grid');
+  if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Loading…</div>';
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives')
+    .then(function(r){ return r.json(); })
+    .then(function(data){ state.archives = Array.isArray(data) ? data : []; renderArchives(); })
+    .catch(function(){ if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Could not load the archive.</div>'; });
+}
+
+function archiveContextLabel(a) {
+  var parts = [];
+  if (a.character_name) parts.push(a.character_name);
+  if (a.session_title) parts.push(a.session_title);
+  return parts.join(' — ');
+}
+
+function renderArchives() {
+  var grid = document.getElementById('archives-grid');
+  if (!grid) return;
+  var meId = (state.user && state.user.id) || null;
+  var isDM = (state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  var rows = state.archives || [];
+  if (!rows.length) {
+    grid.innerHTML = '<div class="muted" style="padding:20px;">Nothing archived yet. Use the treasure-chest button on any image to save a copy here.</div>';
+    return;
+  }
+  grid.innerHTML = rows.map(function(a){
+    var canDelete = isDM || (meId && a.archived_by === meId);
+    var ctx = archiveContextLabel(a);
+    var when = a.created_at ? new Date(a.created_at).toLocaleString() : '';
+    var typeLabel = a.image_type === 'character' ? 'Character' : 'Panel';
+    return '<div class="archive-card">' +
+      '<div class="archive-thumb"><img src="' + a.image_url + '" alt="' + (a.title || 'archived image') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>' +
+      '<div class="archive-meta">' +
+        '<div class="archive-title">' + (a.title || '(untitled)') + '</div>' +
+        '<div class="archive-sub">' + typeLabel + (ctx ? ' &middot; ' + ctx : '') + '</div>' +
+        '<div class="archive-sub">Archived by ' + (a.archived_by_name || 'someone') + (when ? ' &middot; ' + when : '') + '</div>' +
+        (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function deleteArchive(id) {
+  if (!confirm('Remove this image from the campaign Archive? This permanently deletes the saved copy.')) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + id, { method: 'DELETE' })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.success) {
+        showAlert('Removed from the Archive.');
+        state.archives = (state.archives || []).filter(function(a){ return a.id !== id; });
+        renderArchives();
+      } else {
+        alert((data && data.error) || 'Could not remove the archive.');
+      }
+    })
+    .catch(function(){ alert('Could not remove the archive.'); });
+}
+
 function archiveChestIcon(isClosed) {
   if (isClosed) {
     return '<img src="/images/chest-closed.png" alt="archived" />';
@@ -4119,7 +4182,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -4174,7 +4237,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members', archives:'Archives'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
@@ -4185,6 +4248,7 @@ function showCampaignSection(section) {
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
   if (section === 'novel') { loadNovelPeople(); loadNovelSummary(); }
   if (section === 'assets') loadAssets();
+  if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
 
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).

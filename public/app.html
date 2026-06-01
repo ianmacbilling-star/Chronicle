@@ -71,6 +71,7 @@
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
           <button class="btn btn-primary dm-only" id="btn-new-session" onclick="openSessionModal()">+ New session</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">&#128451; Archives</button>
           <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
         </div>
       </div>
@@ -88,6 +89,7 @@
           <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">&#128451; Archives</button>
           <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
         </div>
       </div>
@@ -110,6 +112,7 @@
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">&#128451; Archives</button>
         </div>
       </div>
       <div class="char-grid" id="asset-grid">
@@ -117,6 +120,24 @@
           <div class="plus">+</div><span>Add asset</span>
         </div>
       </div>
+    </div>
+
+    <!-- ==================== CAMPAIGN SECTION: ARCHIVES ==================== -->
+    <div id="view-archives" class="view" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Archives</div>
+          <div class="page-subtitle">Saved copies of generated images — kept safe even if a panel is regenerated or a session is deleted</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">&#128451; Archives</button>
+        </div>
+      </div>
+      <div id="archives-grid" class="archives-grid"></div>
     </div>
 
     <!-- ==================== CAMPAIGN SECTION: GRAPHIC NOVEL ==================== -->

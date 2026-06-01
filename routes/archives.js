@@ -134,4 +134,50 @@ router.delete('/', requireAuth, verifyCampaignMember, async function(req, res) {
   }
 });
 
+// GET /api/campaigns/:campaignId/archives — list every archived image in the
+// campaign (any member can view). Joins owner/session/character for display.
+router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      'SELECT a.*, u.name AS archived_by_name, s.name AS session_title, ch.name AS character_name ' +
+      'FROM campaign_archives a ' +
+      'LEFT JOIN users u ON u.id = a.archived_by ' +
+      'LEFT JOIN sessions s ON s.id = a.session_id ' +
+      'LEFT JOIN characters ch ON ch.id = a.character_id ' +
+      'WHERE a.campaign_id = ? ORDER BY a.created_at DESC, a.id DESC'
+    ).all(req.params.campaignId);
+    res.json(rows);
+  } catch (e) {
+    console.error('archive list error:', e.message);
+    res.json([]);
+  }
+});
+
+// DELETE /api/campaigns/:campaignId/archives/:archiveId — remove ONE archive
+// entry by id. Allowed if you archived it (archived_by) OR you are the Story
+// Master. Releases the R2 copy via the refcount after the row is gone.
+router.delete('/:archiveId', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const row = await db.prepare('SELECT id, campaign_id, image_url, archived_by FROM campaign_archives WHERE id = ?').get(req.params.archiveId);
+    if (!row) return res.json({ success: true, removed: 0 });
+    if (String(row.campaign_id) !== String(req.params.campaignId)) {
+      return res.status(403).json({ error: 'Not in this campaign' });
+    }
+    const isOwner = String(row.archived_by) === String(req.session.userId);
+    const isDm = req.campaignRole === 'dm';
+    if (!isOwner && !isDm) {
+      return res.status(403).json({ error: 'Only the person who archived this (or the Story Master) can remove it.' });
+    }
+    await db.prepare('DELETE FROM campaign_archives WHERE id = ?').run(row.id);
+    try { await releaseImage(db, row.image_url); }
+    catch (e) { console.error('release archive copy:', e.message); }
+    res.json({ success: true, removed: 1 });
+  } catch (e) {
+    console.error('archive delete-by-id error:', e.message);
+    res.json({ error: 'Could not remove the archive. Please try again.' });
+  }
+});
+
 module.exports = router;
