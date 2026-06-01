@@ -3863,7 +3863,7 @@ function toggleArchiveCharSnapshot(characterId) {
     method: isArchived ? 'DELETE' : 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ image_type: 'character', character_id: characterId,
-                           session_id: state.currentSession.id, fork_id: state.currentForkId })
+                           session_id: state.currentSession.id, fork_id: r.fork_id })
   })
     .then(function(res){ return res.json(); })
     .then(function(data){

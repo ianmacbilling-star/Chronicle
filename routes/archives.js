@@ -51,8 +51,10 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
         const sc = await db.prepare(
           'SELECT reference_url, prompt FROM session_characters WHERE fork_id = ? AND character_id = ?'
         ).get(forkId, characterId);
-        if (!sc || !sc.reference_url) return res.json({ error: 'This character has no reference image to archive yet.' });
-        sourceUrl = sc.reference_url; prompt = sc.prompt;
+        // Mirror the panel's display fallback: snapshot reference, else canonical.
+        sourceUrl = (sc && sc.reference_url) ? sc.reference_url : ch.canonical_reference_url;
+        prompt = (sc && sc.prompt) ? sc.prompt : ch.canonical_prompt;
+        if (!sourceUrl) return res.json({ error: 'This character has no reference image to archive yet.' });
       } else {
         if (!ch.canonical_reference_url) return res.json({ error: 'This character has no reference image to archive yet.' });
         sourceUrl = ch.canonical_reference_url; prompt = ch.canonical_prompt;

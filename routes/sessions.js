@@ -245,7 +245,7 @@ router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(
   const viewForkId = await getViewableForkId(db, req.params.id, req.session.userId, req.query.fork_id);
   if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
   const rows = await db.prepare(
-    'SELECT sc.id, sc.character_id, sc.prompt, sc.change_note, sc.edited_at, ' +
+    'SELECT sc.id, sc.character_id, sc.fork_id, sc.prompt, sc.change_note, sc.edited_at, ' +
     'sc.reference_url, sc.change_flag, sc.change_detail, sc.change_status, sc.change_moment_index, ' +
     'ch.name, ch.cls, ch.is_npc, ch.image_portrait, ch.image, ch.image_fullbody, ch.canonical_reference_url, ' +
     'EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.character_id = sc.character_id AND ca.fork_id = sc.fork_id AND ca.archived_by = ?) AS archived ' +
