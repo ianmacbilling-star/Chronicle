@@ -2732,6 +2732,7 @@ function regenImage(momentId, index) {
       return;
     }
     moment.image = data.image_url;
+    moment.archived = false; // brand-new image — not archived yet, so reopen the chest
     // A token was spent — update the header balance.
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     renderStoryboard();
@@ -5291,6 +5292,7 @@ function regenImage(momentId, index) {
       return;
     }
     moment.image = data.image_url;
+    moment.archived = false; // brand-new image — not archived yet, so reopen the chest
     // A token was spent — update the header balance.
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     renderStoryboard();
