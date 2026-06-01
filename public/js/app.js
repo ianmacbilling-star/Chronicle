@@ -3750,9 +3750,9 @@ function toggleMomentLock(momentId) {
 // Treasure-chest icons. Closed lid = archived (in YOUR archive); open lid = not.
 function archiveChestIcon(isClosed) {
   if (isClosed) {
-    return "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9'/><path d='M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4'/><path d='M4 13h16'/><path d='M11 13v2.5h2V13'/></svg>";
+    return "<svg viewBox='0 0 64 64' width='18' height='18' fill='none' stroke='currentColor' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><rect x='10' y='24' width='44' height='28' rx='3'/><rect x='10' y='16' width='44' height='10' rx='3'/><line x1='10' y1='30' x2='54' y2='30'/><line x1='22' y1='24' x2='22' y2='52'/><line x1='42' y1='24' x2='42' y2='52'/><rect x='29' y='30' width='6' height='10' rx='1'/></svg>";
   }
-  return "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7'/><path d='M3.5 12l1.8-4.6A2.5 2.5 0 0 1 7.6 6h8.8a2.5 2.5 0 0 1 2.3 1.4L20.5 12z'/><path d='M5 12h14'/><circle cx='12' cy='15.5' r='1.1' fill='currentColor' stroke='none'/></svg>";
+  return "<svg viewBox='0 0 64 64' width='18' height='18' fill='none' stroke='currentColor' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><rect x='10' y='28' width='44' height='24' rx='3'/><polygon points='10,28 54,28 48,10 16,10'/><line x1='10' y1='34' x2='54' y2='34'/><line x1='22' y1='28' x2='22' y2='52'/><line x1='42' y1='28' x2='42' y2='52'/><rect x='29' y='34' width='6' height='10' rx='1'/></svg>";
 }
 
 function isMomentArchived(m) {
