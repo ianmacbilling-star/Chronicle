@@ -1830,8 +1830,11 @@ function renderCharModalPrompt(char) {
   var refImg = char.canonical_reference_url
     ? '<div class="char-ref-image" id="char-ref-image-' + char.id + '">' +
         '<div class="char-ref-label">Reference image</div>' +
-        '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
-        'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
+        '<div class="char-ref-imgwrap">' +
+          '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
+          'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
+          '<button class="moment-archive-btn char-ref-archive' + (isMomentArchived(char) ? ' is-archived' : '') + '" id="char-archive-' + char.id + '" onclick="toggleArchiveCharCanonical(' + char.id + ')" title="' + (isMomentArchived(char) ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + archiveChestIcon(isMomentArchived(char)) + '</button>' +
+        '</div>' +
       '</div>'
     : '<div class="char-ref-image" id="char-ref-image-' + char.id + '"></div>';
 
@@ -3808,6 +3811,35 @@ function toggleArchiveCharSnapshot(characterId) {
           btn.className = 'moment-archive-btn sc-review-archive' + (r.archived ? ' is-archived' : '');
           btn.title = r.archived ? 'In your Archive — click to remove' : 'Save this reference image to your Archive';
           btn.innerHTML = archiveChestIcon(r.archived);
+        }
+      } else {
+        alert((data && data.error) || 'Could not update the Archive.');
+      }
+    })
+    .catch(function(){ alert('Could not update the Archive.'); });
+}
+
+// Archive toggle for a character's CANONICAL reference image (character modal).
+function toggleArchiveCharCanonical(charId) {
+  var char = (state.characters || []).find(function(c){ return c.id === charId; });
+  if (!char) return;
+  if (!char.canonical_reference_url) { alert('No reference image to archive yet.'); return; }
+  var isArchived = isMomentArchived(char);
+  var btn = document.getElementById('char-archive-' + charId);
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', {
+    method: isArchived ? 'DELETE' : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ image_type: 'character', character_id: charId })
+  })
+    .then(function(res){ return res.json(); })
+    .then(function(data){
+      if (data && data.success) {
+        char.archived = !isArchived;
+        showAlert(isArchived ? 'Removed from your Archive.' : 'Reference image saved to your Archive.');
+        if (btn) {
+          btn.className = 'moment-archive-btn char-ref-archive' + (char.archived ? ' is-archived' : '');
+          btn.title = char.archived ? 'In your Archive — click to remove' : 'Save this reference image to your Archive';
+          btn.innerHTML = archiveChestIcon(char.archived);
         }
       } else {
         alert((data && data.error) || 'Could not update the Archive.');

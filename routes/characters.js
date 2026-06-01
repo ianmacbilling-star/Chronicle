@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
-const { uploadFile, deleteFile } = require('../storage/storage');
+const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
 const multer = require('multer');
@@ -29,8 +29,6 @@ const uploadFields = upload.fields([
 async function handleFileUpload(files, fieldname, oldUrl) {
   if (!files || !files[fieldname] || !files[fieldname][0]) return null;
   const file = files[fieldname][0];
-  // Delete old file if exists
-  if (oldUrl) await deleteFile(oldUrl);
   // Generate unique filename
   const ext = path.extname(file.originalname) || '.jpg';
   const filename = 'char-' + Date.now() + '-' + fieldname + ext;
@@ -44,11 +42,12 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // "Played by X" badge on the Characters tab. Owner is NULL for NPCs,
   // unowned PCs, and stub characters still awaiting their invitee.
   const characters = await db.prepare(
-    'SELECT c.*, u.name AS owner_name ' +
+    'SELECT c.*, u.name AS owner_name, ' +
+    'EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.character_id = c.id AND ca.fork_id IS NULL AND ca.archived_by = ?) AS archived ' +
     'FROM characters c ' +
     'LEFT JOIN users u ON u.id = c.owner_user_id ' +
     'WHERE c.campaign_id = ? ORDER BY c.created_at ASC'
-  ).all(req.params.campaignId);
+  ).all(req.session.userId, req.params.campaignId);
   res.json(characters);
 });
 
@@ -99,13 +98,15 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, uploadFields, 
     const now = new Date().toISOString();
     const imageFields = ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other'];
     const images = {};
+    const oldImages = {};
 
     for (const field of imageFields) {
       if (req.body['clear_' + field] === 'true') {
-        await deleteFile(char[field]);
+        oldImages[field] = char[field];
         images[field] = null;
       } else if (req.files && req.files[field] && req.files[field][0]) {
-        images[field] = await handleFileUpload(req.files, field, char[field]);
+        oldImages[field] = char[field];
+        images[field] = await handleFileUpload(req.files, field);
       } else {
         images[field] = char[field];
       }
@@ -129,6 +130,12 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, uploadFields, 
       npcVal, now, req.session.userId, char.id
     );
 
+    // Release replaced/cleared images now that the row points elsewhere
+    // (refcounted — a shared reference still in use is spared).
+    for (const field of imageFields) {
+      if (oldImages[field] && oldImages[field] !== images[field]) await releaseImage(db, oldImages[field]);
+    }
+
     const updated = await db.prepare('SELECT * FROM characters WHERE id = ?').get(char.id);
     res.json(updated);
   } catch(e) {
@@ -144,12 +151,12 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
     if (!char) return res.status(404).json({ error: 'Character not found' });
 
-    // Delete all images
-    for (const field of ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other']) {
-      await deleteFile(char[field]);
-    }
-
     await db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
+    // Release this character's images (refcounted — a generated reference
+    // still used by a session snapshot in another fork is spared).
+    for (const field of ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'canonical_reference_url']) {
+      await releaseImage(db, char[field]);
+    }
     res.json({ success: true });
   } catch(e) {
     res.json({ error: e.message });
@@ -245,6 +252,7 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
         referenceUrl = await imageHelpers.generateReferenceImage(falKey, promptText, portrait, modelKey);
         await db.prepare('UPDATE characters SET canonical_reference_url = ? WHERE id = ?')
           .run(referenceUrl, char.id);
+        if (char.canonical_reference_url && char.canonical_reference_url !== referenceUrl) await releaseImage(db, char.canonical_reference_url);
         await imageHelpers.logImageGeneration(db, req.session.userId, 'character_reference', char.id);
         // Spend AFTER success — failed generation never reaches here.
         await spendTokens(req.session.userId, refCost, {

@@ -1051,6 +1051,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   cursor: zoom-in;
   display: block;
 }
+.char-ref-imgwrap {
+  position: relative;
+  display: inline-block;
+}
+.char-ref-archive {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+}
 
 /* NPC checkbox row + badge */
 .form-checkbox-row {
