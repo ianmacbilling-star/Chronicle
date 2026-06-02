@@ -1646,3 +1646,16 @@ body.role-player #stab-export { display: block !important; }
    stamped at generation; narrative_style_used stamped on the narrative write). */
 .moment-artstyle{font-size:10px;color:rgba(201,168,76,0.5);margin-top:5px;}
 .narr-block-style{text-transform:none;letter-spacing:0;color:rgba(201,168,76,0.7);font-weight:600;margin-left:6px;}
+
+/* Campaign cover art on the list chip: faded, bordered, filling most of the
+   card behind the text. Content is lifted above the cover layer. */
+.campaign-card{position:relative;overflow:hidden;}
+.campaign-card-cover{position:absolute;inset:8px;border-radius:8px;background-size:cover;background-position:center;opacity:0.28;border:1px solid rgba(201,168,76,0.45);pointer-events:none;z-index:0;}
+.campaign-card-icon,.campaign-card-name,.campaign-card-desc,.campaign-card-meta{position:relative;z-index:1;}
+/* Inline campaign name/description editing on the Sessions header */
+.camp-edit-pencil{background:none;border:none;color:rgba(201,168,76,0.5);cursor:pointer;font-size:0.55em;padding:2px 5px;line-height:1;border-radius:4px;}
+.camp-edit-pencil:hover{color:var(--gold);background:rgba(201,168,76,0.12);}
+.camp-edit-input{font-family:inherit;font-size:0.85em;background:rgba(12,8,4,0.75);border:1px solid rgba(201,168,76,0.45);border-radius:5px;color:var(--gold);padding:2px 8px;min-width:220px;max-width:100%;}
+.camp-edit-textarea{display:block;width:100%;max-width:560px;font-family:var(--font-body,inherit);font-size:12px;line-height:1.5;background:rgba(12,8,4,0.75);border:1px solid rgba(201,168,76,0.45);border-radius:5px;color:rgba(230,210,160,0.92);padding:5px 8px;min-height:46px;margin-top:5px;resize:vertical;}
+/* Archive 'Make cover' control (DM-only) */
+.archive-cover-btn.is-cover{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,0.16);}

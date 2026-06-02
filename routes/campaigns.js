@@ -65,8 +65,13 @@ router.put('/:id', requireAuth, async function(req, res) {
   const campaign = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(req.params.id);
   if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
   const now = new Date().toISOString();
-  await db.prepare('UPDATE campaigns SET name=?, description=?, edited_at=?, edited_by=? WHERE id=?')
-    .run(req.body.name || campaign.name, req.body.description !== undefined ? req.body.description : campaign.description, now, req.session.userId, campaign.id);
+  await db.prepare('UPDATE campaigns SET name=?, description=?, cover_image_url=?, edited_at=?, edited_by=? WHERE id=?')
+    .run(
+      req.body.name || campaign.name,
+      req.body.description !== undefined ? req.body.description : campaign.description,
+      req.body.cover_image_url !== undefined ? req.body.cover_image_url : campaign.cover_image_url,
+      now, req.session.userId, campaign.id
+    );
   const updated = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(campaign.id);
   res.json(updated);
 });

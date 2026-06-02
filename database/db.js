@@ -244,6 +244,7 @@ async function initPostgres() {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'trialing'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMP',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true',
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cover_image_url TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS art_style TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS layout_style TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS session_notes TEXT',

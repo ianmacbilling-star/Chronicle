@@ -62,17 +62,20 @@
     <!-- ==================== CAMPAIGN SECTION: SESSIONS ==================== -->
     <div id="view-sessions" class="view" style="display:none;">
       <div class="page-header">
-        <div>
-          <div class="page-title" id="sessions-title">Sessions</div>
-          <div class="page-subtitle">Each session holds a transcript and generates a storyboard</div>
+        <div style="min-width:0;">
+          <div class="page-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+            <span id="sessions-camp-name">Sessions</span><span id="sessions-count" style="font-size:0.6em;font-weight:400;color:var(--text-light);"></span>
+            <button class="camp-edit-pencil dm-only" id="camp-edit-btn" onclick="startCampaignEdit()" title="Edit campaign name &amp; description">&#9998;</button>
+          </div>
+          <div class="page-subtitle" id="sessions-camp-desc"></div>
         </div>
         <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">Members</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">Characters</button>
           <button class="btn btn-primary dm-only" id="btn-new-session" onclick="openSessionModal()">+ New session</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('archives')">&#128451; Archives</button>
-          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
+          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">Graphic Novel</button>
         </div>
       </div>
       <div class="sessions-list" id="sessions-list"></div>
@@ -86,11 +89,11 @@
           <div class="page-subtitle">Characters appear in your storyboard panels</div>
         </div>
         <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('archives')">&#128451; Archives</button>
-          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">&#128213; Graphic Novel</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">Members</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
+          <button class="btn btn-sm dm-only" onclick="showCampaignSection('novel')">Graphic Novel</button>
         </div>
       </div>
       <div class="char-grid" id="char-grid">
@@ -108,11 +111,11 @@
           <div class="page-subtitle">Locations, NPCs and items — referenced in your storyboard panels by name</div>
         </div>
         <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('assets')">&#127956; Assets</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('archives')">&#128451; Archives</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">Members</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">Characters</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
         </div>
       </div>
       <div class="char-grid" id="asset-grid">
@@ -150,15 +153,15 @@
           <div class="page-subtitle">Your complete campaign story</div>
         </div>
         <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="showCampaignSection('members')">&#128101; Members</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">&#128203; Sessions</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('characters')">&#129464; Characters</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('members')">Members</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">Sessions</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('characters')">Characters</button>
         </div>
       </div>
 
       <!-- Novel tabs -->
       <div class="sess-tabs" style="margin-bottom:8px;">
-        <div class="sess-tab active" id="ntab-sessions" onclick="switchNovelTab('sessions')">&#128203; Sessions</div>
+        <div class="sess-tab active" id="ntab-sessions" onclick="switchNovelTab('sessions')">Sessions</div>
         <div class="sess-tab" id="ntab-preview" onclick="switchNovelTab('preview')">&#128213; Preview &amp; Export</div>
       </div>
 

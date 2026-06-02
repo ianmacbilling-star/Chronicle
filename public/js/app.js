@@ -596,7 +596,9 @@ function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
   var html = state.campaigns.map(function(c) {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
-      '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>' +
+      (c.cover_image_url
+        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
+        : '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
@@ -689,15 +691,8 @@ function loadSessions() {
 function renderSessions() {
   var list = document.getElementById('sessions-list');
 
-  // Update the page title with a session count, e.g. "The Hidden Pass (35 sessions)"
-  var titleEl = document.getElementById('sessions-title');
-  if (titleEl) {
-    var campName = (state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : 'Sessions';
-    var n = state.sessions.length;
-    titleEl.innerHTML = campName +
-      ' <span style="font-size:0.6em;font-weight:400;color:var(--text-light);">(' +
-      n + ' session' + (n === 1 ? '' : 's') + ')</span>';
-  }
+  // Campaign name + count + description in the header (DM can edit inline).
+  renderCampaignHeaderDisplay();
 
   if (!state.sessions.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
@@ -2054,6 +2049,109 @@ function cancelNarrOnly() {
   var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
   var c = document.getElementById('sb-narr-cancel-btn'); if (c) c.style.display = 'none';
   var b = document.getElementById('sb-generate-narr-btn'); if (b) b.disabled = false;
+}
+
+// ============================================================
+// CAMPAIGN HEADER — editable name + description on the Sessions screen,
+// plus the campaign cover art (set from the Archive; shown on the chip).
+// ============================================================
+function renderCampaignHeaderDisplay() {
+  var c = state.currentCampaign;
+  var nameEl = document.getElementById('sessions-camp-name');
+  var cntEl = document.getElementById('sessions-count');
+  var descEl = document.getElementById('sessions-camp-desc');
+  if (nameEl) nameEl.textContent = (c && c.name) ? c.name : 'Sessions';
+  if (cntEl) {
+    var n = state.sessions ? state.sessions.length : 0;
+    cntEl.textContent = ' (' + n + ' session' + (n === 1 ? '' : 's') + ')';
+  }
+  if (descEl) descEl.textContent = (c && c.description) ? c.description : '';
+}
+
+function startCampaignEdit() {
+  var c = state.currentCampaign;
+  if (!c) return;
+  if (document.getElementById('camp-edit-name-input')) return; // already editing
+  var nameEl = document.getElementById('sessions-camp-name');
+  var descEl = document.getElementById('sessions-camp-desc');
+  var cntEl = document.getElementById('sessions-count');
+  if (cntEl) cntEl.textContent = '';
+  if (nameEl) nameEl.innerHTML = '<input id="camp-edit-name-input" class="camp-edit-input" onblur="campaignEditBlur()" onkeydown="campaignEditKey(event)" />';
+  if (descEl) descEl.innerHTML = '<textarea id="camp-edit-desc-input" class="camp-edit-textarea" placeholder="Add a description..." onblur="campaignEditBlur()"></textarea>';
+  var ni = document.getElementById('camp-edit-name-input');
+  if (ni) { ni.value = c.name || ''; ni.focus(); ni.select(); }
+  var di = document.getElementById('camp-edit-desc-input');
+  if (di) di.value = c.description || '';
+}
+
+function campaignEditKey(e) {
+  if (e && e.key === 'Enter' && e.target && e.target.id === 'camp-edit-name-input') {
+    e.preventDefault();
+    e.target.blur();
+  }
+}
+
+// Commit only once focus has fully left BOTH edit fields, so tabbing from the
+// name to the description doesn't prematurely close the editor. Saves on blur.
+function campaignEditBlur() {
+  setTimeout(function() {
+    var ni = document.getElementById('camp-edit-name-input');
+    var di = document.getElementById('camp-edit-desc-input');
+    var ae = document.activeElement;
+    if (ae === ni || ae === di) return; // still editing one of the fields
+    var c = state.currentCampaign;
+    if (!c) { renderCampaignHeaderDisplay(); return; }
+    var newName = ni ? ni.value.trim() : (c.name || '');
+    var newDesc = di ? di.value : (c.description || '');
+    if (!newName) newName = c.name; // never blank the name
+    if (newName === c.name && newDesc === (c.description || '')) {
+      renderCampaignHeaderDisplay();
+      return;
+    }
+    fetch('/api/campaigns/' + c.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName, description: newDesc })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.id) {
+        c.name = data.name; c.description = data.description;
+        var i = state.campaigns.findIndex(function(x){ return x.id === data.id; });
+        if (i >= 0) { state.campaigns[i].name = data.name; state.campaigns[i].description = data.description; }
+      }
+    })
+    .catch(function(){})
+    .then(function(){ renderCampaignHeaderDisplay(); });
+  }, 0);
+}
+
+// Set (or clear, by re-clicking the current one) the campaign cover from an
+// archived image. DM-only; the button is only rendered for the DM.
+function setCampaignCover(archiveId) {
+  var c = state.currentCampaign;
+  if (!c) return;
+  var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
+  if (!a) return;
+  var newCover = (c.cover_image_url === a.image_url) ? '' : a.image_url;
+  fetch('/api/campaigns/' + c.id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cover_image_url: newCover })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data && data.id) {
+      c.cover_image_url = data.cover_image_url || '';
+      var i = state.campaigns.findIndex(function(x){ return x.id === data.id; });
+      if (i >= 0) state.campaigns[i].cover_image_url = data.cover_image_url || '';
+      renderArchives();
+      showAlert(newCover ? 'Campaign cover set.' : 'Campaign cover cleared.');
+    } else {
+      showAlert((data && data.error) || 'Could not update the cover.');
+    }
+  })
+  .catch(function(){ showAlert('Could not update the campaign cover.'); });
 }
 
 function showErrorDialog(msg, title) {
@@ -4572,6 +4670,7 @@ function renderArchives() {
       '<div class="archive-meta">' +
         '<div class="archive-title">' + escapeHtml(a.title || '(untitled)') + '</div>' +
         meta +
+        (isDM ? '<button class="btn btn-sm archive-cover-btn' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? ' is-cover' : '') + '" onclick="setCampaignCover(' + a.id + ')">' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'Campaign cover' : 'Make cover') + '</button>' : '') +
         (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
       '</div>' +
     '</div>';
@@ -5079,7 +5178,9 @@ function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
   var html = state.campaigns.map(function(c) {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
-      '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>' +
+      (c.cover_image_url
+        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
+        : '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
@@ -5172,15 +5273,8 @@ function loadSessions() {
 function renderSessions() {
   var list = document.getElementById('sessions-list');
 
-  // Update the page title with a session count, e.g. "The Hidden Pass (35 sessions)"
-  var titleEl = document.getElementById('sessions-title');
-  if (titleEl) {
-    var campName = (state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : 'Sessions';
-    var n = state.sessions.length;
-    titleEl.innerHTML = campName +
-      ' <span style="font-size:0.6em;font-weight:400;color:var(--text-light);">(' +
-      n + ' session' + (n === 1 ? '' : 's') + ')</span>';
-  }
+  // Campaign name + count + description in the header (DM can edit inline).
+  renderCampaignHeaderDisplay();
 
   if (!state.sessions.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
