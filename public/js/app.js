@@ -1854,6 +1854,31 @@ function cancelNarr() {
   var b = document.getElementById('review-generate-btn'); if (b) b.disabled = false;
 }
 
+function showErrorDialog(msg, title) {
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--panel,#1c1b22);border:1px solid var(--gold,#c9a84c);border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
+  var h = document.createElement('div');
+  h.textContent = title || 'Heads up';
+  h.style.cssText = 'font-size:16px;font-weight:700;color:var(--gold,#c9a84c);margin-bottom:10px;';
+  var p = document.createElement('div');
+  p.textContent = msg;
+  p.style.cssText = 'font-size:14px;line-height:1.5;color:var(--text,#e8e4d8);margin-bottom:18px;white-space:pre-wrap;';
+  var bar = document.createElement('div');
+  bar.style.cssText = 'text-align:right;';
+  var ok = document.createElement('button');
+  ok.className = 'btn btn-primary';
+  ok.textContent = 'OK';
+  ok.onclick = function(){ ov.remove(); };
+  bar.appendChild(ok);
+  box.appendChild(h); box.appendChild(p); box.appendChild(bar);
+  ov.appendChild(box);
+  ov.onclick = function(e){ if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+  ok.focus();
+}
+
 function switchSessionTab(tab) {
   var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
   tabs.forEach(function(t) {
@@ -2680,8 +2705,10 @@ function extractMoments() {
     clearInterval(ticker);
     var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (data.error) {
-      errorEl.textContent = data.message || ('Error: ' + data.error);
+      var _emsg = data.message || ('Error: ' + data.error);
+      errorEl.textContent = _emsg;
       errorEl.classList.remove('hidden');
+      if (typeof showErrorDialog === 'function') showErrorDialog(_emsg, 'Generate Story');
       wrap.style.display = 'none';
       btn.disabled = false;
       return;
@@ -5462,8 +5489,10 @@ function extractMoments() {
     clearInterval(ticker);
     var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (data.error) {
-      errorEl.textContent = data.message || ('Error: ' + data.error);
+      var _emsg = data.message || ('Error: ' + data.error);
+      errorEl.textContent = _emsg;
       errorEl.classList.remove('hidden');
+      if (typeof showErrorDialog === 'function') showErrorDialog(_emsg, 'Generate Story');
       wrap.style.display = 'none';
       btn.disabled = false;
       return;

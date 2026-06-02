@@ -305,14 +305,16 @@
             <button class="btn btn-xs" onclick="findReplaceSession()">Replace all</button>
             <span class="fr-result" id="fr-result"></span>
           </div>
-          <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+            <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+            <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;">&#10005; Cancel</button>
+          </div>
         </div>
 
         <!-- Slim progress row -->
         <div class="progress-wrap" id="progress-wrap">
           <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
           <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
-          <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;margin-top:6px;">&#10005; Cancel</button>
         </div>
 
         <!-- Transcript (left) and Notes (right), side by side -->
@@ -358,12 +360,14 @@
         <div id="review-content" style="display:none;">
           <div class="review-actionbar">
             <div class="form-hint" style="margin:0;">A quick overview of your storyboard before you generate images — the panels in order, and which characters and assets each one will use.</div>
-            <button class="btn btn-primary dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">&#10024; Generate Narrative &amp; Images</button>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+              <button class="btn btn-primary dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">&#10024; Generate Narrative &amp; Images</button>
+              <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">&#10005; Cancel</button>
+            </div>
           </div>
           <div class="progress-wrap" id="review-progress-wrap" style="display:none;margin-bottom:14px;">
             <div class="progress-bar"><div class="progress-fill" id="review-progress-fill"></div></div>
             <div class="progress-msg" id="review-progress-msg">Writing your narrative&hellip;</div>
-            <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;margin-top:6px;">&#10005; Cancel</button>
           </div>
           <div id="review-list"></div>
         </div>
@@ -390,13 +394,15 @@
                   <div class="chip" onclick="selStyle(this,'Classic pen and ink')">Pen and ink</div>
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
+                <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">&#10005; Cancel</button>
+              </div>
             </div>
             <div style="margin-top:8px;font-size:11px;color:rgba(201,168,76,0.4);">&#9998; Review moments and narrative below. When happy, click Generate all images.</div>
             <div id="generate-progress" style="display:none;margin-top:10px;">
               <div class="progress-bar"><div class="progress-fill" id="gen-progress-fill"></div></div>
               <div class="progress-msg" id="gen-progress-msg">Generating images...</div>
-              <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;margin-top:6px;">&#10005; Cancel</button>
             </div>
             <div id="generate-error" class="alert alert-error hidden" style="margin-top:8px;"></div>
           </div>
