@@ -361,6 +361,7 @@
           <div class="review-actionbar">
             <div class="form-hint" style="margin:0;">A quick overview of your storyboard before you generate images — the panels in order, and which characters and assets each one will use.</div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+              <button class="btn btn-sm dm-only" id="review-narr-style-btn" onclick="openStylePicker('narrative')">&#9997; Narrative: Classic</button>
               <button class="btn btn-primary dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">&#10024; Generate Narrative &amp; Images</button>
               <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">&#10005; Cancel</button>
             </div>
@@ -395,6 +396,7 @@
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">&#9997; Narrative: Classic</button>
                 <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
                 <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">&#10005; Cancel</button>
               </div>
@@ -978,6 +980,16 @@
       <button class="btn btn-sm" onclick="closeNarrDirection()">Cancel</button>
       <button class="btn btn-sm btn-primary" onclick="saveNarrDirection()">Save direction</button>
     </div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="style-picker-modal">
+  <div class="modal archive-picker" style="max-width:680px;">
+    <div class="modal-header">
+      <div class="modal-title" id="style-picker-title">Choose a style</div>
+      <button class="modal-close" onclick="closeStylePicker()">&times;</button>
+    </div>
+    <p style="margin:0 0 12px;font-size:12px;color:var(--gold-dim);line-height:1.45;">Pick the voice for this version's narrative. It applies whenever the narrative is generated or regenerated, and you can change it any time.</p>
+    <div id="style-picker-grid" class="style-card-grid"></div>
   </div>
 </div>
 <div class="modal-overlay hidden" id="retouch-modal">

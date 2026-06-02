@@ -113,7 +113,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
-  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions FROM session_forks WHERE id=?').get(viewForkId);
+  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style FROM session_forks WHERE id=?').get(viewForkId);
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
@@ -125,7 +125,8 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_intro: viewForkRow ? (viewForkRow.narrative_intro || '') : (session.narrative_intro || ''),
     narrative_sections: viewForkRow ? (viewForkRow.narrative_sections || null) : (session.narrative_sections || null),
     narrative_outro: viewForkRow ? (viewForkRow.narrative_outro || '') : (session.narrative_outro || ''),
-    narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null
+    narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null,
+    narrative_style: viewForkRow ? (viewForkRow.narrative_style || 'classic') : 'classic'
   }));
 });
 
@@ -757,8 +758,8 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   if (existing) return res.json({ fork_id: existing.id, existing: true });
   const now = new Date().toISOString();
   const created = await db.prepare(
-    "INSERT INTO session_forks (session_id, user_id, role, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, created_at) " +
-    "SELECT ?, ?, 'player', 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, ? FROM session_forks WHERE id = ?"
+    "INSERT INTO session_forks (session_id, user_id, role, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, created_at) " +
+    "SELECT ?, ?, 'player', 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, ? FROM session_forks WHERE id = ?"
   ).run(sessionId, req.session.userId, now, dmFork.id);
   const newForkId = created.lastInsertRowid;
   await db.prepare(

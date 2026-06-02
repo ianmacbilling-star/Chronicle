@@ -854,6 +854,9 @@ function selectSession(id) {
       // narrative panels.
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
+      // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
+      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
 
@@ -1760,6 +1763,87 @@ function refreshNarrativeDirectionUI(gapKey) {
       if (txt) el.classList.remove('narr-dir-empty');
       else el.classList.add('narr-dir-empty');
     }
+  }
+}
+
+// ============================================================
+// STYLE PICKER (Narrative Styles) — shared dialog of style cards.
+// Step 2 wires the NARRATIVE side; the art side is added in Step 3.
+// NARR_STYLE_META is the client display list (name/desc/example); its ids
+// MUST match the server-side NARRATIVE_STYLES keys in routes/narrative.js.
+// ============================================================
+var NARR_STYLE_META = [
+  { id:'classic', name:'Classic', desc:'Vivid, dramatic graphic-novel narration in present tense \u2014 the default Chronicle voice.', example:'Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat.' },
+  { id:'epic', name:'Epic Chronicle', desc:'Mythic, poetic, and sweeping \u2014 a legendary saga recorded by ancient historians.', example:'Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes.' },
+  { id:'journal', name:"Adventurer's Journal", desc:'Personal and grounded, with dry humor, like an adventurer\u2019s diary. May use first person.', example:'We thought the forest would be quiet after the fight. Turns out the turnips were louder than the monsters.' },
+  { id:'cinematic', name:'Cinematic Script', desc:'Visual, fast, and minimal. Short punchy sentences describing what the camera sees.', example:'The torchlight flickers. Shadows stretch across the stone. Ruk stumbles, pale and shaking, as the shriek fades into the dark.' },
+  { id:'lorekeeper', name:'Lorekeeper / Historian', desc:'Scholarly and mysterious \u2014 formal, slightly archaic, recorded by an in-world historian.', example:'In the annals of the Third Era, the incident of the SoupMaster is noted with both caution and curiosity.' },
+  { id:'noir', name:'Noir', desc:'Gritty, moody, cynical fantasy-noir. Hard-boiled phrasing, shadows, and suspicion.', example:'The cave breathed cold air like a liar exhaling excuses, and the torchlight wasn\u2019t bright enough to chase off the truth.' },
+  { id:'grim', name:'Dark Fantasy / Grim', desc:'Bleak, heavy, and visceral. Dread, decay, and the cost of every choice.', example:'Blood soaked into the stone, vanishing as if the earth itself were thirsty. Even hope felt like a dying ember.' },
+  { id:'storybook', name:"Children's Storybook", desc:'Whimsical, gentle, and playful \u2014 warm language and a sense of wonder.', example:'And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures.' },
+  { id:'anime', name:'High-Drama Anime', desc:'Intense, emotional, and heroic. Heightened emotion and dynamic, expressive action.', example:'Ruk\u2019s heartbeat thundered like a war drum as the darkness closed in \u2014 but his spirit refused to fall.' }
+];
+var STYLE_PICKER_KIND = null;
+
+function narrStyleName(id) {
+  for (var i = 0; i < NARR_STYLE_META.length; i++) { if (NARR_STYLE_META[i].id === id) return NARR_STYLE_META[i].name; }
+  return 'Classic';
+}
+
+function refreshNarrStyleButtons() {
+  var id = state.narrativeStyle ? state.narrativeStyle : 'classic';
+  var label = '\u270D Narrative: ' + narrStyleName(id);
+  ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
+    var b = document.getElementById(bid);
+    if (b) b.textContent = label;
+  });
+}
+
+function openStylePicker(kind) {
+  STYLE_PICKER_KIND = kind || 'narrative';
+  var titleEl = document.getElementById('style-picker-title');
+  var grid = document.getElementById('style-picker-grid');
+  if (!grid) return;
+  var cur, meta;
+  if (STYLE_PICKER_KIND === 'narrative') {
+    if (titleEl) titleEl.textContent = 'Choose a narrative style';
+    cur = state.narrativeStyle ? state.narrativeStyle : 'classic';
+    meta = NARR_STYLE_META;
+  } else { return; }
+  grid.innerHTML = meta.map(function(s) {
+    var on = (s.id === cur) ? ' is-selected' : '';
+    var badge = (s.id === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
+    return '<div class="style-card' + on + '" onclick="selectStyleCard(\'' + STYLE_PICKER_KIND + '\',\'' + s.id + '\')">' +
+      '<div class="style-card-name">' + escapeHtml(s.name) + badge + '</div>' +
+      '<div class="style-card-desc">' + escapeHtml(s.desc) + '</div>' +
+      '<div class="style-card-eg">' + escapeHtml(s.example) + '</div>' +
+      '</div>';
+  }).join('');
+  var modal = document.getElementById('style-picker-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeStylePicker() {
+  var modal = document.getElementById('style-picker-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function selectStyleCard(kind, id) {
+  if (kind === 'narrative') {
+    if (!state.currentCampaign || !state.currentSession) { closeStylePicker(); return; }
+    fetch('/api/narrative/style/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ style: id })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { showAlert('Could not set narrative style: ' + data.error); return; }
+      state.narrativeStyle = data.style || id;
+      refreshNarrStyleButtons();
+      closeStylePicker();
+    })
+    .catch(function(e) { showAlert('Could not set narrative style: ' + e.message); });
   }
 }
 
@@ -5137,6 +5221,9 @@ function selectSession(id) {
       // narrative panels.
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
+      // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
+      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
 
@@ -7483,6 +7570,9 @@ function reloadSessionForFork() {
       // narrative panels.
       try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
       catch (e) { state.narrativeDirections = {}; }
+      // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
+      state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       if (typeof renderStoryboard === 'function') renderStoryboard();
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof updateNotesBox === 'function') updateNotesBox(data);
