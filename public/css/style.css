@@ -1638,3 +1638,9 @@ body.role-player #stab-export { display: block !important; }
 .style-card-current{font-size:10px;color:var(--gold);background:rgba(201,168,76,0.18);border-radius:4px;padding:1px 6px;font-weight:600;}
 .style-card-desc{font-size:12px;color:rgba(230,210,160,0.82);line-height:1.45;margin-bottom:7px;}
 .style-card-eg{font-size:11.5px;color:rgba(201,168,76,0.62);font-style:italic;line-height:1.45;border-left:2px solid rgba(201,168,76,0.25);padding-left:8px;}
+
+/* Per-panel style labels: art style on the image caption, narrative style in
+   the narrative block header. Both reflect the style ACTUALLY used (moments.style
+   stamped at generation; narrative_style_used stamped on the narrative write). */
+.moment-artstyle{font-size:10px;color:rgba(201,168,76,0.5);margin-top:5px;}
+.narr-block-style{text-transform:none;letter-spacing:0;color:rgba(201,168,76,0.7);font-weight:600;margin-left:6px;}

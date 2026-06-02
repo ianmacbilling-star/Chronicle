@@ -113,7 +113,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
-  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style FROM session_forks WHERE id=?').get(viewForkId);
+  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used FROM session_forks WHERE id=?').get(viewForkId);
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
@@ -126,7 +126,8 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_sections: viewForkRow ? (viewForkRow.narrative_sections || null) : (session.narrative_sections || null),
     narrative_outro: viewForkRow ? (viewForkRow.narrative_outro || '') : (session.narrative_outro || ''),
     narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null,
-    narrative_style: viewForkRow ? (viewForkRow.narrative_style || 'classic') : 'classic'
+    narrative_style: viewForkRow ? (viewForkRow.narrative_style || 'classic') : 'classic',
+    narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null
   }));
 });
 

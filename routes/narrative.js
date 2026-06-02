@@ -253,14 +253,14 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     await db.prepare(
       'UPDATE session_forks SET narrative_intro=?, narrative_intro_summary=?, ' +
       'narrative_sections=?, narrative_outro=?, narrative_outro_summary=?, ' +
-      'edited_at=?, edited_by=? WHERE id=?'
+      'narrative_style_used=?, edited_at=?, edited_by=? WHERE id=?'
     ).run(
       parsed.intro || '',
       parsed.intro_summary || '',
       JSON.stringify(parsed.sections || []),
       parsed.outro || '',
       parsed.outro_summary || '',
-      now, req.session.userId, targetForkId
+      narrStyleId, now, req.session.userId, targetForkId
     );
 
     res.json({

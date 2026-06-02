@@ -856,6 +856,7 @@ function selectSession(id) {
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -1951,6 +1952,7 @@ function generateNarrativeAndImages() {
       sections: data.sections || [],
       outro: data.outro || ''
     };
+    state.narrativeStyleUsed = state.narrativeStyle || 'classic';
     // Paint the narrative into the storyboard right away so the user can start
     // reading each panel's prose while the images are still being generated.
     switchSessionTab('storyboard');
@@ -2030,6 +2032,7 @@ function generateNarrativeOnly() {
     if (data.error) { endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
     endBar(true);
     state.narrativeData = { intro: data.intro || '', sections: data.sections || [], outro: data.outro || '' };
+    state.narrativeStyleUsed = state.narrativeStyle || 'classic';
     if (typeof renderStoryboard === 'function') renderStoryboard();
   })
   .catch(function (e) {
@@ -2915,7 +2918,7 @@ function extractMoments() {
     state.narrativeData = { intro: '', sections: [], outro: '' };
     fill.style.width = '100%';
     msg.textContent = 'Your storyboard plan is ready!';
-    document.getElementById('moment-count').textContent = state.moments.length;
+    var _mc = document.getElementById('moment-count'); if (_mc) _mc.textContent = state.moments.length;
     renderStoryboard();
     setTimeout(function() {
       wrap.style.display = 'none';
@@ -4791,6 +4794,7 @@ function renderStoryboard() {
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
         '<span class="moment-title">' + m.title + '</span>' +
         '<span class="moment-type type-' + m.type + '">' + (typeLabel[m.type]||m.type) + '</span>' +
+        '<span class="moment-artstyle">Art: ' + escapeHtml(m.style ? artStyleName(m.style) : 'Unknown') + '</span>' +
       '</div>' +
       buildPromptBlock(m) +
     '</div>';
@@ -4823,9 +4827,10 @@ function renderStoryboard() {
     '</div>';
     // When editable, every box auto-saves on input (so between-panel prose
     // persists too, not just opening/closing); otherwise it is read-only.
+    var _nsName = narrStyleName(state.narrativeStyleUsed ? state.narrativeStyleUsed : (state.narrativeStyle || 'classic'));
     return '<div class="narrative-panel" id="' + id + '">' +
       '<div class="narrative-block-header">' +
-        '<span>&#9998; ' + label + '</span>' +
+        '<span>&#9998; ' + label + ' <span class="narr-block-style">Style: ' + escapeHtml(_nsName) + '</span></span>' +
         regenBtn +
       '</div>' +
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
@@ -5328,6 +5333,7 @@ function selectSession(id) {
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -5702,7 +5708,7 @@ function extractMoments() {
     state.narrativeData = { intro: '', sections: [], outro: '' };
     fill.style.width = '100%';
     msg.textContent = 'Your storyboard plan is ready!';
-    document.getElementById('moment-count').textContent = state.moments.length;
+    var _mc = document.getElementById('moment-count'); if (_mc) _mc.textContent = state.moments.length;
     renderStoryboard();
     setTimeout(function() {
       wrap.style.display = 'none';
@@ -7677,6 +7683,7 @@ function reloadSessionForFork() {
       catch (e) { state.narrativeDirections = {}; }
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
+      state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       if (typeof renderStoryboard === 'function') renderStoryboard();
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');

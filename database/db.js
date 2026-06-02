@@ -731,6 +731,10 @@ async function migrateForks(pool) {
   // Stores the style id string only; the prompt text for each style lives in
   // routes/narrative.js (NARRATIVE_STYLES). Read/written on the caller's fork.
   await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_style TEXT');
+  // narrative_style_used = the style actually used the last time the prose was
+  // generated (stamped at generation). Lets each narrative panel show the true
+  // voice it was written in, independent of the current dropdown selection.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_style_used TEXT');
 
   // Backfill: one DM fork per session, owned by the campaign's DM.
   await pool.query(`
