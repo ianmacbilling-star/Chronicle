@@ -3,6 +3,72 @@ const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 
+// ============================================================
+// NARRATIVE STYLES — the prose analog of art styles.
+// Each entry supplies the VOICE LAYER (tone, tense, person, diction + an
+// example) that gets injected into the narrative-generation prompt. The
+// mechanical rules (chronology, gap anchoring, JSON structure, "don't
+// summarize the panel") stay fixed in the prompt regardless of voice.
+//
+// The stored selection is just the id string (on session_forks.narrative_style,
+// per version). 'classic' is the default and preserves the original behavior
+// exactly, so existing sessions do not change voice unless a style is picked.
+//
+// IMPORTANT: the ids here are the source of truth for what is VALID. The
+// frontend keeps a parallel display list (name/description/example) keyed by
+// these same ids — keep the ids in sync.
+// ============================================================
+const NARRATIVE_STYLES = (function () {
+  const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.';
+  return {
+    classic: {
+      name: 'Classic',
+      voice: `Vivid, dramatic, and engaging — like a fantasy novel or comic-book caption. Use PRESENT tense and THIRD-PERSON narrative voice. Capture mood, tension, and drama.\nExample: "Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat."`,
+      system: 'You are a skilled fantasy author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for fantasy graphic novels. You always return valid JSON.'
+    },
+    epic: {
+      name: 'Epic Chronicle',
+      voice: `Mythic, poetic, sweeping, and dramatic. Describe events as if part of a legendary saga recorded by ancient historians. Use elevated language, poetic phrasing, and a sense of destiny or grandeur. Focus on atmosphere, symbolism, and the weight of events. Avoid modern slang. Keep the narration concise but powerful. PAST tense, THIRD person.\nExample: "Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes."`,
+      system: SYS
+    },
+    journal: {
+      name: "Adventurer's Journal",
+      voice: `Personal and grounded, with occasional dry humor or self-reflection, as if taken from an adventurer's personal journal. Focus on what the characters notice, feel, or think in the moment. You may use FIRST person ("I") or close THIRD person ("Zara thought..."). Keep it readable and human.\nExample: "We thought the forest would be quiet after the fight. Turns out the turnips were louder than the monsters."`,
+      system: SYS
+    },
+    cinematic: {
+      name: 'Cinematic Script',
+      voice: `Visual, fast, and minimal — like a storyboard description. Focus on action, motion, and sensory detail. Use SHORT, punchy sentences. Describe what the "camera" sees: lighting, movement, framing. Avoid internal monologue or flowery language.\nExample: "The torchlight flickers. Shadows stretch across the stone. Ruk stumbles, pale and shaking, as the shriek fades into the dark."`,
+      system: SYS
+    },
+    lorekeeper: {
+      name: 'Lorekeeper / Historian',
+      voice: `Scholarly, mysterious, and world-building heavy, as if recorded by an in-world historian or lorekeeper. Use formal, slightly archaic language. Provide context, hints of ancient knowledge, or commentary on the significance of events. Avoid humor unless it fits the lorekeeper's personality.\nExample: "In the annals of the Third Era, the incident of the SoupMaster is noted with both caution and curiosity, for few mortals have tampered with arcane gastronomy and lived."`,
+      system: SYS
+    },
+    noir: {
+      name: 'Noir',
+      voice: `Fantasy-noir: gritty, moody, cynical, and atmospheric. Use weary, suspicious language. Focus on shadows, tension, and the emotional weight of the moment. Use metaphors and punchy, hard-boiled phrasing. The narrator sounds like they have seen too much and trust too little.\nExample: "The cave breathed cold air like a liar exhaling excuses, and the torchlight was not bright enough to chase off the truth hiding in the corners."`,
+      system: SYS
+    },
+    grim: {
+      name: 'Dark Fantasy / Grim',
+      voice: `Dark fantasy: bleak, heavy, ominous, and visceral. Emphasize dread, decay, and the harshness of the world. Use vivid, unsettling imagery and weighty descriptions. Avoid humor. Highlight the danger and cost of every choice.\nExample: "Blood soaked into the stone, vanishing as if the earth itself were thirsty. In the silence that followed, even hope felt like a dying ember."`,
+      system: SYS
+    },
+    storybook: {
+      name: "Children's Storybook",
+      voice: `Whimsical, gentle, and playful — like a children's fantasy story. Use warm, friendly language and a sense of wonder. Keep sentences simple, rhythmic, and imaginative. Avoid violence or describe it softly. Emphasize friendship, bravery, and curiosity.\nExample: "And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures waiting to say hello."`,
+      system: SYS
+    },
+    anime: {
+      name: 'High-Drama Anime',
+      voice: `High-drama anime: intense, emotional, exaggerated, and heroic. Use heightened emotion, dramatic pacing, and bold, expressive language. Emphasize power, determination, and the emotional stakes of the moment. Use dynamic phrasing and vivid action.\nExample: "Ruk's heartbeat thundered like a war drum as the darkness closed in — but his spirit refused to fall. Not here. Not now."`,
+      system: SYS
+    }
+  };
+})();
+
 // Phase 4 — resolve the caller's version: DM -> canonical (DM fork);
 // player -> their own version (null if they have none).
 async function callerForkId(db, sessionId, userId, role) {
@@ -44,13 +110,18 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   //    the first generation AND every per-gap Regen honor it.
   let directorNotes = session.session_notes || '';
   let gapDirections = {};
-  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions FROM session_forks WHERE id = ?').get(targetForkId);
+  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions, narrative_style FROM session_forks WHERE id = ?').get(targetForkId);
   if (fkSteer) {
     if (callerRole !== 'dm') directorNotes = fkSteer.fork_notes || '';
     if (fkSteer.narrative_directions) {
       try { gapDirections = JSON.parse(fkSteer.narrative_directions) || {}; } catch (e) { gapDirections = {}; }
     }
   }
+
+  // Narrative Style (Narrative Styles feature) — this version's VOICE preset.
+  // Null/unknown falls back to 'classic' (the original behavior).
+  const narrStyleId = (fkSteer && fkSteer.narrative_style) ? fkSteer.narrative_style : 'classic';
+  const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
 
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
@@ -126,12 +197,11 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     (directorNotes ? 'Overall narrative direction (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + directorNotes + '\n\n' : '') +
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
-    '- Read like a fantasy novel or comic book caption — vivid, dramatic, engaging\n' +
-    '- NOT a transcription of what players said\n' +
-    '- Use present tense, third person narrative voice\n' +
-    '- 2-4 sentences per gap — punchy, not bloated\n' +
-    '- Reference characters by name when relevant\n' +
-    '- Capture mood, tension, and drama\n\n' +
+    '- Read like prose for a graphic novel — NOT a transcription of what players said\n' +
+    '- Roughly 2-4 sentences per gap — punchy, not bloated\n' +
+    '- Reference characters by name when relevant\n\n' +
+    'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
+    styleBundle.voice + '\n\n' +
     'CRITICAL — chronological correctness:\n' +
     '- Each gap\'s prose describes ONLY events between its two bracketing panels\n' +
     '- Do not place post-event prose before the panel that depicts that event\n' +
@@ -165,7 +235,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       body: JSON.stringify({
         model: process.env.AI_MODEL || 'claude-sonnet-4-6',
         max_tokens: 3000,
-        system: 'You are a skilled fantasy author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for fantasy graphic novels. You always return valid JSON.',
+        system: styleBundle.system,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -258,12 +328,13 @@ router.get('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // a ?fork_id= the caller is allowed to see).
   const viewForkId = await getViewableForkId(db, session.id, req.session.userId, req.query.fork_id);
   if (!viewForkId) return res.status(403).json({ error: 'Access denied' });
-  const fk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(viewForkId);
+  const fk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro, narrative_style FROM session_forks WHERE id = ?').get(viewForkId);
 
   res.json({
     intro: fk && fk.narrative_intro ? fk.narrative_intro : '',
     sections: fk && fk.narrative_sections ? JSON.parse(fk.narrative_sections) : [],
-    outro: fk && fk.narrative_outro ? fk.narrative_outro : ''
+    outro: fk && fk.narrative_outro ? fk.narrative_outro : '',
+    narrative_style: fk && fk.narrative_style ? fk.narrative_style : 'classic'
   });
 });
 
@@ -307,6 +378,37 @@ router.put('/direction/:campaignId/:sessionId', requireAuth, async function(req,
     .run(JSON.stringify(directions), now, req.session.userId, targetForkId);
 
   res.json({ success: true, gap: gap, text: text, directions: directions });
+});
+
+// ============================================================
+// SAVE this version's narrative STYLE (Narrative Styles feature)
+// Body: { style: '<id>' }  where id is a key of NARRATIVE_STYLES.
+// Owner-scoped exactly like /direction: the caller writes only their OWN
+// version (DM -> DM fork, player -> own fork). Validated server-side.
+// ============================================================
+router.put('/style/:campaignId/:sessionId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.id FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+  ).get(req.params.sessionId, req.session.userId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  const styleId = (req.body && typeof req.body.style === 'string') ? req.body.style.trim() : '';
+  if (!NARRATIVE_STYLES[styleId]) {
+    return res.json({ error: 'Unknown narrative style' });
+  }
+
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE session_forks SET narrative_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(styleId, now, req.session.userId, targetForkId);
+
+  res.json({ success: true, style: styleId });
 });
 
 module.exports = router;

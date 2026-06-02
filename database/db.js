@@ -726,6 +726,11 @@ async function migrateForks(pool) {
   //                          narrative-generation prompt (and thus every per-gap Regen).
   await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_outline TEXT');
   await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_directions TEXT');
+  // Narrative Styles — per-version narrative VOICE preset (the prose analog of
+  // art style). NULL => the default 'classic' voice (current behavior preserved).
+  // Stores the style id string only; the prompt text for each style lives in
+  // routes/narrative.js (NARRATIVE_STYLES). Read/written on the caller's fork.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_style TEXT');
 
   // Backfill: one DM fork per session, owned by the campaign's DM.
   await pool.query(`
