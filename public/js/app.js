@@ -1864,7 +1864,7 @@ function showErrorDialog(msg, title) {
   h.style.cssText = 'font-size:16px;font-weight:700;color:var(--gold,#c9a84c);margin-bottom:10px;';
   var p = document.createElement('div');
   p.textContent = msg;
-  p.style.cssText = 'font-size:14px;line-height:1.5;color:var(--text,#e8e4d8);margin-bottom:18px;white-space:pre-wrap;';
+  p.style.cssText = 'font-size:14px;line-height:1.5;color:var(--gold,#c9a84c);margin-bottom:18px;white-space:pre-wrap;';
   var bar = document.createElement('div');
   bar.style.cssText = 'text-align:right;';
   var ok = document.createElement('button');
