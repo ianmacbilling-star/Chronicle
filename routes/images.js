@@ -214,17 +214,30 @@ async function attachPriorReferences(db, chars, sessionId, campaignId) {
 // with an accepted change at change_moment_index shows their OLD look
 // (prior text + prior reference) for panels BEFORE that index, and the
 // amended look from that index onward.
-function buildCharacterBlock(chars, panelText, panelIndex) {
+function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
   if (!chars || !chars.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
   var pIdx = (typeof panelIndex === 'number' && !isNaN(panelIndex)) ? panelIndex : 0;
 
-  var present = chars.filter(function(c) {
-    if (!c.name) return false;
-    var full = c.name.toLowerCase();
-    var first = full.split(/\s+/)[0];
-    return text.indexOf(full) !== -1 || (first.length > 2 && text.indexOf(first) !== -1);
-  });
+  // Pass 2 — explicit cast overrides name-match. When explicitCharIds is an
+  // array, a character is "present" iff its id is in the set (an empty set is
+  // honored: the panel was explicitly cast with no characters).
+  var present;
+  if (Array.isArray(explicitCharIds)) {
+    var charIdSet = {};
+    explicitCharIds.forEach(function(id) { charIdSet[String(id)] = true; });
+    present = chars.filter(function(c) {
+      var cid = (c.character_id != null) ? c.character_id : c.id;
+      return charIdSet[String(cid)];
+    });
+  } else {
+    present = chars.filter(function(c) {
+      if (!c.name) return false;
+      var full = c.name.toLowerCase();
+      var first = full.split(/\s+/)[0];
+      return text.indexOf(full) !== -1 || (first.length > 2 && text.indexOf(first) !== -1);
+    });
+  }
 
   if (!present.length) return { text: '', refs: [] };
 
@@ -285,14 +298,22 @@ var MAX_PANEL_REFS = 14;
 // an asset is "present" if its name appears in the panel's text.
 // Returns { text, refs } — each ref carries its category so the prompt
 // can describe it correctly (Piece 5).
-function buildAssetBlock(assets, panelText) {
+function buildAssetBlock(assets, panelText, explicitAssetIds) {
   if (!assets || !assets.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
 
-  var present = assets.filter(function(a) {
-    if (!a.name || !a.image_url) return false;
-    return text.indexOf(a.name.toLowerCase()) !== -1;
-  });
+  // Pass 2 — explicit cast overrides name-match (an asset still needs an image).
+  var present;
+  if (Array.isArray(explicitAssetIds)) {
+    var assetIdSet = {};
+    explicitAssetIds.forEach(function(id) { assetIdSet[String(id)] = true; });
+    present = assets.filter(function(a) { return a.image_url && assetIdSet[String(a.id)]; });
+  } else {
+    present = assets.filter(function(a) {
+      if (!a.name || !a.image_url) return false;
+      return text.indexOf(a.name.toLowerCase()) !== -1;
+    });
+  }
   if (!present.length) return { text: '', refs: [] };
 
   var lines = [];
@@ -505,14 +526,20 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     await attachPriorReferences(db, chars, moment.session_id, campId);
     // Only include characters actually named in this panel's text
     const panelText = (prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
-    const charList = buildCharacterBlock(chars, panelText, moment.panel_order);
+    // Pass 2 — if this panel has an explicit cast, it overrides name-match.
+    let explicitCharIds = null, explicitAssetIds = null;
+    if (moment.cast_explicit) {
+      explicitCharIds = (await db.prepare('SELECT character_id FROM moment_characters WHERE moment_id = ?').all(moment.id)).map(function(r){ return r.character_id; });
+      explicitAssetIds = (await db.prepare('SELECT asset_id FROM moment_assets WHERE moment_id = ?').all(moment.id)).map(function(r){ return r.asset_id; });
+    }
+    const charList = buildCharacterBlock(chars, panelText, moment.panel_order, explicitCharIds);
 
     // Asset library: name-match campaign assets (maps, NPCs, items) into
     // this panel. Characters fill reference slots first, then assets, cap 14.
     const assets = await db.prepare(
       'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
     ).all(campId);
-    const assetList = buildAssetBlock(assets, panelText);
+    const assetList = buildAssetBlock(assets, panelText, explicitAssetIds);
     const panelBlock = {
       text: charList.text,
       assetText: assetList.text,
@@ -652,6 +679,16 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
   ).all(campaign_id);
 
+  // Pass 2 — preload explicit casts for any panel the user cast manually
+  // (cast_explicit). Panels without an explicit cast fall back to name-match.
+  let castCharByMoment = {}, castAssetByMoment = {};
+  {
+    const mcRows = await db.prepare('SELECT mc.moment_id, mc.character_id FROM moment_characters mc JOIN moments m ON m.id = mc.moment_id WHERE m.fork_id = ?').all(targetForkId);
+    mcRows.forEach(function(r){ (castCharByMoment[r.moment_id] = castCharByMoment[r.moment_id] || []).push(r.character_id); });
+    const maRows = await db.prepare('SELECT ma.moment_id, ma.asset_id FROM moment_assets ma JOIN moments m ON m.id = ma.moment_id WHERE m.fork_id = ?').all(targetForkId);
+    maRows.forEach(function(r){ (castAssetByMoment[r.moment_id] = castAssetByMoment[r.moment_id] || []).push(r.asset_id); });
+  }
+
   // Stable campaign base seed — every session of a campaign renders from the
   // same visual DNA, so characters stay consistent across sessions. Each panel
   // offsets from it by panel_order so panels within a session still vary.
@@ -687,10 +724,11 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
         // Only the characters named in THIS panel — prevents feature bleed
         const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
-        const charList = buildCharacterBlock(chars, panelText, m.panel_order);
-        // Name-match campaign assets into the panel; characters fill ref
+        const charList = buildCharacterBlock(chars, panelText, m.panel_order, m.cast_explicit ? (castCharByMoment[m.id] || []) : null);
+        // Explicit cast (Pass 2) overrides name-match when set; otherwise
+        // name-match campaign assets into the panel. Characters fill ref
         // slots first, assets fill the remainder, hard cap 14.
-        const assetList = buildAssetBlock(assets, panelText);
+        const assetList = buildAssetBlock(assets, panelText, m.cast_explicit ? (castAssetByMoment[m.id] || []) : null);
         const panelBlock = {
           text: charList.text,
           assetText: assetList.text,

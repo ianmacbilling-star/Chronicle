@@ -251,6 +251,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   background:rgba(201,168,76,0.12);color:var(--gold);}
 .review-chip-asset{background:rgba(122,140,184,0.14);color:#9caedb;}
 .review-none{font-size:11px;color:var(--text-light);font-style:italic;}
+/* Pass 2 — editable per-panel casting */
+.review-chip{position:relative;}
+.review-chip-x{margin-left:5px;border:none;background:transparent;color:inherit;
+  opacity:0.55;cursor:pointer;font-size:12px;line-height:1;padding:0;}
+.review-chip-x:hover{opacity:1;color:var(--crimson);}
+.review-add-select{font-size:11px;padding:2px 6px;border-radius:8px;cursor:pointer;
+  background:rgba(0,0,0,0.4);color:rgba(201,168,76,0.85);
+  border:1px dashed rgba(201,168,76,0.35);}
+.review-add-select:hover{border-color:var(--gold);color:var(--gold);}
+.review-cast-badge{margin-left:auto;font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:0.08em;padding:2px 7px;border-radius:8px;
+  background:rgba(122,140,184,0.14);color:#9caedb;}
+.review-cast-badge.is-custom{background:rgba(201,168,76,0.16);color:var(--gold);}
+.review-reset-btn{font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;
+  background:transparent;border:1px solid rgba(201,168,76,0.3);color:rgba(201,168,76,0.75);}
+.review-reset-btn:hover{border-color:var(--gold);color:var(--gold);}
+.review-change-mark{font-size:11px;color:var(--gold);font-style:italic;
+  margin:2px 0 4px;opacity:0.85;}
 
 /* Asset modal — image drop zone */
 .asset-drop{border:2px dashed rgba(201,168,76,0.3);border-radius:var(--radius);

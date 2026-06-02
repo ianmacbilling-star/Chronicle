@@ -471,7 +471,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     const viewForkId = await getViewableForkId(db, sessionId, req.session.userId, req.query.fork_id);
     if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
     const moments = await db.prepare(
-      'SELECT id, title, description, type, prompt, panel_order FROM moments WHERE fork_id = ? ORDER BY panel_order ASC'
+      'SELECT id, title, description, type, prompt, panel_order, cast_explicit FROM moments WHERE fork_id = ? ORDER BY panel_order ASC'
     ).all(viewForkId);
 
     // Characters for this campaign, joined to this session's snapshots —
@@ -489,6 +489,37 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     const assets = await db.prepare(
       'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
     ).all(campaignId);
+
+    // Pass 2 — explicit per-panel casts for this version (only panels the user
+    // has edited have rows; panels without rows fall back to name-match).
+    const castCharByMoment = {}, castAssetByMoment = {};
+    const mcRows = await db.prepare(
+      'SELECT mc.moment_id, ch.id, ch.name FROM moment_characters mc ' +
+      'JOIN characters ch ON ch.id = mc.character_id ' +
+      'JOIN moments m ON m.id = mc.moment_id WHERE m.fork_id = ?'
+    ).all(viewForkId);
+    mcRows.forEach(function(r){ (castCharByMoment[r.moment_id] = castCharByMoment[r.moment_id] || []).push({ id: r.id, name: r.name }); });
+    const maRows = await db.prepare(
+      'SELECT ma.moment_id, a.id, a.name, a.category FROM moment_assets ma ' +
+      'JOIN campaign_assets a ON a.id = ma.asset_id ' +
+      'JOIN moments m ON m.id = ma.moment_id WHERE m.fork_id = ?'
+    ).all(viewForkId);
+    maRows.forEach(function(r){ (castAssetByMoment[r.moment_id] = castAssetByMoment[r.moment_id] || []).push({ id: r.id, name: r.name, category: r.category }); });
+
+    // Map inferred names back to ids so every chip carries an id (the UI needs
+    // it to edit/remove, which materializes the inferred set into explicit rows).
+    const charIdByName = {}, assetIdByName = {};
+    chars.forEach(function(c){ if (c.name) charIdByName[c.name.toLowerCase()] = c.character_id; });
+    assets.forEach(function(a){ if (a.name) assetIdByName[a.name.toLowerCase()] = a.id; });
+
+    // Change markers (folded-in punch-list item): which panel each ACCEPTED
+    // Stage-3 character look-change takes effect at. panel_index -> [names].
+    const changeMarkers = {};
+    chars.forEach(function(c){
+      if (c.change_status === 'accepted' && typeof c.change_moment_index === 'number' && c.change_moment_index >= 0) {
+        (changeMarkers[c.change_moment_index] = changeMarkers[c.change_moment_index] || []).push(c.name);
+      }
+    });
 
     // Pass 1 — the Review tab previews the per-gap narrative OUTLINE (what the
     // prose WILL say), produced free during extraction and stored on the fork.
@@ -571,16 +602,28 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
         if (nsec.after_summary) bridge = nsec.after_summary;
         else if (nsec.after) bridge = snippet(nsec.after);
       }
+      // Pass 2 — explicit cast (if this panel has been edited) OR the inferred
+      // name-match cast. Either way each entry carries an id so the UI can edit.
+      const isExplicit = !!m.cast_explicit;
+      let panelChars, panelAssets;
+      if (isExplicit) {
+        panelChars = castCharByMoment[m.id] || [];
+        panelAssets = castAssetByMoment[m.id] || [];
+      } else {
+        panelChars = charBlock.refs.map(function(r){ return { id: charIdByName[r.name.toLowerCase()], name: r.name }; });
+        panelAssets = assetBlock.refs.map(function(r){ return { id: assetIdByName[r.name.toLowerCase()], name: r.name, category: r.category }; });
+      }
       return {
+        moment_id: m.id,
         panel_order: m.panel_order,
         title: m.title,
         snippet: snippet(m.description),
         type: m.type,
         bridge: bridge,
-        characters: charBlock.refs.map(function(r) { return r.name; }),
-        assets: assetBlock.refs.map(function(r) {
-          return { name: r.name, category: r.category };
-        }),
+        cast_explicit: isExplicit,
+        characters: panelChars,
+        assets: panelAssets,
+        change_marks: changeMarkers[i] || [],
         total_refs: combined.length
       };
     });
@@ -591,12 +634,80 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       outro: narrativeOutro,
       outro_summary: outroSummary,
       directions: gapDirections,
-      panels: panels
+      panels: panels,
+      all_characters: chars.map(function(c){ return { id: c.character_id, name: c.name, cls: c.cls }; })
+        .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }),
+      all_assets: assets.map(function(a){ return { id: a.id, name: a.name, category: a.category }; })
+        .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); })
     });
   } catch (e) {
     console.error('session review error:', e.message);
     res.json({ error: 'Could not build the review.' });
   }
+});
+
+// ============================================================
+// Pass 2 — explicit per-panel casting (Review tab editing)
+// ============================================================
+
+// Resolve a moment and confirm the caller OWNS its version (DM on canonical,
+// or the player who owns the fork). Returns { id, campaign_id } or null.
+async function ownedMoment(db, userId, momentId) {
+  const m = await db.prepare(
+    'SELECT m.id, m.fork_id, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+    'FROM moments m JOIN sessions s ON m.session_id = s.id ' +
+    'JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ?'
+  ).get(momentId);
+  if (!m) return null;
+  if (String(m.fork_owner) !== String(userId)) return null;
+  return m;
+}
+
+// PUT the explicit cast for a panel. Body: { characterIds:[...], assetIds:[...] }
+// Replaces the panel's cast rows and flips cast_explicit = true (materialize).
+router.put('/:id/moments/:momentId/cast', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const m = await ownedMoment(db, req.session.userId, req.params.momentId);
+  if (!m) return res.status(403).json({ error: 'You can only edit casting on your own version' });
+
+  const characterIds = Array.isArray(req.body && req.body.characterIds) ? req.body.characterIds : [];
+  const assetIds = Array.isArray(req.body && req.body.assetIds) ? req.body.assetIds : [];
+
+  // Defense-in-depth: only accept ids that belong to this campaign.
+  let validChar = [], validAsset = [];
+  if (characterIds.length) {
+    const rows = await db.prepare('SELECT id FROM characters WHERE campaign_id = ?').all(m.campaign_id);
+    const ok = {}; rows.forEach(function(r){ ok[String(r.id)] = true; });
+    validChar = characterIds.filter(function(id){ return ok[String(id)]; });
+  }
+  if (assetIds.length) {
+    const rows = await db.prepare('SELECT id FROM campaign_assets WHERE campaign_id = ?').all(m.campaign_id);
+    const ok = {}; rows.forEach(function(r){ ok[String(r.id)] = true; });
+    validAsset = assetIds.filter(function(id){ return ok[String(id)]; });
+  }
+
+  await db.prepare('DELETE FROM moment_characters WHERE moment_id = ?').run(m.id);
+  await db.prepare('DELETE FROM moment_assets WHERE moment_id = ?').run(m.id);
+  for (const cid of validChar) {
+    await db.prepare('INSERT INTO moment_characters (moment_id, character_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(m.id, cid);
+  }
+  for (const aid of validAsset) {
+    await db.prepare('INSERT INTO moment_assets (moment_id, asset_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(m.id, aid);
+  }
+  await db.prepare('UPDATE moments SET cast_explicit = true WHERE id = ?').run(m.id);
+
+  res.json({ success: true, cast_explicit: true, characterIds: validChar, assetIds: validAsset });
+});
+
+// DELETE the explicit cast for a panel — reset to auto (name-match inference).
+router.delete('/:id/moments/:momentId/cast', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const m = await ownedMoment(db, req.session.userId, req.params.momentId);
+  if (!m) return res.status(403).json({ error: 'You can only edit casting on your own version' });
+  await db.prepare('DELETE FROM moment_characters WHERE moment_id = ?').run(m.id);
+  await db.prepare('DELETE FROM moment_assets WHERE moment_id = ?').run(m.id);
+  await db.prepare('UPDATE moments SET cast_explicit = false WHERE id = ?').run(m.id);
+  res.json({ success: true, cast_explicit: false });
 });
 
 // ============================================================
@@ -651,13 +762,29 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   ).run(sessionId, req.session.userId, now, dmFork.id);
   const newForkId = created.lastInsertRowid;
   await db.prepare(
-    "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, image, panel_order, created_at, created_by) " +
-    "SELECT session_id, ?, title, description, type, prompt, emphasis, image, panel_order, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
+    "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, image, panel_order, cast_explicit, created_at, created_by) " +
+    "SELECT session_id, ?, title, description, type, prompt, emphasis, image, panel_order, cast_explicit, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
   ).run(newForkId, now, req.session.userId, dmFork.id);
   await db.prepare(
     "INSERT INTO session_characters (session_id, fork_id, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, created_at) " +
     "SELECT session_id, ?, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, ? FROM session_characters WHERE fork_id = ?"
   ).run(newForkId, now, dmFork.id);
+  // Pass 2 — copy explicit per-panel casts, mapping each source moment to the
+  // new fork's moment with the same panel_order (unique per fork).
+  await db.prepare(
+    "INSERT INTO moment_characters (moment_id, character_id) " +
+    "SELECT nm.id, mc.character_id FROM moment_characters mc " +
+    "JOIN moments om ON om.id = mc.moment_id " +
+    "JOIN moments nm ON nm.fork_id = ? AND nm.panel_order = om.panel_order " +
+    "WHERE om.fork_id = ? ON CONFLICT DO NOTHING"
+  ).run(newForkId, dmFork.id);
+  await db.prepare(
+    "INSERT INTO moment_assets (moment_id, asset_id) " +
+    "SELECT nm.id, ma.asset_id FROM moment_assets ma " +
+    "JOIN moments om ON om.id = ma.moment_id " +
+    "JOIN moments nm ON nm.fork_id = ? AND nm.panel_order = om.panel_order " +
+    "WHERE om.fork_id = ? ON CONFLICT DO NOTHING"
+  ).run(newForkId, dmFork.id);
   res.json({ fork_id: newForkId, existing: false });
 });
 

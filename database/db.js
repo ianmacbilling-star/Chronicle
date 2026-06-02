@@ -310,6 +310,10 @@ async function initPostgres() {
     // and blocks Generate Story (re-extract) for its version. Per-fork.
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS locked INTEGER DEFAULT 0',
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS style TEXT',
+    // Pass 2 — explicit per-panel casting. false (default) = name-match
+    // inference (legacy behavior); flipped true the first time a user edits a
+    // panel's cast, after which moment_characters/moment_assets are authoritative.
+    'ALTER TABLE moments ADD COLUMN IF NOT EXISTS cast_explicit BOOLEAN DEFAULT false',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -519,6 +523,9 @@ async function initPostgres() {
   // Campaign Archives — saved-off images that survive regen/re-extract.
   // After migrateForks so session_forks + moments exist for the FKs.
   await migrateArchives(pool);
+
+  // Pass 2 — explicit per-panel casting tables. After moments exist.
+  await migrateCasting(pool);
 
   console.log('  PostgreSQL schema ready!');
   return db;
@@ -805,6 +812,32 @@ async function migrateArchives(pool) {
   // lives in image_url). Lets the chest reflect whether THIS image is saved.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS source_url TEXT');
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS art_style TEXT');
+}
+
+// migrateCasting: idempotent. Explicit per-panel casting (Pass 2). A panel's
+// rows here are authoritative ONLY when moments.cast_explicit = true; until
+// then the storyboard/Review fall back to name-match inference. Keyed on
+// moment_id (already fork-scoped), so a player's casting stays on their
+// version. ON DELETE CASCADE so deleting a moment/character/asset cleans up.
+async function migrateCasting(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moment_characters (
+      id SERIAL PRIMARY KEY,
+      moment_id INTEGER NOT NULL REFERENCES moments(id) ON DELETE CASCADE,
+      character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+      UNIQUE (moment_id, character_id)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moment_assets (
+      id SERIAL PRIMARY KEY,
+      moment_id INTEGER NOT NULL REFERENCES moments(id) ON DELETE CASCADE,
+      asset_id INTEGER NOT NULL REFERENCES campaign_assets(id) ON DELETE CASCADE,
+      UNIQUE (moment_id, asset_id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_moment_characters_moment ON moment_characters(moment_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_moment_assets_moment ON moment_assets(moment_id)');
 }
 
 // getOrCreateDmFork: returns the id of the session's DM fork, creating

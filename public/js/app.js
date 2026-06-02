@@ -1500,6 +1500,7 @@ function renderReview(data) {
   if (!list) return;
   var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
   var panels = (data && data.panels) || [];
+  state.reviewData = data || {};
   state.narrativeDirections = (data && data.directions) || {};
 
   // Who may steer/edit this version's narrative (same rule as the Storyboard
@@ -1543,29 +1544,66 @@ function renderReview(data) {
 
   panels.forEach(function(p, i) {
     var num = (typeof p.panel_order === 'number' ? p.panel_order : i) + 1;
+    var mid = p.moment_id;
 
-    var chars = (p.characters || []).length
-      ? (p.characters || []).map(function(n) {
-          return '<span class="review-chip">' + escapeHtmlReview(n) + '</span>';
-        }).join('')
-      : '<span class="review-none">none matched</span>';
+    // Character chips — each carries an id; × removes when editable.
+    var charChips = (p.characters || []).map(function(c) {
+      var rm = canEditNarr
+        ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + mid + ', ' + c.id + ')">\u00d7</button>'
+        : '';
+      return '<span class="review-chip">' + escapeHtmlReview(c.name) + rm + '</span>';
+    }).join('');
+    if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
 
-    var assets = (p.assets || []).length
-      ? (p.assets || []).map(function(a) {
-          return '<span class="review-chip review-chip-asset">' +
-            escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) +
-            '</span>';
-        }).join('')
-      : '<span class="review-none">none matched</span>';
+    var assetChips = (p.assets || []).map(function(a) {
+      var rm = canEditNarr
+        ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + mid + ', ' + a.id + ')">\u00d7</button>'
+        : '';
+      return '<span class="review-chip review-chip-asset">' +
+        escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) + rm + '</span>';
+    }).join('');
+    if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
+
+    // "+ Add" dropdowns — campaign characters/assets not already on the panel.
+    var addChar = '', addAsset = '';
+    if (canEditNarr) {
+      var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
+      var optsC = (state.reviewData.all_characters || []).filter(function(c){ return !haveC[String(c.id)]; })
+        .map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(c.name) + '</option>'; }).join('');
+      addChar = '<select class="review-add-select" onchange="castAddCharacter(' + mid + ', this)">' +
+        '<option value="">+ Add character</option>' + optsC + '</select>';
+      var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
+      var optsA = (state.reviewData.all_assets || []).filter(function(a){ return !haveA[String(a.id)]; })
+        .map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) + '</option>'; }).join('');
+      addAsset = '<select class="review-add-select" onchange="castAddAsset(' + mid + ', this)">' +
+        '<option value="">+ Add asset</option>' + optsA + '</select>';
+    }
+
+    // Auto vs Custom indicator + reset-to-auto (only when explicit + editable).
+    var castBadge = p.cast_explicit
+      ? '<span class="review-cast-badge is-custom">Custom cast</span>'
+      : '<span class="review-cast-badge">Auto-matched</span>';
+    var resetBtn = (canEditNarr && p.cast_explicit)
+      ? '<button class="review-reset-btn" onclick="castReset(' + mid + ')" title="Drop back to automatic name-matching">Reset to auto</button>'
+      : '';
+
+    // Change marker (folded-in): which characters' look changes at THIS panel.
+    var changeNote = (p.change_marks && p.change_marks.length)
+      ? '<div class="review-change-mark" title="A character appearance change takes effect here">\u2726 ' +
+          escapeHtmlReview(p.change_marks.join(', ')) +
+          (p.change_marks.length === 1 ? '\u2019 look changes here' : ' \u2014 looks change here') + '</div>'
+      : '';
 
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + num + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
+        castBadge + resetBtn +
       '</div>' +
       (p.snippet ? '<div class="review-snippet">' + escapeHtmlReview(p.snippet) + '</div>' : '') +
-      '<div class="review-row"><span class="review-label">Characters:</span> ' + chars + '</div>' +
-      '<div class="review-row"><span class="review-label">Assets:</span> ' + assets + '</div>' +
+      changeNote +
+      '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
+      '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
     '</div>';
 
     // Bridge gap AFTER this panel (the last gap is covered by the closing).
@@ -1577,6 +1615,74 @@ function renderReview(data) {
   html += narrRow('closing', 'Closing', outro, 'review-nar-close');
 
   list.innerHTML = html;
+}
+
+// ============================================================
+// Pass 2 — per-panel casting edits (Review tab). Each edit mutates the
+// in-memory review payload, flips the panel to "Custom", and PUTs the full
+// cast set (materialize-on-first-edit). Owner-gated server-side too.
+// ============================================================
+function _reviewPanel(momentId) {
+  var panels = (state.reviewData && state.reviewData.panels) || [];
+  return panels.find(function(p){ return String(p.moment_id) === String(momentId); });
+}
+function _saveCast(p) {
+  var characterIds = (p.characters || []).map(function(c){ return c.id; }).filter(function(x){ return x != null; });
+  var assetIds = (p.assets || []).map(function(a){ return a.id; }).filter(function(x){ return x != null; });
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + p.moment_id + '/cast', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ characterIds: characterIds, assetIds: assetIds })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.error) { showAlert('Could not save casting: ' + data.error); loadReview(); return; }
+    renderReview(state.reviewData);   // reflect Custom badge + updated chips
+  })
+  .catch(function(e){ showAlert('Could not save casting: ' + e.message); loadReview(); });
+}
+function castAddCharacter(momentId, sel) {
+  var id = parseInt(sel.value, 10); if (!id) return;
+  var p = _reviewPanel(momentId); if (!p) return;
+  var name = '';
+  (state.reviewData.all_characters || []).some(function(c){ if (String(c.id) === String(id)) { name = c.name; return true; } return false; });
+  p.characters = p.characters || [];
+  if (!p.characters.some(function(c){ return String(c.id) === String(id); })) p.characters.push({ id: id, name: name });
+  p.cast_explicit = true;
+  _saveCast(p);
+}
+function castRemoveCharacter(momentId, charId) {
+  var p = _reviewPanel(momentId); if (!p) return;
+  p.characters = (p.characters || []).filter(function(c){ return String(c.id) !== String(charId); });
+  p.cast_explicit = true;
+  _saveCast(p);
+}
+function castAddAsset(momentId, sel) {
+  var id = parseInt(sel.value, 10); if (!id) return;
+  var p = _reviewPanel(momentId); if (!p) return;
+  var meta = null;
+  (state.reviewData.all_assets || []).some(function(a){ if (String(a.id) === String(id)) { meta = a; return true; } return false; });
+  p.assets = p.assets || [];
+  if (!p.assets.some(function(a){ return String(a.id) === String(id); })) p.assets.push({ id: id, name: meta ? meta.name : '', category: meta ? meta.category : '' });
+  p.cast_explicit = true;
+  _saveCast(p);
+}
+function castRemoveAsset(momentId, assetId) {
+  var p = _reviewPanel(momentId); if (!p) return;
+  p.assets = (p.assets || []).filter(function(a){ return String(a.id) !== String(assetId); });
+  p.cast_explicit = true;
+  _saveCast(p);
+}
+function castReset(momentId) {
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + momentId + '/cast', {
+    method: 'DELETE'
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.error) { showAlert('Could not reset casting: ' + data.error); return; }
+    loadReview();   // re-fetch so the auto (name-match) cast comes back
+  })
+  .catch(function(e){ showAlert('Could not reset casting: ' + e.message); });
 }
 
 
