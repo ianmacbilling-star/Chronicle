@@ -1086,17 +1086,18 @@ function openChangeReview(charId) {
   // Moment selector — which panel the change first becomes visible at.
   // The character looks normal before it, changed from it onward.
   var moments = state.moments || [];
-  var savedIdx = (typeof r.change_moment_index === 'number') ? r.change_moment_index : 0;
+  var savedIdx = (typeof r.change_moment_index === 'number' && r.change_moment_index >= 0) ? r.change_moment_index : -1;
+  var emptyOpt = '<option value="-1"' + (savedIdx < 0 ? ' selected' : '') + '>&mdash; Empty (applies throughout, not tied to a Moment Panel) &mdash;</option>';
   var momentOptions = moments.map(function(m, i) {
-    var label = 'Moment ' + (i + 1) + (m.title ? ': ' + m.title : '');
+    var label = 'Moment Panel ' + (i + 1) + (m.title ? ': ' + m.title : '');
     var sel = (i === savedIdx) ? ' selected' : '';
     return '<option value="' + i + '"' + sel + '>' + label + '</option>';
   }).join('');
   var momentSelector = moments.length
-    ? '<label class="sc-review-label">Change first appears at this moment ' +
-        '(character looks normal before it):</label>' +
+    ? '<label class="sc-review-label">Change first appears at this Moment Panel ' +
+        '(character looks normal before it; choose Empty to apply it throughout):</label>' +
       '<select class="form-input sc-review-moment" id="sc-review-moment-' + charId + '">' +
-        momentOptions +
+        emptyOpt + momentOptions +
       '</select>'
     : '';
 
@@ -1240,8 +1241,8 @@ function approveChange(charId) {
   var detail = textEl ? textEl.value : '';
   // The DM's chosen moment index (override of the AI's guess).
   var momentEl = document.getElementById('sc-review-moment-' + charId);
-  var momentIndex = momentEl ? parseInt(momentEl.value, 10) : 0;
-  if (isNaN(momentIndex) || momentIndex < 0) momentIndex = 0;
+  var momentIndex = momentEl ? parseInt(momentEl.value, 10) : -1;
+  if (isNaN(momentIndex) || momentIndex < -1) momentIndex = -1;
 
   // The image to lock in: a fresh draft if regenerated, otherwise the
   // existing reference (so editing an already-accepted change — e.g.

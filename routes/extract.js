@@ -53,7 +53,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     "SELECT COUNT(*) AS n FROM session_characters WHERE fork_id = ? AND change_status = 'accepted' AND change_moment_index IS NOT NULL AND change_moment_index >= 0"
   ).get(targetForkId);
   if (pinnedChange && pinnedChange.n > 0) {
-    return res.json({ error: 'PINNED_CHANGE', message: 'An approved character change is pinned to a specific panel, so regenerating the story would put it on the wrong moment. Resolve that change first to rebuild this version.' });
+    return res.json({ error: 'PINNED_CHANGE', message: 'An approved character change is pinned to a specific Moment Panel, so regenerating the story would put it on the wrong panel. To rebuild this version, open the Characters tab and set that change\u2019s Moment Panel dropdown to Empty first.' });
   }
 
   // Get characters for this campaign

@@ -371,7 +371,7 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     const imageUrl = (req.body && req.body.image_url) || null;
     // Stage 4: the moment index the change first appears at (DM override).
     let momentIndex = parseInt(req.body && req.body.moment_index, 10);
-    if (isNaN(momentIndex) || momentIndex < 0) momentIndex = 0;
+    if (isNaN(momentIndex) || momentIndex < -1) momentIndex = -1;
     const now = new Date().toISOString();
 
     const thisSession = await db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
