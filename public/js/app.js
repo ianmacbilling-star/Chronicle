@@ -2546,16 +2546,22 @@ function regenNarrativeSection(type, panelIndex) {
   // Save current state first
   saveInlineNarrative();
 
-  // Show loading in the specific box
+  // The textarea we write the result into, plus the panel container the
+  // spinner overlay anchors to (same gold spinner the storyboard image
+  // panels use, via showBusyOverlay).
   var boxId = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : 'narrative-between-box-' + panelIndex;
+  var panelId = type === 'opening' ? 'narrative-opening'
+    : type === 'closing' ? 'narrative-closing'
+    : 'narrative-between-' + panelIndex;
 
   var box = document.getElementById(boxId);
-  if (box) {
-    box.value = 'Regenerating...';
-    box.disabled = true;
-  }
+  // Non-destructive: leave the existing prose visible-but-dimmed under the
+  // overlay and lock editing while the regenerate is in flight. The original
+  // text stays put on failure (we never blank it).
+  if (box) box.disabled = true;
+  showBusyOverlay(panelId, 'Regenerating');
 
   // Regenerate full narrative and extract the relevant section
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
@@ -2565,8 +2571,9 @@ function regenNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
+    hideBusyOverlay(panelId);
+    if (box) box.disabled = false;
     if (data.error) {
-      if (box) { box.value = ''; box.disabled = false; }
       showAlert('Error: ' + data.error);
       return;
     }
@@ -2577,8 +2584,6 @@ function regenNarrativeSection(type, panelIndex) {
       outro: data.outro || ''
     };
 
-    if (box) box.disabled = false;
-
     // Update just the relevant box
     if (type === 'opening' && box) box.value = data.intro || '';
     else if (type === 'closing' && box) box.value = data.outro || '';
@@ -2588,7 +2593,8 @@ function regenNarrativeSection(type, panelIndex) {
     }
   })
   .catch(function(e) {
-    if (box) { box.value = ''; box.disabled = false; }
+    hideBusyOverlay(panelId);
+    if (box) box.disabled = false;
     showAlert('Error: ' + e.message);
   });
 }
@@ -5317,16 +5323,22 @@ function regenNarrativeSection(type, panelIndex) {
   // Save current state first
   saveInlineNarrative();
 
-  // Show loading in the specific box
+  // The textarea we write the result into, plus the panel container the
+  // spinner overlay anchors to (same gold spinner the storyboard image
+  // panels use, via showBusyOverlay).
   var boxId = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
     : 'narrative-between-box-' + panelIndex;
+  var panelId = type === 'opening' ? 'narrative-opening'
+    : type === 'closing' ? 'narrative-closing'
+    : 'narrative-between-' + panelIndex;
 
   var box = document.getElementById(boxId);
-  if (box) {
-    box.value = 'Regenerating...';
-    box.disabled = true;
-  }
+  // Non-destructive: leave the existing prose visible-but-dimmed under the
+  // overlay and lock editing while the regenerate is in flight. The original
+  // text stays put on failure (we never blank it).
+  if (box) box.disabled = true;
+  showBusyOverlay(panelId, 'Regenerating');
 
   // Regenerate full narrative and extract the relevant section
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
@@ -5336,8 +5348,9 @@ function regenNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
+    hideBusyOverlay(panelId);
+    if (box) box.disabled = false;
     if (data.error) {
-      if (box) { box.value = ''; box.disabled = false; }
       showAlert('Error: ' + data.error);
       return;
     }
@@ -5348,8 +5361,6 @@ function regenNarrativeSection(type, panelIndex) {
       outro: data.outro || ''
     };
 
-    if (box) box.disabled = false;
-
     // Update just the relevant box
     if (type === 'opening' && box) box.value = data.intro || '';
     else if (type === 'closing' && box) box.value = data.outro || '';
@@ -5359,7 +5370,8 @@ function regenNarrativeSection(type, panelIndex) {
     }
   })
   .catch(function(e) {
-    if (box) { box.value = ''; box.disabled = false; }
+    hideBusyOverlay(panelId);
+    if (box) box.disabled = false;
     showAlert('Error: ' + e.message);
   });
 }
