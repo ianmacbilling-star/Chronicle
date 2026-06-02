@@ -1870,7 +1870,6 @@ var ART_STYLE_META = [
   { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },
   { id:'Fantasy oil painting', name:'Fantasy oil', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
   { id:'Comic book cel-shaded', name:'Cel-shaded (Borderlands)', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
-  { id:'Hyper-realistic', name:'Hyper-realism', desc:'Photographic detail with physically accurate lighting and materials; minimal stylization.' },
   { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, dreamy pastel and watercolor blend with glowing highlights and gentle, feathered edges.' }
 ];
 
@@ -4670,8 +4669,10 @@ function renderArchives() {
       '<div class="archive-meta">' +
         '<div class="archive-title">' + escapeHtml(a.title || '(untitled)') + '</div>' +
         meta +
-        (isDM ? '<label class="archive-cover-toggle" title="Use as campaign cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignCover(' + a.id + ')" /> Cover</label>' : '') +
-        (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
+        '<div class="archive-actions">' +
+          (isDM ? '<label class="archive-cover-toggle" title="Use as campaign cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignCover(' + a.id + ')" /> Cover</label>' : '') +
+          (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');
