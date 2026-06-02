@@ -849,6 +849,11 @@ function selectSession(id) {
         sections: data.narrative_sections ? JSON.parse(data.narrative_sections) : [],
         outro: data.narrative_outro || ''
       };
+      // Per-gap narrative directions for this version (Pass 1) — drives the
+      // Direction pills on Review and the "prompt" blocks under the Storyboard
+      // narrative panels.
+      try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
+      catch (e) { state.narrativeDirections = {}; }
 
       if (state.moments.length) renderStoryboard();
 
@@ -1495,7 +1500,7 @@ function renderReview(data) {
   if (!list) return;
   var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
   var panels = (data && data.panels) || [];
-  state.reviewDirections = (data && data.directions) || {};
+  state.narrativeDirections = (data && data.directions) || {};
 
   // Who may steer/edit this version's narrative (same rule as the Storyboard
   // Regen): the DM on canonical, or a player on their OWN version.
@@ -1516,7 +1521,7 @@ function renderReview(data) {
   // A steerable narrative row: shows the outline (what the prose WILL say)
   // plus a Direction pill that lights gold when a direction has been set.
   function narrRow(gapKey, label, text, cls) {
-    var hasDir = !!(state.reviewDirections && state.reviewDirections[gapKey]);
+    var hasDir = !!(state.narrativeDirections && state.narrativeDirections[gapKey]);
     var safeLabel = escapeHtmlReview(label);
     var btn = canEditNarr
       ? '<button class="review-dir-btn' + (hasDir ? ' is-on' : '') + '" ' +
@@ -1597,7 +1602,7 @@ function openNarrDirection(gapKey, label) {
   var titleEl = document.getElementById('narr-direction-title');
   if (titleEl) titleEl.textContent = 'Narrative direction \u2014 ' + (label || 'gap');
   var ta = document.getElementById('narr-direction-text');
-  var cur = (state.reviewDirections && state.reviewDirections[gapKey]) || '';
+  var cur = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
   if (ta) ta.value = cur;
   var modal = document.getElementById('narr-direction-modal');
   if (modal) modal.classList.remove('hidden');
@@ -1622,11 +1627,33 @@ function saveNarrDirection() {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showAlert('Could not save direction: ' + data.error); return; }
-    state.reviewDirections = data.directions || {};
+    state.narrativeDirections = data.directions || {};
     closeNarrDirection();
-    loadReview();   // re-render so the gap's pill reflects the saved state
+    refreshNarrativeDirectionUI(gapKey);
   })
   .catch(function(e){ showAlert('Could not save direction: ' + e.message); });
+}
+
+// Refresh the surfaces that show a gap's Direction after it's saved, WITHOUT
+// clobbering in-progress prose edits. The Review tab re-renders its pills (no
+// editable prose there); the Storyboard updates just that one gap's "prompt"
+// block in place rather than re-rendering the whole board.
+function refreshNarrativeDirectionUI(gapKey) {
+  var reviewPane = document.getElementById('session-tab-review');
+  if (reviewPane && reviewPane.style.display !== 'none' && typeof loadReview === 'function') {
+    loadReview();
+  }
+  var sbPane = document.getElementById('session-tab-storyboard');
+  if (sbPane && sbPane.style.display !== 'none') {
+    var domKey = gapKey.replace(/[^a-z0-9]/gi, '-');
+    var txt = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
+    var el = document.getElementById('narr-dir-text-' + domKey);
+    if (el) {
+      el.textContent = txt || 'No direction set \u2014 using the default narrative style.';
+      if (txt) el.classList.remove('narr-dir-empty');
+      else el.classList.add('narr-dir-empty');
+    }
+  }
 }
 
 // ============================================================
@@ -1640,6 +1667,29 @@ function generateNarrativeAndImages() {
   var origLabel = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = 'Writing narrative\u2026'; }
 
+  // Progress bar on the Review tab for the narrative-writing phase. The call
+  // duration is unknown (one LLM pass), so ease the bar toward ~90% and snap
+  // to 100% on success, then hand off to the Storyboard image bar.
+  var wrap = document.getElementById('review-progress-wrap');
+  var fill = document.getElementById('review-progress-fill');
+  var pmsg = document.getElementById('review-progress-msg');
+  var pct = 0;
+  if (wrap) wrap.style.display = 'block';
+  if (fill) fill.style.width = '0%';
+  if (pmsg) pmsg.textContent = 'Writing your narrative\u2026';
+  var ticker = setInterval(function() {
+    pct = Math.min(90, pct + Math.max(1, (90 - pct) * 0.12));
+    if (fill) fill.style.width = pct.toFixed(0) + '%';
+  }, 400);
+  function endBar(done) {
+    clearInterval(ticker);
+    if (done && fill) fill.style.width = '100%';
+    setTimeout(function() {
+      if (wrap) wrap.style.display = 'none';
+      if (fill) fill.style.width = '0%';
+    }, done ? 350 : 0);
+  }
+
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -1648,7 +1698,9 @@ function generateNarrativeAndImages() {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
-    if (data.error) { showAlert('Could not generate narrative: ' + data.error); return; }
+    if (data.error) { endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
+    if (pmsg) pmsg.textContent = 'Narrative ready \u2014 starting images\u2026';
+    endBar(true);
     state.narrativeData = {
       intro: data.intro || '',
       sections: data.sections || [],
@@ -1663,6 +1715,7 @@ function generateNarrativeAndImages() {
   })
   .catch(function(e){
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
+    endBar(false);
     showAlert('Could not generate narrative: ' + e.message);
   });
 }
@@ -4379,6 +4432,27 @@ function renderStoryboard() {
     var regenBtn = canEditNarr
       ? '<button class="narrative-regen-btn" onclick="' + regenCall + '">&#8635; Regen</button>'
       : '';
+    // Option A — the gap's "prompt" is its Direction. Mirror the image panels'
+    // prompt block (same .moment-prompt-* classes): show the Direction text with
+    // an "Edit prompt" button that opens the Direction modal. Always reflects the
+    // current direction (incl. anything set on the Review tab); read-only echo
+    // for viewers who can't edit this version.
+    var gapKey = (id === 'narrative-opening') ? 'opening'
+      : (id === 'narrative-closing') ? 'closing'
+      : 'between:' + id.replace('narrative-between-', '');
+    var domKey = gapKey.replace(/[^a-z0-9]/gi, '-');
+    var dirText = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
+    var dirBody = dirText
+      ? escapeHtmlReview(dirText)
+      : 'No direction set \u2014 using the default narrative style.';
+    var dirEditBtn = canEditNarr
+      ? '<button class="moment-prompt-edit-btn dm-only" id="narr-dir-btn-' + domKey + '" ' +
+        'onclick="openNarrDirection(\'' + gapKey + '\', \'' + escapeHtmlReview(label) + '\')">&#9998; Edit prompt</button>'
+      : '';
+    var dirBlock = '<div class="moment-prompt-wrap narr-dir-wrap" id="narr-dir-' + domKey + '">' +
+      '<div class="moment-prompt-text narr-dir-text' + (dirText ? '' : ' narr-dir-empty') + '" id="narr-dir-text-' + domKey + '">' + dirBody + '</div>' +
+      dirEditBtn +
+    '</div>';
     // When editable, every box auto-saves on input (so between-panel prose
     // persists too, not just opening/closing); otherwise it is read-only.
     return '<div class="narrative-panel" id="' + id + '">' +
@@ -4389,6 +4463,7 @@ function renderStoryboard() {
       '<textarea class="narrative-inline-box" id="' + textareaId + '" placeholder="' + placeholder + '"' +
         (canEditNarr ? ' oninput="scheduleNarrativeSave()"' : ' readonly') + '>' +
       (value || '') + '</textarea>' +
+      dirBlock +
     '</div>';
   }
 
@@ -4878,6 +4953,11 @@ function selectSession(id) {
         sections: data.narrative_sections ? JSON.parse(data.narrative_sections) : [],
         outro: data.narrative_outro || ''
       };
+      // Per-gap narrative directions for this version (Pass 1) — drives the
+      // Direction pills on Review and the "prompt" blocks under the Storyboard
+      // narrative panels.
+      try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
+      catch (e) { state.narrativeDirections = {}; }
 
       if (state.moments.length) renderStoryboard();
 
@@ -7203,6 +7283,11 @@ function reloadSessionForFork() {
         sections: data.narrative_sections ? JSON.parse(data.narrative_sections) : [],
         outro: data.narrative_outro || ''
       };
+      // Per-gap narrative directions for this version (Pass 1) — drives the
+      // Direction pills on Review and the "prompt" blocks under the Storyboard
+      // narrative panels.
+      try { state.narrativeDirections = data.narrative_directions ? JSON.parse(data.narrative_directions) : {}; }
+      catch (e) { state.narrativeDirections = {}; }
       if (typeof renderStoryboard === 'function') renderStoryboard();
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof updateNotesBox === 'function') updateNotesBox(data);

@@ -979,6 +979,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   background: rgba(201,168,76,0.12);
   color: var(--gold);
 }
+/* Pass 1 — the Direction "prompt" block under each Storyboard narrative panel
+   reuses the image panel's .moment-prompt-* styling; these align the Edit
+   button under the text and mute the empty (no-direction) state. */
+.narr-dir-wrap .moment-prompt-edit-btn { margin-left: 14px; margin-bottom: 8px; }
+.narr-dir-empty { opacity: 0.8; }
 .moment-prompt-editor {
   width: 100%;
   min-height: 90px;
