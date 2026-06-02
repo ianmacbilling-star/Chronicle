@@ -1650,7 +1650,7 @@ body.role-player #stab-export { display: block !important; }
 /* Campaign cover art on the list chip: faded, bordered, filling most of the
    card behind the text. Content is lifted above the cover layer. */
 .campaign-card{position:relative;overflow:hidden;}
-.campaign-card-cover{position:absolute;inset:8px;border-radius:8px;background-size:cover;background-position:center;opacity:0.28;border:1px solid rgba(201,168,76,0.45);pointer-events:none;z-index:0;}
+.campaign-card-cover{position:absolute;inset:8px;border-radius:8px;background-size:cover;background-position:center;opacity:0.43;border:1px solid rgba(201,168,76,0.45);pointer-events:none;z-index:0;}
 .campaign-card-icon,.campaign-card-name,.campaign-card-desc,.campaign-card-meta{position:relative;z-index:1;}
 /* Inline campaign name/description editing on the Sessions header */
 .camp-edit-pencil{background:none;border:none;color:rgba(201,168,76,0.5);cursor:pointer;font-size:0.55em;padding:2px 5px;line-height:1;border-radius:4px;}
