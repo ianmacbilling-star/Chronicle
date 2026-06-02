@@ -1872,7 +1872,11 @@ var ART_STYLE_META = [
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes and loose edges.' },
   { id:'Anime manga style', name:'Anime / manga', desc:'Clean anime / manga linework with expressive shading.' },
-  { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' }
+  { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' },
+  { id:'Fantasy oil painting', name:'Fantasy oil', desc:'Rich, saturated oil-paint cover art \u2014 heroic and dramatic, with painterly brushwork and soft, borderless edges.' },
+  { id:'Comic book cel-shaded', name:'Cel-shaded (Borderlands)', desc:'Thick ink outlines and hard cel-shaded shadow blocks; bold, hand-painted graphic-novel look.' },
+  { id:'Hyper-realistic', name:'Hyper-realism', desc:'Photographic detail with physically accurate lighting and materials; minimal stylization.' },
+  { id:'Fantasy pastel', name:'Fantasy pastel', desc:'Soft, dreamy pastel and watercolor blend with glowing highlights and gentle, feathered edges.' }
 ];
 
 function artStyleName(v) {
