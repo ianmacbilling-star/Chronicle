@@ -357,7 +357,7 @@
         <div id="review-content" style="display:none;">
           <div class="review-actionbar">
             <div class="form-hint" style="margin:0;">A quick overview of your storyboard before you generate images — the panels in order, and which characters and assets each one will use.</div>
-            <button class="btn btn-primary dm-only" id="review-generate-btn" onclick="generateFromReview()">&#10024; Generate Storyboard Images</button>
+            <button class="btn btn-primary dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">&#10024; Generate Narrative &amp; Images</button>
           </div>
           <div id="review-list"></div>
         </div>
@@ -953,6 +953,20 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="narr-direction-modal">
+  <div class="modal archive-picker" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="narr-direction-title">Narrative direction</div>
+      <button class="modal-close" onclick="closeNarrDirection()">&times;</button>
+    </div>
+    <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">Steer the prose for this gap — tone, focus, what to emphasize. It's optional, and it applies whenever this version's narrative is generated or regenerated. Leave it blank to use the default.</p>
+    <textarea class="form-textarea" id="narr-direction-text" placeholder="e.g. keep it grim and terse &middot; stay in Kira's point of view &middot; lean into the betrayal" style="min-height:90px;"></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-sm" onclick="closeNarrDirection()">Cancel</button>
+      <button class="btn btn-sm btn-primary" onclick="saveNarrDirection()">Save direction</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="retouch-modal">
   <div class="modal archive-picker" style="max-width:480px;">
     <div class="modal-header">

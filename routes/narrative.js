@@ -36,6 +36,22 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
+  // Steering inputs (Pass 1):
+  //  - OVERALL direction: the DM steers with the session's notes; a player
+  //    steers their OWN version with their fork notes.
+  //  - PER-GAP direction: optional steering text per gap, set on the Review
+  //    tab, stored on this fork. Injected into each gap's instruction below so
+  //    the first generation AND every per-gap Regen honor it.
+  let directorNotes = session.session_notes || '';
+  let gapDirections = {};
+  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions FROM session_forks WHERE id = ?').get(targetForkId);
+  if (fkSteer) {
+    if (callerRole !== 'dm') directorNotes = fkSteer.fork_notes || '';
+    if (fkSteer.narrative_directions) {
+      try { gapDirections = JSON.parse(fkSteer.narrative_directions) || {}; } catch (e) { gapDirections = {}; }
+    }
+  }
+
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
@@ -73,12 +89,16 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     const nextLabel = isLast
       ? 'THE END OF THE SESSION'
       : 'PANEL ' + (i + 2) + ' — "' + moments[i + 1].title + '"';
+    const dir = gapDirections['between:' + i];
+    const dirLine = dir
+      ? '\n  DIRECTOR STEERING for this gap (you MUST follow this): ' + dir
+      : '';
     return 'GAP after panel ' + (i + 1) + ': sits between ' +
       'PANEL ' + (i + 1) + ' — "' + m.title + '" AND ' + nextLabel + '.\n' +
       '  Write prose describing ONLY the story events that occur AFTER panel ' + (i + 1) +
       ' and BEFORE ' + (isLast ? 'the session ends' : 'panel ' + (i + 2)) + '. ' +
       'Do not describe what panel ' + (i + 1) + ' itself shows — that is the image\'s job. ' +
-      'Do not describe events that belong in other gaps.';
+      'Do not describe events that belong in other gaps.' + dirLine;
   }).join('\n\n');
 
   const prompt =
@@ -99,8 +119,11 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'in any narrative block MUST belong to the gap that block represents.\n\n' +
     'The gaps you need to fill:\n\n' +
     gapsList + '\n\n' +
-    'You will also write an "intro" (before panel 1) and an "outro" (after the final panel).\n\n' +
-    (session.session_notes ? 'DM Notes (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + session.session_notes + '\n\n' : '') +
+    'You will also write an "intro" (before panel 1) and an "outro" (after the final panel).\n' +
+    (gapDirections['opening'] ? 'DIRECTOR STEERING for the intro (you MUST follow this): ' + gapDirections['opening'] + '\n' : '') +
+    (gapDirections['closing'] ? 'DIRECTOR STEERING for the outro (you MUST follow this): ' + gapDirections['closing'] + '\n' : '') +
+    '\n' +
+    (directorNotes ? 'Overall narrative direction (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + directorNotes + '\n\n' : '') +
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
     '- Read like a fantasy novel or comic book caption — vivid, dramatic, engaging\n' +
@@ -242,6 +265,48 @@ router.get('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     sections: fk && fk.narrative_sections ? JSON.parse(fk.narrative_sections) : [],
     outro: fk && fk.narrative_outro ? fk.narrative_outro : ''
   });
+});
+
+// ============================================================
+// SAVE a per-gap narrative direction (Pass 1)
+// Body: { gap: 'opening' | 'between:<i>' | 'closing', text: '...' }
+// Merges into this version's narrative_directions JSON. Owner-scoped:
+// the caller writes only their OWN version (DM -> DM fork, player -> own).
+// Empty text clears that gap's direction. Returns the merged map so the
+// frontend can update its lit-pill state.
+// ============================================================
+router.put('/direction/:campaignId/:sessionId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.id FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+  ).get(req.params.sessionId, req.session.userId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
+  const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
+  if (!/^(opening|closing|between:\d+)$/.test(gap)) {
+    return res.json({ error: 'Invalid gap key' });
+  }
+
+  const row = await db.prepare('SELECT narrative_directions FROM session_forks WHERE id = ?').get(targetForkId);
+  let directions = {};
+  if (row && row.narrative_directions) {
+    try { directions = JSON.parse(row.narrative_directions) || {}; } catch (e) { directions = {}; }
+  }
+  if (text) directions[gap] = text;
+  else delete directions[gap];
+
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE session_forks SET narrative_directions = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(JSON.stringify(directions), now, req.session.userId, targetForkId);
+
+  res.json({ success: true, gap: gap, text: text, directions: directions });
 });
 
 module.exports = router;

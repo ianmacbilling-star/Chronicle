@@ -223,6 +223,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .review-nar-label{font-size:10px;font-weight:700;color:var(--gold);
   text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
 .review-nar-text{font-size:13px;color:var(--parchment);font-style:italic;line-height:1.5;}
+/* Pass 1 — per-gap narrative steering. The head row carries the label + the
+   Direction pill; the pill lights gold when a direction has been set. */
+.review-nar-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
+.review-nar-head .review-nar-label{margin-bottom:0;}
+.review-nar-empty{color:rgba(201,168,76,0.45);font-style:italic;}
+.review-dir-btn{padding:3px 8px;font-size:10px;background:rgba(0,0,0,0.5);
+  color:rgba(201,168,76,0.85);border:1px solid rgba(201,168,76,0.3);border-radius:6px;
+  cursor:pointer;white-space:nowrap;line-height:1.3;transition:background 0.15s,color 0.15s,border-color 0.15s;}
+.review-dir-btn:hover{background:rgba(0,0,0,0.8);color:var(--gold);border-color:var(--gold);}
+.review-dir-btn.is-on{color:var(--gold);border-color:var(--gold);background:rgba(201,168,76,0.12);}
 
 /* Panel blocks — quick reference points along the narrative. */
 .review-panel{border:1px solid rgba(201,168,76,0.18);border-radius:var(--radius);

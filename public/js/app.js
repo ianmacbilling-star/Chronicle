@@ -1495,8 +1495,15 @@ function renderReview(data) {
   if (!list) return;
   var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
   var panels = (data && data.panels) || [];
+  state.reviewDirections = (data && data.directions) || {};
 
-  // Truncate prose to a fallback summary for older sessions.
+  // Who may steer/edit this version's narrative (same rule as the Storyboard
+  // Regen): the DM on canonical, or a player on their OWN version.
+  var _nRole = state.currentCampaign && state.currentCampaign.my_role;
+  var canEditNarr = (_nRole === 'dm' && !state.currentForkId) ||
+    ((_nRole === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId)));
+
+  // Outline fallback for legacy versions that stored prose, not an outline.
   function fallback(text, words) {
     if (!text) return '';
     var w = String(text).trim().split(/\s+/);
@@ -1506,17 +1513,29 @@ function renderReview(data) {
   var intro = (data && data.intro_summary) || fallback(data && data.intro, 25);
   var outro = (data && data.outro_summary) || fallback(data && data.outro, 25);
 
-  var html = '';
-
-  // Opening narrative summary.
-  if (intro) {
-    html += '<div class="review-nar review-nar-open">' +
-      '<div class="review-nar-label">Opening</div>' +
-      '<div class="review-nar-text">' + escapeHtmlReview(intro) + '</div>' +
+  // A steerable narrative row: shows the outline (what the prose WILL say)
+  // plus a Direction pill that lights gold when a direction has been set.
+  function narrRow(gapKey, label, text, cls) {
+    var hasDir = !!(state.reviewDirections && state.reviewDirections[gapKey]);
+    var safeLabel = escapeHtmlReview(label);
+    var btn = canEditNarr
+      ? '<button class="review-dir-btn' + (hasDir ? ' is-on' : '') + '" ' +
+        'onclick="openNarrDirection(\'' + gapKey + '\', \'' + safeLabel + '\')" ' +
+        'title="' + (hasDir ? 'Narrative direction set - click to edit' : 'Steer the prose for this gap') + '">' +
+        '\u270E Direction' + (hasDir ? ' \u2713' : '') + '</button>'
+      : '';
+    var body = text
+      ? '<div class="review-nar-text">' + escapeHtmlReview(text) + '</div>'
+      : '<div class="review-nar-text review-nar-empty">No outline yet - prose will be generated for this gap.</div>';
+    return '<div class="review-nar ' + cls + '">' +
+      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div>' + btn + '</div>' +
+      body +
     '</div>';
   }
 
-  // Interleave: panel, then the bridge narrative summary after it.
+  var html = '';
+  html += narrRow('opening', 'Opening', intro, 'review-nar-open');
+
   panels.forEach(function(p, i) {
     var num = (typeof p.panel_order === 'number' ? p.panel_order : i) + 1;
 
@@ -1544,21 +1563,13 @@ function renderReview(data) {
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assets + '</div>' +
     '</div>';
 
-    // Bridge summary AFTER this panel (omit on the last — outro handles it).
-    if (p.bridge && i < panels.length - 1) {
-      html += '<div class="review-nar review-nar-bridge">' +
-        '<div class="review-nar-text">' + escapeHtmlReview(p.bridge) + '</div>' +
-      '</div>';
+    // Bridge gap AFTER this panel (the last gap is covered by the closing).
+    if (i < panels.length - 1) {
+      html += narrRow('between:' + i, 'Panel ' + num + ' \u2192 ' + (num + 1), p.bridge || '', 'review-nar-bridge');
     }
   });
 
-  // Closing narrative summary.
-  if (outro) {
-    html += '<div class="review-nar review-nar-close">' +
-      '<div class="review-nar-label">Closing</div>' +
-      '<div class="review-nar-text">' + escapeHtmlReview(outro) + '</div>' +
-    '</div>';
-  }
+  html += narrRow('closing', 'Closing', outro, 'review-nar-close');
 
   list.innerHTML = html;
 }
@@ -1573,6 +1584,87 @@ function generateFromReview() {
   setTimeout(function() {
     if (typeof generateAllImages === 'function') generateAllImages();
   }, 60);
+}
+
+// ============================================================
+// Per-gap narrative DIRECTION modal (Pass 1)
+// Mirrors the Retouch modal: open (prefill), close, save.
+// state.narrDirGap holds the gap key currently being edited
+// ('opening' | 'between:<i>' | 'closing').
+// ============================================================
+function openNarrDirection(gapKey, label) {
+  state.narrDirGap = gapKey;
+  var titleEl = document.getElementById('narr-direction-title');
+  if (titleEl) titleEl.textContent = 'Narrative direction \u2014 ' + (label || 'gap');
+  var ta = document.getElementById('narr-direction-text');
+  var cur = (state.reviewDirections && state.reviewDirections[gapKey]) || '';
+  if (ta) ta.value = cur;
+  var modal = document.getElementById('narr-direction-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+function closeNarrDirection() {
+  var modal = document.getElementById('narr-direction-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function saveNarrDirection() {
+  var gapKey = state.narrDirGap;
+  if (!gapKey) { closeNarrDirection(); return; }
+  var ta = document.getElementById('narr-direction-text');
+  var text = ta ? ta.value.trim() : '';
+  fetch('/api/narrative/direction/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ gap: gapKey, text: text })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.error) { showAlert('Could not save direction: ' + data.error); return; }
+    state.reviewDirections = data.directions || {};
+    closeNarrDirection();
+    loadReview();   // re-render so the gap's pill reflects the saved state
+  })
+  .catch(function(e){ showAlert('Could not save direction: ' + e.message); });
+}
+
+// ============================================================
+// "Generate Narrative & Images" (Pass 1) — the commit point on the Review tab.
+// Generates the narrative prose ONCE (honoring per-gap directions + Session
+// Notes), then runs image generation. The narrative is produced for the first
+// time here, so it reflects the casting and directions set on the Review tab.
+// ============================================================
+function generateNarrativeAndImages() {
+  var btn = document.getElementById('review-generate-btn');
+  var origLabel = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Writing narrative\u2026'; }
+
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ key: getApiKey() || 'platform' })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
+    if (data.error) { showAlert('Could not generate narrative: ' + data.error); return; }
+    state.narrativeData = {
+      intro: data.intro || '',
+      sections: data.sections || [],
+      outro: data.outro || ''
+    };
+    // Hand off to the storyboard's image generation (it has its own progress
+    // bar + per-panel busy overlays).
+    switchSessionTab('storyboard');
+    setTimeout(function() {
+      if (typeof generateAllImages === 'function') generateAllImages();
+    }, 60);
+  })
+  .catch(function(e){
+    if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
+    showAlert('Could not generate narrative: ' + e.message);
+  });
 }
 
 function switchSessionTab(tab) {
@@ -2402,66 +2494,30 @@ function extractMoments() {
       btn.disabled = false;
       return;
     }
-    fill.style.width = '60%';
-    msg.textContent = 'Moments found! Writing your narrative...';
+    // Pass 1 — Generate Story now EXTRACTS ONLY (moments + the free narrative
+    // outline produced in the same call). Narrative prose and images are
+    // generated later from the Review tab via "Generate Narrative & Images",
+    // so no narrative call fires here.
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
-
-    // Step 2 — Generate narrative then render everything together
-    fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({key: key})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(narData) {
-      // Set narrative BEFORE rendering storyboard
-      state.narrativeData = {
-        intro: narData.intro || '',
-        sections: narData.sections || [],
-        outro: narData.outro || ''
-      };
-      fill.style.width = '100%';
-      msg.textContent = 'Your story is ready!';
-      document.getElementById('moment-count').textContent = state.moments.length;
-      renderStoryboard();
-      setTimeout(function() {
-        wrap.style.display = 'none';
-        fill.style.width = '0%';
-        btn.disabled = false;
-        // If character changes were detected, send the DM to the
-        // Characters tab to review them; otherwise go to Storyboard.
-        if (state.pendingChanges && state.pendingChanges > 0) {
-          switchSessionTab('characters');
-        } else {
-          // Land on Review so the DM can check the storyboard plan
-          // before spending image-generation calls.
-          switchSessionTab('review');
-        }
-      }, 800);
-    })
-    .catch(function() {
-      // Narrative failed — still show storyboard with empty narrative
-      state.narrativeData = { intro: '', sections: [], outro: '' };
-      fill.style.width = '100%';
-      msg.textContent = 'Moments extracted!';
-      document.getElementById('moment-count').textContent = state.moments.length;
-      renderStoryboard();
-      setTimeout(function() {
-        wrap.style.display = 'none';
-        fill.style.width = '0%';
-        btn.disabled = false;
-        // If character changes were detected, send the DM to the
-        // Characters tab to review them; otherwise go to Storyboard.
-        if (state.pendingChanges && state.pendingChanges > 0) {
-          switchSessionTab('characters');
-        } else {
-          // Land on Review so the DM can check the storyboard plan
-          // before spending image-generation calls.
-          switchSessionTab('review');
-        }
-      }, 800);
-    });
+    state.narrativeData = { intro: '', sections: [], outro: '' };
+    fill.style.width = '100%';
+    msg.textContent = 'Your storyboard plan is ready!';
+    document.getElementById('moment-count').textContent = state.moments.length;
+    renderStoryboard();
+    setTimeout(function() {
+      wrap.style.display = 'none';
+      fill.style.width = '0%';
+      btn.disabled = false;
+      // Permanent character changes detected -> review them on the Characters
+      // tab first; otherwise land on Review to check the plan, steer the
+      // narrative, and set casting before generating.
+      if (state.pendingChanges && state.pendingChanges > 0) {
+        switchSessionTab('characters');
+      } else {
+        switchSessionTab('review');
+      }
+    }, 800);
   })
   .catch(function(e) {
     clearInterval(ticker);
@@ -5179,66 +5235,30 @@ function extractMoments() {
       btn.disabled = false;
       return;
     }
-    fill.style.width = '60%';
-    msg.textContent = 'Moments found! Writing your narrative...';
+    // Pass 1 — Generate Story now EXTRACTS ONLY (moments + the free narrative
+    // outline produced in the same call). Narrative prose and images are
+    // generated later from the Review tab via "Generate Narrative & Images",
+    // so no narrative call fires here.
     state.moments = data.moments || [];
     state.pendingChanges = data.pendingChanges || 0;
-
-    // Step 2 — Generate narrative then render everything together
-    fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({key: key})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(narData) {
-      // Set narrative BEFORE rendering storyboard
-      state.narrativeData = {
-        intro: narData.intro || '',
-        sections: narData.sections || [],
-        outro: narData.outro || ''
-      };
-      fill.style.width = '100%';
-      msg.textContent = 'Your story is ready!';
-      document.getElementById('moment-count').textContent = state.moments.length;
-      renderStoryboard();
-      setTimeout(function() {
-        wrap.style.display = 'none';
-        fill.style.width = '0%';
-        btn.disabled = false;
-        // If character changes were detected, send the DM to the
-        // Characters tab to review them; otherwise go to Storyboard.
-        if (state.pendingChanges && state.pendingChanges > 0) {
-          switchSessionTab('characters');
-        } else {
-          // Land on Review so the DM can check the storyboard plan
-          // before spending image-generation calls.
-          switchSessionTab('review');
-        }
-      }, 800);
-    })
-    .catch(function() {
-      // Narrative failed — still show storyboard with empty narrative
-      state.narrativeData = { intro: '', sections: [], outro: '' };
-      fill.style.width = '100%';
-      msg.textContent = 'Moments extracted!';
-      document.getElementById('moment-count').textContent = state.moments.length;
-      renderStoryboard();
-      setTimeout(function() {
-        wrap.style.display = 'none';
-        fill.style.width = '0%';
-        btn.disabled = false;
-        // If character changes were detected, send the DM to the
-        // Characters tab to review them; otherwise go to Storyboard.
-        if (state.pendingChanges && state.pendingChanges > 0) {
-          switchSessionTab('characters');
-        } else {
-          // Land on Review so the DM can check the storyboard plan
-          // before spending image-generation calls.
-          switchSessionTab('review');
-        }
-      }, 800);
-    });
+    state.narrativeData = { intro: '', sections: [], outro: '' };
+    fill.style.width = '100%';
+    msg.textContent = 'Your storyboard plan is ready!';
+    document.getElementById('moment-count').textContent = state.moments.length;
+    renderStoryboard();
+    setTimeout(function() {
+      wrap.style.display = 'none';
+      fill.style.width = '0%';
+      btn.disabled = false;
+      // Permanent character changes detected -> review them on the Characters
+      // tab first; otherwise land on Review to check the plan, steer the
+      // narrative, and set casting before generating.
+      if (state.pendingChanges && state.pendingChanges > 0) {
+        switchSessionTab('characters');
+      } else {
+        switchSessionTab('review');
+      }
+    }, 800);
   })
   .catch(function(e) {
     clearInterval(ticker);

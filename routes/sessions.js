@@ -113,7 +113,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
-  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id=?').get(viewForkId);
+  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions FROM session_forks WHERE id=?').get(viewForkId);
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
@@ -124,7 +124,8 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     fork_notes: viewForkRow ? (viewForkRow.fork_notes || '') : '',
     narrative_intro: viewForkRow ? (viewForkRow.narrative_intro || '') : (session.narrative_intro || ''),
     narrative_sections: viewForkRow ? (viewForkRow.narrative_sections || null) : (session.narrative_sections || null),
-    narrative_outro: viewForkRow ? (viewForkRow.narrative_outro || '') : (session.narrative_outro || '')
+    narrative_outro: viewForkRow ? (viewForkRow.narrative_outro || '') : (session.narrative_outro || ''),
+    narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null
   }));
 });
 
@@ -489,33 +490,57 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
     ).all(campaignId);
 
-    // Narrative prose, if Generate Story has produced it. Stored per-panel
-    // as a JSON array of { panel_index, before, after, after_summary } on
-    // the session. The Review tab uses summaries (terse outline); the
-    // storyboard/PDF use the full prose.
-    const sessRow = await db.prepare(
-      'SELECT narrative_intro, narrative_intro_summary, narrative_sections, ' +
-      'narrative_outro, narrative_outro_summary FROM sessions WHERE id = ?'
-    ).get(sessionId);
+    // Pass 1 — the Review tab previews the per-gap narrative OUTLINE (what the
+    // prose WILL say), produced free during extraction and stored on the fork.
+    // (Previously this read narrative summaries off the legacy `sessions` row,
+    // which went stale after the Phase-4 narrative-on-fork cutover.) Falls back
+    // to any generated summaries on the fork for legacy versions.
+    const fkRow = await db.prepare(
+      'SELECT narrative_intro_summary, narrative_outro_summary, narrative_sections, ' +
+      'narrative_outline, narrative_directions FROM session_forks WHERE id = ?'
+    ).get(viewForkId);
     let narrativeByPanel = {};
     let narrativeIntro = '';
     let narrativeOutro = '';
     let introSummary = '';
     let outroSummary = '';
-    if (sessRow) {
-      narrativeIntro = sessRow.narrative_intro || '';
-      narrativeOutro = sessRow.narrative_outro || '';
-      introSummary = sessRow.narrative_intro_summary || '';
-      outroSummary = sessRow.narrative_outro_summary || '';
-      if (sessRow.narrative_sections) {
+    let gapDirections = {};
+    if (fkRow) {
+      if (fkRow.narrative_directions) {
+        try { gapDirections = JSON.parse(fkRow.narrative_directions) || {}; } catch (e) { gapDirections = {}; }
+      }
+      let usedOutline = false;
+      if (fkRow.narrative_outline) {
         try {
-          const secs = JSON.parse(sessRow.narrative_sections);
-          if (Array.isArray(secs)) {
-            secs.forEach(function(s) {
-              if (typeof s.panel_index === 'number') narrativeByPanel[s.panel_index] = s;
-            });
+          const ol = JSON.parse(fkRow.narrative_outline);
+          if (ol) {
+            introSummary = ol.intro || '';
+            outroSummary = ol.outro || '';
+            if (Array.isArray(ol.sections)) {
+              ol.sections.forEach(function(s) {
+                if (typeof s.panel_index === 'number') {
+                  narrativeByPanel[s.panel_index] = { after_summary: s.outline || '' };
+                }
+              });
+            }
+            usedOutline = true;
           }
-        } catch (e) { narrativeByPanel = {}; }
+        } catch (e) { usedOutline = false; }
+      }
+      if (!usedOutline) {
+        // Legacy fallback: a version whose narrative predates the outline.
+        introSummary = fkRow.narrative_intro_summary || '';
+        outroSummary = fkRow.narrative_outro_summary || '';
+        if (fkRow.narrative_sections) {
+          try {
+            const secs = JSON.parse(fkRow.narrative_sections);
+            if (Array.isArray(secs)) {
+              secs.forEach(function(s) {
+                if (typeof s.panel_index === 'number') narrativeByPanel[s.panel_index] = s;
+              });
+            }
+          } catch (e) { narrativeByPanel = {}; }
+        }
       }
     }
 
@@ -565,6 +590,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       intro_summary: introSummary,
       outro: narrativeOutro,
       outro_summary: outroSummary,
+      directions: gapDirections,
       panels: panels
     });
   } catch (e) {

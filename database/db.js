@@ -697,6 +697,8 @@ async function migrateForks(pool) {
       narrative_outro TEXT,
       narrative_intro_summary TEXT,
       narrative_outro_summary TEXT,
+      narrative_outline TEXT,
+      narrative_directions TEXT,
       art_style_override TEXT,
       fork_notes TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -707,6 +709,16 @@ async function migrateForks(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_session ON session_forks(session_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_user ON session_forks(user_id)');
+  // Pass 1 (narrative rework) — per-version narrative planning fields:
+  //   narrative_outline    = JSON { intro, sections:[{panel_index,outline}], outro }
+  //                          produced FREE during extraction so the Review tab can
+  //                          preview "what each gap's prose will say" before any
+  //                          narrative prose is generated.
+  //   narrative_directions = JSON keyed by gap ('opening' | 'between:<i>' | 'closing')
+  //                          of per-gap steering text that gets injected into the
+  //                          narrative-generation prompt (and thus every per-gap Regen).
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_outline TEXT');
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_directions TEXT');
 
   // Backfill: one DM fork per session, owned by the campaign's DM.
   await pool.query(`

@@ -106,7 +106,12 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '      "emphasis": "ONLY for combat moments: a punchy 1-3 word comic-style emphasis phrase that fits THIS specific moment (e.g. \\"Steel meets steel!\\", \\"The wards shatter!\\", \\"No escape!\\"). It must make sense for what actually happens in the moment — not a generic sound effect. For non-combat moments, use an empty string.",\n' +
     '      "prompt": "Detailed image generation prompt describing the SCENE ONLY. Describe composition, lighting, character positions, mood, and any specific visual details from the director\'s instructions. 2-3 sentences. Do NOT mention or name an art style, medium, or rendering technique - the art style is applied separately at image-generation time, so the prompt must stay style-neutral. CRITICAL FOR CHARACTER CONSISTENCY: every time a KNOWN named character appears, refer to them BY THEIR EXACT NAME (e.g. \\"Ruk\\", \\"Zara\\") - never anonymously like \\"a half-orc\\" or \\"the warrior\\". The name tells the system this is a specific recurring character. WHO IS ACTUALLY IN THE PANEL — CRITICAL: each panel is a SINGLE CINEMATIC SHOT, not an inventory of who is in the room. Name ONLY the characters whose faces or bodies would be IN THE VISUAL FRAME of this specific panel — the ones doing the action, reacting, or close enough to be visually prominent. Varied panel composition is what makes a graphic novel feel like a graphic novel — a close-up on one character\'s hands working magic, a two-shot of a heated argument, a wide group shot of the whole party entering a hall — each panel earns its character count from the dramatic moment, not from who happens to be present in the room. If a moment is intimate or focused, name 1 or 2 characters. If it is a group moment, name the group. AVOID the failure mode of \\"name everyone every time to be safe\\" — that produces bland, identical-cast panels and over-inclusion is just as wrong as under-inclusion. GROUP REFERENCES — CRITICAL: when the transcript uses a group term (\\"the party\\", \\"the group\\", \\"the adventurers\\", \\"the heroes\\", \\"the team\\", \\"the companions\\", \\"the fellowship\\", \\"everyone\\") or plural pronouns (\\"they\\", \\"them\\") that refer to multiple characters, NEVER pass the group term through to the prompt — group terms produce generic faces in the rendered image. Resolve the group term into the EXPLICIT NAMES of the characters who are visually in this panel\'s frame. For example, do not write \\"the party fights the dragon\\" — write \\"Ruk, Zara, and Thorin fight the dragon\\" if those three are the ones engaging. If only one or two characters from the group are the visual focus of this panel, name only those. Resolving a group term does NOT mean including every party member — it means replacing the vague term with the specific names of who is actually IN this shot. CHARACTER DESCRIPTIONS - KEEP THEM LEAN: a reference image supplies each known character\'s permanent appearance (face, build, features), so do NOT re-describe their fixed physical traits at length. For a known character, focus their text on what they are DOING in this panel (pose, action, expression) and any TEMPORARY visible state from the transcript (bloodied, muddy, exhausted, frightened, soaked). A brief identifying tag is fine the first time (\\"Ruk, the half-orc barbarian\\") but keep it short - the image carries the look. Only describe full physical appearance for UNNAMED background figures who are not known characters."\n' +
     '    }\n' +
-    '  ]\n' +
+    '  ],\n' +
+    '  "narrative_outline": {\n' +
+    '    "intro": "One short sentence describing what the OPENING narration (before panel 1) will be about — the scene-setting the reader needs. This is a PLAN of what the prose will cover, NOT the prose itself.",\n' +
+    '    "gaps": ["One short sentence per BETWEEN-panel gap describing what the connective narration covers — the story events that happen AFTER one panel and BEFORE the next. Return them in order with EXACTLY (number of panels minus 1) entries: the gap after panel 1, then after panel 2, and so on."],\n' +
+    '    "outro": "One short sentence describing what the CLOSING narration (after the final panel) will be about."\n' +
+    '  }\n' +
     '}';
 
   try {
@@ -159,6 +164,30 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       parsed.moments.forEach(function(m, i) {
         insert.run(session.id, dmForkId, m.title, m.description, m.type, m.prompt, m.emphasis || null, i, now, req.session.userId);
       });
+
+      // Pass 1 — store the per-gap narrative OUTLINE produced in this same
+      // extraction call (free), and clear any stale narrative prose from a
+      // prior extraction of this version (the panels just changed, so the old
+      // prose no longer matches). Per-gap DIRECTIONS are deliberately preserved
+      // (narrative_directions untouched) — they are the user's steering intent
+      // and should survive a re-extract.
+      var outlineObj = parsed.narrative_outline || {};
+      var outlineGaps = Array.isArray(outlineObj.gaps) ? outlineObj.gaps : [];
+      var outlineSections = [];
+      for (var gi = 0; gi < parsed.moments.length - 1; gi++) {
+        outlineSections.push({ panel_index: gi, outline: outlineGaps[gi] || '' });
+      }
+      var outlineToStore = JSON.stringify({
+        intro: outlineObj.intro || '',
+        sections: outlineSections,
+        outro: outlineObj.outro || ''
+      });
+      await db.prepare(
+        'UPDATE session_forks SET narrative_outline = ?, ' +
+        'narrative_intro = NULL, narrative_sections = NULL, narrative_outro = NULL, ' +
+        'narrative_intro_summary = NULL, narrative_outro_summary = NULL, ' +
+        'edited_at = ?, edited_by = ? WHERE id = ?'
+      ).run(outlineToStore, now, req.session.userId, dmForkId);
 
       // Snapshot each character present in this session (self-contained).
       await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now, dmForkId);
