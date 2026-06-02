@@ -1792,7 +1792,7 @@ function narrStyleName(id) {
 
 function refreshNarrStyleButtons() {
   var id = state.narrativeStyle ? state.narrativeStyle : 'classic';
-  var label = '\u270D Narrative: ' + narrStyleName(id);
+  var label = 'Narrative: ' + narrStyleName(id);
   ['review-narr-style-btn', 'sb-narr-style-btn'].forEach(function(bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -1809,14 +1809,19 @@ function openStylePicker(kind) {
     if (titleEl) titleEl.textContent = 'Choose a narrative style';
     cur = state.narrativeStyle ? state.narrativeStyle : 'classic';
     meta = NARR_STYLE_META;
+  } else if (STYLE_PICKER_KIND === 'art') {
+    if (titleEl) titleEl.textContent = 'Choose an art style';
+    cur = state.artStyle ? state.artStyle : 'High fantasy illustration';
+    meta = ART_STYLE_META;
   } else { return; }
   grid.innerHTML = meta.map(function(s) {
     var on = (s.id === cur) ? ' is-selected' : '';
     var badge = (s.id === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
+    var eg = s.example ? ('<div class="style-card-eg">' + escapeHtml(s.example) + '</div>') : '';
     return '<div class="style-card' + on + '" onclick="selectStyleCard(\'' + STYLE_PICKER_KIND + '\',\'' + s.id + '\')">' +
       '<div class="style-card-name">' + escapeHtml(s.name) + badge + '</div>' +
       '<div class="style-card-desc">' + escapeHtml(s.desc) + '</div>' +
-      '<div class="style-card-eg">' + escapeHtml(s.example) + '</div>' +
+      eg +
       '</div>';
   }).join('');
   var modal = document.getElementById('style-picker-modal');
@@ -1844,7 +1849,51 @@ function selectStyleCard(kind, id) {
       closeStylePicker();
     })
     .catch(function(e) { showAlert('Could not set narrative style: ' + e.message); });
+  } else if (kind === 'art') {
+    state.artStyle = id;
+    if (state.currentSession && state.currentCampaign) {
+      fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ art_style: id })
+      }).catch(function () {});
+    }
+    refreshArtStyleButtons();
+    closeStylePicker();
   }
+}
+
+// ---- Art Styles (shared picker; mirrors selStyle's session persistence) ----
+var ART_STYLE_META = [
+  { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Chronicle default.' },
+  { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
+  { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes and loose edges.' },
+  { id:'Anime manga style', name:'Anime / manga', desc:'Clean anime / manga linework with expressive shading.' },
+  { id:'Classic pen and ink', name:'Pen and ink', desc:'Classic black-and-white pen-and-ink line art.' }
+];
+
+function artStyleName(v) {
+  for (var i = 0; i < ART_STYLE_META.length; i++) { if (ART_STYLE_META[i].id === v) return ART_STYLE_META[i].name; }
+  return v || 'High fantasy';
+}
+
+function refreshArtStyleButtons() {
+  var v = state.artStyle ? state.artStyle : 'High fantasy illustration';
+  var label = 'Art: ' + artStyleName(v);
+  ['review-art-style-btn', 'sb-art-style-btn'].forEach(function (bid) {
+    var b = document.getElementById(bid);
+    if (b) b.textContent = label;
+  });
+}
+
+// Was referenced on session load but never defined (a no-op). Now it sets the
+// art style from the session's saved value and refreshes the Art buttons so the
+// label is truthful for the session being opened.
+function loadLastArtStyle(artStyle, layoutStyle) {
+  if (artStyle) state.artStyle = artStyle;
+  else if (!state.artStyle) state.artStyle = 'High fantasy illustration';
+  if (layoutStyle && !state.layoutStyle) state.layoutStyle = layoutStyle;
+  refreshArtStyleButtons();
 }
 
 // ============================================================
@@ -1940,6 +1989,62 @@ function cancelNarr() {
   var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('narr-cancel-btn'); if (c) c.style.display = 'none';
   var b = document.getElementById('review-generate-btn'); if (b) b.disabled = false;
+}
+
+// Generate the narrative ONLY (no images). Same narrative pass as the combined
+// button, but it stops after painting the prose into the panels. Lets you
+// rewrite the story without regenerating art / spending image tokens.
+function generateNarrativeOnly() {
+  var btn = document.getElementById('sb-generate-narr-btn');
+  var origLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Writing narrative\u2026'; }
+  var wrap = document.getElementById('generate-progress');
+  var fill = document.getElementById('gen-progress-fill');
+  var pmsg = document.getElementById('gen-progress-msg');
+  var pct = 0;
+  if (wrap) wrap.style.display = 'block';
+  if (fill) fill.style.width = '0%';
+  if (pmsg) pmsg.textContent = 'Writing your narrative\u2026';
+  var _nctl = new AbortController();
+  state.abortNarrOnly = _nctl;
+  var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'inline-block';
+  var ticker = setInterval(function () {
+    pct = Math.min(90, pct + Math.max(1, (90 - pct) * 0.12));
+    if (fill) fill.style.width = pct.toFixed(0) + '%';
+  }, 400);
+  function endBar(done) {
+    clearInterval(ticker);
+    var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'none';
+    if (done && fill) fill.style.width = '100%';
+    setTimeout(function () { if (wrap) wrap.style.display = 'none'; if (fill) fill.style.width = '0%'; }, done ? 350 : 0);
+  }
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: getApiKey() || 'platform' }),
+    signal: _nctl.signal
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    if (data.error) { endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
+    endBar(true);
+    state.narrativeData = { intro: data.intro || '', sections: data.sections || [], outro: data.outro || '' };
+    if (typeof renderStoryboard === 'function') renderStoryboard();
+  })
+  .catch(function (e) {
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    endBar(false);
+    if (e && e.name === 'AbortError') return;
+    showAlert('Could not generate narrative: ' + e.message);
+  });
+}
+
+function cancelNarrOnly() {
+  if (state.abortNarrOnly) { try { state.abortNarrOnly.abort(); } catch (e) {} }
+  var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
+  var c = document.getElementById('sb-narr-cancel-btn'); if (c) c.style.display = 'none';
+  var b = document.getElementById('sb-generate-narr-btn'); if (b) b.disabled = false;
 }
 
 function showErrorDialog(msg, title) {

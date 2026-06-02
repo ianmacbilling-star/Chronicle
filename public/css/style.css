@@ -1351,7 +1351,8 @@ body.role-player.can-edit-fork .moment-regen-btn { display: inline-block !import
 body.role-player.can-edit-fork #review-generate-btn,
 body.role-player.can-edit-fork #generate-all-btn,
 body.role-player.can-edit-fork #review-narr-style-btn,
-body.role-player.can-edit-fork #sb-narr-style-btn { display: inline-block !important; }
+body.role-player.can-edit-fork #sb-narr-style-btn,
+body.role-player.can-edit-fork #sb-generate-narr-btn { display: inline-block !important; }
 body.role-player.can-edit-fork #extract-btn { display: inline-block !important; }
 /* Viewing a fork you do not own (e.g. DM looking at a player version) is read-only. */
 body.viewing-foreign-fork #extract-btn,
@@ -1359,6 +1360,9 @@ body.viewing-foreign-fork #review-generate-btn,
 body.viewing-foreign-fork #generate-all-btn,
 body.viewing-foreign-fork #review-narr-style-btn,
 body.viewing-foreign-fork #sb-narr-style-btn,
+body.viewing-foreign-fork #review-art-style-btn,
+body.viewing-foreign-fork #sb-art-style-btn,
+body.viewing-foreign-fork #sb-generate-narr-btn,
 body.viewing-foreign-fork .moment-regen-btn,
 body.viewing-foreign-fork .moment-prompt-edit-btn { display: none !important; }
 /* Publish/Preview is a READ capability — a player may preview any version

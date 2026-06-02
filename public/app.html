@@ -359,11 +359,12 @@
         </div>
         <div id="review-content" style="display:none;">
           <div class="review-actionbar">
-            <div class="form-hint" style="margin:0;">A quick overview of your storyboard before you generate images — the panels in order, and which characters and assets each one will use.</div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-              <button class="btn btn-sm dm-only" id="review-narr-style-btn" onclick="openStylePicker('narrative')">&#9997; Narrative: Classic</button>
-              <button class="btn btn-primary dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">&#10024; Generate Narrative &amp; Images</button>
-              <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">&#10005; Cancel</button>
+            <div class="form-hint" style="margin:0;flex:1 1 220px;">A quick overview before you generate — panels in order, and the characters and assets each will use.</div>
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end;">
+              <button class="btn btn-sm dm-only" id="review-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
+              <button class="btn btn-sm dm-only" id="review-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
+              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" onclick="generateNarrativeAndImages()">Generate Narrative &amp; Images</button>
+              <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">Cancel</button>
             </div>
           </div>
           <div class="progress-wrap" id="review-progress-wrap" style="display:none;margin-bottom:14px;">
@@ -384,24 +385,16 @@
         </div>
         <div id="sb-content" style="display:none;">
           <div style="background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius-lg);padding:14px;margin-bottom:20px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-              <div>
-                <div class="form-label" style="margin-bottom:6px;">Art style</div>
-                <div class="style-row" style="margin:0;">
-                  <div class="chip sel" onclick="selStyle(this,'High fantasy illustration')">High fantasy</div>
-                  <div class="chip" onclick="selStyle(this,'Dark gritty comic book')">Dark and gritty</div>
-                  <div class="chip" onclick="selStyle(this,'Watercolor painterly')">Watercolor</div>
-                  <div class="chip" onclick="selStyle(this,'Anime manga style')">Anime / manga</div>
-                  <div class="chip" onclick="selStyle(this,'Classic pen and ink')">Pen and ink</div>
-                </div>
-              </div>
-              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-                <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">&#9997; Narrative: Classic</button>
-                <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">&#10024; Generate all images</button>
-                <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">&#10005; Cancel</button>
-              </div>
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+              <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
+              <button class="btn btn-sm dm-only" id="sb-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
+              <span style="flex:1 1 auto;"></span>
+              <button class="btn btn-sm dm-only" id="sb-generate-narr-btn" onclick="generateNarrativeOnly()">Generate Narrative</button>
+              <button class="btn btn-xs" id="sb-narr-cancel-btn" onclick="cancelNarrOnly()" style="display:none;">Cancel</button>
+              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">Generate Images</button>
+              <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">Cancel</button>
             </div>
-            <div style="margin-top:8px;font-size:11px;color:rgba(201,168,76,0.4);">&#9998; Review moments and narrative below. When happy, click Generate all images.</div>
+            <div style="margin-top:8px;font-size:11px;color:rgba(201,168,76,0.4);">Pick your styles, then generate the narrative and images independently &mdash; you don't have to regenerate images to update the prose.</div>
             <div id="generate-progress" style="display:none;margin-top:10px;">
               <div class="progress-bar"><div class="progress-fill" id="gen-progress-fill"></div></div>
               <div class="progress-msg" id="gen-progress-msg">Generating images...</div>
