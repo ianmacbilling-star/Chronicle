@@ -113,7 +113,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
-  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used FROM session_forks WHERE id=?').get(viewForkId);
+  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used, art_style_override FROM session_forks WHERE id=?').get(viewForkId);
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
@@ -127,7 +127,8 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_outro: viewForkRow ? (viewForkRow.narrative_outro || '') : (session.narrative_outro || ''),
     narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null,
     narrative_style: viewForkRow ? (viewForkRow.narrative_style || 'classic') : 'classic',
-    narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null
+    narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
+    art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
   }));
 });
 
@@ -180,6 +181,27 @@ router.put('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
 // fork (one row per session in session_forks, with the DM's fork being
 // the canonical one). The endpoint signature stays the same; only the
 // underlying storage moves.
+// Set the art style for the caller's VERSION. DM writes the session-level
+// canonical art_style (existing behavior). A player writes their OWN fork's
+// art_style_override (per-version; never touches canon). Owner-scoped.
+router.put('/:id/art-style', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const sess = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id=?').get(req.params.id);
+  if (!sess || String(sess.campaign_id) !== String(req.params.campaignId)) return res.status(404).json({ error: 'Session not found' });
+  const artStyle = (req.body && typeof req.body.art_style === 'string') ? req.body.art_style : '';
+  const now = new Date().toISOString();
+  if (req.campaignRole === 'dm') {
+    await db.prepare('UPDATE sessions SET art_style=?, edited_at=?, edited_by=? WHERE id=?')
+      .run(artStyle, now, req.session.userId, req.params.id);
+    return res.json({ success: true, scope: 'session', art_style: artStyle });
+  }
+  const forkId = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
+  if (!forkId) return res.status(403).json({ error: 'You have no version of this session' });
+  await db.prepare('UPDATE session_forks SET art_style_override=?, edited_at=?, edited_by=? WHERE id=?')
+    .run(artStyle, now, req.session.userId, forkId);
+  res.json({ success: true, scope: 'fork', art_style: artStyle });
+});
+
 router.put('/:id/access-status', requireAuth, verifyCampaignMember, async function(req, res) {
   const ALLOWED = ['draft', 'ready'];
   const status = (req.body && req.body.status) || '';

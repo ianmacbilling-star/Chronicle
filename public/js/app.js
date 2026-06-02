@@ -862,7 +862,7 @@ function selectSession(id) {
       if (state.moments.length) renderStoryboard();
 
       // Load last used art style for this campaign
-      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style, data.layout_style);
+      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
       var views = ['campaigns','sessions','characters','novel','session-detail','settings'];
@@ -1853,7 +1853,9 @@ function selectStyleCard(kind, id) {
   } else if (kind === 'art') {
     state.artStyle = id;
     if (state.currentSession && state.currentCampaign) {
-      fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+      // Smart endpoint: DM -> session canonical art_style; player -> their own
+      // fork's art_style_override (per-version, never touches canon).
+      fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/art-style', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ art_style: id })
@@ -5339,7 +5341,7 @@ function selectSession(id) {
       if (state.moments.length) renderStoryboard();
 
       // Load last used art style for this campaign
-      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style, data.layout_style);
+      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
 
       // Show session detail view FIRST
       var views = ['campaigns','sessions','characters','novel','session-detail','settings'];

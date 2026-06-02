@@ -1352,7 +1352,9 @@ body.role-player.can-edit-fork #review-generate-btn,
 body.role-player.can-edit-fork #generate-all-btn,
 body.role-player.can-edit-fork #review-narr-style-btn,
 body.role-player.can-edit-fork #sb-narr-style-btn,
-body.role-player.can-edit-fork #sb-generate-narr-btn { display: inline-block !important; }
+body.role-player.can-edit-fork #sb-generate-narr-btn,
+body.role-player.can-edit-fork #review-art-style-btn,
+body.role-player.can-edit-fork #sb-art-style-btn { display: inline-block !important; }
 body.role-player.can-edit-fork #extract-btn { display: inline-block !important; }
 /* Viewing a fork you do not own (e.g. DM looking at a player version) is read-only. */
 body.viewing-foreign-fork #extract-btn,
