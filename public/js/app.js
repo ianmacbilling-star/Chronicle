@@ -1818,9 +1818,12 @@ function generateNarrativeAndImages() {
       sections: data.sections || [],
       outro: data.outro || ''
     };
-    // Hand off to the storyboard's image generation (it has its own progress
-    // bar + per-panel busy overlays).
+    // Paint the narrative into the storyboard right away so the user can start
+    // reading each panel's prose while the images are still being generated.
     switchSessionTab('storyboard');
+    if (typeof renderStoryboard === 'function') renderStoryboard();
+    // Hand off to image generation — it overlays per-panel busy spinners on the
+    // image areas; the narrative text stays readable underneath while they run.
     setTimeout(function() {
       if (typeof generateAllImages === 'function') generateAllImages();
     }, 60);
