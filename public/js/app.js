@@ -4335,7 +4335,7 @@ function renderStoryboard() {
 
   // Opening narrative
   cells.push(buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box',
-    'Opening paragraph...', narrative.intro, 'regenNarrativeSection(\"opening\")', true));
+    'Opening paragraph...', narrative.intro, 'regenNarrativeSection(\'opening\')', true));
 
   // Alternate panels and between-narratives
   state.moments.forEach(function(m, i) {
@@ -4347,14 +4347,14 @@ function renderStoryboard() {
         'Panel ' + (i+1) + ' → ' + (i+2),
         'narrative-between-box-' + i,
         'Bridge the story...', section.after || '',
-        'regenNarrativeSection(\"between\",' + i + ')', false
+        'regenNarrativeSection(\'between\',' + i + ')', false
       ));
     }
   });
 
   // Closing narrative
   cells.push(buildNarrative('narrative-closing', 'Closing', 'narrative-outro-box',
-    'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\"closing\")', true));
+    'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\'closing\')', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
 }
