@@ -1660,3 +1660,5 @@ body.role-player #stab-export { display: block !important; }
 /* Archive 'Make cover' control (DM-only) */
 .archive-cover-toggle{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:rgba(201,168,76,0.72);cursor:pointer;user-select:none;}
 .archive-cover-toggle input{margin:0;width:13px;height:13px;accent-color:var(--gold);cursor:pointer;}
+.archive-actions{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.archive-actions .archive-del{margin-left:auto;}
