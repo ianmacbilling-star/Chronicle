@@ -51,6 +51,22 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     charText = charBlock;
   }
 
+  // Pass 2 — when a panel has an EXPLICIT cast, the cast roster is the source
+  // of truth for WHO appears, overriding any character names in the scene
+  // prose (which the extraction AI wrote and may not match the chosen cast).
+  // Sits high in the prompt so it outweighs the scene text.
+  var castExplicit = !!(charBlock && typeof charBlock === 'object' && charBlock.castExplicit);
+  var castNames = (charBlock && charBlock.castNames) || [];
+  var rosterDirective = '';
+  if (castExplicit) {
+    if (castNames.length) {
+      rosterDirective = 'CAST (AUTHORITATIVE \u2014 overrides the scene text below): the ONLY characters present in this panel are: ' +
+        castNames.join(', ') + '. Depict exactly these people and no others. The scene text may mention other names \u2014 IGNORE anyone not in this list and do not draw them. Use the scene text only for setting, action, and mood.\n\n';
+    } else {
+      rosterDirective = 'CAST (AUTHORITATIVE \u2014 overrides the scene text below): this panel has NO characters. Depict the scene with no people in it, ignoring any character names mentioned in the scene text.\n\n';
+    }
+  }
+
   // Style goes FIRST so the model treats it as the primary instruction
   const stylePrefix = getStylePrefix(style);
   const charSection = charText
@@ -96,6 +112,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
       'image. Do NOT blend, average, or merge features between characters ' +
       '— each person keeps only their own appearance. Match any location ' +
       'or item to its reference image too.\n\n' +
+      rosterDirective +
       'Draw this comic panel: ' + prompt + charSection + assetSection;
     input = {
       prompt: editPrompt,
@@ -109,7 +126,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   } else if (key === 'nano2') {
     // Nano Banana 2 text-to-image — no reference images for this panel.
     input = {
-      prompt: stylePrefix + '\n\n' + prompt + charSection,
+      prompt: stylePrefix + '\n\n' + rosterDirective + prompt + charSection,
       num_images: 1,
       aspect_ratio: '4:3',
       output_format: 'png',
@@ -119,7 +136,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   } else {
     // Flux schnell: text-to-image only — no /edit endpoint, no references.
     input = {
-      prompt: stylePrefix + '\n\n' + prompt + charSection,
+      prompt: stylePrefix + '\n\n' + rosterDirective + prompt + charSection,
       image_size: 'landscape_4_3',
       num_inference_steps: 4,
       num_images: 1,
@@ -540,10 +557,18 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
       'SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?'
     ).all(campId);
     const assetList = buildAssetBlock(assets, panelText, explicitAssetIds);
+    // Roster of the explicit cast's names (authoritative WHO for this panel).
+    let castNames = [];
+    if (moment.cast_explicit && explicitCharIds) {
+      const idset = {}; explicitCharIds.forEach(function(id){ idset[String(id)] = true; });
+      castNames = chars.filter(function(c){ return idset[String(c.character_id)]; }).map(function(c){ return c.name; });
+    }
     const panelBlock = {
       text: charList.text,
       assetText: assetList.text,
-      refs: combineRefs(charList.refs, assetList.refs)
+      refs: combineRefs(charList.refs, assetList.refs),
+      castExplicit: !!moment.cast_explicit,
+      castNames: castNames
     };
 
     // Single regenerate = user wants a different take, so use a fresh
@@ -729,10 +754,18 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         // name-match campaign assets into the panel. Characters fill ref
         // slots first, assets fill the remainder, hard cap 14.
         const assetList = buildAssetBlock(assets, panelText, m.cast_explicit ? (castAssetByMoment[m.id] || []) : null);
+        // Roster of the explicit cast's names (authoritative WHO for this panel).
+        let castNames = [];
+        if (m.cast_explicit) {
+          const idset = {}; (castCharByMoment[m.id] || []).forEach(function(id){ idset[String(id)] = true; });
+          castNames = chars.filter(function(c){ return idset[String(c.character_id)]; }).map(function(c){ return c.name; });
+        }
         const panelBlock = {
           text: charList.text,
           assetText: assetList.text,
-          refs: combineRefs(charList.refs, assetList.refs)
+          refs: combineRefs(charList.refs, assetList.refs),
+          castExplicit: !!m.cast_explicit,
+          castNames: castNames
         };
         const imageUrl = await generateImage(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey);
         const now = new Date().toISOString();
