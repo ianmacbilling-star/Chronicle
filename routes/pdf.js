@@ -599,6 +599,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   const maxDate = new Date(Math.max.apply(null, dates));
   const dateRange = minDate.toLocaleDateString('en-US', {month:'long', year:'numeric'}) +
     (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', {month:'long', year:'numeric'}) : '');
+  const coverImg = campaign.cover_image_url || '';
 
   // Cast page
   const castHTML = characters.map(function(c) {
@@ -671,6 +672,13 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   .cover-subtitle { font-family:'Crimson Text',serif;font-size:13pt;color:rgba(201,168,76,0.6);font-style:italic;margin-bottom:0.08in; }
   .cover-dates { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
   .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:8pt;color:rgba(201,168,76,0.25);letter-spacing:0.15em;z-index:1; }
+  /* Cover-art layout: logo top, framed cover image with faded edges, title overlaid at the bottom. */
+  .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:0.7in;text-align:center; }
+  .cover-image-layout .cover-logo { margin-bottom:0.3in; }
+  .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
+  .cover-art-img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
+  .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
+  .cover-art-title { position:absolute;left:0;right:0;bottom:0;padding:0.7in 0.35in 0.35in;font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);background:linear-gradient(to top, rgba(10,6,4,0.94) 10%, rgba(10,6,4,0.55) 55%, rgba(10,6,4,0) 100%); }
 
   /* CAST PAGE */
   .cast-page { width:8.5in;min-height:11in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
@@ -724,14 +732,21 @@ ${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
   <div class="cover-border-inner"></div>
-  <div class="cover-content">
+  ${coverImg ? `<div class="cover-content cover-image-layout">
+    <img class="cover-logo" src="/images/Chronicle_Logo.png" alt="Chronicle" />
+    <div class="cover-art-frame">
+      <img class="cover-art-img" src="${coverImg}" alt="" />
+      <div class="cover-art-fade"></div>
+      <div class="cover-art-title">${campaign.name}</div>
+    </div>
+  </div>` : `<div class="cover-content">
     <img class="cover-logo" src="/images/Chronicle_Logo.png" alt="Chronicle" />
     <div class="cover-eyebrow">The Chronicle of</div>
     <div class="cover-title">${campaign.name}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
     <div class="cover-dates">${dateRange}</div>
-  </div>
+  </div>`}
   <div class="cover-watermark">CHRONICLEMYGAME.COM</div>
 </div>
 
