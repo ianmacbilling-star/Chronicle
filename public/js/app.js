@@ -1783,12 +1783,16 @@ function generateNarrativeAndImages() {
   if (wrap) wrap.style.display = 'block';
   if (fill) fill.style.width = '0%';
   if (pmsg) pmsg.textContent = 'Writing your narrative\u2026';
+  var _nctl = new AbortController();
+  state.abortNarr = _nctl;
+  var _ncb = document.getElementById('narr-cancel-btn'); if (_ncb) _ncb.style.display = 'inline-block';
   var ticker = setInterval(function() {
     pct = Math.min(90, pct + Math.max(1, (90 - pct) * 0.12));
     if (fill) fill.style.width = pct.toFixed(0) + '%';
   }, 400);
   function endBar(done) {
     clearInterval(ticker);
+    var _ncb = document.getElementById('narr-cancel-btn'); if (_ncb) _ncb.style.display = 'none';
     if (done && fill) fill.style.width = '100%';
     setTimeout(function() {
       if (wrap) wrap.style.display = 'none';
@@ -1799,7 +1803,8 @@ function generateNarrativeAndImages() {
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ key: getApiKey() || 'platform' })
+    body: JSON.stringify({ key: getApiKey() || 'platform' }),
+    signal: _nctl.signal
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
@@ -1822,8 +1827,31 @@ function generateNarrativeAndImages() {
   .catch(function(e){
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
     endBar(false);
+    if (e && e.name === 'AbortError') return;
     showAlert('Could not generate narrative: ' + e.message);
   });
+}
+
+function cancelExtract() {
+  if (state.abortExtract) { try { state.abortExtract.abort(); } catch (e) {} }
+  var w = document.getElementById('progress-wrap'); if (w) w.style.display = 'none';
+  var c = document.getElementById('extract-cancel-btn'); if (c) c.style.display = 'none';
+  var b = document.getElementById('extract-btn'); if (b) b.disabled = false;
+}
+
+function cancelGenAll() {
+  if (state.abortGenAll) { try { state.abortGenAll.abort(); } catch (e) {} }
+  if (typeof hideAllPanelBusy === 'function') hideAllPanelBusy();
+  var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
+  var c = document.getElementById('genall-cancel-btn'); if (c) c.style.display = 'none';
+  var b = document.getElementById('generate-all-btn'); if (b) b.disabled = false;
+}
+
+function cancelNarr() {
+  if (state.abortNarr) { try { state.abortNarr.abort(); } catch (e) {} }
+  var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
+  var c = document.getElementById('narr-cancel-btn'); if (c) c.style.display = 'none';
+  var b = document.getElementById('review-generate-btn'); if (b) b.disabled = false;
 }
 
 function switchSessionTab(tab) {
@@ -2638,16 +2666,21 @@ function extractMoments() {
     fill.style.width = pct + '%';
   }, 400);
 
+  var _xctl = new AbortController();
+  state.abortExtract = _xctl;
+  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
   fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({key:key, artStyle:state.artStyle})
+    body: JSON.stringify({key:key, artStyle:state.artStyle}),
+    signal: _xctl.signal
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
     clearInterval(ticker);
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (data.error) {
-      errorEl.textContent = 'Error: ' + data.error;
+      errorEl.textContent = data.message || ('Error: ' + data.error);
       errorEl.classList.remove('hidden');
       wrap.style.display = 'none';
       btn.disabled = false;
@@ -2680,6 +2713,8 @@ function extractMoments() {
   })
   .catch(function(e) {
     clearInterval(ticker);
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
     btn.disabled = false;
     errorEl.textContent = 'Connection error: ' + e.message;
@@ -2862,6 +2897,9 @@ function generateAllImages() {
     if (!m.locked) showPanelBusy(m.id, 'Generating');
   });
 
+  var _gctl = new AbortController();
+  state.abortGenAll = _gctl;
+  var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'inline-block';
   fetch('/api/images/generate-all', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -2870,10 +2908,12 @@ function generateAllImages() {
       campaign_id: state.currentCampaign.id,
       style: state.artStyle,
       fal_key: falKey
-    })
+    }),
+    signal: _gctl.signal
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
+    var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'none';
     if (data.error) {
       // Generation refused — clear ALL busy overlays so the user's
       // existing images are fully visible again (not dimmed).
@@ -2910,6 +2950,8 @@ function generateAllImages() {
   })
   .catch(function(e) {
     hideAllPanelBusy();
+    var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'none';
+    if (e && e.name === 'AbortError') { btn.disabled = false; progressWrap.style.display = 'none'; return; }
     document.getElementById('generate-error').textContent = 'Error: ' + e.message;
     document.getElementById('generate-error').classList.remove('hidden');
     btn.disabled = false;
@@ -5406,16 +5448,21 @@ function extractMoments() {
     fill.style.width = pct + '%';
   }, 400);
 
+  var _xctl = new AbortController();
+  state.abortExtract = _xctl;
+  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
   fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({key:key, artStyle:state.artStyle})
+    body: JSON.stringify({key:key, artStyle:state.artStyle}),
+    signal: _xctl.signal
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
     clearInterval(ticker);
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (data.error) {
-      errorEl.textContent = 'Error: ' + data.error;
+      errorEl.textContent = data.message || ('Error: ' + data.error);
       errorEl.classList.remove('hidden');
       wrap.style.display = 'none';
       btn.disabled = false;
@@ -5448,6 +5495,8 @@ function extractMoments() {
   })
   .catch(function(e) {
     clearInterval(ticker);
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
     btn.disabled = false;
     errorEl.textContent = 'Connection error: ' + e.message;
@@ -5612,6 +5661,9 @@ function generateAllImages() {
     if (!m.locked) showPanelBusy(m.id, 'Generating');
   });
 
+  var _gctl = new AbortController();
+  state.abortGenAll = _gctl;
+  var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'inline-block';
   fetch('/api/images/generate-all', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -5620,10 +5672,12 @@ function generateAllImages() {
       campaign_id: state.currentCampaign.id,
       style: state.artStyle,
       fal_key: falKey
-    })
+    }),
+    signal: _gctl.signal
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
+    var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'none';
     if (data.error) {
       // Generation refused — clear ALL busy overlays so the user's
       // existing images are fully visible again (not dimmed).
@@ -5660,6 +5714,8 @@ function generateAllImages() {
   })
   .catch(function(e) {
     hideAllPanelBusy();
+    var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'none';
+    if (e && e.name === 'AbortError') { btn.disabled = false; progressWrap.style.display = 'none'; return; }
     document.getElementById('generate-error').textContent = 'Error: ' + e.message;
     document.getElementById('generate-error').classList.remove('hidden');
     btn.disabled = false;

@@ -285,7 +285,7 @@
       </div>
 
       <div class="sess-tabs">
-        <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">&#128203; Session Notes</div>
+        <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">&#128203; Story</div>
         <div class="sess-tab" id="stab-characters" onclick="switchSessionTab('characters')">&#128100; Characters</div>
         <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">&#128269; Review</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">&#127912; Storyboard</div>
@@ -312,16 +312,17 @@
         <div class="progress-wrap" id="progress-wrap">
           <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
           <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
+          <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;margin-top:6px;">&#10005; Cancel</button>
         </div>
 
         <!-- Transcript (left) and Notes (right), side by side -->
         <div class="notes-grid">
           <div class="form-group">
-            <label class="form-label">Session transcript</label>
+            <label class="form-label">Story / Session Transcript</label>
             <textarea class="transcript-box" id="transcript-input" style="min-height:340px;" placeholder="Paste your session transcript here..."></textarea>
           </div>
           <div class="form-group">
-            <label class="form-label">Session notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— director's instructions for the AI</span></label>
+            <label class="form-label">Story Notes and Instructions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— director's instructions for the AI</span></label>
             <textarea class="transcript-box" id="session-notes-input" style="min-height:340px;" placeholder="Give the AI specific instructions...&#10;&#10;MANDATORY SCENES:&#10;- I want a panel showing the moment Zara betrayed the party&#10;&#10;VISUAL STYLE:&#10;- Dark gothic tone, candlelit crypts&#10;&#10;COMPOSITION:&#10;- Theron should always be shown with his wolf Shadow"></textarea>
             <div class="form-hint" style="margin-top:4px;">Specify mandatory scenes, atmosphere, and character directions. The AI follows these precisely.</div>
           </div>
@@ -338,7 +339,7 @@
           <div class="empty-state-icon">&#128100;</div>
           <h3>No character snapshots yet</h3>
           <p>Generate the story first. When moments are extracted, Chronicle captures how each character looked this session.</p>
-          <button class="btn" onclick="switchSessionTab('notes')">Go to Session Notes</button>
+          <button class="btn" onclick="switchSessionTab('notes')">Go to Story</button>
         </div>
         <div id="sc-content" style="display:none;">
           <div class="form-hint" style="margin-bottom:14px;">These are the character descriptions used to generate this session's images. Each carries forward from the prior session, or the character's base prompt.</div>
@@ -352,7 +353,7 @@
           <div class="empty-state-icon">&#128269;</div>
           <h3>Nothing to review yet</h3>
           <p>Generate the story first. The review shows an outline of every panel and which characters and assets will appear in each.</p>
-          <button class="btn" onclick="switchSessionTab('notes')">Go to Session Notes</button>
+          <button class="btn" onclick="switchSessionTab('notes')">Go to Story</button>
         </div>
         <div id="review-content" style="display:none;">
           <div class="review-actionbar">
@@ -362,6 +363,7 @@
           <div class="progress-wrap" id="review-progress-wrap" style="display:none;margin-bottom:14px;">
             <div class="progress-bar"><div class="progress-fill" id="review-progress-fill"></div></div>
             <div class="progress-msg" id="review-progress-msg">Writing your narrative&hellip;</div>
+            <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;margin-top:6px;">&#10005; Cancel</button>
           </div>
           <div id="review-list"></div>
         </div>
@@ -372,8 +374,8 @@
         <div id="sb-empty" class="empty-state">
           <div class="empty-state-icon">&#127912;</div>
           <h3>No moments yet</h3>
-          <p>Go to Session Notes, paste your transcript and click Generate Story</p>
-          <button class="btn" onclick="switchSessionTab('notes')">Go to Session Notes</button>
+          <p>Go to Story, paste your transcript and click Generate Story</p>
+          <button class="btn" onclick="switchSessionTab('notes')">Go to Story</button>
         </div>
         <div id="sb-content" style="display:none;">
           <div style="background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius-lg);padding:14px;margin-bottom:20px;">
@@ -394,6 +396,7 @@
             <div id="generate-progress" style="display:none;margin-top:10px;">
               <div class="progress-bar"><div class="progress-fill" id="gen-progress-fill"></div></div>
               <div class="progress-msg" id="gen-progress-msg">Generating images...</div>
+              <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;margin-top:6px;">&#10005; Cancel</button>
             </div>
             <div id="generate-error" class="alert alert-error hidden" style="margin-top:8px;"></div>
           </div>

@@ -46,6 +46,16 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     return res.json({ error: 'LOCKED_MOMENTS', message: 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.' });
   }
 
+  // An accepted character change pinned to a specific panel (change_moment_index)
+  // anchors to a moment that re-extraction would rebuild from scratch — the
+  // change would land on the wrong beat. Refuse up front, same as locked images.
+  const pinnedChange = await db.prepare(
+    "SELECT COUNT(*) AS n FROM session_characters WHERE fork_id = ? AND change_status = 'accepted' AND change_moment_index IS NOT NULL AND change_moment_index >= 0"
+  ).get(targetForkId);
+  if (pinnedChange && pinnedChange.n > 0) {
+    return res.json({ error: 'PINNED_CHANGE', message: 'An approved character change is pinned to a specific panel, so regenerating the story would put it on the wrong moment. Resolve that change first to rebuild this version.' });
+  }
+
   // Get characters for this campaign
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
   const charList = characters.map(function(c) {
