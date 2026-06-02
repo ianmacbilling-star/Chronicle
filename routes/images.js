@@ -59,9 +59,14 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   var castNames = (charBlock && charBlock.castNames) || [];
   var rosterDirective = '';
   if (castExplicit) {
-    if (castNames.length) {
+    // NPC assets are people too — fold any cast NPC assets into the roster so
+    // it lists them as PRESENT rather than suppressing them (NPCs are additive).
+    // Locations/items aren't people, so they're never affected by the roster.
+    var npcAssetNames = charRefs.filter(function(r){ return r && r.isAsset && r.category === 'npc'; }).map(function(r){ return r.name; });
+    var presentPeople = castNames.concat(npcAssetNames);
+    if (presentPeople.length) {
       rosterDirective = 'CAST (AUTHORITATIVE \u2014 overrides the scene text below): the ONLY characters present in this panel are: ' +
-        castNames.join(', ') + '. Depict exactly these people and no others. The scene text may mention other names \u2014 IGNORE anyone not in this list and do not draw them. Use the scene text only for setting, action, and mood.\n\n';
+        presentPeople.join(', ') + '. Depict exactly these people and no others. The scene text may mention other names \u2014 IGNORE anyone not in this list and do not draw them. Use the scene text only for setting, action, and mood.\n\n';
     } else {
       rosterDirective = 'CAST (AUTHORITATIVE \u2014 overrides the scene text below): this panel has NO characters. Depict the scene with no people in it, ignoring any character names mentioned in the scene text.\n\n';
     }
