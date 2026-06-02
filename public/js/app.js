@@ -4670,7 +4670,7 @@ function renderArchives() {
       '<div class="archive-meta">' +
         '<div class="archive-title">' + escapeHtml(a.title || '(untitled)') + '</div>' +
         meta +
-        (isDM ? '<button class="btn btn-sm archive-cover-btn' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? ' is-cover' : '') + '" onclick="setCampaignCover(' + a.id + ')">' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'Campaign cover' : 'Make cover') + '</button>' : '') +
+        (isDM ? '<label class="archive-cover-toggle" title="Use as campaign cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignCover(' + a.id + ')" /> Cover</label>' : '') +
         (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
       '</div>' +
     '</div>';

@@ -1658,4 +1658,5 @@ body.role-player #stab-export { display: block !important; }
 .camp-edit-input{font-family:inherit;font-size:0.85em;background:rgba(12,8,4,0.75);border:1px solid rgba(201,168,76,0.45);border-radius:5px;color:var(--gold);padding:2px 8px;min-width:220px;max-width:100%;}
 .camp-edit-textarea{display:block;width:100%;max-width:560px;font-family:var(--font-body,inherit);font-size:12px;line-height:1.5;background:rgba(12,8,4,0.75);border:1px solid rgba(201,168,76,0.45);border-radius:5px;color:rgba(230,210,160,0.92);padding:5px 8px;min-height:46px;margin-top:5px;resize:vertical;}
 /* Archive 'Make cover' control (DM-only) */
-.archive-cover-btn.is-cover{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,0.16);}
+.archive-cover-toggle{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:rgba(201,168,76,0.72);cursor:pointer;user-select:none;}
+.archive-cover-toggle input{margin:0;width:13px;height:13px;accent-color:var(--gold);cursor:pointer;}
