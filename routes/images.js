@@ -72,8 +72,13 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     }
   }
 
-  // Style goes FIRST so the model treats it as the primary instruction
+  // Style is applied LAST as a whole-image "final step" (see styleFinal below),
+  // so the model unifies the art style across the CHARACTERS too — not just the
+  // background. References stay first/high (identity); style closes the prompt.
   const stylePrefix = getStylePrefix(style);
+  const styleFinal = stylePrefix
+    ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to each character as well as the scene, so the characters look DRAWN in this style rather than placed on top of it. ' + stylePrefix
+    : '';
   const charSection = charText
     ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charText
     : '';
@@ -110,15 +115,19 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     var assetSection = assetText
       ? '\n\nSCENE ASSETS (match these to their reference images): ' + assetText
       : '';
-    var editPrompt = stylePrefix + '\n\n' +
-      'REFERENCE IMAGES (HIGHEST PRIORITY): ' + refMap + ' ' +
-      'Render EACH character as a SEPARATE INDIVIDUAL whose face, hair, ' +
-      'build, and distinctive features EXACTLY match their own reference ' +
-      'image. Do NOT blend, average, or merge features between characters ' +
-      '— each person keeps only their own appearance. Match any location ' +
-      'or item to its reference image too.\n\n' +
+    var editPrompt =
+      'REFERENCE IMAGES — IDENTITY SOURCE (HIGHEST PRIORITY): ' + refMap + ' ' +
+      'Use these references ONLY for the IDENTITY of each character — their exact ' +
+      'face, hair, build, distinctive features, and gear. Render EACH character ' +
+      'as a SEPARATE INDIVIDUAL; do NOT blend, average, or merge features between ' +
+      'characters — each person keeps only their own appearance. Keep the identity ' +
+      'and design of every character EXACTLY as their reference shows. The ' +
+      'references may be drawn in a different art style — do NOT copy that rendering ' +
+      'style; re-render each character in the unified art style described at the END ' +
+      'of this prompt, changing ONLY the artistic medium, NEVER their identity or ' +
+      'features. Match any location or item to its reference image too.\n\n' +
       rosterDirective +
-      'Draw this comic panel: ' + prompt + charSection + assetSection;
+      'Draw this comic panel: ' + prompt + charSection + assetSection + styleFinal;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -131,7 +140,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   } else if (key === 'nano2') {
     // Nano Banana 2 text-to-image — no reference images for this panel.
     input = {
-      prompt: stylePrefix + '\n\n' + rosterDirective + prompt + charSection,
+      prompt: rosterDirective + prompt + charSection + styleFinal,
       num_images: 1,
       aspect_ratio: '4:3',
       output_format: 'png',
@@ -141,7 +150,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   } else {
     // Flux schnell: text-to-image only — no /edit endpoint, no references.
     input = {
-      prompt: stylePrefix + '\n\n' + rosterDirective + prompt + charSection,
+      prompt: rosterDirective + prompt + charSection + styleFinal,
       image_size: 'landscape_4_3',
       num_inference_steps: 4,
       num_images: 1,
