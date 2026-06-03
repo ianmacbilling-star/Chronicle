@@ -17,10 +17,10 @@ async function sendEmail(to, subject, html) {
   const { Resend } = require('resend');
   const resend = new Resend(apiKey);
 
-  const fromEmail = process.env.FROM_EMAIL || 'chronicle@chroniclemygame.com';
+  const fromEmail = process.env.FROM_EMAIL || 'noreply@campaignia.com';
 
   const { data, error } = await resend.emails.send({
-    from: 'Chronicle <' + fromEmail + '>',
+    from: 'Campaignia <' + fromEmail + '>',
     to: to,
     subject: subject,
     html: html
@@ -52,21 +52,21 @@ function passwordResetHTML(name, resetUrl) {
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">CHRONICLE</div>
+      <div class="logo">CAMPAIGNIA</div>
       <div class="divider"></div>
       <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">YOUR ADVENTURE AWAITS</div>
     </div>
     <div class="body">
       <div class="title">Password Reset Request</div>
       <div class="text">Greetings, ${name}.</div>
-      <div class="text">We received a request to reset the password for your Chronicle account. Click the button below to choose a new password. This link expires in 1 hour.</div>
+      <div class="text">We received a request to reset the password for your Campaignia account. Click the button below to choose a new password. This link expires in 1 hour.</div>
       <div style="text-align:center;margin:28px 0;">
         <a href="${resetUrl}" class="btn">Reset My Password</a>
       </div>
       <div class="text" style="font-size:12px;color:rgba(201,168,76,0.5);">If you didn't request this, you can safely ignore this email. Your password won't change.</div>
     </div>
     <div class="footer">
-      chroniclemygame.com &nbsp;·&nbsp; The Chronicle of Your Campaign
+      campaignia.com &nbsp;·&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
 </body>
@@ -96,12 +96,12 @@ function welcomeHTML(name) {
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">CHRONICLE</div>
+      <div class="logo">CAMPAIGNIA</div>
       <div class="divider"></div>
       <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">YOUR ADVENTURE AWAITS</div>
     </div>
     <div class="body">
-      <div class="title">Welcome to Chronicle, ${name}!</div>
+      <div class="title">Welcome to Campaignia, ${name}!</div>
       <div class="text">Your 30-day free trial has begun. Here's what you can do with your Copper account:</div>
       <div class="feature">📜 Create 1 campaign and up to 5 sessions</div>
       <div class="feature">✨ AI-powered moment extraction from transcripts</div>
@@ -111,11 +111,11 @@ function welcomeHTML(name) {
         ⏳ Your trial runs for 30 days. Upgrade anytime to unlock unlimited campaigns, full export, and no watermarks.
       </div>
       <div style="text-align:center;margin:24px 0;">
-        <a href="https://chroniclemygame.com" class="btn">Start Your Chronicle</a>
+        <a href="https://campaignia.com" class="btn">Start Your Campaign</a>
       </div>
     </div>
     <div class="footer">
-      chroniclemygame.com &nbsp;·&nbsp; The Chronicle of Your Campaign
+      campaignia.com &nbsp;·&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
 </body>
@@ -145,9 +145,9 @@ router.post('/forgot-password', async function(req, res) {
     await db.prepare('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?')
       .run(token, expires, user.id);
 
-    const resetUrl = (process.env.APP_URL || 'https://chroniclemygame.com') + '/reset-password.html?token=' + token;
+    const resetUrl = (process.env.APP_URL || 'https://campaignia.com') + '/reset-password.html?token=' + token;
 
-    await sendEmail(user.email, 'Reset your Chronicle password', passwordResetHTML(user.name, resetUrl));
+    await sendEmail(user.email, 'Reset your Campaignia password', passwordResetHTML(user.name, resetUrl));
 
     res.json({ success: true });
   } catch(e) {
@@ -187,7 +187,7 @@ router.post('/reset-password', async function(req, res) {
 // Internal function to send welcome email (called from auth route)
 async function sendWelcomeEmail(name, email) {
   try {
-    await sendEmail(email, 'Welcome to Chronicle — Your adventure begins!', welcomeHTML(name));
+    await sendEmail(email, 'Welcome to Campaignia — Your adventure begins!', welcomeHTML(name));
   } catch(e) {
     console.error('Welcome email error:', e.message); // Non-fatal
   }
@@ -218,7 +218,7 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
 <body style="margin:0;padding:0;background:#0a0806;">
   <div style="max-width:520px;margin:0 auto;background:#140f08;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
     <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
-      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CHRONICLE</div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CAMPAIGNIA</div>
       <div style="width:40px;height:1px;background:rgba(201,168,76,0.4);margin:16px auto;"></div>
       <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">YOU'VE BEEN INVITED</div>
     </div>
@@ -235,11 +235,11 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
       <div style="text-align:center;margin:28px 0;">
         <a href="${invite_url}" style="display:inline-block;padding:14px 32px;background:#c9a84c;color:#1a0f08;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:1px;">Accept Invitation</a>
       </div>
-      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">If you don't have a Chronicle account yet, the link will let you create one and join in the same step.</div>
+      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">If you don't have a Campaignia account yet, the link will let you create one and join in the same step.</div>
       <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">If the button doesn't work, paste this link into your browser:<br/><span style="color:#c9a84c;word-break:break-all;">${invite_url}</span></div>
     </div>
     <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
-      chroniclemygame.com &nbsp;&middot;&nbsp; The Chronicle of Your Campaign
+      campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
 </body>
@@ -260,7 +260,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
 <body style="margin:0;padding:0;background:#0a0806;">
   <div style="max-width:520px;margin:0 auto;background:#140f08;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
     <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
-      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CHRONICLE</div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CAMPAIGNIA</div>
       <div style="width:40px;height:1px;background:rgba(201,168,76,0.4);margin:16px auto;"></div>
       <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">A NEW PLAYER HAS JOINED</div>
     </div>
@@ -281,7 +281,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
       </div>
     </div>
     <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
-      chroniclemygame.com &nbsp;&middot;&nbsp; The Chronicle of Your Campaign
+      campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
 </body>
@@ -300,7 +300,7 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
 <body style="margin:0;padding:0;background:#0a0806;">
   <div style="max-width:520px;margin:0 auto;background:#140f08;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
     <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
-      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CHRONICLE</div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CAMPAIGNIA</div>
       <div style="width:40px;height:1px;background:rgba(201,168,76,0.4);margin:16px auto;"></div>
       <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">WELCOME TO THE TABLE</div>
     </div>
@@ -319,10 +319,10 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
       <div style="text-align:center;margin:28px 0;">
         <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c9a84c;color:#1a0f08;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:1px;">Enter the Campaign</a>
       </div>
-      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">From here you can view storyboards, see your fellow adventurers, and follow the chronicle as it unfolds. When your character isn't locked, you can edit its appearance and identity.</div>
+      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">From here you can view storyboards, see your fellow adventurers, and follow the story as it unfolds. When your character isn't locked, you can edit its appearance and identity.</div>
     </div>
     <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
-      chroniclemygame.com &nbsp;&middot;&nbsp; The Chronicle of Your Campaign
+      campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
 </body>
