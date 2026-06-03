@@ -2432,13 +2432,18 @@ function renderCharModalPrompt(char) {
   }
 
   // Reference image — the generated picture, shown full under the button.
+  var _carched = isMomentArchived(char);
   var refImg = char.canonical_reference_url
     ? '<div class="char-ref-image" id="char-ref-image-' + char.id + '">' +
         '<div class="char-ref-label">Reference image</div>' +
         '<div class="char-ref-imgwrap">' +
           '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
           'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
-          '<button class="moment-archive-btn char-ref-archive' + (isMomentArchived(char) ? ' is-archived' : '') + '" id="char-archive-' + char.id + '" onclick="toggleArchiveCharCanonical(' + char.id + ')" title="' + (isMomentArchived(char) ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + archiveChestIcon(isMomentArchived(char)) + '</button>' +
+          '<div class="panel-img-actions">' +
+            '<button class="panel-pill" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">Regenerate</button>' +
+            '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing">Retouch</button>' +
+            '<button class="panel-pill' + (_carched ? ' is-on' : '') + '" id="char-archive-' + char.id + '" onclick="toggleArchiveCharCanonical(' + char.id + ')" title="' + (_carched ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + (_carched ? 'Archived' : 'Archive') + '</button>' +
+          '</div>' +
         '</div>' +
       '</div>'
     : '<div class="char-ref-image" id="char-ref-image-' + char.id + '"></div>';
@@ -2592,6 +2597,55 @@ function rebuildCharPromptCore(charId) {
       if (textEl) textEl.textContent = 'Could not build the prompt.';
       if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
     });
+}
+
+// Re-roll the canonical reference IMAGE from the existing prompt (option A:
+// no prompt rewrite). The moment "Regenerate" pill, applied to a character.
+function regenCharRef(charId) {
+  var refTargetId = 'char-ref-image-' + charId;
+  var refEl = document.getElementById(refTargetId);
+  if (refEl && !refEl.querySelector('img')) refEl.style.minHeight = '180px';
+  showBusyOverlay(refTargetId, 'Regenerating', 'Re-rolling the reference image…');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/regenerate-reference', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ fal_key: getFalKey() || 'platform' })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var ch = (state.characters || []).find(function(c){ return c.id === charId; });
+      if (data && data.success) {
+        if (ch) {
+          ch.canonical_reference_url = data.canonical_reference_url;
+          ch.archived = false;
+          renderCharModalPrompt(ch);
+        } else {
+          hideBusyOverlay(refTargetId);
+        }
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+      } else {
+        hideBusyOverlay(refTargetId);
+        var textEl = document.getElementById('char-prompt-text-' + charId);
+        if (data && data.error === 'INSUFFICIENT_TOKENS') {
+          if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
+          else alert(data.message || 'You are out of tokens.');
+        } else {
+          alert((data && (data.message || data.error)) || 'Could not regenerate the reference image.');
+        }
+      }
+    })
+    .catch(function(e){ hideBusyOverlay(refTargetId); alert('Could not regenerate the reference image: ' + e.message); });
+}
+
+// Open the shared Retouch modal targeting a CHARACTER reference (vs a moment).
+function openRetouchChar(charId) {
+  state.retouchCharId = charId;
+  state.retouchMomentId = null;
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
 }
 
 function startEditCharPrompt(charId) {
@@ -4476,6 +4530,7 @@ function archiveFilterBarHTML(f, onchange) {
 
 function openRetouch(momentId) {
   state.retouchMomentId = momentId;
+  state.retouchCharId = null;
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal');
@@ -4489,10 +4544,47 @@ function closeRetouch() {
 }
 
 function submitRetouch() {
-  var momentId = state.retouchMomentId;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
   if (!instruction) { if (ta) ta.focus(); return; }
+
+  // Character reference target (vs a storyboard moment).
+  if (state.retouchCharId) {
+    var charId = state.retouchCharId;
+    var ch = (state.characters || []).find(function(c){ return c.id === charId; });
+    if (!ch) return;
+    closeRetouch();
+    var refTargetId = 'char-ref-image-' + charId;
+    showBusyOverlay(refTargetId, 'Retouching', 'Applying your change…');
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/retouch-reference', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data && data.success) {
+          ch.canonical_reference_url = data.canonical_reference_url;
+          ch.archived = false;
+          renderCharModalPrompt(ch);
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        } else {
+          hideBusyOverlay(refTargetId);
+          var textEl = document.getElementById('char-prompt-text-' + charId);
+          if (data && data.error === 'INSUFFICIENT_TOKENS') {
+            if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
+            else alert(data.message || 'You are out of tokens.');
+          } else {
+            alert((data && (data.message || data.error)) || 'Could not retouch the reference image.');
+          }
+        }
+      })
+      .catch(function(e){ hideBusyOverlay(refTargetId); alert('Could not retouch the reference image: ' + e.message); });
+    return;
+  }
+
+  // Moment target (original behavior).
+  var momentId = state.retouchMomentId;
   var moment = state.moments.find(function(m){ return m.id === momentId; });
   if (!moment) return;
   closeRetouch();
@@ -4778,9 +4870,9 @@ function toggleArchiveCharCanonical(charId) {
         char.archived = !isArchived;
         showAlert(isArchived ? 'Removed from your Archive.' : 'Reference image saved to your Archive.');
         if (btn) {
-          btn.className = 'moment-archive-btn char-ref-archive' + (char.archived ? ' is-archived' : '');
+          btn.className = 'panel-pill' + (char.archived ? ' is-on' : '');
           btn.title = char.archived ? 'In your Archive — click to remove' : 'Save this reference image to your Archive';
-          btn.innerHTML = archiveChestIcon(char.archived);
+          btn.textContent = char.archived ? 'Archived' : 'Archive';
         }
       } else {
         alert((data && data.error) || 'Could not update the Archive.');

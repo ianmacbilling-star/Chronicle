@@ -4,7 +4,7 @@ const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
 const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
 const imageHelpers = require('./images');
-const { getTokenCost, canAfford, spendTokens } = require('./tokens');
+const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
 const multer = require('multer');
 const path = require('path');
 
@@ -294,6 +294,94 @@ router.put('/:id/canonical-prompt', requireAuth, verifyCampaignDM, async functio
 
     res.json({ success: true, canonical_prompt: canonical_prompt, canonical_prompt_at: now });
   } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
+// POST /:id/regenerate-reference — re-roll the canonical reference IMAGE only,
+// from the EXISTING canonical prompt. Does NOT rewrite the description (that's
+// rebuild-prompt). DM or character owner; player blocked once a session is
+// Ready. Costs one image's worth of tokens, spend-on-success.
+router.post('/:id/regenerate-reference', requireAuth, verifyCampaignDmOrCharacterOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+    if (req.campaignRole === 'player' && await isCampaignLocked(req.params.campaignId)) {
+      return res.status(423).json({ error: 'This campaign has a Ready session — character editing is locked. Forking support coming soon.' });
+    }
+    if (!char.canonical_prompt || !char.canonical_prompt.trim()) {
+      return res.json({ error: 'Build the character prompt first, then you can re-roll the reference image.' });
+    }
+    const falKey = process.env.FAL_API_KEY || req.body.fal_key;
+    if (!falKey) return res.json({ error: 'Image generation is not configured.' });
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You’re out of tokens. Re-rolling the reference image costs tokens. Add more to continue.' });
+    }
+    // Generate from the EXISTING prompt. A failure throws to the catch below,
+    // so tokens are never spent on a failed generation.
+    const portrait = char.image_portrait || char.image_fullbody || char.image || null;
+    const referenceUrl = await imageHelpers.generateReferenceImage(falKey, char.canonical_prompt, portrait, modelKey);
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE characters SET canonical_reference_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(referenceUrl, now, req.session.userId, char.id);
+    if (char.canonical_reference_url && char.canonical_reference_url !== referenceUrl) await releaseImage(db, char.canonical_reference_url);
+    await imageHelpers.logImageGeneration(db, req.session.userId, 'character_reference', char.id);
+    await spendTokens(req.session.userId, cost, {
+      related_campaign_id: req.params.campaignId,
+      source: 'character_reference',
+      event_type: 'generation_spend'
+    });
+    const balance = await getBalance(req.session.userId);
+    res.json({ success: true, canonical_reference_url: referenceUrl, balance: balance });
+  } catch(e) {
+    console.error('Regenerate reference error:', e.message);
+    res.json({ error: e.message });
+  }
+});
+
+// POST /:id/retouch-reference — in-context edit of the canonical reference
+// image: keep it exactly and change ONLY the typed instruction. Reuses the
+// shared retouchImage() helper with NO style prefix (the reference is
+// style-neutral). DM or character owner; player blocked once Ready.
+router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+    if (req.campaignRole === 'player' && await isCampaignLocked(req.params.campaignId)) {
+      return res.status(423).json({ error: 'This campaign has a Ready session — character editing is locked. Forking support coming soon.' });
+    }
+    if (!char.canonical_reference_url) return res.json({ error: 'There is no reference image to retouch yet.' });
+    const instruction = req.body.instruction;
+    if (!instruction || !String(instruction).trim()) return res.json({ error: 'Describe the change you want.' });
+    const falKey = process.env.FAL_API_KEY || req.body.fal_key;
+    if (!falKey) return res.json({ error: 'Image generation is not configured.' });
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You’re out of tokens. Add more to keep generating.' });
+    }
+    // Empty style => no style prefix; retouchImage keeps the existing look and
+    // changes only the instruction. Failure throws -> no spend.
+    const prevUrl = char.canonical_reference_url;
+    const referenceUrl = await imageHelpers.retouchImage(prevUrl, String(instruction).trim(), '', falKey);
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE characters SET canonical_reference_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(referenceUrl, now, req.session.userId, char.id);
+    if (prevUrl && prevUrl !== referenceUrl) await releaseImage(db, prevUrl);
+    await imageHelpers.logImageGeneration(db, req.session.userId, 'retouch', char.id);
+    await spendTokens(req.session.userId, cost, {
+      related_campaign_id: req.params.campaignId,
+      source: 'character_reference',
+      event_type: 'generation_spend'
+    });
+    const balance = await getBalance(req.session.userId);
+    res.json({ success: true, canonical_reference_url: referenceUrl, balance: balance });
+  } catch(e) {
+    console.error('Retouch reference error:', e.message);
     res.json({ error: e.message });
   }
 });

@@ -180,7 +180,9 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
 // conditions on an input image).
 async function retouchImage(currentImageUrl, instruction, style, falKey) {
   fal.config({ credentials: falKey });
-  const stylePrefix = getStylePrefix(style);
+  // A falsy style means "no style prefix" (used by the style-neutral character
+  // reference retouch). Moments always pass a real style, so they're unchanged.
+  const stylePrefix = style ? getStylePrefix(style) : '';
   const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
     'You are editing an EXISTING comic panel, provided as Image 1. Reproduce it '+
     'EXACTLY \u2014 identical composition, characters, faces, poses, framing, '+
@@ -844,3 +846,4 @@ module.exports.buildCharacterBlock = buildCharacterBlock;
 module.exports.buildAssetBlock = buildAssetBlock;
 module.exports.combineRefs = combineRefs;
 module.exports.attachPriorReferences = attachPriorReferences;
+module.exports.retouchImage = retouchImage;
