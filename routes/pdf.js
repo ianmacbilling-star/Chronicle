@@ -554,14 +554,14 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
   <div class="cover-border"></div>
   <div class="cover-border-inner"></div>
   <div class="cover-content">
-    <img class="cover-logo" src="/images/Chronicle_Logo.png" alt="Chronicle" />
-    <div class="cover-eyebrow">A Chronicle of</div>
+    <img class="cover-logo" src="/images/Chronicle_Logo.png" alt="Campaignia" />
+    <div class="cover-eyebrow">A Saga of</div>
     <div class="cover-campaign">${campaign.name}</div>
     <div class="cover-divider"></div>
     <div class="cover-session">${session.name}</div>
     <div class="cover-date">${formatDate(session.session_date)}</div>
   </div>
-  <div class="cover-watermark">CHRONICLEMYGAME.COM</div>
+  <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>
 
 <!-- CONTENT PAGE -->
@@ -573,7 +573,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
   ${panelsHTML}
 </div>
 
-<div class="page-watermark">CHRONICLEMYGAME.COM</div>
+<div class="page-watermark">CAMPAIGNIA.COM</div>
 
 </body>
 </html>`;
@@ -741,18 +741,18 @@ ${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-art-title">${campaign.name}</div>
         <div class="cover-art-dates">${dateRange}</div>
-        <img class="cover-art-logo" src="/images/Chronicle_Logo.png" alt="Chronicle" />
+        <img class="cover-art-logo" src="/images/Chronicle_Logo.png" alt="Campaignia" />
       </div>
     </div>
   </div>` : `<div class="cover-content">
-    <img class="cover-logo" src="/images/Chronicle_Logo.png" alt="Chronicle" />
-    <div class="cover-eyebrow">The Chronicle of</div>
+    <img class="cover-logo" src="/images/Chronicle_Logo.png" alt="Campaignia" />
+    <div class="cover-eyebrow">The Saga of</div>
     <div class="cover-title">${campaign.name}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
     <div class="cover-dates">${dateRange}</div>
   </div>`}
-  <div class="cover-watermark">CHRONICLEMYGAME.COM</div>
+  <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>
 
 <!-- CAST & CREW PAGE -->
@@ -767,7 +767,7 @@ ${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
 <!-- SESSIONS -->
 ${allSessionsHTML}
 
-<div class="page-watermark">CHRONICLEMYGAME.COM</div>
+<div class="page-watermark">CAMPAIGNIA.COM</div>
 
 </body>
 </html>`;
