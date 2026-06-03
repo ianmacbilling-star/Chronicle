@@ -598,7 +598,7 @@ function renderCampaigns() {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       (c.cover_image_url
         ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
-        : '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>') +
+        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Icon.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
@@ -5181,7 +5181,7 @@ function renderCampaigns() {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       (c.cover_image_url
         ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
-        : '<div class="campaign-card-icon"><img src="/images/Chronicle_Logo.png" alt="" /></div>') +
+        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Icon.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
