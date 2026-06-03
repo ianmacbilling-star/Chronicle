@@ -87,7 +87,11 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     'You are a graphic-novel illustrator. Render the ENTIRE image in ONE single, ' +
     'consistent art style — every character, NPC, location, and item included, ' +
     'not just the background — so everything looks genuinely DRAWN in this ' +
-    'style rather than pasted on top of it. If reference images are provided, treat ' +
+    'style rather than pasted on top of it. A consistent art style means one shared ' +
+    'rendering MEDIUM and technique; it does NOT mean making the characters look ' +
+    'alike — each character, NPC, and creature stays a separate, distinct individual ' +
+    'with their own face, hair, build, and outfit, and must NEVER be blended, ' +
+    'averaged, or merged with another. If reference images are provided, treat ' +
     'them ONLY as identity and content sources (who or what each element is); do ' +
     'NOT copy their rendering style — re-render every referenced element in ' +
     'this art style. The required art style is: ' + stylePrefix;
