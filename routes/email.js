@@ -366,4 +366,55 @@ async function sendPlayerJoinedWelcomeEmail(opts) {
   }
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail };
+// ============================================================
+// MONITORING ALERTS
+// Major-event notifications (failed startup, DB down/recovered,
+// app crash) sent to monitoring@. Production-only: gated behind
+// ALERTS_ENABLED so staging restarts don't generate noise.
+// NEVER throws — safe to call from crash/shutdown handlers.
+// ============================================================
+async function sendAlertEmail(subject, message) {
+  try {
+    if (process.env.ALERTS_ENABLED !== 'true') {
+      console.log('[alert suppressed: ALERTS_ENABLED!=true] ' + subject);
+      return false;
+    }
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) { console.error('[alert] RESEND_API_KEY not set'); return false; }
+    const to = process.env.ALERT_EMAIL || 'monitoring@campaignia.com';
+    const from = process.env.ALERT_FROM || 'monitoring@campaignia.com';
+    const env = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'production';
+    const appUrl = process.env.APP_URL || '(APP_URL not set)';
+    const ts = new Date().toISOString();
+    const safe = String(message == null ? '' : message)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;background:#0a0806;color:#e8d5a3;margin:0;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#140f08;border:1px solid rgba(201,168,76,0.25);border-radius:10px;overflow:hidden;">
+    <div style="background:#1a0f08;padding:18px 24px;border-bottom:1px solid rgba(201,168,76,0.2);font-weight:700;letter-spacing:1px;color:#c9a84c;">CAMPAIGNIA MONITOR</div>
+    <div style="padding:24px;">
+      <div style="font-size:18px;color:#f0e8d0;margin-bottom:14px;">${subject}</div>
+      <pre style="white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px;line-height:1.6;color:#e8d5a3;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.15);border-radius:6px;padding:14px;margin:0 0 18px;">${safe}</pre>
+      <div style="font-size:12px;color:rgba(201,168,76,0.55);line-height:1.8;">
+        Environment: ${env}<br>App: ${appUrl}<br>Time: ${ts}
+      </div>
+    </div>
+  </div>
+</body></html>`;
+    const { Resend } = require('resend');
+    const resend = new Resend(apiKey);
+    const { error } = await resend.emails.send({
+      from: 'Campaignia Monitor <' + from + '>',
+      to: to,
+      subject: '[Campaignia] ' + subject,
+      html: html
+    });
+    if (error) { console.error('[alert] send failed:', error.message); return false; }
+    console.log('[alert sent] ' + subject);
+    return true;
+  } catch (e) {
+    console.error('[alert] unexpected error:', (e && e.message) ? e.message : e);
+    return false;
+  }
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail };

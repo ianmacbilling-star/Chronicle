@@ -4,6 +4,7 @@ const session = require('express-session');
 const rateLimit = require('express-rate-limit');
 const { getDb } = require('./database/db');
 const { initStorage } = require('./storage/storage');
+const { sendAlertEmail } = require('./routes/email');
 
 const app = express();
 
@@ -12,6 +13,23 @@ app.set('trust proxy', 1);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ------------------------------------------------------------
+// Health check — mounted BEFORE the session middleware so uptime
+// pings don't create session rows. 200 when app + DB are reachable,
+// 503 if the DB probe fails. Point an external uptime monitor
+// (alerting to monitoring@) at /health to catch the one case the
+// app-side alerts cannot: a fully-dead process.
+// ------------------------------------------------------------
+app.get('/health', async function(req, res) {
+  try {
+    const db = await getDb();
+    await db.exec('SELECT 1');
+    res.status(200).json({ status: 'ok', db: 'ok', ts: new Date().toISOString() });
+  } catch (e) {
+    res.status(503).json({ status: 'degraded', db: 'down', ts: new Date().toISOString() });
+  }
+});
 
 // Session store — PostgreSQL in production, memory locally
 function buildSessionMiddleware() {
@@ -143,15 +161,65 @@ app.use(function(req, res) {
   res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
 });
 
+// ------------------------------------------------------------
+// Monitoring: DB heartbeat + crash handlers (alerts to monitoring@).
+// sendAlertEmail is production-gated (ALERTS_ENABLED) and never throws.
+// ------------------------------------------------------------
+let dbHealthy = true;            // startup success implies the DB was reachable
+let heartbeatInFlight = false;
+function startDbHeartbeat() {
+  setInterval(async function() {
+    if (heartbeatInFlight) return;          // don't stack probes if one is slow
+    heartbeatInFlight = true;
+    try {
+      const db = await getDb();
+      await db.exec('SELECT 1');
+      if (!dbHealthy) {
+        dbHealthy = true;
+        console.log('[monitor] database recovered');
+        sendAlertEmail('DB RECOVERED', 'The production database is responding again.');
+      }
+    } catch (e) {
+      if (dbHealthy) {
+        dbHealthy = false;
+        const m = (e && e.message) ? e.message : String(e);
+        console.error('[monitor] database DOWN:', m);
+        sendAlertEmail('DB DOWN', 'The production database is not responding. Error: ' + m);
+      }
+    } finally {
+      heartbeatInFlight = false;
+    }
+  }, 60 * 1000);                              // probe once a minute
+}
+
+// Fatal-error handler: alert once, then exit so Railway restarts cleanly.
+let shuttingDown = false;
+function handleFatal(kind, err) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const m = (err && err.stack) ? err.stack : String(err);
+  console.error('[monitor] ' + kind + ':', m);
+  Promise.race([
+    sendAlertEmail('APP CRASH (' + kind + ')', 'The app is shutting down after an unhandled error. ' + m),
+    new Promise(function(resolve) { setTimeout(resolve, 4000); })   // never hang on exit
+  ]).then(function() { process.exit(1); });
+}
+process.on('uncaughtException', function(err) { handleFatal('uncaughtException', err); });
+process.on('unhandledRejection', function(reason) { handleFatal('unhandledRejection', reason); });
+
 getDb().then(function() {
   app.listen(PORT, function() {
     console.log('');
-    console.log('  Chronicle is running!');
+    console.log('  Campaignia is running!');
     console.log('  Database: ' + (process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite'));
     console.log('  Open: http://localhost:' + PORT);
     console.log('');
+    startDbHeartbeat();
   });
-}).catch(function(err) {
+}).catch(async function(err) {
   console.error('Failed to connect to database:', err.message);
+  try {
+    await sendAlertEmail('FAILED STARTUP', 'The app failed to start — database init/connection error. Error: ' + ((err && err.message) ? err.message : String(err)));
+  } catch (e) {}
   process.exit(1);
 });
