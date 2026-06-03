@@ -77,7 +77,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   // background. References stay first/high (identity); style closes the prompt.
   const stylePrefix = getStylePrefix(style);
   const styleFinal = stylePrefix
-    ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to each character as well as the scene, so the characters look DRAWN in this style rather than placed on top of it. ' + stylePrefix
+    ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks DRAWN in this style rather than placed on top of it. ' + stylePrefix
     : '';
   const charSection = charText
     ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charText
@@ -116,16 +116,19 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
       ? '\n\nSCENE ASSETS (match these to their reference images): ' + assetText
       : '';
     var editPrompt =
-      'REFERENCE IMAGES — IDENTITY SOURCE (HIGHEST PRIORITY): ' + refMap + ' ' +
-      'Use these references ONLY for the IDENTITY of each character — their exact ' +
-      'face, hair, build, distinctive features, and gear. Render EACH character ' +
-      'as a SEPARATE INDIVIDUAL; do NOT blend, average, or merge features between ' +
-      'characters — each person keeps only their own appearance. Keep the identity ' +
-      'and design of every character EXACTLY as their reference shows. The ' +
-      'references may be drawn in a different art style — do NOT copy that rendering ' +
-      'style; re-render each character in the unified art style described at the END ' +
-      'of this prompt, changing ONLY the artistic medium, NEVER their identity or ' +
-      'features. Match any location or item to its reference image too.\n\n' +
+      'REFERENCE IMAGES — CONTENT & IDENTITY SOURCE ONLY (HIGHEST PRIORITY): ' + refMap + ' ' +
+      'Use every reference image ONLY for WHAT each element is — for characters and ' +
+      'NPCs, their exact face, hair, build, distinctive features, and gear; for ' +
+      'locations and items, their structure, design, and distinctive details. ' +
+      'Render EACH character as a SEPARATE INDIVIDUAL; do NOT blend, average, or ' +
+      'merge features between characters — each person keeps only their own ' +
+      'appearance. Keep the identity and design of every referenced character, NPC, ' +
+      'location, and item EXACTLY as its reference shows. The references may be ' +
+      'drawn in a different art style — do NOT copy that rendering style from ANY ' +
+      'reference (characters, NPCs, locations, and items alike); re-render EVERY ' +
+      'referenced element in the unified art style described at the END of this ' +
+      'prompt, changing ONLY the artistic medium, NEVER what each element actually ' +
+      'is.\n\n' +
       rosterDirective +
       'Draw this comic panel: ' + prompt + charSection + assetSection + styleFinal;
     input = {
