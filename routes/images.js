@@ -417,7 +417,11 @@ async function generateReferenceImage(falKey, descriptionText, portraitUrl, mode
   // Neutral framing — a plain, consistent reference, not a scene.
   const refPrompt =
     'Full-body character reference portrait. Neutral standing pose, ' +
-    'facing forward, plain neutral background, even lighting, comic book art style.\n\n' +
+    'facing forward, plain neutral background, even soft lighting. Render in a ' +
+    'CLEAN, STYLE-NEUTRAL illustration: clear flat-shaded colors, crisp readable ' +
+    'detail, accurate proportions — a plain character model sheet, NOT heavily ' +
+    'stylized (no thick comic inking, no painterly brushwork, no genre filter). ' +
+    'A neutral identity reference meant to be re-rendered in any art style later.\n\n' +
     'CHARACTER: ' + descriptionText;
 
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
