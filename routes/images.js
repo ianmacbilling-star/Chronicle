@@ -35,6 +35,11 @@ async function getSelectedModel(db) {
   }
 }
 
+// Optional Gemini "thinking" level for Nano Banana 2 ('minimal' | 'high'),
+// off by default. Set NANO_THINKING_LEVEL in the environment to A/B test it;
+// later this becomes a per-campaign "Render quality" dial (Campaign Settings).
+const NANO_THINKING_LEVEL = (['minimal', 'high'].indexOf(process.env.NANO_THINKING_LEVEL) !== -1) ? process.env.NANO_THINKING_LEVEL : null;
+
 async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   fal.config({ credentials: falKey });
 
@@ -72,10 +77,20 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     }
   }
 
-  // Style is applied LAST as a whole-image "final step" (see styleFinal below),
-  // so the model unifies the art style across the CHARACTERS too — not just the
-  // background. References stay first/high (identity); style closes the prompt.
+  // Art-style handling. For Nano Banana 2 the style now rides in a dedicated
+  // `system_prompt` (styleSystem) rather than the prompt body — fal documents
+  // system_prompt as steering output style, a separate/higher-priority channel
+  // than the content prompt (which competes with scene text + reference images).
+  // Flux has no system_prompt, so it keeps the style in the prompt (styleFinal).
   const stylePrefix = getStylePrefix(style);
+  const styleSystem =
+    'You are a graphic-novel illustrator. Render the ENTIRE image in ONE single, ' +
+    'consistent art style — every character, NPC, location, and item included, ' +
+    'not just the background — so everything looks genuinely DRAWN in this ' +
+    'style rather than pasted on top of it. If reference images are provided, treat ' +
+    'them ONLY as identity and content sources (who or what each element is); do ' +
+    'NOT copy their rendering style — re-render every referenced element in ' +
+    'this art style. The required art style is: ' + stylePrefix;
   const styleFinal = stylePrefix
     ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks DRAWN in this style rather than placed on top of it. ' + stylePrefix
     : '';
@@ -126,11 +141,11 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
       'location, and item EXACTLY as its reference shows. The references may be ' +
       'drawn in a different art style — do NOT copy that rendering style from ANY ' +
       'reference (characters, NPCs, locations, and items alike); re-render EVERY ' +
-      'referenced element in the unified art style described at the END of this ' +
-      'prompt, changing ONLY the artistic medium, NEVER what each element actually ' +
-      'is.\n\n' +
+      'referenced element in the unified art style for this image (provided as a ' +
+      'separate style instruction), changing ONLY the artistic medium, NEVER what ' +
+      'each element actually is.\n\n' +
       rosterDirective +
-      'Draw this comic panel: ' + prompt + charSection + assetSection + styleFinal;
+      'Draw this comic panel: ' + prompt + charSection + assetSection;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -143,7 +158,7 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
   } else if (key === 'nano2') {
     // Nano Banana 2 text-to-image — no reference images for this panel.
     input = {
-      prompt: rosterDirective + prompt + charSection + styleFinal,
+      prompt: rosterDirective + prompt + charSection,
       num_images: 1,
       aspect_ratio: '4:3',
       output_format: 'png',
@@ -163,6 +178,14 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     if (typeof seed === 'number' && !isNaN(seed)) {
       input.seed = seed;
     }
+  }
+
+  // Nano Banana 2 only: the art style rides in system_prompt (a dedicated style
+  // channel) instead of the prompt body. thinking_level is off unless the env
+  // dial is set — the hook for a future "Render quality" campaign setting.
+  if (key === 'nano2') {
+    input.system_prompt = styleSystem;
+    if (NANO_THINKING_LEVEL) input.thinking_level = NANO_THINKING_LEVEL;
   }
 
   const result = await fal.subscribe(model, { input: input });
