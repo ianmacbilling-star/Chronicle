@@ -152,7 +152,7 @@
         <label class="form-label">Password</label>
         <input class="form-input" type="password" id="login-password" placeholder="Your password" autocomplete="current-password" />
       </div>
-      <button class="btn btn-primary" id="login-btn">Enter the Chronicle</button>
+      <button class="btn btn-primary" id="login-btn">Enter Campaignia</button>
       <div class="auth-switch">New here? <a onclick="showRegister()">Create your account</a></div>
       <div style="text-align:center;margin-top:10px;">
         <a onclick="showForgotPassword()" style="font-size:12px;color:rgba(201,168,76,0.5);cursor:pointer;">Forgot your password?</a>
@@ -230,9 +230,9 @@ document.getElementById('login-btn').addEventListener('click', async function() 
   try {
     var res = await fetch('/api/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
     var data = await res.json();
-    if (data.error) { showError('login-error', data.error); this.disabled=false; this.textContent='Enter the Chronicle'; return; }
+    if (data.error) { showError('login-error', data.error); this.disabled=false; this.textContent='Enter Campaignia'; return; }
     window.location.href = '/app.html';
-  } catch(e) { showError('login-error','Connection error. Please try again.'); this.disabled=false; this.textContent='Enter the Chronicle'; }
+  } catch(e) { showError('login-error','Connection error. Please try again.'); this.disabled=false; this.textContent='Enter Campaignia'; }
 });
 
 document.getElementById('register-btn').addEventListener('click', async function() {
