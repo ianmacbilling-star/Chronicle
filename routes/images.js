@@ -416,14 +416,14 @@ async function logImageGeneration(db, userId, source, refId, forkId) {
 async function generateReferenceImage(falKey, descriptionText, portraitUrl, modelKey) {
   fal.config({ credentials: falKey });
 
-  // Neutral framing — a plain, consistent reference, not a scene.
+  // Comic-style reference — a plain, consistent reference image, not a scene.
+  // (Reverted from the short-lived "style-neutral model sheet" experiment: the
+  // neutral refs looked worse and barely helped style transfer, so we keep the
+  // good-looking comic reference and address per-panel style separately.)
   const refPrompt =
     'Full-body character reference portrait. Neutral standing pose, ' +
-    'facing forward, plain neutral background, even soft lighting. Render in a ' +
-    'CLEAN, STYLE-NEUTRAL illustration: clear flat-shaded colors, crisp readable ' +
-    'detail, accurate proportions — a plain character model sheet, NOT heavily ' +
-    'stylized (no thick comic inking, no painterly brushwork, no genre filter). ' +
-    'A neutral identity reference meant to be re-rendered in any art style later.\n\n' +
+    'facing forward, plain neutral background, even soft lighting, ' +
+    'comic book art style.\n\n' +
     'CHARACTER: ' + descriptionText;
 
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
