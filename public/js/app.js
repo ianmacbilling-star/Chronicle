@@ -768,7 +768,11 @@ function saveSession() {
   .then(function(data) {
     if (data.error) { showModalError('session-modal-error', data.error); return; }
     closeSessionModal();
-    loadSessions();
+    // Drop the user straight into the newly created session (the backend
+    // returns the full session row, so data.id is the new id). Fall back to
+    // just refreshing the list if no id came back.
+    if (data && data.id) { selectSession(data.id); }
+    else { loadSessions(); }
   });
 }
 
@@ -5444,7 +5448,11 @@ function saveSession() {
   .then(function(data) {
     if (data.error) { showModalError('session-modal-error', data.error); return; }
     closeSessionModal();
-    loadSessions();
+    // Drop the user straight into the newly created session (the backend
+    // returns the full session row, so data.id is the new id). Fall back to
+    // just refreshing the list if no id came back.
+    if (data && data.id) { selectSession(data.id); }
+    else { loadSessions(); }
   });
 }
 
