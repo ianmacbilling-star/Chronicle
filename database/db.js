@@ -528,6 +528,11 @@ async function initPostgres() {
   // Pass 2 — explicit per-panel casting tables. After moments exist.
   await migrateCasting(pool);
 
+  // Scaling hardening — performance indexes on hot-path FK / filter
+  // columns and the releaseImage() URL lookups. Runs LAST so every
+  // referenced column already exists.
+  await migratePerfIndexes(pool);
+
   console.log('  PostgreSQL schema ready!');
   return db;
 }
@@ -848,6 +853,51 @@ async function migrateCasting(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_moment_characters_moment ON moment_characters(moment_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_moment_assets_moment ON moment_assets(moment_id)');
+}
+
+// migratePerfIndexes: idempotent (runs every boot). Performance indexes for
+// scale. Postgres does NOT auto-index foreign-key columns -- only PKs and
+// UNIQUE constraints -- so the hot-path FK filters below were doing sequential
+// scans: invisible at small row counts, brutal at large ones. All IF NOT
+// EXISTS, so a re-run is a no-op. Each wrapped in try/catch so one bad index
+// can never kill the deploy.
+//
+// NOTE: plain CREATE INDEX takes a brief exclusive lock while it builds.
+// That's instant on today's small tables -- which is exactly why we add them
+// NOW, before the tables get big. If these were already huge you'd want
+// CREATE INDEX CONCURRENTLY instead (not needed yet).
+async function migratePerfIndexes(pool) {
+  const idx = [
+    // --- Hot-path foreign-key / filter indexes (issue #1) ---
+    // The single most-run query in the app: SELECT * FROM moments
+    // WHERE fork_id = ? ORDER BY panel_order. Composite serves filter + sort.
+    'CREATE INDEX IF NOT EXISTS idx_moments_fork_order ON moments(fork_id, panel_order)',
+    'CREATE INDEX IF NOT EXISTS idx_moments_session ON moments(session_id)',
+    'CREATE INDEX IF NOT EXISTS idx_sessions_campaign ON sessions(campaign_id)',
+    'CREATE INDEX IF NOT EXISTS idx_characters_campaign ON characters(campaign_id)',
+    'CREATE INDEX IF NOT EXISTS idx_assets_campaign ON campaign_assets(campaign_id)',
+    // session_characters(fork_id) is already covered by the
+    // UNIQUE(fork_id, character_id) implicit index. session_id is not, and
+    // session-delete sweeps filter by it.
+    'CREATE INDEX IF NOT EXISTS idx_sc_session ON session_characters(session_id)',
+
+    // --- releaseImage() reference-check indexes (issue #2) ---
+    // releaseImage does an exact-match lookup on each image URL column before
+    // deleting an R2 object -- previously unindexed full scans on every
+    // regenerate + every delete. We index the columns on the LARGE tables.
+    // (characters' 6-column OR is intentionally left unindexed: that table
+    //  stays small vs moments; revisit with a normalized image-ref table or
+    //  partial indexes only if it ever shows up hot.)
+    'CREATE INDEX IF NOT EXISTS idx_moments_image ON moments(image)',
+    'CREATE INDEX IF NOT EXISTS idx_sc_refurl ON session_characters(reference_url)',
+    'CREATE INDEX IF NOT EXISTS idx_assets_imageurl ON campaign_assets(image_url)',
+    'CREATE INDEX IF NOT EXISTS idx_archives_imageurl ON campaign_archives(image_url)',
+    'CREATE INDEX IF NOT EXISTS idx_archives_sourceurl ON campaign_archives(source_url)'
+  ];
+  for (const sql of idx) {
+    try { await pool.query(sql); } catch (e) { console.error('  [migratePerfIndexes] skipped:', e.message); }
+  }
+  console.log('  Performance indexes ensured.');
 }
 
 // getOrCreateDmFork: returns the id of the session's DM fork, creating

@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const rateLimit = require('express-rate-limit');
 const { getDb } = require('./database/db');
 const { initStorage } = require('./storage/storage');
 
@@ -54,6 +55,43 @@ function buildSessionMiddleware() {
 
 app.use(buildSessionMiddleware());
 
+// ------------------------------------------------------------
+// Rate limiting (scaling hardening). Two layers:
+//   apiLimiter -- a generous backstop on ALL /api traffic, sized so normal
+//     SPA navigation never trips it; catches raw floods / runaway loops.
+//   aiLimiter  -- a strict per-user cap on the endpoints that call PAID AI
+//     APIs (image gen, extraction, narrative). Tokens already bound a paying
+//     user's spend; this is defense-in-depth against retry storms, buggy
+//     clients, and abuse hammering the costly endpoints.
+// Keyed by user id when logged in, else IP. NOTE: the default store is
+// in-memory, so limits are PER APP INSTANCE -- fine on one Railway instance
+// today, but move to a shared store (Redis/pg) before scaling horizontally
+// or the effective limit multiplies by the instance count.
+// ------------------------------------------------------------
+function rlUserKey(req) {
+  return (req.session && req.session.userId) ? ('u' + req.session.userId) : req.ip;
+}
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,   // 15 minutes
+  max: 1500,                  // generous; an active SPA session stays well under this
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: rlUserKey,
+  // endpoints are auth-gated so the IP fallback is rarely hit; skip the
+  // library's IPv6-subnet validation rather than pull in its ip key helper.
+  validate: { keyGeneratorIpFallback: false },
+  message: { error: 'Too many requests. Please slow down and try again in a few minutes.' }
+});
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,        // 1 minute
+  max: 30,                    // generate-all is ONE request; single regens are one each
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: rlUserKey,
+  validate: { keyGeneratorIpFallback: false },
+  message: { error: "You're generating very quickly. Please wait a moment before generating again." }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicit page routes
@@ -61,6 +99,10 @@ app.get('/login', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Global backstop limiter across all API routes (after session so it can
+// key by user). Must precede the route mounts below.
+app.use('/api', apiLimiter);
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/email', require('./routes/email').router);
@@ -71,9 +113,9 @@ app.use('/api/campaigns/:campaignId/assets', require('./routes/assets'));
 app.use('/api/campaigns/:campaignId/archives', require('./routes/archives'));
 app.use('/api/campaigns/:campaignId/sessions', require('./routes/sessions'));
 app.use('/api/campaigns/:campaignId/sessions/:sessionId/moments', require('./routes/moments'));
-app.use('/api/extract', require('./routes/extract'));
-app.use('/api/images', require('./routes/images'));
-app.use('/api/narrative', require('./routes/narrative'));
+app.use('/api/extract', aiLimiter, require('./routes/extract'));
+app.use('/api/images', aiLimiter, require('./routes/images'));
+app.use('/api/narrative', aiLimiter, require('./routes/narrative'));
 app.use('/api/pdf', require('./routes/pdf'));
 // Phase 3 — invite endpoints. Mounted at /api so the router can serve
 // both /api/campaigns/:campaignId/invites and /api/invites/:token.
