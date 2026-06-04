@@ -511,6 +511,38 @@
         <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
       </div>
 
+
+
+    </div>
+
+    <!-- ==================== SETTINGS VIEW ==================== -->
+    <div id="view-settings" class="view" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Settings</div>
+          <div class="page-subtitle">Manage your account and preferences</div>
+        </div>
+      </div>
+
+
+
+
+      <!-- Image Generation Model -->
+      <div class="settings-section">
+        <div class="settings-section-title">Image Generation Model</div>
+        <div class="settings-section-desc">Which AI model generates storyboard images. Applies to all users.</div>
+        <div id="model-success" class="alert alert-success hidden"></div>
+        <div id="model-error" class="alert alert-error hidden"></div>
+        <div class="form-group">
+          <label class="form-label">Model</label>
+          <select class="form-input" id="settings-image-model">
+            <option value="nano2">Nano Banana 2 (current — highest quality)</option>
+            <option value="schnell">Flux schnell (legacy — low quality, low cost)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveImageModel()">Save model</button>
+      </div>
+
       <!-- ==================== ADMIN TESTING WIDGET ====================
            TEMPORARY: lets admins set their own token balance for testing
            edge cases (out-of-tokens, exactly-enough, etc.). Backed by the
@@ -558,36 +590,6 @@
             <button class="btn btn-sm" onclick="adminSetMyBalance()">Set balance</button>
           </div>
         </div>
-      </div>
-
-    </div>
-
-    <!-- ==================== SETTINGS VIEW ==================== -->
-    <div id="view-settings" class="view" style="display:none;">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Settings</div>
-          <div class="page-subtitle">Manage your account and preferences</div>
-        </div>
-      </div>
-
-
-
-
-      <!-- Image Generation Model -->
-      <div class="settings-section">
-        <div class="settings-section-title">Image Generation Model</div>
-        <div class="settings-section-desc">Which AI model generates storyboard images. Applies to all users.</div>
-        <div id="model-success" class="alert alert-success hidden"></div>
-        <div id="model-error" class="alert alert-error hidden"></div>
-        <div class="form-group">
-          <label class="form-label">Model</label>
-          <select class="form-input" id="settings-image-model">
-            <option value="nano2">Nano Banana 2 (current — highest quality)</option>
-            <option value="schnell">Flux schnell (legacy — low quality, low cost)</option>
-          </select>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveImageModel()">Save model</button>
       </div>
 
 
