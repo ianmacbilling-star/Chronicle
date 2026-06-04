@@ -476,6 +476,16 @@
         <button class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
       </div>
 
+      <!-- Account actions (Sign out relocated here from the Settings screen) -->
+      <div class="settings-section" style="border-color:#f09595;">
+        <div class="settings-section-title" style="color:var(--error);">Account</div>
+        <div class="settings-section-desc">Sign out, or suspend your account.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+          <button class="btn btn-sm" onclick="logout()">Sign out</button>
+          <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
+        </div>
+      </div>
+
       <!-- Current Plan -->
       <div class="settings-section" id="account-tier-section">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -581,15 +591,30 @@
       </div>
 
 
-      <!-- Danger Zone -->
-      <div class="settings-section" style="border-color:#f09595;">
-        <div class="settings-section-title" style="color:var(--error);">Sign out</div>
-        <div class="settings-section-desc">Sign out of your Chronicle account on this device</div>
-        <button class="btn btn-danger btn-sm" onclick="logout()">Sign out</button>
-      </div>
     </div>
 
 
+  </div>
+</div>
+
+<!-- SUSPEND ACCOUNT MODAL -->
+<div class="modal-overlay hidden" id="suspend-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Suspend your account?</div>
+      <button class="modal-close" onclick="closeSuspendConfirm()">&times;</button>
+    </div>
+    <div id="suspend-modal-error" class="alert alert-error hidden"></div>
+    <div class="settings-section-desc" style="line-height:1.5;">
+      Your account will be suspended and you'll be signed out. Your campaigns,
+      characters, and history are kept safe. You can reactivate any time within
+      the next 6 months just by logging back in. After that, a suspended account
+      may be permanently removed.
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeSuspendConfirm()">Cancel</button>
+      <button class="btn btn-danger" id="suspend-confirm-btn" onclick="suspendAccount()">Suspend my account</button>
+    </div>
   </div>
 </div>
 

@@ -150,11 +150,19 @@ router.post('/login', async function(req, res) {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.json({ error: 'Invalid email or password' });
 
+    // Account lifecycle: logging in reactivates a suspended account
+    // (within the retention window) -- clears the suspend flag + clock.
+    let reactivated = false;
+    if (user.status === 'suspended') {
+      await db.prepare("UPDATE users SET status = 'active', suspended_at = NULL WHERE id = ?").run(user.id);
+      reactivated = true;
+    }
+
     req.session.userId = user.id;
     req.session.userName = user.name;
     req.session.userEmail = user.email;
 
-    res.json({ success: true, name: user.name, email: user.email });
+    res.json({ success: true, name: user.name, email: user.email, reactivated: reactivated });
   } catch(e) {
     console.error('Login error:', e.message);
     res.json({ error: 'Login failed. Please try again.' });
@@ -208,6 +216,25 @@ router.get('/me', async function(req, res) {
 router.post('/logout', function(req, res) {
   req.session.destroy();
   res.json({ success: true });
+});
+
+// POST /api/auth/suspend -- self-service account suspension. Holds the
+// account + all data; the user reactivates by simply logging back in.
+// Stamps suspended_at to start the retention clock the future sweep job
+// will act on. Destroys the current session. (Permanent delete is a
+// separate, later flow.)
+router.post('/suspend', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.prepare("UPDATE users SET status = 'suspended', suspended_at = ? WHERE id = ?").run(now, req.session.userId);
+    req.session.destroy();
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Suspend error:', e.message);
+    res.status(500).json({ error: 'Could not suspend account. Please try again.' });
+  }
 });
 
 router.put('/profile', async function(req, res) {

@@ -350,6 +350,42 @@ function closeUserMenu() {
 // ============================================================
 // MY ACCOUNT (read-only)
 // ============================================================
+// ============================================================
+// SUSPEND ACCOUNT (self-service). Suspend holds the account + all data
+// for the retention window; the user reactivates simply by logging back
+// in. Permanent delete is a separate, later flow.
+// ============================================================
+function openSuspendConfirm() {
+  var e = document.getElementById('suspend-modal-error');
+  if (e) e.classList.add('hidden');
+  var m = document.getElementById('suspend-modal');
+  if (m) m.classList.remove('hidden');
+}
+function closeSuspendConfirm() {
+  var m = document.getElementById('suspend-modal');
+  if (m) m.classList.add('hidden');
+}
+function suspendAccount() {
+  var btn = document.getElementById('suspend-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Suspending…'; }
+  fetch('/api/auth/suspend', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && d.success) {
+        window.location.href = '/';
+      } else {
+        var e = document.getElementById('suspend-modal-error');
+        if (e) { e.textContent = (d && d.error) || 'Could not suspend account.'; e.classList.remove('hidden'); }
+        if (btn) { btn.disabled = false; btn.textContent = 'Suspend my account'; }
+      }
+    })
+    .catch(function() {
+      var e = document.getElementById('suspend-modal-error');
+      if (e) { e.textContent = 'Could not suspend account. Please try again.'; e.classList.remove('hidden'); }
+      if (btn) { btn.disabled = false; btn.textContent = 'Suspend my account'; }
+    });
+}
+
 function loadAccount() {
   // Profile fields moved here from Settings — populate name/email from state.
   var _pn = document.getElementById('settings-name');

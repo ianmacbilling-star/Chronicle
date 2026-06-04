@@ -297,6 +297,11 @@ async function initPostgres() {
     // attribution: it's stamped on a player's image generations, then
     // looked up when they purchase tokens to credit the right DM.
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_campaign_id INTEGER',
+    // Account lifecycle (suspend -> 6-month hold -> anonymized delete).
+    // status: 'active' | 'suspended' | 'deleted' (tombstone). suspended_at
+    // starts the retention clock the future sweep job will act on.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'",
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP',
     // image_generations gains fork_id (which fork the generation belongs
     // to; null = legacy/canonical) and model (which AI model produced it,
     // so per-model cost can be set from real data later).
@@ -645,6 +650,8 @@ function initSQLite() {
     'ALTER TABLE session_characters ADD COLUMN change_detail TEXT',
     'ALTER TABLE session_characters ADD COLUMN change_moment_index INTEGER',
     "ALTER TABLE session_characters ADD COLUMN change_status TEXT DEFAULT 'none'",
+    "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
+    'ALTER TABLE users ADD COLUMN suspended_at DATETIME',
   ];
   migrations.forEach(function(m) { try { sqlite.exec(m); } catch(e) {} });
 
