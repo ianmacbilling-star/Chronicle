@@ -443,6 +443,39 @@
         </div>
       </div>
 
+      <!-- Profile (moved here from the Settings screen) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Profile</div>
+        <div class="settings-section-desc">Your name, email, and password</div>
+        <div id="profile-error" class="alert alert-error hidden"></div>
+        <div id="profile-success" class="alert alert-success hidden"></div>
+        <div class="form-group">
+          <label class="form-label">Your name</label>
+          <input class="form-input" id="settings-name" placeholder="Your name" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email address</label>
+          <input class="form-input" id="settings-email" type="email" placeholder="you@example.com" />
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
+
+        <div style="height:1px;background:rgba(245,232,200,0.12);margin:18px 0;"></div>
+
+        <div class="settings-section-title" style="font-size:14px;">Change password</div>
+        <div class="settings-section-desc">Choose a strong password of at least 8 characters</div>
+        <div id="password-error" class="alert alert-error hidden"></div>
+        <div id="password-success" class="alert alert-success hidden"></div>
+        <div class="form-group">
+          <label class="form-label">Current password</label>
+          <input class="form-input" id="settings-current-password" type="password" placeholder="Your current password" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">New password</label>
+          <input class="form-input" id="settings-new-password" type="password" placeholder="At least 8 characters" />
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
+      </div>
+
       <!-- Current Plan -->
       <div class="settings-section" id="account-tier-section">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -528,22 +561,6 @@
         </div>
       </div>
 
-      <!-- Profile -->
-      <div class="settings-section">
-        <div class="settings-section-title">Profile</div>
-        <div class="settings-section-desc">Update your name and email address</div>
-        <div id="profile-error" class="alert alert-error hidden"></div>
-        <div id="profile-success" class="alert alert-success hidden"></div>
-        <div class="form-group">
-          <label class="form-label">Your name</label>
-          <input class="form-input" id="settings-name" placeholder="Your name" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email address</label>
-          <input class="form-input" id="settings-email" type="email" placeholder="you@example.com" />
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
-      </div>
 
 
 
@@ -563,22 +580,6 @@
         <button class="btn btn-primary btn-sm" onclick="saveImageModel()">Save model</button>
       </div>
 
-      <!-- Change Password -->
-      <div class="settings-section">
-        <div class="settings-section-title">Change Password</div>
-        <div class="settings-section-desc">Choose a strong password of at least 8 characters</div>
-        <div id="password-error" class="alert alert-error hidden"></div>
-        <div id="password-success" class="alert alert-success hidden"></div>
-        <div class="form-group">
-          <label class="form-label">Current password</label>
-          <input class="form-input" id="settings-current-password" type="password" placeholder="Your current password" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">New password</label>
-          <input class="form-input" id="settings-new-password" type="password" placeholder="At least 8 characters" />
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
-      </div>
 
       <!-- Danger Zone -->
       <div class="settings-section" style="border-color:#f09595;">

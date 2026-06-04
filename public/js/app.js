@@ -351,6 +351,11 @@ function closeUserMenu() {
 // MY ACCOUNT (read-only)
 // ============================================================
 function loadAccount() {
+  // Profile fields moved here from Settings — populate name/email from state.
+  var _pn = document.getElementById('settings-name');
+  if (_pn) _pn.value = (state.user && state.user.name) || '';
+  var _pe = document.getElementById('settings-email');
+  if (_pe) _pe.value = (state.user && state.user.email) || '';
   // Pull current tier + plan info, then usage counts.
   fetch('/api/auth/me')
     .then(function(r) { return r.json(); })
@@ -3769,18 +3774,8 @@ function hideNovelPreview() { loadNovelSummary(); }
 // SETTINGS
 // ============================================================
 function loadSettingsForm() {
-  document.getElementById('settings-name').value = state.user.name || '';
-  document.getElementById('settings-email').value = state.user.email || '';
-  // Load stored keys
-  fetch('/api/auth/apikey')
-    .then(function(r) { return r.json(); })
-    .then(function(k) {
-      var sk = document.getElementById('settings-apikey');
-      if (k.api_key && sk) sk.value = k.api_key;
-      var fk = document.getElementById('settings-falkey');
-      if (k.fal_key && fk) fk.value = k.fal_key;
-    });
-  // Load the current global image-generation model
+  // Settings now hosts admin/testing controls only (the global image model).
+  // Profile (name / email / password) moved to the Account screen.
   fetch('/api/auth/image-model')
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -6541,18 +6536,8 @@ function hideNovelPreview() { loadNovelSummary(); }
 // SETTINGS
 // ============================================================
 function loadSettingsForm() {
-  document.getElementById('settings-name').value = state.user.name || '';
-  document.getElementById('settings-email').value = state.user.email || '';
-  // Load stored keys
-  fetch('/api/auth/apikey')
-    .then(function(r) { return r.json(); })
-    .then(function(k) {
-      var sk = document.getElementById('settings-apikey');
-      if (k.api_key && sk) sk.value = k.api_key;
-      var fk = document.getElementById('settings-falkey');
-      if (k.fal_key && fk) fk.value = k.fal_key;
-    });
-  // Load the current global image-generation model
+  // Settings now hosts admin/testing controls only (the global image model).
+  // Profile (name / email / password) moved to the Account screen.
   fetch('/api/auth/image-model')
     .then(function(r) { return r.json(); })
     .then(function(d) {
