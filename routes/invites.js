@@ -376,6 +376,46 @@ router.delete('/campaigns/:campaignId/members/:userId', requireAuth, verifyCampa
   res.json({ success: true });
 });
 
+// POST /api/campaigns/:campaignId/members/:userId/make-dm
+// DM-only. Hands the Story Master role to an existing PLAYER of the
+// campaign: the target is promoted to 'dm' and the current DM is demoted
+// to 'player' (they remain in the campaign). One DM per campaign is
+// preserved -- this is a swap, not an add. The campaign is stamped as
+// inherited (inherited_at + inherited_from_user_id) for the tier-limit
+// exemption + provenance. Only the current Story Master can do this
+// (enforced by verifyCampaignDM).
+router.post('/campaigns/:campaignId/members/:userId/make-dm', requireAuth, verifyCampaignDM, async function(req, res) {
+  const db = await getDb();
+  const campaignId = parseInt(req.params.campaignId, 10);
+  const targetUserId = parseInt(req.params.userId, 10);
+  const currentDmId = req.session.userId;
+
+  if (targetUserId === currentDmId) {
+    return res.status(400).json({ error: 'You are already the Story Master' });
+  }
+
+  const target = await db.prepare(
+    'SELECT user_id, role FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+  ).get(campaignId, targetUserId);
+  if (!target) return res.status(404).json({ error: 'That player is not a member of this campaign' });
+  if (target.role === 'dm') return res.status(400).json({ error: 'That member is already the Story Master' });
+
+  // Swap roles: demote the current DM to player, promote the target to dm.
+  await db.prepare(
+    "UPDATE campaign_members SET role = 'player' WHERE campaign_id = ? AND user_id = ?"
+  ).run(campaignId, currentDmId);
+  await db.prepare(
+    "UPDATE campaign_members SET role = 'dm' WHERE campaign_id = ? AND user_id = ?"
+  ).run(campaignId, targetUserId);
+
+  // Stamp the campaign as inherited (provenance + tier-limit exemption hook).
+  await db.prepare(
+    'UPDATE campaigns SET inherited_at = ?, inherited_from_user_id = ? WHERE id = ?'
+  ).run(new Date().toISOString(), currentDmId, campaignId);
+
+  res.json({ success: true, new_dm_user_id: targetUserId });
+});
+
 // GET /api/campaigns/:campaignId/invites
 // Any member can see pending invites (per design decision May 30 2026:
 // players see the list so they can anticipate who else is joining; the

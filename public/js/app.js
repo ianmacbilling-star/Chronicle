@@ -7400,6 +7400,7 @@ function renderMembersList() {
           '<div class="row-menu">' +
             '<button class="row-menu-btn" onclick="toggleRowMenu(\'member-menu-' + m.user_id + '\', event)">&#8943;</button>' +
             '<div class="row-menu-dropdown" id="member-menu-' + m.user_id + '">' +
+              '<button class="row-menu-item" onclick="openMakeDmConfirm(' + m.user_id + ')">Make Story Master</button>' +
               '<button class="row-menu-item row-menu-item-danger" onclick="openRemoveMemberConfirm(' + m.user_id + ')">Remove from campaign</button>' +
             '</div>' +
           '</div>' +
@@ -7534,6 +7535,51 @@ function confirmRemoveMember() {
     })
     .finally(function() {
       if (btn) { btn.disabled = false; btn.textContent = 'Remove'; }
+    });
+}
+
+// --- Hand off Story Master role ---
+function openMakeDmConfirm(userId) {
+  var m = (state.members || []).find(function(x) { return x.user_id === userId; });
+  if (!m) return;
+  state._pendingMakeDmUserId = userId;
+  var body = document.getElementById('confirm-make-dm-body');
+  if (body) {
+    var who = escapeHtml(m.user_name || 'this player');
+    body.innerHTML = 'Make <strong>' + who + '</strong> the Story Master of this campaign? You will become a regular player.';
+  }
+  document.querySelectorAll('.row-menu-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+  var el = document.getElementById('confirm-make-dm-modal');
+  if (el) el.classList.remove('hidden');
+}
+
+function closeMakeDmConfirm() {
+  state._pendingMakeDmUserId = null;
+  var el = document.getElementById('confirm-make-dm-modal');
+  if (el) el.classList.add('hidden');
+}
+
+function confirmMakeDm() {
+  var uid = state._pendingMakeDmUserId;
+  var cur = state.currentCampaign;
+  if (!uid || !cur) { closeMakeDmConfirm(); return; }
+  var btn = document.getElementById('confirm-make-dm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Transferring…'; }
+  fetch('/api/campaigns/' + cur.id + '/members/' + uid + '/make-dm', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) {
+        showAlert(data.error);
+        if (btn) { btn.disabled = false; btn.textContent = 'Make Story Master'; }
+        return;
+      }
+      // The acting user just handed off the DM role and is now a player --
+      // reload so every role-gated piece of UI recomputes from the server.
+      window.location.reload();
+    })
+    .catch(function(e) {
+      showAlert('Could not transfer the Story Master role: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Make Story Master'; }
     });
 }
 

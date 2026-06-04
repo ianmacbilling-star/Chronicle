@@ -245,6 +245,11 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMP',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cover_image_url TEXT',
+    // DM handoff: marks a campaign whose Story Master role was transferred.
+    // inherited_at present => exempt from per-tier campaign limits later; the
+    // from-user records provenance for attribution / tombstone context.
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS inherited_at TIMESTAMP',
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS inherited_from_user_id INTEGER',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS art_style TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS layout_style TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS session_notes TEXT',
@@ -652,6 +657,8 @@ function initSQLite() {
     "ALTER TABLE session_characters ADD COLUMN change_status TEXT DEFAULT 'none'",
     "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
     'ALTER TABLE users ADD COLUMN suspended_at DATETIME',
+    'ALTER TABLE campaigns ADD COLUMN inherited_at DATETIME',
+    'ALTER TABLE campaigns ADD COLUMN inherited_from_user_id INTEGER',
   ];
   migrations.forEach(function(m) { try { sqlite.exec(m); } catch(e) {} });
 

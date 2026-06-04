@@ -925,6 +925,26 @@
   </div>
 </div>
 
+<!-- Confirm modal for handing off the Story Master role. -->
+<div class="modal-overlay hidden" id="confirm-make-dm-modal" onclick="if(event.target===this)closeMakeDmConfirm()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Hand off Story Master</div>
+      <button class="modal-close" onclick="closeMakeDmConfirm()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:8px;" id="confirm-make-dm-body">
+      Make this player the Story Master?
+    </p>
+    <p style="color:rgba(245,232,200,0.6);font-size:13px;margin-bottom:14px;">
+      They take over running the campaign. You become a regular player and keep your access. Only the current Story Master can do this, and it takes effect immediately.
+    </p>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeMakeDmConfirm()">Cancel</button>
+      <button class="btn btn-primary" id="confirm-make-dm-btn" onclick="confirmMakeDm()">Make Story Master</button>
+    </div>
+  </div>
+</div>
+
 <!-- Phase 3 Deploy 2 — confirm modal for removing a campaign member. -->
 <div class="modal-overlay hidden" id="confirm-remove-member-modal" onclick="if(event.target===this)closeConfirmRemoveMember()">
   <div class="modal" style="max-width:460px;">
