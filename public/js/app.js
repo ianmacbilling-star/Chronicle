@@ -1915,6 +1915,64 @@ function pollImageJob(jobId, momentId) {
   setTimeout(tick, INTERVAL);
 }
 
+// Poll a batch of async image jobs (generate-all) to completion, driving the
+// progress bar. Panels keep their busy overlays; finished images appear via a
+// single refresh at the end (avoids clobbering still-pending panels mid-batch).
+function pollImageBatch(jobs, meta) {
+  meta = meta || {};
+  var btn = document.getElementById('generate-all-btn');
+  var progressWrap = document.getElementById('generate-progress');
+  var fill = document.getElementById('gen-progress-fill');
+  var msg = document.getElementById('gen-progress-msg');
+  var total = jobs.length;
+  var done = 0, failed = 0;
+  var pending = jobs.map(function(j) { return j.job_id; });
+  var started = Date.now();
+  var MAX_MS = 12 * 60 * 1000;
+  var INTERVAL = 4000;
+  function reset() {
+    setTimeout(function() {
+      if (btn) btn.disabled = false;
+      if (progressWrap) progressWrap.style.display = 'none';
+      if (fill) fill.style.width = '0%';
+    }, 2000);
+  }
+  function finalize() {
+    if (fill) fill.style.width = '100%';
+    var t = done + ' image' + (done === 1 ? '' : 's') + ' generated';
+    if (meta.skipped_locked) t += ' (' + meta.skipped_locked + ' locked skipped)';
+    if (failed) t += ', ' + failed + ' failed';
+    if (msg) msg.textContent = t + '!';
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    refreshStoryboardImages();
+    reset();
+  }
+  function tick() {
+    if (!pending.length) { finalize(); return; }
+    if (Date.now() - started > MAX_MS) {
+      if (msg) msg.textContent = 'Still working \u2014 remaining panels will appear when ready.';
+      refreshStoryboardImages();
+      reset();
+      return;
+    }
+    fetch('/api/images/jobs-status?ids=' + pending.join(','))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var rows = (data && data.jobs) || [];
+        rows.forEach(function(j) {
+          if (j.status === 'done') { if (pending.indexOf(j.id) !== -1) { done++; pending = pending.filter(function(x) { return x !== j.id; }); } }
+          else if (j.status === 'failed') { if (pending.indexOf(j.id) !== -1) { failed++; pending = pending.filter(function(x) { return x !== j.id; }); } }
+        });
+        var fin = done + failed;
+        if (fill) fill.style.width = Math.max(5, total ? Math.round((fin / total) * 100) : 100) + '%';
+        if (msg) msg.textContent = fin + ' of ' + total + ' done' + (failed ? ' (' + failed + ' failed)' : '') + '\u2026';
+        if (!pending.length) finalize(); else setTimeout(tick, INTERVAL);
+      })
+      .catch(function() { setTimeout(tick, INTERVAL); });
+  }
+  tick();
+}
+
 function openStylePicker(kind) {
   STYLE_PICKER_KIND = kind || 'narrative';
   var titleEl = document.getElementById('style-picker-title');
@@ -3437,18 +3495,19 @@ function generateAllImages() {
       return;
     }
 
+    // Async batch: the server queued one job per panel and returned their ids.
+    // Poll them to completion, driving the progress bar as each lands. (Falls
+    // back to the old synchronous shape if the server returns counts directly.)
+    if (data.jobs) {
+      pollImageBatch(data.jobs, { total: data.total, skipped_locked: data.skipped_locked });
+      return;
+    }
     fill.style.width = '100%';
-    var _doneMsg = data.count + ' image' + (data.count === 1 ? '' : 's') + ' generated';
+    var _doneMsg = (data.count || 0) + ' image' + ((data.count || 0) === 1 ? '' : 's') + ' generated';
     if (data.skipped_locked) { _doneMsg += ' (' + data.skipped_locked + ' locked panel' + (data.skipped_locked === 1 ? '' : 's') + ' skipped)'; }
     msg.textContent = _doneMsg + '!';
-
-    // Tokens were spent — update the header balance.
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-
-    // Re-fetch the session fresh from the database so the storyboard
-    // shows the newly generated images reliably (stays on this tab).
     refreshStoryboardImages();
-
     setTimeout(function() {
       btn.disabled = false;
       progressWrap.style.display = 'none';
@@ -4725,11 +4784,9 @@ function submitRetouch() {
       else showPanelError(momentId, 'Could not retouch: ' + (data.message || data.error));
       return;
     }
-    moment.image = data.image_url;
-    moment.archived = false;
-    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-    renderStoryboard();
-    renderNovelWithImages();
+    if (data.image_url) { applyRegenResult(momentId, data.image_url); return; }
+    if (data.job_id) { pollImageJob(data.job_id, momentId); return; }
+    showPanelError(momentId, 'Could not start retouch.');
   })
   .catch(function(e){ showPanelError(momentId, 'Could not retouch: ' + e.message); });
 }
@@ -6240,18 +6297,19 @@ function generateAllImages() {
       return;
     }
 
+    // Async batch: the server queued one job per panel and returned their ids.
+    // Poll them to completion, driving the progress bar as each lands. (Falls
+    // back to the old synchronous shape if the server returns counts directly.)
+    if (data.jobs) {
+      pollImageBatch(data.jobs, { total: data.total, skipped_locked: data.skipped_locked });
+      return;
+    }
     fill.style.width = '100%';
-    var _doneMsg = data.count + ' image' + (data.count === 1 ? '' : 's') + ' generated';
+    var _doneMsg = (data.count || 0) + ' image' + ((data.count || 0) === 1 ? '' : 's') + ' generated';
     if (data.skipped_locked) { _doneMsg += ' (' + data.skipped_locked + ' locked panel' + (data.skipped_locked === 1 ? '' : 's') + ' skipped)'; }
     msg.textContent = _doneMsg + '!';
-
-    // Tokens were spent — update the header balance.
     if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-
-    // Re-fetch the session fresh from the database so the storyboard
-    // shows the newly generated images reliably (stays on this tab).
     refreshStoryboardImages();
-
     setTimeout(function() {
       btn.disabled = false;
       progressWrap.style.display = 'none';

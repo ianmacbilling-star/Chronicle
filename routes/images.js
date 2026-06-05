@@ -255,6 +255,31 @@ async function retouchImage(currentImageUrl, instruction, style, falKey) {
   return await persistToR2(result.data.images[0].url);
 }
 
+// Async retouch: the same in-context edit as retouchImage, submitted to fal's
+// queue with our webhook so the user's request returns immediately.
+async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl) {
+  fal.config({ credentials: falKey });
+  const stylePrefix = style ? getStylePrefix(style) : '';
+  const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
+    'You are editing an EXISTING comic panel, provided as Image 1. Reproduce it '+
+    'EXACTLY \u2014 identical composition, characters, faces, poses, framing, '+
+    'background, colors, lighting, and art style \u2014 and change ONLY the '+
+    'following, leaving everything else untouched:\n\n' + instruction;
+  const submitted = await fal.queue.submit('fal-ai/nano-banana-2/edit', {
+    input: {
+      prompt: editPrompt,
+      image_urls: [currentImageUrl],
+      num_images: 1,
+      aspect_ratio: '4:3',
+      output_format: 'png',
+      safety_tolerance: '5',
+      resolution: '1K'
+    },
+    webhookUrl: webhookUrl
+  });
+  return { request_id: submitted.request_id, model: 'fal-ai/nano-banana-2/edit' };
+}
+
 // Deterministic seed from a campaign id — same campaign, same seed every time.
 function campaignSeed(campaignId) {
   var n = parseInt(campaignId, 10);
@@ -720,23 +745,18 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     if (!(await canAfford(req.session.userId, cost))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
     }
-    const imageUrl = await retouchImage(moment.image, instruction, style, fal_key);
-    const now = new Date().toISOString();
-    const prevImg = moment.image;
-    await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(imageUrl, now, req.session.userId, moment.id);
-    if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
-    await logImageGeneration(db, req.session.userId, 'retouch', moment.id, moment.fork_id);
-    await spendTokens(req.session.userId, cost, {
-      related_campaign_id: moment.campaign_id,
-      source: 'panel_retouch',
-      event_type: 'generation_spend'
-    });
+    const webhookUrl = falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const sub = await submitRetouch(moment.image, instruction, style, fal_key, webhookUrl);
+    const nowTs = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, nowTs, nowTs);
     if (myRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(moment.campaign_id, req.session.userId); } catch (e) {}
     }
-    const balance = await getBalance(req.session.userId);
-    res.json({ success: true, image_url: imageUrl, moment_id: moment.id, balance: balance });
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch (e) {
     console.error('retouch error:', e.message);
     res.json({ error: e.message });
@@ -834,71 +854,52 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     });
   }
 
-  // Generate all images in parallel
-  const results = await Promise.allSettled(
+  // Submit one queued fal job per panel; the webhook finishes each. Returning
+  // immediately means a large batch can't time out at the gateway, and fal's
+  // queue handles concurrency instead of us holding N live connections.
+  const webhookUrl = falWebhookUrl();
+  if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+
+  const submitResults = await Promise.allSettled(
     toGenerate.map(async function(m) {
-      try {
-        const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
-        // Only the characters named in THIS panel — prevents feature bleed
-        const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
-        const charList = buildCharacterBlock(chars, panelText, m.panel_order, m.cast_explicit ? (castCharByMoment[m.id] || []) : null);
-        // Explicit cast (Pass 2) overrides name-match when set; otherwise
-        // name-match campaign assets into the panel. Characters fill ref
-        // slots first, assets fill the remainder, hard cap 14.
-        const assetList = buildAssetBlock(assets, panelText, m.cast_explicit ? (castAssetByMoment[m.id] || []) : null);
-        // Roster of the explicit cast's names (authoritative WHO for this panel).
-        let castNames = [];
-        if (m.cast_explicit) {
-          const idset = {}; (castCharByMoment[m.id] || []).forEach(function(id){ idset[String(id)] = true; });
-          castNames = chars.filter(function(c){ return idset[String(c.character_id)]; }).map(function(c){ return c.name; });
-        }
-        const panelBlock = {
-          text: charList.text,
-          assetText: assetList.text,
-          refs: combineRefs(charList.refs, assetList.refs),
-          castExplicit: !!m.cast_explicit,
-          castNames: castNames
-        };
-        const imageUrl = await generateImage(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey);
-        const now = new Date().toISOString();
-        const prevImg = m.image;
-        await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-          .run(imageUrl, style || null, now, req.session.userId, m.id);
-        if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
-        return { moment_id: m.id, image_url: imageUrl, success: true };
-      } catch(e) {
-        console.error('Error generating image for moment', m.id, e.message);
-        return { moment_id: m.id, error: e.message, success: false };
+      const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
+      const panelText = (m.prompt || '') + ' ' + (m.description || '') + ' ' + (m.title || '');
+      const charList = buildCharacterBlock(chars, panelText, m.panel_order, m.cast_explicit ? (castCharByMoment[m.id] || []) : null);
+      const assetList = buildAssetBlock(assets, panelText, m.cast_explicit ? (castAssetByMoment[m.id] || []) : null);
+      let castNames = [];
+      if (m.cast_explicit) {
+        const idset = {}; (castCharByMoment[m.id] || []).forEach(function(id){ idset[String(id)] = true; });
+        castNames = chars.filter(function(c){ return idset[String(c.character_id)]; }).map(function(c){ return c.name; });
       }
+      const panelBlock = {
+        text: charList.text,
+        assetText: assetList.text,
+        refs: combineRefs(charList.refs, assetList.refs),
+        castExplicit: !!m.cast_explicit,
+        castNames: castNames
+      };
+      const sub = await submitPanelGen(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl);
+      const nowTs = new Date().toISOString();
+      const jobIns = await db.prepare(
+        'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(sub.request_id, req.session.userId, campaign_id, m.id, targetForkId, 'batch', 'queued', sub.model, style || null, perImageCost, m.image || null, nowTs, nowTs);
+      return { moment_id: m.id, job_id: jobIns.lastInsertRowid };
     })
   );
 
-  const generated = results.map(function(r) { return r.value || { success: false, error: r.reason }; });
-  const successCount = generated.filter(function(r) { return r.success; }).length;
-
-  // Log one usage row per successfully generated image.
-  for (var i = 0; i < generated.length; i++) {
-    if (generated[i] && generated[i].success) {
-      await logImageGeneration(db, req.session.userId, 'moment', generated[i].moment_id, targetForkId);
-    }
+  const jobs = [];
+  let submitFailed = 0;
+  for (var si = 0; si < submitResults.length; si++) {
+    if (submitResults[si].status === 'fulfilled') jobs.push(submitResults[si].value);
+    else { submitFailed++; console.error('generate-all submit failed:', submitResults[si].reason && submitResults[si].reason.message); }
   }
 
-  // Spend-on-success: charge only for images that actually generated.
-  // Failures (NSFW false-positives, API errors) are not charged.
-  let balance = null;
-  if (successCount > 0) {
-    await spendTokens(req.session.userId, perImageCost * successCount, {
-      related_campaign_id: campaign_id,
-      source: 'panel_batch',
-      event_type: 'generation_spend'
-    });
-  }
-  if (myRole === 'player' && successCount > 0) {
+  if (myRole === 'player' && jobs.length) {
     try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campaign_id, req.session.userId); } catch (e) {}
   }
-  balance = await getBalance(req.session.userId);
 
-  res.json({ success: true, generated: generated, count: successCount, total: moments.length, skipped_locked: lockedCount, balance: balance });
+  res.status(202).json({ status: 'queued', jobs: jobs, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
 });
 
 // ============================================================
@@ -988,15 +989,21 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     if (!claim || claim.changes === 0) return res.status(200).json({ ok: true });
     try {
       const imageUrl = await persistToR2(falUrl);
-      if (job.kind === 'moment' && job.moment_id) {
+      if (job.moment_id && (job.kind === 'moment' || job.kind === 'batch' || job.kind === 'retouch')) {
         const now = new Date().toISOString();
-        await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-          .run(imageUrl, job.style || null, now, job.user_id, job.moment_id);
+        if (job.kind === 'retouch') {
+          await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+            .run(imageUrl, now, job.user_id, job.moment_id);
+        } else {
+          await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+            .run(imageUrl, job.style || null, now, job.user_id, job.moment_id);
+        }
         if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
-        await logImageGeneration(db, job.user_id, 'moment', job.moment_id, job.fork_id);
+        await logImageGeneration(db, job.user_id, job.kind === 'retouch' ? 'retouch' : 'moment', job.moment_id, job.fork_id);
       }
       if (job.cost && job.cost > 0) {
-        await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: 'panel_regen', event_type: 'generation_spend' });
+        const spendSource = job.kind === 'retouch' ? 'panel_retouch' : (job.kind === 'batch' ? 'panel_batch' : 'panel_regen');
+        await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: spendSource, event_type: 'generation_spend' });
       }
       await db.prepare('UPDATE image_jobs SET status = ?, image_url = ?, updated_at = ? WHERE id = ?')
         .run('done', imageUrl, new Date().toISOString(), job.id);
@@ -1013,6 +1020,18 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
 });
 
 // The browser polls this for its own job until status is done/failed.
+// Batch poll: the browser asks for many job statuses at once (generate-all).
+webhookRouter.get('/jobs-status', requireAuth, async function(req, res) {
+  try {
+    const ids = String(req.query.ids || '').split(',').map(function(x){ return parseInt(x, 10); }).filter(function(n){ return n > 0; }).slice(0, 200);
+    if (!ids.length) return res.json({ jobs: [] });
+    const db = await getDb();
+    const ph = ids.map(function(){ return '?'; }).join(',');
+    const rows = await db.prepare('SELECT id, status, image_url, error, moment_id FROM image_jobs WHERE id IN (' + ph + ') AND user_id = ?').all(ids.concat([req.session.userId]));
+    res.json({ jobs: rows.map(function(j){ return { id: j.id, status: j.status, image_url: j.image_url || null, error: j.error || null, moment_id: j.moment_id }; }) });
+  } catch (e) { res.json({ error: e.message }); }
+});
+
 webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
   try {
     const db = await getDb();
