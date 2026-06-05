@@ -408,6 +408,39 @@ router.post('/campaigns/:campaignId/members/:userId/make-dm', requireAuth, verif
     "UPDATE campaign_members SET role = 'dm' WHERE campaign_id = ? AND user_id = ?"
   ).run(campaignId, targetUserId);
 
+  // Reconcile the canonical (role='dm') fork of every session so the new
+  // Story Master's version becomes canonical and the old SM's stays intact
+  // as a regular player version. Per session:
+  //   - new SM already has a fork  -> flip roles (their fork becomes
+  //     canonical; carry the old canonical's player_access_status so the
+  //     session's player-visibility / lock state doesn't regress). The old
+  //     canonical becomes a 'player' version the old SM keeps.
+  //   - new SM has no fork here    -> hand them the existing canonical by
+  //     reassigning its owner (collision-free: UNIQUE(session_id,user_id)
+  //     can't trip because the new SM has no fork for this session yet).
+  // Lazy player forks mean the no-fork branch is the common path. Done as a
+  // per-session loop (not clever set-SQL) to stay correct across the
+  // Postgres + SQLite wrappers and to preserve each fork's status exactly.
+  const sessRows = await db.prepare('SELECT id FROM sessions WHERE campaign_id = ?').all(campaignId);
+  for (const sRow of sessRows) {
+    const sid = sRow.id;
+    const oldFork = await db.prepare(
+      "SELECT id, player_access_status FROM session_forks WHERE session_id = ? AND role = 'dm'"
+    ).get(sid);
+    if (!oldFork) continue; // no canonical yet -> nothing to transfer
+    const newFork = await db.prepare(
+      'SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?'
+    ).get(sid, targetUserId);
+    if (newFork) {
+      await db.prepare("UPDATE session_forks SET role = 'player' WHERE id = ?").run(oldFork.id);
+      await db.prepare(
+        "UPDATE session_forks SET role = 'dm', player_access_status = ? WHERE id = ?"
+      ).run(oldFork.player_access_status, newFork.id);
+    } else {
+      await db.prepare('UPDATE session_forks SET user_id = ? WHERE id = ?').run(targetUserId, oldFork.id);
+    }
+  }
+
   // Stamp the campaign as inherited (provenance + tier-limit exemption hook).
   await db.prepare(
     'UPDATE campaigns SET inherited_at = ?, inherited_from_user_id = ? WHERE id = ?'
