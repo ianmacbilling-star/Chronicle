@@ -11,6 +11,7 @@ const TIERS = {
     trial_days: 30,
     max_campaigns: 1,
     max_sessions: 5,         // per campaign
+    max_archives_per_campaign: 5,
     moment_algorithm: 'standard',
     max_moments_short: 3,    // < 2000 words
     max_moments_medium: 4,   // 2000-5000
@@ -28,6 +29,7 @@ const TIERS = {
     price: 9,
     max_campaigns: 1,
     max_sessions: null,      // unlimited
+    max_archives_per_campaign: 10,
     moment_algorithm: 'standard',
     max_moments_short: 3,
     max_moments_medium: 4,
@@ -44,6 +46,7 @@ const TIERS = {
     rank: 3,
     price: 12,
     max_campaigns: 3,
+    max_archives_per_campaign: 15,
     max_sessions: null,
     moment_algorithm: 'extended',
     max_moments_short: 5,
@@ -61,6 +64,7 @@ const TIERS = {
     rank: 4,
     price: 15,
     max_campaigns: null,     // unlimited
+    max_archives_per_campaign: 20,
     max_sessions: null,
     moment_algorithm: 'extended',
     max_moments_short: 5,

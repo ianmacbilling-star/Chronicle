@@ -3,6 +3,7 @@ const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage');
+const { getEffectiveTier, getTier } = require('../middleware/tiers');
 
 // POST /api/campaigns/:campaignId/archives
 // Save an image off to the campaign archive. Open to ANY member: you can
@@ -11,6 +12,26 @@ const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage')
 router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
   try {
     const db = await getDb();
+
+    // Tier gate: cap archived images per campaign by the archiving member's
+    // EFFECTIVE tier (max of their own tier and the campaign SM's). Block the
+    // create with a friendly message if it would push past the cap.
+    try {
+      const effName = await getEffectiveTier(req.session.userId, req.params.campaignId);
+      const effTier = getTier(effName);
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(req.params.campaignId);
+        if (cnt && cnt.c >= cap) {
+          return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
+        }
+      }
+    } catch (capErr) {
+      console.error('archive cap check error:', capErr.message);
+      // On an internal cap-check failure, allow the archive rather than block
+      // the user on an error that isn't their fault.
+    }
+
     const imageType = req.body && req.body.image_type;
 
     if (imageType === 'moment') {
