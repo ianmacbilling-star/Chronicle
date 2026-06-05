@@ -657,6 +657,7 @@ function setCampaignElements() {
   var cs = document.getElementById('novel-cover-sub');
   if (ct) ct.textContent = state.currentCampaign.name;
   if (cs) cs.textContent = state.currentCampaign.description || '';
+  if (state.currentCampaign) loadTierInfo(state.currentCampaign.id);
 }
 
 function selectCampaign(id) {
@@ -1840,6 +1841,17 @@ function refreshNarrStyleButtons() {
   });
 }
 
+// Fetch the caller's EFFECTIVE tier + style locks for the current campaign so
+// the style pickers can show locked styles as visible-but-unselectable. Fails
+// open in the UI (the server still enforces on every set/generate).
+function loadTierInfo(campaignId) {
+  if (!campaignId) return;
+  fetch('/api/campaigns/' + campaignId + '/tier-info')
+    .then(function (r) { return r.json(); })
+    .then(function (d) { state.tierInfo = d || null; })
+    .catch(function () { state.tierInfo = null; });
+}
+
 function openStylePicker(kind) {
   STYLE_PICKER_KIND = kind || 'narrative';
   var titleEl = document.getElementById('style-picker-title');
@@ -1856,8 +1868,14 @@ function openStylePicker(kind) {
     meta = ART_STYLE_META;
   } else { return; }
   grid.innerHTML = meta.map(function(s) {
-    var on = (s.id === cur) ? ' is-selected' : '';
-    var badge = (s.id === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
+    var TLABEL = {2:'Silver',3:'Gold',4:'Platinum'};
+    var _locks = (STYLE_PICKER_KIND === 'art') ? (state.tierInfo && state.tierInfo.art_locks) : (state.tierInfo && state.tierInfo.narrative_locks);
+    var _eff = (state.tierInfo && state.tierInfo.effective_rank) || 99;
+    var _min = (_locks && _locks[s.id]) || 1;
+    var _locked = _min > _eff;
+    var on = _locked ? ' is-locked' : ((s.id === cur) ? ' is-selected' : '');
+    var badge = (!_locked && s.id === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
+    if (_locked) badge = ' <span class="style-card-current" style="background:#6b7280;">' + (TLABEL[_min] || 'Upgrade') + ' only</span>';
     var eg = s.example ? ('<div class="style-card-eg">' + escapeHtml(s.example) + '</div>') : '';
     return '<div class="style-card' + on + '" onclick="selectStyleCard(\'' + STYLE_PICKER_KIND + '\',\'' + s.id + '\')">' +
       '<div class="style-card-name">' + escapeHtml(s.name) + badge + '</div>' +
@@ -5327,6 +5345,7 @@ function setCampaignElements() {
   var cs = document.getElementById('novel-cover-sub');
   if (ct) ct.textContent = state.currentCampaign.name;
   if (cs) cs.textContent = state.currentCampaign.description || '';
+  if (state.currentCampaign) loadTierInfo(state.currentCampaign.id);
 }
 
 function selectCampaign(id) {

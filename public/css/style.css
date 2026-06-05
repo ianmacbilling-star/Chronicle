@@ -1640,6 +1640,8 @@ body.role-player #stab-export { display: block !important; }
 .style-card{background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.18);border-radius:10px;padding:12px 13px;cursor:pointer;transition:border-color .12s, background .12s;}
 .style-card:hover{border-color:rgba(201,168,76,0.5);background:rgba(30,18,6,0.7);}
 .style-card.is-selected{border-color:var(--gold);background:rgba(201,168,76,0.12);}
+.style-card.is-locked{opacity:.5;cursor:not-allowed;pointer-events:none;}
+.style-card.is-locked .style-card-current{color:#fff;background:#6b7280;}
 .style-card-name{font-family:var(--font-display);font-size:14px;color:var(--gold-light);font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .style-card-current{font-size:10px;color:var(--gold);background:rgba(201,168,76,0.18);border-radius:4px;padding:1px 6px;font-weight:600;}
 .style-card-desc{font-size:12px;color:rgba(230,210,160,0.82);line-height:1.45;margin-bottom:7px;}

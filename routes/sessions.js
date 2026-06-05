@@ -3,7 +3,7 @@ const router = express.Router({ mergeParams: true });
 const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
-const { checkSessionLimit } = require('../middleware/tiers');
+const { checkSessionLimit, getEffectiveTier, tierRank, artStyleAllowed } = require('../middleware/tiers');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens } = require('./tokens');
 
@@ -189,6 +189,14 @@ router.put('/:id/art-style', requireAuth, verifyCampaignMember, async function(r
   const sess = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id=?').get(req.params.id);
   if (!sess || String(sess.campaign_id) !== String(req.params.campaignId)) return res.status(404).json({ error: 'Session not found' });
   const artStyle = (req.body && typeof req.body.art_style === 'string') ? req.body.art_style : '';
+  // Tier gate: the chosen art style must be unlocked at the caller's effective
+  // tier (max of their own tier and the SM's). Empty value clears it.
+  if (artStyle) {
+    const effRank = tierRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
+    if (!artStyleAllowed(effRank, artStyle)) {
+      return res.status(403).json({ error: "That art style isn't available on your current plan. Pick another, or upgrade for more styles.", code: 'STYLE_LOCKED' });
+    }
+  }
   const now = new Date().toISOString();
   if (req.campaignRole === 'dm') {
     await db.prepare('UPDATE sessions SET art_style=?, edited_at=?, edited_by=? WHERE id=?')

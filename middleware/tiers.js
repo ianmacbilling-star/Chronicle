@@ -239,4 +239,48 @@ async function getEffectiveTierFeatures(userId, campaignId) {
   return getTier(await getEffectiveTier(userId, campaignId));
 }
 
-module.exports = { TIERS, getTier, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures };
+// ============================================================
+// STYLE TIER GATING. Each art/narrative style has a minimum tier RANK.
+// A member may select/generate a style only if their EFFECTIVE tier rank
+// (getEffectiveTier -> tierRank) is >= the style's min rank. Base styles
+// sit at rank 1 (Copper/floor) so even a Copper member -- e.g. someone who
+// inherited a campaign and runs it as SM at the floor tier -- always has a
+// working art and narrative style. Ranks: 1 Copper, 2 Silver, 3 Gold,
+// 4 Platinum. The 30-day trial grants Platinum-equivalent effective rank
+// (wired in the resolver during the monetization pass), so trial users see
+// everything unlocked. Edited here today; moves to a tier_config table
+// (DB, admin-editable) when the Admin Dashboard lands -- callers read
+// through the helpers below, never these maps directly.
+// ============================================================
+const ART_STYLE_MIN_RANK = {
+  'High fantasy illustration': 1,   // base / floor
+  'Dark gritty comic book': 3,      // Gold
+  'Classic pen and ink': 3,         // Gold
+  'Charcoal drawing': 3,            // Gold
+  'Watercolor painterly': 4,        // Platinum
+  'Anime manga style': 4,           // Platinum
+  'Fantasy oil painting': 4,        // Platinum
+  'Comic book cel-shaded': 4,       // Platinum
+  'Fantasy pastel': 4               // Platinum
+};
+
+const NARRATIVE_STYLE_MIN_RANK = {
+  classic: 1,      // base / floor
+  epic: 3,         // Gold
+  journal: 3,      // Gold
+  cinematic: 3,    // Gold
+  lorekeeper: 4,   // Platinum
+  noir: 4,         // Platinum
+  grim: 4,         // Platinum
+  storybook: 4,    // Platinum
+  anime: 4         // Platinum
+};
+
+// Unknown ids default to the floor (rank 1) so a never-mapped style never
+// hard-locks everyone out; the server also falls back to a base style.
+function artStyleMinRank(id) { return ART_STYLE_MIN_RANK[id] || 1; }
+function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
+function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
+function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
+
+module.exports = { TIERS, getTier, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

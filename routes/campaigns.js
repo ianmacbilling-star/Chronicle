@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
-const { requireAuth } = require('../middleware/auth');
-const { checkCampaignLimit } = require('../middleware/tiers');
+const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
+const { checkCampaignLimit, getEffectiveTier, tierRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile } = require('../storage/storage');
 
 // List campaigns the user is a member of (any role — DM or player). This
@@ -102,6 +102,27 @@ router.delete('/:id', requireAuth, async function(req, res) {
   (async function(){ var seen = {}; for (var i=0;i<urls.length;i++){ var u=urls[i]; if(!u||seen[u])continue; seen[u]=true; try{ await deleteFile(u); }catch(e){ console.error('campaign-delete release:', e.message); } } })();
 
   res.json({ success: true });
+});
+
+// Per-campaign tier resolution for the client: the caller's EFFECTIVE tier
+// (the higher of their own tier and the SM's), plus the style lock tables so
+// the style pickers can render locked styles as visible-but-unselectable.
+// The server is the source of truth and re-checks on every set/generate; this
+// endpoint is only so the UI can show the locks. Fails open (UI-only).
+router.get('/:campaignId/tier-info', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const name = await getEffectiveTier(req.session.userId, req.params.campaignId);
+    const t = getTier(name);
+    res.json({
+      effective_tier: name,
+      effective_rank: tierRank(name),
+      watermark: !!t.watermark,
+      art_locks: ART_STYLE_MIN_RANK,
+      narrative_locks: NARRATIVE_STYLE_MIN_RANK
+    });
+  } catch (e) {
+    res.json({ effective_tier: 'copper', effective_rank: 1, watermark: true, art_locks: {}, narrative_locks: {} });
+  }
 });
 
 module.exports = router;
