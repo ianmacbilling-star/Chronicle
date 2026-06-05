@@ -6,6 +6,7 @@
 const TIERS = {
   copper: {
     name: 'Copper',
+    rank: 1,
     price: 0,
     trial_days: 30,
     max_campaigns: 1,
@@ -23,6 +24,7 @@ const TIERS = {
   },
   silver: {
     name: 'Silver',
+    rank: 2,
     price: 9,
     max_campaigns: 1,
     max_sessions: null,      // unlimited
@@ -39,6 +41,7 @@ const TIERS = {
   },
   gold: {
     name: 'Gold',
+    rank: 3,
     price: 12,
     max_campaigns: 3,
     max_sessions: null,
@@ -55,6 +58,7 @@ const TIERS = {
   },
   platinum: {
     name: 'Platinum',
+    rank: 4,
     price: 15,
     max_campaigns: null,     // unlimited
     max_sessions: null,
@@ -184,4 +188,51 @@ async function attachTier(req, res, next) {
   } catch(e) { next(e); }
 }
 
-module.exports = { TIERS, getTier, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, attachTier };
+// ============================================================
+// EFFECTIVE TIER (per campaign member). Tier permissions resolve in the
+// campaign context, not purely per-account: a member's effective tier is
+// the HIGHER of their own account tier and the campaign SM's tier.
+// Computed live (never stored) so it's always correct when either party
+// changes plan -- if an SM downgrades, players without a higher sub of
+// their own immediately lose the richer features.
+// ============================================================
+function tierRank(tierName) {
+  const t = TIERS[tierName];
+  return t ? (t.rank || 1) : 1;
+}
+
+// The richer of two tier names, by rank.
+function maxTier(a, b) {
+  return tierRank(a) >= tierRank(b) ? a : b;
+}
+
+// Resolve a user's effective tier NAME within a campaign:
+//   max(user's own account tier, the campaign SM's tier).
+// Pass campaignId null/undefined to get the user's own tier. Pair the
+// result with getTier() for the feature set. NOTE: account-level limits
+// (e.g. max_campaigns) must still use the user's OWN tier -- joining a
+// higher-tier SM does not grant account-level allowances.
+async function getEffectiveTier(userId, campaignId) {
+  const { getDb } = require('../database/db');
+  try {
+    const db = await getDb();
+    const me = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
+    const myTier = (me && me.tier) || 'copper';
+    if (!campaignId) return myTier;
+    const sm = await db.prepare(
+      "SELECT u.tier AS tier FROM campaign_members cm JOIN users u ON u.id = cm.user_id " +
+      "WHERE cm.campaign_id = ? AND cm.role = 'dm' LIMIT 1"
+    ).get(campaignId);
+    const smTier = (sm && sm.tier) || myTier;
+    return maxTier(myTier, smTier);
+  } catch (e) {
+    return 'copper';
+  }
+}
+
+// Convenience: the effective tier's feature set (a TIERS entry).
+async function getEffectiveTierFeatures(userId, campaignId) {
+  return getTier(await getEffectiveTier(userId, campaignId));
+}
+
+module.exports = { TIERS, getTier, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures };
