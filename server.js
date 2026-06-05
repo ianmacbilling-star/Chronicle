@@ -97,7 +97,7 @@ const apiLimiter = rateLimit({
   keyGenerator: rlUserKey,
   // endpoints are auth-gated so the IP fallback is rarely hit; skip the
   // library's IPv6-subnet validation rather than pull in its ip key helper.
-  validate: { keyGeneratorIpFallback: false },
+  validate: false,  // disable express-rate-limit config-validation warnings (version-proof; limiter still fully active)
   message: { error: 'Too many requests. Please slow down and try again in a few minutes.' }
 });
 const aiLimiter = rateLimit({
@@ -106,7 +106,7 @@ const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: rlUserKey,
-  validate: { keyGeneratorIpFallback: false },
+  validate: false,  // disable express-rate-limit config-validation warnings (version-proof; limiter still fully active)
   message: { error: "You're generating very quickly. Please wait a moment before generating again." }
 });
 
