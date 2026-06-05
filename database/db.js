@@ -235,6 +235,31 @@ async function initPostgres() {
     )
   `);
 
+  // Async image generation jobs (fal queue + webhook delivery). One row per
+  // generation request; the webhook fills image_url + flips status to done.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS image_jobs (
+      id SERIAL PRIMARY KEY,
+      request_id TEXT,
+      user_id INTEGER,
+      campaign_id INTEGER,
+      moment_id INTEGER,
+      fork_id INTEGER,
+      kind TEXT DEFAULT 'moment',
+      status TEXT DEFAULT 'queued',
+      model TEXT,
+      style TEXT,
+      cost INTEGER DEFAULT 0,
+      prev_image TEXT,
+      image_url TEXT,
+      error TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_image_jobs_request ON image_jobs(request_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_image_jobs_user ON image_jobs(user_id, status)');
+
   // ALTER TABLE migrations for existing databases
   const alterations = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",

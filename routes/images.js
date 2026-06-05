@@ -6,6 +6,14 @@ const { getDb, getDmForkId } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
+const crypto = require('crypto');
+
+// Async image generation (fal queue + webhook). PUBLIC_BASE_URL is the app's
+// public origin for THIS environment (set in Railway), e.g. https://campaignia.com
+// or https://chronicle-staging.up.railway.app. fal posts results back there.
+let PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';
+while (PUBLIC_BASE_URL.length && PUBLIC_BASE_URL.charAt(PUBLIC_BASE_URL.length - 1) === '/') PUBLIC_BASE_URL = PUBLIC_BASE_URL.slice(0, -1);
+function falWebhookUrl() { return PUBLIC_BASE_URL ? (PUBLIC_BASE_URL + '/api/images/webhook/fal') : ''; }
 
 // ============================================================
 // PROVIDER ABSTRACTION LAYER
@@ -40,8 +48,7 @@ async function getSelectedModel(db) {
 // later this becomes a per-campaign "Render quality" dial (Campaign Settings).
 const NANO_THINKING_LEVEL = (['minimal', 'high'].indexOf(process.env.NANO_THINKING_LEVEL) !== -1) ? process.env.NANO_THINKING_LEVEL : null;
 
-async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
-  fal.config({ credentials: falKey });
+function buildPanelInput(prompt, style, charBlock, seed, modelKey) {
 
   // charBlock is { text, refs } (refs may include assets) from the
   // route. Tolerate a plain string or null for safety.
@@ -192,13 +199,29 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
     if (NANO_THINKING_LEVEL) input.thinking_level = NANO_THINKING_LEVEL;
   }
 
-  const result = await fal.subscribe(model, { input: input });
+  return { model: model, input: input };
+}
 
+// Synchronous generation (still used by generate-all / retouch until they
+// move to the async queue flow in a later phase).
+async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
+  fal.config({ credentials: falKey });
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey);
+  const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
   }
-
   return await persistToR2(result.data.images[0].url);
+}
+
+// Async generation: submit to fal's queue with our webhook and return the fal
+// request id immediately. The webhook finishes the job when fal is done, so a
+// slow or queued fal can never time out the user's HTTP request.
+async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl) {
+  fal.config({ credentials: falKey });
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey);
+  const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
+  return { request_id: submitted.request_id, model: built.model };
 }
 
 // retouchImage: in-context edit. Feed the CURRENT panel image back in as the
@@ -646,26 +669,25 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
     }
 
-    const imageUrl = await generateImage(prompt, style, fal_key, panelBlock, randomSeed, modelKey);
-    const now = new Date().toISOString();
+    // Async: submit to fal's queue with our webhook, record the job, and return
+    // immediately. The webhook attaches the image + spends tokens on success
+    // when fal finishes — so a slow or queued fal can never time out this
+    // request (it used to block on fal.subscribe and 502 at the gateway).
+    const webhookUrl = falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
-    await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(imageUrl, style || null, now, req.session.userId, moment_id);
-    if (prevImg && prevImg !== imageUrl) await releaseImage(db, prevImg);
-    await logImageGeneration(db, req.session.userId, 'moment', moment_id, moment.fork_id);
-    // Spend AFTER success — failed generations never reach here.
-    await spendTokens(req.session.userId, cost, {
-      related_campaign_id: campId,
-      source: 'panel_regen',
-      event_type: 'generation_spend'
-    });
-    // DM-bonus hook: stamp the player's most-recent campaign (read at
-    // Stripe purchase time to credit the right DM).
+    const sub = await submitPanelGen(prompt, style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl);
+    const nowTs = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, campId, moment_id, moment.fork_id, 'moment', 'queued', sub.model, style || null, cost, prevImg || null, nowTs, nowTs);
+    // DM-bonus hook: stamp the player's most-recent campaign (read at Stripe
+    // purchase time to credit the right DM).
     if (myRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campId, req.session.userId); } catch (e) {}
     }
-    const balance = await getBalance(req.session.userId);
-    res.json({ success: true, image_url: imageUrl, moment_id: moment_id, balance: balance });
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Image generation error:', e.message);
     res.json({ error: e.message });
@@ -879,6 +901,128 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   res.json({ success: true, generated: generated, count: successCount, total: moments.length, skipped_locked: lockedCount, balance: balance });
 });
 
+// ============================================================
+// ASYNC IMAGE DELIVERY — fal queue webhook + job polling
+// fal POSTs here when a queued generation finishes; we persist the image,
+// attach it to the moment, and spend tokens on success. Decoupled from the
+// user's request so a slow/queued fal never times out at the gateway.
+// ============================================================
+const FAL_JWKS_URL = 'https://rest.alpha.fal.ai/.well-known/jwks.json';
+let _falJwks = null, _falJwksAt = 0;
+async function getFalJwks() {
+  const now = Date.now();
+  if (_falJwks && (now - _falJwksAt) < 24 * 60 * 60 * 1000) return _falJwks;
+  const r = await fetch(FAL_JWKS_URL);
+  const data = await r.json();
+  _falJwks = (data && data.keys) || [];
+  _falJwksAt = now;
+  return _falJwks;
+}
+// Verify a fal webhook: ED25519 over a newline-joined request_id, user_id, timestamp, sha256hex(body).
+async function verifyFalWebhook(req) {
+  try {
+    const reqId = req.get('x-fal-webhook-request-id');
+    const userId = req.get('x-fal-webhook-user-id');
+    const ts = req.get('x-fal-webhook-timestamp');
+    const sigHex = req.get('x-fal-webhook-signature');
+    if (!reqId || !userId || !ts || !sigHex) return false;
+    const tsInt = parseInt(ts, 10);
+    if (!tsInt || Math.abs(Math.floor(Date.now() / 1000) - tsInt) > 300) return false;
+    const raw = (req.rawBody && req.rawBody.length) ? req.rawBody : Buffer.from(JSON.stringify(req.body || {}), 'utf8');
+    const bodyHash = crypto.createHash('sha256').update(raw).digest('hex');
+    const message = Buffer.from([reqId, userId, ts, bodyHash].join(String.fromCharCode(10)), 'utf8');
+    const sig = Buffer.from(sigHex, 'hex');
+    const keys = await getFalJwks();
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (!k || !k.x) continue;
+      try {
+        const pub = crypto.createPublicKey({ key: { kty: k.kty || 'OKP', crv: k.crv || 'Ed25519', x: k.x }, format: 'jwk' });
+        if (crypto.verify(null, message, pub, sig)) return true;
+      } catch (e) { /* try the next key */ }
+    }
+    return false;
+  } catch (e) { return false; }
+}
+
+const webhookRouter = express.Router();
+
+// fal calls this when a queued generation finishes. Public (no session) —
+// authenticity comes from the signature. Idempotent + always acks with 200.
+webhookRouter.post('/webhook/fal', async function(req, res) {
+  try {
+    const ENFORCE = String(process.env.FAL_WEBHOOK_ENFORCE || '').toLowerCase() === 'true';
+    const verified = await verifyFalWebhook(req);
+    if (!verified) {
+      console.warn('[fal webhook] signature NOT verified' + (ENFORCE ? ' — rejecting' : ' — processing anyway (FAL_WEBHOOK_ENFORCE is off)'));
+      if (ENFORCE) return res.status(401).json({ error: 'invalid signature' });
+    } else {
+      console.log('[fal webhook] signature verified');
+    }
+    const body = req.body || {};
+    const reqId = body.request_id || body.gateway_request_id || req.get('x-fal-webhook-request-id');
+    if (!reqId) return res.status(200).json({ ok: true });
+    const db = await getDb();
+    const job = await db.prepare('SELECT * FROM image_jobs WHERE request_id = ? OR request_id = ?')
+      .get(body.request_id || reqId, body.gateway_request_id || reqId);
+    if (!job) { console.warn('[fal webhook] no job for request_id ' + reqId); return res.status(200).json({ ok: true }); }
+    if (job.status === 'done' || job.status === 'failed') return res.status(200).json({ ok: true });
+    const status = String(body.status || '').toUpperCase();
+    if (status && status !== 'OK' && status !== 'COMPLETED') {
+      const errMsg = (body.error && (body.error.message || JSON.stringify(body.error))) || 'generation failed';
+      await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
+        .run('failed', String(errMsg).slice(0, 500), new Date().toISOString(), job.id);
+      return res.status(200).json({ ok: true });
+    }
+    const payload = body.payload || body;
+    const images = payload && payload.images;
+    const falUrl = images && images[0] && images[0].url;
+    if (!falUrl) {
+      await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
+        .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
+      return res.status(200).json({ ok: true });
+    }
+    // Atomic claim: only the first delivery flips queued -> processing.
+    const claim = await db.prepare("UPDATE image_jobs SET status = 'processing', updated_at = ? WHERE id = ? AND status = 'queued'")
+      .run(new Date().toISOString(), job.id);
+    if (!claim || claim.changes === 0) return res.status(200).json({ ok: true });
+    try {
+      const imageUrl = await persistToR2(falUrl);
+      if (job.kind === 'moment' && job.moment_id) {
+        const now = new Date().toISOString();
+        await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+          .run(imageUrl, job.style || null, now, job.user_id, job.moment_id);
+        if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
+        await logImageGeneration(db, job.user_id, 'moment', job.moment_id, job.fork_id);
+      }
+      if (job.cost && job.cost > 0) {
+        await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: 'panel_regen', event_type: 'generation_spend' });
+      }
+      await db.prepare('UPDATE image_jobs SET status = ?, image_url = ?, updated_at = ? WHERE id = ?')
+        .run('done', imageUrl, new Date().toISOString(), job.id);
+    } catch (e) {
+      console.error('[fal webhook] processing error:', e.message);
+      await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
+        .run('failed', String(e.message).slice(0, 500), new Date().toISOString(), job.id);
+    }
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error('[fal webhook] handler error:', e.message);
+    return res.status(200).json({ ok: true });
+  }
+});
+
+// The browser polls this for its own job until status is done/failed.
+webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
+  try {
+    const db = await getDb();
+    const job = await db.prepare('SELECT id, status, image_url, error, moment_id FROM image_jobs WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.session.userId);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+    res.json({ status: job.status, image_url: job.image_url || null, error: job.error || null, moment_id: job.moment_id });
+  } catch (e) { res.json({ error: e.message }); }
+});
+
 module.exports = router;
 module.exports.generateReferenceImage = generateReferenceImage;
 module.exports.editReferenceImage = editReferenceImage;
@@ -891,3 +1035,4 @@ module.exports.buildAssetBlock = buildAssetBlock;
 module.exports.combineRefs = combineRefs;
 module.exports.attachPriorReferences = attachPriorReferences;
 module.exports.retouchImage = retouchImage;
+module.exports.webhookRouter = webhookRouter;

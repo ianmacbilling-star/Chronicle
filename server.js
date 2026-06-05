@@ -11,7 +11,7 @@ const app = express();
 // Railway terminates SSL at a proxy — trust it so secure cookies work
 app.set('trust proxy', 1);
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '10mb', verify: function(req, res, buf) { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ------------------------------------------------------------
@@ -132,7 +132,11 @@ app.use('/api/campaigns/:campaignId/archives', require('./routes/archives'));
 app.use('/api/campaigns/:campaignId/sessions', require('./routes/sessions'));
 app.use('/api/campaigns/:campaignId/sessions/:sessionId/moments', require('./routes/moments'));
 app.use('/api/extract', aiLimiter, require('./routes/extract'));
-app.use('/api/images', aiLimiter, require('./routes/images'));
+const imagesRoutes = require('./routes/images');
+// Webhook + job polling bypass the AI rate limiter (fal calls the webhook, and
+// the browser polls job status — neither should be throttled like a generate).
+app.use('/api/images', imagesRoutes.webhookRouter);
+app.use('/api/images', aiLimiter, imagesRoutes);
 app.use('/api/narrative', aiLimiter, require('./routes/narrative'));
 app.use('/api/pdf', require('./routes/pdf'));
 // Phase 3 — invite endpoints. Mounted at /api so the router can serve
