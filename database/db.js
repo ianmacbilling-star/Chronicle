@@ -245,6 +245,7 @@ async function initPostgres() {
       campaign_id INTEGER,
       moment_id INTEGER,
       fork_id INTEGER,
+      character_id INTEGER,
       kind TEXT DEFAULT 'moment',
       status TEXT DEFAULT 'queued',
       model TEXT,
@@ -262,6 +263,7 @@ async function initPostgres() {
 
   // ALTER TABLE migrations for existing databases
   const alterations = [
+    'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',

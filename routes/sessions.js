@@ -370,21 +370,20 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
     }
 
-    const newUrl = await imageHelpers.editReferenceImage(falKey, baseImage, detail, ch.name, modelKey);
-
-    await imageHelpers.logImageGeneration(db, req.session.userId, 'session_reference', characterId, fork);
-    // Spend AFTER success — failed generation never reaches here.
-    await spendTokens(req.session.userId, cost, {
-      related_campaign_id: req.params.campaignId,
-      source: 'amendment_reference',
-      event_type: 'generation_spend'
-    });
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const sub = await imageHelpers.submitEditReference(falKey, baseImage, detail, ch.name, modelKey, webhookUrl);
+    const nowTs = new Date().toISOString();
+    // Draft job: the webhook persists + spends + logs, but does NOT write
+    // session_characters \u2014 the image stays a draft until the user Approves.
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, character_id, fork_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), parseInt(characterId, 10), fork, 'session_ref', 'queued', sub.model, cost, baseImage || null, nowTs, nowTs);
     if (req.campaignRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(req.params.campaignId, req.session.userId); } catch (e) {}
     }
-
-    // Return the draft URL — NOT saved as final until Approve.
-    res.json({ success: true, image_url: newUrl });
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('regenerate-reference error:', e.message);
     res.json({ error: 'Could not regenerate: ' + e.message });

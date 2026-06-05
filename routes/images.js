@@ -489,61 +489,42 @@ async function logImageGeneration(db, userId, source, refId, forkId) {
 // Built from the canonical/amended text. If the character has an uploaded
 // portrait, the editing model conditions on it; otherwise it's pure
 // text-to-image. Returns the image URL. Caller stores it + logs it.
-async function generateReferenceImage(falKey, descriptionText, portraitUrl, modelKey) {
-  fal.config({ credentials: falKey });
-
-  // Comic-style reference — a plain, consistent reference image, not a scene.
-  // (Reverted from the short-lived "style-neutral model sheet" experiment: the
-  // neutral refs looked worse and barely helped style transfer, so we keep the
-  // good-looking comic reference and address per-panel style separately.)
+function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
   const refPrompt =
     'Full-body character reference portrait. Neutral standing pose, ' +
     'facing forward, plain neutral background, even soft lighting, ' +
     'comic book art style.\n\n' +
     'CHARACTER: ' + descriptionText;
-
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   let model = IMAGE_MODELS[key];
   let input;
-
   if (key === 'nano2' && portraitUrl && /^https?:\/\//.test(portraitUrl)) {
-    // Editing model + a real portrait to anchor identity.
     model = 'fal-ai/nano-banana-2/edit';
-    input = {
-      prompt: refPrompt,
-      image_urls: [portraitUrl],
-      num_images: 1,
-      aspect_ratio: '3:4',
-      output_format: 'png',
-      safety_tolerance: '5',
-      resolution: '1K'
-    };
+    input = { prompt: refPrompt, image_urls: [portraitUrl], num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' };
   } else if (key === 'nano2') {
-    // No portrait — Nano Banana 2 text-to-image.
-    input = {
-      prompt: refPrompt,
-      num_images: 1,
-      aspect_ratio: '3:4',
-      output_format: 'png',
-      safety_tolerance: '5',
-      resolution: '1K'
-    };
+    input = { prompt: refPrompt, num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' };
   } else {
-    // schnell text-to-image.
-    input = {
-      prompt: refPrompt,
-      image_size: 'portrait_4_3',
-      num_inference_steps: 4,
-      num_images: 1,
-      enable_safety_checker: true
-    };
+    input = { prompt: refPrompt, image_size: 'portrait_4_3', num_inference_steps: 4, num_images: 1, enable_safety_checker: true };
   }
+  return { model: model, input: input };
+}
 
-  const result = await fal.subscribe(model, { input: input });
+async function generateReferenceImage(falKey, descriptionText, portraitUrl, modelKey) {
+  fal.config({ credentials: falKey });
+  const built = buildReferenceInput(descriptionText, portraitUrl, modelKey);
+  const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No reference image returned from fal.ai');
   }
   return await persistToR2(result.data.images[0].url);
+}
+
+// Async character reference: submit to fal's queue with our webhook.
+async function submitReference(falKey, descriptionText, portraitUrl, modelKey, webhookUrl) {
+  fal.config({ credentials: falKey });
+  const built = buildReferenceInput(descriptionText, portraitUrl, modelKey);
+  const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
+  return { request_id: submitted.request_id, model: built.model };
 }
 
 // Edit an EXISTING reference image to apply an amendment (Stage 3 Piece 5).
@@ -553,52 +534,42 @@ async function generateReferenceImage(falKey, descriptionText, portraitUrl, mode
 //   baseImageUrl = the image to edit FROM (session ref preferred)
 //   changeText   = the amendment, e.g. "skin and hair turned deathly white"
 //   charName     = the character's name, for the instruction
-async function editReferenceImage(falKey, baseImageUrl, changeText, charName, modelKey) {
-  fal.config({ credentials: falKey });
-
+function buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey) {
   const name = charName || 'the character';
-  // Instruction shape proven in the Nano Banana 2 prototype's cut-horn test,
-  // tightened: the change is framed strictly as an appearance edit, and the
-  // identity-preservation clause is emphatic so stray words can't redraw
-  // the character as something else.
   const instruction =
     'This reference image shows ' + name + '. Keep ' + name + ' as the SAME ' +
-    'character — identical face, body type, species, hair, horns, distinctive ' +
+    'character \u2014 identical face, body type, species, hair, horns, distinctive ' +
     'features, outfit, colors and pose as the reference image. ' +
     'Apply ONLY this one appearance change: ' + changeText + '. ' +
     'Do not add or draw any other creatures, characters, or objects. ' +
     'Comic book art style.';
-
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
-
-  // Editing genuinely needs the /edit endpoint + a real base image.
   if (key === 'nano2' && baseImageUrl && /^https?:\/\//.test(baseImageUrl)) {
-    const input = {
-      prompt: instruction,
-      image_urls: [baseImageUrl],
-      num_images: 1,
-      aspect_ratio: '3:4',
-      output_format: 'png',
-      safety_tolerance: '5',
-      resolution: '1K'
-    };
-    const result = await fal.subscribe('fal-ai/nano-banana-2/edit', { input: input });
-    if (!result.data || !result.data.images || !result.data.images[0]) {
-      throw new Error('No edited reference image returned from fal.ai');
-    }
-    // A flagged image comes back blanked — report it instead of saving black.
-    if (result.data.has_nsfw_concepts && result.data.has_nsfw_concepts[0] === true) {
-      throw new Error('image was flagged by the safety filter (returned blank)');
-    }
-    return await persistToR2(result.data.images[0].url);
+    return { model: 'fal-ai/nano-banana-2/edit', input: { prompt: instruction, image_urls: [baseImageUrl], num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' } };
   }
+  const fallbackText = changeText ? (name + ' \u2014 ' + changeText) : name;
+  return buildReferenceInput(fallbackText, baseImageUrl, key);
+}
 
-  // Fallback: no editing model or no base image — build from text instead.
-  // (generateReferenceImage handles schnell / no-portrait cases.)
-  const fallbackText = changeText
-    ? (name + ' — ' + changeText)
-    : name;
-  return await generateReferenceImage(falKey, fallbackText, baseImageUrl, key);
+async function editReferenceImage(falKey, baseImageUrl, changeText, charName, modelKey) {
+  fal.config({ credentials: falKey });
+  const built = buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey);
+  const result = await fal.subscribe(built.model, { input: built.input });
+  if (!result.data || !result.data.images || !result.data.images[0]) {
+    throw new Error('No edited reference image returned from fal.ai');
+  }
+  if (result.data.has_nsfw_concepts && result.data.has_nsfw_concepts[0] === true) {
+    throw new Error('image was flagged by the safety filter (returned blank)');
+  }
+  return await persistToR2(result.data.images[0].url);
+}
+
+// Async amended session reference: submit to fal's queue with our webhook.
+async function submitEditReference(falKey, baseImageUrl, changeText, charName, modelKey, webhookUrl) {
+  fal.config({ credentials: falKey });
+  const built = buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey);
+  const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
+  return { request_id: submitted.request_id, model: built.model };
 }
 
 // ============================================================
@@ -983,6 +954,11 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
       return res.status(200).json({ ok: true });
     }
+    if (payload.has_nsfw_concepts && payload.has_nsfw_concepts[0] === true) {
+      await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
+        .run('failed', 'image was flagged by the safety filter (returned blank)', new Date().toISOString(), job.id);
+      return res.status(200).json({ ok: true });
+    }
     // Atomic claim: only the first delivery flips queued -> processing.
     const claim = await db.prepare("UPDATE image_jobs SET status = 'processing', updated_at = ? WHERE id = ? AND status = 'queued'")
       .run(new Date().toISOString(), job.id);
@@ -1001,8 +977,20 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
         await logImageGeneration(db, job.user_id, job.kind === 'retouch' ? 'retouch' : 'moment', job.moment_id, job.fork_id);
       }
+        if (job.kind === 'char_ref' && job.character_id) {
+          await db.prepare('UPDATE characters SET canonical_reference_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+            .run(imageUrl, new Date().toISOString(), job.user_id, job.character_id);
+          if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
+          await logImageGeneration(db, job.user_id, 'character_reference', job.character_id);
+        }
+        if (job.kind === 'session_ref' && job.character_id) {
+          await logImageGeneration(db, job.user_id, 'session_reference', job.character_id, job.fork_id);
+        }
       if (job.cost && job.cost > 0) {
-        const spendSource = job.kind === 'retouch' ? 'panel_retouch' : (job.kind === 'batch' ? 'panel_batch' : 'panel_regen');
+        const spendSource = (job.kind === 'char_ref') ? 'character_reference'
+          : (job.kind === 'session_ref') ? 'amendment_reference'
+          : (job.kind === 'retouch') ? 'panel_retouch'
+          : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: spendSource, event_type: 'generation_spend' });
       }
       await db.prepare('UPDATE image_jobs SET status = ?, image_url = ?, updated_at = ? WHERE id = ?')
@@ -1055,3 +1043,7 @@ module.exports.combineRefs = combineRefs;
 module.exports.attachPriorReferences = attachPriorReferences;
 module.exports.retouchImage = retouchImage;
 module.exports.webhookRouter = webhookRouter;
+module.exports.falWebhookUrl = falWebhookUrl;
+module.exports.submitReference = submitReference;
+module.exports.submitEditReference = submitEditReference;
+module.exports.submitRetouch = submitRetouch;

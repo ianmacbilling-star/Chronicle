@@ -1266,30 +1266,37 @@ function regenerateReference(charId) {
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (data && data.job_id) {
+        // Async draft: poll the session_ref job. The webhook persists the image
+        // to R2 but leaves it a DRAFT (session_characters is written on Approve).
+        pollRefJob(data.job_id, function(url) {
+          clearInterval(ticker);
+          if (btn) { btn.disabled = false; }
+          var wrap = document.getElementById(wrapId);
+          if (wrap) {
+            wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" ' +
+              'id="sc-review-img-' + charId + '" alt="reference" />';
+          }
+          state.draftReference = state.draftReference || {};
+          state.draftReference[charId] = url;
+          if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        }, function(err) {
+          clearInterval(ticker);
+          if (btn) { btn.disabled = false; }
+          hideBusyOverlay(wrapId);
+          if (msg) msg.textContent = 'Could not regenerate: ' + err;
+        });
+        return;
+      }
+      // No job id => a synchronous error (e.g. insufficient tokens / refusal).
       clearInterval(ticker);
       if (btn) { btn.disabled = false; }
-      if (data && data.success && data.image_url) {
-        // Swap in the new image. We rebuild the wrap's contents so the
-        // overlay is cleanly removed along with the old image.
-        var wrap = document.getElementById(wrapId);
-        if (wrap) {
-          wrap.innerHTML = '<img src="' + data.image_url + '" class="sc-review-img" ' +
-            'id="sc-review-img-' + charId + '" alt="reference" />';
-        }
-        state.draftReference = state.draftReference || {};
-        state.draftReference[charId] = data.image_url;
-        if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
-        // A token was spent — update the header balance.
-        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-      } else {
-        // Refusal / failure — remove overlay; original image (if any)
-        // is fully visible underneath.
-        hideBusyOverlay(wrapId);
-        if (data && data.error === 'INSUFFICIENT_TOKENS') {
-          if (msg) msg.innerHTML = insufficientTokensHtml(data.message);
-        } else if (msg) {
-          msg.textContent = (data && data.error) || 'Could not regenerate.';
-        }
+      hideBusyOverlay(wrapId);
+      if (data && data.error === 'INSUFFICIENT_TOKENS') {
+        if (msg) msg.innerHTML = insufficientTokensHtml(data.message);
+      } else if (msg) {
+        msg.textContent = (data && data.error) || 'Could not regenerate.';
       }
     })
     .catch(function() {
@@ -1971,6 +1978,47 @@ function pollImageBatch(jobs, meta) {
       .catch(function() { setTimeout(tick, INTERVAL); });
   }
   tick();
+}
+
+// ---- Phase 3: async character reference polling ----
+function pollRefJob(jobId, onDone, onFail) {
+  var started = Date.now();
+  var MAX_MS = 6 * 60 * 1000;
+  var INTERVAL = 4000;
+  function tick() {
+    fetch('/api/images/jobs/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (!j || j.error) {
+          if (Date.now() - started > MAX_MS) { onFail((j && j.error) || 'timed out'); return; }
+          setTimeout(tick, INTERVAL); return;
+        }
+        if (j.status === 'done' && j.image_url) { onDone(j.image_url); return; }
+        if (j.status === 'failed') { onFail(j.error || 'generation failed'); return; }
+        if (Date.now() - started > MAX_MS) { onFail('timed out'); return; }
+        setTimeout(tick, INTERVAL);
+      })
+      .catch(function(e) {
+        if (Date.now() - started > MAX_MS) { onFail(e.message); return; }
+        setTimeout(tick, INTERVAL);
+      });
+  }
+  setTimeout(tick, INTERVAL);
+}
+
+function applyCanonicalRef(charId, url) {
+  var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+  if (ch) { ch.canonical_reference_url = url; ch.archived = false; renderCharModalPrompt(ch); }
+  if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+}
+
+function applySessionRefDraft(charId, url, wrapId, msg) {
+  var wrap = document.getElementById(wrapId);
+  if (wrap) { wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />'; }
+  state.draftReference = state.draftReference || {};
+  state.draftReference[charId] = url;
+  if (msg) msg.textContent = 'New image ready. Regenerate again, or Approve to keep it.';
+  if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 }
 
 function openStylePicker(kind) {
@@ -2755,15 +2803,16 @@ function rebuildCharPromptCore(charId) {
         if (ch) {
           ch.canonical_prompt = data.canonical_prompt;
           ch.canonical_prompt_at = data.canonical_prompt_at;
-          if (data.canonical_reference_url) ch.canonical_reference_url = data.canonical_reference_url;
-          // renderCharModalPrompt rebuilds the whole prompt+image section,
-          // which naturally removes the overlay along with the old DOM.
           renderCharModalPrompt(ch);
         } else {
           hideBusyOverlay(refTargetId);
         }
-        // A token was spent — update the header balance.
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        // The reference image is generated async — poll for it and slot it in.
+        if (data.image_job_id) {
+          showBusyOverlay(refTargetId, 'Generating', 'Rendering the reference image\u2026');
+          pollRefJob(data.image_job_id, function(url){ applyCanonicalRef(charId, url); }, function(){ hideBusyOverlay(refTargetId); });
+        }
       } else {
         // Refusal / failure — remove the overlay so the existing image
         // (if any) is fully visible again, and show the error.
@@ -2798,26 +2847,27 @@ function regenCharRef(charId) {
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
-      var ch = (state.characters || []).find(function(c){ return c.id === charId; });
-      if (data && data.success) {
-        if (ch) {
-          ch.canonical_reference_url = data.canonical_reference_url;
-          ch.archived = false;
-          renderCharModalPrompt(ch);
-        } else {
-          hideBusyOverlay(refTargetId);
-        }
-        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-      } else {
+      if (data && data.error) {
         hideBusyOverlay(refTargetId);
-        var textEl = document.getElementById('char-prompt-text-' + charId);
-        if (data && data.error === 'INSUFFICIENT_TOKENS') {
-          if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
+        var textEl0 = document.getElementById('char-prompt-text-' + charId);
+        if (data.error === 'INSUFFICIENT_TOKENS') {
+          if (textEl0) textEl0.innerHTML = insufficientTokensHtml(data.message);
           else alert(data.message || 'You are out of tokens.');
         } else {
           alert((data && (data.message || data.error)) || 'Could not regenerate the reference image.');
         }
+        return;
       }
+      if (data && data.canonical_reference_url) { applyCanonicalRef(charId, data.canonical_reference_url); return; }
+      if (data && data.job_id) {
+        pollRefJob(data.job_id, function(url){ applyCanonicalRef(charId, url); }, function(err){
+          hideBusyOverlay(refTargetId);
+          alert(err === 'INSUFFICIENT_TOKENS' ? 'You are out of tokens.' : 'Could not regenerate the reference image.');
+        });
+        return;
+      }
+      hideBusyOverlay(refTargetId);
+      alert('Could not regenerate the reference image.');
     })
     .catch(function(e){ hideBusyOverlay(refTargetId); alert('Could not regenerate the reference image: ' + e.message); });
 }
@@ -4739,6 +4789,17 @@ function submitRetouch() {
     })
       .then(function(r){ return r.json(); })
       .then(function(data){
+        if (data && data.job_id) {
+          // Async: poll the char_ref job. The webhook writes
+          // characters.canonical_reference_url, so on done we just show it.
+          pollRefJob(data.job_id, function(url){ applyCanonicalRef(charId, url); }, function(err){
+            hideBusyOverlay(refTargetId);
+            var et = document.getElementById('char-prompt-text-' + charId);
+            if (et) et.textContent = 'Could not retouch: ' + err;
+            else alert('Could not retouch the reference image: ' + err);
+          });
+          return;
+        }
         if (data && data.success) {
           ch.canonical_reference_url = data.canonical_reference_url;
           ch.archived = false;

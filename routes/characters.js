@@ -242,30 +242,27 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     await db.prepare('UPDATE characters SET canonical_prompt = ?, canonical_prompt_at = ?, edited_at = ?, edited_by = ? WHERE id = ?')
       .run(promptText, now, now, req.session.userId, char.id);
 
-    // Also generate a canonical REFERENCE IMAGE from the new prompt.
-    // This becomes the character's thumbnail and the Lever 3 anchor.
-    // Image failure must NOT fail the whole rebuild — the prompt is saved.
-    let referenceUrl = char.canonical_reference_url || null;
+    // Also generate a canonical REFERENCE IMAGE from the new prompt \u2014 but
+    // ASYNC: queue it with our webhook and return the prompt immediately. The
+    // webhook attaches the image + spends on success; the client polls for it.
+    let imageJobId = null;
     try {
-      if (falKey) {
+      const webhookUrl = imageHelpers.falWebhookUrl();
+      if (falKey && webhookUrl) {
         const portrait = char.image_portrait || char.image_fullbody || char.image || null;
-        referenceUrl = await imageHelpers.generateReferenceImage(falKey, promptText, portrait, modelKey);
-        await db.prepare('UPDATE characters SET canonical_reference_url = ? WHERE id = ?')
-          .run(referenceUrl, char.id);
-        if (char.canonical_reference_url && char.canonical_reference_url !== referenceUrl) await releaseImage(db, char.canonical_reference_url);
-        await imageHelpers.logImageGeneration(db, req.session.userId, 'character_reference', char.id);
-        // Spend AFTER success — failed generation never reaches here.
-        await spendTokens(req.session.userId, refCost, {
-          related_campaign_id: req.params.campaignId,
-          source: 'character_reference',
-          event_type: 'generation_spend'
-        });
+        const sub = await imageHelpers.submitReference(falKey, promptText, portrait, modelKey, webhookUrl);
+        const ts = new Date().toISOString();
+        const jobIns = await db.prepare(
+          'INSERT INTO image_jobs (request_id, user_id, campaign_id, character_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), char.id, 'char_ref', 'queued', sub.model, refCost, char.canonical_reference_url || null, ts, ts);
+        imageJobId = jobIns.lastInsertRowid;
       }
     } catch(imgErr) {
-      console.error('Canonical reference image failed (non-fatal):', imgErr.message);
+      console.error('Canonical reference image submit failed (non-fatal):', imgErr.message);
     }
 
-    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, canonical_reference_url: referenceUrl });
+    res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, image_job_id: imageJobId });
   } catch(e) {
     console.error('Rebuild prompt error:', e.message);
     res.json({ error: e.message });
@@ -323,19 +320,15 @@ router.post('/:id/regenerate-reference', requireAuth, verifyCampaignDmOrCharacte
     // Generate from the EXISTING prompt. A failure throws to the catch below,
     // so tokens are never spent on a failed generation.
     const portrait = char.image_portrait || char.image_fullbody || char.image || null;
-    const referenceUrl = await imageHelpers.generateReferenceImage(falKey, char.canonical_prompt, portrait, modelKey);
-    const now = new Date().toISOString();
-    await db.prepare('UPDATE characters SET canonical_reference_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(referenceUrl, now, req.session.userId, char.id);
-    if (char.canonical_reference_url && char.canonical_reference_url !== referenceUrl) await releaseImage(db, char.canonical_reference_url);
-    await imageHelpers.logImageGeneration(db, req.session.userId, 'character_reference', char.id);
-    await spendTokens(req.session.userId, cost, {
-      related_campaign_id: req.params.campaignId,
-      source: 'character_reference',
-      event_type: 'generation_spend'
-    });
-    const balance = await getBalance(req.session.userId);
-    res.json({ success: true, canonical_reference_url: referenceUrl, balance: balance });
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const sub = await imageHelpers.submitReference(falKey, char.canonical_prompt, portrait, modelKey, webhookUrl);
+    const nowTs = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, character_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), char.id, 'char_ref', 'queued', sub.model, cost, char.canonical_reference_url || null, nowTs, nowTs);
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Regenerate reference error:', e.message);
     res.json({ error: e.message });
@@ -367,19 +360,15 @@ router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOw
     // Empty style => no style prefix; retouchImage keeps the existing look and
     // changes only the instruction. Failure throws -> no spend.
     const prevUrl = char.canonical_reference_url;
-    const referenceUrl = await imageHelpers.retouchImage(prevUrl, String(instruction).trim(), '', falKey);
-    const now = new Date().toISOString();
-    await db.prepare('UPDATE characters SET canonical_reference_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(referenceUrl, now, req.session.userId, char.id);
-    if (prevUrl && prevUrl !== referenceUrl) await releaseImage(db, prevUrl);
-    await imageHelpers.logImageGeneration(db, req.session.userId, 'retouch', char.id);
-    await spendTokens(req.session.userId, cost, {
-      related_campaign_id: req.params.campaignId,
-      source: 'character_reference',
-      event_type: 'generation_spend'
-    });
-    const balance = await getBalance(req.session.userId);
-    res.json({ success: true, canonical_reference_url: referenceUrl, balance: balance });
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const sub = await imageHelpers.submitRetouch(prevUrl, String(instruction).trim(), '', falKey, webhookUrl);
+    const nowTs = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, character_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), char.id, 'char_ref', 'queued', sub.model, cost, prevUrl || null, nowTs, nowTs);
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Retouch reference error:', e.message);
     res.json({ error: e.message });
