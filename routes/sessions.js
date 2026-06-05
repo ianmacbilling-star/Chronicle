@@ -390,6 +390,69 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
   }
 });
 
+// POST retouch the reference image for a session character (draft - not
+// saved). Body: { instruction } - a small "keep it, change one thing" edit.
+// Like the canonical retouch it is style-neutral; like regenerate-reference
+// the result stays a DRAFT (session_ref) until the user Approves.
+router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const sessionId = req.params.id;
+    const characterId = req.params.characterId;
+    const instruction = (req.body && req.body.instruction) || '';
+
+    const ch = await db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
+    if (!ch) return res.json({ error: 'Character not found' });
+
+    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole);
+    if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
+    const sc = await db.prepare(
+      'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
+    ).get(fork, characterId);
+
+    const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
+    if (!falKey) return res.json({ error: 'Image generation not configured.' });
+
+    if (!instruction || !instruction.trim()) {
+      return res.json({ error: 'Describe the change you want.' });
+    }
+
+    // Retouch FROM the current reference - session draft first, then canonical,
+    // then an uploaded portrait. There must be something to retouch.
+    const baseImage = (sc && sc.reference_url) || ch.canonical_reference_url ||
+      ch.image_portrait || ch.image_fullbody || ch.image || null;
+    if (!baseImage) return res.json({ error: 'There is no reference image to retouch yet.' });
+
+    const modelKey = await imageHelpers.getSelectedModel(db);
+
+    // Token gate (spend-on-success): refuse upfront if the user can't afford it.
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    }
+
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    // Empty style => no style prefix; submitRetouch keeps the existing look and
+    // changes only the instruction. A failure throws to the catch -> no spend.
+    const sub = await imageHelpers.submitRetouch(baseImage, instruction.trim(), '', falKey, webhookUrl);
+    const nowTs = new Date().toISOString();
+    // Draft job: the webhook persists + spends + logs, but does NOT write
+    // session_characters - the image stays a draft until the user Approves.
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, character_id, fork_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), parseInt(characterId, 10), fork, 'session_ref', 'queued', sub.model, cost, baseImage || null, nowTs, nowTs);
+    if (req.campaignRole === 'player') {
+      try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(req.params.campaignId, req.session.userId); } catch (e) {}
+    }
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
+  } catch(e) {
+    console.error('retouch-reference error:', e.message);
+    res.json({ error: 'Could not retouch: ' + e.message });
+  }
+});
+
 // POST approve a pending change. Body: { detail, image_url }.
 // Locks the approved image + text into THIS session, writes the change
 // forward into all LATER sessions for this character, clears the flag.

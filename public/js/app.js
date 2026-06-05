@@ -1193,6 +1193,21 @@ function openChangeReview(charId) {
           'character — it will be applied from the chosen moment onward.</div>'
         : '');
 
+  // Reference-image controls - the standard on-image pill group (Regenerate /
+  // Retouch / Replace / Archive) when an image exists; a simpler create row
+  // (Regenerate / Replace) when there is no image yet.
+  var imgActions = currentImg
+    ? '<div class="panel-img-actions">' +
+        '<button class="panel-pill" id="sc-regen-' + charId + '" onclick="regenerateReference(' + charId + ')" title="Re-roll the reference image from the current amendment">Regenerate</button>' +
+        '<button class="panel-pill" onclick="openRetouchSessionChar(' + charId + ')" title="Keep this image and change just one thing">Retouch</button>' +
+        '<button class="panel-pill" onclick="openReplacePicker(\'character\', ' + charId + ')" title="Replace with an image from the Archive">Replace</button>' +
+        '<button class="panel-pill' + (isMomentArchived(r) ? ' is-on' : '') + '" id="sc-archive-' + charId + '" onclick="toggleArchiveCharSnapshot(' + charId + ')" title="' + (isMomentArchived(r) ? 'In your Archive \u2014 click to remove' : 'Save this reference image to your Archive') + '">' + (isMomentArchived(r) ? 'Archived' : 'Archive') + '</button>' +
+      '</div>'
+    : '<div class="char-prompt-actions" style="margin-top:8px;">' +
+        '<button class="btn btn-sm" id="sc-regen-' + charId + '" onclick="regenerateReference(' + charId + ')">&#10227; Regenerate image</button>' +
+        '<button class="btn btn-sm" onclick="openReplacePicker(\'character\', ' + charId + ')">&#8646; Replace from Archive</button>' +
+      '</div>';
+
   card.innerHTML =
     '<div class="sc-review">' +
       '<div class="sc-review-title">' + titleText + '</div>' +
@@ -1208,14 +1223,10 @@ function openChangeReview(charId) {
         'placeholder="e.g. left horn broken off to a jagged stump">' +
         detailText + '</textarea>' +
       momentSelector +
-      '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml +
-        (currentImg ? '<button class="moment-archive-btn sc-review-archive' + (isMomentArchived(r) ? ' is-archived' : '') + '" id="sc-archive-' + charId + '" onclick="toggleArchiveCharSnapshot(' + charId + ')" title="' + (isMomentArchived(r) ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + archiveChestIcon(isMomentArchived(r)) + '</button>' : '') +
+      '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + imgActions +
       '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions">' +
-        '<button class="btn btn-sm" id="sc-regen-' + charId + '" ' +
-          'onclick="regenerateReference(' + charId + ')">&#10227; Regenerate image</button>' +
-        '<button class="btn btn-sm" onclick="openReplacePicker(\'character\', ' + charId + ')">&#8646; Replace from Archive</button>' +
         '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
           'onclick="approveChange(' + charId + ')">&#10003; ' +
           (isAccepted ? 'Save changes' : 'Approve change') + '</button>' +
@@ -2675,6 +2686,7 @@ function renderCharModalPrompt(char) {
           '<div class="panel-img-actions">' +
             '<button class="panel-pill" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">Regenerate</button>' +
             '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing">Retouch</button>' +
+            '<button class="panel-pill" onclick="openReplacePicker(\'canonical\', ' + char.id + ')" title="Replace with an image from the Archive">Replace</button>' +
             '<button class="panel-pill' + (_carched ? ' is-on' : '') + '" id="char-archive-' + char.id + '" onclick="toggleArchiveCharCanonical(' + char.id + ')" title="' + (_carched ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + (_carched ? 'Archived' : 'Archive') + '</button>' +
           '</div>' +
         '</div>' +
@@ -2875,6 +2887,21 @@ function regenCharRef(charId) {
 // Open the shared Retouch modal targeting a CHARACTER reference (vs a moment).
 function openRetouchChar(charId) {
   state.retouchCharId = charId;
+  state.retouchMomentId = null;
+  state.retouchSessionCharId = null;
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+// Open the shared Retouch modal targeting a SESSION character's reference (a
+// draft amendment image). Distinct from openRetouchChar (canonical) and
+// openRetouch (moment) via state.retouchSessionCharId.
+function openRetouchSessionChar(charId) {
+  state.retouchSessionCharId = charId;
+  state.retouchCharId = null;
   state.retouchMomentId = null;
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.value = '';
@@ -4757,6 +4784,7 @@ function archiveFilterBarHTML(f, onchange) {
 function openRetouch(momentId) {
   state.retouchMomentId = momentId;
   state.retouchCharId = null;
+  state.retouchSessionCharId = null;
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal');
@@ -4773,6 +4801,55 @@ function submitRetouch() {
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
   if (!instruction) { if (ta) ta.focus(); return; }
+
+  // Session-character reference target (a draft amendment image). Checked
+  // before the canonical character branch below.
+  if (state.retouchSessionCharId) {
+    var scId = state.retouchSessionCharId;
+    closeRetouch();
+    var scWrapId = 'sc-review-imgwrap-' + scId;
+    var scMsg = document.getElementById('sc-review-msg-' + scId);
+    if (scMsg) scMsg.textContent = '';
+    showBusyOverlay(scWrapId, 'Retouching', 'Applying your change\u2026');
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+          state.currentSession.id + '/characters/' + scId + '/retouch-reference', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data && data.job_id) {
+          // Async draft: poll the session_ref job, then show it as a draft.
+          // session_characters is written only on Approve.
+          pollRefJob(data.job_id, function(url){
+            var wrap = document.getElementById(scWrapId);
+            if (wrap) {
+              wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" ' +
+                'id="sc-review-img-' + scId + '" alt="reference" />';
+            }
+            state.draftReference = state.draftReference || {};
+            state.draftReference[scId] = url;
+            if (scMsg) scMsg.textContent = 'Retouched image ready. Retouch again, or Approve to keep it.';
+            if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          }, function(err){
+            hideBusyOverlay(scWrapId);
+            if (scMsg) scMsg.textContent = 'Could not retouch: ' + err;
+          });
+          return;
+        }
+        hideBusyOverlay(scWrapId);
+        if (data && data.error === 'INSUFFICIENT_TOKENS') {
+          if (scMsg) scMsg.innerHTML = insufficientTokensHtml(data.message);
+        } else if (scMsg) {
+          scMsg.textContent = (data && (data.message || data.error)) || 'Could not retouch.';
+        } else {
+          alert((data && (data.message || data.error)) || 'Could not retouch.');
+        }
+      })
+      .catch(function(e){ hideBusyOverlay(scWrapId); if (scMsg) scMsg.textContent = 'Could not retouch: ' + e.message; });
+    return;
+  }
 
   // Character reference target (vs a storyboard moment).
   if (state.retouchCharId) {
@@ -4864,6 +4941,13 @@ function openReplacePicker(mode, id) {
     f.moment = String(id);
     if (state.currentForkId) f.version = String(state.currentForkId);
     if (tEl) tEl.textContent = 'Replace panel image from Archive';
+  } else if (mode === 'canonical') {
+    state.pickerCtx.characterId = id;
+    state.pickerCtx.sessionId = null;
+    state.pickerCtx.forkId = null;
+    f.type = 'character';
+    f.character = String(id);
+    if (tEl) tEl.textContent = 'Replace character image from Archive';
   } else {
     state.pickerCtx.characterId = id;
     state.pickerCtx.sessionId = state.currentSession ? state.currentSession.id : null;
@@ -4920,15 +5004,24 @@ function applyArchiveToTarget(archiveId) {
   var ctx = state.pickerCtx || {};
   var cid = state.currentCampaign && state.currentCampaign.id;
   if (!cid) return;
-  var body = (ctx.mode === 'moment')
-    ? { target_type: 'moment', target_moment_id: ctx.momentId }
-    : { target_type: 'character', target_character_id: ctx.characterId, session_id: ctx.sessionId, fork_id: ctx.forkId };
+  var body;
+  if (ctx.mode === 'moment') {
+    body = { target_type: 'moment', target_moment_id: ctx.momentId };
+  } else if (ctx.mode === 'canonical') {
+    body = { target_type: 'canonical_character', target_character_id: ctx.characterId };
+  } else {
+    body = { target_type: 'character', target_character_id: ctx.characterId, session_id: ctx.sessionId, fork_id: ctx.forkId };
+  }
   fetch('/api/campaigns/' + cid + '/archives/' + archiveId + '/apply', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   }).then(function(r){ return r.json(); }).then(function(data){
     if (data && data.error) { alert(data.message || data.error); return; }
     closeReplacePicker();
     if (ctx.mode === 'moment') { if (typeof refreshStoryboardImages === 'function') refreshStoryboardImages(); }
+    else if (ctx.mode === 'canonical') {
+      var _ch = charById(ctx.characterId);
+      if (_ch && data.image_url) { _ch.canonical_reference_url = data.image_url; _ch.archived = false; renderCharModalPrompt(_ch); }
+    }
     else { if (typeof loadSessionCharacters === 'function') loadSessionCharacters(); }
   }).catch(function(e){ alert('Replace failed: ' + e.message); });
 }
@@ -5076,9 +5169,9 @@ function toggleArchiveCharSnapshot(characterId) {
         r.archived = !isArchived;
         showAlert(isArchived ? 'Removed from your Archive.' : 'Reference image saved to your Archive.');
         if (btn) {
-          btn.className = 'moment-archive-btn sc-review-archive' + (r.archived ? ' is-archived' : '');
-          btn.title = r.archived ? 'In your Archive — click to remove' : 'Save this reference image to your Archive';
-          btn.innerHTML = archiveChestIcon(r.archived);
+          btn.className = 'panel-pill' + (r.archived ? ' is-on' : '');
+          btn.title = r.archived ? 'In your Archive \u2014 click to remove' : 'Save this reference image to your Archive';
+          btn.textContent = r.archived ? 'Archived' : 'Archive';
         }
       } else {
         alert((data && data.error) || 'Could not update the Archive.');

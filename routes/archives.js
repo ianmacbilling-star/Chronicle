@@ -271,6 +271,22 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       return res.json({ success: true, image_url: freshUrl });
     }
 
+    if (targetType === 'canonical_character') {
+      const ch = await db.prepare(
+        'SELECT id, canonical_reference_url, owner_user_id FROM characters WHERE id = ? AND campaign_id = ?'
+      ).get(req.body.target_character_id, req.params.campaignId);
+      if (!ch) return res.json({ error: 'The target character no longer exists.' });
+      const isOwner = String(ch.owner_user_id) === String(req.session.userId);
+      if (req.campaignRole !== 'dm' && !isOwner)
+        return res.status(403).json({ error: 'Only the DM or the character owner can replace its reference image.' });
+      const freshUrl = await restoreCopy(archive.image_url);
+      const prevRef = ch.canonical_reference_url;
+      await db.prepare('UPDATE characters SET canonical_reference_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+        .run(freshUrl, now, req.session.userId, ch.id);
+      if (prevRef && prevRef !== freshUrl) await releaseImage(db, prevRef);
+      return res.json({ success: true, image_url: freshUrl });
+    }
+
     return res.json({ error: 'Unknown replace target.' });
   } catch (e) {
     console.error('archive apply error:', e.message);

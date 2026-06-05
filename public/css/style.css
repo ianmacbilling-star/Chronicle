@@ -1098,6 +1098,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    defaults to opacity:0 and is revealed by the storyboard hover rule, which does
    not apply inside the character modal — so reveal them on the wrapper's hover. */
 .char-ref-imgwrap:hover .panel-pill { opacity: 1; }
+.sc-review-imgwrap:hover .panel-pill { opacity: 1; }
 .archives-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
