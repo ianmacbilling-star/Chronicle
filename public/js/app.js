@@ -1193,18 +1193,14 @@ function openChangeReview(charId) {
           'character — it will be applied from the chosen moment onward.</div>'
         : '');
 
-  // Reference-image controls - the standard on-image pill group (Regenerate /
-  // Retouch / Replace / Archive) when an image exists; a simpler create row
-  // (Regenerate / Replace) when there is no image yet.
+  // Reference-image controls - on-image pills: Replace + Archive only.
+  // (Regenerate/Retouch now live as a button below the Amended-appearance box.)
   var imgActions = currentImg
     ? '<div class="panel-img-actions">' +
-        '<button class="panel-pill" id="sc-regen-' + charId + '" onclick="regenerateReference(' + charId + ')" title="Re-roll the reference image from the current amendment">Regenerate</button>' +
-        '<button class="panel-pill" onclick="openRetouchSessionChar(' + charId + ')" title="Keep this image and change just one thing">Retouch</button>' +
         '<button class="panel-pill" onclick="openReplacePicker(\'character\', ' + charId + ')" title="Replace with an image from the Archive">Replace</button>' +
         '<button class="panel-pill' + (isMomentArchived(r) ? ' is-on' : '') + '" id="sc-archive-' + charId + '" onclick="toggleArchiveCharSnapshot(' + charId + ')" title="' + (isMomentArchived(r) ? 'In your Archive \u2014 click to remove' : 'Save this reference image to your Archive') + '">' + (isMomentArchived(r) ? 'Archived' : 'Archive') + '</button>' +
       '</div>'
     : '<div class="char-prompt-actions" style="margin-top:8px;">' +
-        '<button class="btn btn-sm" id="sc-regen-' + charId + '" onclick="regenerateReference(' + charId + ')">&#10227; Regenerate image</button>' +
         '<button class="btn btn-sm" onclick="openReplacePicker(\'character\', ' + charId + ')">&#8646; Replace from Archive</button>' +
       '</div>';
 
@@ -1222,17 +1218,24 @@ function openChangeReview(charId) {
       '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
         'placeholder="e.g. left horn broken off to a jagged stump">' +
         detailText + '</textarea>' +
-      momentSelector +
+      '<div class="char-prompt-actions" style="margin-bottom:10px;">' +
+        '<button class="btn btn-sm" id="sc-retouch-' + charId + '" ' +
+          'onclick="retouchSessionInline(' + charId + ')" ' +
+          'title="Apply the amended appearance above to the current reference image \u2014 retouches in place, no pop-up">&#9998; Retouch image</button>' +
+      '</div>' +
       '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + imgActions +
       '</div>' +
+      momentSelector +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions">' +
         '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
-          'onclick="approveChange(' + charId + ')">&#10003; ' +
+          'onclick="approveChange(' + charId + ')" ' +
+          'title="Lock in this amended appearance from the chosen Moment Panel onward, and carry it into later sessions">&#10003; ' +
           (isAccepted ? 'Save changes' : 'Approve change') + '</button>' +
         '<button class="btn btn-sm" id="sc-reject-' + charId + '" ' +
-          'onclick="rejectChange(' + charId + ')">&#10005; ' +
-          (isAccepted ? 'Un-approve' : 'Not a real change') + '</button>' +
+          'onclick="rejectChange(' + charId + ')" ' +
+          'title="Discard this amendment and leave the character unchanged for this session">&#10005; ' +
+          (isAccepted ? 'Un-approve' : 'Discard / Ignore') + '</button>' +
         '<button class="btn btn-sm" onclick="loadSessionCharacters()">Cancel</button>' +
       '</div>' +
     '</div>';
@@ -2908,6 +2911,62 @@ function openRetouchSessionChar(charId) {
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.remove('hidden');
   if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+// Inline session-character retouch: reads the Amended-appearance textarea and
+// retouches the current reference in place (draft -> Approve), no modal. The
+// session_ref webhook persists/spends/logs but only writes the snapshot on
+// Approve. Replaces the old Regenerate/Retouch pills on this screen.
+function retouchSessionInline(charId) {
+  var textEl = document.getElementById('sc-review-text-' + charId);
+  var instruction = textEl ? textEl.value.trim() : '';
+  var msg = document.getElementById('sc-review-msg-' + charId);
+  var btn = document.getElementById('sc-retouch-' + charId);
+  if (!instruction) {
+    if (msg) msg.textContent = 'Describe the amended appearance in the box above first.';
+    return;
+  }
+  var wrapId = 'sc-review-imgwrap-' + charId;
+  if (msg) msg.textContent = '';
+  if (btn) btn.disabled = true;
+  showBusyOverlay(wrapId, 'Retouching', 'Applying your change\u2026');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/characters/' + charId + '/retouch-reference', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.job_id) {
+        pollRefJob(data.job_id, function(url){
+          var wrap = document.getElementById(wrapId);
+          if (wrap) {
+            wrap.innerHTML = '<img src="' + url + '" class="sc-review-img" id="sc-review-img-' + charId + '" alt="reference" />';
+          }
+          state.draftReference = state.draftReference || {};
+          state.draftReference[charId] = url;
+          if (btn) btn.disabled = false;
+          if (msg) msg.textContent = 'Retouched image ready. Retouch again, or Approve to keep it.';
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        }, function(err){
+          hideBusyOverlay(wrapId);
+          if (btn) btn.disabled = false;
+          if (msg) msg.textContent = 'Could not retouch: ' + err;
+        });
+        return;
+      }
+      hideBusyOverlay(wrapId);
+      if (btn) btn.disabled = false;
+      if (data && data.error === 'INSUFFICIENT_TOKENS') {
+        if (msg) msg.innerHTML = insufficientTokensHtml(data.message);
+      } else if (msg) {
+        msg.textContent = (data && (data.message || data.error)) || 'Could not retouch.';
+      } else {
+        alert((data && (data.message || data.error)) || 'Could not retouch.');
+      }
+    })
+    .catch(function(e){ hideBusyOverlay(wrapId); if (btn) btn.disabled = false; if (msg) msg.textContent = 'Could not retouch: ' + e.message; });
 }
 
 function startEditCharPrompt(charId) {
