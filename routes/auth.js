@@ -237,6 +237,24 @@ router.post('/suspend', async function(req, res) {
   }
 });
 
+// POST /api/auth/set-tier -- TESTING ONLY: lets the signed-in user switch
+// their OWN tier so we can exercise tier-gated features (style locking,
+// archive caps, effective tier). NOT a real upgrade path -- remove before
+// production (paid tiers will be Stripe-gated). Grep 'set-tier' to find it.
+router.post('/set-tier', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  const tier = (req.body && typeof req.body.tier === 'string') ? req.body.tier.trim().toLowerCase() : '';
+  if (!TIERS[tier]) return res.status(400).json({ error: 'Unknown tier' });
+  try {
+    const db = await getDb();
+    await db.prepare('UPDATE users SET tier = ? WHERE id = ?').run(tier, req.session.userId);
+    res.json({ success: true, tier: tier });
+  } catch (e) {
+    console.error('set-tier error:', e.message);
+    res.status(500).json({ error: 'Could not change tier. Please try again.' });
+  }
+});
+
 router.put('/profile', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const { name, email } = req.body;

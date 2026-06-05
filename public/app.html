@@ -497,6 +497,25 @@
         <div id="account-features" style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;"></div>
       </div>
 
+      <!-- TESTING ONLY: manual tier override (remove before production) -->
+      <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(201,168,76,0.5);">
+        <div class="settings-section-title">Testing — Manual Tier Override</div>
+        <div class="settings-section-desc">Temporary: switch this account's tier to test tier-gated features. Not a real upgrade — will be removed later.</div>
+        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;">
+          <div style="flex:1;">
+            <label class="form-label">Tier</label>
+            <select class="form-input" id="account-tier-override">
+              <option value="copper">Copper</option>
+              <option value="silver">Silver</option>
+              <option value="gold">Gold</option>
+              <option value="platinum">Platinum</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="setTierOverride()">Apply</button>
+        </div>
+        <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
+      </div>
+
       <!-- Usage -->
       <div class="settings-section">
         <div class="settings-section-title">Usage</div>

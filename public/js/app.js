@@ -407,6 +407,26 @@ function loadAccount() {
     .catch(function(){});
 }
 
+// TESTING ONLY: switch the signed-in account's tier so we can exercise
+// tier-gated features. NOT a real upgrade path -- remove before production.
+function setTierOverride() {
+  var sel = document.getElementById('account-tier-override');
+  var msg = document.getElementById('account-tier-override-msg');
+  if (!sel) return;
+  if (msg) msg.textContent = 'Applying...';
+  fetch('/api/auth/set-tier', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tier: sel.value })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (d && d.success) { window.location.reload(); }
+    else if (msg) { msg.textContent = 'Could not change tier: ' + ((d && d.error) || 'unknown'); }
+  })
+  .catch(function (e) { if (msg) msg.textContent = 'Could not change tier: ' + e.message; });
+}
+
 var TIER_COLORS = {
   copper:   { bg:'#6b4a2f', fg:'#f0d8b8' },
   silver:   { bg:'#8a8d93', fg:'#1a1a1a' },
@@ -416,6 +436,9 @@ var TIER_COLORS = {
 
 function renderAccountTier(me) {
   var tierKey = (me.tier || 'copper');
+  // TESTING tier override: reflect the current tier in the dropdown.
+  var _ov = document.getElementById('account-tier-override');
+  if (_ov) _ov.value = tierKey;
   var feat = me.tierFeatures || {};
   var nameEl = document.getElementById('account-tier-name');
   if (nameEl) nameEl.textContent = (feat.name || tierKey) + ' Plan';
