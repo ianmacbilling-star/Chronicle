@@ -142,6 +142,7 @@ app.use('/api/pdf', require('./routes/pdf'));
 // Phase 3 — invite endpoints. Mounted at /api so the router can serve
 // both /api/campaigns/:campaignId/invites and /api/invites/:token.
 app.use('/api', require('./routes/invites'));
+app.use('/api/admin', require('./routes/admin'));
 
 // Phase 3 — invite landing page. Standalone HTML served to logged-out
 // and logged-in users alike; it fetches metadata client-side and adapts
@@ -211,7 +212,8 @@ function handleFatal(kind, err) {
 process.on('uncaughtException', function(err) { handleFatal('uncaughtException', err); });
 process.on('unhandledRejection', function(reason) { handleFatal('unhandledRejection', reason); });
 
-getDb().then(function() {
+getDb().then(async function() {
+  try { await require('./middleware/tiers').loadTierConfig(); } catch (e) { console.error('tier_config load failed (using code defaults):', e.message); }
   app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');

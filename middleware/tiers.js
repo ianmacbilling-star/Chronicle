@@ -12,6 +12,7 @@ const TIERS = {
     max_campaigns: 1,
     max_sessions: 5,         // per campaign
     max_archives_per_campaign: 5,
+    max_assets: null,
     moment_algorithm: 'standard',
     max_moments_short: 3,    // < 2000 words
     max_moments_medium: 4,   // 2000-5000
@@ -30,6 +31,7 @@ const TIERS = {
     max_campaigns: 1,
     max_sessions: null,      // unlimited
     max_archives_per_campaign: 10,
+    max_assets: null,
     moment_algorithm: 'standard',
     max_moments_short: 3,
     max_moments_medium: 4,
@@ -47,6 +49,7 @@ const TIERS = {
     price: 12,
     max_campaigns: 3,
     max_archives_per_campaign: 15,
+    max_assets: null,
     max_sessions: null,
     moment_algorithm: 'extended',
     max_moments_short: 5,
@@ -65,6 +68,7 @@ const TIERS = {
     price: 15,
     max_campaigns: null,     // unlimited
     max_archives_per_campaign: 20,
+    max_assets: null,
     max_sessions: null,
     moment_algorithm: 'extended',
     max_moments_short: 5,
@@ -79,8 +83,94 @@ const TIERS = {
   }
 };
 
+// ============================================================
+// DB-BACKED TIER OVERRIDES (admin-editable; code TIERS = fallback).
+// A single app_settings row ('tier_config') holds a JSON object of
+// per-tier overrides for the whitelisted fields below. Loaded once at
+// boot into TIER_OVERRIDES and refreshed on save, so getTier() stays
+// synchronous. Missing/empty/corrupt config => code defaults.
+// ============================================================
+let TIER_OVERRIDES = {};
+
+// Only these fields may be overridden from the admin UI (Phase A). The
+// list grows in later phases (styles, startup tokens, SM bonus, ...).
+const EDITABLE_TIER_FIELDS = [
+  'max_archives_per_campaign',
+  'max_assets',
+  'max_moments_short',
+  'max_moments_medium',
+  'max_moments_long',
+  'max_moments_epic'
+];
+
+// Fields where an empty value means "unlimited" (stored as null). Every
+// other editable field is a required count: an empty value clears the
+// override so the code default applies (never stored as null/NaN).
+const NULLABLE_TIER_FIELDS = { max_assets: true };
+
+// Read the tier_config row into the in-memory cache. Call at boot and
+// after every save. Never throws -- on any error the cache is left as-is
+// (code defaults remain the effective config).
+async function loadTierConfig() {
+  const { getDb } = require('../database/db');
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'tier_config'").get();
+    if (row && row.value) {
+      const parsed = JSON.parse(row.value);
+      if (parsed && typeof parsed === 'object') TIER_OVERRIDES = parsed;
+    }
+  } catch (e) {
+    console.error('loadTierConfig failed (using code defaults):', e.message);
+  }
+  return TIER_OVERRIDES;
+}
+
+// A deep copy of the raw overrides (not merged with defaults).
+function getTierOverrides() {
+  return JSON.parse(JSON.stringify(TIER_OVERRIDES || {}));
+}
+
+// Save overrides for ONE tier. Whitelists + coerces values, merges them
+// into the cache, persists the whole blob, and returns the tier's merged
+// effective config.
+async function saveTierConfig(tierName, values) {
+  if (!TIERS[tierName]) throw new Error('Unknown tier: ' + tierName);
+  const { getDb } = require('../database/db');
+  const clean = Object.assign({}, TIER_OVERRIDES[tierName] || {});
+  EDITABLE_TIER_FIELDS.forEach(function (f) {
+    if (!values || !Object.prototype.hasOwnProperty.call(values, f)) return;
+    const raw = values[f];
+    const empty = (raw === null || raw === '' || raw === undefined);
+    if (empty) {
+      if (NULLABLE_TIER_FIELDS[f]) clean[f] = null; else delete clean[f];
+      return;
+    }
+    const n = parseInt(raw, 10);
+    if (isNaN(n)) {
+      if (NULLABLE_TIER_FIELDS[f]) clean[f] = null; else delete clean[f];
+      return;
+    }
+    clean[f] = n;
+  });
+  TIER_OVERRIDES[tierName] = clean;
+  const db = await getDb();
+  const json = JSON.stringify(TIER_OVERRIDES);
+  // Upsert via existing-check (matches the image_model pattern in this repo,
+  // which avoids the wrapper's RETURNING-id handling on ON CONFLICT).
+  const existing = await db.prepare("SELECT setting_key FROM app_settings WHERE setting_key = 'tier_config'").get();
+  if (existing) {
+    await db.prepare("UPDATE app_settings SET value = ? WHERE setting_key = 'tier_config'").run(json);
+  } else {
+    await db.prepare("INSERT INTO app_settings (setting_key, value) VALUES ('tier_config', ?)").run(json);
+  }
+  return getTier(tierName);
+}
+
 function getTier(tierName) {
-  return TIERS[tierName] || TIERS.copper;
+  const base = TIERS[tierName] || TIERS.copper;
+  const ov = TIER_OVERRIDES[tierName];
+  return ov ? Object.assign({}, base, ov) : base;
 }
 
 function getMomentRange(tier, wordCount) {
@@ -283,4 +373,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

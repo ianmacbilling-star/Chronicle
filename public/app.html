@@ -27,7 +27,7 @@
         <div class="user-menu-header" id="user-menu-email"></div>
         <div class="user-menu-item" onclick="showView('account');closeUserMenu()">&#9733; My Account</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">&#9672; Buy Tokens</div>
-        <div class="user-menu-item" onclick="showView('settings');closeUserMenu()">&#9881; Settings</div>
+        <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">&#9881; Settings</div>
         <div class="user-menu-divider"></div>
         <div class="user-menu-item danger" onclick="logout()">&#8594; Sign out</div>
       </div>
@@ -546,6 +546,14 @@
 
 
 
+      <!-- Settings tabs (admin) -->
+      <div class="settings-tabs">
+        <button class="settings-tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">General</button>
+        <button class="settings-tab" id="settings-tab-tiers" onclick="switchSettingsTab('tiers')">Tiers</button>
+      </div>
+
+      <div class="settings-pane" id="settings-pane-general">
+
       <!-- Image Generation Model -->
       <div class="settings-section">
         <div class="settings-section-title">Image Generation Model</div>
@@ -611,6 +619,16 @@
         </div>
       </div>
 
+
+      </div><!-- /settings-pane-general -->
+
+      <div class="settings-pane" id="settings-pane-tiers" style="display:none;">
+        <div class="settings-section-desc" style="margin-bottom:14px;">
+          Edit per-tier limits. Values are stored in the database and override the code defaults; blank a field to fall back to the default. Changes apply to new checks immediately.
+        </div>
+        <div id="tiers-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
+        <div id="tiers-config-container">Loading tiers...</div>
+      </div>
 
     </div>
 

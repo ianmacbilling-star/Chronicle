@@ -1695,3 +1695,33 @@ body.role-player #stab-export { display: block !important; }
 .archive-cover-toggle input{margin:0;width:13px;height:13px;accent-color:var(--gold);cursor:pointer;}
 .archive-actions{display:flex;align-items:center;gap:8px;margin-top:8px;}
 .archive-actions .archive-del{margin-left:auto;}
+
+/* Admin Settings: tabs + Tiers config */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid rgba(201,168,76,0.2);
+}
+.settings-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-light);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.settings-tab:hover { color: var(--parchment); }
+.settings-tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+.tier-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}

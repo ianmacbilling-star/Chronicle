@@ -151,8 +151,28 @@ async function verifyForkOwnerOrDm(req, res, next) {
   next();
 }
 
+// Admin gate. Source of truth = ADMIN_EMAILS env var (comma-separated
+// list of emails). Express middleware for admin-only routes.
+async function requireAdmin(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  try {
+    const db = await getDb();
+    const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function (e) { return e.trim(); }).filter(Boolean);
+    if (!user || !adminEmails.includes(user.email)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+  } catch (e) {
+    return res.status(500).json({ error: 'Admin check failed' });
+  }
+}
+
 module.exports = {
   requireAuth,
+  requireAdmin,
   getCampaignRole,
   verifyCampaignMember,
   verifyCampaignDM,

@@ -319,6 +319,8 @@ function checkAuth() {
       refreshTokenBalance();
       var adminBox = document.getElementById('account-admin-testing');
       if (adminBox) adminBox.style.display = data.is_admin ? 'block' : 'none';
+      var navSettingsItem = document.getElementById('nav-settings-item');
+      if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')
@@ -571,6 +573,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
+  if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -5516,6 +5519,8 @@ function checkAuth() {
       refreshTokenBalance();
       var adminBox = document.getElementById('account-admin-testing');
       if (adminBox) adminBox.style.display = data.is_admin ? 'block' : 'none';
+      var navSettingsItem = document.getElementById('nav-settings-item');
+      if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')
@@ -5571,6 +5576,7 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
+  if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -8389,4 +8395,103 @@ function renderCampaignLockBanner() {
     'Open a Ready session and choose <strong>Make My Version</strong> to tinker in your own copy.';
   // Insert before the char-grid
   grid.parentNode.insertBefore(banner, grid);
+}
+
+// ============================================================
+// ADMIN SETTINGS — tabs + Tiers config (Phase A)
+// General tab = the existing settings panels. Tiers tab = per-tier limit
+// editors backed by GET/PUT /api/admin/tier-config (admin-only). The field
+// set is driven by the server response so it grows automatically in later
+// phases. Numeric fields only for now (styles + tokens land in B/C).
+// ============================================================
+var TIER_FIELD_LABELS = {
+  max_archives_per_campaign: 'Archived images / campaign',
+  max_assets: 'Max campaign assets (blank = unlimited)',
+  max_moments_short: 'Max moments \u2014 short (<2k words)',
+  max_moments_medium: 'Max moments \u2014 medium (2k\u20135k)',
+  max_moments_long: 'Max moments \u2014 long (5k\u201310k)',
+  max_moments_epic: 'Max moments \u2014 epic (10k+)'
+};
+
+function switchSettingsTab(tab) {
+  ['general', 'tiers'].forEach(function (t) {
+    var pane = document.getElementById('settings-pane-' + t);
+    var btn = document.getElementById('settings-tab-' + t);
+    if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'tiers') loadTiersConfig();
+}
+
+function loadTiersConfig() {
+  var box = document.getElementById('tiers-config-container');
+  var msg = document.getElementById('tiers-config-msg');
+  if (msg) msg.textContent = '';
+  if (box) box.textContent = 'Loading tiers...';
+  fetch('/api/admin/tier-config')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || !data.tiers) {
+        if (box) box.textContent = (data && (data.message || data.error)) || 'Could not load tiers.';
+        return;
+      }
+      renderTiersConfig(data);
+    })
+    .catch(function (e) { if (box) box.textContent = 'Could not load tiers: ' + e.message; });
+}
+
+function renderTiersConfig(data) {
+  var box = document.getElementById('tiers-config-container');
+  if (!box) return;
+  var fields = data.fields || [];
+  var html = '';
+  (data.order || []).forEach(function (tierKey) {
+    var t = data.tiers[tierKey];
+    if (!t) return;
+    html += '<div class="settings-section tier-config-panel" id="tier-panel-' + tierKey + '">';
+    html += '<div class="settings-section-title">' + (t.name || tierKey) + '</div>';
+    html += '<div class="tier-config-grid">';
+    fields.forEach(function (f) {
+      var val = (t[f] === null || t[f] === undefined) ? '' : t[f];
+      var label = TIER_FIELD_LABELS[f] || f;
+      html += '<div class="form-group" style="margin-bottom:0;">' +
+        '<label class="form-label">' + label + '</label>' +
+        '<input class="form-input tier-config-input" type="number" min="0" step="1" ' +
+        'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" />' +
+        '</div>';
+    });
+    html += '</div>';
+    html += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;">' +
+      '<button class="btn btn-primary btn-sm" onclick="saveTierPanel(\'' + tierKey + '\')">Save ' + (t.name || tierKey) + '</button>' +
+      '<span class="settings-section-desc" id="tier-save-msg-' + tierKey + '" style="margin:0;"></span>' +
+      '</div>';
+    html += '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function saveTierPanel(tierKey) {
+  var inputs = document.querySelectorAll('.tier-config-input[data-tier="' + tierKey + '"]');
+  var values = {};
+  inputs.forEach(function (inp) {
+    var f = inp.getAttribute('data-field');
+    var v = inp.value;
+    values[f] = (v === '' ? null : parseInt(v, 10));
+  });
+  var msgEl = document.getElementById('tier-save-msg-' + tierKey);
+  if (msgEl) { msgEl.textContent = 'Saving...'; msgEl.style.color = ''; }
+  fetch('/api/admin/tier-config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tier: tierKey, values: values })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.success) {
+        if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--gold)'; }
+      } else {
+        if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
+      }
+    })
+    .catch(function (e) { if (msgEl) { msgEl.textContent = 'Save failed: ' + e.message; msgEl.style.color = 'var(--error)'; } });
 }
