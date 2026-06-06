@@ -170,6 +170,7 @@ async function initPostgres() {
       description TEXT,
       art_style TEXT,
       is_active BOOLEAN DEFAULT true,
+      allow_player_novel_access BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_by INTEGER NOT NULL,
       edited_at TIMESTAMP,
@@ -272,6 +273,7 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMP',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cover_image_url TEXT',
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS allow_player_novel_access BOOLEAN DEFAULT false',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the
     // from-user records provenance for attribution / tombstone context.
