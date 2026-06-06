@@ -174,12 +174,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <div>
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
-            <div class="style-row" style="margin:0;">
-              <div class="chip sel" id="novel-layout-classic" onclick="selNovelLayout(this,'Classic')">Classic</div>
-              <div class="chip" id="novel-layout-comicbook" onclick="selNovelLayout(this,'ComicBook')">Comic Book</div>
-              <div class="chip" id="novel-layout-action" onclick="selNovelLayout(this,'Action')">Action</div>
-              <div class="chip" id="novel-layout-storybook" onclick="selNovelLayout(this,'Storybook')">Storybook</div>
-            </div>
+            <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')">Layout: Classic</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">&#8659; Export Full Novel PDF</button>
         </div>
@@ -412,12 +407,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <div>
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
-            <div class="style-row" style="margin:0;">
-              <div class="chip sel" id="layout-classic" onclick="selLayout(this,'Classic')">Classic</div>
-              <div class="chip" id="layout-comicbook" onclick="selLayout(this,'ComicBook')">Comic Book</div>
-              <div class="chip" id="layout-action" onclick="selLayout(this,'Action')">Action</div>
-              <div class="chip" id="layout-storybook" onclick="selLayout(this,'Storybook')">Storybook</div>
-            </div>
+            <button class="btn btn-sm" id="layout-style-btn" onclick="openStylePicker('layout')">Layout: Classic</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
         </div>
@@ -550,6 +540,9 @@
       <div class="settings-tabs">
         <button class="settings-tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">General</button>
         <button class="settings-tab" id="settings-tab-tiers" onclick="switchSettingsTab('tiers')">Tiers</button>
+        <button class="settings-tab" id="settings-tab-stats" onclick="switchSettingsTab('stats')">Stats</button>
+        <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
+        <button class="settings-tab" id="settings-tab-financial" onclick="switchSettingsTab('financial')">Financial</button>
       </div>
 
       <div class="settings-pane" id="settings-pane-general">
@@ -628,6 +621,27 @@
         </div>
         <div id="tiers-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
         <div id="tiers-config-container">Loading tiers...</div>
+      </div>
+
+      <div class="settings-pane" id="settings-pane-stats" style="display:none;">
+        <div class="settings-section-desc" style="margin-bottom:14px;">
+          Top-line metrics, queried live each time you open this tab.
+        </div>
+        <div id="stats-container">Loading stats...</div>
+      </div>
+
+      <div class="settings-pane" id="settings-pane-trends" style="display:none;">
+        <div class="settings-section">
+          <div class="settings-section-title">Trends</div>
+          <div class="settings-section-desc">Coming soon.</div>
+        </div>
+      </div>
+
+      <div class="settings-pane" id="settings-pane-financial" style="display:none;">
+        <div class="settings-section">
+          <div class="settings-section-title">Financial</div>
+          <div class="settings-section-desc">Coming soon.</div>
+        </div>
       </div>
 
     </div>
@@ -1067,7 +1081,7 @@
       <div class="modal-title" id="style-picker-title">Choose a style</div>
       <button class="modal-close" onclick="closeStylePicker()">&times;</button>
     </div>
-    <p style="margin:0 0 12px;font-size:12px;color:var(--gold-dim);line-height:1.45;">Pick the voice for this version's narrative. It applies whenever the narrative is generated or regenerated, and you can change it any time.</p>
+    <p id="style-picker-sub" style="margin:0 0 12px;font-size:12px;color:var(--gold-dim);line-height:1.45;">Choose a style.</p>
     <div id="style-picker-grid" class="style-card-grid"></div>
   </div>
 </div>
@@ -1095,6 +1109,25 @@
     <div class="archive-picker-grid" id="replace-picker-grid"></div>
   </div>
 </div>
+<div class="modal-overlay hidden" id="campaign-settings-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Campaign settings</div>
+      <button class="modal-close" onclick="closeCampaignSettings()">&times;</button>
+    </div>
+    <div id="campaign-settings-error" class="alert alert-error hidden"></div>
+    <label class="cs-toggle">
+      <input type="checkbox" id="cs-allow-novel" />
+      <span>Allow players access to graphic novel</span>
+    </label>
+    <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, players can view and export this campaign's graphic novel. Off by default.</div>
+    <div class="modal-footer" style="margin-top:20px;">
+      <button class="btn" onclick="closeCampaignSettings()">Cancel</button>
+      <button class="btn btn-primary" id="cs-save-btn" onclick="saveCampaignSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/app.js"></script>
 </body>
 </html>

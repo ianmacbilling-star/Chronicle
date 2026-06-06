@@ -8,6 +8,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const tiers = require('../middleware/tiers');
+const { getDb } = require('../database/db');
 
 const TIER_ORDER = ['copper', 'silver', 'gold', 'platinum'];
 
@@ -47,6 +48,39 @@ router.put('/tier-config', requireAuth, requireAdmin, async function (req, res) 
   } catch (e) {
     console.error('PUT tier-config error:', e.message);
     res.status(500).json({ error: 'Could not save tier config' });
+  }
+});
+
+// GET /api/admin/stats
+// Top-line counts for the admin "Stats" tab, queried fresh on each load.
+// (Claude story calls are intentionally not included this pass — there is
+// no per-call log yet; that needs its own logging hook to be meaningful.)
+router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const q = function (sql) { return db.prepare(sql).get(); };
+    const results = await Promise.all([
+      q("SELECT COUNT(*) AS c FROM users WHERE status = 'active'"),
+      q("SELECT COUNT(*) AS c FROM users WHERE created_at >= NOW() - INTERVAL '30 days'"),
+      q("SELECT COUNT(*) AS c FROM users WHERE created_at >= NOW() - INTERVAL '90 days'"),
+      q("SELECT COUNT(*) AS c FROM moments WHERE created_at >= NOW() - INTERVAL '30 days'"),
+      q("SELECT COUNT(*) AS c FROM moments WHERE created_at >= NOW() - INTERVAL '90 days'"),
+      q("SELECT COUNT(*) AS c FROM image_generations"),
+      q("SELECT COUNT(*) AS c FROM campaigns WHERE is_active = true")
+    ]);
+    const n = function (r) { return (r && r.c != null) ? Number(r.c) : 0; };
+    res.json({
+      active_users: n(results[0]),
+      new_users_30: n(results[1]),
+      new_users_90: n(results[2]),
+      moments_30: n(results[3]),
+      moments_90: n(results[4]),
+      fal_calls: n(results[5]),
+      active_campaigns: n(results[6])
+    });
+  } catch (e) {
+    console.error('GET stats error:', e.message);
+    res.status(500).json({ error: 'Could not load stats' });
   }
 });
 

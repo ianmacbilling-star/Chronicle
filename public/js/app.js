@@ -670,6 +670,7 @@ function renderCampaigns() {
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
         '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+        (c.my_role === 'dm' ? '<button class="campaign-card-menu-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign settings">&#8943;</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -2054,10 +2055,25 @@ function openStylePicker(kind) {
     if (titleEl) titleEl.textContent = 'Choose an art style';
     cur = state.artStyle ? state.artStyle : 'High fantasy illustration';
     meta = ART_STYLE_META;
+  } else if (STYLE_PICKER_KIND === 'layout') {
+    if (titleEl) titleEl.textContent = 'Choose a layout';
+    cur = state.layoutStyle ? state.layoutStyle : 'Classic';
+    meta = LAYOUT_STYLE_META;
+  } else if (STYLE_PICKER_KIND === 'novel-layout') {
+    if (titleEl) titleEl.textContent = 'Choose a layout';
+    cur = (typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? novelLayoutStyle : 'Classic';
+    meta = LAYOUT_STYLE_META;
   } else { return; }
+  var _subEl = document.getElementById('style-picker-sub');
+  if (_subEl) {
+    _subEl.textContent =
+      (STYLE_PICKER_KIND === 'art') ? 'Pick the art style for this version. It applies to new image generations; change it any time.' :
+      (STYLE_PICKER_KIND === 'narrative') ? 'Pick the narrative voice for this version. It applies whenever the narrative is generated or regenerated; change it any time.' :
+      'Pick the page layout. The preview updates when you choose; change it any time.';
+  }
   grid.innerHTML = meta.map(function(s) {
     var TLABEL = {2:'Silver',3:'Gold',4:'Platinum'};
-    var _locks = (STYLE_PICKER_KIND === 'art') ? (state.tierInfo && state.tierInfo.art_locks) : (state.tierInfo && state.tierInfo.narrative_locks);
+    var _locks = (STYLE_PICKER_KIND === 'art') ? (state.tierInfo && state.tierInfo.art_locks) : (STYLE_PICKER_KIND === 'narrative') ? (state.tierInfo && state.tierInfo.narrative_locks) : null;
     var _eff = (state.tierInfo && state.tierInfo.effective_rank) || 99;
     var _min = (_locks && _locks[s.id]) || 1;
     var _locked = _min > _eff;
@@ -2109,6 +2125,23 @@ function selectStyleCard(kind, id) {
     }
     refreshArtStyleButtons();
     closeStylePicker();
+  } else if (kind === 'layout') {
+    state.layoutStyle = id;
+    if (state.currentSession && state.currentCampaign) {
+      fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layout_style: id })
+      }).catch(function () {});
+    }
+    if (typeof loadPreview === 'function') loadPreview(id);
+    refreshLayoutStyleButtons();
+    closeStylePicker();
+  } else if (kind === 'novel-layout') {
+    novelLayoutStyle = id;
+    if (typeof loadNovelPreview === 'function') loadNovelPreview(id);
+    refreshLayoutStyleButtons();
+    closeStylePicker();
   }
 }
 
@@ -2147,6 +2180,7 @@ function loadLastArtStyle(artStyle, layoutStyle) {
   else if (!state.artStyle) state.artStyle = 'High fantasy illustration';
   if (layoutStyle && !state.layoutStyle) state.layoutStyle = layoutStyle;
   refreshArtStyleButtons();
+  refreshLayoutStyleButtons();
 }
 
 // ============================================================
@@ -3299,9 +3333,7 @@ function layoutChipKey(layout) {
 
 function applyLayoutStyle(layout) {
   state.layoutStyle = layout || 'Classic';
-  document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
-  var el = document.getElementById('layout-' + layoutChipKey(layout));
-  if (el) el.classList.add('sel');
+  refreshLayoutStyleButtons();
 }
 
 function extractMoments() {
@@ -5673,6 +5705,7 @@ function renderCampaigns() {
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
         '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+        (c.my_role === 'dm' ? '<button class="campaign-card-menu-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign settings">&#8943;</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -6199,9 +6232,7 @@ function layoutChipKey(layout) {
 
 function applyLayoutStyle(layout) {
   state.layoutStyle = layout || 'Classic';
-  document.querySelectorAll('#session-tab-export .chip').forEach(function(c){c.classList.remove('sel');});
-  var el = document.getElementById('layout-' + layoutChipKey(layout));
-  if (el) el.classList.add('sel');
+  refreshLayoutStyleButtons();
 }
 
 function extractMoments() {
@@ -8414,13 +8445,14 @@ var TIER_FIELD_LABELS = {
 };
 
 function switchSettingsTab(tab) {
-  ['general', 'tiers'].forEach(function (t) {
+  ['general', 'tiers', 'stats', 'trends', 'financial'].forEach(function (t) {
     var pane = document.getElementById('settings-pane-' + t);
     var btn = document.getElementById('settings-tab-' + t);
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', t === tab);
   });
   if (tab === 'tiers') loadTiersConfig();
+  if (tab === 'stats') loadStats();
 }
 
 function loadTiersConfig() {
@@ -8494,4 +8526,127 @@ function saveTierPanel(tierKey) {
       }
     })
     .catch(function (e) { if (msgEl) { msgEl.textContent = 'Save failed: ' + e.message; msgEl.style.color = 'var(--error)'; } });
+}
+
+// ----- Admin Settings: Stats tab (queried on open) -----
+function loadStats() {
+  var box = document.getElementById('stats-container');
+  if (box) box.textContent = 'Loading stats...';
+  fetch('/api/admin/stats')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || data.error) {
+        if (box) box.textContent = (data && (data.message || data.error)) || 'Could not load stats.';
+        return;
+      }
+      renderStats(data);
+    })
+    .catch(function (e) { if (box) box.textContent = 'Could not load stats: ' + e.message; });
+}
+
+function renderStats(d) {
+  var box = document.getElementById('stats-container');
+  if (!box) return;
+  var cards = [
+    ['Total active users', d.active_users],
+    ['New users (last 30 days)', d.new_users_30],
+    ['New users (last 90 days)', d.new_users_90],
+    ['Moments generated (last 30 days)', d.moments_30],
+    ['Moments generated (last 90 days)', d.moments_90],
+    ['Total Fal calls', d.fal_calls],
+    ['Total active campaigns', d.active_campaigns]
+  ];
+  var html = '<div class="stats-grid">';
+  cards.forEach(function (c) {
+    var val = (c[1] === null || c[1] === undefined) ? '\u2014' : c[1];
+    html += '<div class="stat-card"><div class="stat-value">' + val + '</div>' +
+      '<div class="stat-label">' + c[0] + '</div></div>';
+  });
+  html += '</div>';
+  box.innerHTML = html;
+}
+
+// ----- Layout styles (shared style-picker; mirrors art/narrative) -----
+// Two contexts share this metadata: the session Publish tab (kind 'layout',
+// persisted to the session via layout_style) and the graphic-novel screen
+// (kind 'novel-layout', ad-hoc novelLayoutStyle, not persisted). Layouts are
+// not tier-gated, so the picker renders them all unlocked.
+var LAYOUT_STYLE_META = [
+  { id: 'Classic', name: 'Classic', desc: 'Clean, balanced page layout. The Chronicle default.' },
+  { id: 'ComicBook', name: 'Comic Book', desc: 'Bold paneled grid with gutters, like a printed comic page.' },
+  { id: 'Action', name: 'Action', desc: 'Dynamic, varied panel sizing for high-energy sequences.' },
+  { id: 'Storybook', name: 'Storybook', desc: 'Large illustrations with flowing prose, like an illustrated storybook.' }
+];
+
+function layoutStyleName(v) {
+  var legacy = { cinematic: 'ComicBook', dramatic: 'Action' };
+  var key = legacy[(v || '').toLowerCase()] || v;
+  for (var i = 0; i < LAYOUT_STYLE_META.length; i++) {
+    if (LAYOUT_STYLE_META[i].id === key) return LAYOUT_STYLE_META[i].name;
+  }
+  return key || 'Classic';
+}
+
+function refreshLayoutStyleButtons() {
+  var sb = document.getElementById('layout-style-btn');
+  if (sb) sb.textContent = 'Layout: ' + layoutStyleName(state.layoutStyle || 'Classic');
+  var nb = document.getElementById('novel-layout-btn');
+  var nv = (typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? novelLayoutStyle : 'Classic';
+  if (nb) nb.textContent = 'Layout: ' + layoutStyleName(nv);
+}
+
+// ----- Campaign settings modal (SM/DM only) -----
+// Opened from the ellipsis on a campaign card. Holds per-campaign options;
+// starts with "allow players access to graphic novel" and has room to grow.
+var _csCampaignId = null;
+
+function openCampaignSettings(id, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  _csCampaignId = id;
+  var c = (state.campaigns || []).filter(function (x) { return x.id === id; })[0];
+  var cb = document.getElementById('cs-allow-novel');
+  if (cb) {
+    var v = c && c.allow_player_novel_access;
+    cb.checked = (v === true || v === 1 || v === 't' || v === 'true');
+  }
+  var err = document.getElementById('campaign-settings-error');
+  if (err) err.classList.add('hidden');
+  var modal = document.getElementById('campaign-settings-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeCampaignSettings() {
+  var modal = document.getElementById('campaign-settings-modal');
+  if (modal) modal.classList.add('hidden');
+  _csCampaignId = null;
+}
+
+function saveCampaignSettings() {
+  if (!_csCampaignId) { closeCampaignSettings(); return; }
+  var cb = document.getElementById('cs-allow-novel');
+  var allow = !!(cb && cb.checked);
+  var btn = document.getElementById('cs-save-btn');
+  var err = document.getElementById('campaign-settings-error');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  fetch('/api/campaigns/' + _csCampaignId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ allow_player_novel_access: allow })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      if (!data || data.error) {
+        if (err) { err.textContent = (data && data.error) || 'Could not save settings.'; err.classList.remove('hidden'); }
+        return;
+      }
+      var saveId = _csCampaignId;
+      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) x.allow_player_novel_access = allow; });
+      if (state.currentCampaign && state.currentCampaign.id === saveId) state.currentCampaign.allow_player_novel_access = allow;
+      closeCampaignSettings();
+    })
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      if (err) { err.textContent = 'Could not save settings: ' + e.message; err.classList.remove('hidden'); }
+    });
 }
