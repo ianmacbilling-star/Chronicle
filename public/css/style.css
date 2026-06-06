@@ -1263,6 +1263,32 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   color: var(--text-light);
   margin-bottom: 4px;
 }
+.sc-review-retouch {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0;
+}
+.sc-review-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+  margin: 6px 0 8px;
+}
+.sc-review-row .sc-review-imgwrap {
+  flex: 0 0 auto;
+  width: 280px;
+  max-width: 100%;
+  margin: 0;
+}
+.sc-review-side {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.sc-review-side .sc-review-label {
+  margin-top: 0;
+}
+
 .sc-review-imgwrap {
   margin-top: 12px;
   position: relative;
@@ -1290,8 +1316,8 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 .sc-review-msg {
   font-size: 13px;
   color: var(--gold);
-  margin: 8px 0;
-  min-height: 18px;
+  margin: 4px 0;
+  min-height: 16px;
 }
 
 .sc-card-head {

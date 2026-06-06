@@ -1218,14 +1218,16 @@ function openChangeReview(charId) {
       '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
         'placeholder="e.g. left horn broken off to a jagged stump">' +
         detailText + '</textarea>' +
-      '<div class="char-prompt-actions" style="margin-bottom:10px;">' +
+      '<div class="sc-review-retouch">' +
         '<button class="btn btn-sm" id="sc-retouch-' + charId + '" ' +
           'onclick="retouchSessionInline(' + charId + ')" ' +
           'title="Apply the amended appearance above to the current reference image \u2014 retouches in place, no pop-up">&#9998; Retouch image</button>' +
       '</div>' +
-      '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + imgActions +
+      '<div class="sc-review-row">' +
+        '<div class="sc-review-imgwrap" id="sc-review-imgwrap-' + charId + '">' + imgHtml + imgActions +
+        '</div>' +
+        '<div class="sc-review-side">' + momentSelector + '</div>' +
       '</div>' +
-      momentSelector +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions">' +
         '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
