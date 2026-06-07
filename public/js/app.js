@@ -8621,7 +8621,7 @@ function refreshLayoutStyleButtons() {
 // ===== Custom (a-la-carte) layout =====
 var CUSTOM_LAYOUT_DEFAULTS = {
   arrange:'grid', border:'keyline', caption:'bar', gutter:'normal', density:'normal',
-  narr:'plain', dropcap:0, paper:'parchment',
+  narr:'plain', font:'classic', dropcap:0, paper:'parchment',
   pano:1, aside:1, companion:1, emphasis:0,
   cover:1, cast:1, toc:1, header:1, markers:1, watermark:1
 };
@@ -8649,7 +8649,7 @@ function saveCustomLayoutPrefs(){
     }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','gutter','density','narr'];
+var CL_SELECTS = ['arrange','border','caption','paper','gutter','density','narr','font'];
 var CL_TOGGLES = ['dropcap','pano','aside','companion','emphasis','header','markers','watermark','cover','cast','toc'];
 
 function openCustomLayout(ctx){

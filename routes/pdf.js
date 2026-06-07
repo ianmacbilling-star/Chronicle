@@ -406,9 +406,26 @@ var CO_DEFAULTS = {
   narr: 'plain',         // plain | box
   dropcap: 0,            // 0 | 1
   paper: 'parchment',    // white | parchment | smoke
+  font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
   cover: 1, cast: 1, toc: 1, header: 1, markers: 1, watermark: 1
 };
+
+var CO_FONTS = {
+  classic:      "'Crimson Text', Georgia, serif",
+  garamond:     "'EB Garamond', Georgia, serif",
+  lora:         "'Lora', Georgia, serif",
+  merriweather: "'Merriweather', Georgia, serif",
+  sans:         "'Helvetica Neue', Arial, sans-serif",
+  mono:         "'Courier New', Courier, monospace"
+};
+var CO_FONT_IMPORTS = {
+  garamond:     'family=EB+Garamond:ital,wght@0,400;0,600;1,400',
+  lora:         'family=Lora:ital,wght@0,400;0,600;1,400',
+  merriweather: 'family=Merriweather:ital,wght@0,400;1,400'
+};
+function coFontFamily(f){ if (!f || f === 'classic') return ''; return CO_FONTS[f] || ''; }
+function coFontImport(f){ var q = CO_FONT_IMPORTS[f]; return q ? ("@import url('https://fonts.googleapis.com/css2?" + q + "&display=swap');") : ''; }
 
 function parseCustomOpts(str) {
   var o = {};
@@ -782,6 +799,9 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   var fHeader = co ? !!co.header    : true;
   var fWmark  = co ? !!co.watermark : true;
   var paperCSS = co ? coPaperCSS(co.paper) : '';
+  var fontImp = co ? coFontImport(co.font) : '';
+  var fontFam = co ? coFontFamily(co.font) : '';
+  var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
   const intro = narrative.intro || '';
   const sections = narrative.sections || [];
   const outro = narrative.outro || '';
@@ -809,6 +829,8 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
 <meta charset="UTF-8">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+  ${fontImp}
+  ${fontRule}
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1103,6 +1125,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fMarkers= co ? !!co.markers   : true;
   var fWmark  = co ? !!co.watermark : true;
   var paperCSS = coPaperCSS(co ? co.paper : 'parchment');
+  var fontImp = coFontImport(co ? co.font : '');
+  var fontFam = coFontFamily(co ? co.font : '');
+  var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
   // When paginated, render only one session. page is 1-indexed.
   var paginated = (typeof pageOpts.page === 'number' && pageOpts.page > 0);
   var totalSessions = sessions.length;
@@ -1179,6 +1204,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
 <meta charset="UTF-8">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+  ${fontImp}
+  ${fontRule}
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Crimson Text', Georgia, serif; background: #fff; color: #1a1410; width: 8.5in; margin: 0 auto; }
