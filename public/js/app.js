@@ -2127,6 +2127,7 @@ function selectStyleCard(kind, id) {
     closeStylePicker();
   } else if (kind === 'layout') {
     state.layoutStyle = id;
+    customActive.session = false;
     if (state.currentSession && state.currentCampaign) {
       fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
         method: 'PUT',
@@ -2139,6 +2140,7 @@ function selectStyleCard(kind, id) {
     closeStylePicker();
   } else if (kind === 'novel-layout') {
     novelLayoutStyle = id;
+    customActive.novel = false;
     if (typeof loadNovelPreview === 'function') loadNovelPreview(id);
     refreshLayoutStyleButtons();
     closeStylePicker();
@@ -3277,7 +3279,7 @@ function loadPreview(layout) {
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '');
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&');
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
@@ -3817,7 +3819,7 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&');
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
@@ -3994,7 +3996,7 @@ function previewNovelPDF() {
 }
 
 function exportNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&');
   window.open(url, '_blank');
 }
 
@@ -4616,13 +4618,13 @@ function exportSessionPDF() {
   }
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '');
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&');
   var win = window.open(url, '_blank');
   setTimeout(function() { if (win) win.print(); }, 4000);
 }
 
 function exportNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id;
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&');
   window.open(url, '_blank');
 }
 
@@ -6174,7 +6176,7 @@ function loadPreview(layout) {
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '');
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&');
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
@@ -6656,7 +6658,7 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&');
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
@@ -6833,7 +6835,7 @@ function previewNovelPDF() {
 }
 
 function exportNovelPDF() {
-  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&');
   window.open(url, '_blank');
 }
 
@@ -8604,6 +8606,57 @@ function refreshLayoutStyleButtons() {
   var nb = document.getElementById('novel-layout-btn');
   var nv = (typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? novelLayoutStyle : 'Classic';
   if (nb) nb.textContent = 'Layout: ' + layoutStyleName(nv);
+  var scb = document.getElementById('session-custom-btn');
+  if (scb) scb.textContent = (typeof customActive !== 'undefined' && customActive.session) ? '⚙ Custom Layout (on)' : '⚙ Custom Layout';
+  var ncb = document.getElementById('novel-custom-btn');
+  if (ncb) ncb.textContent = (typeof customActive !== 'undefined' && customActive.novel) ? '⚙ Custom Layout (on)' : '⚙ Custom Layout';
+}
+
+// ===== Custom (a-la-carte) layout =====
+var CUSTOM_LAYOUT_DEFAULTS = {
+  arrange:'grid', border:'keyline', caption:'bar', gutter:'normal', density:'normal',
+  narr:'plain', dropcap:0, paper:'parchment',
+  pano:1, aside:1, companion:1, emphasis:0,
+  cover:1, cast:1, toc:1, header:1, markers:1, watermark:1
+};
+function clClone(o){ var r={}; for (var k in o) { if (o.hasOwnProperty(k)) r[k]=o[k]; } return r; }
+var customOpts = { session: clClone(CUSTOM_LAYOUT_DEFAULTS), novel: clClone(CUSTOM_LAYOUT_DEFAULTS) };
+var customActive = { session:false, novel:false };
+var _clCtx = 'novel';
+var CL_SELECTS = ['arrange','border','caption','paper','gutter','density','narr'];
+var CL_TOGGLES = ['dropcap','pano','aside','companion','emphasis','header','markers','watermark','cover','cast','toc'];
+
+function openCustomLayout(ctx){
+  _clCtx = ctx || 'novel';
+  var o = customOpts[_clCtx] || CUSTOM_LAYOUT_DEFAULTS;
+  CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.value=o[k]; });
+  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.checked=!!o[k]; });
+  var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
+  var novelOnly=document.querySelectorAll('.cl-novel-only');
+  for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }
+  var modal=document.getElementById('custom-layout-modal'); if(modal) modal.classList.remove('hidden');
+}
+function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal'); if(m) m.classList.add('hidden'); }
+function resetCustomLayout(){ customOpts[_clCtx]=clClone(CUSTOM_LAYOUT_DEFAULTS); openCustomLayout(_clCtx); }
+function applyCustomLayout(){
+  var o={};
+  CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
+  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
+  customOpts[_clCtx]=o;
+  customActive[_clCtx]=true;
+  closeCustomLayout();
+  refreshLayoutStyleButtons();
+  if(_clCtx==='novel'){ if(typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle); }
+  else { if(typeof loadPreview==='function') loadPreview(state.layoutStyle || 'Classic'); }
+}
+function serializeCustomOpts(o){
+  var parts=[];
+  for (var k in o){ if(o.hasOwnProperty(k)) parts.push(k+':'+o[k]); }
+  return parts.join(',');
+}
+function customOptsQ(ctx, prefix){
+  if(!customActive[ctx]) return '';
+  return (prefix||'&')+'co='+encodeURIComponent(serializeCustomOpts(customOpts[ctx]));
 }
 
 // ----- Campaign settings modal (SM/DM only) -----

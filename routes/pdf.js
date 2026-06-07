@@ -389,7 +389,297 @@ function layoutSaga(moments, sections, intro, outro) {
   return html;
 }
 
-function buildLayout(layoutStyle, moments, sections, intro, outro) {
+// ============================================================
+// CUSTOM (A-LA-CARTE) LAYOUT ENGINE
+// A single options object drives the render instead of a named preset.
+// All visual primitives above are reused; nothing here touches the 7 presets.
+// ============================================================
+var CO_DEFAULTS = {
+  arrange: 'grid',       // grid | stack | splash | paired
+  border: 'keyline',     // none | keyline | frame | comic | vignette | gallery
+  caption: 'bar',        // plate | bar | engraved | gradient | none
+  gutter: 'normal',      // tight | normal | airy
+  density: 'normal',     // busy | normal | roomy
+  narr: 'plain',         // plain | box
+  dropcap: 0,            // 0 | 1
+  paper: 'parchment',    // white | parchment | smoke
+  pano: 1, aside: 1, companion: 1, emphasis: 0,
+  cover: 1, cast: 1, toc: 1, header: 1, markers: 1, watermark: 1
+};
+
+function parseCustomOpts(str) {
+  var o = {};
+  for (var k in CO_DEFAULTS) o[k] = CO_DEFAULTS[k];
+  if (!str) return o;
+  String(str).split(',').forEach(function (pair) {
+    var idx = pair.indexOf(':');
+    if (idx < 0) return;
+    var k = pair.slice(0, idx).trim();
+    var v = pair.slice(idx + 1).trim();
+    if (!(k in CO_DEFAULTS)) return;
+    if (typeof CO_DEFAULTS[k] === 'number') o[k] = (v === '1' || v === 'true') ? 1 : 0;
+    else o[k] = v;
+  });
+  return o;
+}
+
+function coGutter(g) { return g === 'tight' ? '6px' : (g === 'airy' ? '0.22in' : '0.12in'); }
+function coRowTarget(d) { return d === 'busy' ? 3.2 : (d === 'roomy' ? 2.0 : ROW_TARGET); }
+
+// packRows variant that honors the density target and the panoramic-band toggle.
+function coPackRows(items, opts) {
+  var target = coRowTarget(opts.density);
+  var rows = [], cur = [], sum = 0;
+  function flush() { if (cur.length) { rows.push({ items: cur, sum: sum }); cur = []; sum = 0; } }
+  items.forEach(function (it) {
+    var sh = normShape(it.m);
+    if (sh === 'panoramic' && opts.pano) { flush(); rows.push({ items: [it], sum: shapeAspect(sh) }); return; }
+    cur.push(it); sum += shapeAspect(sh);
+    if (sum >= target) flush();
+  });
+  flush();
+  return rows;
+}
+
+// The chosen border treatment, applied to one image at its true ratio.
+function coMedia(m, border) {
+  var ratio = shapeRatioCSS(normShape(m));
+  var img = m.image
+    ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;"></div>';
+  switch (border) {
+    case 'frame': return framedMedia(m);
+    case 'comic': return '<div style="border:5px solid #0a0806;background:#160e06;overflow:hidden;line-height:0;">' + img + '</div>';
+    case 'vignette':
+      return '<div style="position:relative;line-height:0;">' + img +
+        '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.5in 0.3in #ffffff;"></div>' +
+        '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 82%, rgba(255,255,255,1) 100%);"></div></div>';
+    case 'gallery':
+      return m.image
+        ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:0 3px 16px rgba(0,0,0,0.16);" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+        : img;
+    case 'keyline':
+      return shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px');
+    case 'none':
+    default:
+      return img;
+  }
+}
+
+function coCaptionOverlay(m, caption) {
+  if (!m.title) return '';
+  if (caption === 'plate')
+    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+  if (caption === 'gradient')
+    return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;">' + m.title + '</div>';
+  return '';
+}
+
+function coCaptionBelow(m, i, caption) {
+  if (!m.title) return '';
+  if (caption === 'engraved')
+    return '<div style="text-align:center;margin-top:0.12in;font-family:Cinzel,serif;font-size:9.5pt;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a2a;">' + m.title + '</div>';
+  if (caption === 'bar') return panelCaption(m, i);
+  return '';
+}
+
+function coNarr(text, opts, isIntro) {
+  if (!text) return '';
+  if (opts.narr === 'box' && !isIntro) return '<div style="margin:0.16in 0;">' + buildClassicTextPanel(text) + '</div>';
+  return buildNarrativeHTML(text, isIntro);
+}
+
+// Drop a large initial on the first narrative paragraph of the page.
+function coDropcap(html) {
+  if (!html) return html;
+  return html.replace(/(<p[^>]*>)(\s*)([A-Za-z])/, function (mm, tag, sp, ch) {
+    return tag + '<span style="float:left;font-family:Cinzel,serif;font-size:34pt;line-height:0.8;font-weight:700;color:#7a5418;margin:2px 6px 0 0;">' + ch + '</span>';
+  });
+}
+
+function coCell(m, i, pct, opts) {
+  var overlay = coCaptionOverlay(m, opts.caption);
+  var media = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>';
+  return '<div style="width:' + pct + '%;page-break-inside:avoid;">' + media + coCaptionBelow(m, i, opts.caption) + '</div>';
+}
+
+function coRow(row, opts) {
+  var divisor = Math.max(row.sum, ROW_MIN);
+  var g = coGutter(opts.gutter);
+  var cells = row.items.map(function (it) {
+    return coCell(it.m, it.i, (shapeAspect(normShape(it.m)) / divisor) * 100, opts);
+  }).join('');
+  return '<div style="display:flex;gap:' + g + ';margin-bottom:' + g + ';align-items:flex-start;line-height:0;">' + cells + '</div>';
+}
+
+// Tall/tower aside that honors the companion-pull toggle and the chosen border.
+function coPortrait(moments, sections, i, opts) {
+  var m = moments[i];
+  var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+  var side = coNarr(section.after || m.description || m.title || '', opts, false);
+  var consumed = 0;
+  var nxt = moments[i + 1];
+  if (opts.companion && nxt && companionEligible(nxt)) {
+    side += '<div style="margin-top:0.16in;">' + coMedia(nxt, opts.border) + '</div>';
+    var nsec = sections.find(function (s) { return s.panel_index === (i + 1); }) || {};
+    if (nsec.after) side += '<div style="margin-top:0.1in;">' + coNarr(nsec.after, opts, false) + '</div>';
+    consumed = 1;
+  }
+  return { html: asideBlock(coMedia(m, opts.border), side, (i % 2 === 0)), consumed: consumed };
+}
+
+function coIsAsidePortrait(m, opts) { return opts.aside && isPortrait(m); }
+
+function renderGrid(moments, sections, intro, outro, opts) {
+  var html = coDropOrIntro(intro, opts);
+  var buf = [];
+  function flush() {
+    if (!buf.length) return;
+    coPackRows(buf, opts).forEach(function (r) {
+      html += coRow(r, opts);
+      r.items.forEach(function (it) {
+        var sec = sections.find(function (s) { return s.panel_index === it.i; }) || {};
+        if (sec.after) html += coNarr(sec.after, opts, false);
+      });
+    });
+    buf = [];
+  }
+  for (var i = 0; i < moments.length; i++) {
+    if (coIsAsidePortrait(moments[i], opts)) {
+      flush();
+      var r = coPortrait(moments, sections, i, opts);
+      html += r.html; i += r.consumed;
+    } else {
+      buf.push({ m: moments[i], i: i });
+    }
+  }
+  flush();
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function renderStack(moments, sections, intro, outro, opts) {
+  var html = coDropOrIntro(intro, opts);
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    if (coIsAsidePortrait(m, opts)) {
+      var r = coPortrait(moments, sections, i, opts);
+      html += r.html; i += r.consumed; continue;
+    }
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    var shape = normShape(m);
+    var widthPct = isLandscape(shape) ? 100 : (shape === 'square' ? 64 : 54);
+    var overlay = coCaptionOverlay(m, opts.caption);
+    html += '<div style="width:' + widthPct + '%;margin:0.2in auto 0.1in;page-break-inside:avoid;">' +
+      '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+      coCaptionBelow(m, i, opts.caption) + '</div>';
+    if (section.after) html += coNarr(section.after, opts, false);
+  }
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function renderSplash(moments, sections, intro, outro, opts) {
+  var html = coDropOrIntro(intro, opts);
+  var buf = [];
+  function flush() { if (buf.length) { coPackRows(buf, opts).forEach(function (r) { html += coRow(r, opts); }); buf = []; } }
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    if (coIsAsidePortrait(m, opts)) {
+      flush();
+      var r = coPortrait(moments, sections, i, opts);
+      html += r.html; i += r.consumed; continue;
+    }
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    var big = (opts.emphasis && m.type === 'combat') || i === 0 || i === moments.length - 1 ||
+      ['panoramic', 'wide'].indexOf(normShape(m)) >= 0;
+    if (big) {
+      flush();
+      html += coRow({ items: [{ m: m, i: i }], sum: shapeAspect(normShape(m)) }, opts);
+    } else {
+      buf.push({ m: m, i: i });
+    }
+    if (section.after) { flush(); html += coNarr(section.after, opts, false); }
+  }
+  flush();
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function renderPaired(moments, sections, intro, outro, opts) {
+  var html = coDropOrIntro(intro, opts);
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    if (coIsAsidePortrait(m, opts)) {
+      var r = coPortrait(moments, sections, i, opts);
+      html += r.html; i += r.consumed; continue;
+    }
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    var overlay = coCaptionOverlay(m, opts.caption);
+    var inner = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' + coCaptionBelow(m, i, opts.caption);
+    var text = section.after || '';
+    if (text) {
+      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner +
+        '<div style="margin-top:0.1in;">' + coNarr(text, opts, false) + '</div></div>';
+    } else {
+      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + '</div>';
+    }
+  }
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+function coDropOrIntro(intro, opts) {
+  var h = buildNarrativeHTML(intro, true);
+  return opts.dropcap ? coDropcap(h) : h;
+}
+
+function renderLayout(opts, moments, sections, intro, outro) {
+  if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet - generate your storyboard first.</p>';
+  sections = sections || []; intro = intro || ''; outro = outro || '';
+  switch (opts.arrange) {
+    case 'stack':  return renderStack(moments, sections, intro, outro, opts);
+    case 'splash': return renderSplash(moments, sections, intro, outro, opts);
+    case 'paired': return renderPaired(moments, sections, intro, outro, opts);
+    case 'grid':
+    default:       return renderGrid(moments, sections, intro, outro, opts);
+  }
+}
+
+// ---- Page background (paper) ----
+var CO_SMOKE_SVG =
+  "<svg xmlns='http://www.w3.org/2000/svg' width='560' height='520'>" +
+  "<filter id='s'><feTurbulence type='fractalNoise' baseFrequency='0.011 0.017' numOctaves='3' seed='11' stitchTiles='stitch'/>" +
+  "<feColorMatrix type='matrix' values='0 0 0 0 0.20  0 0 0 0 0.15  0 0 0 0 0.10  0 0 0 0.55 0'/></filter>" +
+  "<rect width='100%' height='100%' filter='url(#s)' opacity='0.32'/></svg>";
+var CO_SMOKE_ENC = encodeURIComponent(CO_SMOKE_SVG).replace(/\(/g, '%28').replace(/\)/g, '%29');
+var CO_SMOKE_URL = 'url("data:image/svg+xml,' + CO_SMOKE_ENC + '")';
+
+var CO_PARCHMENT_CSS =
+  'background-color:#f4e8c9;' +
+  'background-image:' +
+  'radial-gradient(ellipse at 9% 6%, rgba(110,75,28,0.11), transparent 42%),' +
+  'radial-gradient(ellipse at 91% 13%, rgba(110,75,28,0.08), transparent 46%),' +
+  'radial-gradient(ellipse at 20% 95%, rgba(85,55,18,0.11), transparent 42%),' +
+  'radial-gradient(ellipse at 83% 87%, rgba(110,75,28,0.07), transparent 46%);' +
+  'box-shadow: inset 0 0 1.5in 0.45in rgba(74,48,16,0.33);';
+
+// Faint smoke wisps low on an otherwise white page (hints, not full coverage).
+var CO_SMOKE_CSS =
+  'background-color:#ffffff;' +
+  'background-image:' + CO_SMOKE_URL + ',' + CO_SMOKE_URL + ';' +
+  'background-repeat:no-repeat,no-repeat;' +
+  'background-position:center 80%, 12% 18%;' +
+  'background-size:120% 48%, 70% 36%;';
+
+function coPaperCSS(paper) {
+  if (paper === 'white') return 'background-color:#ffffff;';
+  if (paper === 'smoke') return CO_SMOKE_CSS;
+  return CO_PARCHMENT_CSS; // parchment default
+}
+
+function buildLayout(layoutStyle, moments, sections, intro, outro, opts) {
+  if (opts) return renderLayout(opts, moments, sections, intro, outro);
   if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet - generate your storyboard first.</p>';
   sections = sections || [];
   intro = intro || '';
@@ -415,7 +705,12 @@ function buildLayout(layoutStyle, moments, sections, intro, outro) {
 // ============================================================
 // Generate PDF HTML for a session
 // ============================================================
-function buildSessionHTML(session, moments, campaign, characters, narrative) {
+function buildSessionHTML(session, moments, campaign, characters, narrative, opts) {
+  var co = opts || null;
+  var fCover  = co ? !!co.cover     : true;
+  var fHeader = co ? !!co.header    : true;
+  var fWmark  = co ? !!co.watermark : true;
+  var paperCSS = co ? coPaperCSS(co.paper) : '';
   const intro = narrative.intro || '';
   const sections = narrative.sections || [];
   const outro = narrative.outro || '';
@@ -435,7 +730,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
 
   // Build panels using selected layout
   var layoutStyle = narrative.layout_style || 'Classic';
-  var panelsHTML = buildLayout(layoutStyle, moments, sections, intro, outro);
+  var panelsHTML = buildLayout(layoutStyle, moments, sections, intro, outro, co);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -681,7 +976,9 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
     color: rgba(44,24,16,0.4);
   }
 
+  .content-page { ${paperCSS} }
   @media print {
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { width: 8.5in; }
     .cover-page { height: 11in; }
     @page { size: 8.5in 11in; margin: 0; }
@@ -690,7 +987,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
 </head>
 <body>
 
-<!-- COVER PAGE -->
+${fCover ? `<!-- COVER PAGE -->
 <div class="cover-page">
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
@@ -704,18 +1001,18 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
     <div class="cover-date">${formatDate(session.session_date)}</div>
   </div>
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
-</div>
+</div>` : ''}
 
 <!-- CONTENT PAGE -->
 <div class="content-page">
-  <div class="page-header">
+  ${fHeader ? `<div class="page-header">
     <div class="page-header-campaign">${campaign.name}</div>
     <div class="page-header-session">${session.name}</div>
-  </div>
+  </div>` : ''}
   ${panelsHTML}
 </div>
 
-<div class="page-watermark">CAMPAIGNIA.COM</div>
+${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 </body>
 </html>`;
@@ -724,9 +1021,17 @@ function buildSessionHTML(session, moments, campaign, characters, narrative) {
 // ============================================================
 // BUILD Graphic Novel HTML (all sessions)
 // ============================================================
-function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
+function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, opts) {
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
+  var co = opts || null;
+  var fCover  = co ? !!co.cover     : true;
+  var fCast   = co ? !!co.cast      : true;
+  var fToc    = co ? !!co.toc       : false;
+  var fHeader = co ? !!co.header    : true;
+  var fMarkers= co ? !!co.markers   : true;
+  var fWmark  = co ? !!co.watermark : true;
+  var paperCSS = coPaperCSS(co ? co.paper : 'parchment');
   // When paginated, render only one session. page is 1-indexed.
   var paginated = (typeof pageOpts.page === 'number' && pageOpts.page > 0);
   var totalSessions = sessions.length;
@@ -772,9 +1077,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
       outro: s.narrative_outro || ''
     };
 
-    var panelsHTML = buildLayout(layoutStyle, moments, narrative.sections, narrative.intro, narrative.outro);
+    var panelsHTML = buildLayout(layoutStyle, moments, narrative.sections, narrative.intro, narrative.outro, co);
 
-    var chapterHeading = paginated
+    var chapterHeading = (paginated || !fMarkers)
       ? ''
       : '<div class="session-marker">' +
           '<div class="session-marker-ornament">&bull; &bull; &bull;</div>' +
@@ -783,14 +1088,19 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
         '</div>';
 
     return '<div class="content-page">' +
-      '<div class="page-header">' +
+      (fHeader ? ('<div class="page-header">' +
         '<div class="page-header-campaign">' + campaign.name + '</div>' +
         '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
-      '</div>' +
+      '</div>') : '') +
       chapterHeading +
       panelsHTML +
     '</div>';
   }).join('');
+
+  var tocRows = sessions.map(function(s, idx){
+    return '<div class="toc-row"><span class="toc-name">Session ' + (idx+1) + ' &mdash; ' + s.name + '</span><span class="toc-dots"></span><span class="toc-date">' + formatDate(s.session_date, {year:'numeric',month:'short',day:'numeric'}) + '</span></div>';
+  }).join('');
+  var tocBlock = '<div class="content-page toc-page"><div class="toc-title">Contents</div><div class="cast-divider"></div>' + tocRows + '</div>';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -842,15 +1152,13 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   /* CONTENT */
   .content-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;position:relative; }
   .content-page:last-of-type { page-break-after:avoid; }
-  .cast-page, .content-page {
-    background-color:#f4e8c9;
-    background-image:
-      radial-gradient(ellipse at 9% 6%, rgba(110,75,28,0.11), transparent 42%),
-      radial-gradient(ellipse at 91% 13%, rgba(110,75,28,0.08), transparent 46%),
-      radial-gradient(ellipse at 20% 95%, rgba(85,55,18,0.11), transparent 42%),
-      radial-gradient(ellipse at 83% 87%, rgba(110,75,28,0.07), transparent 46%);
-    box-shadow: inset 0 0 1.5in 0.45in rgba(74,48,16,0.33);
-  }
+  .cast-page, .content-page { ${paperCSS} }
+  .toc-page { }
+  .toc-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
+  .toc-row { display:flex;align-items:baseline;gap:8px;margin:0.12in 0;font-family:'Cinzel',serif; }
+  .toc-name { font-size:11pt;color:#2c1810;white-space:nowrap; }
+  .toc-dots { flex:1;border-bottom:1px dotted rgba(110,75,28,0.5);transform:translateY(-3px); }
+  .toc-date { font-size:9.5pt;color:#8a6a2a;font-style:italic;white-space:nowrap; }
   .print-bar { position:fixed;top:14px;right:14px;z-index:9999; }
   .print-bar button { font-family:'Cinzel',serif;font-size:11pt;font-weight:600;background:#2c1810;color:#f3e7c8;border:1px solid #c9a84c;border-radius:4px;padding:8px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3); }
   .page-header { display:flex;align-items:center;justify-content:space-between;padding-bottom:0.12in;margin-bottom:0.2in;border-bottom:1px solid rgba(201,168,76,0.3); }
@@ -889,7 +1197,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
 <div class="print-bar" id="printBar"><button onclick="window.print()">Save as PDF / Print</button></div>
 <script>try{if(window.self!==window.top){var _pb=document.getElementById('printBar');if(_pb)_pb.style.display='none';}}catch(e){}</script>
 
-${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
+${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
 <div class="cover-page">
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
@@ -913,9 +1221,8 @@ ${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
     <div class="cover-dates">${dateRange}</div>
   </div>`}
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
-</div>
-
-<!-- CAST & CREW PAGE -->
+</div>` : ''}
+${(fCast && (!paginated || pageOpts.page === 1)) ? `<!-- CAST & CREW PAGE -->
 <div class="cast-page">
   <div class="cast-page-title">The Company</div>
   <div class="cast-page-subtitle">${campaign.description || ''}</div>
@@ -923,11 +1230,12 @@ ${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
   <div class="cast-page-dm">Story Master: ${dmName} &nbsp;&nbsp;|&nbsp;&nbsp; ${dateRange}</div>
   <div class="cast-grid">${castHTML}</div>
 </div>` : ''}
+${(fToc && (!paginated || pageOpts.page === 1)) ? tocBlock : ''}
 
 <!-- SESSIONS -->
 ${allSessionsHTML}
 
-<div class="page-watermark">CAMPAIGNIA.COM</div>
+${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 </body>
 </html>`;
@@ -966,7 +1274,8 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       layout_style: req.query.layout || session.layout_style || 'Classic'
     };
 
-    const html = buildSessionHTML(session, moments, campaign, characters, narrative);
+    const co = req.query.co ? parseCustomOpts(req.query.co) : null;
+    const html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
     res.send(html);
   } catch(e) {
     console.error('PDF session error:', e.message);
@@ -1033,7 +1342,8 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   }
   res.set('X-Total-Sessions', String(sessionsWithData.length));
 
-  const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts);
+  const co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   res.send(html);
 });
 

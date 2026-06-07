@@ -175,6 +175,7 @@
           <div>
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')">Layout: Classic</button>
+            <button class="btn btn-sm" id="novel-custom-btn" onclick="openCustomLayout('novel')" style="margin-left:6px;">&#9881; Custom Layout</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">&#8659; Export Full Novel PDF</button>
         </div>
@@ -408,6 +409,7 @@
           <div>
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
             <button class="btn btn-sm" id="layout-style-btn" onclick="openStylePicker('layout')">Layout: Classic</button>
+            <button class="btn btn-sm" id="session-custom-btn" onclick="openCustomLayout('session')" style="margin-left:6px;">&#9881; Custom Layout</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
         </div>
@@ -1135,6 +1137,105 @@
     </div>
   </div>
 </div>
+
+<div class="modal-overlay hidden" id="custom-layout-modal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div class="modal-title">Custom Layout <span id="cl-ctx-label" style="font-size:12px;color:var(--gold-dim);font-weight:400;"></span></div>
+      <button class="modal-close" onclick="closeCustomLayout()">&times;</button>
+    </div>
+    <p style="margin:0 0 14px;font-size:12px;color:var(--gold-dim);line-height:1.45;">Mix and match every part of the page. Apply to update the preview.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;">
+      <label class="cl-field"><span>Panel arrangement</span>
+        <select id="cl-arrange">
+          <option value="grid">Grid &mdash; mixed-size justified rows</option>
+          <option value="stack">Stacked &mdash; one panel per row</option>
+          <option value="splash">Splash &mdash; dominant hero panels</option>
+          <option value="paired">Paired &mdash; image with text below</option>
+        </select>
+      </label>
+      <label class="cl-field"><span>Picture border</span>
+        <select id="cl-border">
+          <option value="none">None</option>
+          <option value="keyline">Thin keyline</option>
+          <option value="frame">Bronze picture frame</option>
+          <option value="comic">Thick comic border</option>
+          <option value="vignette">Soft vignette fade</option>
+          <option value="gallery">Gallery (shadow only)</option>
+        </select>
+      </label>
+      <label class="cl-field"><span>Caption style</span>
+        <select id="cl-caption">
+          <option value="bar">Title bar</option>
+          <option value="plate">Comic title plate</option>
+          <option value="engraved">Engraved small-caps</option>
+          <option value="gradient">Gradient over image</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+      <label class="cl-field"><span>Page background</span>
+        <select id="cl-paper">
+          <option value="white">Clean white</option>
+          <option value="parchment">Aged parchment</option>
+          <option value="smoke">Wispy smoke</option>
+        </select>
+      </label>
+      <label class="cl-field"><span>Gutter spacing</span>
+        <select id="cl-gutter">
+          <option value="tight">Tight</option>
+          <option value="normal">Normal</option>
+          <option value="airy">Airy</option>
+        </select>
+      </label>
+      <label class="cl-field"><span>Row density</span>
+        <select id="cl-density">
+          <option value="busy">Busy</option>
+          <option value="normal">Normal</option>
+          <option value="roomy">Roomy</option>
+        </select>
+      </label>
+      <label class="cl-field"><span>Narrative text</span>
+        <select id="cl-narr">
+          <option value="plain">Plain paragraphs</option>
+          <option value="box">Boxed panels</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="margin-top:16px;border-top:1px solid rgba(201,168,76,0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
+      <label class="cl-toggle"><input type="checkbox" id="cl-dropcap"><span>Drop cap on opening</span></label>
+      <label class="cl-toggle"><input type="checkbox" id="cl-pano"><span>Panoramic full-width band</span></label>
+      <label class="cl-toggle"><input type="checkbox" id="cl-aside"><span>Tall image beside narrative</span></label>
+      <label class="cl-toggle"><input type="checkbox" id="cl-companion"><span>Pull next panel into sidebar</span></label>
+      <label class="cl-toggle"><input type="checkbox" id="cl-emphasis"><span>Combat emphasis bursts (splash)</span></label>
+      <label class="cl-toggle"><input type="checkbox" id="cl-header"><span>Running page header</span></label>
+      <label class="cl-toggle"><input type="checkbox" id="cl-markers"><span>Session dividers</span></label>
+      <label class="cl-toggle"><input type="checkbox" id="cl-watermark"><span>Watermark</span></label>
+    </div>
+
+    <div id="cl-pages-group" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
+      <label class="cl-toggle"><input type="checkbox" id="cl-cover"><span>Include cover page</span></label>
+      <label class="cl-toggle cl-novel-only"><input type="checkbox" id="cl-cast"><span>Include character page</span></label>
+      <label class="cl-toggle cl-novel-only"><input type="checkbox" id="cl-toc"><span>Include table of contents</span></label>
+    </div>
+
+    <div class="modal-footer" style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <button class="btn btn-sm" onclick="resetCustomLayout()">Reset to defaults</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" onclick="closeCustomLayout()">Cancel</button>
+        <button class="btn btn-sm btn-primary" onclick="applyCustomLayout()">Apply &amp; preview</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--gold);font-family:var(--font-display);letter-spacing:0.02em; }
+  .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:6px 8px;font-size:12px;font-family:var(--font-display); }
+  .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
+  .cl-toggle input { accent-color:#c9a84c;width:15px;height:15px; }
+</style>
 
 <script src="/js/app.js"></script>
 </body>
