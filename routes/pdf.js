@@ -184,7 +184,36 @@ function galleryMedia(m) {
 function isPortrait(m) { var s = normShape(m); return s === 'tall' || s === 'tower'; }
 function companionEligible(m) { var s = normShape(m); return s === 'standard' || s === 'square'; }
 
+// IRONFRAME picture frame: dark bronze/iron face with a gold inlay keyline
+// around the image. Used for Ironframe row panels and its portrait asides.
+function framedMedia(m) {
+  var ratio = shapeRatioCSS(normShape(m));
+  var inner = m.image
+    ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#160e06;"></div>';
+  return '<div style="padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
+    '<div style="padding:2px;background:#0a0806;">' +
+    '<div style="border:1.5px solid #c9a84c;line-height:0;">' + inner + '</div>' +
+    '</div>' +
+  '</div>';
+}
+function frameCell(m, pct, showCaption) {
+  var cap = '';
+  if (showCaption && m.title) {
+    cap = '<div style="position:absolute;top:11px;left:11px;max-width:78%;background:#f0e8d0;border:2px solid #0a0806;padding:2px 8px 3px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.2;">' + m.title + '</div>';
+  }
+  return '<div style="width:' + pct + '%;position:relative;page-break-inside:avoid;">' + framedMedia(m) + cap + '</div>';
+}
+function frameRow(row, showCaption) {
+  var divisor = Math.max(row.sum, ROW_MIN);
+  var cells = row.items.map(function (it) {
+    return frameCell(it.m, (shapeAspect(normShape(it.m)) / divisor) * 100, showCaption);
+  }).join('');
+  return '<div style="display:flex;gap:0.14in;margin-bottom:0.14in;line-height:0;align-items:flex-start;">' + cells + '</div>';
+}
+
 function portraitMedia(m, kind) {
+  if (kind === 'frame') return framedMedia(m);
   var ratio = shapeRatioCSS(normShape(m));
   if (!m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);"></div>';
   var img = '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
@@ -287,7 +316,7 @@ function stackLayoutP(moments, sections, intro, outro, mediaFn, kind) {
 // ---- THE SEVEN PRESETS ----
 
 function layoutIronframe(moments, sections, intro, outro) {
-  return gridLayout(moments, sections, intro, outro, function (row) { return comicRow(row, true, false); }, 'comic');
+  return gridLayout(moments, sections, intro, outro, function (row) { return frameRow(row, true); }, 'frame');
 }
 
 function layoutMosaic(moments, sections, intro, outro) {
