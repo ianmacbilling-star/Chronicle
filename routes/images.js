@@ -48,7 +48,29 @@ async function getSelectedModel(db) {
 // later this becomes a per-campaign "Render quality" dial (Campaign Settings).
 const NANO_THINKING_LEVEL = (['minimal', 'high'].indexOf(process.env.NANO_THINKING_LEVEL) !== -1) ? process.env.NANO_THINKING_LEVEL : null;
 
-function buildPanelInput(prompt, style, charBlock, seed, modelKey) {
+function shapeAspectRatio(shape) {
+  if (shape === 'wide') return '16:9';
+  if (shape === 'tall') return '2:3';
+  if (shape === 'square') return '1:1';
+  return '4:3';
+}
+function shapeFluxSize(shape) {
+  if (shape === 'wide') return 'landscape_16_9';
+  if (shape === 'tall') return 'portrait_16_9';
+  if (shape === 'square') return 'square_hd';
+  return 'landscape_4_3';
+}
+function shapeCompHint(shape) {
+  if (shape === 'wide') return ' COMPOSITION: a wide, cinematic establishing shot - a horizontal layout that fills the frame edge to edge, using the full width for a sweeping, panoramic view.';
+  if (shape === 'tall') return ' COMPOSITION: a tall, vertical composition - strong full-height framing that emphasizes height and verticality, with the subject arranged top to bottom in the frame.';
+  if (shape === 'square') return ' COMPOSITION: a square, balanced composition centered tightly on a single focal subject, with intimate framing.';
+  return '';
+}
+
+function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
+  var ar = shapeAspectRatio(shape);
+  var flux = shapeFluxSize(shape);
+  var hint = shapeCompHint(shape);
 
   // charBlock is { text, refs } (refs may include assets) from the
   // route. Tolerate a plain string or null for safety.
@@ -156,12 +178,12 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey) {
       'separate style instruction), changing ONLY the artistic medium, NEVER what ' +
       'each element actually is.\n\n' +
       rosterDirective +
-      'Draw this comic panel: ' + prompt + charSection + assetSection;
+      'Draw this comic panel: ' + prompt + charSection + assetSection + hint;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
       num_images: 1,
-      aspect_ratio: '4:3',
+      aspect_ratio: ar,
       output_format: 'png',
       safety_tolerance: '5',
       resolution: '1K'
@@ -169,9 +191,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey) {
   } else if (key === 'nano2') {
     // Nano Banana 2 text-to-image — no reference images for this panel.
     input = {
-      prompt: rosterDirective + prompt + charSection,
+      prompt: rosterDirective + prompt + charSection + hint,
       num_images: 1,
-      aspect_ratio: '4:3',
+      aspect_ratio: ar,
       output_format: 'png',
       safety_tolerance: '5',
       resolution: '1K'
@@ -179,8 +201,8 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey) {
   } else {
     // Flux schnell: text-to-image only — no /edit endpoint, no references.
     input = {
-      prompt: rosterDirective + prompt + charSection + styleFinal,
-      image_size: 'landscape_4_3',
+      prompt: rosterDirective + prompt + charSection + hint + styleFinal,
+      image_size: flux,
       num_inference_steps: 4,
       num_images: 1,
       enable_safety_checker: true
@@ -204,9 +226,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey) {
 
 // Synchronous generation (still used by generate-all / retouch until they
 // move to the async queue flow in a later phase).
-async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
+async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
@@ -217,9 +239,9 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey) {
 // Async generation: submit to fal's queue with our webhook and return the fal
 // request id immediately. The webhook finishes the job when fal is done, so a
 // slow or queued fal can never time out the user's HTTP request.
-async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl) {
+async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model };
 }
@@ -228,8 +250,9 @@ async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, 
 // SOLE reference and tell the model to keep everything identical except the
 // one requested change. Always uses Nano Banana 2 /edit (the only model that
 // conditions on an input image).
-async function retouchImage(currentImageUrl, instruction, style, falKey) {
+async function retouchImage(currentImageUrl, instruction, style, falKey, shape) {
   fal.config({ credentials: falKey });
+  const ar = shapeAspectRatio(shape);
   // A falsy style means "no style prefix" (used by the style-neutral character
   // reference retouch). Moments always pass a real style, so they're unchanged.
   const stylePrefix = style ? getStylePrefix(style) : '';
@@ -243,7 +266,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey) {
       prompt: editPrompt,
       image_urls: [currentImageUrl],
       num_images: 1,
-      aspect_ratio: '4:3',
+      aspect_ratio: ar,
       output_format: 'png',
       safety_tolerance: '5',
       resolution: '1K'
@@ -257,8 +280,9 @@ async function retouchImage(currentImageUrl, instruction, style, falKey) {
 
 // Async retouch: the same in-context edit as retouchImage, submitted to fal's
 // queue with our webhook so the user's request returns immediately.
-async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock) {
+async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock, shape) {
   fal.config({ credentials: falKey });
+  const ar = shapeAspectRatio(shape);
   const stylePrefix = style ? getStylePrefix(style) : '';
   // Reference images for the characters/assets attached to this panel, so a
   // retouch like "add the other character" has those identities to draw from.
@@ -297,7 +321,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       prompt: editPrompt,
       image_urls: imageUrls,
       num_images: 1,
-      aspect_ratio: '4:3',
+      aspect_ratio: ar,
       output_format: 'png',
       safety_tolerance: '5',
       resolution: '1K'
@@ -699,7 +723,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const webhookUrl = falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
-    const sub = await submitPanelGen(prompt, style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl);
+    const sub = await submitPanelGen(prompt, style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -769,7 +793,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
     const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
     const refsR = combineRefs(charListR.refs, assetListR.refs);
-    const sub = await submitRetouch(moment.image, instruction, style, fal_key, webhookUrl, { refs: refsR, text: charListR.text });
+    const sub = await submitRetouch(moment.image, instruction, style, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -900,7 +924,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castExplicit: !!m.cast_explicit,
         castNames: castNames
       };
-      const sub = await submitPanelGen(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl);
+      const sub = await submitPanelGen(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape);
       const nowTs = new Date().toISOString();
       const jobIns = await db.prepare(
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +

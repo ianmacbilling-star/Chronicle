@@ -354,6 +354,7 @@ async function initPostgres() {
     // inference (legacy behavior); flipped true the first time a user edits a
     // panel's cast, after which moment_characters/moment_assets are authoritative.
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS cast_explicit BOOLEAN DEFAULT false',
+    "ALTER TABLE moments ADD COLUMN IF NOT EXISTS shape TEXT DEFAULT 'standard'",
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
@@ -368,6 +369,7 @@ async function initPostgres() {
       type TEXT,
       prompt TEXT,
       emphasis TEXT,
+      shape TEXT DEFAULT 'standard',
       image TEXT,
       panel_order INTEGER DEFAULT 0,
       fork_id INTEGER,
