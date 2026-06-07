@@ -21,63 +21,60 @@ function formatDate(dateVal, options) {
 // Each takes (moments, sections, intro, outro) and returns panel HTML
 // ============================================================
 
-function buildPanelHTML(m, i, size) {
-  // size: 'full' | 'half' | 'third'
-  var widthMap = { full: '100%', half: '48%', third: '31%' };
-  var heightMap = { full: '5in', half: '3.5in', third: '2.5in' };
-  var w = widthMap[size] || '31%';
-  var h = heightMap[size] || '2.5in';
+function shapeRatio(shape) {
+  switch (shape) {
+    case 'panoramic': return [21, 9];
+    case 'wide':      return [16, 9];
+    case 'square':    return [1, 1];
+    case 'tall':      return [2, 3];
+    case 'tower':     return [9, 16];
+    default:          return [4, 3]; // standard
+  }
+}
+function shapeAspect(shape) { var r = shapeRatio(shape); return r[0] / r[1]; }
+function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
+function normShape(m) {
+  var s = (m && m.shape) || '';
+  return (['wide', 'tall', 'square', 'panoramic', 'tower'].indexOf(s) >= 0) ? s : 'standard';
+}
+function isLandscape(shape) { return shapeAspect(shape) >= 1.15; }
 
-  return '<div style="width:' + w + ';display:inline-block;vertical-align:top;margin-bottom:0.15in;margin-right:0.1in;page-break-inside:avoid;">' +
-    (m.image
-      ? '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.2);" src="' + m.image + '" alt="' + m.title + '" />'
-      : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:3px;display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>') +
-    '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:2px;">' +
-      '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i+1) + '</span>' +
-      '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;margin-left:8px;">' + m.title + '</span>' +
-    '</div>' +
-  '</div>';
+// Row packing: target / floor sums of aspect ratios. A row's height is
+// (containerWidth / sumOfAspects), so a larger sum = shorter row. The floor
+// caps the height of short trailing rows; panoramic always gets its own band.
+var ROW_TARGET = 2.6;
+var ROW_MIN = 1.85;
+
+function packRows(items) {
+  var rows = [], cur = [], sum = 0;
+  function flush() { if (cur.length) { rows.push({ items: cur, sum: sum }); cur = []; sum = 0; } }
+  items.forEach(function (it) {
+    var sh = normShape(it.m);
+    if (sh === 'panoramic') { flush(); rows.push({ items: [it], sum: shapeAspect(sh) }); return; }
+    cur.push(it); sum += shapeAspect(sh);
+    if (sum >= ROW_TARGET) flush();
+  });
+  flush();
+  return rows;
 }
 
-// Comic-book style panel — thick black border, flush, optional overlaid caption.
-// Designed to sit inside a flex row; `flex` controls how much width it takes.
-function buildComicPanel(m, i, flexGrow, h, showCaption, emphasisText) {
-  var caption = '';
-  if (showCaption && m.title) {
-    caption = '<div style="position:absolute;top:0;left:0;max-width:80%;' +
-      'background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;' +
-      'padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;' +
-      'color:#0a0806;letter-spacing:0.02em;line-height:1.25;">' + m.title + '</div>';
+// An uncropped image sized to its shape's true aspect ratio. Because the image
+// was generated at this exact ratio, object-fit:cover fills the box with no
+// cropping; placeholders use the same ratio so empty panels keep their shape.
+function shapedImage(m, border, radius) {
+  var ratio = shapeRatioCSS(normShape(m));
+  var b = border || '';
+  var rad = (radius == null) ? '3px' : radius;
+  if (m.image) {
+    return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:' + rad + ';' + b + '" src="' + m.image + '" alt="' + (m.title || '') + '" />';
   }
+  return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:' + rad + ';display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
+}
 
-  var media = m.image
-    ? '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;" src="' + m.image + '" alt="' + m.title + '" />'
-    : '<div style="width:100%;height:' + h + ';background:#1a0f06;display:flex;align-items:center;justify-content:center;">' +
-        '<span style="font-size:30pt;opacity:0.25;color:#c9a84c;">&#128444;</span></div>';
-
-  // The panel itself clips its contents (overflow:hidden keeps the image tidy).
-  var panel = '<div style="width:100%;box-sizing:border-box;' +
-    'position:relative;overflow:hidden;border:5px solid #0a0806;' +
-    'background:#160e06;">' +
-    media + caption +
-  '</div>';
-
-  // Emphasis burst — angled comic SFX text that breaks past the panel edge.
-  // It lives on the (non-clipping) wrapper, not inside the clipped panel.
-  var burst = '';
-  if (emphasisText) {
-    burst = '<div style="position:absolute;right:-0.12in;bottom:-0.1in;z-index:5;' +
-      'transform:rotate(-7deg);font-family:Cinzel,serif;font-weight:700;' +
-      'font-size:21pt;line-height:0.95;color:#c0392b;' +
-      '-webkit-text-stroke:1.5px #0a0806;text-stroke:1.5px #0a0806;' +
-      'text-shadow:2px 2px 0 #f0e8d0,-1px -1px 0 #f0e8d0,1px -1px 0 #f0e8d0,-1px 1px 0 #f0e8d0;' +
-      'text-transform:uppercase;letter-spacing:0.01em;max-width:2.6in;text-align:right;">' +
-      emphasisText + '</div>';
-  }
-
-  // Wrapper does NOT clip — lets the burst overflow into the gutter/white.
-  return '<div style="flex:' + flexGrow + ';position:relative;page-break-inside:avoid;">' +
-    panel + burst +
+function panelCaption(m, i) {
+  return '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:3px;">' +
+    '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i + 1) + '</span>' +
+    '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;margin-left:8px;">' + (m.title || '') + '</span>' +
   '</div>';
 }
 
@@ -88,167 +85,144 @@ function buildNarrativeHTML(text, isIntro) {
     'margin:0.15in 0;text-indent:' + (isIntro ? '0' : '0.3in') + ';">' + text + '</p>';
 }
 
-// ---- BOOK FAMILY ----
-
-// A book-style image panel sized for a flex row.
-function buildClassicImage(m, i, h) {
-  var media = m.image
-    ? '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;border-radius:3px;border:1px solid rgba(201,168,76,0.25);" src="' + m.image + '" alt="' + m.title + '" />'
-    : '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:3px;display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
-  return media +
-    '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:3px;">' +
-      '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i+1) + '</span>' +
-      '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;margin-left:8px;">' + (m.title || '') + '</span>' +
-    '</div>';
-}
-
-// A book-style text panel — narrative prose on a parchment card.
 function buildClassicTextPanel(text) {
   return '<div style="background:#f9f4e8;border:1px solid rgba(201,168,76,0.25);border-radius:3px;' +
     'padding:0.18in 0.22in;font-family:Crimson Text,Georgia,serif;font-size:11.5pt;' +
     'line-height:1.7;color:#2a1a0e;text-indent:0.25in;">' + text + '</div>';
 }
 
-// CLASSIC — clean book layout. Each moment pairs with its narrative, in order.
-// Layout alternates: text beside the image, then text below it, for rhythm.
-function layoutClassic(moments, sections, intro, outro) {
+// ---- COMIC FAMILY ----
+
+// A single comic-style cell: thick black border, optional overlaid caption,
+// optional emphasis burst. Width is a percentage so the row tiles at a common
+// height (height = containerWidth / rowSum) without cropping any shape.
+function comicCell(m, pct, showCaption, showEmphasis) {
+  var ratio = shapeRatioCSS(normShape(m));
+  var media = m.image
+    ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;display:flex;align-items:center;justify-content:center;"><span style="font-size:30pt;opacity:0.25;color:#c9a84c;">&#128444;</span></div>';
+  var caption = '';
+  if (showCaption && m.title) {
+    caption = '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;letter-spacing:0.02em;line-height:1.25;">' + m.title + '</div>';
+  }
+  var panel = '<div style="width:100%;box-sizing:border-box;position:relative;overflow:hidden;border:5px solid #0a0806;background:#160e06;">' + media + caption + '</div>';
+  var burst = '';
+  if (showEmphasis && m.type === 'combat' && m.emphasis) {
+    burst = '<div style="position:absolute;right:-0.12in;bottom:-0.1in;z-index:5;transform:rotate(-7deg);font-family:Cinzel,serif;font-weight:700;font-size:21pt;line-height:0.95;color:#c0392b;-webkit-text-stroke:1.5px #0a0806;text-stroke:1.5px #0a0806;text-shadow:2px 2px 0 #f0e8d0,-1px -1px 0 #f0e8d0,1px -1px 0 #f0e8d0,-1px 1px 0 #f0e8d0;text-transform:uppercase;letter-spacing:0.01em;max-width:2.6in;text-align:right;">' + m.emphasis + '</div>';
+  }
+  return '<div style="width:' + pct + '%;position:relative;page-break-inside:avoid;">' + panel + burst + '</div>';
+}
+
+function comicRow(row, showCaption, showEmphasis) {
+  var divisor = Math.max(row.sum, ROW_MIN);
+  var cells = row.items.map(function (it) {
+    var pct = (shapeAspect(normShape(it.m)) / divisor) * 100;
+    return comicCell(it.m, pct, showCaption, showEmphasis);
+  }).join('');
+  return '<div style="display:flex;gap:6px;margin-bottom:6px;line-height:0;align-items:flex-start;">' + cells + '</div>';
+}
+
+// COMIC BOOK — thick black borders, flush-packed justified rows whose panel
+// widths follow each panel's shape, captions overlaid comic-style.
+function layoutComicBook(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
-
-  moments.forEach(function(m, i) {
-    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
-    var text = section.after || '';
-    var besideMode = (i % 2 === 0);   // alternate: beside on even, below on odd
-
-    if (text && besideMode) {
-      // Image left, narrative panel right — same row
-      html += '<div style="display:flex;gap:0.18in;align-items:stretch;margin-bottom:0.22in;page-break-inside:avoid;">' +
-        '<div style="flex:1.15;">' + buildClassicImage(m, i, '3.0in') + '</div>' +
-        '<div style="flex:1;display:flex;">' + buildClassicTextPanel(text) + '</div>' +
-      '</div>';
-    } else if (text) {
-      // Image on top, narrative panel below
-      html += '<div style="margin-bottom:0.22in;page-break-inside:avoid;">' +
-        buildClassicImage(m, i, '3.4in') +
-        '<div style="margin-top:0.1in;">' + buildClassicTextPanel(text) + '</div>' +
-      '</div>';
-    } else {
-      // No narrative for this moment — just the image
-      html += '<div style="margin-bottom:0.22in;page-break-inside:avoid;">' +
-        buildClassicImage(m, i, '3.4in') + '</div>';
-    }
+  var items = moments.map(function (m, i) { return { m: m, i: i }; });
+  packRows(items).forEach(function (row) {
+    html += comicRow(row, true, false);
+    row.items.forEach(function (it) {
+      var section = sections.find(function (s) { return s.panel_index === it.i; }) || {};
+      if (section.after) html += buildNarrativeHTML(section.after, false);
+    });
   });
-
   html += buildNarrativeHTML(outro, true);
   return html;
 }
 
-// STORYBOOK — one large image per beat with narrative flowing around it,
-// like an illustrated novel. Fewer, bigger images; lots of prose.
-function layoutStorybook(moments, sections, intro, outro) {
+// ACTION — combat / first / last beats get their own row (rendered large by
+// virtue of being alone), quieter beats pack into justified rows. No captions
+// on the art — kinetic; emphasis bursts on combat panels that carry one.
+function layoutAction(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
-  moments.forEach(function(m, i) {
-    var h = '4.2in';
-    var media;
-    if (m.image) {
-      // Image sits under a soft white vignette so its edges fade into the
-      // page. Overlay approach is print-safe (works in the exported PDF).
-      media = '<div style="position:relative;width:100%;height:' + h + ';">' +
-        '<img style="width:100%;height:' + h + ';object-fit:cover;object-position:center top;display:block;" src="' + m.image + '" alt="' + m.title + '" />' +
-        '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.55in 0.32in #ffffff;"></div>' +
-        '<div style="position:absolute;inset:0;pointer-events:none;background:' +
-          'radial-gradient(ellipse at center, rgba(255,255,255,0) 55%, rgba(255,255,255,0.55) 82%, rgba(255,255,255,1) 100%);"></div>' +
+  var buffer = [];
+  function flushBuffer() {
+    if (buffer.length) { packRows(buffer).forEach(function (r) { html += comicRow(r, false, false); }); buffer = []; }
+  }
+  moments.forEach(function (m, i) {
+    var isBig = m.type === 'combat' || i === 0 || i === moments.length - 1;
+    if (isBig) {
+      flushBuffer();
+      html += comicRow({ items: [{ m: m, i: i }], sum: shapeAspect(normShape(m)) }, false, true);
+    } else {
+      buffer.push({ m: m, i: i });
+    }
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    if (section.after) { flushBuffer(); html += buildNarrativeHTML(section.after, false); }
+  });
+  flushBuffer();
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+// ---- BOOK FAMILY ----
+
+// CLASSIC — clean book layout. Portrait panels (tall / tower / square) sit
+// beside the narrative so their height reads as deliberate; landscape panels
+// (panoramic / wide / standard) run full width with text below.
+function layoutClassic(moments, sections, intro, outro) {
+  var html = buildNarrativeHTML(intro, true);
+  var imgBorder = 'border:1px solid rgba(201,168,76,0.25);';
+  moments.forEach(function (m, i) {
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    var text = section.after || '';
+    var portrait = !isLandscape(normShape(m));
+
+    if (text && portrait) {
+      html += '<div style="display:flex;gap:0.2in;align-items:flex-start;margin-bottom:0.24in;page-break-inside:avoid;">' +
+        '<div style="flex:0 0 40%;">' + shapedImage(m, imgBorder) + panelCaption(m, i) + '</div>' +
+        '<div style="flex:1;">' + buildClassicTextPanel(text) + '</div>' +
+      '</div>';
+    } else if (text) {
+      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' +
+        shapedImage(m, imgBorder) + panelCaption(m, i) +
+        '<div style="margin-top:0.1in;">' + buildClassicTextPanel(text) + '</div>' +
       '</div>';
     } else {
-      media = '<div style="width:100%;height:' + h + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;"><span style="font-size:28pt;opacity:0.3;">&#128444;</span></div>';
+      var inner = shapedImage(m, imgBorder) + panelCaption(m, i);
+      if (portrait) {
+        html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;display:flex;justify-content:center;"><div style="width:55%;">' + inner + '</div></div>';
+      } else {
+        html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + '</div>';
+      }
+    }
+  });
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
+// STORYBOOK — one image per beat with prose flowing around it. Landscape fills
+// the column; portrait / square narrow and center so heights stay book-like.
+function layoutStorybook(moments, sections, intro, outro) {
+  var html = buildNarrativeHTML(intro, true);
+  moments.forEach(function (m, i) {
+    var shape = normShape(m);
+    var ratio = shapeRatioCSS(shape);
+    var widthPct = isLandscape(shape) ? 100 : (shape === 'square' ? 62 : 50);
+    var media;
+    if (m.image) {
+      media = '<div style="position:relative;width:' + widthPct + '%;margin:0 auto;">' +
+        '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
+        '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.55in 0.32in #ffffff;"></div>' +
+        '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 55%, rgba(255,255,255,0.55) 82%, rgba(255,255,255,1) 100%);"></div>' +
+      '</div>';
+    } else {
+      media = '<div style="width:' + widthPct + '%;margin:0 auto;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;"><span style="font-size:28pt;opacity:0.3;">&#128444;</span></div>';
     }
     html += '<div style="margin:0.3in 0 0.1in;page-break-inside:avoid;">' + media +
       '<div style="text-align:center;font-family:Cinzel,serif;font-size:9pt;font-style:italic;color:#8a6a2a;margin-top:5px;">' +
       (m.title || '') + '</div></div>';
-    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     if (section.after) html += buildNarrativeHTML(section.after, false);
   });
-  html += buildNarrativeHTML(outro, true);
-  return html;
-}
-
-// ---- COMIC FAMILY ----
-
-// COMIC BOOK — thick black borders, tight gutters, flush-packed panels in
-// dynamic mixed-size rows, captions overlaid comic-style.
-function layoutComicBook(moments, sections, intro, outro) {
-  var html = buildNarrativeHTML(intro, true);
-
-  // Row recipes: each defines how many panels and their flex ratios + height.
-  // Mixing 1-, 2-, and 3-panel rows (some uneven) gives a real comic rhythm.
-  var recipes = [
-    { sizes: [1],        h: '4.6in' },          // full splash
-    { sizes: [2, 1],     h: '3.0in' },          // big + small
-    { sizes: [1, 1, 1],  h: '2.5in' },          // even trio
-    { sizes: [1, 1],     h: '3.2in' },          // even pair
-    { sizes: [1, 2],     h: '3.0in' },          // small + big
-    { sizes: [1, 1],     h: '3.2in' }           // even pair
-  ];
-
-  function rowOpen() { return '<div style="display:flex;gap:6px;margin-bottom:6px;line-height:0;">'; }
-
-  var idx = 0;            // moment index
-  var recipeNum = 0;      // which recipe to use next
-  while (idx < moments.length) {
-    var recipe = recipes[recipeNum % recipes.length];
-    recipeNum++;
-    var count = recipe.sizes.length;
-    var slice = moments.slice(idx, idx + count);
-    // If fewer moments remain than the recipe wants, just lay them out evenly.
-    var sizes = (slice.length === count) ? recipe.sizes : slice.map(function() { return 1; });
-
-    html += rowOpen();
-    slice.forEach(function(m, j) {
-      html += buildComicPanel(m, idx + j, sizes[j], recipe.h, true);
-    });
-    html += '</div>';
-
-    // Narrative that falls within this row's moments
-    for (var k = 0; k < slice.length; k++) {
-      var section = sections.find(function(s) { return s.panel_index === (idx + k); }) || {};
-      if (section.after) html += buildNarrativeHTML(section.after, false);
-    }
-    idx += slice.length;
-  }
-
-  html += buildNarrativeHTML(outro, true);
-  return html;
-}
-
-// ACTION — comic treatment, but combat/key beats become full-bleed splash
-// panels; quieter moments stay small. No captions on the art — kinetic.
-// ACTION — comic treatment, but combat/key beats become full-bleed splash
-// panels; quieter moments stay small in flex rows. No captions — kinetic.
-function layoutAction(moments, sections, intro, outro) {
-  var html = buildNarrativeHTML(intro, true);
-  var rowPanels = [];
-  function flushRow() {
-    if (rowPanels.length) {
-      html += '<div style="display:flex;gap:6px;margin-bottom:6px;line-height:0;">' +
-        rowPanels.join('') + '</div>';
-      rowPanels = [];
-    }
-  }
-  moments.forEach(function(m, i) {
-    var isBig = m.type === 'combat' || i === 0 || i === moments.length - 1;
-    if (isBig) {
-      flushRow();
-      // Emphasis burst only on actual combat moments that have one
-      var emph = (m.type === 'combat' && m.emphasis) ? m.emphasis : '';
-      html += '<div style="display:flex;margin-bottom:6px;line-height:0;">' +
-        buildComicPanel(m, i, 1, '5.0in', false, emph) + '</div>';
-    } else {
-      rowPanels.push(buildComicPanel(m, i, 1, '2.6in', false, ''));
-      if (rowPanels.length === 3) flushRow();   // up to 3 small panels per row
-    }
-    var section = sections.find(function(s) { return s.panel_index === i; }) || {};
-    if (section.after) { flushRow(); html += buildNarrativeHTML(section.after, false); }
-  });
-  flushRow();
   html += buildNarrativeHTML(outro, true);
   return html;
 }
@@ -258,7 +232,7 @@ function buildLayout(layoutStyle, moments, sections, intro, outro) {
   sections = sections || [];
   intro = intro || '';
   outro = outro || '';
-  switch(layoutStyle) {
+  switch (layoutStyle) {
     case 'ComicBook':
     case 'Cinematic':  // legacy name — old saved sessions
       return layoutComicBook(moments, sections, intro, outro);

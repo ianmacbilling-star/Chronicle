@@ -5384,7 +5384,7 @@ function renderStoryboard() {
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
           '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
         '</div>';
-    var _shapeVal = (m.shape === 'wide' || m.shape === 'tall' || m.shape === 'square') ? m.shape : 'standard';
+    var _shapeVal = (['wide','tall','square','panoramic','tower'].indexOf(m.shape) >= 0 ? m.shape : 'standard');
     var _canLock = canEditCurrentStatus();
     var lockBtn = '';
     if (m.image && _canLock) {

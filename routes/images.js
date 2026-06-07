@@ -52,18 +52,24 @@ function shapeAspectRatio(shape) {
   if (shape === 'wide') return '16:9';
   if (shape === 'tall') return '2:3';
   if (shape === 'square') return '1:1';
+  if (shape === 'panoramic') return '21:9';
+  if (shape === 'tower') return '9:16';
   return '4:3';
 }
 function shapeFluxSize(shape) {
   if (shape === 'wide') return 'landscape_16_9';
   if (shape === 'tall') return 'portrait_16_9';
   if (shape === 'square') return 'square_hd';
+  if (shape === 'panoramic') return 'landscape_16_9';
+  if (shape === 'tower') return 'portrait_16_9';
   return 'landscape_4_3';
 }
 function shapeCompHint(shape) {
   if (shape === 'wide') return ' COMPOSITION: a wide, cinematic establishing shot - a horizontal layout that fills the frame edge to edge, using the full width for a sweeping, panoramic view.';
   if (shape === 'tall') return ' COMPOSITION: a tall, vertical composition - strong full-height framing that emphasizes height and verticality, with the subject arranged top to bottom in the frame.';
   if (shape === 'square') return ' COMPOSITION: a square, balanced composition centered tightly on a single focal subject, with intimate framing.';
+  if (shape === 'panoramic') return ' COMPOSITION: an ultra-wide panoramic shot - an extremely wide cinematic banner, vast and sweeping, filling the full width edge to edge with a strong horizontal letterbox feel.';
+  if (shape === 'tower') return ' COMPOSITION: an extremely tall, narrow vertical composition - a towering full-height column emphasizing dramatic verticality and scale from top to bottom.';
   return '';
 }
 
