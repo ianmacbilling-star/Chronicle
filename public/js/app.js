@@ -2057,11 +2057,11 @@ function openStylePicker(kind) {
     meta = ART_STYLE_META;
   } else if (STYLE_PICKER_KIND === 'layout') {
     if (titleEl) titleEl.textContent = 'Choose a layout';
-    cur = state.layoutStyle ? state.layoutStyle : 'Classic';
+    cur = normalizeLayoutId(state.layoutStyle || 'Classic');
     meta = LAYOUT_STYLE_META;
   } else if (STYLE_PICKER_KIND === 'novel-layout') {
     if (titleEl) titleEl.textContent = 'Choose a layout';
-    cur = (typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? novelLayoutStyle : 'Classic';
+    cur = normalizeLayoutId((typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? novelLayoutStyle : 'Classic');
     meta = LAYOUT_STYLE_META;
   } else { return; }
   var _subEl = document.getElementById('style-picker-sub');
@@ -8579,19 +8579,26 @@ function renderStats(d) {
 // (kind 'novel-layout', ad-hoc novelLayoutStyle, not persisted). Layouts are
 // not tier-gated, so the picker renders them all unlocked.
 var LAYOUT_STYLE_META = [
-  { id: 'Classic', name: 'Classic', desc: 'Clean, balanced page layout. The Chronicle default.' },
-  { id: 'ComicBook', name: 'Comic Book', desc: 'Bold paneled grid with gutters, like a printed comic page.' },
-  { id: 'Action', name: 'Action', desc: 'Dynamic, varied panel sizing for high-energy sequences.' },
-  { id: 'Storybook', name: 'Storybook', desc: 'Large illustrations with flowing prose, like an illustrated storybook.' }
+  { id: 'Mosaic', name: 'Mosaic', desc: 'Mixed-size panels in a clean, modern grid — the dynamic graphic-novel look.' },
+  { id: 'Ironframe', name: 'Ironframe', desc: 'Bold bordered panels with gutters, like a printed comic page.' },
+  { id: 'Spectacle', name: 'Spectacle', desc: 'Splash-forward: dominant hero images with smaller beats around them.' },
+  { id: 'Eclipse', name: 'Eclipse', desc: 'Full-bleed, frameless art that runs corner to corner — cinematic.' },
+  { id: 'Reverie', name: 'Reverie', desc: 'Soft, feathered images that fade into the page — illustrated-novel feel.' },
+  { id: 'Folio', name: 'Folio', desc: 'Large gallery images with generous white space — a premium art book.' },
+  { id: 'Saga', name: 'Saga', desc: 'Large illustrations paired with flowing narrative text blocks.' }
 ];
 
+var LAYOUT_LEGACY = { classic: 'Saga', storybook: 'Saga', comicbook: 'Ironframe', cinematic: 'Ironframe', action: 'Spectacle', dramatic: 'Spectacle' };
+function normalizeLayoutId(v) {
+  if (!v) return 'Mosaic';
+  return LAYOUT_LEGACY[('' + v).toLowerCase()] || v;
+}
 function layoutStyleName(v) {
-  var legacy = { cinematic: 'ComicBook', dramatic: 'Action' };
-  var key = legacy[(v || '').toLowerCase()] || v;
+  var key = normalizeLayoutId(v);
   for (var i = 0; i < LAYOUT_STYLE_META.length; i++) {
     if (LAYOUT_STYLE_META[i].id === key) return LAYOUT_STYLE_META[i].name;
   }
-  return key || 'Classic';
+  return key || 'Mosaic';
 }
 
 function refreshLayoutStyleButtons() {
