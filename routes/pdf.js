@@ -417,12 +417,16 @@ var CO_FONTS = {
   lora:         "'Lora', Georgia, serif",
   merriweather: "'Merriweather', Georgia, serif",
   sans:         "'Helvetica Neue', Arial, sans-serif",
-  mono:         "'Courier New', Courier, monospace"
+  mono:         "'Courier New', Courier, monospace",
+  script:       "'Dancing Script', 'Segoe Script', cursive",
+  journal:      "'Caveat', 'Bradley Hand', cursive"
 };
 var CO_FONT_IMPORTS = {
   garamond:     'family=EB+Garamond:ital,wght@0,400;0,600;1,400',
   lora:         'family=Lora:ital,wght@0,400;0,600;1,400',
-  merriweather: 'family=Merriweather:ital,wght@0,400;1,400'
+  merriweather: 'family=Merriweather:ital,wght@0,400;1,400',
+  script:       'family=Dancing+Script:wght@400;500;600;700',
+  journal:      'family=Caveat:wght@400;500;700'
 };
 function coFontFamily(f){ if (!f || f === 'classic') return ''; return CO_FONTS[f] || ''; }
 function coFontImport(f){ var q = CO_FONT_IMPORTS[f]; return q ? ("@import url('https://fonts.googleapis.com/css2?" + q + "&display=swap');") : ''; }
