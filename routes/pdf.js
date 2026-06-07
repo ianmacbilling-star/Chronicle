@@ -5,7 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const path = require('path');
 
 // Shared drop shadow for gallery panels AND character portraits (kept in lockstep).
-var CO_IMG_SHADOW = '0 8px 18px rgba(0,0,0,0.42), 0 24px 54px rgba(0,0,0,0.55)';
+var CO_IMG_SHADOW = '7px 7px 10px -2px rgba(0,0,0,0.5), 18px 18px 30px -10px rgba(0,0,0,0.5)';
 
 // ============================================================
 // Date helper - handles both PostgreSQL Date objects and SQLite strings
@@ -459,7 +459,7 @@ function coMedia(m, border) {
         '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 82%, rgba(255,255,255,1) 100%);"></div></div>';
     case 'gallery':
       return m.image
-        ? '<div style="padding:0 4px 0.28in 4px;line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
+        ? '<div style="padding:0 0.26in 0.26in 0;line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
         : img;
     case 'keyline':
       return shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px');
@@ -637,6 +637,34 @@ function coDropOrIntro(intro, opts) {
   return opts.dropcap ? coDropcap(h) : h;
 }
 
+function renderComicPage(moments, sections, intro, outro, opts) {
+  var html = coDropOrIntro(intro, opts);
+  var buf = [];
+  var page = '';
+  var open = false;
+  function openPage(){ if (!open) { page = '<div style="background:#0d0805;padding:6px;margin:0.16in 0;">'; open = true; } }
+  function flushRows(){
+    if (!buf.length) return;
+    openPage();
+    coPackRows(buf, opts).forEach(function (r) { page += comicRow(r, opts.caption !== 'none', !!opts.emphasis); });
+    buf = [];
+  }
+  function closePage(){ if (open) { flushRows(); html += page + '</div>'; page = ''; open = false; } }
+  for (var i = 0; i < moments.length; i++) {
+    if (coIsAsidePortrait(moments[i], opts)) {
+      closePage();
+      var r = coPortrait(moments, sections, i, opts);
+      html += r.html; i += r.consumed; continue;
+    }
+    buf.push({ m: moments[i], i: i });
+    var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
+    if (sec.after) { flushRows(); closePage(); html += coNarr(sec.after, opts, false); }
+  }
+  closePage();
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
 function renderLayout(opts, moments, sections, intro, outro) {
   if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet - generate your storyboard first.</p>';
   sections = sections || []; intro = intro || ''; outro = outro || '';
@@ -644,6 +672,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
     case 'paired': return renderPaired(moments, sections, intro, outro, opts);
+    case 'comicpage': return renderComicPage(moments, sections, intro, outro, opts);
     case 'grid':
     default:       return renderGrid(moments, sections, intro, outro, opts);
   }
