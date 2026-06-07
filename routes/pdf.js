@@ -139,9 +139,6 @@ function mosaicRow(row) {
   return '<div style="display:flex;gap:0.12in;margin-bottom:0.12in;align-items:flex-start;">' + cells + '</div>';
 }
 
-// Full-bleed cinematic image with an overlaid title gradient (Eclipse).
-// Screen-preview fills the content width; true paper-edge bleed arrives with
-// the print profile.
 function bleedMedia(m) {
   var ratio = shapeRatioCSS(normShape(m));
   if (m.image) {
@@ -153,8 +150,6 @@ function bleedMedia(m) {
   return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;margin-bottom:0.12in;"></div>';
 }
 
-// Soft feathered image fading into the page (Reverie). Portrait shapes narrow
-// and center so they do not tower.
 function vignetteMedia(m) {
   var shape = normShape(m);
   var ratio = shapeRatioCSS(shape);
@@ -169,7 +164,6 @@ function vignetteMedia(m) {
   return '<div style="width:' + widthPct + '%;margin:0.3in auto 0.1in;aspect-ratio:' + ratio + ';background:#f0e8d0;"></div>';
 }
 
-// Large gallery plate with generous white space + engraved caption (Folio).
 function galleryMedia(m) {
   var shape = normShape(m);
   var ratio = shapeRatioCSS(shape);
@@ -182,27 +176,88 @@ function galleryMedia(m) {
   '</div>';
 }
 
-// Simple per-moment stacker shared by the single-image presets.
-function stackLayout(moments, sections, intro, outro, mediaFn) {
+// ---- Tall / tower handling, shared by every preset ----
+// A tall or towering image must never stand alone: it sits to one side with
+// the narrative (and the panel's own description as fallback) beside it. Sides
+// alternate by panel index for rhythm.
+function isPortrait(m) { var s = normShape(m); return s === 'tall' || s === 'tower'; }
+
+// The tall image, rendered to fill its column, in each layout's visual idiom.
+function portraitMedia(m, kind) {
+  var ratio = shapeRatioCSS(normShape(m));
+  if (!m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);"></div>';
+  var img = '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+  if (kind === 'comic') {
+    return '<div style="width:100%;box-sizing:border-box;border:5px solid #0a0806;background:#160e06;overflow:hidden;">' + img + '</div>';
+  }
+  if (kind === 'vignette') {
+    return '<div style="position:relative;width:100%;">' + img +
+      '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.5in 0.3in #ffffff;"></div>' +
+      '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 50%, rgba(255,255,255,0.5) 82%, rgba(255,255,255,0.95) 100%);"></div>' +
+    '</div>';
+  }
+  if (kind === 'gallery') {
+    return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:0 3px 16px rgba(0,0,0,0.14);" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+  }
+  if (kind === 'bleed') {
+    return img;
+  }
+  // keyline (default — Mosaic / Saga)
+  return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border:1px solid rgba(201,168,76,0.25);border-radius:3px;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+}
+
+function asideText(m, sectionAfter) {
+  var t = sectionAfter || m.description || m.title || '';
+  return buildClassicTextPanel(t);
+}
+
+function asideBlock(mediaHTML, sideHTML, imgLeft) {
+  var imgCol = '<div style="flex:0 0 40%;">' + mediaHTML + '</div>';
+  var txtCol = '<div style="flex:1;">' + sideHTML + '</div>';
+  return '<div style="display:flex;gap:0.22in;align-items:flex-start;margin-bottom:0.24in;page-break-inside:avoid;">' +
+    (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
+}
+
+function portraitAside(m, i, sections, kind) {
+  var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+  return asideBlock(portraitMedia(m, kind), asideText(m, section.after), (i % 2 === 0));
+}
+
+// ---- Shared drivers ----
+
+// Grid driver: non-portrait panels pack into justified rows; tall/tower panels
+// break out into a narrative-aside block. Narratives stay grouped after their row.
+function gridLayout(moments, sections, intro, outro, rowFn, kind) {
   var html = buildNarrativeHTML(intro, true);
+  var buf = [];
+  function flush() {
+    if (!buf.length) return;
+    packRows(buf).forEach(function (r) {
+      html += rowFn(r);
+      r.items.forEach(function (it) {
+        var sec = sections.find(function (s) { return s.panel_index === it.i; }) || {};
+        if (sec.after) html += buildNarrativeHTML(sec.after, false);
+      });
+    });
+    buf = [];
+  }
   moments.forEach(function (m, i) {
-    html += mediaFn(m);
-    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    if (section.after) html += buildNarrativeHTML(section.after, false);
+    if (isPortrait(m)) { flush(); html += portraitAside(m, i, sections, kind); }
+    else buf.push({ m: m, i: i });
   });
+  flush();
   html += buildNarrativeHTML(outro, true);
   return html;
 }
 
-// Justified-row stacker shared by the grid presets.
-function rowLayout(moments, sections, intro, outro, rowFn) {
+// Stack driver: one image per beat; tall/tower panels become a narrative-aside.
+function stackLayoutP(moments, sections, intro, outro, mediaFn, kind) {
   var html = buildNarrativeHTML(intro, true);
-  packRows(moments.map(function (m, i) { return { m: m, i: i }; })).forEach(function (row) {
-    html += rowFn(row);
-    row.items.forEach(function (it) {
-      var section = sections.find(function (s) { return s.panel_index === it.i; }) || {};
-      if (section.after) html += buildNarrativeHTML(section.after, false);
-    });
+  moments.forEach(function (m, i) {
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    if (isPortrait(m)) { html += portraitAside(m, i, sections, kind); return; }
+    html += mediaFn(m);
+    if (section.after) html += buildNarrativeHTML(section.after, false);
   });
   html += buildNarrativeHTML(outro, true);
   return html;
@@ -210,32 +265,31 @@ function rowLayout(moments, sections, intro, outro, rowFn) {
 
 // ---- THE SEVEN PRESETS ----
 
-// IRONFRAME — bold bordered comic panels, gutters, overlaid captions.
 function layoutIronframe(moments, sections, intro, outro) {
-  return rowLayout(moments, sections, intro, outro, function (row) { return comicRow(row, true, false); });
+  return gridLayout(moments, sections, intro, outro, function (row) { return comicRow(row, true, false); }, 'comic');
 }
 
-// MOSAIC — mixed-size shape-driven grid, clean thin keylines, modern gutters.
 function layoutMosaic(moments, sections, intro, outro) {
-  return rowLayout(moments, sections, intro, outro, mosaicRow);
+  return gridLayout(moments, sections, intro, outro, mosaicRow, 'keyline');
 }
 
-// SPECTACLE — splash-forward. Combat / first / last / large shapes get their
-// own dominant row; quieter beats pack into justified rows.
+// SPECTACLE — splash-forward. Tall/tower go to a narrative-aside; combat / first
+// / last / panoramic / wide get a dominant solo row; quieter beats pack.
 function layoutSpectacle(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
   var buffer = [];
   function flush() { if (buffer.length) { packRows(buffer).forEach(function (r) { html += comicRow(r, false, false); }); buffer = []; } }
   moments.forEach(function (m, i) {
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    if (isPortrait(m)) { flush(); html += portraitAside(m, i, sections, 'comic'); return; }
     var big = m.type === 'combat' || i === 0 || i === moments.length - 1 ||
-      ['panoramic', 'tower', 'wide'].indexOf(normShape(m)) >= 0;
+      ['panoramic', 'wide'].indexOf(normShape(m)) >= 0;
     if (big) {
       flush();
       html += comicRow({ items: [{ m: m, i: i }], sum: shapeAspect(normShape(m)) }, true, true);
     } else {
       buffer.push({ m: m, i: i });
     }
-    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     if (section.after) { flush(); html += buildNarrativeHTML(section.after, false); }
   });
   flush();
@@ -243,45 +297,33 @@ function layoutSpectacle(moments, sections, intro, outro) {
   return html;
 }
 
-// ECLIPSE — full-bleed, frameless, cinematic. One image per beat, edge to edge.
 function layoutEclipse(moments, sections, intro, outro) {
-  return stackLayout(moments, sections, intro, outro, bleedMedia);
+  return stackLayoutP(moments, sections, intro, outro, bleedMedia, 'bleed');
 }
 
-// REVERIE — soft vignette fade into the page; illustrated-novel / lore feel.
 function layoutReverie(moments, sections, intro, outro) {
-  return stackLayout(moments, sections, intro, outro, vignetteMedia);
+  return stackLayoutP(moments, sections, intro, outro, vignetteMedia, 'vignette');
 }
 
-// FOLIO — coffee-table gallery: large images, generous white space, elegant.
 function layoutFolio(moments, sections, intro, outro) {
-  return stackLayout(moments, sections, intro, outro, galleryMedia);
+  return stackLayoutP(moments, sections, intro, outro, galleryMedia, 'gallery');
 }
 
-// SAGA — illustrated novel. Portrait panels sit beside the narrative; landscape
-// panels run full width with text below.
+// SAGA — illustrated novel. Tall/tower beside narrative (shared rule); landscape
+// and square run full width with text below.
 function layoutSaga(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
   var imgBorder = 'border:1px solid rgba(201,168,76,0.25);';
   moments.forEach(function (m, i) {
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var text = section.after || '';
-    var portrait = !isLandscape(normShape(m));
-    if (text && portrait) {
-      html += '<div style="display:flex;gap:0.2in;align-items:flex-start;margin-bottom:0.24in;page-break-inside:avoid;">' +
-        '<div style="flex:0 0 42%;">' + shapedImage(m, imgBorder) + panelCaption(m, i) + '</div>' +
-        '<div style="flex:1;">' + buildClassicTextPanel(text) + '</div>' +
-      '</div>';
-    } else if (text) {
-      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' +
-        shapedImage(m, imgBorder) + panelCaption(m, i) +
-        '<div style="margin-top:0.1in;">' + buildClassicTextPanel(text) + '</div>' +
-      '</div>';
+    if (isPortrait(m)) { html += portraitAside(m, i, sections, 'keyline'); return; }
+    var inner = shapedImage(m, imgBorder) + panelCaption(m, i);
+    if (text) {
+      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner +
+        '<div style="margin-top:0.1in;">' + buildClassicTextPanel(text) + '</div></div>';
     } else {
-      var inner = shapedImage(m, imgBorder) + panelCaption(m, i);
-      html += portrait
-        ? '<div style="margin-bottom:0.24in;page-break-inside:avoid;display:flex;justify-content:center;"><div style="width:55%;">' + inner + '</div></div>'
-        : '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + '</div>';
+      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + '</div>';
     }
   });
   html += buildNarrativeHTML(outro, true);
@@ -293,7 +335,6 @@ function buildLayout(layoutStyle, moments, sections, intro, outro) {
   sections = sections || [];
   intro = intro || '';
   outro = outro || '';
-  // Legacy names from old saved sessions map onto the new preset family.
   var legacy = {
     Classic: 'Saga', Storybook: 'Saga',
     ComicBook: 'Ironframe', Cinematic: 'Ironframe',
