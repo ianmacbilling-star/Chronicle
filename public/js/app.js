@@ -3995,8 +3995,7 @@ function previewNovelPDF() {
 
 function exportNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 5000);
+  window.open(url, '_blank');
 }
 
 function loadNovelSummary() {
@@ -4624,8 +4623,7 @@ function exportSessionPDF() {
 
 function exportNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id;
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 5000);
+  window.open(url, '_blank');
 }
 
 function previewNovelPDF() {
@@ -6836,8 +6834,7 @@ function previewNovelPDF() {
 
 function exportNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&');
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 5000);
+  window.open(url, '_blank');
 }
 
 function loadNovelSummary() {

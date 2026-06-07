@@ -841,6 +841,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
 
   /* CONTENT */
   .content-page { width:8.5in;min-height:11in;padding:0.75in 0.85in;page-break-after:always;position:relative; }
+  .content-page:last-of-type { min-height:0; page-break-after:avoid; }
+  .print-bar { position:fixed;top:14px;right:14px;z-index:9999; }
+  .print-bar button { font-family:'Cinzel',serif;font-size:11pt;font-weight:600;background:#2c1810;color:#f3e7c8;border:1px solid #c9a84c;border-radius:4px;padding:8px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3); }
   .page-header { display:flex;align-items:center;justify-content:space-between;padding-bottom:0.12in;margin-bottom:0.2in;border-bottom:1px solid rgba(201,168,76,0.3); }
   .page-header-campaign { font-family:'Cinzel',serif;font-size:7pt;color:#8a6a2a;letter-spacing:0.1em;text-transform:uppercase; }
   .page-header-session { font-family:'Cinzel',serif;font-size:7pt;color:#8a6a2a; }
@@ -866,10 +869,13 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   @media print {
     body { width:8.5in; }
     @page { size:8.5in 11in; margin:0; }
+    .print-bar { display:none !important; }
   }
 </style>
 </head>
 <body>
+<div class="print-bar" id="printBar"><button onclick="window.print()">Save as PDF / Print</button></div>
+<script>try{if(window.self!==window.top){var _pb=document.getElementById('printBar');if(_pb)_pb.style.display='none';}}catch(e){}</script>
 
 ${(!paginated || pageOpts.page === 1) ? `<!-- COVER PAGE -->
 <div class="cover-page">
