@@ -756,17 +756,61 @@ var CO_PARCHMENT_CSS =
   'radial-gradient(ellipse at 83% 87%, rgba(110,75,28,0.07), transparent 46%);' +
   'box-shadow: inset 0 0 1.5in 0.45in rgba(74,48,16,0.33);';
 
-// Faint smoke wisps low on an otherwise white page (hints, not full coverage).
+// Smoke: soft, cloudy shadowing spread across the whole page, beneath the panels.
 var CO_SMOKE_CSS =
   'background-color:#ffffff;' +
-  'background-image:' + CO_SMOKE_URL + ',' + CO_SMOKE_URL + ';' +
-  'background-repeat:no-repeat,no-repeat;' +
-  'background-position:center 80%, 12% 18%;' +
-  'background-size:120% 48%, 70% 36%;';
+  'background-image:' +
+  'radial-gradient(ellipse at 16% 18%, rgba(36,30,26,0.13), transparent 46%),' +
+  'radial-gradient(ellipse at 82% 26%, rgba(36,30,26,0.10), transparent 50%),' +
+  'radial-gradient(ellipse at 28% 72%, rgba(36,30,26,0.11), transparent 48%),' +
+  'radial-gradient(ellipse at 74% 84%, rgba(36,30,26,0.13), transparent 46%),' +
+  'radial-gradient(ellipse at 50% 48%, rgba(36,30,26,0.06), transparent 62%);' +
+  'box-shadow: inset 0 0 2in 0.35in rgba(28,22,18,0.20);';
+
+// Dirt: brownish grime blotches and specks across the page.
+var CO_DIRT_CSS =
+  'background-color:#ffffff;' +
+  'background-image:' +
+  'radial-gradient(ellipse at 12% 20%, rgba(86,62,30,0.16), transparent 30%),' +
+  'radial-gradient(ellipse at 70% 14%, rgba(70,50,24,0.13), transparent 26%),' +
+  'radial-gradient(ellipse at 86% 58%, rgba(96,68,32,0.15), transparent 30%),' +
+  'radial-gradient(ellipse at 30% 84%, rgba(76,54,26,0.14), transparent 28%),' +
+  'radial-gradient(ellipse at 54% 50%, rgba(88,64,34,0.08), transparent 40%),' +
+  'radial-gradient(circle at 44% 30%, rgba(54,38,18,0.22), transparent 7%),' +
+  'radial-gradient(circle at 62% 72%, rgba(54,38,18,0.20), transparent 6%),' +
+  'radial-gradient(circle at 22% 60%, rgba(54,38,18,0.18), transparent 5%);' +
+  'box-shadow: inset 0 0 1.6in 0.4in rgba(70,48,20,0.22);';
+
+// Wrinkle: faint diagonal crease lines (a dark fold edge beside a light highlight).
+var CO_WRINKLE_CSS =
+  'background-color:#ffffff;' +
+  'background-image:' +
+  'linear-gradient(118deg, transparent 37%, rgba(0,0,0,0.05) 38.5%, rgba(255,255,255,0.75) 40%, transparent 41.5%),' +
+  'linear-gradient(62deg, transparent 58%, rgba(0,0,0,0.045) 59.5%, rgba(255,255,255,0.7) 61%, transparent 62.5%),' +
+  'linear-gradient(150deg, transparent 70%, rgba(0,0,0,0.04) 71.5%, rgba(255,255,255,0.65) 73%, transparent 74.5%),' +
+  'linear-gradient(95deg, transparent 22%, rgba(0,0,0,0.035) 23.5%, rgba(255,255,255,0.6) 25%, transparent 26.5%);' +
+  'box-shadow: inset 0 0 1.4in 0.2in rgba(0,0,0,0.07);';
+
+// Blood: dark-red splatter spots of varied size on white.
+var CO_BLOOD_CSS =
+  'background-color:#ffffff;' +
+  'background-image:' +
+  'radial-gradient(circle at 22% 18%, rgba(122,12,12,0.55), transparent 6%),' +
+  'radial-gradient(circle at 26% 23%, rgba(110,8,8,0.5), transparent 2.5%),' +
+  'radial-gradient(circle at 30% 15%, rgba(110,8,8,0.45), transparent 1.6%),' +
+  'radial-gradient(circle at 78% 30%, rgba(132,14,14,0.5), transparent 9%),' +
+  'radial-gradient(circle at 85% 25%, rgba(110,8,8,0.45), transparent 2%),' +
+  'radial-gradient(circle at 60% 70%, rgba(125,12,12,0.5), transparent 7%),' +
+  'radial-gradient(circle at 38% 82%, rgba(115,10,10,0.45), transparent 4%),' +
+  'radial-gradient(circle at 66% 60%, rgba(110,8,8,0.4), transparent 2%),' +
+  'radial-gradient(circle at 50% 46%, rgba(120,10,10,0.4), transparent 3%);';
 
 function coPaperCSS(paper) {
   if (paper === 'white') return 'background-color:#ffffff;';
   if (paper === 'smoke') return CO_SMOKE_CSS;
+  if (paper === 'dirt') return CO_DIRT_CSS;
+  if (paper === 'wrinkle') return CO_WRINKLE_CSS;
+  if (paper === 'blood') return CO_BLOOD_CSS;
   return CO_PARCHMENT_CSS; // parchment default
 }
 
