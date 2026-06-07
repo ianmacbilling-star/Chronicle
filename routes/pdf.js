@@ -5,7 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const path = require('path');
 
 // Shared drop shadow for gallery panels AND character portraits (kept in lockstep).
-var CO_IMG_SHADOW = '0 2px 6px rgba(0,0,0,0.25), 0 12px 30px rgba(0,0,0,0.30)';
+var CO_IMG_SHADOW = '0 8px 18px rgba(0,0,0,0.42), 0 24px 54px rgba(0,0,0,0.55)';
 
 // ============================================================
 // Date helper - handles both PostgreSQL Date objects and SQLite strings
@@ -459,7 +459,7 @@ function coMedia(m, border) {
         '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 82%, rgba(255,255,255,1) 100%);"></div></div>';
     case 'gallery':
       return m.image
-        ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+        ? '<div style="padding:0 4px 0.28in 4px;line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
         : img;
     case 'keyline':
       return shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px');

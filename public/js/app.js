@@ -2128,6 +2128,7 @@ function selectStyleCard(kind, id) {
   } else if (kind === 'layout') {
     state.layoutStyle = id;
     customActive.session = false;
+    saveCustomLayoutPrefs();
     if (state.currentSession && state.currentCampaign) {
       fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
         method: 'PUT',
@@ -2141,6 +2142,7 @@ function selectStyleCard(kind, id) {
   } else if (kind === 'novel-layout') {
     novelLayoutStyle = id;
     customActive.novel = false;
+    saveCustomLayoutPrefs();
     if (typeof loadNovelPreview === 'function') loadNovelPreview(id);
     refreshLayoutStyleButtons();
     closeStylePicker();
@@ -8623,6 +8625,26 @@ function clClone(o){ var r={}; for (var k in o) { if (o.hasOwnProperty(k)) r[k]=
 var customOpts = { session: clClone(CUSTOM_LAYOUT_DEFAULTS), novel: clClone(CUSTOM_LAYOUT_DEFAULTS) };
 var customActive = { session:false, novel:false };
 var _clCtx = 'novel';
+var CL_LS_KEY = 'campaignia.customLayout';
+function clMerge(saved){ var r=clClone(CUSTOM_LAYOUT_DEFAULTS); if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } } return r; }
+function saveCustomLayoutPrefs(){
+  try { window.localStorage.setItem(CL_LS_KEY, JSON.stringify({ opts: customOpts, active: customActive })); } catch (e) {}
+}
+(function loadCustomLayoutPrefs(){
+  try {
+    var raw = window.localStorage.getItem(CL_LS_KEY);
+    if (!raw) return;
+    var saved = JSON.parse(raw);
+    if (saved && saved.opts) {
+      customOpts.session = clMerge(saved.opts.session);
+      customOpts.novel = clMerge(saved.opts.novel);
+    }
+    if (saved && saved.active) {
+      customActive.session = !!saved.active.session;
+      customActive.novel = !!saved.active.novel;
+    }
+  } catch (e) {}
+})();
 var CL_SELECTS = ['arrange','border','caption','paper','gutter','density','narr'];
 var CL_TOGGLES = ['dropcap','pano','aside','companion','emphasis','header','markers','watermark','cover','cast','toc'];
 
@@ -8637,13 +8659,14 @@ function openCustomLayout(ctx){
   var modal=document.getElementById('custom-layout-modal'); if(modal) modal.classList.remove('hidden');
 }
 function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal'); if(m) m.classList.add('hidden'); }
-function resetCustomLayout(){ customOpts[_clCtx]=clClone(CUSTOM_LAYOUT_DEFAULTS); openCustomLayout(_clCtx); }
+function resetCustomLayout(){ customOpts[_clCtx]=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(); openCustomLayout(_clCtx); }
 function applyCustomLayout(){
   var o={};
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
   customOpts[_clCtx]=o;
   customActive[_clCtx]=true;
+  saveCustomLayoutPrefs();
   closeCustomLayout();
   refreshLayoutStyleButtons();
   if(_clCtx==='novel'){ if(typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle); }
