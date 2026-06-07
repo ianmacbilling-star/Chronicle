@@ -8656,3 +8656,25 @@ function saveCampaignSettings() {
       if (err) { err.textContent = 'Could not save settings: ' + e.message; err.classList.remove('hidden'); }
     });
 }
+
+// ----- Admin: run the weekly metrics snapshot on demand -----
+function runSnapshotNow() {
+  var btn = document.getElementById('snapshot-run-btn');
+  var msg = document.getElementById('snapshot-run-msg');
+  if (btn) btn.disabled = true;
+  if (msg) { msg.textContent = 'Running...'; msg.style.color = ''; }
+  fetch('/api/admin/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (btn) btn.disabled = false;
+      if (data && data.success) {
+        if (msg) { msg.textContent = 'Snapshot saved for week of ' + data.week_start + ' (' + data.written + ' values).'; msg.style.color = 'var(--gold)'; }
+      } else {
+        if (msg) { msg.textContent = (data && (data.message || data.error)) || 'Snapshot failed.'; msg.style.color = 'var(--error)'; }
+      }
+    })
+    .catch(function (e) {
+      if (btn) btn.disabled = false;
+      if (msg) { msg.textContent = 'Snapshot failed: ' + e.message; msg.style.color = 'var(--error)'; }
+    });
+}

@@ -469,6 +469,18 @@ async function initPostgres() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_ledger_user ON token_ledger(user_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_ledger_user_bucket ON token_ledger(user_id, bucket)');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS metric_snapshots (
+      id SERIAL PRIMARY KEY,
+      week_start DATE NOT NULL,
+      metric TEXT NOT NULL,
+      tier TEXT NOT NULL DEFAULT '',
+      value BIGINT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_metric_snapshots_uniq ON metric_snapshots (week_start, metric, tier)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_metric_snapshots_metric ON metric_snapshots (metric, week_start)');
 
   // Record of every Stripe purchase. attributed_campaign_id is the
   // campaign that earns the DM the 10% bonus on this purchase.

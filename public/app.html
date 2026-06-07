@@ -613,6 +613,16 @@
       </div>
 
 
+      <!-- Maintenance (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Maintenance</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Take this week's metrics snapshot now. The scheduled weekly job does this automatically; use this to capture a point on demand.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="snapshot-run-btn" onclick="runSnapshotNow()">Run weekly snapshot now</button>
+          <span class="settings-section-desc" id="snapshot-run-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       </div><!-- /settings-pane-general -->
 
       <div class="settings-pane" id="settings-pane-tiers" style="display:none;">

@@ -95,4 +95,101 @@ router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
+// ---- Weekly metric snapshots (true history for current-state metrics) ----
+// Current-state metrics (active users, per-tier counts) have no history in the
+// live tables, so a weekly job snapshots them into metric_snapshots.
+// Timestamp-based metrics (purchases) stay computed live. Idempotent per week.
+
+function mondayOf(dateObj) {
+  var d = new Date(dateObj.getTime());
+  var day = (d.getUTCDay() + 6) % 7; // 0 = Monday
+  d.setUTCDate(d.getUTCDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+async function upsertSnapshot(db, weekStart, metric, tier, value) {
+  const existing = await db.prepare(
+    'SELECT id FROM metric_snapshots WHERE week_start = ? AND metric = ? AND tier = ?'
+  ).get(weekStart, metric, tier);
+  const now = new Date().toISOString();
+  if (existing) {
+    await db.prepare('UPDATE metric_snapshots SET value = ?, created_at = ? WHERE id = ?').run(value, now, existing.id);
+  } else {
+    await db.prepare(
+      'INSERT INTO metric_snapshots (week_start, metric, tier, value, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(weekStart, metric, tier, value, now);
+  }
+}
+
+async function runSnapshot(db) {
+  const weekStart = mondayOf(new Date());
+  const active = await db.prepare("SELECT COUNT(*) AS c FROM users WHERE status = 'active'").get();
+  const tierRows = await db.prepare('SELECT tier, COUNT(*) AS c FROM users GROUP BY tier').all();
+  const tierMap = { copper: 0, silver: 0, gold: 0, platinum: 0 };
+  tierRows.forEach(function (r) {
+    if (r && r.tier && Object.prototype.hasOwnProperty.call(tierMap, r.tier)) tierMap[r.tier] = Number(r.c);
+  });
+  const rows = [['active_users', '', Number((active && active.c) || 0)]];
+  Object.keys(tierMap).forEach(function (t) { rows.push(['tier_count', t, tierMap[t]]); });
+  for (var i = 0; i < rows.length; i++) {
+    await upsertSnapshot(db, weekStart, rows[i][0], rows[i][1], rows[i][2]);
+  }
+  return { week_start: weekStart, written: rows.length };
+}
+
+// Allow either an admin session OR the cron secret (for the Railway job).
+function snapshotAuth(req, res, next) {
+  var secret = process.env.SNAPSHOT_SECRET;
+  var provided = req.get('X-Snapshot-Secret');
+  if (secret && provided && provided === secret) return next();
+  requireAuth(req, res, function () { requireAdmin(req, res, next); });
+}
+
+// POST /api/admin/snapshot — take this week's snapshot now (manual button or cron).
+router.post('/snapshot', snapshotAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const result = await runSnapshot(db);
+    res.json({ success: true, week_start: result.week_start, written: result.written });
+  } catch (e) {
+    console.error('snapshot error:', e.message);
+    res.status(500).json({ error: 'Snapshot failed' });
+  }
+});
+
+// GET /api/admin/trends?weeks=12 — weekly series for the Trends charts.
+// active_users + per-tier come from snapshots (true history); tokens purchased
+// is computed live from the ledger (timestamp-historical).
+router.get('/trends', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    var weeks = parseInt(req.query.weeks, 10);
+    if (isNaN(weeks) || weeks < 1 || weeks > 104) weeks = 12;
+    const since = "NOW() - INTERVAL '" + weeks + " weeks'";
+    const activeRows = await db.prepare(
+      "SELECT week_start, value FROM metric_snapshots WHERE metric = 'active_users' AND week_start >= (" + since + ")::date ORDER BY week_start"
+    ).all();
+    const tierRows = await db.prepare(
+      "SELECT week_start, tier, value FROM metric_snapshots WHERE metric = 'tier_count' AND week_start >= (" + since + ")::date ORDER BY week_start"
+    ).all();
+    const purchaseRows = await db.prepare(
+      "SELECT date_trunc('week', created_at)::date AS week_start, COALESCE(SUM(amount),0) AS value " +
+      "FROM token_ledger WHERE event_type = 'purchase' AND created_at >= " + since + " GROUP BY week_start ORDER BY week_start"
+    ).all();
+    const tier_counts = { copper: [], silver: [], gold: [], platinum: [] };
+    tierRows.forEach(function (r) {
+      if (r && r.tier && tier_counts[r.tier]) tier_counts[r.tier].push({ week_start: r.week_start, value: Number(r.value) });
+    });
+    res.json({
+      weeks: weeks,
+      active_users: activeRows.map(function (r) { return { week_start: r.week_start, value: Number(r.value) }; }),
+      tier_counts: tier_counts,
+      tokens_purchased: purchaseRows.map(function (r) { return { week_start: r.week_start, value: Number(r.value) }; })
+    });
+  } catch (e) {
+    console.error('trends error:', e.message);
+    res.status(500).json({ error: 'Could not load trends' });
+  }
+});
+
 module.exports = router;
