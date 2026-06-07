@@ -4,6 +4,9 @@ const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const path = require('path');
 
+// Shared drop shadow for gallery panels AND character portraits (kept in lockstep).
+var CO_IMG_SHADOW = '0 2px 6px rgba(0,0,0,0.25), 0 12px 30px rgba(0,0,0,0.30)';
+
 // ============================================================
 // Date helper - handles both PostgreSQL Date objects and SQLite strings
 // ============================================================
@@ -169,7 +172,7 @@ function galleryMedia(m) {
   var ratio = shapeRatioCSS(shape);
   var widthPct = isLandscape(shape) ? 92 : (shape === 'square' ? 60 : 52);
   var img = m.image
-    ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:0 3px 18px rgba(0,0,0,0.14);" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;"></div>';
   return '<div style="margin:0.55in auto;width:' + widthPct + '%;page-break-inside:avoid;">' + img +
     (m.title ? '<div style="text-align:center;margin-top:0.14in;font-family:Cinzel,serif;font-size:9.5pt;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a2a;">' + m.title + '</div>' : '') +
@@ -227,7 +230,7 @@ function portraitMedia(m, kind) {
     '</div>';
   }
   if (kind === 'gallery') {
-    return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:0 3px 16px rgba(0,0,0,0.14);" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+    return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" />';
   }
   if (kind === 'bleed') {
     return img;
@@ -456,7 +459,7 @@ function coMedia(m, border) {
         '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 82%, rgba(255,255,255,1) 100%);"></div></div>';
     case 'gallery':
       return m.image
-        ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:0 3px 16px rgba(0,0,0,0.16);" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+        ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" />'
         : img;
     case 'keyline':
       return shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px');
@@ -1142,7 +1145,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.2in auto; }
   .cast-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:0.25in;margin-top:0.1in; }
   .cast-member { text-align:center;padding:0.15in;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:#fff; }
-  .cast-portrait { width:1.2in;height:1.2in;object-fit:cover;object-position:center top;border-radius:50%;border:2px solid rgba(201,168,76,0.3);margin-bottom:0.1in; }
+  .cast-portrait { width:1.2in;height:1.2in;object-fit:cover;object-position:center top;border-radius:50%;border:2px solid rgba(201,168,76,0.3);margin-bottom:0.1in;box-shadow:${CO_IMG_SHADOW}; }
   .cast-no-img { width:1.2in;height:1.2in;border-radius:50%;border:2px solid rgba(201,168,76,0.3);background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:24pt;font-weight:700;margin:0 auto 0.1in; }
   .cast-name { font-family:'Cinzel',serif;font-size:11pt;font-weight:600;color:#2c1810;margin-bottom:0.03in; }
   .cast-cls { font-family:'Crimson Text',serif;font-size:10pt;color:#8a6a2a;font-style:italic;margin-bottom:0.03in; }
