@@ -5384,6 +5384,8 @@ function renderStoryboard() {
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
           '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
         '</div>';
+    var _shapeVal = (m.shape === 'wide' || m.shape === 'tall' || m.shape === 'square') ? m.shape : 'standard';
+    var shapeBadge = '<span class="panel-shape-badge shape-' + _shapeVal + '" title="Panel shape (sets the image aspect ratio)">' + _shapeVal + '</span>';
     var _canLock = canEditCurrentStatus();
     var lockBtn = '';
     if (m.image && _canLock) {
@@ -5409,7 +5411,7 @@ function renderStoryboard() {
         '">' + (_arched ? 'Archived' : 'Archive') + '</button>';
     }
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
-      '<div class="storyboard-panel-img">' +
+      '<div class="storyboard-panel-img">' + shapeBadge +
         imgHtml + '<div class="panel-img-actions">' + regenBtn + retouchBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
