@@ -8453,6 +8453,7 @@ function switchSettingsTab(tab) {
   });
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
+  if (tab === 'trends') loadTrends();
 }
 
 function loadTiersConfig() {
@@ -8677,4 +8678,128 @@ function runSnapshotNow() {
       if (btn) btn.disabled = false;
       if (msg) { msg.textContent = 'Snapshot failed: ' + e.message; msg.style.color = 'var(--error)'; }
     });
+}
+
+// ============================================================
+// ADMIN DASHBOARD — Trends tab (inline SVG charts, dependency-free)
+// Reads GET /api/admin/trends. active_users + per-tier come from weekly
+// snapshots (true history); tokens purchased is live from the ledger.
+// ============================================================
+function loadTrends() {
+  var box = document.getElementById('trends-container');
+  if (box) box.textContent = 'Loading trends...';
+  fetch('/api/admin/trends?weeks=12')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || data.error) {
+        if (box) box.textContent = (data && (data.message || data.error)) || 'Could not load trends.';
+        return;
+      }
+      renderTrends(data);
+    })
+    .catch(function (e) { if (box) box.textContent = 'Could not load trends: ' + e.message; });
+}
+
+function renderTrends(data) {
+  var box = document.getElementById('trends-container');
+  if (!box) return;
+  var tc = data.tier_counts || {};
+  var html = '';
+  html += trendBlock('Active users (weekly)', svgFromSeries([
+    { name: 'Active users', color: 'var(--gold)', points: data.active_users || [] }
+  ]));
+  html += trendBlock('Tokens purchased (weekly)', svgFromSeries([
+    { name: 'Tokens purchased', color: 'var(--gold)', points: data.tokens_purchased || [] }
+  ]));
+  html += trendBlock('Users by tier (weekly)', svgFromSeries([
+    { name: 'Copper', color: '#c87f4a', points: tc.copper || [] },
+    { name: 'Silver', color: '#b9c2cc', points: tc.silver || [] },
+    { name: 'Gold', color: '#d8b84c', points: tc.gold || [] },
+    { name: 'Platinum', color: '#7fb0c8', points: tc.platinum || [] }
+  ]));
+  box.innerHTML = html;
+}
+
+function trendBlock(title, body) {
+  return '<div class="trend-block"><div class="trend-title">' + title + '</div>' + body + '</div>';
+}
+
+function trendShortDate(w) {
+  var p = String(w).slice(0, 10).split('-');
+  if (p.length < 3) return String(w);
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var mi = parseInt(p[1], 10) - 1;
+  return (months[mi] || p[1]) + ' ' + parseInt(p[2], 10);
+}
+
+function svgFromSeries(seriesIn) {
+  var weekSet = {};
+  seriesIn.forEach(function (s) { (s.points || []).forEach(function (pt) { weekSet[String(pt.week_start).slice(0, 10)] = true; }); });
+  var weeks = Object.keys(weekSet).sort();
+  if (!weeks.length) {
+    return '<div class="trend-empty">No data yet \u2014 the first weekly snapshot will show up here.</div>';
+  }
+  var series = seriesIn.map(function (s) {
+    var map = {};
+    (s.points || []).forEach(function (pt) { map[String(pt.week_start).slice(0, 10)] = Number(pt.value); });
+    return {
+      name: s.name, color: s.color,
+      values: weeks.map(function (w) { return (w in map) ? map[w] : null; })
+    };
+  });
+  return svgLineChart(series, weeks.map(trendShortDate), seriesIn.length > 1);
+}
+
+function trendNiceCeil(v) {
+  if (v <= 5) return 5;
+  var pow = Math.pow(10, Math.floor(Math.log10(v)));
+  var nn = v / pow;
+  var step = nn <= 2 ? 2 : (nn <= 5 ? 5 : 10);
+  return step * pow;
+}
+
+function svgLineChart(series, xLabels, showLegend) {
+  var W = 720, H = 240, padL = 46, padR = 16, padT = 14, padB = 34;
+  var n = xLabels.length;
+  var maxY = 1;
+  series.forEach(function (s) { s.values.forEach(function (v) { if (v != null && v > maxY) maxY = v; }); });
+  maxY = trendNiceCeil(maxY);
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+  function xAt(i) { return n <= 1 ? padL + plotW / 2 : padL + (plotW * i / (n - 1)); }
+  function yAt(v) { return padT + plotH - (plotH * v / maxY); }
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="trend-svg" preserveAspectRatio="xMidYMid meet">';
+  [0, 0.5, 1].forEach(function (f) {
+    var yy = padT + plotH - plotH * f;
+    svg += '<line x1="' + padL + '" y1="' + yy + '" x2="' + (W - padR) + '" y2="' + yy + '" stroke="rgba(201,168,76,0.15)" stroke-width="1"/>';
+    svg += '<text x="' + (padL - 6) + '" y="' + (yy + 3) + '" text-anchor="end" class="trend-axis">' + Math.round(maxY * f) + '</text>';
+  });
+  var step = Math.ceil(n / 8) || 1;
+  for (var i = 0; i < n; i++) {
+    if (i % step !== 0 && i !== n - 1) continue;
+    svg += '<text x="' + xAt(i).toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle" class="trend-axis">' + xLabels[i] + '</text>';
+  }
+  series.forEach(function (s) {
+    var d = '', started = false;
+    for (var k = 0; k < n; k++) {
+      var v = s.values[k];
+      if (v == null) { started = false; continue; }
+      d += (started ? ' L ' : 'M ') + xAt(k).toFixed(1) + ' ' + yAt(v).toFixed(1);
+      started = true;
+    }
+    if (d) svg += '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2"/>';
+    for (var j = 0; j < n; j++) {
+      var vv = s.values[j];
+      if (vv == null) continue;
+      svg += '<circle cx="' + xAt(j).toFixed(1) + '" cy="' + yAt(vv).toFixed(1) + '" r="3" fill="' + s.color + '"/>';
+    }
+  });
+  svg += '</svg>';
+  if (showLegend) {
+    svg += '<div class="trend-legend">';
+    series.forEach(function (s) {
+      svg += '<span class="trend-leg"><span class="trend-swatch" style="background:' + s.color + '"></span>' + s.name + '</span>';
+    });
+    svg += '</div>';
+  }
+  return svg;
 }
