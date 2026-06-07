@@ -3307,6 +3307,7 @@ function resizePreviewIframe() {
     var doc = iframe.contentDocument || iframe.contentWindow.document;
     if (!doc || !doc.body) return;
     // Take the largest of several height measures to be safe across layouts
+    iframe.style.height = '0px';
     var h = Math.max(
       doc.body.scrollHeight, doc.documentElement.scrollHeight,
       doc.body.offsetHeight, doc.documentElement.offsetHeight
@@ -3970,6 +3971,7 @@ function resizeNovelPreviewIframe() {
   try {
     var doc = iframe.contentDocument || iframe.contentWindow.document;
     if (!doc || !doc.body) return;
+    iframe.style.height = '0px';
     var h = Math.max(
       doc.body.scrollHeight, doc.documentElement.scrollHeight,
       doc.body.offsetHeight, doc.documentElement.offsetHeight
@@ -6204,6 +6206,7 @@ function resizePreviewIframe() {
     var doc = iframe.contentDocument || iframe.contentWindow.document;
     if (!doc || !doc.body) return;
     // Take the largest of several height measures to be safe across layouts
+    iframe.style.height = '0px';
     var h = Math.max(
       doc.body.scrollHeight, doc.documentElement.scrollHeight,
       doc.body.offsetHeight, doc.documentElement.offsetHeight
@@ -6809,6 +6812,7 @@ function resizeNovelPreviewIframe() {
   try {
     var doc = iframe.contentDocument || iframe.contentWindow.document;
     if (!doc || !doc.body) return;
+    iframe.style.height = '0px';
     var h = Math.max(
       doc.body.scrollHeight, doc.documentElement.scrollHeight,
       doc.body.offsetHeight, doc.documentElement.offsetHeight
