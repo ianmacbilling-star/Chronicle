@@ -6,7 +6,7 @@ let usePostgres = false;
 
 // ============================================================
 // POSTGRES ADAPTER
-// Wraps pg to look like better-sqlite3 (synchronous interface)
+// Wraps pg with a synchronous-looking prepared-statement interface
 // ============================================================
 class PostgresAdapter {
   constructor(client) {
@@ -49,7 +49,7 @@ class PostgresAdapter {
 }
 
 // Synchronous wrappers using Atomics/SharedArrayBuffer trick
-// Since pg is async but better-sqlite3 is sync, we use a child process approach
+// pg is async; this adapter presents a synchronous-style query interface
 // Actually - we'll use a different strategy: pre-run all migrations async at startup
 // and use sync-over-async for queries via node's --experimental-vm-modules
 // 
@@ -590,136 +590,7 @@ async function initPostgres() {
   return db;
 }
 
-function initSQLite() {
-  const Database = require('better-sqlite3');
-  const DATA_DIR = path.join(__dirname, '../data');
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-  const sqlite = new Database(path.join(DATA_DIR, 'chronicle.db'));
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('foreign_keys = ON');
-
-  // Run schema
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL,
-      api_key TEXT, fal_key TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, edited_at DATETIME, edited_by INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS campaigns (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, art_style TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
-      edited_at DATETIME, edited_by INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS characters (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL, name TEXT NOT NULL, player_name TEXT,
-      cls TEXT, description TEXT, image TEXT,
-      image_portrait TEXT, image_fullbody TEXT, image_action TEXT, image_other TEXT,
-      canonical_prompt TEXT, canonical_prompt_at DATETIME, canonical_reference_url TEXT, is_npc INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
-      edited_at DATETIME, edited_by INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL, name TEXT NOT NULL, session_date DATE NOT NULL,
-      transcript TEXT, session_notes TEXT, art_style TEXT,
-      narrative_intro TEXT, narrative_sections TEXT, narrative_outro TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
-      edited_at DATETIME, edited_by INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS campaign_assets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      category TEXT NOT NULL DEFAULT 'location',
-      image_url TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
-      edited_at DATETIME, edited_by INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS moments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id INTEGER NOT NULL, title TEXT NOT NULL, description TEXT,
-      type TEXT, prompt TEXT, emphasis TEXT, image TEXT, panel_order INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by INTEGER NOT NULL,
-      edited_at DATETIME, edited_by INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS session_characters (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id INTEGER NOT NULL, character_id INTEGER NOT NULL,
-      prompt TEXT, change_note TEXT,
-      reference_url TEXT,
-      change_flag INTEGER DEFAULT 0,
-      change_detail TEXT,
-      change_moment_index INTEGER,
-      change_status TEXT DEFAULT 'none',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      edited_at DATETIME, edited_by INTEGER,
-      UNIQUE (session_id, character_id)
-    );
-    CREATE TABLE IF NOT EXISTS image_generations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      source TEXT NOT NULL DEFAULT 'moment',
-      ref_id INTEGER,
-      month_key TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS app_settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      setting_key TEXT UNIQUE NOT NULL,
-      value TEXT
-    );
-  `);
-
-  // SQLite migrations for existing databases
-  const migrations = [
-    'ALTER TABLE characters ADD COLUMN player_name TEXT',
-    'ALTER TABLE characters ADD COLUMN image_portrait TEXT',
-    'ALTER TABLE characters ADD COLUMN image_fullbody TEXT',
-    'ALTER TABLE characters ADD COLUMN image_action TEXT',
-    'ALTER TABLE characters ADD COLUMN image_other TEXT',
-    'ALTER TABLE sessions ADD COLUMN session_notes TEXT',
-    'ALTER TABLE sessions ADD COLUMN art_style TEXT',
-    'ALTER TABLE sessions ADD COLUMN narrative_intro TEXT',
-    'ALTER TABLE sessions ADD COLUMN narrative_sections TEXT',
-    'ALTER TABLE sessions ADD COLUMN narrative_outro TEXT',
-    'ALTER TABLE users ADD COLUMN api_key TEXT',
-    'ALTER TABLE users ADD COLUMN fal_key TEXT',
-    'ALTER TABLE moments ADD COLUMN emphasis TEXT',
-    'ALTER TABLE characters ADD COLUMN canonical_prompt TEXT',
-    'ALTER TABLE characters ADD COLUMN canonical_prompt_at DATETIME',
-    'ALTER TABLE characters ADD COLUMN is_npc INTEGER DEFAULT 0',
-    'ALTER TABLE characters ADD COLUMN canonical_reference_url TEXT',
-    'ALTER TABLE session_characters ADD COLUMN reference_url TEXT',
-    'ALTER TABLE session_characters ADD COLUMN change_flag INTEGER DEFAULT 0',
-    'ALTER TABLE session_characters ADD COLUMN change_detail TEXT',
-    'ALTER TABLE session_characters ADD COLUMN change_moment_index INTEGER',
-    "ALTER TABLE session_characters ADD COLUMN change_status TEXT DEFAULT 'none'",
-    "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
-    'ALTER TABLE users ADD COLUMN suspended_at DATETIME',
-    'ALTER TABLE campaigns ADD COLUMN inherited_at DATETIME',
-    'ALTER TABLE campaigns ADD COLUMN inherited_from_user_id INTEGER',
-  ];
-  migrations.forEach(function(m) { try { sqlite.exec(m); } catch(e) {} });
-
-  console.log('  SQLite connected!');
-
-  // Wrap to match async interface (returns resolved promises)
-  return {
-    prepare: function(sql) {
-      const stmt = sqlite.prepare(sql);
-      return {
-        run: function(...args) { return Promise.resolve(stmt.run(...args)); },
-        get: function(...args) { return Promise.resolve(stmt.get(...args)); },
-        all: function(...args) { return Promise.resolve(stmt.all(...args)); }
-      };
-    },
-    exec: function(sql) { sqlite.exec(sql); return Promise.resolve(); }
-  };
-}
+// SQLite support removed - this app is Postgres-only (see getDb()).
 
 // ============================================================
 // EXPORTED FUNCTIONS
@@ -730,12 +601,11 @@ let _initialized = false;
 
 async function getDb() {
   if (_db) return _db;
-  if (process.env.DATABASE_URL) {
-    _db = await initPostgres();
-    usePostgres = true;
-  } else {
-    _db = initSQLite();
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required (SQLite support has been removed; this app is Postgres-only).');
   }
+  _db = await initPostgres();
+  usePostgres = true;
   _initialized = true;
   return _db;
 }
