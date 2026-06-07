@@ -8547,20 +8547,26 @@ function loadStats() {
 function renderStats(d) {
   var box = document.getElementById('stats-container');
   if (!box) return;
-  var cards = [
-    ['Total active users', d.active_users],
-    ['New users (last 30 days)', d.new_users_30],
-    ['New users (last 90 days)', d.new_users_90],
-    ['Moments generated (last 30 days)', d.moments_30],
-    ['Moments generated (last 90 days)', d.moments_90],
-    ['Total Fal calls', d.fal_calls],
-    ['Total active campaigns', d.active_campaigns]
-  ];
-  var html = '<div class="stats-grid">';
-  cards.forEach(function (c) {
-    var val = (c[1] === null || c[1] === undefined) ? '\u2014' : c[1];
-    html += '<div class="stat-card"><div class="stat-value">' + val + '</div>' +
-      '<div class="stat-label">' + c[0] + '</div></div>';
+  function row(name, val) {
+    var v = (val === null || val === undefined) ? '\u2014' : val;
+    return '<div class="stat-row"><span class="stat-name">' + name + '</span>' +
+      '<span class="stat-num">' + v + '</span></div>';
+  }
+  var html = '<div class="stats-list">';
+  html += row('Total active users', d.active_users);
+  html += row('New users (last 30 days)', d.new_users_30);
+  html += row('New users (last 90 days)', d.new_users_90);
+  html += row('Moments generated (last 30 days)', d.moments_30);
+  html += row('Moments generated (last 90 days)', d.moments_90);
+  html += row('Total Fal calls', d.fal_calls);
+  html += row('Tokens purchased (last 30 days)', d.tokens_purchased_30);
+  html += row('Tokens purchased (last 90 days)', d.tokens_purchased_90);
+  html += row('Total active campaigns', d.active_campaigns);
+  html += '</div>';
+  var tiers = d.tier_counts || {};
+  html += '<div class="stats-subhead">Users by tier</div><div class="stats-list">';
+  [['copper', 'Copper'], ['silver', 'Silver'], ['gold', 'Gold'], ['platinum', 'Platinum']].forEach(function (t) {
+    html += row(t[1], (tiers[t[0]] === null || tiers[t[0]] === undefined) ? 0 : tiers[t[0]]);
   });
   html += '</div>';
   box.innerHTML = html;

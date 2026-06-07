@@ -66,9 +66,17 @@ router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
       q("SELECT COUNT(*) AS c FROM moments WHERE created_at >= NOW() - INTERVAL '30 days'"),
       q("SELECT COUNT(*) AS c FROM moments WHERE created_at >= NOW() - INTERVAL '90 days'"),
       q("SELECT COUNT(*) AS c FROM image_generations"),
-      q("SELECT COUNT(*) AS c FROM campaigns WHERE is_active = true")
+      q("SELECT COUNT(*) AS c FROM campaigns WHERE is_active = true"),
+      q("SELECT COALESCE(SUM(amount),0) AS c FROM token_ledger WHERE event_type = 'purchase' AND created_at >= NOW() - INTERVAL '30 days'"),
+      q("SELECT COALESCE(SUM(amount),0) AS c FROM token_ledger WHERE event_type = 'purchase' AND created_at >= NOW() - INTERVAL '90 days'")
     ]);
     const n = function (r) { return (r && r.c != null) ? Number(r.c) : 0; };
+    // Users per tier (all four represented, 0 if none).
+    const tierRows = await db.prepare('SELECT tier, COUNT(*) AS c FROM users GROUP BY tier').all();
+    const tier_counts = { copper: 0, silver: 0, gold: 0, platinum: 0 };
+    tierRows.forEach(function (row) {
+      if (row && row.tier && Object.prototype.hasOwnProperty.call(tier_counts, row.tier)) tier_counts[row.tier] = Number(row.c);
+    });
     res.json({
       active_users: n(results[0]),
       new_users_30: n(results[1]),
@@ -76,7 +84,10 @@ router.get('/stats', requireAuth, requireAdmin, async function (req, res) {
       moments_30: n(results[3]),
       moments_90: n(results[4]),
       fal_calls: n(results[5]),
-      active_campaigns: n(results[6])
+      active_campaigns: n(results[6]),
+      tokens_purchased_30: n(results[7]),
+      tokens_purchased_90: n(results[8]),
+      tier_counts: tier_counts
     });
   } catch (e) {
     console.error('GET stats error:', e.message);

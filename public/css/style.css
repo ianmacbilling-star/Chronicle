@@ -1779,3 +1779,29 @@ body.role-player #stab-export { display: block !important; }
   cursor: pointer;
   flex: 0 0 auto;
 }
+
+/* Admin Dashboard: compact read-only stat rows */
+.stats-list { max-width: 520px; }
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(201,168,76,0.12);
+  font-size: 14px;
+}
+.stat-name { color: var(--text-light); }
+.stat-num {
+  color: var(--gold);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stats-subhead {
+  margin: 20px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-dim, rgba(201,168,76,0.7));
+}

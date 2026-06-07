@@ -27,7 +27,7 @@
         <div class="user-menu-header" id="user-menu-email"></div>
         <div class="user-menu-item" onclick="showView('account');closeUserMenu()">&#9733; My Account</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">&#9672; Buy Tokens</div>
-        <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">&#9881; Settings</div>
+        <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">&#9881; Dashboard</div>
         <div class="user-menu-divider"></div>
         <div class="user-menu-item danger" onclick="logout()">&#8594; Sign out</div>
       </div>
@@ -528,7 +528,7 @@
     <div id="view-settings" class="view" style="display:none;">
       <div class="page-header">
         <div>
-          <div class="page-title">Settings</div>
+          <div class="page-title">Dashboard</div>
           <div class="page-subtitle">Manage your account and preferences</div>
         </div>
       </div>
@@ -538,7 +538,7 @@
 
       <!-- Settings tabs (admin) -->
       <div class="settings-tabs">
-        <button class="settings-tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">General</button>
+        <button class="settings-tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">Settings</button>
         <button class="settings-tab" id="settings-tab-tiers" onclick="switchSettingsTab('tiers')">Tiers</button>
         <button class="settings-tab" id="settings-tab-stats" onclick="switchSettingsTab('stats')">Stats</button>
         <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
