@@ -177,12 +177,13 @@ function galleryMedia(m) {
 }
 
 // ---- Tall / tower handling, shared by every preset ----
-// A tall or towering image must never stand alone: it sits to one side with
-// the narrative (and the panel's own description as fallback) beside it. Sides
-// alternate by panel index for rhythm.
+// A tall or towering image never stands alone: it sits to one side with the
+// narrative beside it (panel description as fallback). If the NEXT panel is a
+// compact shape (standard or square) it is pulled in under the narrative as a
+// companion; wide / panoramic / another tall|tower are left for their own role.
 function isPortrait(m) { var s = normShape(m); return s === 'tall' || s === 'tower'; }
+function companionEligible(m) { var s = normShape(m); return s === 'standard' || s === 'square'; }
 
-// The tall image, rendered to fill its column, in each layout's visual idiom.
 function portraitMedia(m, kind) {
   var ratio = shapeRatioCSS(normShape(m));
   if (!m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);"></div>';
@@ -202,7 +203,6 @@ function portraitMedia(m, kind) {
   if (kind === 'bleed') {
     return img;
   }
-  // keyline (default — Mosaic / Saga)
   return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border:1px solid rgba(201,168,76,0.25);border-radius:3px;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
 }
 
@@ -218,15 +218,25 @@ function asideBlock(mediaHTML, sideHTML, imgLeft) {
     (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
 }
 
-function portraitAside(m, i, sections, kind) {
+// Returns { html, consumed }. consumed === 1 when the next panel was pulled in
+// as a companion (so the caller skips it).
+function portraitAside(moments, sections, i, kind) {
+  var m = moments[i];
   var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-  return asideBlock(portraitMedia(m, kind), asideText(m, section.after), (i % 2 === 0));
+  var side = asideText(m, section.after);
+  var consumed = 0;
+  var nxt = moments[i + 1];
+  if (nxt && companionEligible(nxt)) {
+    side += '<div style="margin-top:0.16in;">' + portraitMedia(nxt, kind) + '</div>';
+    var nsec = sections.find(function (s) { return s.panel_index === (i + 1); }) || {};
+    if (nsec.after) side += '<div style="margin-top:0.1in;">' + buildClassicTextPanel(nsec.after) + '</div>';
+    consumed = 1;
+  }
+  return { html: asideBlock(portraitMedia(m, kind), side, (i % 2 === 0)), consumed: consumed };
 }
 
 // ---- Shared drivers ----
 
-// Grid driver: non-portrait panels pack into justified rows; tall/tower panels
-// break out into a narrative-aside block. Narratives stay grouped after their row.
 function gridLayout(moments, sections, intro, outro, rowFn, kind) {
   var html = buildNarrativeHTML(intro, true);
   var buf = [];
@@ -241,24 +251,35 @@ function gridLayout(moments, sections, intro, outro, rowFn, kind) {
     });
     buf = [];
   }
-  moments.forEach(function (m, i) {
-    if (isPortrait(m)) { flush(); html += portraitAside(m, i, sections, kind); }
-    else buf.push({ m: m, i: i });
-  });
+  for (var i = 0; i < moments.length; i++) {
+    if (isPortrait(moments[i])) {
+      flush();
+      var r = portraitAside(moments, sections, i, kind);
+      html += r.html;
+      i += r.consumed;
+    } else {
+      buf.push({ m: moments[i], i: i });
+    }
+  }
   flush();
   html += buildNarrativeHTML(outro, true);
   return html;
 }
 
-// Stack driver: one image per beat; tall/tower panels become a narrative-aside.
 function stackLayoutP(moments, sections, intro, outro, mediaFn, kind) {
   var html = buildNarrativeHTML(intro, true);
-  moments.forEach(function (m, i) {
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    if (isPortrait(m)) {
+      var r = portraitAside(moments, sections, i, kind);
+      html += r.html;
+      i += r.consumed;
+      continue;
+    }
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    if (isPortrait(m)) { html += portraitAside(m, i, sections, kind); return; }
     html += mediaFn(m);
     if (section.after) html += buildNarrativeHTML(section.after, false);
-  });
+  }
   html += buildNarrativeHTML(outro, true);
   return html;
 }
@@ -273,15 +294,20 @@ function layoutMosaic(moments, sections, intro, outro) {
   return gridLayout(moments, sections, intro, outro, mosaicRow, 'keyline');
 }
 
-// SPECTACLE — splash-forward. Tall/tower go to a narrative-aside; combat / first
-// / last / panoramic / wide get a dominant solo row; quieter beats pack.
 function layoutSpectacle(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
   var buffer = [];
   function flush() { if (buffer.length) { packRows(buffer).forEach(function (r) { html += comicRow(r, false, false); }); buffer = []; } }
-  moments.forEach(function (m, i) {
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    if (isPortrait(m)) {
+      flush();
+      var r = portraitAside(moments, sections, i, 'comic');
+      html += r.html;
+      i += r.consumed;
+      continue;
+    }
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    if (isPortrait(m)) { flush(); html += portraitAside(m, i, sections, 'comic'); return; }
     var big = m.type === 'combat' || i === 0 || i === moments.length - 1 ||
       ['panoramic', 'wide'].indexOf(normShape(m)) >= 0;
     if (big) {
@@ -291,7 +317,7 @@ function layoutSpectacle(moments, sections, intro, outro) {
       buffer.push({ m: m, i: i });
     }
     if (section.after) { flush(); html += buildNarrativeHTML(section.after, false); }
-  });
+  }
   flush();
   html += buildNarrativeHTML(outro, true);
   return html;
@@ -309,15 +335,19 @@ function layoutFolio(moments, sections, intro, outro) {
   return stackLayoutP(moments, sections, intro, outro, galleryMedia, 'gallery');
 }
 
-// SAGA — illustrated novel. Tall/tower beside narrative (shared rule); landscape
-// and square run full width with text below.
 function layoutSaga(moments, sections, intro, outro) {
   var html = buildNarrativeHTML(intro, true);
   var imgBorder = 'border:1px solid rgba(201,168,76,0.25);';
-  moments.forEach(function (m, i) {
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    if (isPortrait(m)) {
+      var r = portraitAside(moments, sections, i, 'keyline');
+      html += r.html;
+      i += r.consumed;
+      continue;
+    }
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var text = section.after || '';
-    if (isPortrait(m)) { html += portraitAside(m, i, sections, 'keyline'); return; }
     var inner = shapedImage(m, imgBorder) + panelCaption(m, i);
     if (text) {
       html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner +
@@ -325,7 +355,7 @@ function layoutSaga(moments, sections, intro, outro) {
     } else {
       html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + '</div>';
     }
-  });
+  }
   html += buildNarrativeHTML(outro, true);
   return html;
 }
