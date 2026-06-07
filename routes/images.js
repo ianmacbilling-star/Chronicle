@@ -257,18 +257,45 @@ async function retouchImage(currentImageUrl, instruction, style, falKey) {
 
 // Async retouch: the same in-context edit as retouchImage, submitted to fal's
 // queue with our webhook so the user's request returns immediately.
-async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl) {
+async function submitRetouch(currentImageUrl, instruction, style, falKey, webhookUrl, charBlock) {
   fal.config({ credentials: falKey });
   const stylePrefix = style ? getStylePrefix(style) : '';
+  // Reference images for the characters/assets attached to this panel, so a
+  // retouch like "add the other character" has those identities to draw from.
+  // Image 1 is always the current panel; references follow as Image 2+.
+  var refs = (charBlock && charBlock.refs) || [];
+  var imageUrls = [currentImageUrl].concat(refs.map(function (r) { return r.url; }));
+  var refSection = '';
+  if (refs.length) {
+    var refMap = refs.map(function (r, i) {
+      var n = 'Image ' + (i + 2);
+      if (r.isAsset) {
+        if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
+        if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
+        if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        return n + ' is a reference for "' + r.name + '".';
+      }
+      return n + ' is the reference for ' + r.name + '.';
+    }).join(' ');
+    refSection =
+      '\n\nREFERENCE IMAGES (identity and content source only \u2014 Image 1 is the panel being edited): ' + refMap + ' ' +
+      'These are the characters, NPCs, locations, and items that belong in this panel. ' +
+      'If the change above asks to add or include a character or element that is NOT already ' +
+      'visible in Image 1, ADD it using its reference for exact face, hair, build, and gear, ' +
+      'placed naturally into the existing scene. Keep each as a SEPARATE individual and never ' +
+      'blend or merge features. Anyone already present in Image 1 stays exactly as they are; ' +
+      'do not duplicate them. Re-render any added element in the existing art style of Image 1, ' +
+      'matching its medium, lighting, and color.';
+  }
   const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
-    'You are editing an EXISTING comic panel, provided as Image 1. Reproduce it '+
-    'EXACTLY \u2014 identical composition, characters, faces, poses, framing, '+
-    'background, colors, lighting, and art style \u2014 and change ONLY the '+
-    'following, leaving everything else untouched:\n\n' + instruction;
+    'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
+    'same composition, framing, background, the characters already present and their faces and ' +
+    'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
+    'everything else untouched:\n\n' + instruction + refSection;
   const submitted = await fal.queue.submit('fal-ai/nano-banana-2/edit', {
     input: {
       prompt: editPrompt,
-      image_urls: [currentImageUrl],
+      image_urls: imageUrls,
       num_images: 1,
       aspect_ratio: '4:3',
       output_format: 'png',
@@ -700,7 +727,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
   if (!instruction || !String(instruction).trim()) return res.json({ error: 'Describe the change you want.' });
   const db = await getDb();
   const moment = await db.prepare(
-    'SELECT m.id, m.image, m.locked, m.session_id, m.fork_id, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+    'SELECT m.*, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
     'FROM moments m JOIN sessions s ON m.session_id = s.id JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ?'
   ).get(moment_id);
   if (!moment) return res.status(404).json({ error: 'Moment not found' });
@@ -718,7 +745,31 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     }
     const webhookUrl = falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
-    const sub = await submitRetouch(moment.image, instruction, style, fal_key, webhookUrl);
+    // Gather the SAME references this panel was generated with — its attached
+    // cast characters AND assets — so a retouch can add a character it would
+    // otherwise have no reference for. Mirrors the generate-moment path.
+    const campRowR = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
+    const campIdR = campRowR ? campRowR.campaign_id : moment.campaign_id;
+    const charsR = await db.prepare(
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(moment.fork_id, campIdR);
+    await attachPriorReferences(db, charsR, moment.session_id, campIdR);
+    const panelTextR = (moment.prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
+    let explicitCharIdsR = null, explicitAssetIdsR = null;
+    if (moment.cast_explicit) {
+      explicitCharIdsR = (await db.prepare('SELECT character_id FROM moment_characters WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.character_id; });
+      explicitAssetIdsR = (await db.prepare('SELECT asset_id FROM moment_assets WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.asset_id; });
+    }
+    const charListR = buildCharacterBlock(charsR, panelTextR, moment.panel_order, explicitCharIdsR);
+    const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
+    const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
+    const refsR = combineRefs(charListR.refs, assetListR.refs);
+    const sub = await submitRetouch(moment.image, instruction, style, fal_key, webhookUrl, { refs: refsR, text: charListR.text });
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
