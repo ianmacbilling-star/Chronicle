@@ -73,10 +73,14 @@ function shapeCompHint(shape) {
   return '';
 }
 
+// Every generated panel must be borderless/full-bleed so the PDF LAYOUT owns all
+// framing. Appended to the prompt body and the Nano Banana system_prompt.
+var NO_BORDER = ' FULL-BLEED IMAGE: the artwork must fill the entire frame edge to edge and extend all the way to all four edges, with NO border, NO frame, NO white or colored margin, NO matte, and NO bare paper or padding around it.';
+
 function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
-  var hint = shapeCompHint(shape);
+  var hint = shapeCompHint(shape) + NO_BORDER;
 
   // charBlock is { text, refs } (refs may include assets) from the
   // route. Tolerate a plain string or null for safety.
@@ -129,7 +133,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
     'averaged, or merged with another. If reference images are provided, treat ' +
     'them ONLY as identity and content sources (who or what each element is); do ' +
     'NOT copy their rendering style — re-render every referenced element in ' +
-    'this art style. The required art style is: ' + stylePrefix;
+    'this art style.' + NO_BORDER + ' The required art style is: ' + stylePrefix;
   const styleFinal = stylePrefix
     ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks DRAWN in this style rather than placed on top of it. ' + stylePrefix
     : '';
@@ -517,9 +521,9 @@ function getStylePrefix(style) {
     'Watercolor painterly': 'STYLE: Beautiful loose watercolor illustration. Soft wet-on-wet washes, organic flowing color, artistic brushwork, warm earthy tones, delicate linework. Painterly and expressive, like a fantasy storybook, in the watercolor tradition of John Singer Sargent, Winslow Homer, and Andrew Wyeth.',
     'Anime manga style': 'STYLE: High quality anime illustration. Clean bold linework, vibrant flat colors, dynamic composition, expressive characters, detailed backgrounds, studio Ghibli and JRPG inspired. Cinematic anime framing.',
     'Classic pen and ink': 'STYLE: Classic pen and ink illustration with sepia wash. Fine crosshatching, detailed linework, old parchment tones, reminiscent of vintage fantasy book illustrations and Tolkien-era artwork. Intricate detail.',
-    'Fantasy oil painting': 'STYLE: Fantasy oil painting inspired by classic sword-and-sorcery cover art and old fantasy rulebook art plates, in the tradition of Frank Frazetta, Boris Vallejo, and Charles Marion Russell. LARGE, bold, loose brushstrokes with thick visible impasto and broad palette-knife marks, where each individual stroke of paint is clearly visible. Rich, saturated oil-paint textures, dramatic lighting, bold high-contrast highlights. Heroic anatomy, powerful poses, sculpted musculature. Epic, atmospheric backgrounds with mist, firelight, or stormy skies. Deep intense colors, warm skin tones, metallic reflections. UNFRAMED vignette composition: the painting is fully rendered on only ONE or TWO edges and dissolves into bare, unpainted parchment on the remaining edges, with loose ragged fading borders and NO rectangular frame, like an illustration printed in the margin of a fantasy rulebook page.',
+    'Fantasy oil painting': 'STYLE: Fantasy oil painting inspired by classic sword-and-sorcery cover art and old fantasy rulebook art plates, in the tradition of Frank Frazetta, Boris Vallejo, and Charles Marion Russell. LARGE, bold, loose brushstrokes with thick visible impasto and broad palette-knife marks, where each individual stroke of paint is clearly visible. Rich, saturated oil-paint textures, dramatic lighting, bold high-contrast highlights. Heroic anatomy, powerful poses, sculpted musculature. Epic, atmospheric backgrounds with mist, firelight, or stormy skies. Deep intense colors, warm skin tones, metallic reflections. FULL-BLEED composition: the painting fills the ENTIRE frame edge to edge, with paint, brushwork, and detail extending all the way to all four edges and NO bare parchment, NO fading margins, and NO border.',
     'Comic book cel-shaded': 'STYLE: EXTREME comic-book cel-shaded art in the style of Borderlands. VERY THICK, heavy black ink outlines: bold brush-inked contours around every character, prop, and shape, plus strong interior ink linework. HARD cel shading with flat blocks of light and shadow, razor-sharp shadow edges and NO smooth gradients, dramatic high-contrast lighting. Visible halftone dots and crosshatching in the shadow areas. Punchy, saturated graphic-novel colors. Heavy hand-painted marker texture with visible strokes and sketch lines. Exaggerated silhouettes, dynamic angles, expressive faces, stylized proportions. Loud, graphic, over-the-top comic-book energy.',
-    'Fantasy pastel': 'STYLE: Fantasy pastel and soft-chalk art in the great pastel tradition of Edgar Degas and Mary Cassatt. BOLD, large chalk and pastel strokes with thick, visible, grainy chalk marks and broad soft-pastel sweeps, generous smudging, and the texture of chalk dragged across rough paper. Soft, blended pastel colors with gentle gradients and a dreamy, magical atmosphere. Warm light, glowing highlights, a whimsical airy feeling. Lightly stylized, ethereal, expressive characters. UNFRAMED vignette composition: fully drawn on only ONE or TWO edges and dissolving into bare, untouched paper on the remaining edges, with loose feathered fading chalk borders and NO rectangular frame, like an illustration in the margin of a fantasy rulebook page.',
+    'Fantasy pastel': 'STYLE: Fantasy pastel and soft-chalk art in the great pastel tradition of Edgar Degas and Mary Cassatt. BOLD, large chalk and pastel strokes with thick, visible, grainy chalk marks and broad soft-pastel sweeps, generous smudging, and the texture of chalk dragged across rough paper. Soft, blended pastel colors with gentle gradients and a dreamy, magical atmosphere. Warm light, glowing highlights, a whimsical airy feeling. Lightly stylized, ethereal, expressive characters. FULL-BLEED composition: the chalk and pastel work fills the ENTIRE frame edge to edge, extending all the way to all four edges with NO bare paper, NO fading margins, and NO border.',
     'Charcoal drawing': 'STYLE: Traditional charcoal drawing on rough paper. Rich, textured charcoal strokes with deep velvety blacks, soft smudged mid-tones, and subtle blended shading. Hand-drawn edges that feel slightly rough, with visible charcoal grain and the tooth of the paper showing through. Bold, expressive shadows with dramatic high contrast and areas of heavy shading. Minimal highlights, created by leaving the bare paper exposed rather than adding bright tones. A traditional, tactile, sketch-based monochrome charcoal look, like an artist working with charcoal sticks and blending stumps on rough paper, in the tradition of Old Master charcoal and chalk drawings by Leonardo da Vinci and Michelangelo Buonarroti.'
   };
   return prefixes[style] || prefixes['High fantasy illustration'];
