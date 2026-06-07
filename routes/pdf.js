@@ -842,6 +842,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts) {
   /* CONTENT */
   .content-page { width:8.5in;min-height:11in;padding:0.75in 0.85in;page-break-after:always;position:relative; }
   .content-page:last-of-type { min-height:0; page-break-after:avoid; }
+  .cast-page, .content-page {
+    background-color:#f4e8c9;
+    background-image:
+      radial-gradient(ellipse at 9% 6%, rgba(110,75,28,0.11), transparent 42%),
+      radial-gradient(ellipse at 91% 13%, rgba(110,75,28,0.08), transparent 46%),
+      radial-gradient(ellipse at 20% 95%, rgba(85,55,18,0.11), transparent 42%),
+      radial-gradient(ellipse at 83% 87%, rgba(110,75,28,0.07), transparent 46%);
+    box-shadow: inset 0 0 1.5in 0.45in rgba(74,48,16,0.33);
+  }
   .print-bar { position:fixed;top:14px;right:14px;z-index:9999; }
   .print-bar button { font-family:'Cinzel',serif;font-size:11pt;font-weight:600;background:#2c1810;color:#f3e7c8;border:1px solid #c9a84c;border-radius:4px;padding:8px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3); }
   .page-header { display:flex;align-items:center;justify-content:space-between;padding-bottom:0.12in;margin-bottom:0.2in;border-bottom:1px solid rgba(201,168,76,0.3); }
