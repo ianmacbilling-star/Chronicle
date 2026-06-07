@@ -665,6 +665,44 @@ function renderComicPage(moments, sections, intro, outro, opts) {
   return html;
 }
 
+// Magazine flow: images float and the narrative text wraps around them.
+function magFull(shape){ return shape === 'panoramic' || shape === 'wide'; }
+function magWidth(shape){ if (shape === 'tall' || shape === 'tower') return 36; if (shape === 'square') return 42; return 46; }
+function coFloatImg(m, i, side, opts){
+  var media = coMedia(m, opts.border);
+  var overlay = coCaptionOverlay(m, opts.caption);
+  var cap = coCaptionBelow(m, i, opts.caption);
+  var mar = (side === 'left') ? 'margin:0.06in 0.3in 0.2in 0;' : 'margin:0.06in 0 0.2in 0.3in;';
+  return '<div style="float:' + side + ';width:' + magWidth(normShape(m)) + '%;' + mar + 'page-break-inside:avoid;">' +
+    '<div style="position:relative;line-height:0;">' + media + overlay + '</div>' + cap +
+  '</div>';
+}
+function renderMagazine(moments, sections, intro, outro, opts){
+  var html = coDropOrIntro(intro, opts);
+  var fc = 0;
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    var shape = normShape(m);
+    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    if (magFull(shape)) {
+      html += '<div style="clear:both;"></div>';
+      var overlay = coCaptionOverlay(m, opts.caption);
+      html += '<div style="width:100%;margin:0.2in 0 0.1in;page-break-inside:avoid;">' +
+        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+        coCaptionBelow(m, i, opts.caption) + '</div>';
+      if (section.after) html += coNarr(section.after, opts, false);
+    } else {
+      var side = (fc % 2 === 0) ? 'right' : 'left';
+      fc++;
+      html += coFloatImg(m, i, side, opts);
+      if (section.after) html += coNarr(section.after, opts, false);
+    }
+  }
+  html += '<div style="clear:both;"></div>';
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
 function renderLayout(opts, moments, sections, intro, outro) {
   if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet - generate your storyboard first.</p>';
   sections = sections || []; intro = intro || ''; outro = outro || '';
@@ -673,6 +711,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
     case 'paired': return renderPaired(moments, sections, intro, outro, opts);
     case 'comicpage': return renderComicPage(moments, sections, intro, outro, opts);
+    case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
     case 'grid':
     default:       return renderGrid(moments, sections, intro, outro, opts);
   }
