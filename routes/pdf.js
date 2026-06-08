@@ -1474,10 +1474,18 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
 
   const campaign = await db.prepare(
-    'SELECT c.* FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ? AND cm.role = \'dm\''
+    'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
 
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
+
+  // Graphic novel access: the Story Master (dm) always; a member (player) only
+  // when the SM has enabled it for this campaign. No tier gate.
+  var _allowNovel = campaign.allow_player_novel_access === true || campaign.allow_player_novel_access === 1 ||
+    campaign.allow_player_novel_access === 't' || campaign.allow_player_novel_access === 'true';
+  if (campaign.my_role !== 'dm' && !_allowNovel) {
+    return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
+  }
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);

@@ -692,6 +692,12 @@ function showView(view) {
 }
 
 function showCampaignSection(section) {
+  // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
+  if (section === 'novel' && state.currentCampaign) {
+    var _c = state.currentCampaign;
+    var _allow = (_c.allow_player_novel_access === true || _c.allow_player_novel_access === 1 || _c.allow_player_novel_access === 't' || _c.allow_player_novel_access === 'true');
+    if (_c.my_role !== 'dm' && !_allow) { section = 'sessions'; }
+  }
   showView(section);
 
   // Show campaign subnav
@@ -5736,6 +5742,12 @@ function showView(view) {
 }
 
 function showCampaignSection(section) {
+  // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
+  if (section === 'novel' && state.currentCampaign) {
+    var _c = state.currentCampaign;
+    var _allow = (_c.allow_player_novel_access === true || _c.allow_player_novel_access === 1 || _c.allow_player_novel_access === 't' || _c.allow_player_novel_access === 'true');
+    if (_c.my_role !== 'dm' && !_allow) { section = 'sessions'; }
+  }
   showView(section);
 
   // Show campaign subnav
@@ -7629,6 +7641,12 @@ function applyRoleVisibility() {
   } else {
     document.body.classList.remove('role-player');
   }
+
+  // Graphic Novel: visible to the SM (dm) always; to a player only when the SM
+  // has enabled player access for THIS campaign (no tier gate).
+  var _allowNovel = cur && (cur.allow_player_novel_access === true || cur.allow_player_novel_access === 1 || cur.allow_player_novel_access === 't' || cur.allow_player_novel_access === 'true');
+  var _showNovel = (role === 'dm') || (isPlayer && _allowNovel);
+  Array.prototype.forEach.call(document.querySelectorAll('.novel-nav-btn'), function(b){ b.style.display = _showNovel ? '' : 'none'; });
 
   // Invite button: DM-only, has its own ID-targeted toggle.
   var inviteBtn = document.getElementById('campaign-invite-btn');
