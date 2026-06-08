@@ -60,21 +60,24 @@ const STATUS = {
 //                                   + Finish + Linen + Foil.
 //
 // Binding codes: PB = perfect-bound paperback, SS = saddle stitch,
-// CW = casewrap hardcover. PB/SS are documented; CW is best-effort and
-// MUST be confirmed (run a sandbox getQuote -- a 400 means the code/paper
-// is wrong; fix the constant or add a SKU_OVERRIDES entry).
+// CW = casewrap hardcover. PB and CW are sandbox-confirmed for 8.5x11 FC.
+// SS is not yet confirmed (saddle needs a <=48pp book to quote); confirm it
+// the first time a short-enough book is ordered.
 const BIND_CODE = { paperback: 'PB', saddle: 'SS', hardcover: 'CW' };
 
-// 60# uncoated white. Confirmed for paperback standard color. VERIFY for
-// premium color and for casewrap (color books often want a coated stock).
+// 60# uncoated white. Sandbox-confirmed for 8.5x11 paperback (standard AND
+// premium color) and for casewrap hardcover premium. Re-confirm if a new
+// trim/paper is added.
 const PAPER_CODE = '060UW444';
 
-// Confirmed SKUs win over the parametric builder below. Read exact codes
-// off Lulu's Pricing Calculator (it prints the pod_package_id per option
-// set) or confirm via sandbox quote, then lock them in here keyed by
-// `${binding}:${quality}:${coverFinish}`.
+// Confirmed SKUs win over the parametric builder so a future code change
+// can't silently break a known-good product. All entries below are
+// sandbox-confirmed (8.5x11 full color); keyed by `${binding}:${quality}:${coverFinish}`.
 const SKU_OVERRIDES = {
-  'paperback:standard:gloss': '0850X1100FCSTDPB060UW444GXX', // sandbox-confirmed (8.5x11 FC std PB gloss)
+  'paperback:standard:gloss': '0850X1100FCSTDPB060UW444GXX', // $7.01 print
+  'paperback:standard:matte': '0850X1100FCSTDPB060UW444MXX', // $7.01 print
+  'paperback:premium:matte':  '0850X1100FCPREPB060UW444MXX', // $18.97 print
+  'hardcover:premium:matte':  '0850X1100FCPRECW060UW444MXX', // $28.57 print
 };
 
 class LuluProvider extends PrintProvider {
