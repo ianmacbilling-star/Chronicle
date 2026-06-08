@@ -697,7 +697,7 @@ function coFloatImg(m, i, side, opts){
   var overlay = coCaptionOverlay(m, opts.caption);
   var cap = coCaptionBelow(m, i, opts.caption);
   var mar = (side === 'left') ? 'margin:0.06in 0.3in 0.2in 0;' : 'margin:0.06in 0 0.2in 0.3in;';
-  return '<div style="float:' + side + ';width:' + magWidth(normShape(m)) + '%;' + mar + 'page-break-inside:avoid;">' +
+  return '<div style="float:' + side + ';clear:both;width:' + magWidth(normShape(m)) + '%;' + mar + 'page-break-inside:avoid;">' +
     '<div style="position:relative;line-height:0;">' + media + overlay + '</div>' + cap +
   '</div>';
 }
