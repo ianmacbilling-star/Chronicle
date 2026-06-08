@@ -18,7 +18,7 @@ const TIERS = {
     max_moments_medium: 4,   // 2000-5000
     max_moments_long: 5,     // 5000-10000
     max_moments_epic: 6,     // 10000+
-    watermark: true,
+    watermark: false,
     can_export: false,
     can_print: false,
     can_edit_prompts: true,

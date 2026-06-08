@@ -178,6 +178,12 @@ router.get('/me', async function(req, res) {
 
     const tier = getTier(user.tier || 'copper');
     const trialExpired = isTrialExpired(user);
+    // Free trial = within the 30-day window from trial_started_at and not yet
+    // converted to a paid plan. Drives the on-screen trial watermark.
+    const _trialMs = 30 * 24 * 60 * 60 * 1000;
+    const inFreeTrial = !!user.trial_started_at &&
+      (Date.now() - new Date(user.trial_started_at).getTime()) < _trialMs &&
+      (user.subscription_status || 'trialing') === 'trialing';
 
     // Calculate trial days remaining
     let trialDaysLeft = null;
@@ -206,6 +212,7 @@ router.get('/me', async function(req, res) {
       trialDaysLeft: trialDaysLeft,
       subscriptionStatus: user.subscription_status || 'trialing',
       renderThinking: !!user.render_thinking,
+      inFreeTrial: inFreeTrial,
       is_admin: isAdmin,
       allTiers: TIERS
     });

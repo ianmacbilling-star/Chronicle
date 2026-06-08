@@ -343,6 +343,7 @@ function checkAuth() {
       state.user = data;
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
+      state.inFreeTrial = !!data.inFreeTrial;
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -5423,7 +5424,7 @@ function renderStoryboard() {
   // [Opening] [Panel 1] [Between 1-2] [Panel 2] [Between 2-3] [Panel 3] ...
 
   function buildPanel(m, i) {
-    var needsWatermark = state.userTier && state.userTier.watermark;
+    var needsWatermark = !!state.inFreeTrial;
     var imgHtml = m.image
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +
@@ -5590,6 +5591,7 @@ function checkAuth() {
       state.user = data;
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
+      state.inFreeTrial = !!data.inFreeTrial;
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
