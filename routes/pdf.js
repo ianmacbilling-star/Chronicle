@@ -740,10 +740,14 @@ function renderLayout(opts, moments, sections, intro, outro) {
 
 // ---- Page background (paper) ----
 var CO_SMOKE_SVG =
-  "<svg xmlns='http://www.w3.org/2000/svg' width='560' height='520'>" +
-  "<filter id='s'><feTurbulence type='fractalNoise' baseFrequency='0.011 0.017' numOctaves='3' seed='11' stitchTiles='stitch'/>" +
-  "<feColorMatrix type='matrix' values='0 0 0 0 0.20  0 0 0 0 0.15  0 0 0 0 0.10  0 0 0 0.55 0'/></filter>" +
-  "<rect width='100%' height='100%' filter='url(#s)' opacity='0.32'/></svg>";
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 850 1100' preserveAspectRatio='none'>" +
+  "<defs><filter id='b' x='-40%' y='-40%' width='180%' height='180%'><feGaussianBlur stdDeviation='9'/></filter></defs>" +
+  "<g fill='none' stroke-linecap='round' filter='url(#b)'>" +
+  "<path d='M150 1110 C110 960 245 880 160 740 C100 630 225 560 150 440 C112 360 198 300 162 215' stroke='rgba(32,28,26,0.24)' stroke-width='20'/>" +
+  "<path d='M255 1110 C330 980 195 905 285 795 C348 705 238 645 305 535 C338 472 288 410 320 350' stroke='rgba(32,28,26,0.16)' stroke-width='14'/>" +
+  "<path d='M690 1110 C765 965 635 895 720 775 C785 685 668 615 742 505 C778 445 720 388 752 318' stroke='rgba(32,28,26,0.22)' stroke-width='18'/>" +
+  "<path d='M600 1110 C548 985 660 928 596 826 C552 756 642 698 590 606' stroke='rgba(32,28,26,0.14)' stroke-width='12'/>" +
+  "</g></svg>";
 var CO_SMOKE_ENC = encodeURIComponent(CO_SMOKE_SVG).replace(/\(/g, '%28').replace(/\)/g, '%29');
 var CO_SMOKE_URL = 'url("data:image/svg+xml,' + CO_SMOKE_ENC + '")';
 
@@ -756,40 +760,47 @@ var CO_PARCHMENT_CSS =
   'radial-gradient(ellipse at 83% 87%, rgba(110,75,28,0.07), transparent 46%);' +
   'box-shadow: inset 0 0 1.5in 0.45in rgba(74,48,16,0.33);';
 
-// Smoke: soft, cloudy shadowing spread across the whole page, beneath the panels.
+// Smoke: drifting tendrils that crept across the page (blurred SVG curls rising from
+// the lower corners), leaving most of the paper clean - a mark left ON the paper.
 var CO_SMOKE_CSS =
   'background-color:#ffffff;' +
-  'background-image:' +
-  'radial-gradient(ellipse at 16% 18%, rgba(36,30,26,0.13), transparent 46%),' +
-  'radial-gradient(ellipse at 82% 26%, rgba(36,30,26,0.10), transparent 50%),' +
-  'radial-gradient(ellipse at 28% 72%, rgba(36,30,26,0.11), transparent 48%),' +
-  'radial-gradient(ellipse at 74% 84%, rgba(36,30,26,0.13), transparent 46%),' +
-  'radial-gradient(ellipse at 50% 48%, rgba(36,30,26,0.06), transparent 62%);' +
-  'box-shadow: inset 0 0 2in 0.35in rgba(28,22,18,0.20);';
+  'background-image:' + CO_SMOKE_URL + ';' +
+  'background-repeat:no-repeat;' +
+  'background-position:center bottom;' +
+  'background-size:100% 100%;';
 
-// Dirt: brownish grime blotches and specks across the page.
+// Dirt: sparse dark specks (SVG grain, mostly transparent so white shows through) plus
+// a few localized smudge smears - dirt that got ON the paper, not a brown tint of it.
+var CO_DIRT_SVG =
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 380' preserveAspectRatio='none'>" +
+  "<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='8' result='n'/>" +
+  "<feColorMatrix in='n' type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.19  0 0 0 0 0.09  0 0 0 1.4 -0.85'/></filter>" +
+  "<rect width='300' height='380' filter='url(#g)'/></svg>";
+var CO_DIRT_ENC = encodeURIComponent(CO_DIRT_SVG).replace(/\(/g, '%28').replace(/\)/g, '%29');
+var CO_DIRT_URL = 'url("data:image/svg+xml,' + CO_DIRT_ENC + '")';
 var CO_DIRT_CSS =
   'background-color:#ffffff;' +
   'background-image:' +
-  'radial-gradient(ellipse at 12% 20%, rgba(86,62,30,0.16), transparent 30%),' +
-  'radial-gradient(ellipse at 70% 14%, rgba(70,50,24,0.13), transparent 26%),' +
-  'radial-gradient(ellipse at 86% 58%, rgba(96,68,32,0.15), transparent 30%),' +
-  'radial-gradient(ellipse at 30% 84%, rgba(76,54,26,0.14), transparent 28%),' +
-  'radial-gradient(ellipse at 54% 50%, rgba(88,64,34,0.08), transparent 40%),' +
-  'radial-gradient(circle at 44% 30%, rgba(54,38,18,0.22), transparent 7%),' +
-  'radial-gradient(circle at 62% 72%, rgba(54,38,18,0.20), transparent 6%),' +
-  'radial-gradient(circle at 22% 60%, rgba(54,38,18,0.18), transparent 5%);' +
-  'box-shadow: inset 0 0 1.6in 0.4in rgba(70,48,20,0.22);';
+  'radial-gradient(ellipse 22% 13% at 13% 12%, rgba(74,52,24,0.30), transparent 72%),' +
+  'radial-gradient(ellipse 18% 11% at 88% 82%, rgba(64,46,22,0.28), transparent 72%),' +
+  'radial-gradient(ellipse 15% 10% at 62% 38%, rgba(70,50,24,0.20), transparent 74%),' +
+  'radial-gradient(ellipse 12% 9% at 36% 70%, rgba(70,50,24,0.18), transparent 74%),' +
+  CO_DIRT_URL + ';' +
+  'background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,repeat;' +
+  'background-position:0 0,0 0,0 0,0 0,0 0;' +
+  'background-size:auto,auto,auto,auto,300px 380px;';
 
-// Wrinkle: faint diagonal crease lines (a dark fold edge beside a light highlight).
+// Wrinkle: creases with a real shadow side and a bright highlight side, plus a soft
+// overall bow, so the folds read three-dimensionally.
 var CO_WRINKLE_CSS =
   'background-color:#ffffff;' +
   'background-image:' +
-  'linear-gradient(118deg, transparent 37%, rgba(0,0,0,0.05) 38.5%, rgba(255,255,255,0.75) 40%, transparent 41.5%),' +
-  'linear-gradient(62deg, transparent 58%, rgba(0,0,0,0.045) 59.5%, rgba(255,255,255,0.7) 61%, transparent 62.5%),' +
-  'linear-gradient(150deg, transparent 70%, rgba(0,0,0,0.04) 71.5%, rgba(255,255,255,0.65) 73%, transparent 74.5%),' +
-  'linear-gradient(95deg, transparent 22%, rgba(0,0,0,0.035) 23.5%, rgba(255,255,255,0.6) 25%, transparent 26.5%);' +
-  'box-shadow: inset 0 0 1.4in 0.2in rgba(0,0,0,0.07);';
+  'linear-gradient(116deg, transparent 34%, rgba(0,0,0,0.12) 38%, rgba(0,0,0,0.17) 39.3%, rgba(255,255,255,0.92) 40.6%, rgba(255,255,255,0.35) 42.5%, transparent 46%),' +
+  'linear-gradient(63deg, transparent 55%, rgba(0,0,0,0.10) 59%, rgba(0,0,0,0.15) 60.2%, rgba(255,255,255,0.88) 61.5%, rgba(255,255,255,0.30) 63.5%, transparent 67%),' +
+  'linear-gradient(151deg, transparent 67%, rgba(0,0,0,0.09) 71%, rgba(0,0,0,0.14) 72%, rgba(255,255,255,0.82) 73.3%, rgba(255,255,255,0.30) 75.5%, transparent 79%),' +
+  'linear-gradient(94deg, transparent 19%, rgba(0,0,0,0.08) 22.5%, rgba(0,0,0,0.11) 23.3%, rgba(255,255,255,0.75) 24.4%, rgba(255,255,255,0.28) 26.5%, transparent 30%),' +
+  'linear-gradient(108deg, rgba(0,0,0,0.05), transparent 28%, transparent 72%, rgba(0,0,0,0.06));' +
+  'box-shadow: inset 0 0 1.6in 0.25in rgba(0,0,0,0.10);';
 
 // Blood: dark-red splatter spots of varied size on white.
 var CO_BLOOD_CSS =
