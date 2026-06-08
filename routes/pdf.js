@@ -1186,7 +1186,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
   var co = opts || null;
-  var fCover  = co ? !!co.cover     : true;
+  var fCover  = (pageOpts && pageOpts.noCover) ? false : (co ? !!co.cover : true);
   var fCast   = co ? !!co.cast      : true;
   var fToc    = co ? !!co.toc       : false;
   var fHeader = co ? !!co.header    : true;
@@ -1604,14 +1604,14 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 
   const layoutStyle = req.query.layout || 'Classic';
 
-  // Interior-only: keep the reader's chosen look but force the cover page OFF.
-  // When no co is supplied we must spell out the screen defaults, because
-  // buildNovelHTML treats a present co object as "all flags default false".
+  // Interior-only: render EXACTLY what the on-screen novel preview shows -- same
+  // layout and same custom options -- just without the cover PAGE. The cover is
+  // suppressed via pageOpts.noCover so we never synthesize a co object; doing so
+  // would force buildNovelHTML down the a-la-carte engine (renderLayout) and lose
+  // the reader's chosen preset / magazine wrap layout.
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
-  if (!co) co = { cast: true, toc: false, header: true, markers: true, watermark: true };
-  co.cover = false;
 
-  var pageOpts = {}; // full book, never paginated for print
+  var pageOpts = { noCover: true }; // full book, never paginated for print
 
   var html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
 
