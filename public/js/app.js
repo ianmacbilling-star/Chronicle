@@ -3887,6 +3887,7 @@ function loadNovelPeople() {
 
 function onNovelVersionChange(val) {
   state.novelAsUser = val || null;
+  if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
   loadNovelSummary();
   var prev = document.getElementById('novel-tab-preview');
   if (prev && prev.style.display !== 'none') {
@@ -4143,7 +4144,7 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:rgba(245,232,200,0.75);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> In PDF</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#9fb0c4;cursor:pointer;text-decoration:underline;">Open</a>' +
+        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
           '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         '</span>' +
@@ -6995,7 +6996,7 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:rgba(245,232,200,0.75);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> In PDF</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#9fb0c4;cursor:pointer;text-decoration:underline;">Open</a>' +
+        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
           '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         '</span>' +
@@ -9037,12 +9038,7 @@ function loadPrintTab() {
     .then(function (res) {
       if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Could not load order options.', null); return; }
       printNovelInfo = res.j;
-      var vs = document.getElementById('print-version-select');
-      if (vs) {
-        vs.innerHTML = (res.j.versions || []).map(function (v) {
-          return '<option value="' + (v.userId == null ? '' : v.userId) + '">' + escapeHtmlPrint(v.name) + '</option>';
-        }).join('');
-      }
+      syncPrintVersionDisplay();
       var pe = document.getElementById('print-page-est');
       if (pe) pe.textContent = 'Estimated length: about ' + res.j.pageEstimate + ' pages (final count is set when the print file is generated).';
       refreshPrintOptions(res.j.pageEstimate);
@@ -9077,12 +9073,11 @@ function refreshPrintOptions(pageCount) {
 
 function printSelectionBody() {
   if (!printNovelInfo || !state.currentCampaign) return null;
-  var vs = document.getElementById('print-version-select');
   function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
   return {
     campaignId: state.currentCampaign.id,
     orderName: val('print-order-name'),
-    sourceUserId: vs && vs.value ? vs.value : null,
+    sourceUserId: state.novelAsUser || null,
     pageCount: printNovelInfo.pageEstimate,
     quantity: parseInt(val('print-qty'), 10) || 1,
     selection: {
@@ -9198,4 +9193,15 @@ function savePrintMarkup() {
       if (res.ok && res.j && res.j.printMarkupPct != null) inp.value = res.j.printMarkupPct;
     })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+function syncPrintVersionDisplay() {
+  var disp = document.getElementById('print-version-display');
+  if (!disp) return;
+  var top = document.getElementById('novel-version-select');
+  var label = 'Canonical (Story Master)';
+  if (top && top.options && top.selectedIndex >= 0 && top.options[top.selectedIndex]) {
+    label = top.options[top.selectedIndex].text || label;
+  }
+  disp.value = label;
 }
