@@ -64,6 +64,15 @@ router.get('/novel/people', requireAuth, verifyCampaignDM, async function(req, r
 });
 
 // GET all sessions
+// PUT novel-include - DM toggles whether a session appears in the graphic
+// novel (preview + export). Default true. Per-session, not per-fork.
+router.put('/:id/novel-include', requireAuth, verifyCampaignDM, async function(req, res) {
+  const db = await getDb();
+  const include = !(req.body && (req.body.include === false || req.body.include === 'false' || req.body.include === 0));
+  await db.prepare('UPDATE sessions SET novel_include = ? WHERE id = ? AND campaign_id = ?').run(include, req.params.id, req.params.campaignId);
+  res.json({ ok: true, include: include });
+});
+
 router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   // Phase 3 polish — include the first generated storyboard image with
@@ -296,6 +305,16 @@ router.put('/:id/characters/:characterId', requireAuth, verifyCampaignMember, as
   const db = await getDb();
   const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
   if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
+  // Tier gate applies only to DM canonical editing; a player edits their
+  // own version freely (tokens are the meter for forks, not tier).
+  if (req.campaignRole === 'dm') {
+    const { getTier } = require('../middleware/tiers');
+    const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    const tier = getTier(user ? user.tier : 'copper');
+    if (!tier.can_edit_prompts) {
+      return res.status(403).json({ error: 'Editing session character prompts is a Platinum feature.' });
+    }
+  }
   const { prompt } = req.body;
   if (typeof prompt !== 'string') return res.json({ error: 'Prompt required' });
 

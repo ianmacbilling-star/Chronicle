@@ -26,9 +26,20 @@ const { getDb } = require('../database/db');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 
-// Markup applied to the vendor's landed cost to get the customer charge.
-// TODO: move to app_settings / per-tier policy. 0 = at-cost for now.
-const MARGIN_PCT = Number(process.env.PRINT_MARGIN_PCT || 0);
+// Markup is read from app_settings ('print_markup_pct', default 10) and
+// applied to the PRINT cost only -- shipping (and tax) pass through at cost.
+const DEFAULT_PRINT_MARKUP_PCT = 10;
+async function getPrintMarkupPct(db) {
+  try {
+    const r = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('print_markup_pct');
+    const p = r && r.value != null ? parseFloat(r.value) : NaN;
+    return Number.isFinite(p) && p >= 0 ? p : DEFAULT_PRINT_MARKUP_PCT;
+  } catch (e) { return DEFAULT_PRINT_MARKUP_PCT; }
+}
+function applyPrintMarkup(totalCost, printCost, pct) {
+  var charge = Number(totalCost || 0) + Number(printCost || 0) * (pct / 100);
+  return Math.round(charge * 100) / 100;
+}
 
 function requireSession(req, res, next) {
   if (!req.session || !req.session.userId) {
@@ -55,11 +66,6 @@ function buildOrderRequest(body, spec, externalId, contactEmail) {
       countryCode: s.countryCode, phone: s.phone,
     },
   };
-}
-
-function withMargin(total) {
-  const charge = Number(total || 0) * (1 + MARGIN_PCT / 100);
-  return Math.round(charge * 100) / 100;
 }
 
 // ------------------------------------------------------------
@@ -139,13 +145,16 @@ router.post('/quote', requireSession, async function (req, res) {
     const provider = getPrintProvider();
     const orderReq = buildOrderRequest(req.body, built.spec, 'quote', null);
     const quote = await provider.getQuote(orderReq);
+    const db = await getDb();
+    const pct = await getPrintMarkupPct(db);
 
     res.json({
       podPackageId: provider._packageId ? provider._packageId(built.spec) : undefined,
       printedPageCount: built.spec.pageCount,
       providerCost: quote.totalCost,
       currency: quote.currency,
-      customerCharge: withMargin(quote.totalCost),
+      customerCharge: applyPrintMarkup(quote.totalCost, quote.printCost, pct),
+      markupPct: pct,
       breakdown: { print: quote.printCost, shipping: quote.shippingCost },
     });
   } catch (e) {
@@ -185,7 +194,8 @@ router.post('/order', requireSession, async function (req, res) {
     // 1) Fresh quote at the moment of checkout (prices/shipping move).
     const quoteReq = buildOrderRequest(body, built.spec, 'quote', contactEmail);
     const quote = await provider.getQuote(quoteReq);
-    const customerCharge = withMargin(quote.totalCost);
+    const pct = await getPrintMarkupPct(db);
+    const customerCharge = applyPrintMarkup(quote.totalCost, quote.printCost, pct);
     const podPackageId = provider._packageId ? provider._packageId(built.spec) : null;
 
     // 2) Persist the order up-front (status pending) so we have a stable

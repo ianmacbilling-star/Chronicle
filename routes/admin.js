@@ -192,4 +192,27 @@ router.get('/trends', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
+// Print pricing: markup % applied to the print cost at order time.
+router.get('/print-settings', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('print_markup_pct');
+    const p = r && r.value != null ? parseFloat(r.value) : NaN;
+    res.json({ printMarkupPct: Number.isFinite(p) ? p : 10 });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.put('/print-settings', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    var pct = parseFloat(req.body && req.body.printMarkupPct);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 1000) return res.status(400).json({ error: 'printMarkupPct must be a number >= 0' });
+    pct = Math.round(pct * 100) / 100;
+    const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get('print_markup_pct');
+    if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(String(pct), 'print_markup_pct');
+    else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run('print_markup_pct', String(pct));
+    res.json({ ok: true, printMarkupPct: pct });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 module.exports = router;

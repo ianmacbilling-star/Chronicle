@@ -743,6 +743,19 @@
         </div>
       </div>
 
+      <!-- Print pricing (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Print pricing</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Markup added to the printer's cost on every print order. Applied to the print cost only &mdash; shipping is passed through to the customer at cost.</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label for="print-markup-input" style="color:var(--gold);font-size:13px;">Print Markup Percentage</label>
+          <input class="form-input" id="print-markup-input" type="number" min="0" step="0.5" value="10" style="width:110px;">
+          <span style="color:rgba(245,232,200,0.6);">%</span>
+          <button class="btn btn-primary btn-sm" onclick="savePrintMarkup()">Save</button>
+          <span class="settings-section-desc" id="print-markup-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       </div><!-- /settings-pane-general -->
 
       <div class="settings-pane" id="settings-pane-tiers" style="display:none;">

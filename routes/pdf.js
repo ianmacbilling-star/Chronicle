@@ -1487,7 +1487,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? AND (novel_include IS NULL OR novel_include = true) ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   // Sort sessions ascending (oldest first) using a normalized YYYY-MM-DD key.

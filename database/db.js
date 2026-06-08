@@ -227,6 +227,7 @@ async function initPostgres() {
       session_notes TEXT,
       art_style TEXT,
       layout_style TEXT,
+      novel_include BOOLEAN DEFAULT true,
       narrative_intro TEXT,
       narrative_sections TEXT,
       narrative_outro TEXT,
@@ -357,6 +358,7 @@ async function initPostgres() {
     // panel's cast, after which moment_characters/moment_assets are authoritative.
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS cast_explicit BOOLEAN DEFAULT false',
     "ALTER TABLE moments ADD COLUMN IF NOT EXISTS shape TEXT DEFAULT 'standard'",
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS novel_include BOOLEAN DEFAULT true',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}

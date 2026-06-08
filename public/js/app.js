@@ -4111,7 +4111,7 @@ function loadNovelSummary() {
 function renderNovelSummary(sessions) {
 
   // Keep the ordered session list available for the preview pager
-  state.novelSessions = sessions || [];
+  state.novelSessions = (sessions || []).filter(novelIncluded);
 
   var container = document.getElementById('novel-summary-list');
   if (!sessions.length) {
@@ -4143,7 +4143,7 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:rgba(245,232,200,0.75);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> In PDF</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#9fb0c4;cursor:pointer;text-decoration:underline;">Open</a>' +
           '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         '</span>' +
@@ -6963,7 +6963,7 @@ function loadNovelSummary() {
 function renderNovelSummary(sessions) {
 
   // Keep the ordered session list available for the preview pager
-  state.novelSessions = sessions || [];
+  state.novelSessions = (sessions || []).filter(novelIncluded);
 
   var container = document.getElementById('novel-summary-list');
   if (!sessions.length) {
@@ -6995,7 +6995,7 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:rgba(245,232,200,0.75);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> In PDF</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#9fb0c4;cursor:pointer;text-decoration:underline;">Open</a>' +
           '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         '</span>' +
@@ -8559,6 +8559,7 @@ function switchSettingsTab(tab) {
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', t === tab);
   });
+  if (tab === 'general') loadPrintMarkup();
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
@@ -9153,4 +9154,48 @@ function submitPrintOrder() {
       showPrintMsg('Order placed. Reference #' + res.j.orderId + ' (' + (res.j.status || 'submitted') + '). It will appear on your Print Orders page.', 'ok');
     })
     .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Place order'; } showPrintMsg('Order failed.', null); });
+}
+
+// ---- Novel session include + navigation (Sessions tab) ----
+function novelIncluded(s) {
+  return !(s && (s.novel_include === false || s.novel_include === 0 || s.novel_include === 'f' || s.novel_include === 'false'));
+}
+
+function toggleNovelInclude(sessionId, checked) {
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sessionId + '/novel-include', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include: !!checked })
+  }).then(function () { loadNovelSummary(); })
+    .catch(function () { loadNovelSummary(); });
+}
+
+function goToSessionPage(id) {
+  if (typeof showCampaignSection === 'function') showCampaignSection('sessions');
+  if (typeof selectSession === 'function') selectSession(id);
+}
+
+// ---- Admin: Print markup percentage (dashboard Settings tab) ----
+function loadPrintMarkup() {
+  var inp = document.getElementById('print-markup-input');
+  if (!inp) return;
+  fetch('/api/admin/print-settings')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j && j.printMarkupPct != null) inp.value = j.printMarkupPct; })
+    .catch(function () {});
+}
+
+function savePrintMarkup() {
+  var inp = document.getElementById('print-markup-input');
+  var msg = document.getElementById('print-markup-msg');
+  if (!inp) return;
+  var pct = parseFloat(inp.value);
+  if (!isFinite(pct) || pct < 0) { if (msg) msg.textContent = 'Enter a percentage of 0 or more.'; return; }
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/print-settings', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ printMarkupPct: pct })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (msg) msg.textContent = res.ok ? 'Saved.' : (res.j && res.j.error ? res.j.error : 'Could not save.');
+      if (res.ok && res.j && res.j.printMarkupPct != null) inp.value = res.j.printMarkupPct;
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }
