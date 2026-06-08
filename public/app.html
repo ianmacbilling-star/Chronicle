@@ -176,7 +176,7 @@
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')">Layout: Classic</button>
             <button class="btn btn-sm" id="novel-custom-btn" onclick="openCustomLayout('novel')">Custom Layout</button>
-            <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick = fast on-screen preview for layout checks. WYSIWYG = the exact paged PDF that prints (slower).">Preview: Quick</button>
+            <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower).">Quick View</button>
           </div>
           <div id="novel-pager" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-pager-prev" onclick="novelPagePrev()">Prev</button>
@@ -495,7 +495,7 @@
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
             <button class="btn btn-sm" id="layout-style-btn" onclick="openStylePicker('layout')">Layout: Classic</button>
             <button class="btn btn-sm" id="session-custom-btn" onclick="openCustomLayout('session')" style="margin-left:6px;">&#9881; Custom Layout</button>
-            <button class="btn btn-sm" id="session-preview-mode-btn" onclick="toggleSessionPreviewMode()" style="margin-left:6px;" title="Quick = fast on-screen preview. WYSIWYG = the exact paged PDF (slower).">Preview: Quick</button>
+            <button class="btn btn-sm" id="session-preview-mode-btn" onclick="toggleSessionPreviewMode()" style="margin-left:6px;" title="Quick View = fast on-screen preview. True View = the exact paged PDF (slower).">Quick View</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
         </div>

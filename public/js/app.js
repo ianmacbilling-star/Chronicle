@@ -3891,14 +3891,14 @@ var novelPreviewMode = 'quick';
 function toggleNovelPreviewMode() {
   novelPreviewMode = (novelPreviewMode === 'quick') ? 'wysiwyg' : 'quick';
   var btn = document.getElementById('novel-preview-mode-btn');
-  if (btn) btn.textContent = (novelPreviewMode === 'wysiwyg') ? 'Preview: WYSIWYG' : 'Preview: Quick';
+  if (btn) btn.textContent = (novelPreviewMode === 'wysiwyg') ? 'True View' : 'Quick View';
   if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
 }
 var sessionPreviewMode = 'quick';
 function toggleSessionPreviewMode() {
   sessionPreviewMode = (sessionPreviewMode === 'quick') ? 'wysiwyg' : 'quick';
   var btn = document.getElementById('session-preview-mode-btn');
-  if (btn) btn.textContent = (sessionPreviewMode === 'wysiwyg') ? 'Preview: WYSIWYG' : 'Preview: Quick';
+  if (btn) btn.textContent = (sessionPreviewMode === 'wysiwyg') ? 'True View' : 'Quick View';
   if (typeof loadPreview === 'function') loadPreview(state.layoutStyle || 'Classic');
 }
 
