@@ -1316,7 +1316,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-desc { font-family:'Crimson Text',serif;font-size:9pt;color:#6b5f55;line-height:1.4; }
 
   /* CONTENT */
-  .content-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;position:relative; }
+  .content-page { width:8.5in;padding:0.5in 0.85in;position:relative; }
   .content-page:last-of-type { page-break-after:avoid; }
   .cast-page, .content-page { ${paperCSS} }
   .toc-page { }
@@ -1337,10 +1337,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .session-marker { text-align:center;margin:0.1in 0 0.28in; }
   .session-marker-ornament { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.55);letter-spacing:0.3em;margin-bottom:0.06in; }
   .session-marker-label { font-family:'Cinzel',serif;font-size:8.5pt;font-weight:600;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase; }
-  .narrative-text { font-family:'Crimson Text',serif;font-size:12pt;line-height:1.7;color:#2a1a0e;margin:0.18in 0;text-indent:0.3in; }
+  .narrative-text { font-family:'Crimson Text',serif;font-size:12pt;line-height:1.7;color:#2a1a0e;margin:0.12in 0;text-indent:0.3in; }
   .intro-text { font-size:13pt;font-style:italic;text-indent:0;color:#3a2010; }
   .outro-text { font-size:12pt;font-style:italic;text-indent:0;color:#3a2010;border-top:1px solid rgba(201,168,76,0.3);padding-top:0.2in;margin-top:0.25in; }
-  .panel-block { margin:0.2in 0;page-break-inside:avoid; }
+  .panel-block { margin:0.12in 0;page-break-inside:avoid; }
   .panel-image { width:100%;max-height:4.5in;object-fit:cover;object-position:center top;display:block;border-radius:4px;border:1px solid rgba(201,168,76,0.2);box-shadow:0 2px 12px rgba(0,0,0,0.15); }
   .panel-placeholder { width:100%;height:2.5in;background:#f0e8d0;display:flex;align-items:center;justify-content:center;border:1px solid rgba(201,168,76,0.3);border-radius:4px; }
   .panel-placeholder-icon { font-size:36pt;opacity:0.3; }
