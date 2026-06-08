@@ -3365,7 +3365,8 @@ function loadPreview(layout) {
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&') + '&format=pdf';
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&') +
+    (sessionPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
@@ -3883,6 +3884,24 @@ function onNovelVersionChange(val) {
   }
 }
 
+// Preview mode toggle: 'quick' = fast on-screen HTML preview for layout checks
+// (default); 'wysiwyg' = the exact paged PDF that prints (slower). One mode each
+// for the novel and the session preview.
+var novelPreviewMode = 'quick';
+function toggleNovelPreviewMode() {
+  novelPreviewMode = (novelPreviewMode === 'quick') ? 'wysiwyg' : 'quick';
+  var btn = document.getElementById('novel-preview-mode-btn');
+  if (btn) btn.textContent = (novelPreviewMode === 'wysiwyg') ? 'Preview: WYSIWYG' : 'Preview: Quick';
+  if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
+}
+var sessionPreviewMode = 'quick';
+function toggleSessionPreviewMode() {
+  sessionPreviewMode = (sessionPreviewMode === 'quick') ? 'wysiwyg' : 'quick';
+  var btn = document.getElementById('session-preview-mode-btn');
+  if (btn) btn.textContent = (sessionPreviewMode === 'wysiwyg') ? 'Preview: WYSIWYG' : 'Preview: Quick';
+  if (typeof loadPreview === 'function') loadPreview(state.layoutStyle || 'Classic');
+}
+
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
@@ -3895,7 +3914,8 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&format=pdf';
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') +
+    (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
@@ -6251,7 +6271,8 @@ function loadPreview(layout) {
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&') + '&format=pdf';
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&') +
+    (sessionPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
@@ -6722,7 +6743,8 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&format=pdf';
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') +
+    (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
