@@ -155,6 +155,31 @@ router.get('/ledger', async function(req, res) {
   }
 });
 
+// POST /api/tokens/dev-credit — TESTING ONLY. Lets the signed-in user top up
+// THEIR OWN balance (no admin needed) while we're testing before Stripe.
+// Session-gated and self-only (ignores any user_id in the body). REMOVE when
+// Stripe billing goes live.
+router.post('/dev-credit', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  const amt = parseInt((req.body || {}).amount, 10);
+  if (!Number.isFinite(amt) || amt <= 0) {
+    return res.status(400).json({ error: 'Provide a positive amount' });
+  }
+  if (amt > 100000) {
+    return res.status(400).json({ error: 'Amount too large (max 100000)' });
+  }
+  try {
+    const bal = await creditTokens(req.session.userId, amt, {
+      bucket: 'cot',
+      event_type: 'manual_credit',
+      source: 'self_test'
+    });
+    res.json({ ok: true, balance: bal });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/tokens/admin/credit — admin-only manual credit (testing)
 // body: { user_id, amount, bucket?, source? }
 router.post('/admin/credit', async function(req, res) {

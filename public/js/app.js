@@ -235,6 +235,37 @@ function insufficientTokensHtml(message) {
     '</div>';
 }
 
+// ----- TESTING: self-service add tokens (any user). Remove at Stripe. -----
+function devAddTokens() {
+  var input = document.getElementById('dev-add-tokens-input');
+  var msg = document.getElementById('dev-add-tokens-msg');
+  function show(text, ok) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
+    msg.style.color = ok ? '#3c9142' : '#c0392b';
+  }
+  if (!input) return;
+  var amt = parseInt(input.value, 10);
+  if (!Number.isFinite(amt) || amt <= 0) { show('Enter a positive whole number.', false); return; }
+  fetch('/api/tokens/dev-credit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: amt })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.ok) {
+        show('Added ' + amt + ' tokens. Balance: ' + (data.balance && data.balance.total) + '.', true);
+        refreshTokenBalance();
+      } else {
+        show((data && data.error) || 'Could not add tokens.', false);
+      }
+    })
+    .catch(function() { show('Network error.', false); });
+}
+
 // ----- ADMIN TESTING: set my own balance (temporary, deprecate later) -----
 function adminSetMyBalance() {
   var input = document.getElementById('admin-set-balance-input');

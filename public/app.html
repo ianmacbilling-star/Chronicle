@@ -499,6 +499,19 @@
         <div id="account-features" style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;"></div>
       </div>
 
+      <!-- TESTING ONLY: self-service add tokens for ANY signed-in user while
+           we test before Stripe. Backed by /api/tokens/dev-credit (session-
+           gated, self only). REMOVE when checkout goes live. -->
+      <div class="settings-section" id="dev-add-tokens-section" style="border:1px dashed rgba(201,168,76,0.5);">
+        <div class="settings-section-title" style="color:#c9a84c;">&#9672; Add Tokens (Testing)</div>
+        <div class="settings-section-desc">Temporary: top up your own token balance while we&rsquo;re testing, before payments are set up. This will be removed once checkout goes live.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <input class="form-input" id="dev-add-tokens-input" type="number" min="1" step="1" value="100" style="max-width:140px;" />
+          <button class="btn btn-primary btn-sm" onclick="devAddTokens()">Add tokens</button>
+        </div>
+        <div id="dev-add-tokens-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
+      </div>
+
       <!-- TESTING ONLY: manual tier override (remove before production) -->
       <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(201,168,76,0.5);">
         <div class="settings-section-title">Testing — Manual Tier Override</div>
