@@ -3839,7 +3839,8 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
-  ['sessions', 'preview'].forEach(function(t) {
+  if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
+  ['sessions', 'preview', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
     var el = document.getElementById('ntab-' + t);
@@ -6730,7 +6731,8 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
-  ['sessions', 'preview'].forEach(function(t) {
+  if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
+  ['sessions', 'preview', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
     var el = document.getElementById('ntab-' + t);
@@ -8995,4 +8997,160 @@ function svgLineChart(series, xLabels, showLegend) {
     svg += '</div>';
   }
   return svg;
+}
+
+// ============================================================
+// PRINT ORDER TAB (Graphic Novel -> Order Printed Copy)
+// ============================================================
+// Drives the order tab: loads campaign versions + a page estimate, renders
+// the binding/color/finish options from the catalog, gives a live quote, and
+// places the order. The Print Orders list (status/tracking) is a separate
+// page built later; placing an order here just records it.
+var printNovelInfo = null;
+
+function escapeHtmlPrint(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showPrintMsg(text, kind) {
+  var el = document.getElementById('print-msg');
+  if (!el) return;
+  if (!text) { el.style.display = 'none'; return; }
+  var ok = kind === 'ok';
+  el.style.display = 'block';
+  el.style.background = ok ? 'rgba(120,180,90,0.12)' : 'rgba(201,120,76,0.12)';
+  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : 'rgba(201,120,76,0.4)');
+  el.style.color = ok ? 'rgba(200,235,180,0.95)' : 'rgba(245,200,180,0.95)';
+  el.textContent = text;
+}
+
+function loadPrintTab() {
+  if (!state.currentCampaign) return;
+  showPrintMsg('', null);
+  var q = document.getElementById('print-quote');
+  if (q) q.textContent = '';
+  fetch('/api/print/novel-info/' + state.currentCampaign.id)
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Could not load order options.', null); return; }
+      printNovelInfo = res.j;
+      var vs = document.getElementById('print-version-select');
+      if (vs) {
+        vs.innerHTML = (res.j.versions || []).map(function (v) {
+          return '<option value="' + (v.userId == null ? '' : v.userId) + '">' + escapeHtmlPrint(v.name) + '</option>';
+        }).join('');
+      }
+      var pe = document.getElementById('print-page-est');
+      if (pe) pe.textContent = 'Estimated length: about ' + res.j.pageEstimate + ' pages (final count is set when the print file is generated).';
+      refreshPrintOptions(res.j.pageEstimate);
+    })
+    .catch(function () { showPrintMsg('Could not load order options.', null); });
+}
+
+function refreshPrintOptions(pageCount) {
+  fetch('/api/print/options?pageCount=' + encodeURIComponent(pageCount))
+    .then(function (r) { return r.json(); })
+    .then(function (o) {
+      var b = document.getElementById('print-binding');
+      var c = document.getElementById('print-color');
+      var f = document.getElementById('print-finish');
+      function fill(el, arr) {
+        if (!el) return;
+        el.innerHTML = (arr || []).map(function (x) {
+          return '<option value="' + x.id + '">' + escapeHtmlPrint(x.label) + '</option>';
+        }).join('');
+      }
+      fill(b, o.bindings);
+      fill(c, o.colorTiers);
+      fill(f, o.coverFinishes);
+      if (o.default) {
+        if (b && o.default.binding) b.value = o.default.binding;
+        if (c && o.default.colorTier) c.value = o.default.colorTier;
+        if (f && o.default.coverFinish) f.value = o.default.coverFinish;
+      }
+    })
+    .catch(function () {});
+}
+
+function printSelectionBody() {
+  if (!printNovelInfo || !state.currentCampaign) return null;
+  var vs = document.getElementById('print-version-select');
+  function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  return {
+    campaignId: state.currentCampaign.id,
+    orderName: val('print-order-name'),
+    sourceUserId: vs && vs.value ? vs.value : null,
+    pageCount: printNovelInfo.pageEstimate,
+    quantity: parseInt(val('print-qty'), 10) || 1,
+    selection: {
+      binding: val('print-binding'),
+      colorTier: val('print-color'),
+      coverFinish: val('print-finish')
+    },
+    shippingLevel: val('print-ship-level') || 'cheapest',
+    shipTo: {
+      name: val('print-ship-name'),
+      street1: val('print-ship-street1'),
+      street2: val('print-ship-street2'),
+      city: val('print-ship-city'),
+      stateCode: val('print-ship-state'),
+      postcode: val('print-ship-postcode'),
+      countryCode: (val('print-ship-country') || 'US').toUpperCase(),
+      phone: val('print-ship-phone')
+    }
+  };
+}
+
+function quotePrintOrder() {
+  var body = printSelectionBody();
+  var out = document.getElementById('print-quote');
+  if (!body || !body.selection.binding) { if (out) out.textContent = ''; return; }
+  if (!body.shipTo.postcode || !body.shipTo.countryCode) {
+    if (out) out.textContent = 'Enter a postal code and country to price shipping.';
+    return;
+  }
+  if (out) out.textContent = 'Pricing...';
+  fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok) {
+        var msg = res.j && res.j.error ? res.j.error : 'Could not price this order.';
+        if (res.j && res.j.details) msg += ' (' + res.j.details.join('; ') + ')';
+        if (out) out.textContent = msg;
+        return;
+      }
+      var j = res.j;
+      if (out) {
+        out.innerHTML = '<strong style="color:var(--gold);">$' + Number(j.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(j.currency) + '</strong> ' +
+          '<span style="color:rgba(245,232,200,0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) + ' + shipping $' + Number(j.breakdown.shipping).toFixed(2) + ')</span>';
+      }
+    })
+    .catch(function () { if (out) out.textContent = 'Could not price this order.'; });
+}
+
+function submitPrintOrder() {
+  var body = printSelectionBody();
+  if (!body || !body.selection.binding) { showPrintMsg('Pick your format first.', null); return; }
+  body.interiorPdfUrl = (document.getElementById('print-interior-url') || {}).value || '';
+  body.coverPdfUrl = (document.getElementById('print-cover-url') || {}).value || '';
+  if (!body.interiorPdfUrl || !body.coverPdfUrl) {
+    showPrintMsg('Placing a real order needs the print files, which are produced in the next build step. To test the order flow now, paste sandbox PDF URLs under "(testing) print file URLs".', null);
+    return;
+  }
+  if (!body.shipTo.name || !body.shipTo.street1 || !body.shipTo.city || !body.shipTo.postcode) {
+    showPrintMsg('Please complete the shipping address.', null);
+    return;
+  }
+  var btn = document.getElementById('print-place-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Placing...'; }
+  fetch('/api/print/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Place order'; }
+      if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Order failed.', null); return; }
+      showPrintMsg('Order placed. Reference #' + res.j.orderId + ' (' + (res.j.status || 'submitted') + '). It will appear on your Print Orders page.', 'ok');
+    })
+    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Place order'; } showPrintMsg('Order failed.', null); });
 }

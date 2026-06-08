@@ -823,6 +823,11 @@ async function migrateCasting(pool) {
       tracking_url TEXT,
       carrier TEXT,
       error TEXT,
+      order_name TEXT,
+      campaign_name TEXT,
+      source_kind TEXT,
+      source_user_id INTEGER,
+      source_user_name TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP
     )
@@ -830,6 +835,12 @@ async function migrateCasting(pool) {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_print_orders_user ON print_orders(user_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_print_orders_campaign ON print_orders(campaign_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_print_orders_provider_job ON print_orders(provider_order_id)');
+  // Added after the table shipped — CREATE above won't alter existing tables.
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS order_name TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS campaign_name TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_kind TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_user_id INTEGER');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_user_name TEXT');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

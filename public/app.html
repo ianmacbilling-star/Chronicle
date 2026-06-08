@@ -162,6 +162,7 @@
       <div class="sess-tabs" style="margin-bottom:8px;">
         <div class="sess-tab active" id="ntab-sessions" onclick="switchNovelTab('sessions')">Sessions</div>
         <div class="sess-tab" id="ntab-preview" onclick="switchNovelTab('preview')">&#128213; Preview &amp; Export</div>
+        <div class="sess-tab" id="ntab-order" onclick="switchNovelTab('order')">&#128230; Order Printed Copy</div>
       </div>
 
       <!-- Sessions tab -->
@@ -203,9 +204,82 @@
           <button class="btn btn-sm" id="novel-pager-next-bottom" onclick="novelPageNext()">Next &#9654;</button>
         </div>
       </div>
-    </div>
 
-    <!-- ==================== MEMBERS (Phase 3 Deploy 2) ==================== -->
+      <!-- Order Printed Copy tab -->
+      <div id="novel-tab-order" style="display:none;">
+        <div style="max-width:640px;">
+          <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Order a printed copy</div>
+          <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:14px;">Printed and shipped on demand. Pricing is live from the printer; the final price is confirmed at checkout.</div>
+          <div id="print-msg" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--radius);font-size:12px;"></div>
+
+          <!-- What to print -->
+          <div style="margin-bottom:6px;color:var(--gold);font-size:12px;font-family:var(--font-display);letter-spacing:0.05em;">WHAT TO PRINT</div>
+          <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Order name <span style="color:rgba(245,232,200,0.4);">(your label for this order)</span></label>
+          <input id="print-order-name" type="text" maxlength="200" placeholder="e.g. Session 1-5, Hardcover gift copy" style="width:100%;margin-bottom:10px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+          <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Version</label>
+          <select id="print-version-select" style="width:100%;margin-bottom:10px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
+          <div id="print-page-est" style="font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:14px;"></div>
+
+          <!-- Format -->
+          <div style="margin-bottom:6px;color:var(--gold);font-size:12px;font-family:var(--font-display);letter-spacing:0.05em;">FORMAT</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+            <div style="flex:1;min-width:160px;">
+              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Binding</label>
+              <select id="print-binding" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
+            </div>
+            <div style="flex:1;min-width:120px;">
+              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Color</label>
+              <select id="print-color" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
+            </div>
+            <div style="flex:1;min-width:100px;">
+              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Cover finish</label>
+              <select id="print-finish" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
+            </div>
+            <div style="width:90px;">
+              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Qty</label>
+              <input id="print-qty" type="number" min="1" value="1" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            </div>
+          </div>
+
+          <!-- Shipping -->
+          <div style="margin-bottom:6px;color:var(--gold);font-size:12px;font-family:var(--font-display);letter-spacing:0.05em;">SHIP TO</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+            <input id="print-ship-name" type="text" placeholder="Full name" style="flex:1;min-width:200px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <input id="print-ship-phone" type="text" placeholder="Phone" style="flex:1;min-width:140px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <input id="print-ship-street1" type="text" placeholder="Street address" style="flex-basis:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <input id="print-ship-street2" type="text" placeholder="Apt, suite (optional)" style="flex-basis:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <input id="print-ship-city" type="text" placeholder="City" style="flex:1;min-width:140px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <input id="print-ship-state" type="text" placeholder="State/Province code" style="width:140px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <input id="print-ship-postcode" type="text" placeholder="Postal code" style="width:120px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <input id="print-ship-country" type="text" placeholder="Country (US)" value="US" maxlength="2" style="width:100px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+            <div style="flex-basis:100%;">
+              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Shipping speed</label>
+              <select id="print-ship-level" onchange="quotePrintOrder()" style="width:220px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
+                <option value="cheapest">Standard (cheapest)</option>
+                <option value="expedited">Expedited</option>
+                <option value="express">Express</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Price + place -->
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="btn btn-sm" onclick="quotePrintOrder()">Get price</button>
+            <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
+          </div>
+
+          <!-- Testing-only: until the print-ready PDF generator is built, the
+               order needs hosted PDF URLs. Paste sandbox PDFs to exercise the
+               full flow; otherwise Place Order is disabled. -->
+          <details style="margin-bottom:12px;">
+            <summary style="cursor:pointer;font-size:11px;color:rgba(201,168,76,0.6);">(testing) print file URLs &mdash; temporary until the generator is built</summary>
+            <input id="print-interior-url" type="text" placeholder="Interior PDF URL" style="width:100%;margin-top:6px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:7px 10px;font-size:12px;">
+            <input id="print-cover-url" type="text" placeholder="Cover PDF URL" style="width:100%;margin-top:6px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:7px 10px;font-size:12px;">
+          </details>
+
+          <button class="btn btn-primary" id="print-place-btn" onclick="submitPrintOrder()">Place order</button>
+        </div>
+      </div>
     <div id="view-members" class="view" style="display:none;">
       <div class="page-head">
         <div>

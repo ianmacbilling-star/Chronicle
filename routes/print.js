@@ -72,6 +72,60 @@ router.get('/options', requireSession, function (req, res) {
 });
 
 // ------------------------------------------------------------
+// GET /novel-info/:campaignId  -> campaign name, the versions the caller
+// may order (canonical + members), and a page-count ESTIMATE.
+//
+// Version rules: canonical is always orderable. A DM may also order any
+// player's version (those who have one); a player may order only their own.
+// ------------------------------------------------------------
+router.get('/novel-info/:campaignId', requireSession, async function (req, res) {
+  try {
+    const db = await getDb();
+    const campaignId = parseInt(req.params.campaignId, 10);
+    const userId = req.session.userId;
+
+    const camp = await db.prepare('SELECT id, name, allow_player_novel_access FROM campaigns WHERE id = ?').get(campaignId);
+    if (!camp) return res.status(404).json({ error: 'Campaign not found' });
+    const mem = await db.prepare('SELECT role FROM campaign_members WHERE campaign_id = ? AND user_id = ?').get(campaignId, userId);
+    if (!mem) return res.status(403).json({ error: 'Not a member of this campaign' });
+    const isDm = mem.role === 'dm';
+    if (!isDm && !camp.allow_player_novel_access) {
+      return res.status(403).json({ error: 'Graphic novel access is disabled for players in this campaign' });
+    }
+
+    const versions = [{ kind: 'canonical', userId: null, name: 'Canonical (Story Master)' }];
+    if (isDm) {
+      const rows = await db.prepare(
+        'SELECT u.id AS user_id, u.name, u.email FROM campaign_members cm JOIN users u ON u.id = cm.user_id ' +
+        "WHERE cm.campaign_id = ? AND cm.role = 'player' AND EXISTS(" +
+        'SELECT 1 FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
+        "WHERE s.campaign_id = ? AND sf.user_id = u.id AND sf.role = 'player') ORDER BY u.name ASC"
+      ).all(campaignId, campaignId);
+      rows.forEach(function (r) {
+        versions.push({ kind: 'member', userId: r.user_id, name: (r.name || r.email) + ' (member)' });
+      });
+    } else {
+      const me = await db.prepare('SELECT name FROM users WHERE id = ?').get(userId);
+      versions.push({ kind: 'member', userId: userId, name: 'My version' + (me && me.name ? ' (' + me.name + ')' : '') });
+    }
+
+    // Page-count ESTIMATE only. The true printed count is set when the
+    // print-ready PDF is generated (that generator is the next milestone);
+    // ~1 panel/page from the campaign's moment count is close enough to gate
+    // which bindings are offered.
+    const cnt = await db.prepare(
+      'SELECT COUNT(*) AS c FROM moments m JOIN sessions s ON s.id = m.session_id WHERE s.campaign_id = ?'
+    ).get(campaignId);
+    const moments = Number((cnt && cnt.c) || 0);
+    const pageEstimate = Math.max(8, moments);
+
+    res.json({ campaignName: camp.name, role: mem.role, versions: versions, pageEstimate: pageEstimate, momentCount: moments, estimated: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Server error', detail: String(e && e.message || e) });
+  }
+});
+
+// ------------------------------------------------------------
 // POST /quote  body: { selection:{binding,colorTier,coverFinish}, pageCount,
 //                      quantity, shipTo, shippingLevel }
 // Returns a live vendor quote + the customer-facing charge (cost + margin).
@@ -136,7 +190,21 @@ router.post('/order', requireSession, async function (req, res) {
 
     // 2) Persist the order up-front (status pending) so we have a stable
     //    external_id and a record even if a later step throws.
+    //    Snapshot the campaign + version names server-side so the order
+    //    record stays meaningful even if things are later renamed/removed.
     const s = body.shipTo || {};
+    const orderName = (body.orderName != null ? String(body.orderName) : '').trim().slice(0, 200) || null;
+    const sourceUserId = body.sourceUserId ? parseInt(body.sourceUserId, 10) : null;
+    const sourceKind = sourceUserId ? 'member' : 'canonical';
+    let campaignName = null, sourceUserName = null;
+    if (body.campaignId) {
+      const c = await db.prepare('SELECT name FROM campaigns WHERE id = ?').get(body.campaignId);
+      campaignName = c && c.name ? c.name : null;
+    }
+    if (sourceUserId) {
+      const su = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(sourceUserId);
+      sourceUserName = su ? (su.name || su.email || null) : null;
+    }
     const ins = await db.prepare(
       `INSERT INTO print_orders
         (user_id, campaign_id, session_id, provider, pod_package_id,
@@ -144,8 +212,9 @@ router.post('/order', requireSession, async function (req, res) {
          interior_pdf_url, cover_pdf_url,
          ship_name, ship_street1, ship_street2, ship_city, ship_state,
          ship_postcode, ship_country, ship_phone, shipping_level,
-         provider_cost, currency, customer_charge, payment_status, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         provider_cost, currency, customer_charge, payment_status, status,
+         order_name, campaign_name, source_kind, source_user_id, source_user_name)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       userId, body.campaignId || null, body.sessionId || null, provider.name, podPackageId,
       built.spec.binding, (body.selection || {}).colorTier, built.spec.coverFinish,
@@ -153,7 +222,8 @@ router.post('/order', requireSession, async function (req, res) {
       body.interiorPdfUrl, body.coverPdfUrl,
       s.name || null, s.street1 || null, s.street2 || null, s.city || null, s.stateCode || null,
       s.postcode || null, s.countryCode || null, s.phone || null, quoteReq.shippingLevel,
-      quote.totalCost, quote.currency, customerCharge, 'pending', 'pending'
+      quote.totalCost, quote.currency, customerCharge, 'pending', 'pending',
+      orderName, campaignName, sourceKind, sourceUserId, sourceUserName
     );
     const orderId = ins.lastInsertRowid;
     const externalId = 'po-' + orderId;
