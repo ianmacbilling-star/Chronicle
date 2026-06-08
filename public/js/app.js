@@ -1122,13 +1122,12 @@ function loadSessionCharacters() {
 
 function renderSessionCharacters(rows) {
   // Phase 4 Step 3c — amendment controls show for the DM on canonical OR a
-  // player on their OWN version. Player fork editing is free (token-metered);
-  // DM canonical editing keeps the Platinum gate.
+  // player on their OWN version. Prompt editing is allowed wherever the caller
+  // can edit images (own fork, or DM on canonical) — no tier gate.
   var role = state.currentCampaign && state.currentCampaign.my_role;
   var ownFork = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
   var canAct = (role === 'dm' && !state.currentForkId) || ownFork;
-  var tierOk = state.userTier && state.userTier.can_edit_prompts;
-  var canEditPrompt = canAct && (ownFork || tierOk);
+  var canEditPrompt = canAct;
   var list = document.getElementById('sc-list');
   if (!list) return;
   list.innerHTML = rows.map(function(r) {
@@ -2785,7 +2784,9 @@ function renderCharModalPrompt(char) {
     return;
   }
 
-  var canEdit = state.userTier && state.userTier.can_edit_prompts;
+  var _meId = (state.user && state.user.id) || null;
+  var _crole = state.currentCampaign && state.currentCampaign.my_role;
+  var canEdit = (_crole === 'dm') || (!!_meId && char.owner_user_id === _meId);
   var hasPrompt = char.canonical_prompt && char.canonical_prompt.trim();
   var inner = hasPrompt
     ? '<div class="char-prompt-text" id="char-prompt-text-' + char.id + '">' + char.canonical_prompt + '</div>'
@@ -4693,8 +4694,8 @@ function toggleSessionPreview() { previewSessionInline(); }
 
 // Export - opens PDF page, waits for full render, then prints
 function exportSessionPDF() {
-  if (state.userTier && !state.userTier.can_export) {
-    showAlert('Export is not available on the Copper plan. Upgrade to Silver or higher to export PDFs!');
+  if (state.tierInfo && state.tierInfo.can_export === false) {
+    showAlert('Export is not available on your current plan. Upgrade to Silver or higher to export PDFs.');
     return;
   }
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
@@ -4787,10 +4788,13 @@ function showAlert(msg) {
   setTimeout(function() { el.remove(); }, 2500);
 }
 
-// Prompt block for a storyboard panel. Platinum users get an Edit button;
-// everyone else sees read-only text.
+// Prompt block for a storyboard panel. The Edit button shows wherever the
+// caller can edit the panel image: the DM on canonical, or a player on their
+// own fork. No tier gate.
 function buildPromptBlock(m) {
-  var canEdit = state.userTier && state.userTier.can_edit_prompts;
+  var _prole = state.currentCampaign && state.currentCampaign.my_role;
+  var _pOwnFork = (_prole === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+  var canEdit = (_prole === 'dm' && !state.currentForkId) || _pOwnFork;
   var safe = (m.prompt || '');
   if (m.locked) {
     return '<div class="moment-prompt-text" id="prompt-text-' + m.id + '">' + safe + '</div>';

@@ -296,16 +296,6 @@ router.put('/:id/characters/:characterId', requireAuth, verifyCampaignMember, as
   const db = await getDb();
   const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
   if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
-  // Tier gate applies only to DM canonical editing; a player edits their
-  // own version freely (tokens are the meter for forks, not tier).
-  if (req.campaignRole === 'dm') {
-    const { getTier } = require('../middleware/tiers');
-    const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
-    const tier = getTier(user ? user.tier : 'copper');
-    if (!tier.can_edit_prompts) {
-      return res.status(403).json({ error: 'Editing session character prompts is a Platinum feature.' });
-    }
-  }
   const { prompt } = req.body;
   if (typeof prompt !== 'string') return res.json({ error: 'Prompt required' });
 

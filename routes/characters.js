@@ -269,16 +269,11 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
   }
 });
 
-// PUT update just the canonical prompt (Platinum manual edit)
-router.put('/:id/canonical-prompt', requireAuth, verifyCampaignDM, async function(req, res) {
+// PUT update just the canonical prompt. Same access as editing the reference
+// image: the DM, or the character's owner (player blocked once a session is Ready).
+router.put('/:id/canonical-prompt', requireAuth, verifyCampaignDmOrCharacterOwner, async function(req, res) {
   try {
-    const { getTier } = require('../middleware/tiers');
     const db = await getDb();
-    const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
-    const tier = getTier(user ? user.tier : 'copper');
-    if (!tier.can_edit_prompts) {
-      return res.status(403).json({ error: 'Editing character prompts is a Platinum feature.' });
-    }
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
     if (!char) return res.status(404).json({ error: 'Character not found' });
 
