@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
-const { getTier, getMomentRange } = require('../middleware/tiers');
+const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 
@@ -67,10 +67,11 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   // Scale moment count to transcript length based on user tier
   const wordCount = session.transcript.split(/\s+/).length;
-  const db2 = await getDb();
-  const userForTier = await db2.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
-  const userTier = userForTier ? userForTier.tier : 'copper';
-  const momentCount = getMomentRange(userTier, wordCount);
+  // Campaign features resolve to the EFFECTIVE tier (the higher of the player's
+  // own tier and the campaign SM's), so a Copper player under a Platinum SM gets
+  // Platinum's moment counts — and a Gold player under a Silver SM keeps Gold.
+  const effectiveTier = await getEffectiveTier(req.session.userId, req.params.campaignId);
+  const momentCount = getMomentRange(effectiveTier, wordCount);
 
   // Parse session notes into mandatory and optional directives
   const notesSection = session.session_notes
