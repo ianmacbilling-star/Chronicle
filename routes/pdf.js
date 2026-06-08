@@ -1352,9 +1352,16 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   @media print {
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { width:8.5in; }
-    @page { size:8.5in 11in; margin:0; }
+    @page { size:8.5in 11in; margin:0.55in 0; }
+    @page :first { margin:0; }
     .print-bar { display:none !important; }
-    .cast-page, .content-page { min-height:11in; }
+    /* Top/bottom page margins now come from @page, so every physical page --
+       including continuation pages of a multi-page session -- gets consistent
+       breathing room, while the cover (first page) stays full-bleed. No
+       min-height: sessions flow continuously instead of each short session
+       being padded out to a whole sheet (the main white-space culprit). */
+    .content-page { padding-top:0; padding-bottom:0; }
+    .content-page + .content-page { margin-top:0.4in; }
     .cover-art-frame { flex:none; height:9.6in; }
   }
 </style>
