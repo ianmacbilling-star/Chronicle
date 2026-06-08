@@ -692,6 +692,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
 // Magazine flow: images float and the narrative text wraps around them.
 function magFull(shape){ return shape === 'panoramic' || shape === 'wide'; }
 function magWidth(shape){ if (shape === 'tall' || shape === 'tower') return 36; if (shape === 'square') return 42; return 46; }
+function magSoloWidth(shape){ if (shape === 'tower') return 56; if (shape === 'tall') return 64; if (shape === 'square') return 72; return 100; }
 function coFloatImg(m, i, side, opts){
   var media = coMedia(m, opts.border);
   var overlay = coCaptionOverlay(m, opts.caption);
@@ -715,11 +716,18 @@ function renderMagazine(moments, sections, intro, outro, opts){
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
       if (section.after) html += coNarr(section.after, opts, false);
+    } else if (!(section.after && String(section.after).trim())) {
+      // No narrative to wrap beside it -- render it large & centered instead of
+      // stranding a small floated image in a sea of white space.
+      html += '<div style="clear:both;"></div>';
+      html += '<div style="width:' + magSoloWidth(shape) + '%;margin:0.22in auto 0.14in;page-break-inside:avoid;">' +
+        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
+        coCaptionBelow(m, i, opts.caption) + '</div>';
     } else {
       var side = (fc % 2 === 0) ? 'right' : 'left';
       fc++;
       html += coFloatImg(m, i, side, opts);
-      if (section.after) html += coNarr(section.after, opts, false);
+      html += coNarr(section.after, opts, false);
     }
   }
   html += '<div style="clear:both;"></div>';
