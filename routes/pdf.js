@@ -691,20 +691,19 @@ function renderComicPage(moments, sections, intro, outro, opts) {
 
 // Magazine flow: images float and the narrative text wraps around them.
 function magFull(shape){ return shape === 'panoramic' || shape === 'wide'; }
-function magWidth(shape){ if (shape === 'tall' || shape === 'tower') return 36; if (shape === 'square') return 42; return 46; }
+function magWidth(shape){ if (shape === 'tall' || shape === 'tower') return 44; if (shape === 'square') return 50; return 54; }
 function magSoloWidth(shape){ if (shape === 'tower') return 56; if (shape === 'tall') return 64; if (shape === 'square') return 72; return 100; }
 function coFloatImg(m, i, side, opts){
   var media = coMedia(m, opts.border);
   var overlay = coCaptionOverlay(m, opts.caption);
   var cap = coCaptionBelow(m, i, opts.caption);
   var mar = (side === 'left') ? 'margin:0.06in 0.3in 0.2in 0;' : 'margin:0.06in 0 0.2in 0.3in;';
-  return '<div style="float:' + side + ';clear:both;width:' + magWidth(normShape(m)) + '%;' + mar + 'page-break-inside:avoid;">' +
+  return '<div style="float:' + side + ';width:' + magWidth(normShape(m)) + '%;' + mar + 'page-break-inside:avoid;">' +
     '<div style="position:relative;line-height:0;">' + media + overlay + '</div>' + cap +
   '</div>';
 }
 function renderMagazine(moments, sections, intro, outro, opts){
   var html = coDropOrIntro(intro, opts);
-  var fc = 0;
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var shape = normShape(m);
@@ -724,9 +723,10 @@ function renderMagazine(moments, sections, intro, outro, opts){
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
     } else {
-      var side = (fc % 2 === 0) ? 'right' : 'left';
-      fc++;
-      html += coFloatImg(m, i, side, opts);
+      // Float to one consistent side so text always has the full remaining
+      // width on the other side -- no opposing floats trapping it in a gutter,
+      // and the image packs up beside the text instead of clearing below it.
+      html += coFloatImg(m, i, 'right', opts);
       html += coNarr(section.after, opts, false);
     }
   }
