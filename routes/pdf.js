@@ -1410,6 +1410,27 @@ ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 // ============================================================
 
 // GET session PDF HTML
+// TRIAL: tiled "CAMPAIGNIA TRIAL" watermark for free-trial users, shown in the
+// session + novel preview and print. Dark tone so it reads on the light
+// (parchment/white) PDF pages. Gated on the VIEWER's trial status.
+var TRIAL_WM_URI = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22320%22%20height%3D%22200%22%3E%3Ctext%20x%3D%22160%22%20y%3D%22108%22%20fill%3D%22%233a2410%22%20fill-opacity%3D%220.18%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.12%22%20stroke-width%3D%220.5%22%20font-family%3D%22Georgia%2Cserif%22%20font-size%3D%2222%22%20font-weight%3D%22700%22%20letter-spacing%3D%223%22%20text-anchor%3D%22middle%22%20transform%3D%22rotate%28-30%20160%20108%29%22%3ECAMPAIGNIA%20TRIAL%3C%2Ftext%3E%3C%2Fsvg%3E';
+async function userInFreeTrial(db, userId) {
+  try {
+    var u = await db.prepare('SELECT subscription_status, trial_started_at FROM users WHERE id = ?').get(userId);
+    if (!u || !u.trial_started_at) return false;
+    var within = (Date.now() - new Date(u.trial_started_at).getTime()) < 30 * 24 * 60 * 60 * 1000;
+    return within && ((u.subscription_status || 'trialing') === 'trialing');
+  } catch (e) { return false; }
+}
+function injectTrialWatermark(html) {
+  var css = '<style>.trial-watermark{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;background-image:url("' + TRIAL_WM_URI + '");background-repeat:repeat;background-position:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{.trial-watermark{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style>';
+  var div = '<div class="trial-watermark"></div>';
+  if (html.indexOf('</head>') !== -1) html = html.replace('</head>', css + '</head>');
+  else html = css + html;
+  html = html.replace(/<body([^>]*)>/, function(m){ return m + div; });
+  return html;
+}
+
 router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, res) {
   try {
     const db = await getDb();
@@ -1439,7 +1460,8 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     };
 
     const co = req.query.co ? parseCustomOpts(req.query.co) : null;
-    const html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
+    let html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
+    if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
     res.send(html);
   } catch(e) {
     console.error('PDF session error:', e.message);
@@ -1507,7 +1529,8 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   res.set('X-Total-Sessions', String(sessionsWithData.length));
 
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
-  const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
   res.send(html);
 });
 
