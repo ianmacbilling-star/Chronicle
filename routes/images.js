@@ -84,7 +84,7 @@ var FADE_WHITE = ' EDGES: render as a loose vignette where the medium thins and 
 var FADE_STYLES = { 'Fantasy oil painting': 1, 'Fantasy pastel': 1, 'Charcoal drawing': 1, 'Classic pen and ink': 1 };
 function isFadeStyle(s){ return !!FADE_STYLES[s]; }
 
-function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
+function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
   var edgeDirective = isFadeStyle(style) ? FADE_WHITE : NO_BORDER;
@@ -239,7 +239,8 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
   // dial is set — the hook for a future "Render quality" campaign setting.
   if (key === 'nano2') {
     input.system_prompt = styleSystem;
-    if (NANO_THINKING_LEVEL) input.thinking_level = NANO_THINKING_LEVEL;
+    var _tl = (thinkingLevel === 'minimal' || thinkingLevel === 'high') ? thinkingLevel : NANO_THINKING_LEVEL;
+    if (_tl) input.thinking_level = _tl;
   }
 
   return { model: model, input: input };
@@ -247,9 +248,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
 
 // Synchronous generation (still used by generate-all / retouch until they
 // move to the async queue flow in a later phase).
-async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape) {
+async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
@@ -260,9 +261,9 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, s
 // Async generation: submit to fal's queue with our webhook and return the fal
 // request id immediately. The webhook finishes the job when fal is done, so a
 // slow or queued fal can never time out the user's HTTP request.
-async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape) {
+async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape, thinkingLevel) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model };
 }
@@ -741,7 +742,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const webhookUrl = falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
-    const sub = await submitPanelGen(prompt, style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape);
+    const userThinking = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
+    const sub = await submitPanelGen(prompt, style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -907,6 +909,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // images that actually succeed (spend-on-success), so failures aren't
   // charged — but the upfront check guarantees they can cover a full run.
   const perImageCost = await getTokenCost(modelKey);
+  const userThinkingAll = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
   const batchCost = perImageCost * toGenerate.length;
   if (!(await canAfford(req.session.userId, batchCost))) {
     const bal = await getBalance(req.session.userId);
@@ -942,7 +945,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castExplicit: !!m.cast_explicit,
         castNames: castNames
       };
-      const sub = await submitPanelGen(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape);
+      const sub = await submitPanelGen(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll);
       const nowTs = new Date().toISOString();
       const jobIns = await db.prepare(
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +

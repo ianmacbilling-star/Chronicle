@@ -465,6 +465,19 @@
         <button class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
       </div>
 
+      <!-- Image rendering options -->
+      <div class="settings-section">
+        <div class="settings-section-title">Image rendering</div>
+        <div class="settings-section-desc">Options for how your panel images are generated.</div>
+        <label style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;cursor:pointer;">
+          <input type="checkbox" id="setting-thinking" onchange="saveRenderThinking()" style="margin-top:3px;flex-shrink:0;" />
+          <span>
+            <span style="font-weight:600;color:var(--text);">Smarter rendering (AI &ldquo;thinking&rdquo;)</span><br>
+            <span class="settings-section-desc" style="margin:0;">The image model reasons about the scene before it draws, which helps keep multiple characters distinct in busy panels. Generation is somewhat slower; it does not cost extra tokens.</span>
+          </span>
+        </label>
+      </div>
+
       <!-- Account actions (Sign out relocated here from the Settings screen) -->
       <div class="settings-section" style="border-color:#f09595;">
         <div class="settings-section-title" style="color:var(--error);">Account</div>

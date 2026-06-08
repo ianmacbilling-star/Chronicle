@@ -401,12 +401,23 @@ function loadAccount() {
       if (!me || !me.authenticated) return;
       renderAccountTier(me);
       renderAccountPlans(me);
+      var _tk = document.getElementById('setting-thinking'); if (_tk) _tk.checked = !!me.renderThinking;
       return fetch('/api/auth/usage').then(function(r) { return r.json(); });
     })
     .then(function(usage) {
       if (usage) renderAccountUsage(usage);
     })
     .catch(function(){});
+}
+
+function saveRenderThinking() {
+  var el = document.getElementById('setting-thinking');
+  if (!el) return;
+  fetch('/api/auth/render-settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ thinking: el.checked })
+  }).catch(function(){});
 }
 
 // TESTING ONLY: switch the signed-in account's tier so we can exercise

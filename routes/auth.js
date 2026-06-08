@@ -173,7 +173,7 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, render_thinking FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     const tier = getTier(user.tier || 'copper');
@@ -205,6 +205,7 @@ router.get('/me', async function(req, res) {
       trialExpired: trialExpired,
       trialDaysLeft: trialDaysLeft,
       subscriptionStatus: user.subscription_status || 'trialing',
+      renderThinking: !!user.render_thinking,
       is_admin: isAdmin,
       allTiers: TIERS
     });
@@ -294,6 +295,22 @@ router.put('/apikey', async function(req, res) {
       .run(fal_key || null, now, req.session.userId, req.session.userId);
   }
   res.json({ success: true });
+});
+
+// Per-user image rendering preferences (e.g. AI "thinking").
+router.put('/render-settings', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    const thinking = (req.body && req.body.thinking) ? 1 : 0;
+    await db.prepare('UPDATE users SET render_thinking=?, edited_at=?, edited_by=? WHERE id=?')
+      .run(thinking, now, req.session.userId, req.session.userId);
+    res.json({ success: true, render_thinking: thinking });
+  } catch (e) {
+    console.error('render-settings error:', e.message);
+    res.status(500).json({ error: 'Could not save settings' });
+  }
 });
 
 router.get('/apikey', async function(req, res) {
