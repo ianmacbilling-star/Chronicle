@@ -268,16 +268,26 @@
             <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
           </div>
 
-          <!-- Testing-only: until the print-ready PDF generator is built, the
-               order needs hosted PDF URLs. Paste sandbox PDFs to exercise the
-               full flow; otherwise Place Order is disabled. -->
+          <!-- The interior is generated automatically when you place the order.
+               Covers come in a later phase; for sandbox testing of the full
+               order, paste a hosted cover PDF URL here. -->
           <details style="margin-bottom:12px;">
-            <summary style="cursor:pointer;font-size:11px;color:rgba(201,168,76,0.6);">(testing) print file URLs &mdash; temporary until the generator is built</summary>
-            <input id="print-interior-url" type="text" placeholder="Interior PDF URL" style="width:100%;margin-top:6px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:7px 10px;font-size:12px;">
+            <summary style="cursor:pointer;font-size:11px;color:rgba(201,168,76,0.6);">(testing) cover PDF URL &mdash; temporary until the cover generator is built</summary>
             <input id="print-cover-url" type="text" placeholder="Cover PDF URL" style="width:100%;margin-top:6px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:7px 10px;font-size:12px;">
           </details>
 
-          <button class="btn btn-primary" id="print-place-btn" onclick="submitPrintOrder()">Place order</button>
+          <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Place order</button>
+
+          <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(201,168,76,0.4);border-radius:var(--radius);background:rgba(20,12,4,0.5);">
+            <div style="font-weight:600;color:var(--gold);margin-bottom:10px;">Review your order</div>
+            <div id="print-review-summary" style="font-size:13px;margin-bottom:12px;"></div>
+            <a id="print-review-preview" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px;font-size:13px;color:#7fb0e0;text-decoration:underline;">Preview your book (opens the PDF in a new tab)</a>
+            <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:12px;">Check the preview above. Once placed, the order goes to print and can&rsquo;t be changed.</div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-primary" id="print-confirm-btn" onclick="submitPrintOrder()">Yes, place my order</button>
+              <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

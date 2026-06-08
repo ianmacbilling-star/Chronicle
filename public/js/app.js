@@ -9126,29 +9126,122 @@ function quotePrintOrder() {
     .catch(function () { if (out) out.textContent = 'Could not price this order.'; });
 }
 
-function submitPrintOrder() {
+// --- Print order: final review + confirm gate ------------------------------
+// "Place order" now builds the actual print-ready interior, shows a summary
+// plus a link to PREVIEW that exact PDF, and requires an explicit confirm
+// before the order is submitted. preparedInteriorUrl holds the generated file.
+var preparedInteriorUrl = '';
+
+function printInteriorUrl() {
+  // Same params the on-screen novel preview uses, so the printed interior
+  // matches what the reader sees (the cover page is omitted server-side).
+  return '/api/pdf/print-interior/' + state.currentCampaign.id +
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');
+}
+
+function reviewPrintOrder() {
   var body = printSelectionBody();
   if (!body || !body.selection.binding) { showPrintMsg('Pick your format first.', null); return; }
-  body.interiorPdfUrl = (document.getElementById('print-interior-url') || {}).value || '';
-  body.coverPdfUrl = (document.getElementById('print-cover-url') || {}).value || '';
-  if (!body.interiorPdfUrl || !body.coverPdfUrl) {
-    showPrintMsg('Placing a real order needs the print files, which are produced in the next build step. To test the order flow now, paste sandbox PDF URLs under "(testing) print file URLs".', null);
-    return;
-  }
   if (!body.shipTo.name || !body.shipTo.street1 || !body.shipTo.city || !body.shipTo.postcode) {
     showPrintMsg('Please complete the shipping address.', null);
     return;
   }
   var btn = document.getElementById('print-place-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing your book...'; }
+  showPrintMsg('Building your print-ready book and pricing it. This can take a moment for longer books...', null);
+  preparedInteriorUrl = '';
+
+  fetch(printInteriorUrl())
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.url) {
+        throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the print file.');
+      }
+      preparedInteriorUrl = res.j.url;
+      return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+    })
+    .then(function (res) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Place order'; }
+      if (!res.ok || !res.j) {
+        var msg = res.j && res.j.error ? res.j.error : 'Could not price this order.';
+        if (res.j && res.j.details) msg += ' (' + res.j.details.join('; ') + ')';
+        showPrintMsg(msg, null);
+        return;
+      }
+      showPrintMsg('', null);
+      renderPrintReview(body, res.j);
+    })
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Place order'; }
+      showPrintMsg((e && e.message) ? e.message : 'Could not prepare your order.', null);
+    });
+}
+
+function renderPrintReview(body, quote) {
+  var panel = document.getElementById('print-review');
+  var sum = document.getElementById('print-review-summary');
+  if (!panel || !sum) return;
+  function row(label, value) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
+      '<span style="color:rgba(245,232,200,0.55);">' + escapeHtmlPrint(label) + '</span>' +
+      '<span style="color:var(--cream);text-align:right;">' + escapeHtmlPrint(value) + '</span></div>';
+  }
+  function lbl(id) { var el = document.getElementById(id); return (el && el.options && el.options[el.selectedIndex]) ? el.options[el.selectedIndex].text : ''; }
+  var versionTxt = (document.getElementById('print-version-display') || {}).value || (state.novelAsUser ? 'Player version' : 'Canonical');
+  var ship = body.shipTo;
+  var addr = [ship.name, ship.street1, ship.street2, [ship.city, ship.stateCode, ship.postcode].filter(Boolean).join(' '), ship.countryCode].filter(Boolean).join(', ');
+  var html = '';
+  html += row('Order name', body.orderName || '(none)');
+  html += row('Version', versionTxt);
+  html += row('Format', [lbl('print-binding'), lbl('print-color'), lbl('print-finish')].filter(Boolean).join(', '));
+  html += row('Quantity', String(body.quantity));
+  html += row('Ship to', addr);
+  html += row('Shipping', body.shippingLevel);
+  html += '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;"></div>';
+  html += row('Total', '$' + Number(quote.customerCharge).toFixed(2) + ' ' + (quote.currency || 'USD'));
+  sum.innerHTML = html;
+  var prev = document.getElementById('print-review-preview');
+  if (prev) prev.href = preparedInteriorUrl;
+  var place = document.getElementById('print-place-btn');
+  if (place) place.style.display = 'none';
+  panel.style.display = 'block';
+  if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function cancelPrintReview() {
+  var panel = document.getElementById('print-review');
+  if (panel) panel.style.display = 'none';
+  var place = document.getElementById('print-place-btn');
+  if (place) place.style.display = '';
+  showPrintMsg('', null);
+}
+
+function submitPrintOrder() {
+  var body = printSelectionBody();
+  if (!body || !body.selection.binding) { showPrintMsg('Pick your format first.', null); return; }
+  body.interiorPdfUrl = preparedInteriorUrl || ((document.getElementById('print-interior-url') || {}).value || '');
+  body.coverPdfUrl = (document.getElementById('print-cover-url') || {}).value || '';
+  if (!body.interiorPdfUrl) {
+    showPrintMsg('Your print file was not prepared. Please go Back and try again.', null);
+    return;
+  }
+  if (!body.coverPdfUrl) {
+    showPrintMsg('A cover file is required. Covers are generated in the next phase; for sandbox testing, paste a cover PDF URL under "(testing) cover PDF URL".', null);
+    return;
+  }
+  var btn = document.getElementById('print-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Placing...'; }
   fetch('/api/print/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Place order'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Yes, place my order'; }
       if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Order failed.', null); return; }
+      var panel = document.getElementById('print-review');
+      if (panel) panel.style.display = 'none';
       showPrintMsg('Order placed. Reference #' + res.j.orderId + ' (' + (res.j.status || 'submitted') + '). It will appear on your Print Orders page.', 'ok');
     })
-    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Place order'; } showPrintMsg('Order failed.', null); });
+    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Yes, place my order'; } showPrintMsg('Order failed.', null); });
 }
 
 // ---- Novel session include + navigation (Sessions tab) ----
