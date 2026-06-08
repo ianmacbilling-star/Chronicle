@@ -1,0 +1,28 @@
+# ============================================================
+# nixpacks.toml  -  Railway build config for headless Chromium (Puppeteer)
+# ------------------------------------------------------------
+# STARTING POINT - expect to tweak this once for your Railway image.
+#
+# Strategy here: install a SYSTEM Chromium via nix and tell Puppeteer to use it,
+# instead of downloading Puppeteer's ~300MB bundled Chromium. The app's renderer
+# (services/printing/renderPdf.js) reads PUPPETEER_EXECUTABLE_PATH at runtime, so
+# as long as that env var points at a working Chromium binary, rendering works.
+#
+# After the first deploy, open a Railway shell and run:  which chromium
+# Then set PUPPETEER_EXECUTABLE_PATH (Railway dashboard -> Variables) to that path.
+# (Leaving it in the dashboard rather than hardcoding here avoids a wrong path
+# silently breaking the build.)
+#
+# ALTERNATIVE (no toml): delete this file and just `npm install puppeteer` so it
+# downloads its own Chromium. Simpler, but heavier build and you may still need to
+# add a few shared libraries for Chrome to launch. The system-Chromium route below
+# is usually the more reliable one on Railway.
+# ============================================================
+
+[phases.setup]
+# Add system Chromium (pulls in the shared libs Chrome needs) to the build image.
+nixPkgs = ['nodejs_20', 'chromium']
+
+[variables]
+# Skip Puppeteer's bundled-Chromium download; use the system Chromium above.
+PUPPETEER_SKIP_DOWNLOAD = 'true'

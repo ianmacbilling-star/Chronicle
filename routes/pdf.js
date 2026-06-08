@@ -3,6 +3,8 @@ const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const path = require('path');
+const { uploadFile } = require('../storage/storage');
+const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 
 // Shared drop shadow for gallery panels AND character portraits (kept in lockstep).
 var CO_IMG_SHADOW = '7px 7px 10px -2px rgba(0,0,0,0.5), 18px 18px 30px -10px rgba(0,0,0,0.5)';
@@ -1540,6 +1542,107 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
   res.send(html);
+});
+
+// ============================================================
+// Print-ready INTERIOR PDF  (Phase 1: prove the plumbing)
+// ------------------------------------------------------------
+// Renders the graphic-novel interior (cover page OFF - the cover is a separate
+// Lulu file built in a later phase) to a real PDF via headless Chromium, then:
+//   ?download=1  -> streams the PDF inline so you can eyeball it
+//   (otherwise)  -> uploads to R2 and returns { url } for a Lulu interior_source_url
+// Phase 1 renders at the document's native 8.5x11 trim; Lulu pads bleed. True
+// full-bleed 8.75x11.25 geometry + high-res panel regen come in Phase 2.
+// ============================================================
+router.get('/print-interior/:campaignId', requireAuth, async function(req, res) {
+  const db = await getDb();
+
+  const campaign = await db.prepare(
+    'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+  ).get(req.params.campaignId, req.session.userId);
+
+  if (!campaign) return res.status(403).json({ error: 'Access denied' });
+
+  var _allowNovel = campaign.allow_player_novel_access === true || campaign.allow_player_novel_access === 1 ||
+    campaign.allow_player_novel_access === 't' || campaign.allow_player_novel_access === 'true';
+  if (campaign.my_role !== 'dm' && !_allowNovel) {
+    return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
+  }
+
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? AND (novel_include IS NULL OR novel_include = true) ORDER BY session_date ASC').all(campaign.id);
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
+
+  function sessionDateKey(s) {
+    if (!s.session_date) return '';
+    if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
+    try { return s.session_date.toISOString().split('T')[0]; }
+    catch (e) { return String(s.session_date); }
+  }
+  sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
+
+  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+  const sessionsWithData = await Promise.all(sessions.map(async function(s) {
+    let forkId = null;
+    if (asUser) {
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      if (pf) forkId = pf.id;
+    }
+    if (!forkId) forkId = await getDmForkId(db, s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
+    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
+    return Object.assign({}, s, {
+      moments: moments,
+      narrative_intro: nfk ? (nfk.narrative_intro || '') : '',
+      narrative_sections: nfk ? (nfk.narrative_sections || null) : null,
+      narrative_outro: nfk ? (nfk.narrative_outro || '') : ''
+    });
+  }));
+
+  if (!sessionsWithData.length) {
+    return res.status(400).json({ error: 'No sessions are included in the print. Enable at least one session under "Include in Print".' });
+  }
+
+  const layoutStyle = req.query.layout || 'Classic';
+
+  // Interior-only: keep the reader's chosen look but force the cover page OFF.
+  // When no co is supplied we must spell out the screen defaults, because
+  // buildNovelHTML treats a present co object as "all flags default false".
+  var co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  if (!co) co = { cast: true, toc: false, header: true, markers: true, watermark: true };
+  co.cover = false;
+
+  var pageOpts = {}; // full book, never paginated for print
+
+  var html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+
+  // Resolve any relative decorative asset URLs (textures/logo) against the live
+  // site so Chromium can fetch them under setContent (which has no document base).
+  // Panel images are absolute R2 URLs and are unaffected by <base>.
+  var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+
+  let pdfBuffer;
+  try {
+    pdfBuffer = await renderHtmlToPdf(html, {});
+  } catch (e) {
+    console.error('[print-interior] render failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'PDF render failed', detail: String(e && e.message ? e.message : e) });
+  }
+
+  if (req.query.download) {
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', 'inline; filename="interior-' + campaign.id + '.pdf"');
+    return res.send(pdfBuffer);
+  }
+
+  try {
+    var fname = 'interior-' + campaign.id + (asUser ? ('-u' + asUser) : '') + '-' + Date.now() + '.pdf';
+    var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
+    return res.json({ url: url, bytes: pdfBuffer.length });
+  } catch (e) {
+    console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'PDF upload failed', detail: String(e && e.message ? e.message : e) });
+  }
 });
 
 module.exports = router;
