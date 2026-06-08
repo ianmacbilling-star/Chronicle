@@ -782,6 +782,54 @@ async function migrateCasting(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_moment_characters_moment ON moment_characters(moment_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_moment_assets_moment ON moment_assets(moment_id)');
+
+  // Print-on-demand orders (Lulu and any future vendor via PrintProvider).
+  // One row per placed order. session_id NULL = whole-campaign novel.
+  // Money columns are the vendor's landed cost vs what we charge the user.
+  // payment_status: pending|stubbed|paid|payment_failed|refunded.
+  // status: neutral provider lifecycle (created|accepted|in_production|
+  // shipped|rejected|canceled|order_failed).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS print_orders (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      campaign_id INTEGER REFERENCES campaigns(id),
+      session_id INTEGER,
+      external_id TEXT,
+      provider TEXT NOT NULL DEFAULT 'lulu',
+      provider_order_id TEXT,
+      pod_package_id TEXT,
+      binding TEXT,
+      color_tier TEXT,
+      cover_finish TEXT,
+      page_count INTEGER,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      interior_pdf_url TEXT,
+      cover_pdf_url TEXT,
+      ship_name TEXT,
+      ship_street1 TEXT,
+      ship_street2 TEXT,
+      ship_city TEXT,
+      ship_state TEXT,
+      ship_postcode TEXT,
+      ship_country TEXT,
+      ship_phone TEXT,
+      shipping_level TEXT,
+      provider_cost NUMERIC,
+      currency TEXT DEFAULT 'USD',
+      customer_charge NUMERIC,
+      payment_status TEXT DEFAULT 'pending',
+      status TEXT DEFAULT 'created',
+      tracking_url TEXT,
+      carrier TEXT,
+      error TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_print_orders_user ON print_orders(user_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_print_orders_campaign ON print_orders(campaign_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_print_orders_provider_job ON print_orders(provider_order_id)');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

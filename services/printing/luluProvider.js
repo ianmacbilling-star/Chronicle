@@ -54,6 +54,29 @@ const STATUS = {
   CANCELED: 'canceled',
 };
 
+// --- SKU encoding -------------------------------------------------------
+//
+// pod_package_id (legacy 27-char) = Trim + Color + Quality + Bind + Paper
+//                                   + Finish + Linen + Foil.
+//
+// Binding codes: PB = perfect-bound paperback, SS = saddle stitch,
+// CW = casewrap hardcover. PB/SS are documented; CW is best-effort and
+// MUST be confirmed (run a sandbox getQuote -- a 400 means the code/paper
+// is wrong; fix the constant or add a SKU_OVERRIDES entry).
+const BIND_CODE = { paperback: 'PB', saddle: 'SS', hardcover: 'CW' };
+
+// 60# uncoated white. Confirmed for paperback standard color. VERIFY for
+// premium color and for casewrap (color books often want a coated stock).
+const PAPER_CODE = '060UW444';
+
+// Confirmed SKUs win over the parametric builder below. Read exact codes
+// off Lulu's Pricing Calculator (it prints the pod_package_id per option
+// set) or confirm via sandbox quote, then lock them in here keyed by
+// `${binding}:${quality}:${coverFinish}`.
+const SKU_OVERRIDES = {
+  'paperback:standard:gloss': '0850X1100FCSTDPB060UW444GXX', // sandbox-confirmed (8.5x11 FC std PB gloss)
+};
+
 class LuluProvider extends PrintProvider {
   constructor(config = {}) {
     super(config);
@@ -80,28 +103,29 @@ class LuluProvider extends PrintProvider {
   /**
    * Map our neutral BookSpec to a Lulu pod_package_id.
    *
-   * Legacy 27-char SKU = Trim + Color + Quality + Bind + Paper + PPI + Finish
-   *                      + Linen + Foil. Examples confirmed from Lulu docs:
-   *   0600X0900BWSTDPB060UW444MXX = 6x9   B&W standard paperback, matte
-   *   0550X0850BWSTDPB060UW444GXX = 5.5x8.5 B&W standard paperback, gloss
+   * A confirmed SKU in SKU_OVERRIDES (keyed by binding:quality:finish) is
+   * used verbatim. Otherwise the SKU is assembled parametrically from the
+   * documented component codes -- valid in shape, but the casewrap/premium/
+   * paper pieces are best-effort and must be confirmed against a sandbox
+   * quote (a 400 means a code is wrong; fix the constant or add an override).
    *
-   * The mapping below covers what Campaignia ships (full-color paperback).
-   * !!! VERIFY every code against Lulu's Product Specification Sheet / the
-   * pricing calculator before going live -- trim/paper codes are exact and a
-   * wrong SKU is silently rejected at job creation. Unknown specs throw.
+   * Legacy 27-char SKU = Trim + Color + Quality + Bind + Paper + Finish
+   *                      + Linen + Foil. Confirmed example:
+   *   0600X0900BWSTDPB060UW444MXX = 6x9 B&W standard paperback, matte.
    */
   _packageId(spec) {
+    const quality = spec.quality === 'premium' ? 'PRE' : 'STD';
+    const finishKey = spec.coverFinish === 'gloss' ? 'gloss' : 'matte';
+    const overrideKey = `${spec.binding}:${spec.quality === 'premium' ? 'premium' : 'standard'}:${finishKey}`;
+    if (SKU_OVERRIDES[overrideKey]) return SKU_OVERRIDES[overrideKey];
+
+    const bind = BIND_CODE[spec.binding];
+    if (!bind) throw new Error('lulu: unsupported binding ' + spec.binding);
     const trim = `${pad4(spec.trimWidthIn)}X${pad4(spec.trimHeightIn)}`; // e.g. 0850X1100
     const color = spec.ink === 'color' ? 'FC' : 'BW';
-    const quality = spec.quality === 'premium' ? 'PRE' : 'STD';
-    const bind = spec.binding === 'saddle' ? 'SS' : 'PB'; // hardcover differs; not handled here
-    const paper = '060UW444'; // 60# uncoated white -- TODO confirm for color (coated may differ)
     const finish = spec.coverFinish === 'matte' ? 'M' : 'G';
-    if (spec.binding === 'hardcover') {
-      throw new Error('lulu: hardcover pod_package_id mapping not configured yet');
-    }
-    // Trailing Linen/Foil = 'XX' (none) for paperback.
-    return `${trim}${color}${quality}${bind}${paper}${finish}XX`;
+    // Trailing Linen/Foil = 'XX' (none).
+    return `${trim}${color}${quality}${bind}${PAPER_CODE}${finish}XX`;
   }
 
   _lineItem(req) {
