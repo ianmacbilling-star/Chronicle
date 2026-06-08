@@ -213,6 +213,7 @@ router.get('/me', async function(req, res) {
       subscriptionStatus: user.subscription_status || 'trialing',
       renderThinking: !!user.render_thinking,
       inFreeTrial: inFreeTrial,
+      trialStartedAt: user.trial_started_at || null,
       is_admin: isAdmin,
       allTiers: TIERS
     });
@@ -317,6 +318,33 @@ router.put('/render-settings', async function(req, res) {
   } catch (e) {
     console.error('render-settings error:', e.message);
     res.status(500).json({ error: 'Could not save settings' });
+  }
+});
+
+// TESTING ONLY: put the signed-in account in/out of the free trial so we can
+// exercise the trial watermark. Sets subscription_status + trial_started_at.
+// Self only. REMOVE with the other testing controls before production.
+router.put('/trial-testing', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    const inTrial = !!(req.body && req.body.inTrial);
+    let startedAt = null;
+    if (inTrial) {
+      const raw = req.body && req.body.started_at;
+      if (raw) { const d = new Date(raw); if (!isNaN(d.getTime())) startedAt = d.toISOString(); }
+      if (!startedAt) startedAt = now;
+      await db.prepare("UPDATE users SET subscription_status = 'trialing', trial_started_at = ?, edited_at = ?, edited_by = ? WHERE id = ?")
+        .run(startedAt, now, req.session.userId, req.session.userId);
+    } else {
+      await db.prepare("UPDATE users SET subscription_status = 'active', edited_at = ?, edited_by = ? WHERE id = ?")
+        .run(now, req.session.userId, req.session.userId);
+    }
+    res.json({ success: true, inTrial: inTrial, trial_started_at: startedAt });
+  } catch (e) {
+    console.error('trial-testing error:', e.message);
+    res.status(500).json({ error: 'Could not update trial state' });
   }
 });
 

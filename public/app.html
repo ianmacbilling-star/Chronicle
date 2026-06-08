@@ -531,6 +531,27 @@
         <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
       </div>
 
+      <!-- TESTING ONLY: put this account in/out of the free trial to exercise
+           the trial watermark. Backed by /api/auth/trial-testing (self only).
+           REMOVE with the other testing controls before production. -->
+      <div class="settings-section" id="dev-trial-section" style="border:1px dashed rgba(201,168,76,0.5);">
+        <div class="settings-section-title">Testing &mdash; Free Trial</div>
+        <div class="settings-section-desc">Temporary: flip this account in or out of the 30-day free trial to test the trial watermark. Will be removed later.</div>
+        <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;">
+          <input type="checkbox" id="dev-trial-toggle" style="flex-shrink:0;" />
+          <span style="font-weight:600;">In free trial</span>
+        </label>
+        <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin-top:10px;">
+          <div style="flex:1;max-width:220px;">
+            <label class="form-label">Trial start date (optional)</label>
+            <input class="form-input" id="dev-trial-date" type="date" />
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="devApplyTrial()">Apply</button>
+        </div>
+        <div class="settings-section-desc" style="margin-top:6px;">Tip: set the start date ~31 days ago with the toggle on to confirm the watermark switches off past the window.</div>
+        <div id="dev-trial-msg" style="display:none;margin-top:8px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
+      </div>
+
       <!-- Usage -->
       <div class="settings-section">
         <div class="settings-section-title">Usage</div>

@@ -266,6 +266,38 @@ function devAddTokens() {
     .catch(function() { show('Network error.', false); });
 }
 
+// ----- TESTING: put this account in/out of the free trial. Remove later. -----
+function devApplyTrial() {
+  var toggle = document.getElementById('dev-trial-toggle');
+  var dateEl = document.getElementById('dev-trial-date');
+  var msg = document.getElementById('dev-trial-msg');
+  function show(text, ok) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
+    msg.style.color = ok ? '#3c9142' : '#c0392b';
+  }
+  if (!toggle) return;
+  var body = { inTrial: toggle.checked };
+  if (toggle.checked && dateEl && dateEl.value) body.started_at = dateEl.value;
+  fetch('/api/auth/trial-testing', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        state.inFreeTrial = !!data.inTrial;
+        show(data.inTrial ? 'Account is now IN the free trial. Open a session to see the watermark.' : 'Account is now OUT of the free trial (watermark off).', true);
+      } else {
+        show((data && data.error) || 'Could not update trial state.', false);
+      }
+    })
+    .catch(function() { show('Network error.', false); });
+}
+
 // ----- ADMIN TESTING: set my own balance (temporary, deprecate later) -----
 function adminSetMyBalance() {
   var input = document.getElementById('admin-set-balance-input');
@@ -434,6 +466,8 @@ function loadAccount() {
       renderAccountTier(me);
       renderAccountPlans(me);
       var _tk = document.getElementById('setting-thinking'); if (_tk) _tk.checked = !!me.renderThinking;
+      var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = !!me.inFreeTrial;
+      var _td = document.getElementById('dev-trial-date'); if (_td && me.trialStartedAt) _td.value = String(me.trialStartedAt).slice(0,10);
       return fetch('/api/auth/usage').then(function(r) { return r.json(); });
     })
     .then(function(usage) {
