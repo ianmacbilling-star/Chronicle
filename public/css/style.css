@@ -1821,3 +1821,7 @@ body.role-player #stab-export { display: block !important; }
 .trend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 
 .storyboard-panel-meta .moment-meta-list{font-size:11px;color:rgba(201,168,76,0.55) !important;}
+
+/* Order Printed Copy tab -- readable blue-grey placeholders on dark fields */
+#novel-tab-order input::placeholder,
+#novel-tab-order textarea::placeholder { color:#9fb0c4; opacity:1; }
