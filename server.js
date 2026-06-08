@@ -144,6 +144,9 @@ app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api', require('./routes/invites'));
 app.use('/api/admin', require('./routes/admin'));
 
+// Public, unauthenticated: landing-page pricing (reads live tier config).
+app.use('/api/public', require('./routes/public'));
+
 // Phase 3 — invite landing page. Standalone HTML served to logged-out
 // and logged-in users alike; it fetches metadata client-side and adapts
 // the UI based on auth state. Separate file (not the SPA) so unauth'd

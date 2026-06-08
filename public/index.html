@@ -993,7 +993,7 @@
             <div class="tier-name-row">COPPER</div>
             <div class="tier-perks">Player Tier · Invite only</div>
           </div>
-          <div class="tier-price-tag"><small>Invite only</small></div>
+          <div class="tier-price-tag" data-tier="copper"><small>Invite only</small></div>
           <a href="/login" class="btn-tier">INVITE ONLY</a>
         </div>
 
@@ -1003,7 +1003,7 @@
             <div class="tier-name-row">SILVER</div>
             <div class="tier-perks">1 campaign · unlimited sessions · full export</div>
           </div>
-          <div class="tier-price-tag">$10<small>per month</small></div>
+          <div class="tier-price-tag" data-tier="silver">$10<small>per month</small></div>
           <a href="/login" class="btn-tier">GET SILVER</a>
         </div>
 
@@ -1013,7 +1013,7 @@
             <div class="tier-name-row">GOLD ⭐</div>
             <div class="tier-perks">3 campaigns · unlimited sessions · extended moments</div>
           </div>
-          <div class="tier-price-tag">$15<small>per month</small></div>
+          <div class="tier-price-tag" data-tier="gold">$15<small>per month</small></div>
           <a href="/login" class="btn-tier">GET GOLD</a>
         </div>
 
@@ -1023,7 +1023,7 @@
             <div class="tier-name-row">PLATINUM</div>
             <div class="tier-perks">unlimited everything · prompt editing</div>
           </div>
-          <div class="tier-price-tag">$22<small>per month</small></div>
+          <div class="tier-price-tag" data-tier="platinum">$22<small>per month</small></div>
           <a href="/login" class="btn-tier">GO PLATINUM</a>
         </div>
 
@@ -1104,5 +1104,18 @@
   document.getElementById('footer-year').textContent = new Date().getFullYear();
 </script>
 
+<script>
+(function(){
+  fetch('/api/public/pricing').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.pricing) return;
+    Object.keys(d.pricing).forEach(function(tier){
+      var el=document.querySelector('.tier-price-tag[data-tier="'+tier+'"]');
+      if(!el) return;
+      var p=Number(d.pricing[tier]);
+      el.innerHTML=(p>0)?('$'+p+'<small>per month</small>'):'<small>Invite only</small>';
+    });
+  }).catch(function(){});
+})();
+</script>
 </body>
 </html>

@@ -8441,6 +8441,7 @@ function renderCampaignLockBanner() {
 // phases. Numeric fields only for now (styles + tokens land in B/C).
 // ============================================================
 var TIER_FIELD_LABELS = {
+  price: 'Price ($ / month, 0 = Invite only)',
   max_archives_per_campaign: 'Archived images / campaign',
   max_assets: 'Max campaign assets (blank = unlimited)',
   max_moments_short: 'Max moments \u2014 short (<2k words)',

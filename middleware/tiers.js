@@ -21,13 +21,13 @@ const TIERS = {
     watermark: true,
     can_export: false,
     can_print: false,
-    can_edit_prompts: false,
+    can_edit_prompts: true,
     description: '30-day free trial'
   },
   silver: {
     name: 'Silver',
     rank: 2,
-    price: 9,
+    price: 10,
     max_campaigns: 1,
     max_sessions: null,      // unlimited
     max_archives_per_campaign: 10,
@@ -40,13 +40,13 @@ const TIERS = {
     watermark: false,
     can_export: true,
     can_print: true,
-    can_edit_prompts: false,
+    can_edit_prompts: true,
     description: '1 campaign, unlimited sessions'
   },
   gold: {
     name: 'Gold',
     rank: 3,
-    price: 12,
+    price: 15,
     max_campaigns: 3,
     max_archives_per_campaign: 15,
     max_assets: null,
@@ -59,13 +59,13 @@ const TIERS = {
     watermark: false,
     can_export: true,
     can_print: true,
-    can_edit_prompts: false,
+    can_edit_prompts: true,
     description: '3 campaigns, extended moment counts'
   },
   platinum: {
     name: 'Platinum',
     rank: 4,
-    price: 15,
+    price: 22,
     max_campaigns: null,     // unlimited
     max_archives_per_campaign: 20,
     max_assets: null,
@@ -78,7 +78,7 @@ const TIERS = {
     watermark: false,
     can_export: true,
     can_print: true,
-    can_edit_prompts: true,  // exclusive perk
+    can_edit_prompts: true,
     description: 'Unlimited everything + prompt editing'
   }
 };
@@ -95,6 +95,7 @@ let TIER_OVERRIDES = {};
 // Only these fields may be overridden from the admin UI (Phase A). The
 // list grows in later phases (styles, startup tokens, SM bonus, ...).
 const EDITABLE_TIER_FIELDS = [
+  'price',
   'max_archives_per_campaign',
   'max_assets',
   'max_moments_short',
