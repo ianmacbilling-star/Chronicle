@@ -177,7 +177,7 @@
     .hero-content {
       position: relative;
       z-index: 2;
-      padding: 8px 48px 40px;
+      padding: 4px 48px 32px;
       max-width: 800px;
     }
 
@@ -186,16 +186,16 @@
       font-size: 14px;
       letter-spacing: 6px;
       color: var(--crimson-bright);
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .hero-title {
       font-family: 'Bangers', cursive;
-      font-size: clamp(56px, 8vw, 100px);
+      font-size: clamp(40px, 5.5vw, 72px);
       line-height: 0.92;
       color: var(--gold);
       text-shadow: 4px 4px 0 var(--ink), 6px 6px 0 rgba(0,0,0,0.4);
-      margin-bottom: 20px;
+      margin-bottom: 12px;
       letter-spacing: 2px;
     }
 
@@ -204,12 +204,12 @@
 
     .hero-sub {
       font-family: 'Crimson Text', serif;
-      font-size: clamp(16px, 2.5vw, 22px);
+      font-size: clamp(15px, 2vw, 18px);
       font-style: italic;
       color: var(--gold-light);
-      line-height: 1.6;
-      margin-bottom: 28px;
-      max-width: 580px;
+      line-height: 1.55;
+      margin-bottom: 18px;
+      max-width: 560px;
     }
 
     .hero-cta-wrap {
@@ -257,6 +257,7 @@
       color: rgba(201,168,76,0.4);
       font-family: 'Cinzel', serif;
       letter-spacing: 1px;
+      line-height: 1.7;
       margin-top: 12px;
     }
 
@@ -856,7 +857,7 @@
   <div style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);height:calc(100vh - 84px);min-height:460px;">
 
     <!-- LEFT: Text panel -->
-    <div class="panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:28px 44px;position:relative;overflow:hidden;">
+    <div class="panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:16px 44px;position:relative;overflow:hidden;">
       <!-- subtle background texture -->
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(201,168,76,0.02) 0px,rgba(201,168,76,0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
       <div class="hero-content" style="position:relative;z-index:1;">
@@ -876,7 +877,8 @@
           <a href="/login" class="btn-hero">START FREE TRIAL</a>
           <a href="#pricing" class="btn-ghost">See Plans</a>
         </div>
-        <div class="hero-trial">30-day free trial · No credit card required to explore</div>
+        <div class="hero-trial">⚔ 30-day free trial · No credit card required to explore<br>
+        AI storyboards · Custom image generation · Print-ready PDF export · Cancel anytime</div>
       </div>
     </div>
 
@@ -1001,7 +1003,7 @@
             <div class="tier-name-row">SILVER</div>
             <div class="tier-perks">1 campaign · unlimited sessions · full export</div>
           </div>
-          <div class="tier-price-tag">$9<small>per month</small></div>
+          <div class="tier-price-tag">$10<small>per month</small></div>
           <a href="/login" class="btn-tier">GET SILVER</a>
         </div>
 
@@ -1011,7 +1013,7 @@
             <div class="tier-name-row">GOLD ⭐</div>
             <div class="tier-perks">3 campaigns · unlimited sessions · extended moments</div>
           </div>
-          <div class="tier-price-tag">$12<small>per month</small></div>
+          <div class="tier-price-tag">$15<small>per month</small></div>
           <a href="/login" class="btn-tier">GET GOLD</a>
         </div>
 
@@ -1021,7 +1023,7 @@
             <div class="tier-name-row">PLATINUM</div>
             <div class="tier-perks">unlimited everything · prompt editing</div>
           </div>
-          <div class="tier-price-tag">$15<small>per month</small></div>
+          <div class="tier-price-tag">$22<small>per month</small></div>
           <a href="/login" class="btn-tier">GO PLATINUM</a>
         </div>
 
