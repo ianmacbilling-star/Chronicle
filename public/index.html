@@ -177,7 +177,7 @@
     .hero-content {
       position: relative;
       z-index: 2;
-      padding: 40px 48px;
+      padding: 8px 48px 40px;
       max-width: 800px;
     }
 
@@ -853,10 +853,10 @@
   <!-- ============================================================
        PANEL 1 — HERO SPLIT (text left, image right)
        ============================================================ -->
-  <div style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);min-height:88vh;">
+  <div style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);height:calc(100vh - 84px);min-height:460px;">
 
     <!-- LEFT: Text panel -->
-    <div class="panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:48px 44px;position:relative;overflow:hidden;">
+    <div class="panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:28px 44px;position:relative;overflow:hidden;">
       <!-- subtle background texture -->
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(201,168,76,0.02) 0px,rgba(201,168,76,0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
       <div class="hero-content" style="position:relative;z-index:1;">
@@ -881,7 +881,7 @@
     </div>
 
     <!-- RIGHT: DM image panel -->
-    <div class="panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;min-height:500px;">
+    <div class="panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;">
       <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(10,8,6,0.3) 0%,transparent 40%);"></div>
     </div>
 
