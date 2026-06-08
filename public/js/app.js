@@ -8621,7 +8621,7 @@ function refreshLayoutStyleButtons() {
 // ===== Custom (a-la-carte) layout =====
 var CUSTOM_LAYOUT_DEFAULTS = {
   arrange:'grid', border:'keyline', caption:'bar', gutter:'normal', density:'normal',
-  narr:'plain', font:'classic', dropcap:0, paper:'parchment',
+  narr:'plain', font:'classic', dropcap:0, paper:'white', condition:'none',
   pano:1, aside:1, companion:1, emphasis:0,
   cover:1, cast:1, toc:1, header:1, markers:1, watermark:1
 };
@@ -8630,7 +8630,15 @@ var customOpts = { session: clClone(CUSTOM_LAYOUT_DEFAULTS), novel: clClone(CUST
 var customActive = { session:false, novel:false };
 var _clCtx = 'novel';
 var CL_LS_KEY = 'campaignia.customLayout';
-function clMerge(saved){ var r=clClone(CUSTOM_LAYOUT_DEFAULTS); if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } } return r; }
+var CL_CONDITION_VALUES = { smoke:1, dirt:1, wrinkle:1, blood:1 };
+function clMerge(saved){
+  var r=clClone(CUSTOM_LAYOUT_DEFAULTS);
+  if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } }
+  // Legacy migration: old single 'paper' control could hold a condition (smoke/dirt/...).
+  if (CL_CONDITION_VALUES[r.paper]) { r.condition = r.paper; r.paper = 'white'; }
+  if (r.paper === 'parchment') { r.paper = 'linen'; }
+  return r;
+}
 function saveCustomLayoutPrefs(){
   try { window.localStorage.setItem(CL_LS_KEY, JSON.stringify({ opts: customOpts, active: customActive })); } catch (e) {}
 }
@@ -8649,7 +8657,7 @@ function saveCustomLayoutPrefs(){
     }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','gutter','density','narr','font'];
+var CL_SELECTS = ['arrange','border','caption','paper','condition','gutter','density','narr','font'];
 var CL_TOGGLES = ['dropcap','pano','aside','companion','emphasis','header','markers','watermark','cover','cast','toc'];
 
 function openCustomLayout(ctx){

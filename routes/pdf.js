@@ -405,7 +405,8 @@ var CO_DEFAULTS = {
   density: 'normal',     // busy | normal | roomy
   narr: 'plain',         // plain | box
   dropcap: 0,            // 0 | 1
-  paper: 'parchment',    // white | parchment | smoke
+  paper: 'white',        // white | linen | grey
+  condition: 'none',     // none | smoke | dirt | wrinkle | blood
   font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
   cover: 1, cast: 1, toc: 1, header: 1, markers: 1, watermark: 1
@@ -762,8 +763,7 @@ var CO_PARCHMENT_CSS =
 
 // Smoke: drifting tendrils that crept across the page (blurred SVG curls rising from
 // the lower corners), leaving most of the paper clean - a mark left ON the paper.
-var CO_SMOKE_CSS =
-  'background-color:#ffffff;' +
+var CO_SMOKE_MARKS =
   'background-image:' + CO_SMOKE_URL + ';' +
   'background-repeat:no-repeat;' +
   'background-position:center bottom;' +
@@ -778,8 +778,7 @@ var CO_DIRT_SVG =
   "<rect width='300' height='380' filter='url(#g)'/></svg>";
 var CO_DIRT_ENC = encodeURIComponent(CO_DIRT_SVG).replace(/\(/g, '%28').replace(/\)/g, '%29');
 var CO_DIRT_URL = 'url("data:image/svg+xml,' + CO_DIRT_ENC + '")';
-var CO_DIRT_CSS =
-  'background-color:#ffffff;' +
+var CO_DIRT_MARKS =
   'background-image:' +
   'radial-gradient(ellipse 22% 13% at 13% 12%, rgba(74,52,24,0.30), transparent 72%),' +
   'radial-gradient(ellipse 18% 11% at 88% 82%, rgba(64,46,22,0.28), transparent 72%),' +
@@ -792,8 +791,7 @@ var CO_DIRT_CSS =
 
 // Wrinkle: creases with a real shadow side and a bright highlight side, plus a soft
 // overall bow, so the folds read three-dimensionally.
-var CO_WRINKLE_CSS =
-  'background-color:#ffffff;' +
+var CO_WRINKLE_MARKS =
   'background-image:' +
   'linear-gradient(116deg, transparent 34%, rgba(0,0,0,0.12) 38%, rgba(0,0,0,0.17) 39.3%, rgba(255,255,255,0.92) 40.6%, rgba(255,255,255,0.35) 42.5%, transparent 46%),' +
   'linear-gradient(63deg, transparent 55%, rgba(0,0,0,0.10) 59%, rgba(0,0,0,0.15) 60.2%, rgba(255,255,255,0.88) 61.5%, rgba(255,255,255,0.30) 63.5%, transparent 67%),' +
@@ -803,8 +801,7 @@ var CO_WRINKLE_CSS =
   'box-shadow: inset 0 0 1.6in 0.25in rgba(0,0,0,0.10);';
 
 // Blood: dark-red splatter spots of varied size on white.
-var CO_BLOOD_CSS =
-  'background-color:#ffffff;' +
+var CO_BLOOD_MARKS =
   'background-image:' +
   'radial-gradient(circle at 22% 18%, rgba(122,12,12,0.55), transparent 6%),' +
   'radial-gradient(circle at 26% 23%, rgba(110,8,8,0.5), transparent 2.5%),' +
@@ -816,13 +813,23 @@ var CO_BLOOD_CSS =
   'radial-gradient(circle at 66% 60%, rgba(110,8,8,0.4), transparent 2%),' +
   'radial-gradient(circle at 50% 46%, rgba(120,10,10,0.4), transparent 3%);';
 
-function coPaperCSS(paper) {
-  if (paper === 'white') return 'background-color:#ffffff;';
-  if (paper === 'smoke') return CO_SMOKE_CSS;
-  if (paper === 'dirt') return CO_DIRT_CSS;
-  if (paper === 'wrinkle') return CO_WRINKLE_CSS;
-  if (paper === 'blood') return CO_BLOOD_CSS;
-  return CO_PARCHMENT_CSS; // parchment default
+function coPaperColor(paper) {
+  if (paper === 'linen') return '#f3ece0';
+  if (paper === 'grey' || paper === 'lightgrey') return '#e9e9e7';
+  return '#ffffff';
+}
+function coConditionMarks(condition) {
+  if (condition === 'smoke') return CO_SMOKE_MARKS;
+  if (condition === 'dirt') return CO_DIRT_MARKS;
+  if (condition === 'wrinkle') return CO_WRINKLE_MARKS;
+  if (condition === 'blood') return CO_BLOOD_MARKS;
+  return '';
+}
+// Paper = base colour; condition = wear/marks layered on top. 'parchment' is kept as a
+// legacy textured paper for the default (non-custom) novel.
+function coPaperCSS(paper, condition) {
+  if (paper === 'parchment') return CO_PARCHMENT_CSS;
+  return 'background-color:' + coPaperColor(paper) + ';' + coConditionMarks(condition);
 }
 
 function buildLayout(layoutStyle, moments, sections, intro, outro, opts) {
@@ -857,7 +864,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   var fCover  = co ? !!co.cover     : true;
   var fHeader = co ? !!co.header    : true;
   var fWmark  = co ? !!co.watermark : true;
-  var paperCSS = co ? coPaperCSS(co.paper) : '';
+  var paperCSS = co ? coPaperCSS(co.paper, co.condition) : '';
   var fontImp = co ? coFontImport(co.font) : '';
   var fontFam = co ? coFontFamily(co.font) : '';
   var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
@@ -1183,7 +1190,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fHeader = co ? !!co.header    : true;
   var fMarkers= co ? !!co.markers   : true;
   var fWmark  = co ? !!co.watermark : true;
-  var paperCSS = coPaperCSS(co ? co.paper : 'parchment');
+  var paperCSS = coPaperCSS(co ? co.paper : 'parchment', co ? co.condition : 'none');
   var fontImp = coFontImport(co ? co.font : '');
   var fontFam = coFontFamily(co ? co.font : '');
   var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
