@@ -93,14 +93,17 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
   // charBlock is { text, refs } (refs may include assets) from the
   // route. Tolerate a plain string or null for safety.
   var charText = '';
+  var charTextTrimmed = '';
   var assetText = '';
   var charRefs = [];
   if (charBlock && typeof charBlock === 'object') {
     charText = charBlock.text || '';
+    charTextTrimmed = charBlock.textTrimmed || charText;
     assetText = charBlock.assetText || '';
     charRefs = charBlock.refs || [];
   } else if (typeof charBlock === 'string') {
     charText = charBlock;
+    charTextTrimmed = charBlock;
   }
 
   // Pass 2 — when a panel has an EXPLICIT cast, the cast roster is the source
@@ -145,9 +148,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
   const styleFinal = stylePrefix
     ? '\n\nFINAL STEP — UNIFY THE ART STYLE ACROSS THE ENTIRE IMAGE (every character, NPC, location, and item included, not just the background): re-render the COMPLETE panel in the following single art style, applying it to every referenced element as well as the scene, so everything looks DRAWN in this style rather than placed on top of it. ' + stylePrefix
     : '';
-  const charSection = charText
-    ? '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n' + charText
-    : '';
+  const CHAR_HEADING = '\n\nCHARACTERS IN THIS PANEL (each is a separate, distinct person — do NOT blend their features together; keep each one\'s hair, face, and outfit only on that character):\n';
+  const charSection = charText ? CHAR_HEADING + charText : '';
+  const charSectionTrim = charTextTrimmed ? CHAR_HEADING + charTextTrimmed : '';
 
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   let input;
@@ -196,7 +199,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape) {
       'separate style instruction), changing ONLY the artistic medium, NEVER what ' +
       'each element actually is.\n\n' +
       rosterDirective +
-      'Draw this comic panel: ' + prompt + charSection + assetSection + hint;
+      'Draw this comic panel: ' + prompt + charSectionTrim + assetSection + hint;
     input = {
       prompt: editPrompt,
       image_urls: charRefs.map(function(r) { return r.url; }),
@@ -423,6 +426,7 @@ function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
 
   var lines = [];
   var refs = [];
+  var linesTrim = [];
 
   present.forEach(function(c) {
     // Does this character have an accepted change?
@@ -437,38 +441,34 @@ function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
     // "Before the change" = accepted change exists AND this panel is earlier.
     var beforeChange = hasChange && (pIdx < changeIdx);
 
-    var line = c.name;
-    if (c.cls) line += ' (' + c.cls + ')';
-
+    var nameLine = c.name + (c.cls ? ' (' + c.cls + ')' : '');
+    var desc, refUrl;
     if (beforeChange) {
-      // Pre-change panel: use the snapshot prompt with the change text
-      // stripped off, so the character shows their OLD look.
+      // Pre-change panel: snapshot prompt with the change text stripped off,
+      // so the character shows their OLD look.
       var base = c.snapshot_prompt || c.canonical_prompt || c.description || '';
-      if (c.change_note) {
-        // The approve route appended "\n\nRECENT CHANGE: <detail>" — remove it.
-        base = base.split('\n\nRECENT CHANGE:')[0];
-      }
-      if (base) line += ' — ' + base;
-      // Pre-change reference = the prior session's image (old look).
-      var oldUrl = c.prior_reference_url || c.canonical_reference_url || null;
-      if (oldUrl && /^https?:\/\//.test(oldUrl)) {
-        refs.push({ name: c.name, url: oldUrl });
-      }
+      if (c.change_note) base = base.split('\n\nRECENT CHANGE:')[0];
+      desc = base;
+      refUrl = c.prior_reference_url || c.canonical_reference_url || null;
     } else {
       // At/after the change (or no change at all): amended snapshot.
-      var desc = (c.snapshot_prompt && c.snapshot_prompt.trim())
+      desc = (c.snapshot_prompt && c.snapshot_prompt.trim())
         ? c.snapshot_prompt
         : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description);
-      if (desc) line += ' — ' + desc;
-      var url = c.snapshot_reference_url || c.canonical_reference_url || null;
-      if (url && /^https?:\/\//.test(url)) {
-        refs.push({ name: c.name, url: url });
-      }
+      refUrl = c.snapshot_reference_url || c.canonical_reference_url || null;
     }
-    lines.push(line);
+    var hasRef = !!(refUrl && /^https?:\/\//.test(refUrl));
+    if (hasRef) refs.push({ name: c.name, url: refUrl });
+
+    // Full block: name + class + physical description (text-only model paths).
+    lines.push(desc ? (nameLine + ' — ' + desc) : nameLine);
+    // Trimmed block: when a reference image is sent it OWNS the look, so drop
+    // the physical description (it only invites cross-character attribute
+    // bleed). Keep the description only when there is NO reference image.
+    linesTrim.push((hasRef || !desc) ? nameLine : (nameLine + ' — ' + desc));
   });
 
-  return { text: lines.join('\n'), refs: refs };
+  return { text: lines.join('\n'), textTrimmed: linesTrim.join('\n'), refs: refs };
 }
 
 // Maximum reference images a single panel may send to the /edit endpoint.
@@ -715,7 +715,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
       castNames = chars.filter(function(c){ return idset[String(c.character_id)]; }).map(function(c){ return c.name; });
     }
     const panelBlock = {
-      text: charList.text,
+      text: charList.text, textTrimmed: charList.textTrimmed,
       assetText: assetList.text,
       refs: combineRefs(charList.refs, assetList.refs),
       castExplicit: !!moment.cast_explicit,
@@ -936,7 +936,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castNames = chars.filter(function(c){ return idset[String(c.character_id)]; }).map(function(c){ return c.name; });
       }
       const panelBlock = {
-        text: charList.text,
+        text: charList.text, textTrimmed: charList.textTrimmed,
         assetText: assetList.text,
         refs: combineRefs(charList.refs, assetList.refs),
         castExplicit: !!m.cast_explicit,
