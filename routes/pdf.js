@@ -1327,7 +1327,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .content-page { width:8.5in;padding:0.5in 0.85in;position:relative; }
   .content-page:last-of-type { page-break-after:avoid; }
   .cast-page, .content-page { ${paperCSS} }
-  .toc-page { }
+  .toc-page { page-break-after:always; }
   .toc-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .toc-row { display:flex;align-items:baseline;gap:8px;margin:0.12in 0;font-family:'Cinzel',serif; }
   .toc-name { font-size:11pt;color:#2c1810;white-space:nowrap; }
