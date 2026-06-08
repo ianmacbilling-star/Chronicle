@@ -3365,7 +3365,7 @@ function loadPreview(layout) {
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&');
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&') + '&format=pdf';
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
@@ -3384,25 +3384,12 @@ function loadPreview(layout) {
 // Grow the preview iframe to the full height of its content so there is
 // no inner scrollbar — the user scrolls only the outer page.
 function resizePreviewIframe() {
+  // Preview now renders the true paged PDF; the native PDF viewer scrolls
+  // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('session-preview-iframe');
   var frame = document.getElementById('session-preview-frame');
-  if (!iframe) return;
-  try {
-    var doc = iframe.contentDocument || iframe.contentWindow.document;
-    if (!doc || !doc.body) return;
-    // Take the largest of several height measures to be safe across layouts
-    iframe.style.height = '0px';
-    var h = Math.max(
-      doc.body.scrollHeight, doc.documentElement.scrollHeight,
-      doc.body.offsetHeight, doc.documentElement.offsetHeight
-    );
-    if (h > 0) {
-      iframe.style.height = h + 'px';
-      if (frame) frame.style.height = 'auto';
-    }
-  } catch (e) {
-    // If measurement fails for any reason, leave the iframe as-is
-  }
+  if (iframe) iframe.style.height = '75vh';
+  if (frame) frame.style.height = '';
 }
 
 // Re-measure on window resize — content reflow can change the height
@@ -3908,7 +3895,7 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&');
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&format=pdf';
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
@@ -4051,24 +4038,12 @@ function novelPageNext() {
 // Grow the novel preview iframe to the full height of its content so there
 // is no inner scrollbar — the user scrolls only the outer page.
 function resizeNovelPreviewIframe() {
+  // Preview now renders the true paged PDF; the native PDF viewer scrolls
+  // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
-  if (!iframe) return;
-  try {
-    var doc = iframe.contentDocument || iframe.contentWindow.document;
-    if (!doc || !doc.body) return;
-    iframe.style.height = '0px';
-    var h = Math.max(
-      doc.body.scrollHeight, doc.documentElement.scrollHeight,
-      doc.body.offsetHeight, doc.documentElement.offsetHeight
-    );
-    if (h > 0) {
-      iframe.style.height = h + 'px';
-      if (frame) frame.style.height = 'auto';
-    }
-  } catch (e) {
-    // If measurement fails for any reason, leave the iframe as-is
-  }
+  if (iframe) iframe.style.height = '75vh';
+  if (frame) frame.style.height = '';
 }
 
 // Re-measure novel preview on window resize
@@ -6276,7 +6251,7 @@ function loadPreview(layout) {
 
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(layout || state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&');
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&') + '&format=pdf';
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
@@ -6295,25 +6270,12 @@ function loadPreview(layout) {
 // Grow the preview iframe to the full height of its content so there is
 // no inner scrollbar — the user scrolls only the outer page.
 function resizePreviewIframe() {
+  // Preview now renders the true paged PDF; the native PDF viewer scrolls
+  // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('session-preview-iframe');
   var frame = document.getElementById('session-preview-frame');
-  if (!iframe) return;
-  try {
-    var doc = iframe.contentDocument || iframe.contentWindow.document;
-    if (!doc || !doc.body) return;
-    // Take the largest of several height measures to be safe across layouts
-    iframe.style.height = '0px';
-    var h = Math.max(
-      doc.body.scrollHeight, doc.documentElement.scrollHeight,
-      doc.body.offsetHeight, doc.documentElement.offsetHeight
-    );
-    if (h > 0) {
-      iframe.style.height = h + 'px';
-      if (frame) frame.style.height = 'auto';
-    }
-  } catch (e) {
-    // If measurement fails for any reason, leave the iframe as-is
-  }
+  if (iframe) iframe.style.height = '75vh';
+  if (frame) frame.style.height = '';
 }
 
 // Re-measure on window resize — content reflow can change the height
@@ -6760,7 +6722,7 @@ function loadNovelPreview(layout) {
 
   var total = (state.novelSessions || []).length;
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&');
+    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&format=pdf';
   // Paginate by session whenever there is more than one session
   if (total > 1) {
     url += '&page=' + novelPreviewPage;
@@ -6903,24 +6865,12 @@ function novelPageNext() {
 // Grow the novel preview iframe to the full height of its content so there
 // is no inner scrollbar — the user scrolls only the outer page.
 function resizeNovelPreviewIframe() {
+  // Preview now renders the true paged PDF; the native PDF viewer scrolls
+  // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
-  if (!iframe) return;
-  try {
-    var doc = iframe.contentDocument || iframe.contentWindow.document;
-    if (!doc || !doc.body) return;
-    iframe.style.height = '0px';
-    var h = Math.max(
-      doc.body.scrollHeight, doc.documentElement.scrollHeight,
-      doc.body.offsetHeight, doc.documentElement.offsetHeight
-    );
-    if (h > 0) {
-      iframe.style.height = h + 'px';
-      if (frame) frame.style.height = 'auto';
-    }
-  } catch (e) {
-    // If measurement fails for any reason, leave the iframe as-is
-  }
+  if (iframe) iframe.style.height = '75vh';
+  if (frame) frame.style.height = '';
 }
 
 // Re-measure novel preview on window resize

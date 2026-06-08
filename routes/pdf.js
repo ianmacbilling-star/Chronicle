@@ -1433,6 +1433,20 @@ function injectTrialWatermark(html) {
   return html;
 }
 
+// Render a built HTML document to a PDF and stream it inline. Used by the
+// ?format=pdf preview mode so the on-screen preview shows the TRUE paged output
+// (same renderer as the print interior) instead of screen-media HTML. Relative
+// asset URLs (textures, cover logo) resolve against PUBLIC_BASE_URL because
+// Puppeteer's setContent has no document base.
+async function sendHtmlAsPdf(res, html, name) {
+  var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+  var buf = await renderHtmlToPdf(html, {});
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', 'inline; filename="' + (name || 'preview') + '.pdf"');
+  res.send(buf);
+}
+
 router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, res) {
   try {
     const db = await getDb();
@@ -1464,6 +1478,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     const co = req.query.co ? parseCustomOpts(req.query.co) : null;
     let html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
     if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
+    if (req.query.format === 'pdf') return await sendHtmlAsPdf(res, html, 'session-' + session.id);
     res.send(html);
   } catch(e) {
     console.error('PDF session error:', e.message);
@@ -1541,6 +1556,10 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
+  if (req.query.format === 'pdf') {
+    try { return await sendHtmlAsPdf(res, html, 'novel-' + campaign.id); }
+    catch (e) { return res.status(500).json({ error: 'PDF render failed', detail: String(e && e.message || e) }); }
+  }
   res.send(html);
 });
 
