@@ -672,8 +672,15 @@ function renderPaired(moments, sections, intro, outro, opts) {
         coCaptionBelow(m, i, opts.caption) + '</div>';
       html += beforeHtml + afterHtml;
     } else {
-      var inner = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' + coCaptionBelow(m, i, opts.caption);
-      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + beforeHtml + afterHtml + '</div>';
+      // Wide / panoramic / square / standard: keep the image + caption together
+      // in the avoid-block, but let the narrative flow BELOW as its own block so
+      // a wide shot is never dragged onto the next page by long text. Two wide
+      // shots then pack onto one sheet when there is room instead of stranding
+      // white space at a page bottom.
+      html += '<div style="width:100%;margin:0 auto 0.06in;page-break-inside:avoid;">' +
+        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+        coCaptionBelow(m, i, opts.caption) + '</div>';
+      html += beforeHtml + afterHtml;
     }
   }
   html += buildNarrativeHTML(outro, true);
