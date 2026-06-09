@@ -1201,7 +1201,10 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { width: 8.5in; }
     .cover-page { height: 11in; }
-    @page { size: 8.5in 11in; margin: 0; }
+    .content-page { min-height: 0; padding-top: 0; padding-bottom: 0; }
+    @page { size: 8.5in 11in; margin: 0.65in 0; }
+    ${fCover ? '@page :first { margin:0; }' : ''}
+    .content-page + .content-page { margin-top:0.4in; }
   }
 </style>
 </head>
