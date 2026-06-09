@@ -3359,6 +3359,40 @@ function selLayout(el, layout) {
   loadPreview(layout);
 }
 
+// --- Preview render progress bar (shared by the session + novel preview iframes).
+// The real server render percentage is unknowable, so the bar creeps toward ~90%
+// while Chromium renders the PDF, then snaps to 100% when the iframe finishes.
+var _previewProgress = {};
+function startPreviewProgress(prefix, mode) {
+  var wrap = document.getElementById(prefix + '-progress-wrap');
+  var fill = document.getElementById(prefix + '-progress-fill');
+  var msg = document.getElementById(prefix + '-progress-msg');
+  if (!wrap || !fill) return;
+  if (_previewProgress[prefix]) clearInterval(_previewProgress[prefix]);
+  wrap.style.display = 'block';
+  var pct = 8;
+  fill.style.width = pct + '%';
+  if (msg) msg.textContent = (mode === 'wysiwyg')
+    ? 'Rendering the paged PDF (this can take several seconds)...'
+    : 'Loading preview...';
+  var ease = (mode === 'wysiwyg') ? 0.04 : 0.18;
+  _previewProgress[prefix] = setInterval(function() {
+    pct += Math.max(0.4, (90 - pct) * ease);
+    if (pct > 90) pct = 90;
+    fill.style.width = pct.toFixed(1) + '%';
+  }, 300);
+}
+function stopPreviewProgress(prefix) {
+  var wrap = document.getElementById(prefix + '-progress-wrap');
+  var fill = document.getElementById(prefix + '-progress-fill');
+  if (_previewProgress[prefix]) { clearInterval(_previewProgress[prefix]); _previewProgress[prefix] = null; }
+  if (fill) fill.style.width = '100%';
+  setTimeout(function() {
+    if (wrap) wrap.style.display = 'none';
+    if (fill) fill.style.width = '0%';
+  }, 400);
+}
+
 function loadPreview(layout) {
   var loading = document.getElementById('session-preview-loading');
   var iframe = document.getElementById('session-preview-iframe');
@@ -3371,11 +3405,13 @@ function loadPreview(layout) {
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
+  startPreviewProgress('session-preview', sessionPreviewMode);
   iframe.style.display = 'none';
   iframe.src = '';
 
   // Load new preview
   iframe.onload = function() {
+    stopPreviewProgress('session-preview');
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
     resizePreviewIframe();
@@ -3939,10 +3975,12 @@ function loadNovelPreview(layout) {
   }
 
   if (loading) loading.style.display = 'flex';
+  startPreviewProgress('novel-preview', novelPreviewMode);
   iframe.style.display = 'none';
   iframe.src = '';
 
   iframe.onload = function() {
+    stopPreviewProgress('novel-preview');
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
     resizeNovelPreviewIframe();
@@ -4733,9 +4771,8 @@ function exportSessionPDF() {
   }
   var url = '/api/pdf/session/' + state.currentCampaign.id + '/' + state.currentSession.id +
     '?layout=' + encodeURIComponent(state.layoutStyle || 'Classic') +
-    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&');
-  var win = window.open(url, '_blank');
-  setTimeout(function() { if (win) win.print(); }, 4000);
+    (state.currentForkId ? '&fork_id=' + state.currentForkId : '') + customOptsQ('session','&') + '&format=pdf';
+  window.open(url, '_blank');
 }
 
 function exportNovelPDF() {
@@ -6357,11 +6394,13 @@ function loadPreview(layout) {
 
   // Show loading state
   if (loading) loading.style.display = 'flex';
+  startPreviewProgress('session-preview', sessionPreviewMode);
   iframe.style.display = 'none';
   iframe.src = '';
 
   // Load new preview
   iframe.onload = function() {
+    stopPreviewProgress('session-preview');
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
     resizePreviewIframe();
@@ -6848,10 +6887,12 @@ function loadNovelPreview(layout) {
   }
 
   if (loading) loading.style.display = 'flex';
+  startPreviewProgress('novel-preview', novelPreviewMode);
   iframe.style.display = 'none';
   iframe.src = '';
 
   iframe.onload = function() {
+    stopPreviewProgress('novel-preview');
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
     resizeNovelPreviewIframe();

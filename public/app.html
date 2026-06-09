@@ -188,6 +188,10 @@
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
         </div>
+        <div class="progress-wrap" id="novel-preview-progress-wrap" style="display:none;margin-bottom:10px;">
+          <div class="progress-bar"><div class="progress-fill" id="novel-preview-progress-fill"></div></div>
+          <div class="progress-msg" id="novel-preview-progress-msg">Loading preview&hellip;</div>
+        </div>
         <div id="novel-preview-frame" style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;min-height:75vh;">
           <div id="novel-preview-loading" style="width:100%;height:75vh;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
             <div style="text-align:center;color:rgba(201,168,76,0.4);">
@@ -498,6 +502,10 @@
             <button class="btn btn-sm" id="session-preview-mode-btn" onclick="toggleSessionPreviewMode()" style="margin-left:6px;" title="Quick View = fast on-screen preview. True View = the exact paged PDF (slower).">Quick View</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
+        </div>
+        <div class="progress-wrap" id="session-preview-progress-wrap" style="display:none;margin-bottom:10px;">
+          <div class="progress-bar"><div class="progress-fill" id="session-preview-progress-fill"></div></div>
+          <div class="progress-msg" id="session-preview-progress-msg">Loading preview&hellip;</div>
         </div>
         <div id="session-preview-frame" style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;min-height:75vh;">
           <div id="session-preview-loading" style="width:100%;height:75vh;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
