@@ -694,45 +694,119 @@ function coDropOrIntro(intro, opts) {
   return opts.dropcap ? coDropcap(h) : h;
 }
 
+// ---- Comic Page (shape-driven spans) helpers ----
+// Each image cell is sized to its shape's aspect so object-fit barely crops, and
+// every band fills the full content width -- no holes, no black show-through.
+var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
+var CG_GAP = 0.12;  // gutter between panels (inches)
+var CG_BORDER = 'border:3px solid #15100a;box-shadow:0 1px 4px rgba(0,0,0,0.3);overflow:hidden;';
+
+function cgClass(m) {
+  var s = normShape(m);
+  if (s === 'wide' || s === 'panoramic') return 'wide';
+  if (s === 'tall' || s === 'tower') return 'tall';
+  return 'small';
+}
+
+function cgImgCell(m, opts, heightIn, widthPct) {
+  var w = (widthPct != null) ? ('flex:0 0 ' + widthPct + '%;max-width:' + widthPct + '%;') : 'flex:1 1 0;min-width:0;';
+  var h = (heightIn != null) ? ('height:' + heightIn.toFixed(2) + 'in;') : 'height:100%;';
+  var media = m.image
+    ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+  return '<div style="' + CG_BORDER + w + h + 'position:relative;background:#000;line-height:0;">' + media + coCaptionOverlay(m, opts.caption) + '</div>';
+}
+
+function cgTextCell(htmlText, heightIn, widthPct) {
+  var w = (widthPct != null) ? ('flex:0 0 ' + widthPct + '%;max-width:' + widthPct + '%;') : 'flex:1 1 0;min-width:0;';
+  var h = (heightIn != null) ? ('height:' + heightIn.toFixed(2) + 'in;overflow:hidden;') : '';
+  return '<div style="' + CG_BORDER + w + h + 'background:#fdf6dd;padding:0.16in;line-height:1.5;">' + htmlText + '</div>';
+}
+
+function cgBand(inner) {
+  return '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;align-items:stretch;page-break-inside:avoid;break-inside:avoid;">' + inner + '</div>';
+}
+
 function renderComicPage(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
 
-  // V1 comic grid: a VISIBLE grid of comic-bordered boxes, two per row. Every box
-  // is filled -- an image panel or a narrative box -- so there are no empty cells
-  // and no black page showing through. Each row is kept together so it never splits
-  // across a page. (Shape-aware spans + sizing come in the next pass.)
-  var cells = [];
+  // Reading-order stream: per panel -> before-text, image, after-text.
+  var stream = [];
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
-    if (sec.before) cells.push({ type: 'text', html: coNarr(sec.before, opts, false) });
-    cells.push({ type: 'img', m: m, i: i });
-    if (sec.after) cells.push({ type: 'text', html: coNarr(sec.after, opts, false) });
+    if (sec.before) stream.push({ kind: 'text', html: coNarr(sec.before, opts, false), len: String(sec.before).replace(/<[^>]*>/g, '').length });
+    stream.push({ kind: 'img', m: m, cls: cgClass(m) });
+    if (sec.after) stream.push({ kind: 'text', html: coNarr(sec.after, opts, false), len: String(sec.after).replace(/<[^>]*>/g, '').length });
   }
 
-  var CELLH = '3.0in';
-  var BORDER = 'border:3px solid #15100a;box-shadow:0 1px 4px rgba(0,0,0,0.3);overflow:hidden;';
+  function smallItem(it) {
+    return !!it && ((it.kind === 'img' && it.cls === 'small') || (it.kind === 'text' && it.len <= 220));
+  }
+  var spacer = '<div style="flex:1 1 0;"></div>';
 
-  function renderCell(cell) {
-    var base = 'flex:1 1 0;min-width:0;height:' + CELLH + ';' + BORDER;
-    if (cell.type === 'img') {
-      var media = cell.m.image
-        ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + cell.m.image + '" alt="' + (cell.m.title || '') + '" />'
-        : '<div style="width:100%;height:100%;background:#1a0f06;display:flex;align-items:center;justify-content:center;color:#6b5f55;font-size:22pt;">&#128444;</div>';
-      var overlay = coCaptionOverlay(cell.m, opts.caption);
-      return '<div style="' + base + 'position:relative;background:#000;line-height:0;">' + media + overlay + '</div>';
+  var p = 0;
+  while (p < stream.length) {
+    var it = stream[p];
+
+    if (it.kind === 'img' && it.cls === 'wide') {
+      // Full-width hero, sized to its own aspect -> no cropping.
+      var hw = CG_W / shapeAspect(normShape(it.m));
+      html += cgBand(cgImgCell(it.m, opts, hw));
+      p += 1;
+
+    } else if (it.kind === 'img' && it.cls === 'tall') {
+      // Tall hero on the left; stack up to 2 following small items on the right.
+      var right = [];
+      var q = p + 1;
+      while (q < stream.length && right.length < 2 && smallItem(stream[q])) { right.push(stream[q]); q++; }
+      if (right.length === 0) {
+        var aspA = shapeAspect(normShape(it.m));
+        var th = 6.0;
+        var wp = Math.round((th * aspA / CG_W) * 100);
+        html += cgBand(spacer + cgImgCell(it.m, opts, th, wp) + spacer);
+        p += 1;
+      } else {
+        var asp2 = shapeAspect(normShape(it.m));
+        var bandH = Math.min(6.4, (CG_W * 0.5) / asp2);
+        var stackH = (bandH - (right.length - 1) * CG_GAP) / right.length;
+        var stackInner = right.map(function (ri) {
+          return ri.kind === 'img' ? cgImgCell(ri.m, opts, stackH) : cgTextCell(ri.html, stackH);
+        }).join('<div style="height:' + CG_GAP + 'in;"></div>');
+        var rightCol = '<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;">' + stackInner + '</div>';
+        html += cgBand(cgImgCell(it.m, opts, bandH, 50) + rightCol);
+        p = q;
+      }
+
+    } else if (it.kind === 'img' && it.cls === 'small') {
+      var nxt = stream[p + 1];
+      if (smallItem(nxt)) {
+        var hp = 2.7;
+        var b = nxt.kind === 'img' ? cgImgCell(nxt.m, opts, hp) : cgTextCell(nxt.html, hp);
+        html += cgBand(cgImgCell(it.m, opts, hp) + b);
+        p += 2;
+      } else {
+        var aspS = shapeAspect(normShape(it.m));
+        var ws = 58;
+        var hs = (CG_W * ws / 100) / aspS;
+        html += cgBand(spacer + cgImgCell(it.m, opts, hs, ws) + spacer);
+        p += 1;
+      }
+
+    } else {
+      // text item
+      var nxt2 = stream[p + 1];
+      if (it.len <= 220 && smallItem(nxt2)) {
+        var hp2 = 2.7;
+        var b2 = nxt2.kind === 'img' ? cgImgCell(nxt2.m, opts, hp2) : cgTextCell(nxt2.html, hp2);
+        html += cgBand(cgTextCell(it.html, hp2) + b2);
+        p += 2;
+      } else {
+        html += cgBand(cgTextCell(it.html, null));
+        p += 1;
+      }
     }
-    return '<div style="' + base + 'background:#fdf6dd;padding:0.16in;line-height:1.5;">' + cell.html + '</div>';
   }
-
-  html += '<div style="margin:0.16in 0;">';
-  for (var c = 0; c < cells.length; c += 2) {
-    html += '<div style="display:flex;gap:0.12in;margin-bottom:0.12in;page-break-inside:avoid;break-inside:avoid;">';
-    html += renderCell(cells[c]);
-    if (c + 1 < cells.length) html += renderCell(cells[c + 1]);
-    html += '</div>';
-  }
-  html += '</div>';
 
   html += buildNarrativeHTML(outro, true);
   return html;
