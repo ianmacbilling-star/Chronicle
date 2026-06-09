@@ -694,7 +694,7 @@ function magFull(shape){ return shape === 'panoramic' || shape === 'wide'; }
 function magWidth(shape){ if (shape === 'tall' || shape === 'tower') return 44; if (shape === 'square') return 50; return 54; }
 function magSoloWidth(shape){ if (shape === 'tower') return 56; if (shape === 'tall') return 64; if (shape === 'square') return 72; return 100; }
 function coNarrLen(s){ return s ? String(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim().length : 0; }
-function magWrapMin(shape){ if (shape === 'tall' || shape === 'tower') return 260; if (shape === 'square') return 200; return 170; }
+function magWrapMin(shape){ if (shape === 'tall' || shape === 'tower') return 480; if (shape === 'square') return 360; return 300; }
 function coFloatImg(m, i, side, opts){
   var media = coMedia(m, opts.border);
   var overlay = coCaptionOverlay(m, opts.caption);
