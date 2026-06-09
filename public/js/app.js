@@ -3550,9 +3550,18 @@ function scheduleNarrativeSave() {
 function collectNarrativeState() {
   var intro = document.getElementById('narrative-intro-box');
   var outro = document.getElementById('narrative-outro-box');
-  var sections = state.moments.slice(0, -1).map(function(m, i) {
-    var box = document.getElementById('narrative-between-box-' + i);
-    return { panel_index: i, before: '', after: box ? box.value.trim() : '' };
+  var prevSecs = (state.narrativeData && state.narrativeData.sections) || [];
+  var sections = (state.moments || []).map(function(m, i) {
+    var mbox = document.getElementById('narrative-moment-box-' + i);
+    var abox = document.getElementById('narrative-between-box-' + i);
+    var prev = prevSecs.find(function(s){ return s.panel_index === i; }) || {};
+    return {
+      panel_index: i,
+      before: mbox ? mbox.value.trim() : (prev.before || ''),
+      before_summary: prev.before_summary || '',
+      after: abox ? abox.value.trim() : (prev.after || ''),
+      after_summary: prev.after_summary || ''
+    };
   });
   return {
     intro: intro ? intro.value.trim() : '',
@@ -3616,9 +3625,11 @@ function regenNarrativeSection(type, panelIndex) {
   // panels use, via showBusyOverlay).
   var boxId = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
+    : type === 'moment' ? 'narrative-moment-box-' + panelIndex
     : 'narrative-between-box-' + panelIndex;
   var panelId = type === 'opening' ? 'narrative-opening'
     : type === 'closing' ? 'narrative-closing'
+    : type === 'moment' ? 'narrative-moment-' + panelIndex
     : 'narrative-between-' + panelIndex;
 
   var box = document.getElementById(boxId);
@@ -3652,6 +3663,10 @@ function regenNarrativeSection(type, panelIndex) {
     // Update just the relevant box
     if (type === 'opening' && box) box.value = data.intro || '';
     else if (type === 'closing' && box) box.value = data.outro || '';
+    else if (type === 'moment' && box) {
+      var msec = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
+      box.value = msec ? (msec.before || '') : '';
+    }
     else if (type === 'between' && box) {
       var section = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
       box.value = section ? (section.after || '') : '';
@@ -5463,6 +5478,52 @@ function savePrompt(momentId) {
     });
 }
 
+function openImagePrompt(momentId) {
+  state.imagePromptMomentId = momentId;
+  var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
+  var ta = document.getElementById('image-prompt-text');
+  if (ta) ta.value = moment ? (moment.prompt || '') : '';
+  var modal = document.getElementById('image-prompt-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+function closeImagePrompt() {
+  var modal = document.getElementById('image-prompt-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function saveImagePrompt() {
+  var momentId = state.imagePromptMomentId;
+  if (!momentId) { closeImagePrompt(); return; }
+  var ta = document.getElementById('image-prompt-text');
+  if (!ta) { closeImagePrompt(); return; }
+  if (!state.currentCampaign || !state.currentSession) { closeImagePrompt(); return; }
+  var newPrompt = ta.value;
+  ta.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
+        state.currentSession.id + '/moments/' + momentId, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ prompt: newPrompt })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      ta.disabled = false;
+      if (data && data.success) {
+        var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
+        if (moment) moment.prompt = newPrompt;
+        closeImagePrompt();
+      } else {
+        showAlert((data && data.error) || 'Could not save the prompt.');
+      }
+    })
+    .catch(function() {
+      ta.disabled = false;
+      showAlert('Could not save the prompt.');
+    });
+}
+
 function renderStoryboard() {
   document.getElementById('sb-empty').style.display = 'none';
   document.getElementById('sb-content').style.display = 'block';
@@ -5497,6 +5558,9 @@ function renderStoryboard() {
     var regenBtn = m.locked
       ? '<button class="panel-pill dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
       : '<button class="panel-pill dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
+    var editPromptBtn = m.locked
+      ? '<button class="panel-pill dm-only" disabled title="Unlock to edit the prompt">Edit prompt</button>'
+      : '<button class="panel-pill dm-only" onclick="openImagePrompt(' + m.id + ')" title="Edit the image prompt, then Regenerate to apply">Edit prompt</button>';
     var retouchBtn = m.locked
       ? '<button class="panel-pill dm-only" disabled title="Unlock to retouch">Retouch</button>'
       : '<button class="panel-pill dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>';
@@ -5511,16 +5575,17 @@ function renderStoryboard() {
         (_arched ? 'In your Archive - click to remove' : 'Save this image to your Archive') +
         '">' + (_arched ? 'Archived' : 'Archive') + '</button>';
     }
+    var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + '<div class="panel-img-actions">' + regenBtn + retouchBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
+        imgHtml + '<div class="panel-img-actions">' + editPromptBtn + regenBtn + retouchBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
         '<span class="moment-title">' + m.title + '</span>' +
         '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleName(m.style) : 'Unknown') + ', ' + (typeLabel[m.type]||m.type) + ', ' + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
       '</div>' +
-      buildPromptBlock(m) +
+      buildNarrative('narrative-moment-' + i, 'Panel ' + (i + 1) + ' moment', 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true) +
     '</div>';
   }
 
@@ -5535,6 +5600,7 @@ function renderStoryboard() {
     // for viewers who can't edit this version.
     var gapKey = (id === 'narrative-opening') ? 'opening'
       : (id === 'narrative-closing') ? 'closing'
+      : (id.indexOf('narrative-moment-') === 0) ? 'moment:' + id.replace('narrative-moment-', '')
       : 'between:' + id.replace('narrative-between-', '');
     var domKey = gapKey.replace(/[^a-z0-9]/gi, '-');
     var dirText = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
@@ -6470,9 +6536,18 @@ function scheduleNarrativeSave() {
 function collectNarrativeState() {
   var intro = document.getElementById('narrative-intro-box');
   var outro = document.getElementById('narrative-outro-box');
-  var sections = state.moments.slice(0, -1).map(function(m, i) {
-    var box = document.getElementById('narrative-between-box-' + i);
-    return { panel_index: i, before: '', after: box ? box.value.trim() : '' };
+  var prevSecs = (state.narrativeData && state.narrativeData.sections) || [];
+  var sections = (state.moments || []).map(function(m, i) {
+    var mbox = document.getElementById('narrative-moment-box-' + i);
+    var abox = document.getElementById('narrative-between-box-' + i);
+    var prev = prevSecs.find(function(s){ return s.panel_index === i; }) || {};
+    return {
+      panel_index: i,
+      before: mbox ? mbox.value.trim() : (prev.before || ''),
+      before_summary: prev.before_summary || '',
+      after: abox ? abox.value.trim() : (prev.after || ''),
+      after_summary: prev.after_summary || ''
+    };
   });
   return {
     intro: intro ? intro.value.trim() : '',
@@ -6536,9 +6611,11 @@ function regenNarrativeSection(type, panelIndex) {
   // panels use, via showBusyOverlay).
   var boxId = type === 'opening' ? 'narrative-intro-box'
     : type === 'closing' ? 'narrative-outro-box'
+    : type === 'moment' ? 'narrative-moment-box-' + panelIndex
     : 'narrative-between-box-' + panelIndex;
   var panelId = type === 'opening' ? 'narrative-opening'
     : type === 'closing' ? 'narrative-closing'
+    : type === 'moment' ? 'narrative-moment-' + panelIndex
     : 'narrative-between-' + panelIndex;
 
   var box = document.getElementById(boxId);
@@ -6572,6 +6649,10 @@ function regenNarrativeSection(type, panelIndex) {
     // Update just the relevant box
     if (type === 'opening' && box) box.value = data.intro || '';
     else if (type === 'closing' && box) box.value = data.outro || '';
+    else if (type === 'moment' && box) {
+      var msec = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
+      box.value = msec ? (msec.before || '') : '';
+    }
     else if (type === 'between' && box) {
       var section = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
       box.value = section ? (section.after || '') : '';

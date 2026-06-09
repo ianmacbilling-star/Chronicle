@@ -1231,6 +1231,20 @@
     </div>
   </div>
 </div>
+<div class="modal-overlay hidden" id="image-prompt-modal">
+  <div class="modal archive-picker" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title" id="image-prompt-title">Edit image prompt</div>
+      <button class="modal-close" onclick="closeImagePrompt()">&times;</button>
+    </div>
+    <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">This is the prompt the image is generated from. Edit it, save, then use Regenerate on the image to apply your changes.</p>
+    <textarea class="form-textarea" id="image-prompt-text" placeholder="Describe the scene for this panel..." style="min-height:120px;"></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-sm" onclick="closeImagePrompt()">Cancel</button>
+      <button class="btn btn-sm btn-primary" onclick="saveImagePrompt()">Save prompt</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="style-picker-modal">
   <div class="modal archive-picker" style="max-width:680px;">
     <div class="modal-header">
