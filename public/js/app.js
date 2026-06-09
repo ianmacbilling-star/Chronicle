@@ -8849,13 +8849,14 @@ var CL_TOGGLES = ['dropcap','pano','aside','companion','emphasis','header','mark
 
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
+  var modal=document.getElementById('custom-layout-modal');
+  if(modal){ modal.style.display=''; modal.classList.remove('hidden'); }
   var o = customOpts[_clCtx] || CUSTOM_LAYOUT_DEFAULTS;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.checked=!!o[k]; });
   var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
   var novelOnly=document.querySelectorAll('.cl-novel-only');
   for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }
-  var modal=document.getElementById('custom-layout-modal'); if(modal) modal.classList.remove('hidden');
 }
 function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal'); if(m) m.classList.add('hidden'); }
 function resetCustomLayout(){ customOpts[_clCtx]=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(); openCustomLayout(_clCtx); }
