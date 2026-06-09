@@ -656,16 +656,25 @@ function renderPaired(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
-    if (coIsAsidePortrait(m, opts)) {
-      var r = coPortrait(moments, sections, i, opts);
-      html += r.html; i += r.consumed; continue;
-    }
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var overlay = coCaptionOverlay(m, opts.caption);
-    var inner = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' + coCaptionBelow(m, i, opts.caption);
     var beforeHtml = section.before ? '<div style="margin-top:0.1in;">' + coNarr(section.before, opts, false) + '</div>' : '';
     var afterHtml = section.after ? '<div style="margin-top:0.1in;">' + coNarr(section.after, opts, false) + '</div>' : '';
-    html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + beforeHtml + afterHtml + '</div>';
+    if (isPortrait(m)) {
+      // Paired signature: tall/tower panels fill close to the full page height.
+      // Width is derived from the shape so the rendered height lands near 8.5in
+      // (content column is ~6.8in wide). Narrative flows BELOW the image rather
+      // than being locked into the same keep-together block, so a near-full-page
+      // image does not force the text (and its whitespace) onto the next page.
+      var pw = Math.min(96, Math.round((8.5 * shapeAspect(normShape(m)) / 6.8) * 100));
+      html += '<div style="width:' + pw + '%;margin:0 auto 0.06in;page-break-inside:avoid;">' +
+        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+        coCaptionBelow(m, i, opts.caption) + '</div>';
+      html += beforeHtml + afterHtml;
+    } else {
+      var inner = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' + coCaptionBelow(m, i, opts.caption);
+      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + beforeHtml + afterHtml + '</div>';
+    }
   }
   html += buildNarrativeHTML(outro, true);
   return html;
