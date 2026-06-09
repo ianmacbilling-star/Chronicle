@@ -55,7 +55,7 @@ async function renderHtmlToPdf(html, options) {
     const pdfOpts = {
       printBackground: true,
       preferCSSPageSize: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 }
+      margin: { top: '0.65in', right: '0in', bottom: '0.65in', left: '0in' }
     };
 
     // Explicit size override. Phase 1 leaves this unset so the document's own
