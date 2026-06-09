@@ -696,28 +696,44 @@ function coDropOrIntro(intro, opts) {
 
 function renderComicPage(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
-  var buf = [];
-  var page = '';
-  var open = false;
-  function openPage(){ if (!open) { page = '<div style="background:#0d0805;padding:6px;margin:0.16in 0;">'; open = true; } }
-  function flushRows(){
-    if (!buf.length) return;
-    openPage();
-    coPackRows(buf, opts).forEach(function (r) { page += comicRow(r, opts.caption !== 'none', !!opts.emphasis); });
-    buf = [];
-  }
-  function closePage(){ if (open) { flushRows(); html += page + '</div>'; page = ''; open = false; } }
+
+  // V1 comic grid: a VISIBLE grid of comic-bordered boxes, two per row. Every box
+  // is filled -- an image panel or a narrative box -- so there are no empty cells
+  // and no black page showing through. Each row is kept together so it never splits
+  // across a page. (Shape-aware spans + sizing come in the next pass.)
+  var cells = [];
   for (var i = 0; i < moments.length; i++) {
-    if (coIsAsidePortrait(moments[i], opts)) {
-      closePage();
-      var r = coPortrait(moments, sections, i, opts);
-      html += r.html; i += r.consumed; continue;
-    }
-    buf.push({ m: moments[i], i: i });
+    var m = moments[i];
     var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
-    if (sec.before || sec.after) { flushRows(); closePage(); if (sec.before) html += coNarr(sec.before, opts, false); if (sec.after) html += coNarr(sec.after, opts, false); }
+    if (sec.before) cells.push({ type: 'text', html: coNarr(sec.before, opts, false) });
+    cells.push({ type: 'img', m: m, i: i });
+    if (sec.after) cells.push({ type: 'text', html: coNarr(sec.after, opts, false) });
   }
-  closePage();
+
+  var CELLH = '3.0in';
+  var BORDER = 'border:3px solid #15100a;box-shadow:0 1px 4px rgba(0,0,0,0.3);overflow:hidden;';
+
+  function renderCell(cell) {
+    var base = 'flex:1 1 0;min-width:0;height:' + CELLH + ';' + BORDER;
+    if (cell.type === 'img') {
+      var media = cell.m.image
+        ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + cell.m.image + '" alt="' + (cell.m.title || '') + '" />'
+        : '<div style="width:100%;height:100%;background:#1a0f06;display:flex;align-items:center;justify-content:center;color:#6b5f55;font-size:22pt;">&#128444;</div>';
+      var overlay = coCaptionOverlay(cell.m, opts.caption);
+      return '<div style="' + base + 'position:relative;background:#000;line-height:0;">' + media + overlay + '</div>';
+    }
+    return '<div style="' + base + 'background:#fdf6dd;padding:0.16in;line-height:1.5;">' + cell.html + '</div>';
+  }
+
+  html += '<div style="margin:0.16in 0;">';
+  for (var c = 0; c < cells.length; c += 2) {
+    html += '<div style="display:flex;gap:0.12in;margin-bottom:0.12in;page-break-inside:avoid;break-inside:avoid;">';
+    html += renderCell(cells[c]);
+    if (c + 1 < cells.length) html += renderCell(cells[c + 1]);
+    html += '</div>';
+  }
+  html += '</div>';
+
   html += buildNarrativeHTML(outro, true);
   return html;
 }
