@@ -154,23 +154,29 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       '  Depicts: ' + m.description;
   }).join('\n\n');
 
-  // Explicit per-gap descriptions for the AI to fill. Each gap is
-  // labeled with the two panels that bracket it.
-  const gapsList = moments.map(function(m, i) {
+  // Each panel gets TWO continuous narrative blocks that, with intro/outro,
+  // leave no hole in the story: a MOMENT block ("before") that narrates the
+  // events the panel's image depicts and how they come about, and a BRIDGE
+  // block ("after") that carries the story from this moment to the next. The
+  // chain reads intro -> moment(0) -> bridge(0) -> moment(1) -> bridge(1) ->
+  // ... -> outro, each block resuming exactly where the previous one ended.
+  const beatsList = moments.map(function(m, i) {
     const isLast = (i === moments.length - 1);
+    const prevRef = (i === 0) ? 'the intro' : 'the BRIDGE block of panel ' + i;
     const nextLabel = isLast
       ? 'THE END OF THE SESSION'
-      : 'PANEL ' + (i + 2) + ' — "' + moments[i + 1].title + '"';
-    const dir = gapDirections['between:' + i];
-    const dirLine = dir
-      ? '\n  DIRECTOR STEERING for this gap (you MUST follow this): ' + dir
+      : 'PANEL ' + (i + 2) + ' - "' + moments[i + 1].title + '"';
+    const mDir = gapDirections['moment:' + i];
+    const mDirLine = mDir
+      ? '\n    DIRECTOR STEERING for this moment (you MUST follow this): ' + mDir
       : '';
-    return 'GAP after panel ' + (i + 1) + ': sits between ' +
-      'PANEL ' + (i + 1) + ' — "' + m.title + '" AND ' + nextLabel + '.\n' +
-      '  Write prose describing ONLY the story events that occur AFTER panel ' + (i + 1) +
-      ' and BEFORE ' + (isLast ? 'the session ends' : 'panel ' + (i + 2)) + '. ' +
-      'Do not describe what panel ' + (i + 1) + ' itself shows — that is the image\'s job. ' +
-      'Do not describe events that belong in other gaps.' + dirLine;
+    const aDir = gapDirections['between:' + i];
+    const aDirLine = aDir
+      ? '\n    DIRECTOR STEERING for this bridge (you MUST follow this): ' + aDir
+      : '';
+    return 'PANEL ' + (i + 1) + ' - "' + m.title + '"\n' +
+      '  MOMENT block ("before"): narrate the events THIS panel\'s image depicts - what is happening in the picture and how it came to happen - picking up exactly where ' + prevRef + ' left off. Lead the reader INTO the image so the depicted action is told in prose, never skipped.' + mDirLine + '\n' +
+      '  BRIDGE block ("after"): resume where the MOMENT block ended and carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover travel, deliberation, and side events the panels skip. Do NOT re-tell this panel\'s depicted action, and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine;
   }).join('\n\n');
 
   const prompt =
@@ -184,13 +190,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '═══════════════════════════════════════════════════════════\n\n' +
     momentsList + '\n\n' +
     '═══════════════════════════════════════════════════════════\n' +
-    'YOUR JOB — fill the gaps between panels:\n' +
-    '═══════════════════════════════════════════════════════════\n\n' +
-    'Each "after" block in your response covers ONE specific gap in the timeline. ' +
-    'The panel sequence above is the authoritative chronology — events described ' +
-    'in any narrative block MUST belong to the gap that block represents.\n\n' +
-    'The gaps you need to fill:\n\n' +
-    gapsList + '\n\n' +
+    'YOUR JOB - write the continuous narrative:\n\n' +
+    'The story is ONE continuous narrative told in alternating blocks. For each ' +
+    'panel you write a MOMENT block ("before") and a BRIDGE block ("after"). ' +
+    'Read end to end, the chain is: intro -> moment(1) -> bridge(1) -> moment(2) ' +
+    '-> bridge(2) -> ... -> outro, with NO gaps and NO repetition. Each block ' +
+    'MUST resume exactly where the previous block ended, so the reader never hits ' +
+    'a hole where a picture is shown but its events were never told.\n\n' +
+    'The panel sequence above is the authoritative chronology - do not reorder, ' +
+    'and keep every block in its correct place in the timeline.\n\n' +
+    'The blocks you need to write, panel by panel:\n\n' +
+    beatsList + '\n\n' +
     'You will also write an "intro" (before panel 1) and an "outro" (after the final panel).\n' +
     (gapDirections['opening'] ? 'DIRECTOR STEERING for the intro (you MUST follow this): ' + gapDirections['opening'] + '\n' : '') +
     (gapDirections['closing'] ? 'DIRECTOR STEERING for the outro (you MUST follow this): ' + gapDirections['closing'] + '\n' : '') +
@@ -199,15 +209,16 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
     '- Read like prose for a graphic novel — NOT a transcription of what players said\n' +
-    '- Roughly 2-4 sentences per gap — punchy, not bloated\n' +
+    '- Roughly 2-4 sentences per block — punchy, not bloated\n' +
     '- Reference characters by name when relevant\n\n' +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
     styleBundle.voice + '\n\n' +
-    'CRITICAL — chronological correctness:\n' +
-    '- Each gap\'s prose describes ONLY events between its two bracketing panels\n' +
-    '- Do not place post-event prose before the panel that depicts that event\n' +
-    '- Do not summarize panel content itself — that\'s what the image shows\n' +
-    '- If the transcript covers events that the panels skip (travel, deliberation, side moments), THOSE go in the gaps\n\n' +
+    'CRITICAL - continuity and chronology:\n' +
+    '- The MOMENT block of each panel narrates what that panel\'s image depicts; describing the picture in prose is REQUIRED here, not forbidden\n' +
+    '- Every block picks up exactly where the previous block left off - no gaps, and do not restate what an earlier block already covered\n' +
+    '- Keep events in chronological order; never place a later event before the panel that depicts it\n' +
+    '- A BRIDGE block covers ONLY what happens between its panel\'s moment and the next panel\'s moment (travel, deliberation, side events the panels skip)\n' +
+    '- If the transcript covers events the panels skip, those belong in the BRIDGE blocks\n\n' +
     'Return ONLY valid JSON, no markdown. The sections array must have EXACTLY ' + moments.length +
     ' entries (one per panel), in order, with panel_index 0 through ' + (moments.length - 1) + ':\n' +
     '{\n' +
@@ -216,9 +227,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '  "sections": [\n' +
     '    {\n' +
     '      "panel_index": 0,\n' +
-    '      "before": "",\n' +
-    '      "after": "Prose for the gap AFTER panel 1 and BEFORE panel 2 (2-3 sentences)",\n' +
-    '      "after_summary": "A terse outline of what happens in this gap. Maximum 25 words; aim shorter. Do NOT pad to length."\n' +
+    '      "before": "MOMENT prose: narrate what panel 1\'s image depicts and how it comes about, picking up from the intro (2-4 sentences). REQUIRED and non-empty.",\n' +
+    '      "before_summary": "A terse outline of the moment block. Maximum 25 words; aim shorter. Do NOT pad to length.",\n' +
+    '      "after": "BRIDGE prose: carry the story from panel 1\'s moment forward to just before panel 2 (2-4 sentences).",\n' +
+    '      "after_summary": "A terse outline of the bridge. Maximum 25 words; aim shorter. Do NOT pad to length."\n' +
     '    }\n' +
     '  ],\n' +
     '  "outro": "Closing paragraph after the final panel (2-3 sentences)",\n' +
@@ -235,7 +247,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       },
       body: JSON.stringify({
         model: process.env.AI_MODEL || 'claude-sonnet-4-6',
-        max_tokens: 3000,
+        max_tokens: 8000,
         system: styleBundle.system,
         messages: [{ role: 'user', content: prompt }]
       })

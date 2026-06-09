@@ -120,9 +120,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '    }\n' +
     '  ],\n' +
     '  "narrative_outline": {\n' +
-    '    "intro": "One short sentence describing what the OPENING narration (before panel 1) will be about — the scene-setting the reader needs. This is a PLAN of what the prose will cover, NOT the prose itself.",\n' +
-    '    "gaps": ["One short sentence per BETWEEN-panel gap describing what the connective narration covers — the story events that happen AFTER one panel and BEFORE the next. Return them in order with EXACTLY (number of panels minus 1) entries: the gap after panel 1, then after panel 2, and so on."],\n' +
-    '    "outro": "One short sentence describing what the CLOSING narration (after the final panel) will be about."\n' +
+    '    "intro": "One short sentence describing what the OPENING narration (before panel 1) will cover. A PLAN of the prose, not the prose itself.",\n' +
+    '    "moments": ["One short sentence per PANEL describing the events that panel\'s image depicts and how they come about - the narration that leads INTO the picture. Return EXACTLY (number of panels) entries, in order."],\n' +
+    '    "gaps": ["One short sentence per BETWEEN-panel gap describing the connective narration that bridges one panel\'s moment to the next. Return EXACTLY (number of panels minus 1) entries, in order."],\n' +
+    '    "outro": "One short sentence describing what the CLOSING narration (after the final panel) will cover."\n' +
     '  }\n' +
     '}';
 
@@ -185,9 +186,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       // and should survive a re-extract.
       var outlineObj = parsed.narrative_outline || {};
       var outlineGaps = Array.isArray(outlineObj.gaps) ? outlineObj.gaps : [];
+      var outlineMoments = Array.isArray(outlineObj.moments) ? outlineObj.moments : [];
       var outlineSections = [];
-      for (var gi = 0; gi < parsed.moments.length - 1; gi++) {
-        outlineSections.push({ panel_index: gi, outline: outlineGaps[gi] || '' });
+      for (var gi = 0; gi < parsed.moments.length; gi++) {
+        outlineSections.push({ panel_index: gi, before: outlineMoments[gi] || '', outline: (gi < parsed.moments.length - 1) ? (outlineGaps[gi] || '') : '' });
       }
       var outlineToStore = JSON.stringify({
         intro: outlineObj.intro || '',
