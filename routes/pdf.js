@@ -257,12 +257,13 @@ function asideBlock(mediaHTML, sideHTML, imgLeft) {
 function portraitAside(moments, sections, i, kind) {
   var m = moments[i];
   var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-  var side = asideText(m, section.after);
+  var side = (section.before ? buildClassicTextPanel(section.before) : '') + asideText(m, section.after);
   var consumed = 0;
   var nxt = moments[i + 1];
   if (nxt && companionEligible(nxt)) {
     side += '<div style="margin-top:0.16in;">' + portraitMedia(nxt, kind) + '</div>';
     var nsec = sections.find(function (s) { return s.panel_index === (i + 1); }) || {};
+    if (nsec.before) side += '<div style="margin-top:0.1in;">' + buildClassicTextPanel(nsec.before) + '</div>';
     if (nsec.after) side += '<div style="margin-top:0.1in;">' + buildClassicTextPanel(nsec.after) + '</div>';
     consumed = 1;
   }
@@ -280,6 +281,7 @@ function gridLayout(moments, sections, intro, outro, rowFn, kind) {
       html += rowFn(r);
       r.items.forEach(function (it) {
         var sec = sections.find(function (s) { return s.panel_index === it.i; }) || {};
+        if (sec.before) html += buildNarrativeHTML(sec.before, false);
         if (sec.after) html += buildNarrativeHTML(sec.after, false);
       });
     });
@@ -312,6 +314,7 @@ function stackLayoutP(moments, sections, intro, outro, mediaFn, kind) {
     }
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     html += mediaFn(m);
+    if (section.before) html += buildNarrativeHTML(section.before, false);
     if (section.after) html += buildNarrativeHTML(section.after, false);
   }
   html += buildNarrativeHTML(outro, true);
@@ -350,7 +353,7 @@ function layoutSpectacle(moments, sections, intro, outro) {
     } else {
       buffer.push({ m: m, i: i });
     }
-    if (section.after) { flush(); html += buildNarrativeHTML(section.after, false); }
+    if (section.before || section.after) { flush(); if (section.before) html += buildNarrativeHTML(section.before, false); if (section.after) html += buildNarrativeHTML(section.after, false); }
   }
   flush();
   html += buildNarrativeHTML(outro, true);
@@ -381,14 +384,10 @@ function layoutSaga(moments, sections, intro, outro) {
       continue;
     }
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var text = section.after || '';
     var inner = shapedImage(m, imgBorder) + panelCaption(m, i);
-    if (text) {
-      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner +
-        '<div style="margin-top:0.1in;">' + buildClassicTextPanel(text) + '</div></div>';
-    } else {
-      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + '</div>';
-    }
+    var beforeHtml = section.before ? '<div style="margin-top:0.1in;">' + buildClassicTextPanel(section.before) + '</div>' : '';
+    var afterHtml = section.after ? '<div style="margin-top:0.1in;">' + buildClassicTextPanel(section.after) + '</div>' : '';
+    html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + beforeHtml + afterHtml + '</div>';
   }
   html += buildNarrativeHTML(outro, true);
   return html;
@@ -543,12 +542,13 @@ function coRow(row, opts) {
 function coPortrait(moments, sections, i, opts) {
   var m = moments[i];
   var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-  var side = coNarr(section.after || m.description || m.title || '', opts, false);
+  var side = (section.before ? coNarr(section.before, opts, false) : '') + coNarr(section.after || m.description || m.title || '', opts, false);
   var consumed = 0;
   var nxt = moments[i + 1];
   if (opts.companion && nxt && companionEligible(nxt)) {
     side += '<div style="margin-top:0.16in;">' + coMedia(nxt, opts.border) + '</div>';
     var nsec = sections.find(function (s) { return s.panel_index === (i + 1); }) || {};
+    if (nsec.before) side += '<div style="margin-top:0.1in;">' + coNarr(nsec.before, opts, false) + '</div>';
     if (nsec.after) side += '<div style="margin-top:0.1in;">' + coNarr(nsec.after, opts, false) + '</div>';
     consumed = 1;
   }
@@ -566,6 +566,7 @@ function renderGrid(moments, sections, intro, outro, opts) {
       html += coRow(r, opts);
       r.items.forEach(function (it) {
         var sec = sections.find(function (s) { return s.panel_index === it.i; }) || {};
+        if (sec.before) html += coNarr(sec.before, opts, false);
         if (sec.after) html += coNarr(sec.after, opts, false);
       });
     });
@@ -600,6 +601,7 @@ function renderStack(moments, sections, intro, outro, opts) {
     html += '<div style="width:' + widthPct + '%;margin:0.2in auto 0.1in;page-break-inside:avoid;">' +
       '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
       coCaptionBelow(m, i, opts.caption) + '</div>';
+    if (section.before) html += coNarr(section.before, opts, false);
     if (section.after) html += coNarr(section.after, opts, false);
   }
   html += buildNarrativeHTML(outro, true);
@@ -626,7 +628,7 @@ function renderSplash(moments, sections, intro, outro, opts) {
     } else {
       buf.push({ m: m, i: i });
     }
-    if (section.after) { flush(); html += coNarr(section.after, opts, false); }
+    if (section.before || section.after) { flush(); if (section.before) html += coNarr(section.before, opts, false); if (section.after) html += coNarr(section.after, opts, false); }
   }
   flush();
   html += buildNarrativeHTML(outro, true);
@@ -644,13 +646,9 @@ function renderPaired(moments, sections, intro, outro, opts) {
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var overlay = coCaptionOverlay(m, opts.caption);
     var inner = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' + coCaptionBelow(m, i, opts.caption);
-    var text = section.after || '';
-    if (text) {
-      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner +
-        '<div style="margin-top:0.1in;">' + coNarr(text, opts, false) + '</div></div>';
-    } else {
-      html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + '</div>';
-    }
+    var beforeHtml = section.before ? '<div style="margin-top:0.1in;">' + coNarr(section.before, opts, false) + '</div>' : '';
+    var afterHtml = section.after ? '<div style="margin-top:0.1in;">' + coNarr(section.after, opts, false) + '</div>' : '';
+    html += '<div style="margin-bottom:0.24in;page-break-inside:avoid;">' + inner + beforeHtml + afterHtml + '</div>';
   }
   html += buildNarrativeHTML(outro, true);
   return html;
@@ -682,7 +680,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     }
     buf.push({ m: moments[i], i: i });
     var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
-    if (sec.after) { flushRows(); closePage(); html += coNarr(sec.after, opts, false); }
+    if (sec.before || sec.after) { flushRows(); closePage(); if (sec.before) html += coNarr(sec.before, opts, false); if (sec.after) html += coNarr(sec.after, opts, false); }
   }
   closePage();
   html += buildNarrativeHTML(outro, true);
@@ -732,6 +730,7 @@ function renderMagazine(moments, sections, intro, outro, opts){
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var nlen = coNarrLen(section.after);
     var wmin = magWrapMin(shape);
+    if (section.before) html += '<div style="clear:both;">' + coNarr(section.before, opts, false) + '</div>';
     if (magFull(shape)) {
       html += '<div style="clear:both;"></div>';
       var overlay = coCaptionOverlay(m, opts.caption);
