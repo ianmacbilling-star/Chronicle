@@ -709,9 +709,9 @@ function coFloatImg(m, i, side, opts){
 // so the two columns end up roughly balanced in height.
 function magAsideWidth(shape, nlen, wmin){
   var maxW, minW;
-  if (shape === 'tall' || shape === 'tower') { maxW = 62; minW = 44; }
-  else if (shape === 'square') { maxW = 64; minW = 48; }
-  else { maxW = 64; minW = 50; }
+  if (shape === 'tall' || shape === 'tower') { maxW = 70; minW = 52; }
+  else if (shape === 'square') { maxW = 72; minW = 56; }
+  else { maxW = 72; minW = 58; }
   var t = Math.max(0, Math.min(1, nlen / wmin));
   return Math.round(maxW - (maxW - minW) * t);
 }
@@ -721,7 +721,7 @@ function magAside(m, i, opts, narrText, imgW){
     coCaptionBelow(m, i, opts.caption) + '</div>';
   var txtCol = '<div style="flex:1 1 auto;min-width:0;">' + coNarr(narrText, opts, false) + '</div>';
   var imgLeft = (i % 2 === 0);
-  return '<div style="clear:both;display:flex;align-items:center;gap:0.3in;margin:0.18in 0;page-break-inside:avoid;">' +
+  return '<div style="clear:both;display:flex;align-items:center;gap:0.26in;margin:0.14in 0;page-break-inside:avoid;">' +
     (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
 }
 function renderMagazine(moments, sections, intro, outro, opts){
