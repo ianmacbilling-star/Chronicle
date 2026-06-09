@@ -729,81 +729,91 @@ function cgBand(inner) {
 
 function renderComicPage(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
-
-  // Reading-order stream: per panel -> before-text, image, after-text.
-  var stream = [];
-  for (var i = 0; i < moments.length; i++) {
-    var m = moments[i];
-    var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
-    if (sec.before) stream.push({ kind: 'text', html: coNarr(sec.before, opts, false), len: String(sec.before).replace(/<[^>]*>/g, '').length });
-    stream.push({ kind: 'img', m: m, cls: cgClass(m) });
-    if (sec.after) stream.push({ kind: 'text', html: coNarr(sec.after, opts, false), len: String(sec.after).replace(/<[^>]*>/g, '').length });
-  }
-
-  function smallItem(it) {
-    return !!it && ((it.kind === 'img' && it.cls === 'small') || (it.kind === 'text' && it.len <= 220));
-  }
   var spacer = '<div style="flex:1 1 0;"></div>';
 
-  var p = 0;
-  while (p < stream.length) {
-    var it = stream[p];
+  // Each panel = its image + that panel's narration. We pack the IMAGES into side-by-side
+  // rows by shape, then drop the narration in BELOW the row -- so panels actually sit next
+  // to each other instead of every image stacking on its own line.
+  var panels = [];
+  for (var k = 0; k < moments.length; k++) {
+    var mm = moments[k];
+    var sec = sections.find(function (s) { return s.panel_index === k; }) || {};
+    var parts = [];
+    if (sec.before) parts.push(coNarr(sec.before, opts, false));
+    if (sec.after) parts.push(coNarr(sec.after, opts, false));
+    panels.push({ m: mm, cls: cgClass(mm), narr: parts.join('') });
+  }
 
-    if (it.kind === 'img' && it.cls === 'wide') {
-      // Full-width hero, sized to its own aspect -> no cropping.
-      var hw = CG_W / shapeAspect(normShape(it.m));
-      html += cgBand(cgImgCell(it.m, opts, hw));
-      p += 1;
+  function capCell(narr) {
+    return narr ? cgTextCell(narr, null) : '<div style="flex:1 1 0;min-width:0;"></div>';
+  }
+  function capRow(a, b) {
+    if (!a && !b) return '';
+    return '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;align-items:flex-start;page-break-inside:avoid;break-inside:avoid;">' +
+      capCell(a) + capCell(b) + '</div>';
+  }
 
-    } else if (it.kind === 'img' && it.cls === 'tall') {
-      // Tall hero on the left; stack up to 2 following small items on the right.
+  var i = 0;
+  while (i < panels.length) {
+    var p = panels[i];
+
+    if (p.cls === 'wide') {
+      // Full-width hero sized to its aspect, narration as a band below.
+      var hw = CG_W / shapeAspect(normShape(p.m));
+      html += cgBand(cgImgCell(p.m, opts, hw));
+      if (p.narr) html += cgBand(cgTextCell(p.narr, null));
+      i += 1;
+
+    } else if (p.cls === 'tall') {
+      // Tall hero on the left; stack up to 2 following SMALL images on the right.
       var right = [];
-      var q = p + 1;
-      while (q < stream.length && right.length < 2 && smallItem(stream[q])) { right.push(stream[q]); q++; }
+      var j = i + 1;
+      while (j < panels.length && right.length < 2 && panels[j].cls === 'small') { right.push(panels[j]); j++; }
       if (right.length === 0) {
-        var aspA = shapeAspect(normShape(it.m));
+        var aspA = shapeAspect(normShape(p.m));
         var th = 6.0;
         var wp = Math.round((th * aspA / CG_W) * 100);
-        html += cgBand(spacer + cgImgCell(it.m, opts, th, wp) + spacer);
-        p += 1;
+        html += cgBand(spacer + cgImgCell(p.m, opts, th, wp) + spacer);
+        if (p.narr) html += cgBand(cgTextCell(p.narr, null));
+        i += 1;
       } else {
-        var asp2 = shapeAspect(normShape(it.m));
+        var asp2 = shapeAspect(normShape(p.m));
         var bandH = Math.min(6.4, (CG_W * 0.5) / asp2);
         var stackH = (bandH - (right.length - 1) * CG_GAP) / right.length;
-        var stackInner = right.map(function (ri) {
-          return ri.kind === 'img' ? cgImgCell(ri.m, opts, stackH) : cgTextCell(ri.html, stackH);
-        }).join('<div style="height:' + CG_GAP + 'in;"></div>');
+        var stackInner = right.map(function (ri) { return cgImgCell(ri.m, opts, stackH); }).join('<div style="height:' + CG_GAP + 'in;"></div>');
         var rightCol = '<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;">' + stackInner + '</div>';
-        html += cgBand(cgImgCell(it.m, opts, bandH, 50) + rightCol);
-        p = q;
-      }
-
-    } else if (it.kind === 'img' && it.cls === 'small') {
-      var nxt = stream[p + 1];
-      if (smallItem(nxt)) {
-        var hp = 2.7;
-        var b = nxt.kind === 'img' ? cgImgCell(nxt.m, opts, hp) : cgTextCell(nxt.html, hp);
-        html += cgBand(cgImgCell(it.m, opts, hp) + b);
-        p += 2;
-      } else {
-        var aspS = shapeAspect(normShape(it.m));
-        var ws = 58;
-        var hs = (CG_W * ws / 100) / aspS;
-        html += cgBand(spacer + cgImgCell(it.m, opts, hs, ws) + spacer);
-        p += 1;
+        html += cgBand(cgImgCell(p.m, opts, bandH, 50) + rightCol);
+        var combined = [p].concat(right).map(function (x) { return x.narr; }).filter(Boolean).join('');
+        if (combined) html += cgBand(cgTextCell(combined, null));
+        i = j;
       }
 
     } else {
-      // text item
-      var nxt2 = stream[p + 1];
-      if (it.len <= 220 && smallItem(nxt2)) {
-        var hp2 = 2.7;
-        var b2 = nxt2.kind === 'img' ? cgImgCell(nxt2.m, opts, hp2) : cgTextCell(nxt2.html, hp2);
-        html += cgBand(cgTextCell(it.html, hp2) + b2);
-        p += 2;
+      // small (square / standard)
+      var nxt = panels[i + 1];
+      if (nxt && nxt.cls === 'small') {
+        // Two images side by side, captions aligned in two columns below.
+        var hp = 2.7;
+        html += cgBand(cgImgCell(p.m, opts, hp) + cgImgCell(nxt.m, opts, hp));
+        html += capRow(p.narr, nxt.narr);
+        i += 2;
+      } else if (p.narr) {
+        // Lone small WITH text -> image beside its narration (still side-by-side).
+        var aspS = shapeAspect(normShape(p.m));
+        var iw = 46;
+        var ih = (CG_W * iw / 100) / aspS;
+        html += '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;align-items:stretch;page-break-inside:avoid;break-inside:avoid;">' +
+          cgImgCell(p.m, opts, ih, iw) +
+          '<div style="flex:1 1 0;min-width:0;">' + cgTextCell(p.narr, null) + '</div>' +
+          '</div>';
+        i += 1;
       } else {
-        html += cgBand(cgTextCell(it.html, null));
-        p += 1;
+        // Lone small, no text -> centered.
+        var aspS2 = shapeAspect(normShape(p.m));
+        var ws = 58;
+        var hs = (CG_W * ws / 100) / aspS2;
+        html += cgBand(spacer + cgImgCell(p.m, opts, hs, ws) + spacer);
+        i += 1;
       }
     }
   }
@@ -987,9 +997,46 @@ function coConditionMarks(condition) {
 }
 // Paper = base colour; condition = wear/marks layered on top. 'parchment' is kept as a
 // legacy textured paper for the default (non-custom) novel.
+// ---- Page condition textures (uploaded weathering scans) ----
+// Real scanned textures (4 per condition) chosen at random per page, laid behind the
+// page content as a faded overlay. mix-blend-mode:multiply keeps the paper base clean
+// so only the marks/wisps darken; opacity is the transparency dial per condition --
+// raise for stronger weathering, lower if it reads too dark.
+var COND_SETS = {
+  blood:   ['Blood_Splatter_1', 'Blood_Splatter_2', 'Blood_Splatter_3', 'Blood_Splatter_4'],
+  dirt:    ['Dirty_Page_1', 'Dirty_Page_2', 'Dirty_Page_3', 'Dirty_Page_4'],
+  wrinkle: ['Wrinkled_Paper_1', 'Wrinkled_Paper_2', 'Wrinkled_Paper_3', 'Wrinkled_Paper_4'],
+  smoke:   ['Misty_Page_1', 'Misty_Page_2', 'Misty_Page_3', 'Misty_Page_4']
+};
+var COND_OPACITY = { blood: 0.28, dirt: 0.30, wrinkle: 0.45, smoke: 0.40 };
+
+function coCondTexture(condition) {
+  var arr = COND_SETS[condition];
+  if (!arr) return null;
+  return '/textures/' + arr[Math.floor(Math.random() * arr.length)] + '.jpg';
+}
+
+function coCondOverlay(condition) {
+  var url = coCondTexture(condition);
+  if (!url) return '';
+  var op = COND_OPACITY[condition] || 0.3;
+  return '<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;' +
+    'background-image:url(' + url + ');background-size:cover;background-position:center;background-repeat:no-repeat;' +
+    'mix-blend-mode:multiply;opacity:' + op + ';pointer-events:none;' +
+    '-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>';
+}
+
+function coCondPreload(condition) {
+  var arr = COND_SETS[condition];
+  if (!arr) return '';
+  return '<div aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">' +
+    arr.map(function (n) { return '<img src="/textures/' + n + '.jpg" alt="" width="1" height="1" />'; }).join('') +
+    '</div>';
+}
+
 function coPaperCSS(paper, condition) {
   if (paper === 'parchment') return CO_PARCHMENT_CSS;
-  return 'background-color:' + coPaperColor(paper) + ';' + coConditionMarks(condition);
+  return 'background-color:' + coPaperColor(paper) + ';';
 }
 
 function buildLayout(layoutStyle, moments, sections, intro, outro, opts) {
@@ -1326,12 +1373,16 @@ ${fCover ? `<!-- COVER PAGE -->
 </div>` : ''}
 
 <!-- CONTENT PAGE -->
-<div class="content-page">
+<div class="content-page" style="position:relative;">
+  ${co ? coCondOverlay(co.condition) : ''}
+  ${co ? coCondPreload(co.condition) : ''}
+  <div style="position:relative;z-index:1;">
   ${fHeader ? `<div class="page-header">
     <div class="page-header-campaign">${campaign.name}</div>
     <div class="page-header-session">${session.name}</div>
   </div>` : ''}
   ${panelsHTML}
+  </div>
 </div>
 
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
@@ -1412,13 +1463,17 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
             ' &middot; ' + formatDate(s.session_date) + '</div>' +
         '</div>';
 
-    return '<div class="content-page">' +
+    return '<div class="content-page" style="position:relative;">' +
+      (co ? coCondOverlay(co.condition) : '') +
+      (co ? coCondPreload(co.condition) : '') +
+      '<div style="position:relative;z-index:1;">' +
       (fHeader ? ('<div class="page-header">' +
         '<div class="page-header-campaign">' + campaign.name + '</div>' +
         '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
       '</div>') : '') +
       chapterHeading +
       panelsHTML +
+      '</div>' +
     '</div>';
   }).join('');
 
