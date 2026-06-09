@@ -704,12 +704,34 @@ function coFloatImg(m, i, side, opts){
     '<div style="position:relative;line-height:0;">' + media + overlay + '</div>' + cap +
   '</div>';
 }
+// Short-paragraph beat: image beside text. The less text there is, the wider
+// (bigger) the image -- it grows to use the room the narrative doesn't need,
+// so the two columns end up roughly balanced in height.
+function magAsideWidth(shape, nlen, wmin){
+  var maxW, minW;
+  if (shape === 'tall' || shape === 'tower') { maxW = 62; minW = 44; }
+  else if (shape === 'square') { maxW = 64; minW = 48; }
+  else { maxW = 64; minW = 50; }
+  var t = Math.max(0, Math.min(1, nlen / wmin));
+  return Math.round(maxW - (maxW - minW) * t);
+}
+function magAside(m, i, opts, narrText, imgW){
+  var imgCol = '<div style="flex:0 0 ' + imgW + '%;width:' + imgW + '%;">' +
+    '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
+    coCaptionBelow(m, i, opts.caption) + '</div>';
+  var txtCol = '<div style="flex:1 1 auto;min-width:0;">' + coNarr(narrText, opts, false) + '</div>';
+  var imgLeft = (i % 2 === 0);
+  return '<div style="clear:both;display:flex;align-items:center;gap:0.3in;margin:0.18in 0;page-break-inside:avoid;">' +
+    (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
+}
 function renderMagazine(moments, sections, intro, outro, opts){
   var html = coDropOrIntro(intro, opts);
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var shape = normShape(m);
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
+    var nlen = coNarrLen(section.after);
+    var wmin = magWrapMin(shape);
     if (magFull(shape)) {
       html += '<div style="clear:both;"></div>';
       var overlay = coCaptionOverlay(m, opts.caption);
@@ -717,21 +739,21 @@ function renderMagazine(moments, sections, intro, outro, opts){
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
       if (section.after) html += coNarr(section.after, opts, false);
-    } else if (coNarrLen(section.after) < magWrapMin(shape)) {
-      // Not enough narrative to fill a column beside the image -- center it big
-      // with any text below, which reads far cleaner than a small float
-      // marooned next to a tall empty column of white space.
+    } else if (nlen >= wmin) {
+      // Plenty of text: float the image to one consistent side so the narrative
+      // always gets the full remaining width on the other side (no opposing
+      // floats squeezing it into a gutter).
+      html += coFloatImg(m, i, 'right', opts);
+      html += coNarr(section.after, opts, false);
+    } else if (nlen === 0) {
+      // No text at all: center the image big on its own.
       html += '<div style="clear:both;"></div>';
       html += '<div style="width:' + magSoloWidth(shape) + '%;margin:0.22in auto 0.14in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
-      if (coNarrLen(section.after) > 0) html += coNarr(section.after, opts, false);
     } else {
-      // Enough text to wrap: float the image to one consistent side so the
-      // narrative always gets the full remaining width on the other side (no
-      // opposing floats squeezing it into a gutter).
-      html += coFloatImg(m, i, 'right', opts);
-      html += coNarr(section.after, opts, false);
+      // Short paragraph: image beside the text, image sized to balance heights.
+      html += magAside(m, i, opts, section.after, magAsideWidth(shape, nlen, wmin));
     }
   }
   html += '<div style="clear:both;"></div>';
