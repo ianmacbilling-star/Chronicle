@@ -693,6 +693,8 @@ function renderComicPage(moments, sections, intro, outro, opts) {
 function magFull(shape){ return shape === 'panoramic' || shape === 'wide'; }
 function magWidth(shape){ if (shape === 'tall' || shape === 'tower') return 44; if (shape === 'square') return 50; return 54; }
 function magSoloWidth(shape){ if (shape === 'tower') return 56; if (shape === 'tall') return 64; if (shape === 'square') return 72; return 100; }
+function coNarrLen(s){ return s ? String(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim().length : 0; }
+function magWrapMin(shape){ if (shape === 'tall' || shape === 'tower') return 480; if (shape === 'square') return 360; return 300; }
 function coFloatImg(m, i, side, opts){
   var media = coMedia(m, opts.border);
   var overlay = coCaptionOverlay(m, opts.caption);
@@ -715,17 +717,19 @@ function renderMagazine(moments, sections, intro, outro, opts){
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
       if (section.after) html += coNarr(section.after, opts, false);
-    } else if (!(section.after && String(section.after).trim())) {
-      // No narrative to wrap beside it -- render it large & centered instead of
-      // stranding a small floated image in a sea of white space.
+    } else if (coNarrLen(section.after) < magWrapMin(shape)) {
+      // Not enough narrative to fill a column beside the image -- center it big
+      // with any text below, which reads far cleaner than a small float
+      // marooned next to a tall empty column of white space.
       html += '<div style="clear:both;"></div>';
       html += '<div style="width:' + magSoloWidth(shape) + '%;margin:0.22in auto 0.14in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
+      if (coNarrLen(section.after) > 0) html += coNarr(section.after, opts, false);
     } else {
-      // Float to one consistent side so text always has the full remaining
-      // width on the other side -- no opposing floats trapping it in a gutter,
-      // and the image packs up beside the text instead of clearing below it.
+      // Enough text to wrap: float the image to one consistent side so the
+      // narrative always gets the full remaining width on the other side (no
+      // opposing floats squeezing it into a gutter).
       html += coFloatImg(m, i, 'right', opts);
       html += coNarr(section.after, opts, false);
     }
