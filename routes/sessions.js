@@ -653,7 +653,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
             if (Array.isArray(ol.sections)) {
               ol.sections.forEach(function(s) {
                 if (typeof s.panel_index === 'number') {
-                  narrativeByPanel[s.panel_index] = { after_summary: s.outline || '' };
+                  narrativeByPanel[s.panel_index] = { before_summary: s.before || '', after_summary: s.outline || '' };
                 }
               });
             }
@@ -705,6 +705,11 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
         if (nsec.after_summary) bridge = nsec.after_summary;
         else if (nsec.after) bridge = snippet(nsec.after);
       }
+      let moment = '';
+      if (nsec) {
+        if (nsec.before_summary) moment = nsec.before_summary;
+        else if (nsec.before) moment = snippet(nsec.before);
+      }
       // Pass 2 — explicit cast (if this panel has been edited) OR the inferred
       // name-match cast. Either way each entry carries an id so the UI can edit.
       const isExplicit = !!m.cast_explicit;
@@ -723,6 +728,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
         snippet: snippet(m.description),
         type: m.type,
         bridge: bridge,
+        moment: moment,
         cast_explicit: isExplicit,
         characters: panelChars,
         assets: panelAssets,

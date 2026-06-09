@@ -1778,6 +1778,7 @@ function renderReview(data) {
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn +
       '</div>' +
+      (p.moment ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(p.moment) + '</div>' : '') +
       (p.snippet ? '<div class="review-snippet">' + escapeHtmlReview(p.snippet) + '</div>' : '') +
       changeNote +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
