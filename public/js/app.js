@@ -3916,8 +3916,9 @@ function loadNovelPreview(layout) {
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
     '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') +
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
-  // Paginate by session whenever there is more than one session
-  if (total > 1) {
+  // Paginate by session only in Quick View; True View renders the whole
+  // continuous document so the PDF viewer's own page navigation moves through it.
+  if (total > 1 && novelPreviewMode === 'quick') {
     url += '&page=' + novelPreviewPage;
   }
 
@@ -3943,6 +3944,19 @@ function setupNovelPager() {
 
   // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
   var suffixes = ['', '-bottom'];
+
+  // True View renders the real continuous document (sessions flow into each
+  // other mid-page), so a session-based pager has no clean page to jump to.
+  // Hide both bars there and let the PDF viewer's own nav do the moving;
+  // the pager shows only in Quick View, where each session renders alone.
+  if (typeof novelPreviewMode !== 'undefined' && novelPreviewMode === 'wysiwyg') {
+    suffixes.forEach(function(sx) {
+      var p = document.getElementById('novel-pager' + sx);
+      if (p) p.style.display = 'none';
+    });
+    if (warning) warning.style.display = 'none';
+    return;
+  }
 
   // Only show the pagers when there is more than one session
   if (total <= 1) {
@@ -6745,8 +6759,9 @@ function loadNovelPreview(layout) {
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
     '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') +
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
-  // Paginate by session whenever there is more than one session
-  if (total > 1) {
+  // Paginate by session only in Quick View; True View renders the whole
+  // continuous document so the PDF viewer's own page navigation moves through it.
+  if (total > 1 && novelPreviewMode === 'quick') {
     url += '&page=' + novelPreviewPage;
   }
 
@@ -6772,6 +6787,19 @@ function setupNovelPager() {
 
   // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
   var suffixes = ['', '-bottom'];
+
+  // True View renders the real continuous document (sessions flow into each
+  // other mid-page), so a session-based pager has no clean page to jump to.
+  // Hide both bars there and let the PDF viewer's own nav do the moving;
+  // the pager shows only in Quick View, where each session renders alone.
+  if (typeof novelPreviewMode !== 'undefined' && novelPreviewMode === 'wysiwyg') {
+    suffixes.forEach(function(sx) {
+      var p = document.getElementById('novel-pager' + sx);
+      if (p) p.style.display = 'none';
+    });
+    if (warning) warning.style.display = 'none';
+    return;
+  }
 
   // Only show the pagers when there is more than one session
   if (total <= 1) {
