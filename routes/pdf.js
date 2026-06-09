@@ -609,28 +609,45 @@ function renderStack(moments, sections, intro, outro, opts) {
 }
 
 function renderSplash(moments, sections, intro, outro, opts) {
+  // Splash = a big full-width HERO panel punctuating each spread, with the
+  // remaining panels flowing into a denser packed grid (distinct from Stack's
+  // single column). Heroes land on a regular cadence plus any natural big shape.
   var html = coDropOrIntro(intro, opts);
+  var denseOpts = Object.assign({}, opts, { density: 'busy' });
   var buf = [];
-  function flush() { if (buf.length) { coPackRows(buf, opts).forEach(function (r) { html += coRow(r, opts); }); buf = []; } }
+  function panelNarr(idx) {
+    var sec = sections.find(function (s) { return s.panel_index === idx; }) || {};
+    var out = '';
+    if (sec.before) out += coNarr(sec.before, opts, false);
+    if (sec.after) out += coNarr(sec.after, opts, false);
+    return out;
+  }
+  function flushGrid() {
+    if (!buf.length) return;
+    coPackRows(buf, denseOpts).forEach(function (r) { html += coRow(r, opts); });
+    buf.forEach(function (it) { html += panelNarr(it.i); });
+    buf = [];
+  }
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     if (coIsAsidePortrait(m, opts)) {
-      flush();
+      flushGrid();
       var r = coPortrait(moments, sections, i, opts);
       html += r.html; i += r.consumed; continue;
     }
-    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var big = (opts.emphasis && m.type === 'combat') || i === 0 || i === moments.length - 1 ||
-      ['panoramic', 'wide'].indexOf(normShape(m)) >= 0;
-    if (big) {
-      flush();
-      html += coRow({ items: [{ m: m, i: i }], sum: shapeAspect(normShape(m)) }, opts);
+    var isHero = (i % 3 === 0) || ['panoramic', 'wide'].indexOf(normShape(m)) >= 0 || (opts.emphasis && m.type === 'combat');
+    if (isHero) {
+      flushGrid();
+      var overlay = coCaptionOverlay(m, opts.caption);
+      html += '<div style="width:100%;margin:0.2in 0 0.12in;page-break-inside:avoid;">' +
+        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+        coCaptionBelow(m, i, opts.caption) + '</div>';
+      html += panelNarr(i);
     } else {
       buf.push({ m: m, i: i });
     }
-    if (section.before || section.after) { flush(); if (section.before) html += coNarr(section.before, opts, false); if (section.after) html += coNarr(section.after, opts, false); }
   }
-  flush();
+  flushGrid();
   html += buildNarrativeHTML(outro, true);
   return html;
 }
@@ -1385,8 +1402,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   @media print {
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { width:8.5in; }
-    @page { size:8.5in 11in; margin:0.55in 0; }
-    @page :first { margin:0; }
+    @page { size:8.5in 11in; margin:0.65in 0; }
+    ${fCover ? '@page :first { margin:0; }' : ''}
     .print-bar { display:none !important; }
     /* Top/bottom page margins now come from @page, so every physical page --
        including continuation pages of a multi-page session -- gets consistent
