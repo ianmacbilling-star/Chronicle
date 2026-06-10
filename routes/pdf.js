@@ -821,11 +821,15 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
 
 // A wide/panoramic image breaks the column full width; prose flows after it.
 function cgFlowWide(m, opts, narrHtml) {
-  var asp = Math.max(0.3, momentAspect(m));
-  var hw = CG_W / asp;
-  var box = '<div style="' + cgBorder(opts) + 'width:100%;height:' + hw.toFixed(2) +
-    'in;position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+  // Full-width wide image at its NATURAL height -- no fixed-height box, no contain,
+  // no #000 fill -- so the frame wraps the art exactly and a black void is impossible
+  // even when the stored aspect and the real image disagree.
+  var media = m.image
+    ? '<img style="width:100%;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
+  var box = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
+    'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
+    media + coCaptionOverlay(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
 }
 
