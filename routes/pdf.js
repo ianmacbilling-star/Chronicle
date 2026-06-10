@@ -859,29 +859,53 @@ function cgFlowFeature(m, opts, narrHtml) {
 
 // Comic will be rebuilt off the magazine flow later; for now it mirrors Magazine.
 function renderComicPage(moments, sections, intro, outro, opts) {
-  // Comic = a real grid (v1): every beat is a framed ART panel stacked over a
-  // framed NARRATION box, so both image and prose live in bold comic cells. Full
-  // prose is kept (boxes size to the text). Wide shots span the column; others are
-  // centered. Multi-panel rows / text-beside can come next.
+  // Comic = a uniform tic-tac-toe LATTICE (v1). Two columns of bold-framed cells
+  // sharing gutters; each beat yields an ART cell and a NARRATION cell. Tall/tower
+  // art spans the full height of a 2-row block, leaving stacked cells beside it.
+  // Cells are a fixed size for now, so long prose CLIPS -- spill / auto-fit
+  // ("sliding walls") is the next pass. Art fills via focal cover (no letterbox).
+  // Magazine and Picture Book are untouched.
   var html = coDropOrIntro(intro, opts);
+  var CELL_H = 3.0;   // uniform row height (in)
+  var CAP = 6;        // 2 cols x 3 rows = 6 slots per page
+
+  function comicArt(m, tall) {
+    var media = m.image
+      ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+      : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+    return '<div style="' + CG_FRAME + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
+      (tall ? 'grid-row:span 2;' : '') + '">' + media + coCaptionOverlay(m, opts.caption) + '</div>';
+  }
+
+  var cells = [];
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var asp = Math.max(0.3, momentAspect(m));
-    var W, H;
-    if (asp >= 1.3) { W = CG_W; H = CG_W / asp; }
-    else { H = 4.0; W = H * asp; if (W > CG_W) { W = CG_W; H = W / asp; } }
-    var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
-    var imgCell = '<div style="' + CG_FRAME + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;' + ctr + 'position:relative;background:#000;line-height:0;margin-bottom:' + CG_GAP +
-      'in;page-break-inside:avoid;break-inside:avoid;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+    var tall = isPortrait(m);
+    cells.push({ slots: tall ? 2 : 1, html: comicArt(m, tall) });
     var parts = [];
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
     var narr = parts.join('');
-    var narrBox = narr ? '<div style="' + CG_FRAME + 'background:#fbf3cf;padding:0.16in 0.18in;line-height:1.45;margin-bottom:0.20in;break-inside:avoid;">' + narr + '</div>' : '';
-    html += imgCell + narrBox;
+    if (narr) {
+      cells.push({ slots: 1, html: '<div style="' + CG_FRAME +
+        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;overflow:hidden;">' + narr + '</div>' });
+    }
   }
+
+  var pages = [], page = [], used = 0;
+  for (var c = 0; c < cells.length; c++) {
+    if (used + cells[c].slots > CAP && page.length) { pages.push(page); page = []; used = 0; }
+    page.push(cells[c].html); used += cells[c].slots;
+  }
+  if (page.length) pages.push(page);
+
+  for (var pg = 0; pg < pages.length; pg++) {
+    var brk = (pg < pages.length - 1) ? 'page-break-after:always;break-after:page;' : '';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:' + CELL_H.toFixed(2) +
+      'in;gap:' + CG_GAP + 'in;grid-auto-flow:row dense;' + brk + '">' + pages[pg].join('') + '</div>';
+  }
+
   html += buildNarrativeHTML(outro, true);
   return html;
 }
