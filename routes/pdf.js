@@ -851,13 +851,28 @@ function cgFlowPair(a, b, opts, narrHtml) {
 // height (cover-cropped via focal); anything else blows up toward full page.
 function cgFlowFeature(m, opts, narrHtml) {
   var asp = Math.max(0.3, momentAspect(m));
-  var W, H;
-  if (asp >= 1.5) { W = CG_W; H = 4.8; }
-  else { H = Math.min(8.4, CG_W / asp); W = Math.min(CG_W, H * asp); }
+  if (asp >= 1.5) {
+    // Wide feature: full-width at its NATURAL height -- container = image size, so
+    // no fixed box, no contain, no #000 void (same fix as cgFlowWide).
+    var media = m.image
+      ? '<img style="width:100%;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+      : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
+    var wbox = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
+      'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
+      media + coCaptionOverlay(m, opts.caption) + '</div>';
+    return wbox + (narrHtml || '');
+  }
+  // Non-wide feature blows up toward full page; box matches the image aspect and
+  // fills via focal cover, so there is no void either.
+  var H = Math.min(8.4, CG_W / asp);
+  var W = Math.min(CG_W, H * asp);
   var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
+  var img = m.image
+    ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+    img + coCaptionOverlay(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
 }
 
