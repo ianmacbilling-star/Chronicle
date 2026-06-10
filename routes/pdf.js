@@ -441,14 +441,16 @@ var CO_FONTS = {
   sans:         "'Helvetica Neue', Arial, sans-serif",
   mono:         "'Courier New', Courier, monospace",
   script:       "'Dancing Script', 'Segoe Script', cursive",
-  journal:      "'Caveat', 'Bradley Hand', cursive"
+  journal:      "'Caveat', 'Bradley Hand', cursive",
+  comic:        "'Comic Neue', 'Crimson Text', Georgia, serif"
 };
 var CO_FONT_IMPORTS = {
   garamond:     'family=EB+Garamond:ital,wght@0,400;0,600;1,400',
   lora:         'family=Lora:ital,wght@0,400;0,600;1,400',
   merriweather: 'family=Merriweather:ital,wght@0,400;1,400',
   script:       'family=Dancing+Script:wght@400;500;600;700',
-  journal:      'family=Caveat:wght@400;500;700'
+  journal:      'family=Caveat:wght@400;500;700',
+  comic:        'family=Comic+Neue:ital,wght@0,400;0,700;1,400'
 };
 function coFontFamily(f){ if (!f || f === 'classic') return ''; return CO_FONTS[f] || ''; }
 function coFontImport(f){ var q = CO_FONT_IMPORTS[f]; return q ? ("@import url('https://fonts.googleapis.com/css2?" + q + "&display=swap');") : ''; }
@@ -719,7 +721,7 @@ function coDropOrIntro(intro, opts) {
 // every band fills the full content width -- no holes, no black show-through.
 var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
 var CG_GAP = 0.12;  // gutter between panels (inches)
-var CG_BORDER = 'border:3px solid #15100a;box-shadow:0 1px 4px rgba(0,0,0,0.3);overflow:hidden;';
+var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
 
 function cgClass(m) {
   var s = normShape(m);
@@ -751,20 +753,42 @@ function cgImgCell(m, opts, heightIn, widthPct) {
 function cgTextCell(htmlText, heightIn, widthPct) {
   var w = (widthPct != null) ? ('flex:0 0 ' + widthPct + '%;max-width:' + widthPct + '%;') : 'flex:1 1 0;min-width:0;';
   var h = (heightIn != null) ? ('height:' + heightIn.toFixed(2) + 'in;overflow:hidden;') : '';
-  return '<div style="' + CG_BORDER + w + h + 'background:#fdf6dd;padding:0.16in;line-height:1.5;">' + htmlText + '</div>';
+  return '<div style="' + CG_BORDER + w + h + 'background:#fbf3cf;padding:0.15in 0.17in;line-height:1.45;">' + htmlText + '</div>';
 }
 
 function cgBand(inner) {
   return '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;align-items:stretch;page-break-inside:avoid;break-inside:avoid;">' + inner + '</div>';
 }
 
+// One image cell in a justified comic tier. Width and height are explicit inches:
+// width = tierHeight * the image's TRUE aspect, so the cell's aspect matches the
+// image and `cover` shows the whole frame with no crop. Honors crop_safe/focal.
+function cgGridCell(m, opts, wIn, hIn) {
+  var fit = lmCropSafe(m)
+    ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';')
+    : 'object-fit:contain;';
+  var media = m.image
+    ? '<img style="width:100%;height:100%;' + fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+  return '<div style="' + CG_BORDER + 'flex:0 0 ' + wIn.toFixed(3) + 'in;width:' + wIn.toFixed(3) + 'in;height:' + hIn.toFixed(3) + 'in;position:relative;background:#000;line-height:0;">' +
+    media + coCaptionOverlay(m, opts.caption) + '</div>';
+}
+
+// A full-width caption box spanning a tier: narration as an in-grid comic caption
+// panel (heavy ink border + caption ground), not floating prose between rows.
+function cgCaptionTier(inner) {
+  return '<div style="' + CG_BORDER + 'background:#fbf3cf;padding:0.13in 0.16in;line-height:1.4;' +
+    'margin-bottom:' + CG_GAP + 'in;page-break-inside:avoid;break-inside:avoid;">' + inner + '</div>';
+}
+
 function renderComicPage(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
-  var spacer = '<div style="flex:1 1 0;"></div>';
 
-  // Each panel = its image + that panel's narration. We pack the IMAGES into side-by-side
-  // rows by shape, then drop the narration in BELOW the row -- so panels actually sit next
-  // to each other instead of every image stacking on its own line.
+  // Connected tier-grid. Panels pack into horizontal tiers; each tier's height is
+  // solved so the panels (widthed by their TRUE aspect) justify to the full content
+  // width with uniform gutters. Every panel in a tier shares that height, so tiers
+  // are clean 90-degree rectangles and nothing is cropped. Narration drops as a
+  // full-width caption tier beneath the images it belongs to.
   var panels = [];
   for (var k = 0; k < moments.length; k++) {
     var mm = moments[k];
@@ -772,82 +796,44 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var parts = [];
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
-    var cls = cgClass(mm);
-    panels.push({ m: mm, cls: cls, narr: parts.join(''), hero: (lmProminence(mm) >= 4 && cls === 'small'), brk: lmGroupBreak(mm) });
+    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''),
+      hero: (lmProminence(mm) >= 4), brk: lmGroupBreak(mm) });
   }
 
-  function capCell(narr) {
-    return narr ? cgTextCell(narr, null) : '<div style="flex:1 1 0;min-width:0;"></div>';
-  }
-  function capRow(a, b) {
-    if (!a && !b) return '';
-    return '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;align-items:flex-start;page-break-inside:avoid;break-inside:avoid;">' +
-      capCell(a) + capCell(b) + '</div>';
-  }
+  var target = coRowTarget(opts.density);   // aspect-sum per tier (density dial)
+  var MAXH = 4.8;                            // height cap for a normal tier (inches)
+  var HEROH = 5.6;                           // taller cap for a hero tier
 
   var i = 0;
   while (i < panels.length) {
-    var p = panels[i];
-
-    if (p.cls === 'wide' || p.hero) {
-      // Full-width hero sized to its aspect, narration as a band below.
-      var hw = CG_W / momentAspect(p.m);
-      html += cgBand(cgImgCell(p.m, opts, hw));
-      if (p.narr) html += cgBand(cgTextCell(p.narr, null));
-      i += 1;
-
-    } else if (p.cls === 'tall') {
-      // Tall hero on the left; stack up to 2 following SMALL images on the right.
-      var right = [];
-      var j = i + 1;
-      while (j < panels.length && right.length < 2 && panels[j].cls === 'small' && !panels[j].brk) { right.push(panels[j]); j++; }
-      if (right.length === 0) {
-        var aspA = momentAspect(p.m);
-        var th = 6.0;
-        var wp = Math.round((th * aspA / CG_W) * 100);
-        html += cgBand(spacer + cgImgCell(p.m, opts, th, wp) + spacer);
-        if (p.narr) html += cgBand(cgTextCell(p.narr, null));
-        i += 1;
-      } else {
-        var asp2 = momentAspect(p.m);
-        var bandH = Math.min(6.4, (CG_W * 0.5) / asp2);
-        var stackH = (bandH - (right.length - 1) * CG_GAP) / right.length;
-        var stackInner = right.map(function (ri) { return cgImgCell(ri.m, opts, stackH); }).join('<div style="height:' + CG_GAP + 'in;"></div>');
-        var rightCol = '<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;">' + stackInner + '</div>';
-        html += cgBand(cgImgCell(p.m, opts, bandH, 50) + rightCol);
-        var combined = [p].concat(right).map(function (x) { return x.narr; }).filter(Boolean).join('');
-        if (combined) html += cgBand(cgTextCell(combined, null));
-        i = j;
-      }
-
+    var tier = [panels[i]];
+    var sum = panels[i].asp;
+    var isHero = panels[i].hero;
+    if (isHero) {
+      i += 1;                                // a hero stands alone on its own tier
     } else {
-      // small (square / standard)
-      var nxt = panels[i + 1];
-      if (nxt && nxt.cls === 'small' && !nxt.brk) {
-        // Two images side by side, captions aligned in two columns below.
-        var hp = 2.7;
-        html += cgBand(cgImgCell(p.m, opts, hp) + cgImgCell(nxt.m, opts, hp));
-        html += capRow(p.narr, nxt.narr);
-        i += 2;
-      } else if (p.narr) {
-        // Lone small WITH text -> image beside its narration (still side-by-side).
-        var aspS = momentAspect(p.m);
-        var iw = 46;
-        var ih = (CG_W * iw / 100) / aspS;
-        html += '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;align-items:stretch;page-break-inside:avoid;break-inside:avoid;">' +
-          cgImgCell(p.m, opts, ih, iw) +
-          '<div style="flex:1 1 0;min-width:0;">' + cgTextCell(p.narr, null) + '</div>' +
-          '</div>';
-        i += 1;
-      } else {
-        // Lone small, no text -> centered.
-        var aspS2 = momentAspect(p.m);
-        var ws = 58;
-        var hs = (CG_W * ws / 100) / aspS2;
-        html += cgBand(spacer + cgImgCell(p.m, opts, hs, ws) + spacer);
-        i += 1;
+      var j = i + 1;
+      while (j < panels.length && !panels[j].brk && !panels[j].hero && sum < target) {
+        tier.push(panels[j]); sum += panels[j].asp; j += 1;
       }
+      i = j;
     }
+
+    var n = tier.length;
+    var availW = CG_W - (n - 1) * CG_GAP;
+    var H = availW / sum;                    // justify: widths sum to availW
+    var capH = isHero ? HEROH : MAXH;
+    var fillsWidth = true;
+    if (H > capH) { H = capH; fillsWidth = false; }   // too tall -> cap height, center
+
+    var cells = tier.map(function (c) { return cgGridCell(c.m, opts, c.asp * H, H); }).join('');
+    var justify = fillsWidth ? '' : 'justify-content:center;';
+    html += '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;' +
+      'height:' + H.toFixed(2) + 'in;' + justify +
+      'page-break-inside:avoid;break-inside:avoid;">' + cells + '</div>';
+
+    var combined = tier.map(function (c) { return c.narr; }).filter(Boolean).join('');
+    if (combined) html += cgCaptionTier(combined);
   }
 
   html += buildNarrativeHTML(outro, true);
