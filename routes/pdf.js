@@ -797,10 +797,22 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
     panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''),
-      hero: (lmProminence(mm) >= 5), brk: lmGroupBreak(mm) });
+      prom: lmProminence(mm), brk: lmGroupBreak(mm), hero: false });
+  }
+
+  // A full-width splash is reserved for a genuine PEAK: a top-rated (5) beat that
+  // stands above its neighbors, so splashes stay rare even if the AI inflates the
+  // scale -- a flat run of 5s has no peak, so those panels tile instead.
+  for (var h = 0; h < panels.length; h++) {
+    var pv = panels[h].prom;
+    var pp = (h > 0) ? panels[h - 1].prom : -1;
+    var pn = (h < panels.length - 1) ? panels[h + 1].prom : -1;
+    panels[h].hero = (pv >= 5 && pv > pp && pv > pn);
   }
 
   var target = coRowTarget(opts.density);   // aspect-sum per tier (density dial)
+  var MINP = (opts.density === 'busy') ? 3 : 2;  // min panels per tier so a big image
+                                             // (wide/pano/tall) never sits alone
   var MAXH = 4.8;                            // height cap for a normal tier (inches)
   var HEROH = 5.6;                           // taller cap for a hero tier
 
@@ -813,7 +825,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       i += 1;                                // a hero stands alone on its own tier
     } else {
       var j = i + 1;
-      while (j < panels.length && !panels[j].brk && !panels[j].hero && sum < target) {
+      while (j < panels.length && !panels[j].hero && (tier.length < MINP || (sum < target && !panels[j].brk))) {
         tier.push(panels[j]); sum += panels[j].asp; j += 1;
       }
       i = j;
