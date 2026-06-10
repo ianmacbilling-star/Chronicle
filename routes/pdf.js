@@ -734,6 +734,8 @@ function coDropOrIntro(intro, opts) {
 var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
 var CG_GAP = 0.12;  // gutter between panels (inches)
 var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
+var CG_FRAME  = 'border:6px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
+function cgBorder(opts){ return (opts && opts._comic) ? CG_FRAME : CG_BORDER; }
 
 function cgClass(m) {
   var s = normShape(m);
@@ -812,7 +814,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
   if (imgW > 3.3) { imgW = 3.3; imgH = imgW / asp; }
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
-  var box = '<div style="' + fl + CG_BORDER + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
+  var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
     'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
 }
@@ -821,7 +823,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
 function cgFlowWide(m, opts, narrHtml) {
   var asp = Math.max(0.3, momentAspect(m));
   var hw = CG_W / asp;
-  var box = '<div style="' + CG_BORDER + 'width:100%;height:' + hw.toFixed(2) +
+  var box = '<div style="' + cgBorder(opts) + 'width:100%;height:' + hw.toFixed(2) +
     'in;position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
     cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
@@ -833,7 +835,7 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var availW = CG_W - CG_GAP;
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
-    return '<div style="' + CG_BORDER + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
+    return '<div style="' + cgBorder(opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
       'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
@@ -849,7 +851,7 @@ function cgFlowFeature(m, opts, narrHtml) {
   if (asp >= 1.5) { W = CG_W; H = 4.8; }
   else { H = Math.min(8.4, CG_W / asp); W = Math.min(CG_W, H * asp); }
   var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
-  var box = '<div style="' + CG_BORDER + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
+  var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
     cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
@@ -857,7 +859,9 @@ function cgFlowFeature(m, opts, narrHtml) {
 
 // Comic will be rebuilt off the magazine flow later; for now it mirrors Magazine.
 function renderComicPage(moments, sections, intro, outro, opts) {
-  return renderMagazine(moments, sections, intro, outro, opts);
+  // Comic = the Magazine flow with the panel grid exposed as bold comic frames.
+  var cOpts = Object.assign({}, opts, { _comic: true });
+  return renderMagazine(moments, sections, intro, outro, cOpts);
 }
 
 // Magazine flow: images float and the narrative text wraps around them.
