@@ -889,6 +889,20 @@ function cgFlowFeature(m, opts, narrHtml) {
 }
 
 // Comic will be rebuilt off the magazine flow later; for now it mirrors Magazine.
+function cgSplitNarr(text){
+  // Break a narrative blob into panel-sized chunks (~2-4 sentences each).
+  if (!text) return [];
+  var s = String(text).replace(/\s+/g, ' ').trim();
+  if (!s) return [];
+  var sents = s.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [s];
+  var chunks = [], buf = '', cnt = 0;
+  for (var i = 0; i < sents.length; i++) {
+    buf += sents[i]; cnt++;
+    if ((cnt >= 2 && buf.length >= 140) || buf.length >= 300) { chunks.push(buf.trim()); buf = ''; cnt = 0; }
+  }
+  if (buf.trim()) chunks.push(buf.trim());
+  return chunks;
+}
 function renderComicPage(moments, sections, intro, outro, opts) {
   // Comic = a tic-tac-toe LATTICE (v4). Two-column base grid of bold-framed cells.
   // ORIENTATION IS KEYED OFF THE IMAGE ASPECT: wide/panoramic art spans BOTH columns
@@ -917,15 +931,14 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var wide = (asp >= 1.5);
     var colW = (CG_W - CG_GAP) / 2;
     var span = tall ? 'tall' : (wide ? 'wide' : '');
-    var imgH = tall ? 5.0 : (wide ? (CG_W / asp) : Math.min(3.4, Math.max(2.0, colW / asp)));
+    var imgH = wide ? (CG_W / asp) : Math.min(7.0, colW / asp);
     cells.push({ slots: tall ? 2 : 1, html: comicArt(m, span, imgH) });
-    var parts = [];
-    if (sec.before) parts.push(coNarr(sec.before, opts, false));
-    if (sec.after) parts.push(coNarr(sec.after, opts, false));
-    var narr = parts.join('');
-    if (narr) {
+    var nchunks = [];
+    if (sec.before) nchunks = nchunks.concat(cgSplitNarr(sec.before));
+    if (sec.after) nchunks = nchunks.concat(cgSplitNarr(sec.after));
+    for (var q = 0; q < nchunks.length; q++) {
       cells.push({ slots: 1, html: '<div style="' + picBorderCss(opts) +
-        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.8in;align-self:start;break-inside:avoid;page-break-inside:avoid;">' + narr + '</div>' });
+        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;">' + buildNarrativeHTML(nchunks[q], false) + '</div>' });
     }
   }
 
