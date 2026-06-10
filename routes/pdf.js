@@ -829,38 +829,23 @@ function cgFlowPair(a, b, opts, narrHtml) {
   return row + (narrHtml || '');
 }
 
+// A featured (peak-prominence) image. A wide shot fills the width at half-page
+// height (cover-cropped via focal); anything else blows up toward full page.
+function cgFlowFeature(m, opts, narrHtml) {
+  var asp = Math.max(0.3, momentAspect(m));
+  var W, H;
+  if (asp >= 1.5) { W = CG_W; H = 4.8; }
+  else { H = Math.min(8.4, CG_W / asp); W = Math.min(CG_W, H * asp); }
+  var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
+  var box = '<div style="' + CG_BORDER + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
+    'position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
+    cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+  return box + (narrHtml || '');
+}
+
+// Comic will be rebuilt off the magazine flow later; for now it mirrors Magazine.
 function renderComicPage(moments, sections, intro, outro, opts) {
-  var html = coDropOrIntro(intro, opts);
-
-  // Intermixed flow: walk panels IN ORDER, anchor each image, and build the full
-  // prose around it. Wide images break the column full-width (text above/below);
-  // others float so the narrative wraps around and below them; an image with no
-  // narrative of its own pairs with the next picture. No templates, no page-fill --
-  // the point is that text and images are woven together on every page.
-  var panels = [];
-  for (var k = 0; k < moments.length; k++) {
-    var mm = moments[k];
-    var sec = sections.find(function (s) { return s.panel_index === k; }) || {};
-    var parts = [];
-    if (sec.before) parts.push(coNarr(sec.before, opts, false));
-    if (sec.after) parts.push(coNarr(sec.after, opts, false));
-    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join('') });
-  }
-
-  var i = 0, sideLeft = true;
-  while (i < panels.length) {
-    var p = panels[i];
-    if (p.asp >= 1.5) {
-      html += cgFlowWide(p.m, opts, p.narr); i += 1;
-    } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5) {
-      html += cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr); i += 2;
-    } else {
-      html += cgFlowFloat(p.m, opts, p.narr, sideLeft); sideLeft = !sideLeft; i += 1;
-    }
-  }
-
-  html += buildNarrativeHTML(outro, true);
-  return html;
+  return renderMagazine(moments, sections, intro, outro, opts);
 }
 
 // Magazine flow: images float and the narrative text wraps around them.
@@ -898,40 +883,44 @@ function magAside(m, i, opts, narrText, imgW){
   return '<div style="clear:both;display:flex;align-items:center;gap:0.26in;margin:0.14in 0;page-break-inside:avoid;">' +
     (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
 }
-function renderMagazine(moments, sections, intro, outro, opts){
+function renderMagazine(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
-  for (var i = 0; i < moments.length; i++) {
-    var m = moments[i];
-    var shape = normShape(m);
-    var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var nlen = coNarrLen(section.after);
-    var wmin = magWrapMin(shape);
-    if (section.before) html += '<div style="clear:both;">' + coNarr(section.before, opts, false) + '</div>';
-    if (magFull(shape)) {
-      html += '<div style="clear:both;"></div>';
-      var overlay = coCaptionOverlay(m, opts.caption);
-      html += '<div style="width:100%;margin:0.2in 0 0.1in;page-break-inside:avoid;">' +
-        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
-        coCaptionBelow(m, i, opts.caption) + '</div>';
-      if (section.after) html += coNarr(section.after, opts, false);
-    } else if (nlen >= wmin) {
-      // Plenty of text: float the image to one consistent side so the narrative
-      // always gets the full remaining width on the other side (no opposing
-      // floats squeezing it into a gutter).
-      html += coFloatImg(m, i, 'right', opts);
-      html += coNarr(section.after, opts, false);
-    } else if (nlen === 0) {
-      // No text at all: center the image big on its own.
-      html += '<div style="clear:both;"></div>';
-      html += '<div style="width:' + magSoloWidth(shape) + '%;margin:0.22in auto 0.14in;page-break-inside:avoid;">' +
-        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
-        coCaptionBelow(m, i, opts.caption) + '</div>';
+
+  // Intermixed flow: walk panels IN ORDER, anchor each image, build the full prose
+  // around it. Wide images break the column full-width; others float so narrative
+  // wraps around and below them; an image with no narrative pairs with the next one.
+  // A FEATURE beat (a genuine prominence peak) blows up to half/full page.
+  var panels = [];
+  for (var k = 0; k < moments.length; k++) {
+    var mm = moments[k];
+    var sec = sections.find(function (s) { return s.panel_index === k; }) || {};
+    var parts = [];
+    if (sec.before) parts.push(coNarr(sec.before, opts, false));
+    if (sec.after) parts.push(coNarr(sec.after, opts, false));
+    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''), prom: lmProminence(mm), feature: false });
+  }
+  // Feature = a top-rated (5) beat that stands above its neighbors, so only a few
+  // images blow up even when the AI inflates the prominence scale.
+  for (var h = 0; h < panels.length; h++) {
+    var pp = (h > 0) ? panels[h - 1].prom : -1;
+    var pn = (h < panels.length - 1) ? panels[h + 1].prom : -1;
+    panels[h].feature = (panels[h].prom >= 5 && panels[h].prom > pp && panels[h].prom > pn);
+  }
+
+  var i = 0, sideLeft = true;
+  while (i < panels.length) {
+    var p = panels[i];
+    if (p.feature) {
+      html += cgFlowFeature(p.m, opts, p.narr); i += 1;
+    } else if (p.asp >= 1.5) {
+      html += cgFlowWide(p.m, opts, p.narr); i += 1;
+    } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5) {
+      html += cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr); i += 2;
     } else {
-      // Short paragraph: image beside the text, image sized to balance heights.
-      html += magAside(m, i, opts, section.after, magAsideWidth(shape, nlen, wmin));
+      html += cgFlowFloat(p.m, opts, p.narr, sideLeft); sideLeft = !sideLeft; i += 1;
     }
   }
-  html += '<div style="clear:both;"></div>';
+
   html += buildNarrativeHTML(outro, true);
   return html;
 }
