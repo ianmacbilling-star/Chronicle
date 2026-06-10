@@ -121,11 +121,13 @@ router.get('/:campaignId/tier-info', requireAuth, verifyCampaignMember, async fu
       effective_tier: name,
       effective_rank: tierRank(name),
       watermark: !!t.watermark,
+      can_export: !!t.can_export,
+      can_print: !!t.can_print,
       art_locks: ART_STYLE_MIN_RANK,
       narrative_locks: NARRATIVE_STYLE_MIN_RANK
     });
   } catch (e) {
-    res.json({ effective_tier: 'copper', effective_rank: 1, watermark: true, art_locks: {}, narrative_locks: {} });
+    res.json({ effective_tier: 'copper', effective_rank: 1, watermark: true, can_export: false, can_print: false, art_locks: {}, narrative_locks: {} });
   }
 });
 
