@@ -45,6 +45,18 @@ function momentAspect(m) {
   if (w > 0 && h > 0) return w / h;
   return shapeAspect(normShape(m));
 }
+// ---- Layout metadata accessors (Phase 1; consumed in Phase 2) ----
+// Read m.layout_meta (JSON string from extraction); default to TODAY'S behavior when absent.
+function lmMeta(m) {
+  var v = m && m.layout_meta;
+  if (!v) return {};
+  if (typeof v === 'object') return v;
+  try { var o = JSON.parse(v); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+}
+function lmProminence(m) { var n = Number(lmMeta(m).prominence); return (n >= 1 && n <= 5) ? Math.round(n) : 3; }
+function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom', 'left', 'right'].indexOf(f) >= 0) ? f : 'center'; }
+function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
+function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 function normShape(m) {
   var s = (m && m.shape) || '';
