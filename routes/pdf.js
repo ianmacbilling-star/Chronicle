@@ -728,11 +728,22 @@ function cgClass(m) {
   return 'small';
 }
 
+function cgFocalPos(focal) {
+  if (focal === 'top') return 'center top';
+  if (focal === 'bottom') return 'center bottom';
+  if (focal === 'left') return 'left center';
+  if (focal === 'right') return 'right center';
+  return 'center';
+}
+
 function cgImgCell(m, opts, heightIn, widthPct) {
   var w = (widthPct != null) ? ('flex:0 0 ' + widthPct + '%;max-width:' + widthPct + '%;') : 'flex:1 1 0;min-width:0;';
   var h = (heightIn != null) ? ('height:' + heightIn.toFixed(2) + 'in;') : 'height:100%;';
+  var fit = lmCropSafe(m)
+    ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';')
+    : 'object-fit:contain;';
   var media = m.image
-    ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    ? '<img style="width:100%;height:100%;' + fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   return '<div style="' + CG_BORDER + w + h + 'position:relative;background:#000;line-height:0;">' + media + coCaptionOverlay(m, opts.caption) + '</div>';
 }
@@ -761,7 +772,8 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var parts = [];
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
-    panels.push({ m: mm, cls: cgClass(mm), narr: parts.join('') });
+    var cls = cgClass(mm);
+    panels.push({ m: mm, cls: cls, narr: parts.join(''), hero: (lmProminence(mm) >= 4 && cls === 'small'), brk: lmGroupBreak(mm) });
   }
 
   function capCell(narr) {
@@ -777,7 +789,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
   while (i < panels.length) {
     var p = panels[i];
 
-    if (p.cls === 'wide') {
+    if (p.cls === 'wide' || p.hero) {
       // Full-width hero sized to its aspect, narration as a band below.
       var hw = CG_W / momentAspect(p.m);
       html += cgBand(cgImgCell(p.m, opts, hw));
@@ -788,7 +800,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       // Tall hero on the left; stack up to 2 following SMALL images on the right.
       var right = [];
       var j = i + 1;
-      while (j < panels.length && right.length < 2 && panels[j].cls === 'small') { right.push(panels[j]); j++; }
+      while (j < panels.length && right.length < 2 && panels[j].cls === 'small' && !panels[j].brk) { right.push(panels[j]); j++; }
       if (right.length === 0) {
         var aspA = momentAspect(p.m);
         var th = 6.0;
@@ -811,7 +823,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     } else {
       // small (square / standard)
       var nxt = panels[i + 1];
-      if (nxt && nxt.cls === 'small') {
+      if (nxt && nxt.cls === 'small' && !nxt.brk) {
         // Two images side by side, captions aligned in two columns below.
         var hp = 2.7;
         html += cgBand(cgImgCell(p.m, opts, hp) + cgImgCell(nxt.m, opts, hp));
