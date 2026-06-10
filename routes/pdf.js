@@ -797,7 +797,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
     panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''),
-      hero: (lmProminence(mm) >= 4), brk: lmGroupBreak(mm) });
+      hero: (lmProminence(mm) >= 5), brk: lmGroupBreak(mm) });
   }
 
   var target = coRowTarget(opts.density);   // aspect-sum per tier (density dial)
