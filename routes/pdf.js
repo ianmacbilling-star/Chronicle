@@ -37,6 +37,13 @@ function shapeRatio(shape) {
   }
 }
 function shapeAspect(shape) { var r = shapeRatio(shape); return r[0] / r[1]; }
+// True aspect from the stored image pixels (img_w/img_h) when present; otherwise the
+// nominal shape-tag aspect. Lets panels size to the real image so they barely crop.
+function momentAspect(m) {
+  var w = m && Number(m.img_w), h = m && Number(m.img_h);
+  if (w > 0 && h > 0) return w / h;
+  return shapeAspect(normShape(m));
+}
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 function normShape(m) {
   var s = (m && m.shape) || '';
@@ -759,7 +766,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
 
     if (p.cls === 'wide') {
       // Full-width hero sized to its aspect, narration as a band below.
-      var hw = CG_W / shapeAspect(normShape(p.m));
+      var hw = CG_W / momentAspect(p.m);
       html += cgBand(cgImgCell(p.m, opts, hw));
       if (p.narr) html += cgBand(cgTextCell(p.narr, null));
       i += 1;
@@ -770,14 +777,14 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var j = i + 1;
       while (j < panels.length && right.length < 2 && panels[j].cls === 'small') { right.push(panels[j]); j++; }
       if (right.length === 0) {
-        var aspA = shapeAspect(normShape(p.m));
+        var aspA = momentAspect(p.m);
         var th = 6.0;
         var wp = Math.round((th * aspA / CG_W) * 100);
         html += cgBand(spacer + cgImgCell(p.m, opts, th, wp) + spacer);
         if (p.narr) html += cgBand(cgTextCell(p.narr, null));
         i += 1;
       } else {
-        var asp2 = shapeAspect(normShape(p.m));
+        var asp2 = momentAspect(p.m);
         var bandH = Math.min(6.4, (CG_W * 0.5) / asp2);
         var stackH = (bandH - (right.length - 1) * CG_GAP) / right.length;
         var stackInner = right.map(function (ri) { return cgImgCell(ri.m, opts, stackH); }).join('<div style="height:' + CG_GAP + 'in;"></div>');
@@ -799,7 +806,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
         i += 2;
       } else if (p.narr) {
         // Lone small WITH text -> image beside its narration (still side-by-side).
-        var aspS = shapeAspect(normShape(p.m));
+        var aspS = momentAspect(p.m);
         var iw = 46;
         var ih = (CG_W * iw / 100) / aspS;
         html += '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;align-items:stretch;page-break-inside:avoid;break-inside:avoid;">' +
@@ -809,7 +816,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
         i += 1;
       } else {
         // Lone small, no text -> centered.
-        var aspS2 = shapeAspect(normShape(p.m));
+        var aspS2 = momentAspect(p.m);
         var ws = 58;
         var hs = (CG_W * ws / 100) / aspS2;
         html += cgBand(spacer + cgImgCell(p.m, opts, hs, ws) + spacer);
