@@ -878,32 +878,35 @@ function cgFlowFeature(m, opts, narrHtml) {
 
 // Comic will be rebuilt off the magazine flow later; for now it mirrors Magazine.
 function renderComicPage(moments, sections, intro, outro, opts) {
-  // Comic = a tic-tac-toe LATTICE (v3). Two columns of bold-framed cells sharing
-  // gutters; each beat yields an ART cell and a NARRATION cell. ART IS KEYED OFF THE
-  // IMAGE: each panel takes a height from its OWN aspect (capped, so tall/tower art is
-  // a tall panel, not a full page) and does NOT stretch to match the prose. Narration
-  // cells grow to fit their text independently (align:start), so a short panel can sit
-  // beside a taller text cell. Spill/auto-fit + per-row column widths come next.
+  // Comic = a tic-tac-toe LATTICE (v4). Two-column base grid of bold-framed cells.
+  // ORIENTATION IS KEYED OFF THE IMAGE ASPECT: wide/panoramic art spans BOTH columns
+  // (a full-width horizontal band), tall/tower art spans two rows (a tall panel), and
+  // square/standard art takes one cell. Panel HEIGHT also comes from the image aspect
+  // (capped); panels do NOT stretch to match prose. Narration cells grow to fit their
+  // text independently (align:start). Spill/auto-fit comes next.
   var html = coDropOrIntro(intro, opts);
 
-  function comicArt(m, tall, h) {
+  function comicArt(m, span, h) {
     var media = m.image
       ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
       : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+    var spanCss = (span === 'tall') ? 'grid-row:span 2;' : ((span === 'wide') ? 'grid-column:span 2;' : '');
     return '<div style="' + CG_FRAME + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
       'height:' + h.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' +
-      (tall ? 'grid-row:span 2;' : '') + '">' + media + coCaptionOverlay(m, opts.caption) + '</div>';
+      spanCss + '">' + media + coCaptionOverlay(m, opts.caption) + '</div>';
   }
 
   var cells = [];
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var tall = isPortrait(m);
     var asp = Math.max(0.3, momentAspect(m));
+    var tall = isPortrait(m);
+    var wide = (asp >= 1.5);
     var colW = (CG_W - CG_GAP) / 2;
-    var imgH = tall ? 5.0 : Math.min(3.4, Math.max(2.0, colW / asp));
-    cells.push({ slots: tall ? 2 : 1, html: comicArt(m, tall, imgH) });
+    var span = tall ? 'tall' : (wide ? 'wide' : '');
+    var imgH = tall ? 5.0 : (wide ? (CG_W / asp) : Math.min(3.4, Math.max(2.0, colW / asp)));
+    cells.push({ slots: tall ? 2 : 1, html: comicArt(m, span, imgH) });
     var parts = [];
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
