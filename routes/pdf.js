@@ -737,7 +737,7 @@ function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
     case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';
-    case 'frame':    return 'border:1.5px solid #c9a84c;box-shadow:0 0 0 2px #0a0806,0 0 0 6px #2c1e10,0 2px 6px 4px rgba(0,0,0,0.4);';
+    case 'frame':    return 'border:3px solid #2c1e10;box-shadow:inset 0 0 0 1.5px #c9a84c;';
     case 'comic':    return 'border:5px solid #0a0806;';
     case 'gallery':  return 'box-shadow:' + CO_IMG_SHADOW + ';';
     case 'vignette': return '';
@@ -751,7 +751,12 @@ function vignetteOverlayHtml(){
   return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.45in 0.4in #ffffff;"></div>' +
     '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 46%, rgba(255,255,255,0.7) 76%, rgba(255,255,255,1) 92%);"></div>';
 }
-function picOverlay(opts){ return (opts && opts.border === 'vignette') ? vignetteOverlayHtml() : ''; }
+function picOverlay(opts){
+  var b = opts && opts.border;
+  if (b === 'vignette') return vignetteOverlayHtml();
+  if (b === 'frame') return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1.5px #c9a84c;"></div>';
+  return '';
+}
 
 function cgClass(m) {
   var s = normShape(m);
