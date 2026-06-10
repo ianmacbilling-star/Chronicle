@@ -500,9 +500,7 @@ function coMedia(m, border) {
     case 'frame': return framedMedia(m);
     case 'comic': return '<div style="border:5px solid #0a0806;background:#160e06;overflow:hidden;line-height:0;">' + img + '</div>';
     case 'vignette':
-      return '<div style="position:relative;line-height:0;">' + img +
-        '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.5in 0.3in #ffffff;"></div>' +
-        '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 82%, rgba(255,255,255,1) 100%);"></div></div>';
+      return '<div style="position:relative;line-height:0;">' + img + vignetteOverlayHtml() + '</div>';
     case 'gallery':
       return m.image
         ? '<div style="padding:0 0.26in 0.26in 0;line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
@@ -739,7 +737,7 @@ function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
     case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';
-    case 'frame':    return 'border:0.13in solid #241708;';
+    case 'frame':    return 'border:1.5px solid #c9a84c;box-shadow:0 0 0 2px #0a0806,0 0 0 6px #2c1e10,0 2px 6px 4px rgba(0,0,0,0.4);';
     case 'comic':    return 'border:5px solid #0a0806;';
     case 'gallery':  return 'box-shadow:' + CO_IMG_SHADOW + ';';
     case 'vignette': return '';
@@ -748,6 +746,12 @@ function picBorderCss(opts){
   }
 }
 function cgBorder(opts){ return picBorderCss(opts) + 'overflow:hidden;'; }
+function vignetteOverlayHtml(){
+  // Strong fade so the rectangular edge is fully gone -- image looks drawn on the page.
+  return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.45in 0.4in #ffffff;"></div>' +
+    '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 46%, rgba(255,255,255,0.7) 76%, rgba(255,255,255,1) 92%);"></div>';
+}
+function picOverlay(opts){ return (opts && opts.border === 'vignette') ? vignetteOverlayHtml() : ''; }
 
 function cgClass(m) {
   var s = normShape(m);
@@ -827,7 +831,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
 }
 
@@ -841,7 +845,7 @@ function cgFlowWide(m, opts, narrHtml) {
     : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    media + coCaptionOverlay(m, opts.caption) + '</div>';
+    media + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
 }
 
@@ -852,7 +856,7 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
     return '<div style="' + cgBorder(opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+      'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
@@ -871,7 +875,7 @@ function cgFlowFeature(m, opts, narrHtml) {
       : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
     var wbox = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-      media + coCaptionOverlay(m, opts.caption) + '</div>';
+      media + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
     return wbox + (narrHtml || '');
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
@@ -884,7 +888,7 @@ function cgFlowFeature(m, opts, narrHtml) {
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    img + coCaptionOverlay(m, opts.caption) + '</div>';
+    img + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
 }
 
@@ -919,7 +923,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var spanCss = (span === 'tall') ? 'grid-row:span 2;' : ((span === 'wide') ? 'grid-column:span 2;' : '');
     return '<div style="' + cgBorder(opts) + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
       'height:' + h.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' +
-      spanCss + '">' + media + coCaptionOverlay(m, opts.caption) + '</div>';
+      spanCss + '">' + media + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
   }
 
   var cells = [];
