@@ -421,7 +421,7 @@ function layoutSaga(moments, sections, intro, outro) {
 // ============================================================
 var CO_DEFAULTS = {
   arrange: 'grid',       // grid | stack | splash | paired
-  border: 'keyline',     // none | keyline | frame | comic | vignette | gallery
+  border: 'none',        // none | keyline | frame | comic | vignette | gallery
   caption: 'bar',        // plate | bar | engraved | gradient | none
   gutter: 'normal',      // tight | normal | airy
   density: 'normal',     // busy | normal | roomy
@@ -735,7 +735,19 @@ var CG_W = 6.8;     // content column width (inches), used for aspect-based heig
 var CG_GAP = 0.12;  // gutter between panels (inches)
 var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
 var CG_FRAME  = 'border:12px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
-function cgBorder(opts){ return (opts && opts._comic) ? CG_FRAME : CG_BORDER; }
+function picBorderCss(opts){
+  // The picture-border option, applied identically in EVERY layout. Default: none.
+  switch (opts && opts.border) {
+    case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';
+    case 'frame':    return 'border:0.13in solid #241708;';
+    case 'comic':    return 'border:5px solid #0a0806;';
+    case 'gallery':  return 'box-shadow:' + CO_IMG_SHADOW + ';';
+    case 'vignette': return '';
+    case 'none':
+    default:         return '';
+  }
+}
+function cgBorder(opts){ return picBorderCss(opts) + 'overflow:hidden;'; }
 
 function cgClass(m) {
   var s = normShape(m);
@@ -891,7 +903,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
       : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
     var spanCss = (span === 'tall') ? 'grid-row:span 2;' : ((span === 'wide') ? 'grid-column:span 2;' : '');
-    return '<div style="' + CG_FRAME + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
+    return '<div style="' + cgBorder(opts) + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
       'height:' + h.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' +
       spanCss + '">' + media + coCaptionOverlay(m, opts.caption) + '</div>';
   }
@@ -912,7 +924,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
     var narr = parts.join('');
     if (narr) {
-      cells.push({ slots: 1, html: '<div style="' + CG_FRAME +
+      cells.push({ slots: 1, html: '<div style="' + picBorderCss(opts) +
         'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.8in;align-self:start;break-inside:avoid;page-break-inside:avoid;">' + narr + '</div>' });
     }
   }
