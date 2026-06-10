@@ -32,7 +32,8 @@ function shapeRatio(shape) {
     case 'wide':      return [16, 9];
     case 'square':    return [1, 1];
     case 'tall':      return [2, 3];
-    case 'tower':     return [2, 5];
+    case 'tower':     return [9, 16];
+    case 'towerthin': return [2, 5];
     case 'fullpage':  return [3, 4];
     default:          return [4, 3]; // standard
   }
@@ -60,7 +61,7 @@ function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 function normShape(m) {
   var s = (m && m.shape) || '';
-  return (['wide', 'tall', 'square', 'panoramic', 'tower', 'fullpage'].indexOf(s) >= 0) ? s : 'standard';
+  return (['wide', 'tall', 'square', 'panoramic', 'tower', 'towerthin', 'fullpage'].indexOf(s) >= 0) ? s : 'standard';
 }
 function isLandscape(shape) { return shapeAspect(shape) >= 1.15; }
 
@@ -691,13 +692,19 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // sentinel preserved below; tune pbCol to trade image size vs side-text width.)
       var pbTower = (normShape(m) === 'tower');
       var pbCol = 2.6;
+      // Picture Book shows towers in their OWN thin full-page box (towerthin = 2:5)
+      // via a shape-overridden clone, so the shared tower ratio stays at the true 9:16
+      // for Magazine/grid/momentAspect (a too-thin shared box letterboxes them). coMedia
+      // uses object-fit:cover here, so the real image is cropped to fill -- no black bars.
+      var pbDispShape = pbTower ? 'towerthin' : normShape(m);
+      var pbMediaM = pbTower ? Object.assign({}, m, { shape: 'towerthin' }) : m;
       var pbW = pbTower
-        ? Math.min(6.8 - pbCol, 9.2 * shapeAspect(normShape(m)))
+        ? Math.min(6.8 - pbCol, 9.2 * shapeAspect(pbDispShape))
         : Math.min(6.8 - pbCol, 7.0 * shapeAspect(normShape(m)));
       var pbLeft = (pbN % 2 === 0); pbN += 1;
       var pbFl = pbLeft ? 'float:left;margin:0 0.24in 0.12in 0;' : 'float:right;margin:0 0 0.12in 0.24in;';
       var pbImg = '<div style="' + pbFl + 'width:' + pbW.toFixed(2) + 'in;page-break-inside:avoid;">' +
-        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+        '<div style="position:relative;line-height:0;">' + coMedia(pbMediaM, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
       html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
     } else {
