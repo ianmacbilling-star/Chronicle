@@ -945,19 +945,25 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var nchunks = [];
     if (sec.before) nchunks = nchunks.concat(cgSplitNarr(sec.before));
     if (sec.after) nchunks = nchunks.concat(cgSplitNarr(sec.after));
-    // Narration that fits BESIDE the image stays as individual narrow boxes;
-    // a tall image leaves 2 open cells alongside it, a single image 1, a full-width image 0.
-    var besideSlots = tall ? 2 : (wide ? 0 : 1);
-    var qi = 0;
-    for (; qi < besideSlots && qi < nchunks.length; qi++) {
-      cells.push({ slots: 1, html: '<div style="' + picBorderCss(opts) +
-        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;">' + buildNarrativeHTML(nchunks[qi], false) + '</div>' });
+    // At most TWO narration boxes per moment, each a single combined box -- never a stack
+    // of same-width boxes. A tall image leaves a 2-row column beside it, a single image 1
+    // row, a full-width image none. Text is budgeted to fill the beside column by the
+    // image's height; whatever is left becomes ONE full-width band below.
+    var besideRows = tall ? 2 : (wide ? 0 : 1);
+    var besideBudget = besideRows > 0 ? Math.round(imgH * 200) : 0;
+    var besideTxt = '', restTxt = '', acc = 0, qi = 0;
+    for (; qi < nchunks.length && acc < besideBudget; qi++) {
+      besideTxt += (besideTxt ? ' ' : '') + nchunks[qi]; acc += nchunks[qi].length;
     }
-    // Anything left has no picture beside it: merge consecutive pairs into ONE full-width band.
-    for (; qi < nchunks.length; qi += 2) {
-      var mergedTxt = nchunks[qi] + ((qi + 1 < nchunks.length) ? (' ' + nchunks[qi + 1]) : '');
+    for (; qi < nchunks.length; qi++) restTxt += (restTxt ? ' ' : '') + nchunks[qi];
+    if (besideTxt) {
+      var bspan = (besideRows > 1) ? ('grid-row:span ' + besideRows + ';') : '';
+      cells.push({ slots: besideRows, html: '<div style="' + picBorderCss(opts) +
+        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:' + imgH.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' + bspan + '">' + buildNarrativeHTML(besideTxt, false) + '</div>' });
+    }
+    if (restTxt) {
       cells.push({ slots: 2, html: '<div style="' + picBorderCss(opts) +
-        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(mergedTxt, false) + '</div>' });
+        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(restTxt, false) + '</div>' });
     }
   }
 
