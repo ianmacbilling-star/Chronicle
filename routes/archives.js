@@ -246,7 +246,7 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to replace the image.' });
       const freshUrl = await restoreCopy(archive.image_url);
       const prevImg = moment.image;
-      await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = NULL, img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
         .run(freshUrl, archive.art_style || null, now, req.session.userId, moment.id);
       if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
       return res.json({ success: true, image_url: freshUrl });

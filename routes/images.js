@@ -1044,7 +1044,12 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     }
     const payload = body.payload || body;
     const images = payload && payload.images;
-    const falUrl = images && images[0] && images[0].url;
+    const falImg = images && images[0];
+    const falUrl = falImg && falImg.url;
+    // Real pixel size from fal's payload -> stored on the moment so layout can
+    // size to the true aspect (kills most cropping). Null if fal omits it.
+    const imgW = (falImg && Number(falImg.width)) || null;
+    const imgH = (falImg && Number(falImg.height)) || null;
     if (!falUrl) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
@@ -1064,11 +1069,11 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       if (job.moment_id && (job.kind === 'moment' || job.kind === 'batch' || job.kind === 'retouch')) {
         const now = new Date().toISOString();
         if (job.kind === 'retouch') {
-          await db.prepare('UPDATE moments SET image = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-            .run(imageUrl, now, job.user_id, job.moment_id);
+          await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+            .run(imageUrl, imgW, imgH, now, job.user_id, job.moment_id);
         } else {
-          await db.prepare('UPDATE moments SET image = ?, style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-            .run(imageUrl, job.style || null, now, job.user_id, job.moment_id);
+          await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+            .run(imageUrl, job.style || null, imgW, imgH, now, job.user_id, job.moment_id);
         }
         if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
         await logImageGeneration(db, job.user_id, job.kind === 'retouch' ? 'retouch' : 'moment', job.moment_id, job.fork_id);
