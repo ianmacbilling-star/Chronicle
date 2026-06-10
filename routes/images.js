@@ -53,7 +53,7 @@ function shapeAspectRatio(shape) {
   if (shape === 'tall') return '2:3';
   if (shape === 'square') return '1:1';
   if (shape === 'panoramic') return '21:9';
-  if (shape === 'tower') return '9:16';
+  if (shape === 'tower') return '2:5';
   if (shape === 'fullpage') return '3:4';
   return '4:3';
 }
