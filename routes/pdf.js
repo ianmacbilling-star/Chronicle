@@ -781,14 +781,62 @@ function cgCaptionTier(inner) {
     'margin-bottom:' + CG_GAP + 'in;page-break-inside:avoid;break-inside:avoid;">' + inner + '</div>';
 }
 
+// ---- Comic (intermixed flow): full prose always, images woven INTO the text ----
+// The inner media of one comic image: cover-cropped, focal-aware, crop_safe honored.
+function cgImgMedia(m, opts) {
+  var fit = lmCropSafe(m)
+    ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';')
+    : 'object-fit:contain;';
+  return m.image
+    ? '<img style="width:100%;height:100%;' + fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+}
+
+// A floated image with the panel's full narrative flowing around and below it.
+function cgFlowFloat(m, opts, narrHtml, sideLeft) {
+  var asp = Math.max(0.3, momentAspect(m));
+  var imgH = (asp < 0.85) ? 3.5 : 2.7;
+  var imgW = imgH * asp;
+  if (imgW > 3.3) { imgW = 3.3; imgH = imgW / asp; }
+  var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
+                    : 'float:right;margin:0.04in 0 0.10in 0.20in;';
+  var box = '<div style="' + fl + CG_BORDER + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
+    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+  return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
+}
+
+// A wide/panoramic image breaks the column full width; prose flows after it.
+function cgFlowWide(m, opts, narrHtml) {
+  var asp = Math.max(0.3, momentAspect(m));
+  var hw = CG_W / asp;
+  var box = '<div style="' + CG_BORDER + 'width:100%;height:' + hw.toFixed(2) +
+    'in;position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
+    cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+  return box + (narrHtml || '');
+}
+
+// Two images side by side (used when a panel has no narrative of its own).
+function cgFlowPair(a, b, opts, narrHtml) {
+  var aspA = Math.max(0.3, momentAspect(a)), aspB = Math.max(0.3, momentAspect(b));
+  var availW = CG_W - CG_GAP;
+  var H = Math.min(3.2, availW / (aspA + aspB));
+  function cell(m, asp) {
+    return '<div style="' + CG_BORDER + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
+      'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+  }
+  var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
+    'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
+  return row + (narrHtml || '');
+}
+
 function renderComicPage(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
 
-  // Connected tier-grid. Panels pack into horizontal tiers; each tier's height is
-  // solved so the panels (widthed by their TRUE aspect) justify to the full content
-  // width with uniform gutters. Every panel in a tier shares that height, so tiers
-  // are clean 90-degree rectangles and nothing is cropped. Narration drops as a
-  // full-width caption tier beneath the images it belongs to.
+  // Intermixed flow: walk panels IN ORDER, anchor each image, and build the full
+  // prose around it. Wide images break the column full-width (text above/below);
+  // others float so the narrative wraps around and below them; an image with no
+  // narrative of its own pairs with the next picture. No templates, no page-fill --
+  // the point is that text and images are woven together on every page.
   var panels = [];
   for (var k = 0; k < moments.length; k++) {
     var mm = moments[k];
@@ -796,56 +844,19 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var parts = [];
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
-    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''),
-      prom: lmProminence(mm), brk: lmGroupBreak(mm), hero: false });
+    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join('') });
   }
 
-  // A full-width splash is reserved for a genuine PEAK: a top-rated (5) beat that
-  // stands above its neighbors, so splashes stay rare even if the AI inflates the
-  // scale -- a flat run of 5s has no peak, so those panels tile instead.
-  for (var h = 0; h < panels.length; h++) {
-    var pv = panels[h].prom;
-    var pp = (h > 0) ? panels[h - 1].prom : -1;
-    var pn = (h < panels.length - 1) ? panels[h + 1].prom : -1;
-    panels[h].hero = (pv >= 5 && pv > pp && pv > pn);
-  }
-
-  var target = coRowTarget(opts.density);   // aspect-sum per tier (density dial)
-  var MINP = (opts.density === 'busy') ? 3 : 2;  // min panels per tier so a big image
-                                             // (wide/pano/tall) never sits alone
-  var MAXH = 4.8;                            // height cap for a normal tier (inches)
-  var HEROH = 5.6;                           // taller cap for a hero tier
-
-  var i = 0;
+  var i = 0, sideLeft = true;
   while (i < panels.length) {
-    var tier = [panels[i]];
-    var sum = panels[i].asp;
-    var isHero = panels[i].hero;
-    if (isHero) {
-      i += 1;                                // a hero stands alone on its own tier
+    var p = panels[i];
+    if (p.asp >= 1.5) {
+      html += cgFlowWide(p.m, opts, p.narr); i += 1;
+    } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5) {
+      html += cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr); i += 2;
     } else {
-      var j = i + 1;
-      while (j < panels.length && !panels[j].hero && (tier.length < MINP || (sum < target && !panels[j].brk))) {
-        tier.push(panels[j]); sum += panels[j].asp; j += 1;
-      }
-      i = j;
+      html += cgFlowFloat(p.m, opts, p.narr, sideLeft); sideLeft = !sideLeft; i += 1;
     }
-
-    var n = tier.length;
-    var availW = CG_W - (n - 1) * CG_GAP;
-    var H = availW / sum;                    // justify: widths sum to availW
-    var capH = isHero ? HEROH : MAXH;
-    var fillsWidth = true;
-    if (H > capH) { H = capH; fillsWidth = false; }   // too tall -> cap height, center
-
-    var cells = tier.map(function (c) { return cgGridCell(c.m, opts, c.asp * H, H); }).join('');
-    var justify = fillsWidth ? '' : 'justify-content:center;';
-    html += '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:' + CG_GAP + 'in;' +
-      'height:' + H.toFixed(2) + 'in;' + justify +
-      'page-break-inside:avoid;break-inside:avoid;">' + cells + '</div>';
-
-    var combined = tier.map(function (c) { return c.narr; }).filter(Boolean).join('');
-    if (combined) html += cgCaptionTier(combined);
   }
 
   html += buildNarrativeHTML(outro, true);
