@@ -33,6 +33,7 @@ function shapeRatio(shape) {
     case 'square':    return [1, 1];
     case 'tall':      return [2, 3];
     case 'tower':     return [9, 16];
+    case 'fullpage':  return [3, 4];
     default:          return [4, 3]; // standard
   }
 }
@@ -47,7 +48,7 @@ function momentAspect(m) {
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 function normShape(m) {
   var s = (m && m.shape) || '';
-  return (['wide', 'tall', 'square', 'panoramic', 'tower'].indexOf(s) >= 0) ? s : 'standard';
+  return (['wide', 'tall', 'square', 'panoramic', 'tower', 'fullpage'].indexOf(s) >= 0) ? s : 'standard';
 }
 function isLandscape(shape) { return shapeAspect(shape) >= 1.15; }
 

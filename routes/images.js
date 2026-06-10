@@ -54,6 +54,7 @@ function shapeAspectRatio(shape) {
   if (shape === 'square') return '1:1';
   if (shape === 'panoramic') return '21:9';
   if (shape === 'tower') return '9:16';
+  if (shape === 'fullpage') return '3:4';
   return '4:3';
 }
 function shapeFluxSize(shape) {
@@ -62,6 +63,7 @@ function shapeFluxSize(shape) {
   if (shape === 'square') return 'square_hd';
   if (shape === 'panoramic') return 'landscape_16_9';
   if (shape === 'tower') return 'portrait_16_9';
+  if (shape === 'fullpage') return 'portrait_4_3';
   return 'landscape_4_3';
 }
 function shapeCompHint(shape) {
@@ -70,6 +72,7 @@ function shapeCompHint(shape) {
   if (shape === 'square') return ' COMPOSITION: a square, balanced composition centered tightly on a single focal subject, with intimate framing.';
   if (shape === 'panoramic') return ' COMPOSITION: an ultra-wide panoramic shot - an extremely wide cinematic banner, vast and sweeping, filling the full width edge to edge with a strong horizontal letterbox feel.';
   if (shape === 'tower') return ' COMPOSITION: an extremely tall, narrow vertical composition - a towering full-height column emphasizing dramatic verticality and scale from top to bottom.';
+  if (shape === 'fullpage') return ' COMPOSITION: an upright, full-page composition shaped like a whole printed page - a tall page-proportioned frame with the subject composed to fill the entire upright page top to bottom.';
   return '';
 }
 
