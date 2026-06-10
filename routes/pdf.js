@@ -32,7 +32,7 @@ function shapeRatio(shape) {
     case 'wide':      return [16, 9];
     case 'square':    return [1, 1];
     case 'tall':      return [2, 3];
-    case 'tower':     return [9, 20];
+    case 'tower':     return [2, 5];
     case 'fullpage':  return [3, 4];
     default:          return [4, 3]; // standard
   }
@@ -692,7 +692,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
       var pbTower = (normShape(m) === 'tower');
       var pbCol = 2.6;
       var pbW = pbTower
-        ? Math.min(6.8 - pbCol, 8.8 * shapeAspect(normShape(m)))
+        ? Math.min(6.8 - pbCol, 9.2 * shapeAspect(normShape(m)))
         : Math.min(6.8 - pbCol, 7.0 * shapeAspect(normShape(m)));
       var pbLeft = (pbN % 2 === 0); pbN += 1;
       var pbFl = pbLeft ? 'float:left;margin:0 0.24in 0.12in 0;' : 'float:right;margin:0 0 0.12in 0.24in;';
