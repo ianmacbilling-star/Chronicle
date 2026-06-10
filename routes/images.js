@@ -67,10 +67,10 @@ function shapeFluxSize(shape) {
   return 'landscape_4_3';
 }
 function shapeCompHint(shape) {
-  if (shape === 'wide') return ' COMPOSITION: a wide, cinematic establishing shot - a horizontal layout that fills the frame edge to edge, using the full width for a sweeping, panoramic view.';
+  if (shape === 'wide') return ' COMPOSITION: a wide, sweeping establishing shot - a horizontal layout whose artwork fills the frame fully edge to edge and top to bottom, using the full width for an expansive view, with NO black bars.';
   if (shape === 'tall') return ' COMPOSITION: a tall, vertical composition - strong full-height framing that emphasizes height and verticality, with the subject arranged top to bottom in the frame.';
   if (shape === 'square') return ' COMPOSITION: a square, balanced composition centered tightly on a single focal subject, with intimate framing.';
-  if (shape === 'panoramic') return ' COMPOSITION: an ultra-wide panoramic shot - an extremely wide cinematic banner, vast and sweeping, filling the full width edge to edge with a strong horizontal letterbox feel.';
+  if (shape === 'panoramic') return ' COMPOSITION: an ultra-wide panoramic shot - an extremely wide, sweeping banner, vast and expansive, the artwork filling the full width AND full height edge to edge, with NO black bars and NO letterboxing.';
   if (shape === 'tower') return ' COMPOSITION: an extremely tall, narrow vertical composition - a towering full-height column emphasizing dramatic verticality and scale from top to bottom.';
   if (shape === 'fullpage') return ' COMPOSITION: an upright, full-page composition shaped like a whole printed page - a tall page-proportioned frame with the subject composed to fill the entire upright page top to bottom.';
   return '';
@@ -78,7 +78,7 @@ function shapeCompHint(shape) {
 
 // Every generated panel must be borderless/full-bleed so the PDF LAYOUT owns all
 // framing. Appended to the prompt body and the Nano Banana system_prompt.
-var NO_BORDER = ' FULL-BLEED IMAGE: the artwork must fill the entire frame edge to edge and extend all the way to all four edges, with NO border, NO frame, NO white or colored margin, NO matte, and NO bare paper or padding around it.';
+var NO_BORDER = ' FULL-BLEED IMAGE: the artwork must fill the entire frame edge to edge and extend all the way to all four edges, with NO border, NO frame, NO white or colored margin, NO matte, NO bare paper or padding, and NO black bars, letterbox bars, or cinematic bars on any side.';
 
 // Traditional-media styles fade out before the edge instead of going full-bleed.
 // The uncovered area is PURE WHITE so the art reads as painted straight onto a

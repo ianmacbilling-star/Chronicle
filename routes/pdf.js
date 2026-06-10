@@ -859,9 +859,31 @@ function cgFlowFeature(m, opts, narrHtml) {
 
 // Comic will be rebuilt off the magazine flow later; for now it mirrors Magazine.
 function renderComicPage(moments, sections, intro, outro, opts) {
-  // Comic = the Magazine flow with the panel grid exposed as bold comic frames.
-  var cOpts = Object.assign({}, opts, { _comic: true });
-  return renderMagazine(moments, sections, intro, outro, cOpts);
+  // Comic = a real grid (v1): every beat is a framed ART panel stacked over a
+  // framed NARRATION box, so both image and prose live in bold comic cells. Full
+  // prose is kept (boxes size to the text). Wide shots span the column; others are
+  // centered. Multi-panel rows / text-beside can come next.
+  var html = coDropOrIntro(intro, opts);
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i];
+    var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
+    var asp = Math.max(0.3, momentAspect(m));
+    var W, H;
+    if (asp >= 1.3) { W = CG_W; H = CG_W / asp; }
+    else { H = 4.0; W = H * asp; if (W > CG_W) { W = CG_W; H = W / asp; } }
+    var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
+    var imgCell = '<div style="' + CG_FRAME + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
+      'in;' + ctr + 'position:relative;background:#000;line-height:0;margin-bottom:' + CG_GAP +
+      'in;page-break-inside:avoid;break-inside:avoid;">' + cgImgMedia(m, opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+    var parts = [];
+    if (sec.before) parts.push(coNarr(sec.before, opts, false));
+    if (sec.after) parts.push(coNarr(sec.after, opts, false));
+    var narr = parts.join('');
+    var narrBox = narr ? '<div style="' + CG_FRAME + 'background:#fbf3cf;padding:0.16in 0.18in;line-height:1.45;margin-bottom:0.20in;break-inside:avoid;">' + narr + '</div>' : '';
+    html += imgCell + narrBox;
+  }
+  html += buildNarrativeHTML(outro, true);
+  return html;
 }
 
 // Magazine flow: images float and the narrative text wraps around them.
