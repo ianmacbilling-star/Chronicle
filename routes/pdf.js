@@ -950,11 +950,17 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     // row, a full-width image none. Text is budgeted to fill the beside column by the
     // image's height; whatever is left becomes ONE full-width band below.
     var besideRows = tall ? 2 : (wide ? 0 : 1);
-    var besideBudget = besideRows > 0 ? Math.round(imgH * 200) : 0;
+    // ~115 chars per inch of column height is what actually fits beside the image; stop
+    // BEFORE a chunk would push the box past the picture's bottom (but always keep >=1).
+    var besideBudget = Math.round(imgH * 115);
     var besideTxt = '', restTxt = '', acc = 0, qi = 0;
-    for (; qi < nchunks.length && acc < besideBudget; qi++) {
-      besideTxt += (besideTxt ? ' ' : '') + nchunks[qi]; acc += nchunks[qi].length;
+    if (besideRows > 0) {
+      for (; qi < nchunks.length; qi++) {
+        if (besideTxt !== '' && acc + nchunks[qi].length > besideBudget) break;
+        besideTxt += (besideTxt ? ' ' : '') + nchunks[qi]; acc += nchunks[qi].length;
+      }
     }
+    // Overflow past the picture + everything else become ONE full-width box below.
     for (; qi < nchunks.length; qi++) restTxt += (restTxt ? ' ' : '') + nchunks[qi];
     if (besideTxt) {
       var bspan = (besideRows > 1) ? ('grid-row:span ' + besideRows + ';') : '';
