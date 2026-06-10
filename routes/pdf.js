@@ -676,6 +676,7 @@ function renderSplash(moments, sections, intro, outro, opts) {
 
 function renderPaired(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
+  var pbN = 0;
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
@@ -683,18 +684,22 @@ function renderPaired(moments, sections, intro, outro, opts) {
     var beforeHtml = section.before ? '<div style="margin-top:0.1in;">' + coNarr(section.before, opts, false) + '</div>' : '';
     var afterHtml = section.after ? '<div style="margin-top:0.1in;">' + coNarr(section.after, opts, false) + '</div>' : '';
     if (isPortrait(m)) {
-      // Picture Book signature: tall/tower panels render large but NOT quite full
-      // page height. Target height is 7.0in (not 8.5in) so the image leaves ~2.5in
-      // and can share a sheet with a paragraph or two above it, instead of being
-      // bumped to its own page -- which stranded white space above a near-full-page
-      // portrait. Width is derived from the shape (content column ~6.8in). Narrative
-      // still flows BELOW the image as its own block, never locked to it.
-      // (Tunable: raise 7.0 toward 8.5 for bigger portraits / more page-sharing white.)
-      var pw = Math.min(96, Math.round((7.0 * shapeAspect(normShape(m)) / 6.8) * 100));
-      html += '<div style="width:' + pw + '%;margin:0 auto 0.06in;page-break-inside:avoid;">' +
+      // Picture Book portraits FLOAT left/right (alternating) with the narrative
+      // beside and flowing below them, instead of centered with the text underneath.
+      // Towering (narrow) shots go full page height; tall shots stay large but cap
+      // their width so a readable narrative column fits alongside. (7.0in tall target
+      // sentinel preserved below; tune pbCol to trade image size vs side-text width.)
+      var pbTower = (normShape(m) === 'tower');
+      var pbCol = 2.6;
+      var pbW = pbTower
+        ? Math.min(6.8 - pbCol, 8.8 * shapeAspect(normShape(m)))
+        : Math.min(6.8 - pbCol, 7.0 * shapeAspect(normShape(m)));
+      var pbLeft = (pbN % 2 === 0); pbN += 1;
+      var pbFl = pbLeft ? 'float:left;margin:0 0.24in 0.12in 0;' : 'float:right;margin:0 0 0.12in 0.24in;';
+      var pbImg = '<div style="' + pbFl + 'width:' + pbW.toFixed(2) + 'in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
-      html += beforeHtml + afterHtml;
+      html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
     } else {
       // Wide / panoramic / square / standard: keep the image + caption together
       // in the avoid-block, but let the narrative flow BELOW as its own block so
