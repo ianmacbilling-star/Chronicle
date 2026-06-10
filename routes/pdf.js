@@ -734,7 +734,7 @@ function coDropOrIntro(intro, opts) {
 var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
 var CG_GAP = 0.12;  // gutter between panels (inches)
 var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
-var CG_FRAME  = 'border:6px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
+var CG_FRAME  = 'border:12px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
 function cgBorder(opts){ return (opts && opts._comic) ? CG_FRAME : CG_BORDER; }
 
 function cgClass(m) {
