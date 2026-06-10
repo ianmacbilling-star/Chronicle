@@ -32,7 +32,7 @@ function shapeRatio(shape) {
     case 'wide':      return [16, 9];
     case 'square':    return [1, 1];
     case 'tall':      return [2, 3];
-    case 'tower':     return [9, 16];
+    case 'tower':     return [9, 20];
     case 'fullpage':  return [3, 4];
     default:          return [4, 3]; // standard
   }
