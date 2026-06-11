@@ -2216,6 +2216,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var rawTitle = (opts.bookTitle != null ? String(opts.bookTitle).trim() : '');
   if (!rawTitle) rawTitle = campaign.name || 'Campaignia';
   var bookTitle = esc(rawTitle);
+  var titleColor = (opts.titleColor && /^#[0-9a-fA-F]{3,8}$/.test(opts.titleColor)) ? opts.titleColor : '#f0d98a';
   var frontImg = campaign.cover_image_url || '';
   var backImg = campaign.back_cover_image_url || '';
   var logo = hideLogo ? '' : '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
@@ -2228,13 +2229,13 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var frontInner = frontImg
     ? framing +
       '<div class="wc-frame"><img class="wc-img" src="' + frontImg + '" alt="" />' +
-      '<div class="wc-fade"></div>' + mark +
-      '<div class="wc-front-cap"><div class="wc-title">' + bookTitle + '</div>' + logo + '</div></div>'
+      '<div class="wc-fade"></div>' +
+      '<div class="wc-front-cap"><div class="wc-title">' + bookTitle + '</div>' + logo + '</div></div>' + mark
     : framing +
-      '<div class="wc-frame">' + mark + '<div class="wc-textfront">' + logo +
-      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title">' + bookTitle + '</div></div></div>';
+      '<div class="wc-frame"><div class="wc-textfront">' + logo +
+      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title">' + bookTitle + '</div></div></div>' + mark;
   var backInner = framing +
-    '<div class="wc-frame">' + (backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '') + mark + '</div>';
+    '<div class="wc-frame">' + (backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '') + '</div>' + mark;
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
     '@page { size: ' + W + 'in ' + H + 'in; margin: 0; }' +
@@ -2252,13 +2253,13 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-border-inner { position:absolute; inset:0.6in; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
     '.wc-frame { position:absolute; inset:0.8in; border:2px solid rgba(201,168,76,0.55); border-radius:8px; overflow:hidden; background:#0a0604; box-shadow:0 4px 24px rgba(0,0,0,0.5); }' +
     '.wc-fade { position:absolute; inset:0; box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85); pointer-events:none; }' +
-    '.wc-mark { position:absolute; left:0; right:0; bottom:0.16in; text-align:center; font-size:8pt; color:rgba(201,168,76,0.45); letter-spacing:0.18em; z-index:2; }' +
+    '.wc-mark { position:absolute; left:50%; bottom:0.5in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
     '.wc-spine-text { font-size:' + spineFont + 'pt; color:#f0d98a; letter-spacing:0.06em; }' +
     '.wc-spine-logo { position:absolute; left:50%; bottom:0.16in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
     '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
-    '.wc-title { font-size:26pt; font-weight:700; color:#f0d98a; letter-spacing:0.03em; line-height:1.12; text-align:center; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
+    '.wc-title { font-size:26pt; font-weight:700; color:' + titleColor + '; letter-spacing:0.04em; line-height:1.12; text-align:center; text-transform:uppercase; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
     '.wc-eyebrow { font-size:10pt; color:rgba(201,168,76,0.6); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.12in; }' +
     '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:0.92; }' +
     '.wc-barcode { position:absolute; left:1.05in; bottom:1.05in; width:1.75in; height:1in; background:#ffffff; border-radius:3px; }' +
@@ -2304,7 +2305,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
     var fHideLogo = co ? !!co.hideLogo : false;
 
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || '' });
+    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || '', titleColor: req.query.titleColor || '' });
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
