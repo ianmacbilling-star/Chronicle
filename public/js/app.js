@@ -9694,15 +9694,15 @@ function renderOrders(orders) {
     list.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;text-align:center;color:var(--text-muted);">You have not placed any print orders yet.</div>';
     return;
   }
-  list.innerHTML = orders.map(function (o) { return orderCardHtml(o); }).join('');
+  list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">' + orders.map(function (o) { return orderCardHtml(o); }).join('') + '</div>';
 }
 
 function orderCardHtml(o) {
   function esc(s) { return escapeHtmlPrint(s); }
   function row(label, value) {
-    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
-      '<span style="color:var(--text-muted);font-size:13px;">' + esc(label) + '</span>' +
-      '<span style="color:var(--text);font-size:13px;text-align:right;">' + esc(value) + '</span></div>';
+    return '<div style="display:flex;flex-wrap:wrap;gap:4px 6px;padding:2px 0;font-size:12px;line-height:1.35;">' +
+      '<span style="color:var(--text-muted);">' + esc(label) + ':</span>' +
+      '<span style="color:var(--text);">' + esc(value) + '</span></div>';
   }
   var title = o.order_name || o.book_title || o.campaign_name || ('Order #' + o.id);
   var orderNo = o.external_id || ('po-' + o.id);
@@ -9716,7 +9716,7 @@ function orderCardHtml(o) {
   if (o.cover_pdf_url) links += '<a href="' + esc(o.cover_pdf_url) + '" target="_blank" rel="noopener" style="' + linkBase + 'margin-right:14px;">Cover PDF</a>';
   if (o.tracking_url) links += '<a href="' + esc(o.tracking_url) + '" target="_blank" rel="noopener" style="' + linkBase + '">Track shipment</a>';
   var html = '';
-  html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:12px;">';
+  html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 14px;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
   html += '<div style="font-weight:600;color:var(--text);font-size:15px;font-family:var(--font-display);">' + esc(title) + '</div>';
   html += '<div style="font-size:11px;color:var(--text-muted);">' + esc(when) + '</div>';
