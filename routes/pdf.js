@@ -2255,18 +2255,16 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-fade { position:absolute; inset:0; box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85); pointer-events:none; }' +
     '.wc-mark { position:absolute; left:50%; bottom:0.5in; transform:translate(-50%,50%); background:#0a0604; padding:0 0.14in; font-size:8pt; color:rgba(201,168,76,0.8); letter-spacing:0.2em; z-index:3; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
-    '.wc-spine-text { font-size:' + spineFont + 'pt; color:#f0d98a; letter-spacing:0.06em; }' +
+    '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
     '.wc-spine-logo { position:absolute; left:50%; bottom:0.16in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
     '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
     '.wc-title { font-size:26pt; font-weight:700; color:' + titleColor + '; letter-spacing:0.04em; line-height:1.12; text-align:center; text-transform:uppercase; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
     '.wc-eyebrow { font-size:10pt; color:rgba(201,168,76,0.6); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.12in; }' +
     '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:0.92; }' +
-    '.wc-barcode { position:absolute; left:1.05in; bottom:1.05in; width:1.75in; height:1in; background:#ffffff; border-radius:3px; }' +
     '</style></head><body>' +
     '<div class="wrap">' +
       '<div class="wc-panel wc-back">' + backInner + '</div>' +
-      '<div class="wc-barcode"></div>' +
       '<div class="wc-panel wc-spine"><div class="wc-spine-group"><span class="wc-spine-text">' + bookTitle + '</span></div>' + spineLogo + '</div>' +
       '<div class="wc-panel wc-front">' + frontInner + '</div>' +
     '</div></body></html>';

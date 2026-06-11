@@ -9302,6 +9302,7 @@ function showPrintMsg(text, kind) {
 
 function loadPrintTab() {
   if (!state.currentCampaign) return;
+  wirePrintOrderLock();
   showPrintMsg('', null);
   var q = document.getElementById('print-quote');
   if (q) q.textContent = '';
@@ -9407,6 +9408,51 @@ function quotePrintOrder() {
 // before the order is submitted. preparedInteriorUrl holds the generated file.
 var preparedInteriorUrl = '';
 var preparedCoverUrl = '';
+var preparedSignature = '';
+var printLockWired = false;
+
+// A fingerprint of every order attribute that affects the printed files or the
+// price. If this changes after the user has prepared an order, the prepared
+// PDFs + quote are stale and must be rebuilt before the order can go through.
+function printOrderSignature() {
+  var b = printSelectionBody();
+  if (!b) return '';
+  return JSON.stringify(b) + '|' + printCoverUrl() + '|' + printInteriorUrl();
+}
+
+// Drop any prepared files/price and collapse the review + final-confirm panels,
+// sending the user back to the Place order step so the files and price rebuild
+// from the current form. No-op if nothing was prepared yet.
+function invalidatePreparedOrder() {
+  var panel = document.getElementById('print-review');
+  var reviewOpen = !!(panel && panel.style.display === 'block');
+  if (!preparedInteriorUrl && !preparedCoverUrl && !reviewOpen) { preparedSignature = ''; return; }
+  preparedInteriorUrl = '';
+  preparedCoverUrl = '';
+  preparedSignature = '';
+  if (panel) panel.style.display = 'none';
+  hideFinalConfirm();
+  var place = document.getElementById('print-place-btn');
+  if (place) { place.style.display = ''; place.disabled = false; place.textContent = 'Place order'; }
+  showPrintMsg('Your order details changed. Click Place order to rebuild your print files and update the price.', null);
+}
+
+// Attach change/input listeners to every order-affecting control once, so any
+// edit invalidates a prepared order. Safe to call repeatedly (guarded).
+function wirePrintOrderLock() {
+  if (printLockWired) return;
+  printLockWired = true;
+  var ids = ['print-binding','print-color','print-finish','print-qty','print-book-title',
+    'print-title-color','print-order-name','print-ship-name','print-ship-street1',
+    'print-ship-street2','print-ship-city','print-ship-state','print-ship-postcode',
+    'print-ship-country','print-ship-phone','print-ship-level'];
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', invalidatePreparedOrder);
+    el.addEventListener('input', invalidatePreparedOrder);
+  });
+}
 
 function printInteriorUrl() {
   // Same params the on-screen novel preview uses, so the printed interior
@@ -9428,6 +9474,7 @@ function printCoverUrl() {
     '&finish=' + encodeURIComponent(s.coverFinish || '') +
     '&pageCount=' + encodeURIComponent(pc) +
     '&bookTitle=' + encodeURIComponent((sel && sel.bookTitle) || '') +
+    '&titleColor=' + encodeURIComponent((document.getElementById('print-title-color') || {}).value || '') +
     customOptsQ('novel', '&');
 }
 
@@ -9521,6 +9568,7 @@ function renderPrintReview(body, quote) {
   if (place) place.style.display = 'none';
   setupReviewPayment();
   hideFinalConfirm();
+  preparedSignature = printOrderSignature();
   panel.style.display = 'block';
   if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -9530,12 +9578,18 @@ function cancelPrintReview() {
   if (panel) panel.style.display = 'none';
   var place = document.getElementById('print-place-btn');
   if (place) place.style.display = '';
+  preparedSignature = '';
   showPrintMsg('', null);
 }
 
 function submitPrintOrder() {
   var body = printSelectionBody();
   if (!body || !body.selection.binding) { showPrintMsg('Pick your format first.', null); return; }
+  if (preparedSignature && printOrderSignature() !== preparedSignature) {
+    invalidatePreparedOrder();
+    showPrintMsg('Your order details changed. Click Place order to rebuild your print files and update the price before ordering.', null);
+    return;
+  }
   body.interiorPdfUrl = preparedInteriorUrl || ((document.getElementById('print-interior-url') || {}).value || '');
   body.coverPdfUrl = preparedCoverUrl || ((document.getElementById('print-cover-url') || {}).value || '');
   if (!body.interiorPdfUrl) {
@@ -9595,12 +9649,14 @@ function resetPrintForm() {
     'print-card-cvc','print-card-name'];
   ids.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
   var qty = document.getElementById('print-qty'); if (qty) qty.value = '1';
+  var tcol = document.getElementById('print-title-color'); if (tcol) tcol.value = '#f0d98a';
   var save = document.getElementById('print-card-save'); if (save) save.checked = false;
   var review = document.getElementById('print-review'); if (review) review.style.display = 'none';
   hideFinalConfirm();
   var place = document.getElementById('print-place-btn'); if (place) place.style.display = '';
   preparedInteriorUrl = '';
   preparedCoverUrl = '';
+  preparedSignature = '';
   printActualPages = 0;
   printInteriorCache = { key: '', url: '', pages: 0 };
   if (printNovelInfo) {
