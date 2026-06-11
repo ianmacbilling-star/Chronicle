@@ -12,11 +12,18 @@ var CO_IMG_SHADOW = '7px 7px 10px -2px rgba(0,0,0,0.5), 18px 18px 30px -10px rgb
 // ============================================================
 // Date helper - handles both PostgreSQL Date objects and SQLite strings
 // ============================================================
-function formatDate(dateVal, options) {
-  if (!dateVal) return '';
-  var dateStr = typeof dateVal === 'string' ? dateVal : dateVal.toISOString();
+function toDate(dateVal) {
+  if (!dateVal) return null;
+  var dateStr = typeof dateVal === 'string' ? dateVal : (dateVal.toISOString ? dateVal.toISOString() : String(dateVal));
   var datePart = dateStr.split('T')[0];
-  return new Date(datePart + 'T12:00:00').toLocaleDateString('en-US', options || {
+  var d = new Date(datePart + 'T12:00:00');
+  if (isNaN(d.getTime())) d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+function formatDate(dateVal, options) {
+  var d = toDate(dateVal);
+  if (!d) return '';
+  return d.toLocaleDateString('en-US', options || {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 }
@@ -1381,7 +1388,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
     transform: translateX(-50%);
     font-family: 'Cinzel', serif;
     font-size: 8pt;
-    color: rgba(201,168,76,0.25);
+    color: rgba(201,168,76,0.12);
     letter-spacing: 0.15em;
     z-index: 1;
   }
@@ -1507,7 +1514,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
     right: 0.5in;
     font-family: 'Cinzel', serif;
     font-size: 7pt;
-    color: rgba(201,168,76,0.2);
+    color: rgba(201,168,76,0.1);
     letter-spacing: 0.1em;
   }
 
@@ -1597,11 +1604,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     ? (sessions[pageIndex] ? [sessions[pageIndex]] : [])
     : sessions;
   // Date range
-  const dates = sessions.map(function(s) { return new Date(s.session_date + 'T12:00:00'); });
-  const minDate = new Date(Math.min.apply(null, dates));
-  const maxDate = new Date(Math.max.apply(null, dates));
-  const dateRange = minDate.toLocaleDateString('en-US', {month:'long', year:'numeric'}) +
-    (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', {month:'long', year:'numeric'}) : '');
+  const _dts = sessions.map(function(s) { return toDate(s.session_date); }).filter(Boolean).map(function(d){ return d.getTime(); });
+  let dateRange = '';
+  if (_dts.length) {
+    const minDate = new Date(Math.min.apply(null, _dts));
+    const maxDate = new Date(Math.max.apply(null, _dts));
+    const _df = {year:'numeric', month:'long', day:'numeric'};
+    dateRange = minDate.toLocaleDateString('en-US', _df) +
+      (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', _df) : '');
+  }
   const coverImg = campaign.cover_image_url || '';
 
   // Cast page
@@ -1685,7 +1696,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-divider { width:80px;height:1px;background:rgba(201,168,76,0.5);margin:0.25in auto; }
   .cover-subtitle { font-family:'Crimson Text',serif;font-size:13pt;color:rgba(201,168,76,0.6);font-style:italic;margin-bottom:0.08in; }
   .cover-dates { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
-  .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:8pt;color:rgba(201,168,76,0.25);letter-spacing:0.15em;z-index:1; }
+  .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:8pt;color:rgba(201,168,76,0.12);letter-spacing:0.15em;z-index:1; }
   /* Cover-art layout: framed cover image fills the page; title, dates, and centered logo overlaid in the lower half. */
   .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in;text-align:center; }
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
@@ -1743,7 +1754,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .panel-caption { display:flex;align-items:baseline;gap:0.12in;margin-top:0.06in;padding:0.07in 0.1in;background:#f9f4e8;border-left:3px solid #c9a84c; }
   .panel-num { font-family:'Cinzel',serif;font-size:7pt;color:#8a6a2a;text-transform:uppercase;letter-spacing:0.1em;white-space:nowrap; }
   .panel-title { font-family:'Cinzel',serif;font-size:9pt;font-weight:600;color:#2c1810; }
-  .page-watermark { position:fixed;bottom:0.35in;right:0.5in;font-family:'Cinzel',serif;font-size:7pt;color:rgba(201,168,76,0.2);letter-spacing:0.1em; }
+  .page-watermark { position:fixed;bottom:0.35in;right:0.5in;font-family:'Cinzel',serif;font-size:7pt;color:rgba(201,168,76,0.1);letter-spacing:0.1em; }
 
   @media print {
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
