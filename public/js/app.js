@@ -9555,9 +9555,11 @@ function submitPrintOrder() {
     .then(function (res) {
       if (btn) { btn.disabled = false; btn.textContent = 'Place my order & charge my card'; }
       if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Order failed.', null); return; }
-      var panel = document.getElementById('print-review');
-      if (panel) panel.style.display = 'none';
-      showPrintMsg('Order placed. Reference #' + res.j.orderId + ' (' + (res.j.status || 'submitted') + '). It will appear on your Print Orders page.', 'ok');
+      var ref = res.j.externalId || ('po-' + res.j.orderId);
+      resetPrintForm();
+      showPrintMsg('Order complete! Your book is now being processed. You can view it any time on your My Orders page. (Order ' + ref + ')', 'ok');
+      var msg = document.getElementById('print-msg');
+      if (msg && msg.scrollIntoView) msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
     })
     .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Place my order & charge my card'; } showPrintMsg('Order failed.', null); });
 }
@@ -9582,6 +9584,29 @@ function hideFinalConfirm() {
   var cb = document.getElementById('print-confirm-btn');
   if (fc) fc.style.display = 'none';
   if (cb) cb.style.display = '';
+}
+
+// Return the Order tab to a clean state after a successful order so a new one
+// can be started from scratch.
+function resetPrintForm() {
+  var ids = ['print-book-title','print-order-name','print-ship-name','print-ship-street1',
+    'print-ship-street2','print-ship-city','print-ship-state','print-ship-postcode',
+    'print-ship-country','print-ship-phone','print-card-number','print-card-exp',
+    'print-card-cvc','print-card-name'];
+  ids.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+  var qty = document.getElementById('print-qty'); if (qty) qty.value = '1';
+  var save = document.getElementById('print-card-save'); if (save) save.checked = false;
+  var review = document.getElementById('print-review'); if (review) review.style.display = 'none';
+  hideFinalConfirm();
+  var place = document.getElementById('print-place-btn'); if (place) place.style.display = '';
+  preparedInteriorUrl = '';
+  preparedCoverUrl = '';
+  printActualPages = 0;
+  printInteriorCache = { key: '', url: '', pages: 0 };
+  if (printNovelInfo) {
+    updatePrintPageDisplay(-1, false);
+    refreshPrintOptions(printNovelInfo.pageEstimate);
+  }
 }
 
 // ---- Stubbed payment helpers (Stripe replaces these later) -----------------
