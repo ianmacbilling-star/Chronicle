@@ -9668,7 +9668,7 @@ function renderOrders(orders) {
   var list = document.getElementById('orders-list');
   if (!list) return;
   if (!orders.length) {
-    list.innerHTML = '<div class="settings-section" style="text-align:center;color:rgba(245,232,200,0.6);">You have not placed any print orders yet.</div>';
+    list.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;text-align:center;color:var(--text-muted);">You have not placed any print orders yet.</div>';
     return;
   }
   list.innerHTML = orders.map(function (o) { return orderCardHtml(o); }).join('');
@@ -9677,27 +9677,30 @@ function renderOrders(orders) {
 function orderCardHtml(o) {
   function esc(s) { return escapeHtmlPrint(s); }
   function row(label, value) {
-    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;">' +
-      '<span style="color:rgba(245,232,200,0.5);">' + esc(label) + '</span>' +
-      '<span style="color:var(--cream);text-align:right;">' + esc(value) + '</span></div>';
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
+      '<span style="color:var(--text-muted);font-size:13px;">' + esc(label) + '</span>' +
+      '<span style="color:var(--text);font-size:13px;text-align:right;">' + esc(value) + '</span></div>';
   }
-  var title = o.order_name || o.campaign_name || ('Order #' + o.id);
+  var title = o.order_name || o.book_title || o.campaign_name || ('Order #' + o.id);
+  var orderNo = o.external_id || ('po-' + o.id);
   var fmt = [o.binding, o.color_tier, o.cover_finish].filter(Boolean).join(', ');
   var charge = (o.customer_charge != null) ? ('$' + Number(o.customer_charge).toFixed(2) + ' ' + (o.currency || 'USD')) : '';
   var card = (o.card_brand && o.card_last4) ? maskedCard(o.card_brand, o.card_last4) : '';
   var when = o.created_at ? formatOrderDate(o.created_at) : '';
+  var linkBase = 'color:var(--crimson);text-decoration:underline;font-size:12px;';
   var links = '';
-  if (o.interior_pdf_url) links += '<a href="' + esc(o.interior_pdf_url) + '" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;font-size:12px;margin-right:14px;">Interior PDF</a>';
-  if (o.cover_pdf_url) links += '<a href="' + esc(o.cover_pdf_url) + '" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;font-size:12px;margin-right:14px;">Cover PDF</a>';
-  if (o.tracking_url) links += '<a href="' + esc(o.tracking_url) + '" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;font-size:12px;">Track shipment</a>';
+  if (o.interior_pdf_url) links += '<a href="' + esc(o.interior_pdf_url) + '" target="_blank" rel="noopener" style="' + linkBase + 'margin-right:14px;">Interior PDF</a>';
+  if (o.cover_pdf_url) links += '<a href="' + esc(o.cover_pdf_url) + '" target="_blank" rel="noopener" style="' + linkBase + 'margin-right:14px;">Cover PDF</a>';
+  if (o.tracking_url) links += '<a href="' + esc(o.tracking_url) + '" target="_blank" rel="noopener" style="' + linkBase + '">Track shipment</a>';
   var html = '';
-  html += '<div class="settings-section" style="margin-bottom:12px;">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;">';
-  html += '<div style="font-weight:600;color:var(--gold);font-size:15px;">' + esc(title) + '</div>';
-  html += '<div style="font-size:11px;color:rgba(245,232,200,0.55);">' + esc(when) + '</div>';
+  html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:12px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
+  html += '<div style="font-weight:600;color:var(--text);font-size:15px;font-family:var(--font-display);">' + esc(title) + '</div>';
+  html += '<div style="font-size:11px;color:var(--text-muted);">' + esc(when) + '</div>';
   html += '</div>';
-  if (o.book_title) html += row('Book title', o.book_title);
-  if (o.campaign_name && o.order_name) html += row('Campaign', o.campaign_name);
+  html += '<div style="font-size:11px;color:var(--text-muted);letter-spacing:0.04em;margin-bottom:10px;">Order ' + esc(orderNo) + (o.provider_order_id ? (' &middot; Lulu ' + esc(o.provider_order_id)) : '') + '</div>';
+  if (o.book_title && o.order_name) html += row('Book title', o.book_title);
+  if (o.campaign_name && (o.order_name || o.book_title)) html += row('Campaign', o.campaign_name);
   if (o.source_kind === 'member' && o.source_user_name) html += row('Version', o.source_user_name + ' (player)');
   html += row('Format', fmt);
   if (o.page_count) html += row('Pages', String(o.page_count));
@@ -9705,6 +9708,7 @@ function orderCardHtml(o) {
   if (charge) html += row('Total', charge);
   if (card) html += row('Paid with', card);
   if (o.ship_name) html += row('Ship to', o.ship_name);
+  if (o.tracking_number) html += row('Tracking', o.tracking_number + (o.carrier ? (' (' + o.carrier + ')') : ''));
   html += row('Status', orderStatusLabel(o));
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
   html += '</div>';

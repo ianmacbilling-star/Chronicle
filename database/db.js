@@ -838,6 +838,7 @@ async function migrateCasting(pool) {
       card_last4 TEXT,
       status TEXT DEFAULT 'created',
       tracking_url TEXT,
+      tracking_number TEXT,
       carrier TEXT,
       error TEXT,
       order_name TEXT,
@@ -856,6 +857,7 @@ async function migrateCasting(pool) {
   // Added after the table shipped — CREATE above won't alter existing tables.
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS order_name TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS book_title TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS tracking_number TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS campaign_name TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_kind TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_user_id INTEGER');

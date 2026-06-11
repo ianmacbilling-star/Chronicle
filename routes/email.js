@@ -417,4 +417,85 @@ async function sendAlertEmail(subject, message) {
   }
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail };
+function orderConfirmationHTML(name, order) {
+  order = order || {};
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function row(label, value) {
+    if (value == null || value === '') return '';
+    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
+      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+  }
+  var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
+  var total = (order.total != null) ? ('$' + Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD')) : '';
+  var card = (order.cardBrand && order.cardLast4) ? (order.cardBrand + ' ****' + order.cardLast4) : '';
+  var sh = order.shipTo || {};
+  var addr = [sh.name, sh.street1, sh.street2, [sh.city, sh.stateCode, sh.postcode].filter(Boolean).join(' '), sh.countryCode].filter(Boolean).join(', ');
+  var bookTitle = order.bookTitle || order.orderName || order.campaignName || 'Your book';
+  var rows = '';
+  rows += row('Order number', order.orderNo);
+  rows += row('Book title', order.bookTitle);
+  rows += row('Campaign', order.campaignName);
+  rows += row('Format', fmt);
+  rows += row('Pages', order.pageCount);
+  rows += row('Quantity', order.quantity);
+  rows += row('Total', total);
+  rows += row('Paid with', card);
+  rows += row('Ship to', addr);
+  rows += row('Tracking', order.trackingNumber);
+  var trackBtn = order.trackingUrl ? ('<div style="text-align:center;margin:24px 0;"><a href="' + esc(order.trackingUrl) + '" class="btn">Track your shipment</a></div>') : '';
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: rgba(20,15,8,0.95); border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    .header { background: #1a0f08; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
+    .logo { font-family: Georgia, serif; font-size: 28px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; }
+    .body { padding: 32px; }
+    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c9a84c; color: #1a0f08; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    table { width: 100%; border-collapse: collapse; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">CAMPAIGNIA</div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">ORDER CONFIRMED</div>
+    </div>
+    <div class="body">
+      <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
+      <div class="text">Your print order for <strong>${esc(bookTitle)}</strong> has been received and sent to print. Here are the details:</div>
+      <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:8px;">
+        <table>${rows}</table>
+      </div>
+      ${trackBtn}
+      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can view this order any time on your My Orders page.</div>
+    </div>
+    <div class="footer">Campaignia &middot; Order confirmation for your print purchase.</div>
+  </div>
+</body>
+</html>`;
+}
+
+async function sendOrderConfirmationEmail(opts) {
+  // opts: { to_email, name, order }
+  try {
+    var order = opts.order || {};
+    var subject = 'Your Campaignia order is confirmed' + (order.orderNo ? ' (' + order.orderNo + ')' : '');
+    var html = orderConfirmationHTML(opts.name, order);
+    await sendEmail(opts.to_email, subject, html);
+  } catch (e) {
+    console.error('Order confirmation email error:', e.message); // Non-fatal
+  }
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail };

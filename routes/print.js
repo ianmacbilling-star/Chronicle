@@ -27,6 +27,7 @@ const router = express.Router();
 const { getDb } = require('../database/db');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
+const { sendOrderConfirmationEmail } = require('./email');
 
 // Markup is read from app_settings ('print_markup_pct', default 10) and
 // applied to the PRINT cost only -- shipping (and tax) pass through at cost.
@@ -199,12 +200,13 @@ router.post('/order', requireSession, async function (req, res) {
     return res.status(400).json({ error: 'interiorPdfUrl and coverPdfUrl are required' });
   }
 
-  let db, provider, contactEmail = null;
+  let db, provider, contactEmail = null, contactName = null;
   try {
     db = await getDb();
     provider = getPrintProvider();
-    const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(userId);
     contactEmail = u && u.email ? u.email : null;
+    contactName = u && u.name ? u.name : null;
   } catch (e) {
     return res.status(500).json({ error: 'Server error', detail: String(e && e.message || e) });
   }
@@ -277,8 +279,11 @@ router.post('/order', requireSession, async function (req, res) {
       .run(paymentStatus, externalId, orderId);
     // Snapshot the card used onto the order, and persist it to the user if asked.
     var bookTitle = (body.bookTitle != null ? String(body.bookTitle) : '').trim().slice(0, 200) || null;
-    await db.prepare('UPDATE print_orders SET card_brand = ?, card_last4 = ?, book_title = ? WHERE id = ?')
-      .run(payBrand, payLast4, bookTitle, orderId);
+    // Stubbed shipping tracking (Lulu supplies the real values once the book ships).
+    var trackNum = 'CMP' + String(orderId).padStart(6, '0') + Math.floor(1000 + Math.random() * 9000);
+    var trackUrl = 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' + trackNum;
+    await db.prepare('UPDATE print_orders SET card_brand = ?, card_last4 = ?, book_title = ?, tracking_number = ?, carrier = ?, tracking_url = ? WHERE id = ?')
+      .run(payBrand, payLast4, bookTitle, trackNum, 'USPS', trackUrl, orderId);
     if (body.saveCard && payBrand && payLast4) {
       const _exp = (body.card && body.card.exp) ? String(body.card.exp).slice(0, 7) : null;
       await db.prepare('UPDATE users SET card_brand = ?, card_last4 = ?, card_exp = ? WHERE id = ?')
@@ -292,6 +297,32 @@ router.post('/order', requireSession, async function (req, res) {
       await db.prepare(
         'UPDATE print_orders SET provider_order_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
       ).run(placed.providerOrderId, placed.status || 'created', orderId);
+      // Confirmation email (fire-and-forget; the sender swallows its own errors).
+      if (contactEmail) {
+        sendOrderConfirmationEmail({
+          to_email: contactEmail,
+          name: contactName,
+          order: {
+            orderNo: externalId,
+            providerOrderId: placed.providerOrderId,
+            bookTitle: bookTitle,
+            orderName: orderName,
+            campaignName: campaignName,
+            binding: built.spec.binding,
+            colorTier: (body.selection || {}).colorTier,
+            coverFinish: built.spec.coverFinish,
+            pageCount: built.spec.pageCount,
+            quantity: quoteReq.quantity,
+            total: customerCharge,
+            currency: quote.currency,
+            cardBrand: payBrand,
+            cardLast4: payLast4,
+            trackingNumber: trackNum,
+            trackingUrl: trackUrl,
+            shipTo: body.shipTo || {}
+          }
+        });
+      }
       return res.json({ orderId, externalId, providerOrderId: placed.providerOrderId, status: placed.status, customerCharge, currency: quote.currency });
     } catch (submitErr) {
       // Paid but the print job didn't go. Flag for refund + retry.
@@ -343,7 +374,7 @@ router.get('/orders', requireSession, async function (req, res) {
       `SELECT id, external_id, provider_order_id, order_name, book_title, campaign_name,
               source_kind, source_user_name, binding, color_tier, cover_finish,
               page_count, quantity, customer_charge, currency, payment_status,
-              status, tracking_url, carrier, card_brand, card_last4, ship_name,
+              status, tracking_url, tracking_number, carrier, card_brand, card_last4, ship_name,
               interior_pdf_url, cover_pdf_url, created_at, updated_at
          FROM print_orders WHERE user_id = ? ORDER BY id DESC`
     ).all(req.session.userId);
