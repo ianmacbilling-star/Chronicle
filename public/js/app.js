@@ -3962,6 +3962,7 @@ function switchNovelTab(tab) {
 }
 
 function selNovelLayout(el, layout) {
+  if (blockLayoutChangeIfOrdering()) return;
   document.querySelectorAll('#novel-tab-preview .chip').forEach(function(c){c.classList.remove('sel');});
   el.classList.add('sel');
   novelLayoutStyle = layout;
@@ -6955,6 +6956,7 @@ function switchNovelTab(tab) {
 }
 
 function selNovelLayout(el, layout) {
+  if (blockLayoutChangeIfOrdering()) return;
   document.querySelectorAll('#novel-tab-preview .chip').forEach(function(c){c.classList.remove('sel');});
   el.classList.add('sel');
   novelLayoutStyle = layout;
@@ -9002,6 +9004,7 @@ function openCustomLayout(ctx){
 function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal'); if(m) m.classList.add('hidden'); }
 function resetCustomLayout(){ customOpts[_clCtx]=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(); openCustomLayout(_clCtx); }
 function applyCustomLayout(){
+  if(_clCtx==='novel' && blockLayoutChangeIfOrdering()) return;
   var o={};
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
@@ -9480,6 +9483,26 @@ function wirePrintOrderLock() {
     el.addEventListener('change', invalidatePreparedOrder);
     el.addEventListener('input', invalidatePreparedOrder);
   });
+}
+
+// True while a print order is in review/confirm (placed but not yet charged).
+// Used to police layout changes that would make the ordered book diverge from
+// what the user is looking at.
+function orderInProgress() {
+  if (preparedSignature) return true;
+  var panel = document.getElementById('print-review');
+  if (panel && panel.style.display === 'block') return true;
+  return false;
+}
+
+// Refuse a novel-layout change while an order is in review. Returns true if it
+// blocked the change (caller should return without applying it).
+function blockLayoutChangeIfOrdering() {
+  if (!orderInProgress()) return false;
+  if (typeof showAlert === 'function') {
+    showAlert('You have a print order in review. Open the Order tab and click Back to cancel it before changing the layout, or the book you order will not match what you see here.');
+  }
+  return true;
 }
 
 function printInteriorUrl() {
