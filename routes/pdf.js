@@ -1568,6 +1568,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
     .content-page { min-height: 0; padding-top: 0; padding-bottom: 0; }
     @page { size: 8.5in 11in; margin: 0.65in 0; }
     ${fCover ? '@page :first { margin:0; }' : ''}
+    @page backcover { size: 8.5in 11in; margin: 0; }
     .content-page + .content-page { margin-top:0.4in; }
   }
   .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in;text-align:center; }
@@ -1578,9 +1579,8 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   .cover-art-logo { width:110px;height:auto;object-fit:contain; }
-  .backcover-page { width:8.5in;box-sizing:border-box;background:#1a0f08;padding:0.45in 0.7in;page-break-before:always;page-break-inside:avoid;break-inside:avoid;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
-  .backcover-frame { position:relative;width:100%;height:8.4in;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
-  .backcover-frame img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
+  .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
+  .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
 </style>
 </head>
 <body>
@@ -1627,7 +1627,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="backcover-frame"><img src="${campaign.back_cover_image_url}" alt="" /></div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div></div>` : ''}
 
 </body>
 </html>`;
@@ -1817,6 +1817,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     body { width:8.5in; }
     @page { size:8.5in 11in; margin:0.65in 0; }
     ${fCover ? '@page :first { margin:0; }' : ''}
+    @page backcover { size:8.5in 11in; margin:0; }
     .print-bar { display:none !important; }
     /* Top/bottom page margins now come from @page, so every physical page --
        including continuation pages of a multi-page session -- gets consistent
@@ -1827,9 +1828,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     .content-page + .content-page { margin-top:0.4in; }
     .cover-art-frame { flex:none; height:9.6in; }
   }
-  .backcover-page { width:8.5in;box-sizing:border-box;background:#1a0f08;padding:0.45in 0.7in;page-break-before:always;page-break-inside:avoid;break-inside:avoid;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
-  .backcover-frame { position:relative;width:100%;height:8.4in;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
-  .backcover-frame img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
+  .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
+  .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
 </style>
 </head>
 <body>
@@ -1877,7 +1877,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url && !paginated) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="backcover-frame"><img src="${campaign.back_cover_image_url}" alt="" /></div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div></div>` : ''}
 
 </body>
 </html>`;
