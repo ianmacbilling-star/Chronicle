@@ -9509,7 +9509,9 @@ function printInteriorUrl() {
   // Same params the on-screen novel preview uses, so the printed interior
   // matches what the reader sees (the cover page is omitted server-side).
   return '/api/pdf/print-interior/' + state.currentCampaign.id +
-    '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');
+    '?layout=' + encodeURIComponent(novelLayoutStyle) +
+    '&bookTitle=' + encodeURIComponent((document.getElementById('print-book-title') || {}).value || '') +
+    novelAsUserQ('&') + customOptsQ('novel', '&');
 }
 
 function printCoverUrl() {

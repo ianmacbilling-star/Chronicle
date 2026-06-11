@@ -1742,9 +1742,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     .join(', ');
   var copyYear = _dts.length ? new Date(Math.max.apply(null, _dts)).getFullYear() : new Date().getFullYear();
   var copyHolder = campaign.owner_name || campaign.dm_name || dmName;
+  var _bookTitleFM = (pageOpts && pageOpts.bookTitle != null && String(pageOpts.bookTitle).trim())
+    ? String(pageOpts.bookTitle).trim() : campaign.name;
   var titlePageHTML =
     '<div class="titlepage">' +
-      '<div class="tp-title">' + _fmEsc(campaign.name) + '</div>' +
+      '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
       (titleImg
         ? '<div class="tp-image-wrap"><div class="tp-image-border" style="' + picBorderCss(co) + '">' +
             '<img class="tp-image" src="' + titleImg + '" alt="" />' + picOverlay(co) + '</div></div>'
@@ -2186,7 +2188,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   // the reader's chosen preset / magazine wrap layout.
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
 
-  var pageOpts = { noCover: true }; // full book, never paginated for print
+  var pageOpts = { noCover: true, bookTitle: req.query.bookTitle || '' }; // full book, never paginated for print
 
   var html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
 
