@@ -258,7 +258,7 @@ function bronzeFrame(inner, inline, scale) {
   // (often small) cast portraits pass a smaller scale so the frame stays in
   // proportion instead of swallowing the picture.
   var sc = scale || 1;
-  var padO = Math.max(2, Math.round(8 * sc));
+  var padO = Math.max(1, Math.round(8 * sc));
   var padM = Math.max(1, Math.round(2 * sc));
   var gold = Math.max(1, Math.round(2 * sc));
   var dia = Math.max(3, Math.round(6 * sc));
@@ -1719,11 +1719,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     var _members = characters.map(function(c) {
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
       var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
-      // Frame scale follows the portrait size so small portraits get a thin frame
-      // (the fixed-size frame would otherwise swallow them).
-      var _fsc = Math.max(0.38, Math.min(0.7, _castPort * 0.62));
+      // Frame scale follows the portrait size, tuned so a portrait's frame is the
+      // same proportion of the picture as the (large) interior story frames -- a thin
+      // gold line, not a thick dark band. Smaller portrait -> thinner frame.
+      var _fsc = Math.max(0.13, Math.min(0.18, _castPort * 0.15));
       return '<div class="cast-member">' +
-        ((co && co.border === 'frame')
+        ((co && co.border === 'frame' && co.arrange !== 'comicpage')
           ? '<div style="margin-bottom:0.08in;">' + bronzeFrame(
               (primaryImg
                 ? '<img style="' + _ps + 'object-fit:cover;object-position:center top;display:block;" src="' + primaryImg + '" alt="" />'
@@ -1808,7 +1809,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
       (titleImg
         ? '<div class="tp-image-wrap">' +
-            ((co && co.border === 'frame')
+            ((co && co.border === 'frame' && co.arrange !== 'comicpage')
               ? bronzeFrame('<img class="tp-image" src="' + titleImg + '" alt="" />', true, 0.6)
               : '<div class="tp-image-border" style="' + picBorderCss(co) + '">' + '<img class="tp-image" src="' + titleImg + '" alt="" />' + picOverlay(co) + '</div>') +
           '</div>'
