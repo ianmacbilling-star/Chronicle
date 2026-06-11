@@ -310,8 +310,16 @@
               <div style="font-size:11px;color:rgba(245,232,200,0.5);margin-top:8px;">Test mode &mdash; no real charge is made yet.</div>
             </div>
             <div style="display:flex;gap:10px;">
-              <button class="btn btn-primary" id="print-confirm-btn" onclick="submitPrintOrder()">Yes, place my order</button>
+              <button class="btn btn-primary" id="print-confirm-btn" onclick="showFinalConfirm()">Yes, place my order</button>
               <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
+            </div>
+            <div id="print-final-confirm" style="display:none;margin-top:12px;padding:12px;border:1px solid rgba(139,26,26,0.45);border-radius:var(--radius);background:rgba(139,26,26,0.07);">
+              <div style="font-weight:600;color:var(--crimson);margin-bottom:6px;">This is final &mdash; there is no canceling.</div>
+              <div style="font-size:13px;color:var(--text);margin-bottom:10px;">Placing this order charges your card and sends the book straight to print. Please open and double-check your <strong>interior</strong> and <strong>cover</strong> PDFs above first &mdash; they print exactly as shown.</div>
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-primary" id="print-final-btn" onclick="submitPrintOrder()">Place my order &amp; charge my card</button>
+                <button class="btn btn-sm" onclick="hideFinalConfirm()">Go back</button>
+              </div>
             </div>
           </div>
         </div>

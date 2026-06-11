@@ -9520,6 +9520,7 @@ function renderPrintReview(body, quote) {
   var place = document.getElementById('print-place-btn');
   if (place) place.style.display = 'none';
   setupReviewPayment();
+  hideFinalConfirm();
   panel.style.display = 'block';
   if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -9547,18 +9548,40 @@ function submitPrintOrder() {
   }
   var payErr = applyPaymentToBody(body);
   if (payErr) { showPrintMsg(payErr, null); return; }
-  var btn = document.getElementById('print-confirm-btn');
+  var btn = document.getElementById('print-final-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Placing...'; }
   fetch('/api/print/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Yes, place my order'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Place my order & charge my card'; }
       if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Order failed.', null); return; }
       var panel = document.getElementById('print-review');
       if (panel) panel.style.display = 'none';
       showPrintMsg('Order placed. Reference #' + res.j.orderId + ' (' + (res.j.status || 'submitted') + '). It will appear on your Print Orders page.', 'ok');
     })
-    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Yes, place my order'; } showPrintMsg('Order failed.', null); });
+    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Place my order & charge my card'; } showPrintMsg('Order failed.', null); });
+}
+
+// Final point-of-no-return gate. The first confirm button reveals this; only
+// the button inside it actually submits and charges.
+function showFinalConfirm() {
+  var probe = {};
+  var payErr = applyPaymentToBody(probe);
+  if (payErr) { showPrintMsg(payErr, null); return; }
+  var fc = document.getElementById('print-final-confirm');
+  var cb = document.getElementById('print-confirm-btn');
+  if (cb) cb.style.display = 'none';
+  if (fc) {
+    fc.style.display = 'block';
+    if (fc.scrollIntoView) fc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function hideFinalConfirm() {
+  var fc = document.getElementById('print-final-confirm');
+  var cb = document.getElementById('print-confirm-btn');
+  if (fc) fc.style.display = 'none';
+  if (cb) cb.style.display = '';
 }
 
 // ---- Stubbed payment helpers (Stripe replaces these later) -----------------
