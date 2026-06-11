@@ -142,6 +142,9 @@ async function initPostgres() {
       stripe_subscription_id TEXT,
       subscription_status TEXT DEFAULT 'trialing',
       current_period_end TIMESTAMP,
+      card_brand TEXT,
+      card_last4 TEXT,
+      card_exp TEXT,
       reset_token TEXT,
       reset_token_expires TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -273,6 +276,9 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'trialing'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS card_brand TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS card_last4 TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS card_exp TEXT',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cover_image_url TEXT',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS back_cover_image_url TEXT',
@@ -828,6 +834,8 @@ async function migrateCasting(pool) {
       currency TEXT DEFAULT 'USD',
       customer_charge NUMERIC,
       payment_status TEXT DEFAULT 'pending',
+      card_brand TEXT,
+      card_last4 TEXT,
       status TEXT DEFAULT 'created',
       tracking_url TEXT,
       carrier TEXT,
@@ -850,6 +858,8 @@ async function migrateCasting(pool) {
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_kind TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_user_id INTEGER');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_user_name TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS card_brand TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS card_last4 TEXT');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

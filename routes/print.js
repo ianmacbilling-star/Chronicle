@@ -215,6 +215,17 @@ router.post('/order', requireSession, async function (req, res) {
     const quote = await provider.getQuote(quoteReq);
     const pct = await getPrintMarkupPct(db);
     const customerCharge = markedCharge(quote, pct).customerCharge;
+    // --- Stubbed payment method (Stripe replaces this whole block later) ---
+    // The client never sends the full card number; only brand + last4 (+ exp).
+    var payUseOnFile = !!body.useCardOnFile;
+    var payBrand = null, payLast4 = null;
+    if (payUseOnFile) {
+      const _uc = await db.prepare('SELECT card_brand, card_last4 FROM users WHERE id = ?').get(userId);
+      if (_uc) { payBrand = _uc.card_brand || null; payLast4 = _uc.card_last4 || null; }
+    } else if (body.card) {
+      payBrand = body.card.brand ? String(body.card.brand).slice(0, 24) : null;
+      payLast4 = body.card.last4 ? String(body.card.last4).replace(/\D/g, '').slice(-4) : null;
+    }
     const podPackageId = provider._packageId ? provider._packageId(built.spec) : null;
 
     // 2) Persist the order up-front (status pending) so we have a stable
@@ -264,6 +275,14 @@ router.post('/order', requireSession, async function (req, res) {
     const paymentStatus = 'stubbed';
     await db.prepare('UPDATE print_orders SET payment_status = ?, external_id = ? WHERE id = ?')
       .run(paymentStatus, externalId, orderId);
+    // Snapshot the card used onto the order, and persist it to the user if asked.
+    await db.prepare('UPDATE print_orders SET card_brand = ?, card_last4 = ? WHERE id = ?')
+      .run(payBrand, payLast4, orderId);
+    if (body.saveCard && payBrand && payLast4) {
+      const _exp = (body.card && body.card.exp) ? String(body.card.exp).slice(0, 7) : null;
+      await db.prepare('UPDATE users SET card_brand = ?, card_last4 = ?, card_exp = ? WHERE id = ?')
+        .run(payBrand, payLast4, _exp, userId);
+    }
 
     // 4) Submit to the vendor only now that "payment" has cleared.
     try {
@@ -310,6 +329,53 @@ router.get('/order/:id', requireSession, async function (req, res) {
     res.json(row);
   } catch (e) {
     res.status(500).json({ error: 'Server error', detail: String(e && e.message || e) });
+  }
+});
+
+// ------------------------------------------------------------
+// GET /orders -> the caller's print orders (most recent first).
+// ------------------------------------------------------------
+router.get('/orders', requireSession, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      `SELECT id, external_id, provider_order_id, order_name, campaign_name,
+              source_kind, source_user_name, binding, color_tier, cover_finish,
+              page_count, quantity, customer_charge, currency, payment_status,
+              status, tracking_url, carrier, card_brand, card_last4, ship_name,
+              interior_pdf_url, cover_pdf_url, created_at, updated_at
+         FROM print_orders WHERE user_id = ? ORDER BY id DESC`
+    ).all(req.session.userId);
+    res.json({ orders: rows || [] });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load orders', detail: String(e && e.message || e) });
+  }
+});
+
+// ------------------------------------------------------------
+// GET /card -> the caller's saved card on file (brand + last4 only), or null.
+// POST /card/forget -> remove the saved card. (Stubbed; real Stripe later.)
+// ------------------------------------------------------------
+router.get('/card', requireSession, async function (req, res) {
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT card_brand, card_last4, card_exp FROM users WHERE id = ?').get(req.session.userId);
+    if (u && u.card_brand && u.card_last4) {
+      return res.json({ card: { brand: u.card_brand, last4: u.card_last4, exp: u.card_exp || null } });
+    }
+    res.json({ card: null });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load card' });
+  }
+});
+
+router.post('/card/forget', requireSession, async function (req, res) {
+  try {
+    const db = await getDb();
+    await db.prepare('UPDATE users SET card_brand = NULL, card_last4 = NULL, card_exp = NULL WHERE id = ?').run(req.session.userId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not remove card' });
   }
 });
 

@@ -651,7 +651,7 @@ function setBreadcrumb(items) {
 // ============================================================
 function showView(view) {
   if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -680,6 +680,13 @@ function showView(view) {
       {label:'My Account'}
     ]);
     loadAccount();
+  } else if (view === 'orders') {
+    var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
+    setBreadcrumb([
+      {label:'My Campaigns', action:"showView('campaigns')"},
+      {label:'My Print Orders'}
+    ]);
+    loadOrders();
   } else if (view === 'settings') {
     var _ss=document.getElementById('snav-settings'); if(_ss)_ss.classList.add('active');
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
@@ -5856,7 +5863,7 @@ function setBreadcrumb(items) {
 // ============================================================
 function showView(view) {
   if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -5885,6 +5892,13 @@ function showView(view) {
       {label:'My Account'}
     ]);
     loadAccount();
+  } else if (view === 'orders') {
+    var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
+    setBreadcrumb([
+      {label:'My Campaigns', action:"showView('campaigns')"},
+      {label:'My Print Orders'}
+    ]);
+    loadOrders();
   } else if (view === 'settings') {
     var _ss=document.getElementById('snav-settings'); if(_ss)_ss.classList.add('active');
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
@@ -9503,6 +9517,7 @@ function renderPrintReview(body, quote) {
   }
   var place = document.getElementById('print-place-btn');
   if (place) place.style.display = 'none';
+  setupReviewPayment();
   panel.style.display = 'block';
   if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -9528,6 +9543,8 @@ function submitPrintOrder() {
     showPrintMsg('Your cover file was not prepared. Please go Back and try again.', null);
     return;
   }
+  var payErr = applyPaymentToBody(body);
+  if (payErr) { showPrintMsg(payErr, null); return; }
   var btn = document.getElementById('print-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Placing...'; }
   fetch('/api/print/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -9540,6 +9557,155 @@ function submitPrintOrder() {
       showPrintMsg('Order placed. Reference #' + res.j.orderId + ' (' + (res.j.status || 'submitted') + '). It will appear on your Print Orders page.', 'ok');
     })
     .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Yes, place my order'; } showPrintMsg('Order failed.', null); });
+}
+
+// ---- Stubbed payment helpers (Stripe replaces these later) -----------------
+// We never transmit the full card number; only brand + last4 (+ exp) leave the
+// browser. When Stripe lands, these fields become a Stripe Element and we send
+// a PaymentMethod id instead.
+function digitsOnly(s) {
+  s = String(s == null ? '' : s);
+  var out = '';
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charAt(i);
+    if (c >= '0' && c <= '9') out += c;
+  }
+  return out;
+}
+
+function guessCardBrand(num) {
+  var f = String(num || '').charAt(0);
+  if (f === '4') return 'Visa';
+  if (f === '5') return 'Mastercard';
+  if (f === '3') return 'Amex';
+  if (f === '6') return 'Discover';
+  return 'Card';
+}
+
+function maskedCard(brand, last4) {
+  return (brand || 'Card') + ' ' + String.fromCharCode(8226, 8226, 8226, 8226) + (last4 || '');
+}
+
+function updatePaymentMode() {
+  var fields = document.getElementById('print-pay-fields');
+  var onfileWrap = document.getElementById('print-pay-onfile');
+  var onfileRadio = document.getElementById('print-pay-onfile-radio');
+  var onfileShown = onfileWrap && onfileWrap.style.display !== 'none';
+  var useOnFile = onfileShown && onfileRadio && onfileRadio.checked;
+  if (fields) fields.style.display = useOnFile ? 'none' : 'block';
+}
+
+function setupReviewPayment() {
+  var onfileWrap = document.getElementById('print-pay-onfile');
+  var label = document.getElementById('print-pay-onfile-label');
+  var onfileRadio = document.getElementById('print-pay-onfile-radio');
+  var newRadio = document.getElementById('print-pay-new-radio');
+  if (onfileWrap) onfileWrap.style.display = 'none';
+  if (newRadio) newRadio.checked = true;
+  updatePaymentMode();
+  fetch('/api/print/card')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      if (j && j.card && j.card.last4) {
+        if (label) label.textContent = 'Use card on file (' + maskedCard(j.card.brand, j.card.last4) + ')';
+        if (onfileWrap) onfileWrap.style.display = 'block';
+        if (onfileRadio) onfileRadio.checked = true;
+      }
+      updatePaymentMode();
+    })
+    .catch(function () {});
+}
+
+// Reads the payment selection into the order body. Returns an error string, or
+// null on success.
+function applyPaymentToBody(body) {
+  var onfileWrap = document.getElementById('print-pay-onfile');
+  var onfileShown = onfileWrap && onfileWrap.style.display !== 'none';
+  var onfileRadio = document.getElementById('print-pay-onfile-radio');
+  if (onfileShown && onfileRadio && onfileRadio.checked) {
+    body.useCardOnFile = true;
+    return null;
+  }
+  var num = digitsOnly((document.getElementById('print-card-number') || {}).value);
+  if (num.length < 12) return 'Enter a valid card number.';
+  var exp = (((document.getElementById('print-card-exp') || {}).value) || '').trim();
+  if (!exp) return 'Enter the card expiry (MM/YY).';
+  body.card = { brand: guessCardBrand(num), last4: num.slice(-4), exp: exp };
+  body.saveCard = !!((document.getElementById('print-card-save') || {}).checked);
+  return null;
+}
+
+// ---- My Print Orders page --------------------------------------------------
+function loadOrders() {
+  var list = document.getElementById('orders-list');
+  if (list) list.innerHTML = '<div class="settings-section-desc">Loading...</div>';
+  fetch('/api/print/orders')
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok) { if (list) list.innerHTML = '<div class="settings-section-desc">Could not load your orders.</div>'; return; }
+      renderOrders((res.j && res.j.orders) || []);
+    })
+    .catch(function () { if (list) list.innerHTML = '<div class="settings-section-desc">Could not load your orders.</div>'; });
+}
+
+function formatOrderDate(v) {
+  try {
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return String(v);
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (e) { return String(v); }
+}
+
+function orderStatusLabel(o) {
+  var p = o.payment_status || 'pending';
+  if (p === 'stubbed') p = 'test payment';
+  return (o.status || 'pending') + ' / ' + p;
+}
+
+function renderOrders(orders) {
+  var list = document.getElementById('orders-list');
+  if (!list) return;
+  if (!orders.length) {
+    list.innerHTML = '<div class="settings-section" style="text-align:center;color:rgba(245,232,200,0.6);">You have not placed any print orders yet.</div>';
+    return;
+  }
+  list.innerHTML = orders.map(function (o) { return orderCardHtml(o); }).join('');
+}
+
+function orderCardHtml(o) {
+  function esc(s) { return escapeHtmlPrint(s); }
+  function row(label, value) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;">' +
+      '<span style="color:rgba(245,232,200,0.5);">' + esc(label) + '</span>' +
+      '<span style="color:var(--cream);text-align:right;">' + esc(value) + '</span></div>';
+  }
+  var title = o.order_name || o.campaign_name || ('Order #' + o.id);
+  var fmt = [o.binding, o.color_tier, o.cover_finish].filter(Boolean).join(', ');
+  var charge = (o.customer_charge != null) ? ('$' + Number(o.customer_charge).toFixed(2) + ' ' + (o.currency || 'USD')) : '';
+  var card = (o.card_brand && o.card_last4) ? maskedCard(o.card_brand, o.card_last4) : '';
+  var when = o.created_at ? formatOrderDate(o.created_at) : '';
+  var links = '';
+  if (o.interior_pdf_url) links += '<a href="' + esc(o.interior_pdf_url) + '" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;font-size:12px;margin-right:14px;">Interior PDF</a>';
+  if (o.cover_pdf_url) links += '<a href="' + esc(o.cover_pdf_url) + '" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;font-size:12px;margin-right:14px;">Cover PDF</a>';
+  if (o.tracking_url) links += '<a href="' + esc(o.tracking_url) + '" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;font-size:12px;">Track shipment</a>';
+  var html = '';
+  html += '<div class="settings-section" style="margin-bottom:12px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;">';
+  html += '<div style="font-weight:600;color:var(--gold);font-size:15px;">' + esc(title) + '</div>';
+  html += '<div style="font-size:11px;color:rgba(245,232,200,0.55);">' + esc(when) + '</div>';
+  html += '</div>';
+  if (o.campaign_name && o.order_name) html += row('Campaign', o.campaign_name);
+  if (o.source_kind === 'member' && o.source_user_name) html += row('Version', o.source_user_name + ' (player)');
+  html += row('Format', fmt);
+  if (o.page_count) html += row('Pages', String(o.page_count));
+  html += row('Quantity', String(o.quantity || 1));
+  if (charge) html += row('Total', charge);
+  if (card) html += row('Paid with', card);
+  if (o.ship_name) html += row('Ship to', o.ship_name);
+  html += row('Status', orderStatusLabel(o));
+  if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
+  html += '</div>';
+  return html;
 }
 
 // ---- Novel session include + navigation (Sessions tab) ----
