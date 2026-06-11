@@ -247,21 +247,26 @@ function companionEligible(m) { var s = normShape(m); return s === 'standard' ||
 
 // IRONFRAME picture frame: dark bronze/iron face with a gold inlay keyline
 // around the image. Used for Ironframe row panels and its portrait asides.
+// The bronze picture frame: a gradient frame + black mat + a gold inner line with
+// a small diamond node sitting ON the line at each corner. Shared by every layout
+// AND the title page / cast portraits so the 'frame' option looks identical
+// everywhere. inline=true makes the frame hug a fixed-size image (title/cast);
+// the default is a full-width block (interior columns).
+function bronzeFrame(inner, inline) {
+  var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:6px;height:6px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
+  var _dia = _d('top:0;left:0;', 'translate(-50%,-50%)') + _d('top:0;right:0;', 'translate(50%,-50%)') + _d('bottom:0;left:0;', 'translate(-50%,50%)') + _d('bottom:0;right:0;', 'translate(50%,50%)');
+  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
+    '<div style="padding:2px;background:#0a0806;">' +
+    '<div style="position:relative;border:2px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
+    '</div>' +
+  '</div>';
+}
 function framedMedia(m) {
   var ratio = shapeRatioCSS(normShape(m));
   var inner = m.image
     ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#160e06;"></div>';
-  // A thin gold line frames the image; a small diamond node sits ON the line at
-  // each corner so the line runs through it -- the corner reads as part of the
-  // frame, not a separate ornament stuck on top.
-  var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:6px;height:6px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
-  var _diamonds = _d('top:0;left:0;', 'translate(-50%,-50%)') + _d('top:0;right:0;', 'translate(50%,-50%)') + _d('bottom:0;left:0;', 'translate(-50%,50%)') + _d('bottom:0;right:0;', 'translate(50%,50%)');
-  return '<div style="padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-    '<div style="padding:2px;background:#0a0806;">' +
-    '<div style="position:relative;border:1px solid #c9a84c;line-height:0;">' + inner + _diamonds + '</div>' +
-    '</div>' +
-  '</div>';
+  return bronzeFrame(inner, false);
 }
 function frameCell(m, pct, showCaption) {
   var cap = '';
@@ -1706,12 +1711,18 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
       var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
       return '<div class="cast-member">' +
-        '<div class="cast-portrait-frame" style="' + _ps + picBorderCss(co) + '">' +
-          (primaryImg
-            ? '<img class="cast-portrait" src="' + primaryImg + '" alt="" />'
-            : '<div class="cast-no-img" style="font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
-          picOverlay(co) +
-        '</div>' +
+        ((co && co.border === 'frame')
+          ? '<div style="margin-bottom:0.08in;">' + bronzeFrame(
+              (primaryImg
+                ? '<img style="' + _ps + 'object-fit:cover;object-position:center top;display:block;" src="' + primaryImg + '" alt="" />'
+                : '<div style="' + _ps + 'background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:\'Cinzel\',serif;font-weight:700;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>'),
+              true) + '</div>'
+          : '<div class="cast-portrait-frame" style="' + _ps + picBorderCss(co) + '">' +
+              (primaryImg
+                ? '<img class="cast-portrait" src="' + primaryImg + '" alt="" />'
+                : '<div class="cast-no-img" style="font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
+              picOverlay(co) +
+            '</div>') +
         '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
         '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
         (((_castFields === 'full' || _castFields === 'mid') && c.player_name) ? '<div class="cast-player">Played by ' + _fmEsc(c.player_name) + '</div>' : '') +
@@ -1784,8 +1795,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     '<div class="titlepage">' +
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
       (titleImg
-        ? '<div class="tp-image-wrap"><div class="tp-image-border" style="' + picBorderCss(co) + '">' +
-            '<img class="tp-image" src="' + titleImg + '" alt="" />' + picOverlay(co) + '</div></div>'
+        ? '<div class="tp-image-wrap">' +
+            ((co && co.border === 'frame')
+              ? bronzeFrame('<img class="tp-image" src="' + titleImg + '" alt="" />', true)
+              : '<div class="tp-image-border" style="' + picBorderCss(co) + '">' + '<img class="tp-image" src="' + titleImg + '" alt="" />' + picOverlay(co) + '</div>') +
+          '</div>'
         : '') +
     '</div>';
   var detailsPageHTML =
