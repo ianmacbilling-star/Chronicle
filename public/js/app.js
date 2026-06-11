@@ -8851,7 +8851,7 @@ function refreshLayoutStyleButtons() {
 // ===== Custom (a-la-carte) layout =====
 var CUSTOM_LAYOUT_DEFAULTS = {
   arrange:'comicpage', border:'keyline', caption:'bar',
-  narr:'plain', font:'classic', dropcap:0, paper:'white', condition:'none',
+  narr:'plain', font:'classic', dropcap:0, paper:'white',
   pano:1, aside:1, companion:1, emphasis:0,
   cover:1, cast:1, toc:1, header:1, markers:1, watermark:1,
   hidelogo:0
@@ -8866,7 +8866,7 @@ function clMerge(saved){
   var r=clClone(CUSTOM_LAYOUT_DEFAULTS);
   if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } }
   // Legacy migration: old single 'paper' control could hold a condition (smoke/dirt/...).
-  if (CL_CONDITION_VALUES[r.paper]) { r.condition = r.paper; r.paper = 'white'; }
+  if (CL_CONDITION_VALUES[r.paper]) { r.paper = 'white'; }
   if (r.paper === 'parchment') { r.paper = 'linen'; }
   return r;
 }
@@ -8888,7 +8888,7 @@ function saveCustomLayoutPrefs(){
     }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','condition','narr','font'];
+var CL_SELECTS = ['arrange','border','caption','paper','narr','font'];
 var CL_TOGGLES = ['dropcap','header','markers','cover','cast','toc','hidelogo'];
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine' };
 
