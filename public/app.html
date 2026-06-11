@@ -178,7 +178,7 @@
             <select id="novel-pager-select" onchange="novelPageJump(this.value)" style="background:rgba(20,12,4,0.8);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);"></select>
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()">Next</button>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">Export Full Novel PDF</button>
+          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">Open in New Tab</button>
         </div>
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
@@ -496,7 +496,7 @@
             <button class="btn btn-sm" id="session-custom-btn" onclick="openCustomLayout('session')" style="margin-left:6px;">Layout</button>
             <button class="btn btn-sm" id="session-preview-mode-btn" onclick="toggleSessionPreviewMode()" style="margin-left:6px;" title="Quick View = fast on-screen preview. True View = the exact paged PDF (slower).">Quick View</button>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
+          <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">Open in New Tab</button>
         </div>
         <div class="progress-wrap" id="session-preview-progress-wrap" style="display:none;margin-bottom:10px;">
           <div class="progress-bar"><div class="progress-fill" id="session-preview-progress-fill"></div></div>

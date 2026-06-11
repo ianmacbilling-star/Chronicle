@@ -1856,6 +1856,25 @@ function injectTrialWatermark(html) {
 // (same renderer as the print interior) instead of screen-media HTML. Relative
 // asset URLs (textures, cover logo) resolve against PUBLIC_BASE_URL because
 // Puppeteer's setContent has no document base.
+// Build a human, filename-safe base name (campaign / session / member) for the
+// inline PDF's Content-Disposition, so the browser viewer's Save uses a real name.
+// Bad chars by code: / : * ? " < > | \  -> space; control chars -> space.
+var PDF_BAD_CHARS = { 47:1, 58:1, 42:1, 63:1, 34:1, 60:1, 62:1, 124:1, 92:1 };
+function pdfFileSafe(s) {
+  s = String(s == null ? '' : s);
+  var out = '';
+  for (var i = 0; i < s.length; i++) {
+    var cc = s.charCodeAt(i);
+    out += (cc < 32 || PDF_BAD_CHARS[cc]) ? ' ' : s.charAt(i);
+  }
+  return out.split(' ').filter(function (x) { return x.length; }).join(' ');
+}
+function pdfFileName(parts) {
+  var nm = (parts || []).map(pdfFileSafe).filter(Boolean).join(' - ');
+  if (nm.length > 120) nm = nm.slice(0, 120).trim();
+  return nm || 'preview';
+}
+
 async function sendHtmlAsPdf(res, html, name) {
   var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
   if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
@@ -1897,7 +1916,11 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
     let html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
     if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
-    if (req.query.format === 'pdf') return await sendHtmlAsPdf(res, html, 'session-' + session.id);
+    if (req.query.format === 'pdf') {
+      var sfo = await db.prepare("SELECT u.name AS uname, sf.role AS srole FROM session_forks sf JOIN users u ON u.id = sf.user_id WHERE sf.id = ?").get(viewForkId);
+      var sMember = (sfo && sfo.srole === 'player' && sfo.uname) ? sfo.uname : '';
+      return await sendHtmlAsPdf(res, html, pdfFileName([campaign.name, session.name, sMember]));
+    }
     res.send(html);
   } catch(e) {
     console.error('PDF session error:', e.message);
@@ -1977,7 +2000,9 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
   if (req.query.format === 'pdf') {
-    try { return await sendHtmlAsPdf(res, html, 'novel-' + campaign.id); }
+    var nMember = '';
+    if (asUser) { var nu = await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser); if (nu && nu.name) nMember = nu.name; }
+    try { return await sendHtmlAsPdf(res, html, pdfFileName([campaign.name, nMember])); }
     catch (e) { return res.status(500).json({ error: 'PDF render failed', detail: String(e && e.message || e) }); }
   }
   res.send(html);
