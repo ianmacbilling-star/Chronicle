@@ -2559,9 +2559,13 @@ function switchSessionTab(tab) {
     var el = document.getElementById('stab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
-  // Auto-load preview when switching to publish tab
-  if (tab === 'export' && state.currentSession && state.layoutStyle) {
-    loadPreview(state.layoutStyle);
+  // Auto-load preview when switching to the Publish tab. Default to Quick View
+  // and always render it; True View is only shown when the user toggles to it.
+  if (tab === 'export' && state.currentSession) {
+    sessionPreviewMode = 'quick';
+    var _spb = document.getElementById('session-preview-mode-btn');
+    if (_spb) _spb.textContent = 'Quick View';
+    loadPreview(state.layoutStyle || 'Classic');
   }
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
@@ -3886,6 +3890,15 @@ function switchNovelTab(tab) {
     var el = document.getElementById('ntab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
+  // Default to Quick View and always render it on entry; True View is only
+  // shown when the user toggles to it.
+  if (tab === 'preview') {
+    novelPreviewMode = 'quick';
+    var _npb = document.getElementById('novel-preview-mode-btn');
+    if (_npb) _npb.textContent = 'Quick View';
+    if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
+    if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
+  }
 }
 
 function selNovelLayout(el, layout) {
@@ -6253,9 +6266,13 @@ function switchSessionTab(tab) {
     var el = document.getElementById('stab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
-  // Auto-load preview when switching to publish tab
-  if (tab === 'export' && state.currentSession && state.layoutStyle) {
-    loadPreview(state.layoutStyle);
+  // Auto-load preview when switching to the Publish tab. Default to Quick View
+  // and always render it; True View is only shown when the user toggles to it.
+  if (tab === 'export' && state.currentSession) {
+    sessionPreviewMode = 'quick';
+    var _spb = document.getElementById('session-preview-mode-btn');
+    if (_spb) _spb.textContent = 'Quick View';
+    loadPreview(state.layoutStyle || 'Classic');
   }
   // Load character snapshots when switching to the characters tab
   if (tab === 'characters') {
@@ -6857,6 +6874,15 @@ function switchNovelTab(tab) {
     var el = document.getElementById('ntab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
+  // Default to Quick View and always render it on entry; True View is only
+  // shown when the user toggles to it.
+  if (tab === 'preview') {
+    novelPreviewMode = 'quick';
+    var _npb = document.getElementById('novel-preview-mode-btn');
+    if (_npb) _npb.textContent = 'Quick View';
+    if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
+    if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
+  }
 }
 
 function selNovelLayout(el, layout) {
