@@ -8840,10 +8840,12 @@ function refreshLayoutStyleButtons() {
   var nb = document.getElementById('novel-layout-btn');
   var nv = (typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? novelLayoutStyle : 'Classic';
   if (nb) nb.textContent = 'Layout: ' + layoutStyleName(nv);
+  var _clCO = (typeof customOpts !== 'undefined') ? customOpts : {};
+  var _clAc = (typeof customActive !== 'undefined') ? customActive : {};
   var scb = document.getElementById('session-custom-btn');
-  if (scb) scb.textContent = (typeof customActive !== 'undefined' && customActive.session) ? '⚙ Custom Layout (on)' : '⚙ Custom Layout';
+  if (scb) scb.textContent = _clAc.session ? ('Layout: ' + ((_clCO.session && CL_ARRANGE_LABEL[_clCO.session.arrange]) || 'Custom')) : 'Layout';
   var ncb = document.getElementById('novel-custom-btn');
-  if (ncb) ncb.textContent = (typeof customActive !== 'undefined' && customActive.novel) ? '⚙ Custom Layout (on)' : '⚙ Custom Layout';
+  if (ncb) ncb.textContent = _clAc.novel ? ('Layout: ' + ((_clCO.novel && CL_ARRANGE_LABEL[_clCO.novel.arrange]) || 'Custom')) : 'Layout';
 }
 
 // ===== Custom (a-la-carte) layout =====
@@ -8851,7 +8853,8 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   arrange:'comicpage', border:'keyline', caption:'bar',
   narr:'plain', font:'classic', dropcap:0, paper:'white', condition:'none',
   pano:1, aside:1, companion:1, emphasis:0,
-  cover:1, cast:1, toc:1, header:1, markers:1, watermark:1
+  cover:1, cast:1, toc:1, header:1, markers:1, watermark:1,
+  hidelogo:0
 };
 function clClone(o){ var r={}; for (var k in o) { if (o.hasOwnProperty(k)) r[k]=o[k]; } return r; }
 var customOpts = { session: clClone(CUSTOM_LAYOUT_DEFAULTS), novel: clClone(CUSTOM_LAYOUT_DEFAULTS) };
@@ -8886,7 +8889,8 @@ function saveCustomLayoutPrefs(){
   } catch (e) {}
 })();
 var CL_SELECTS = ['arrange','border','caption','paper','condition','narr','font'];
-var CL_TOGGLES = ['dropcap','header','markers','cover','cast','toc'];
+var CL_TOGGLES = ['dropcap','header','markers','cover','cast','toc','hidelogo'];
+var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine' };
 
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
@@ -8895,6 +8899,7 @@ function openCustomLayout(ctx){
   var o = customOpts[_clCtx] || CUSTOM_LAYOUT_DEFAULTS;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.checked=!!o[k]; });
+  (function(){ var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4); var _hl=document.getElementById('cl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; } var _hll=document.getElementById('cl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; } })();
   var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
   var novelOnly=document.querySelectorAll('.cl-novel-only');
   for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }

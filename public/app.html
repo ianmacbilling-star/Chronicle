@@ -175,7 +175,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
-            <button class="btn btn-sm" id="novel-custom-btn" onclick="openCustomLayout('novel')">Custom Layout</button>
+            <button class="btn btn-sm" id="novel-custom-btn" onclick="openCustomLayout('novel')">Layout</button>
             <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower).">Quick View</button>
           </div>
           <div id="novel-pager" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -498,7 +498,7 @@
           <div>
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
             <button class="btn btn-sm" id="layout-style-btn" onclick="openStylePicker('layout')" style="display:none">Layout: Classic</button>
-            <button class="btn btn-sm" id="session-custom-btn" onclick="openCustomLayout('session')" style="margin-left:6px;">&#9881; Custom Layout</button>
+            <button class="btn btn-sm" id="session-custom-btn" onclick="openCustomLayout('session')" style="margin-left:6px;">Layout</button>
             <button class="btn btn-sm" id="session-preview-mode-btn" onclick="toggleSessionPreviewMode()" style="margin-left:6px;" title="Quick View = fast on-screen preview. True View = the exact paged PDF (slower).">Quick View</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()">&#8659; Export PDF</button>
@@ -1309,7 +1309,7 @@
 <div class="modal-overlay hidden" id="custom-layout-modal" onclick="if(event.target===this)closeCustomLayout()">
   <div class="modal" style="max-width:640px;">
     <div class="modal-header">
-      <div class="modal-title">Custom Layout <span id="cl-ctx-label" style="font-size:12px;color:var(--gold-dim);font-weight:400;"></span></div>
+      <div class="modal-title">Layout <span id="cl-ctx-label" style="font-size:12px;color:var(--gold-dim);font-weight:400;"></span></div>
       <button class="modal-close" onclick="closeCustomLayout()">&times;</button>
     </div>
     <p style="margin:0 0 14px;font-size:12px;color:var(--gold-dim);line-height:1.45;">Mix and match every part of the page. Apply to update the preview.</p>
@@ -1386,6 +1386,7 @@
 
     <div id="cl-pages-group" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
       <label class="cl-toggle" title="Include the cover page"><input type="checkbox" id="cl-cover"><span>Include cover page</span></label>
+      <label class="cl-toggle" id="cl-hidelogo-label" title="Hiding the logo is a Platinum feature"><input type="checkbox" id="cl-hidelogo" disabled><span>Hide Campaignia logo</span></label>
       <label class="cl-toggle cl-novel-only" title="Include the character / cast page (graphic novel only)"><input type="checkbox" id="cl-cast"><span>Include character page</span></label>
       <label class="cl-toggle cl-novel-only" title="Include a table of contents listing the sessions (graphic novel only)"><input type="checkbox" id="cl-toc"><span>Include table of contents</span></label>
     </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
+const { getEffectiveTier } = require('../middleware/tiers');
 const path = require('path');
 const { uploadFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
@@ -438,7 +439,8 @@ var CO_DEFAULTS = {
   condition: 'none',     // none | smoke | dirt | wrinkle | blood
   font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
-  cover: 1, cast: 1, toc: 1, header: 1, markers: 1, watermark: 1
+  cover: 1, cast: 1, toc: 1, header: 1, markers: 1, watermark: 1,
+  hidelogo: 0
 };
 
 var CO_FONTS = {
@@ -1255,6 +1257,7 @@ function buildLayout(layoutStyle, moments, sections, intro, outro, opts) {
 // ============================================================
 function buildSessionHTML(session, moments, campaign, characters, narrative, opts) {
   var co = opts || null;
+  var fHideLogo = co ? !!co.hideLogo : false;
   var fCover  = co ? !!co.cover     : true;
   var fHeader = co ? !!co.header    : true;
   var fWmark  = true; // watermark always on
@@ -1549,7 +1552,7 @@ ${fCover ? `<!-- COVER PAGE -->
   <div class="cover-border"></div>
   <div class="cover-border-inner"></div>
   <div class="cover-content">
-    <img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />
+    ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     <div class="cover-eyebrow">A Saga of</div>
     <div class="cover-campaign">${campaign.name}</div>
     <div class="cover-divider"></div>
@@ -1585,6 +1588,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
   var co = opts || null;
+  var fHideLogo = co ? !!co.hideLogo : false;
   var fCover  = (pageOpts && pageOpts.noCover) ? false : (co ? !!co.cover : true);
   var fCast   = co ? !!co.cast      : true;
   var fToc    = co ? !!co.toc       : false;
@@ -1789,11 +1793,11 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-art-title">${campaign.name}</div>
         <div class="cover-art-dates">${dateRange}</div>
-        <img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />
+        ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
       </div>
     </div>
   </div>` : `<div class="cover-content">
-    <img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />
+    ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     <div class="cover-eyebrow">The Saga of</div>
     <div class="cover-title">${campaign.name}</div>
     <div class="cover-divider"></div>
@@ -1890,6 +1894,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     };
 
     const co = req.query.co ? parseCustomOpts(req.query.co) : null;
+    if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
     let html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
     if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
     if (req.query.format === 'pdf') return await sendHtmlAsPdf(res, html, 'session-' + session.id);
@@ -1968,6 +1973,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   res.set('X-Total-Sessions', String(sessionsWithData.length));
 
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
   if (req.query.format === 'pdf') {
