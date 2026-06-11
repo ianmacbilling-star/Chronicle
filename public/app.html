@@ -271,14 +271,6 @@
             <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
           </div>
 
-          <!-- The interior is generated automatically when you place the order.
-               Covers come in a later phase; for sandbox testing of the full
-               order, paste a hosted cover PDF URL here. -->
-          <details style="margin-bottom:12px;">
-            <summary style="cursor:pointer;font-size:11px;color:rgba(201,168,76,0.6);">(testing) cover PDF URL &mdash; temporary until the cover generator is built</summary>
-            <input id="print-cover-url" type="text" placeholder="Cover PDF URL" style="width:100%;margin-top:6px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:7px 10px;font-size:12px;">
-          </details>
-
           <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Place order</button>
 
           <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(201,168,76,0.4);border-radius:var(--radius);background:rgba(20,12,4,0.5);">
@@ -289,10 +281,10 @@
             <div id="print-payment" style="margin:0 0 12px;padding:12px;border:1px solid rgba(201,168,76,0.25);border-radius:var(--radius);background:rgba(20,12,4,0.35);">
               <div style="font-weight:600;color:var(--gold);margin-bottom:8px;">Payment</div>
               <div id="print-pay-onfile" style="display:none;margin-bottom:10px;">
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gold-light);cursor:pointer;">
                   <input type="radio" name="print-pay-choice" id="print-pay-onfile-radio" checked onchange="updatePaymentMode()"> <span id="print-pay-onfile-label">Use card on file</span>
                 </label>
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:6px;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gold-light);cursor:pointer;margin-top:6px;">
                   <input type="radio" name="print-pay-choice" id="print-pay-new-radio" onchange="updatePaymentMode()"> <span>Use a different card</span>
                 </label>
               </div>
@@ -314,8 +306,8 @@
               <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
             </div>
             <div id="print-final-confirm" style="display:none;margin-top:12px;padding:12px;border:1px solid rgba(139,26,26,0.45);border-radius:var(--radius);background:rgba(139,26,26,0.07);">
-              <div style="font-weight:600;color:var(--crimson);margin-bottom:6px;">This is final &mdash; there is no canceling.</div>
-              <div style="font-size:13px;color:var(--text);margin-bottom:10px;">Placing this order charges your card and sends the book straight to print. Please open and double-check your <strong>interior</strong> and <strong>cover</strong> PDFs above first &mdash; they print exactly as shown.</div>
+              <div style="font-weight:600;color:#f09595;margin-bottom:6px;">This is final &mdash; there is no canceling.</div>
+              <div style="font-size:13px;color:var(--gold-light);margin-bottom:10px;">Placing this order charges your card and sends the book straight to print. Please open and double-check your <strong>interior</strong> and <strong>cover</strong> PDFs above first &mdash; they print exactly as shown.</div>
               <div style="display:flex;gap:10px;">
                 <button class="btn btn-primary" id="print-final-btn" onclick="submitPrintOrder()">Place my order &amp; charge my card</button>
                 <button class="btn btn-sm" onclick="hideFinalConfirm()">Go back</button>
