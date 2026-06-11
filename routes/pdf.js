@@ -1553,8 +1553,9 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   .cover-art-logo { width:110px;height:auto;object-fit:contain; }
-  .backcover-page { width:8.5in;height:11in;background:#0a0604;page-break-before:always;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
-  .backcover-img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
+  .backcover-page { width:8.5in;box-sizing:border-box;background:#1a0f08;padding:0.45in 0.7in;page-break-before:always;page-break-inside:avoid;break-inside:avoid;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
+  .backcover-frame { position:relative;width:100%;height:8.4in;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
+  .backcover-frame img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
 </style>
 </head>
 <body>
@@ -1601,7 +1602,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><img class="backcover-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : ''}
+<div class="backcover-page"><div class="backcover-frame"><img src="${campaign.back_cover_image_url}" alt="" /></div></div>` : ''}
 
 </body>
 </html>`;
@@ -1801,8 +1802,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     .content-page + .content-page { margin-top:0.4in; }
     .cover-art-frame { flex:none; height:9.6in; }
   }
-  .backcover-page { width:8.5in;height:11in;background:#0a0604;page-break-before:always;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
-  .backcover-img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
+  .backcover-page { width:8.5in;box-sizing:border-box;background:#1a0f08;padding:0.45in 0.7in;page-break-before:always;page-break-inside:avoid;break-inside:avoid;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
+  .backcover-frame { position:relative;width:100%;height:8.4in;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
+  .backcover-frame img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
 </style>
 </head>
 <body>
@@ -1850,7 +1852,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url && !paginated) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><img class="backcover-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : ''}
+<div class="backcover-page"><div class="backcover-frame"><img src="${campaign.back_cover_image_url}" alt="" /></div></div>` : ''}
 
 </body>
 </html>`;
@@ -2150,6 +2152,23 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 // sheet size comes from Lulu; the internal split is computed here and should
 // be verified against a Lulu sandbox proof, especially for hardcover.
 // ============================================================
+// Compute the one-piece cover sheet size locally from binding + interior page
+// count. Lulu encodes paper bulk in the SKU (060UW444 = 444 pages/inch), so
+// spine = pages / PPI; no network call needed. 8.5x11 trim, 0.125in bleed.
+// Hardcover (casewrap) adds a 0.75in wrap allowance + board to the spine; that
+// piece is approximate and should be checked against a Lulu casewrap proof.
+function computeCoverDims(binding, pageCount, ppi) {
+  var trimW = 8.5, trimH = 11, bleed = 0.125;
+  ppi = ppi || 444;
+  var r3 = function (n) { return Math.round(n * 1000) / 1000; };
+  var spine = (binding === 'saddle') ? 0 : (pageCount / ppi);
+  if (binding === 'hardcover') {
+    var wrap = 0.75, board = 0.125;
+    return { widthIn: r3(2 * (trimW + wrap) + spine + board), heightIn: r3(trimH + 2 * wrap), spineIn: r3(spine + board) };
+  }
+  return { widthIn: r3(2 * (trimW + bleed) + spine), heightIn: r3(trimH + 2 * bleed), spineIn: r3(spine) };
+}
+
 function coverGeometry(binding, totalWidthIn) {
   var bleed = 0.125, trimW = 8.5;
   var sideOuter = (binding === 'hardcover') ? (trimW + 0.75) : (trimW + bleed);
@@ -2231,16 +2250,9 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     var built = catalog.buildSpec(selection, pageCount);
     if (!built.ok) return res.status(400).json({ error: 'Invalid selection', details: built.errors });
 
-    var dims;
-    try {
-      var provider = getPrintProvider();
-      dims = await provider.getCoverDimensions(built.spec, built.spec.pageCount);
-    } catch (e) {
-      console.error('[print-cover] dimensions failed:', e && e.message ? e.message : e);
-      return res.status(502).json({ error: 'Could not get cover dimensions from the print provider', detail: String(e && e.message ? e.message : e) });
-    }
+    var dims = computeCoverDims(built.spec.binding, built.spec.pageCount);
     if (!(dims.widthIn > 0 && dims.heightIn > 0)) {
-      return res.status(502).json({ error: 'Print provider returned invalid cover dimensions' });
+      return res.status(500).json({ error: 'Could not compute cover dimensions' });
     }
 
     var co = req.query.co ? parseCustomOpts(req.query.co) : null;
