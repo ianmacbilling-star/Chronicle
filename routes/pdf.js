@@ -252,16 +252,15 @@ function framedMedia(m) {
   var inner = m.image
     ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#160e06;"></div>';
-  // Small scroll flourish in each corner (scales with the frame, capped). Matches
-  // the Comic frame motif so every layout reads consistently.
-  var _scroll = '<path d="M4 28 C4 14 14 4 28 4 C19 4 15 9 15 15 C15 19 18 20 21 18" fill="none" stroke="#e8d5a3" stroke-width="1.8" stroke-linecap="round"/>';
-  var _corners = ['top:0;left:0;', 'top:0;right:0;transform:rotate(90deg);', 'bottom:0;right:0;transform:rotate(180deg);', 'bottom:0;left:0;transform:rotate(270deg);']
-    .map(function(_p){ return '<svg viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" style="position:absolute;' + _p + 'width:13%;height:auto;max-width:0.34in;overflow:visible;z-index:2;pointer-events:none;">' + _scroll + '</svg>'; })
-    .join('');
-  return '<div style="position:relative;padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
+  // A thin gold line frames the image; a small diamond node sits ON the line at
+  // each corner so the line runs through it -- the corner reads as part of the
+  // frame, not a separate ornament stuck on top.
+  var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:6px;height:6px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
+  var _diamonds = _d('top:0;left:0;', 'translate(-50%,-50%)') + _d('top:0;right:0;', 'translate(50%,-50%)') + _d('bottom:0;left:0;', 'translate(-50%,50%)') + _d('bottom:0;right:0;', 'translate(50%,50%)');
+  return '<div style="padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
     '<div style="padding:2px;background:#0a0806;">' +
-    '<div style="border:1.5px solid #c9a84c;line-height:0;">' + inner + '</div>' +
-    '</div>' + _corners +
+    '<div style="position:relative;border:1px solid #c9a84c;line-height:0;">' + inner + _diamonds + '</div>' +
+    '</div>' +
   '</div>';
 }
 function frameCell(m, pct, showCaption) {
@@ -813,14 +812,12 @@ function picOverlay(opts){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
   if (b === 'frame') {
-    // Two thin gold lines (lighter than before) + a small scroll flourish in each
-    // corner. The scroll is an SVG sized as a % of the frame, so it scales down on
-    // small pictures (cast portraits) and up on full-page images. All inset -> no bleed.
-    var _scroll = '<path d="M4 28 C4 14 14 4 28 4 C19 4 15 9 15 15 C15 19 18 20 21 18" fill="none" stroke="#e8d5a3" stroke-width="1.8" stroke-linecap="round"/>';
-    var _corners = ['top:0;left:0;', 'top:0;right:0;transform:rotate(90deg);', 'bottom:0;right:0;transform:rotate(180deg);', 'bottom:0;left:0;transform:rotate(270deg);']
-      .map(function(_p){ return '<svg viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" style="position:absolute;' + _p + 'width:15%;height:auto;max-width:0.32in;overflow:visible;">' + _scroll + '</svg>'; })
-      .join('');
-    return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px #c9a84c, inset 0 0 0 2px #2c1e10, inset 0 0 0 3px #e8d5a3;">' + _corners + '</div>';
+    // Two thin gold lines + a small diamond node tucked into each corner where the
+    // lines meet, so the corner reads as part of the frame line. The cell clips,
+    // so the diamonds sit just inside the corner rather than centred on the edge.
+    var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:5px;height:5px;background:#c9a84c;transform:rotate(45deg);box-shadow:0 0 0 1px #2c1e10;"></i>'; };
+    var _diamonds = _d('top:1px;left:1px;') + _d('top:1px;right:1px;') + _d('bottom:1px;left:1px;') + _d('bottom:1px;right:1px;');
+    return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px #c9a84c, inset 0 0 0 2px #2c1e10, inset 0 0 0 3px #c9a84c;">' + _diamonds + '</div>';
   }
   return '';
 }
