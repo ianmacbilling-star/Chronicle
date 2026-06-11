@@ -9192,6 +9192,82 @@ function svgLineChart(series, xLabels, showLegend) {
 // page built later; placing an order here just records it.
 var printNovelInfo = null;
 
+// --- Exact page count from the rendered interior PDF -------------------------
+// The on-screen estimate counts moments (~panels), but the comic layout packs
+// several panels per page, so it runs high. The only accurate source is the
+// rendered interior PDF itself; print-interior returns its real page count.
+// We render once (on tab open), cache it by the interior URL, and reuse that
+// same file at Place Order so we never render twice for the same book.
+var printActualPages = 0;
+var printInteriorCache = { key: '', url: '', pages: 0 };
+
+function currentPageCount() {
+  if (printActualPages > 0) return printActualPages;
+  return (printNovelInfo && printNovelInfo.pageEstimate) || 0;
+}
+
+function updatePrintPageDisplay(n, exact) {
+  var pe = document.getElementById('print-page-est');
+  if (!pe) return;
+  if (exact && n > 0) {
+    pe.textContent = 'Final length: ' + n + ' pages (used for pricing and the cover spine).';
+  } else if (n === 0) {
+    pe.textContent = 'Calculating exact page count from the print file...';
+  } else {
+    var est = (printNovelInfo && printNovelInfo.pageEstimate) || 0;
+    pe.textContent = 'Estimated length: about ' + est + ' pages (final count is set when the print file is generated).';
+  }
+}
+
+// Resolve the interior PDF, reusing a cached render when params are unchanged.
+// Resolves to { url, pages }.
+function ensureInterior() {
+  var key = printInteriorUrl();
+  if (printInteriorCache.key === key && printInteriorCache.url) {
+    return Promise.resolve({ url: printInteriorCache.url, pages: printInteriorCache.pages });
+  }
+  return fetch(key)
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.url) {
+        throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the interior file.');
+      }
+      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
+      return { url: res.j.url, pages: (res.j.pages || 0) };
+    });
+}
+
+// Fired when the Order tab opens: render the interior once to learn the true
+// page count, then update the displayed length and format options. Optional --
+// if it fails the form still works off the estimate.
+function prepareInteriorCount() {
+  if (!state.currentCampaign) return;
+  var key = printInteriorUrl();
+  if (printInteriorCache.key === key && printInteriorCache.pages > 0) {
+    printActualPages = printInteriorCache.pages;
+    preparedInteriorUrl = printInteriorCache.url;
+    updatePrintPageDisplay(printActualPages, true);
+    refreshPrintOptions(printActualPages);
+    return;
+  }
+  updatePrintPageDisplay(0, false);
+  fetch(key)
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.url) { updatePrintPageDisplay(-1, false); return; }
+      printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
+      preparedInteriorUrl = res.j.url;
+      if (res.j.pages && res.j.pages > 0) {
+        printActualPages = res.j.pages;
+        updatePrintPageDisplay(printActualPages, true);
+        refreshPrintOptions(printActualPages);
+      } else {
+        updatePrintPageDisplay(-1, false);
+      }
+    })
+    .catch(function () { updatePrintPageDisplay(-1, false); });
+}
+
 function escapeHtmlPrint(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -9221,9 +9297,11 @@ function loadPrintTab() {
       if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Could not load order options.', null); return; }
       printNovelInfo = res.j;
       syncPrintVersionDisplay();
-      var pe = document.getElementById('print-page-est');
-      if (pe) pe.textContent = 'Estimated length: about ' + res.j.pageEstimate + ' pages (final count is set when the print file is generated).';
+      printActualPages = 0;
+      printInteriorCache = { key: '', url: '', pages: 0 };
+      updatePrintPageDisplay(-1, false);
       refreshPrintOptions(res.j.pageEstimate);
+      prepareInteriorCount();
     })
     .catch(function () { showPrintMsg('Could not load order options.', null); });
 }
@@ -9260,7 +9338,7 @@ function printSelectionBody() {
     campaignId: state.currentCampaign.id,
     orderName: val('print-order-name'),
     sourceUserId: state.novelAsUser || null,
-    pageCount: printNovelInfo.pageEstimate,
+    pageCount: currentPageCount(),
     quantity: parseInt(val('print-qty'), 10) || 1,
     selection: {
       binding: val('print-binding'),
@@ -9328,7 +9406,7 @@ function printCoverUrl() {
   // the Platinum hide-logo flag. as_user does not change the cover.
   var sel = printSelectionBody();
   var s = (sel && sel.selection) || {};
-  var pc = (printNovelInfo && printNovelInfo.pageEstimate) || 0;
+  var pc = currentPageCount();
   return '/api/pdf/print-cover/' + state.currentCampaign.id +
     '?binding=' + encodeURIComponent(s.binding || '') +
     '&color=' + encodeURIComponent(s.colorTier || '') +
@@ -9347,16 +9425,16 @@ function reviewPrintOrder() {
   var btn = document.getElementById('print-place-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing your book...'; }
   showPrintMsg('Preparing your book for final approval...', null);
-  preparedInteriorUrl = '';
   preparedCoverUrl = '';
 
-  fetch(printInteriorUrl())
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-    .then(function (res) {
-      if (!res.ok || !res.j || !res.j.url) {
-        throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the interior file.');
+  ensureInterior()
+    .then(function (intr) {
+      preparedInteriorUrl = intr.url;
+      if (intr.pages && intr.pages > 0) {
+        printActualPages = intr.pages;
+        body.pageCount = intr.pages;
+        updatePrintPageDisplay(intr.pages, true);
       }
-      preparedInteriorUrl = res.j.url;
       return fetch(printCoverUrl())
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
     })

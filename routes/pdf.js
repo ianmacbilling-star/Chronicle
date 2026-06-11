@@ -9,6 +9,31 @@ const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 
+// Count pages in a rendered PDF buffer. Prefers pdf-lib (exact); if that module
+// is unavailable or throws, falls back to a structural scan of the PDF bytes
+// (Chromium writes an uncompressed page tree). Returns 0 when undeterminable,
+// in which case callers fall back to the moment-count estimate.
+async function pdfPageCount(buf) {
+  if (!buf || !buf.length) return 0;
+  try {
+    var lib = require('pdf-lib');
+    if (lib && lib.PDFDocument) {
+      var doc = await lib.PDFDocument.load(buf, { updateMetadata: false });
+      var n = doc.getPageCount();
+      if (n > 0) return n;
+    }
+  } catch (e) { /* pdf-lib missing or parse failed -- use structural scan */ }
+  try {
+    var str = buf.toString('latin1');
+    var m = str.match(/\/Type\s*\/Pages\b[\s\S]{0,400}?\/Count\s+(\d+)/);
+    if (m) return parseInt(m[1], 10) || 0;
+    var m2 = str.match(/\/Count\s+(\d+)[\s\S]{0,400}?\/Type\s*\/Pages\b/);
+    if (m2) return parseInt(m2[1], 10) || 0;
+    var c = (str.match(/\/Type\s*\/Page(?![sR\w])/g) || []).length;
+    return c || 0;
+  } catch (e) { return 0; }
+}
+
 // Shared drop shadow for gallery panels AND character portraits (kept in lockstep).
 var CO_IMG_SHADOW = '7px 7px 10px -2px rgba(0,0,0,0.5), 18px 18px 30px -10px rgba(0,0,0,0.5)';
 
@@ -2135,7 +2160,8 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   try {
     var fname = 'interior-' + campaign.id + (asUser ? ('-u' + asUser) : '') + '-' + Date.now() + '.pdf';
     var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
-    return res.json({ url: url, bytes: pdfBuffer.length });
+    var pages = await pdfPageCount(pdfBuffer);
+    return res.json({ url: url, bytes: pdfBuffer.length, pages: pages });
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: String(e && e.message ? e.message : e) });
