@@ -1250,7 +1250,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   var co = opts || null;
   var fCover  = co ? !!co.cover     : true;
   var fHeader = co ? !!co.header    : true;
-  var fWmark  = co ? !!co.watermark : true;
+  var fWmark  = true; // watermark always on
   var paperCSS = co ? coPaperCSS(co.paper, co.condition) : '';
   var fontImp = co ? coFontImport(co.font) : '';
   var fontFam = co ? coFontFamily(co.font) : '';
@@ -1583,7 +1583,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fToc    = co ? !!co.toc       : false;
   var fHeader = co ? !!co.header    : true;
   var fMarkers= co ? !!co.markers   : true;
-  var fWmark  = co ? !!co.watermark : true;
+  var fWmark  = true; // watermark always on
   var paperCSS = coPaperCSS(co ? co.paper : 'parchment', co ? co.condition : 'none');
   var fontImp = coFontImport(co ? co.font : '');
   var fontFam = coFontFamily(co ? co.font : '');

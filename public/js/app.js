@@ -8886,7 +8886,7 @@ function saveCustomLayoutPrefs(){
   } catch (e) {}
 })();
 var CL_SELECTS = ['arrange','border','caption','paper','condition','narr','font'];
-var CL_TOGGLES = ['dropcap','pano','aside','companion','emphasis','header','markers','watermark','cover','cast','toc'];
+var CL_TOGGLES = ['dropcap','header','markers','cover','cast','toc'];
 
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
