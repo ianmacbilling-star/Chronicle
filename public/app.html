@@ -74,7 +74,7 @@
           <button class="btn btn-primary dm-only" id="btn-new-session" onclick="openSessionModal()">+ New session</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
           <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
-          <button class="btn btn-sm novel-nav-btn" style="display:none;" onclick="showCampaignSection('novel')">Graphic Novel</button>
+          <button class="btn btn-sm novel-nav-btn" style="display:none;" onclick="showCampaignSection('novel')">Publish</button>
         </div>
       </div>
       <div class="sessions-list" id="sessions-list"></div>
@@ -92,7 +92,7 @@
           <button class="btn btn-sm" onclick="showCampaignSection('sessions')">Sessions</button>
           <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
           <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
-          <button class="btn btn-sm novel-nav-btn" style="display:none;" onclick="showCampaignSection('novel')">Graphic Novel</button>
+          <button class="btn btn-sm novel-nav-btn" style="display:none;" onclick="showCampaignSection('novel')">Publish</button>
         </div>
       </div>
       <div class="char-grid" id="char-grid">
@@ -141,7 +141,7 @@
       <div class="page-header">
         <div>
           <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-            <div class="page-title">Graphic Novel</div>
+            <div class="page-title">Publish</div>
             <!-- Version picker: the Story Master can assemble & export any
                  player's novel (their versions per session, canonical where none). -->
             <div id="novel-version-row" style="display:flex;align-items:center;gap:8px;">
@@ -150,11 +150,6 @@
             </div>
             <div class="page-subtitle" style="margin:0;">Your complete campaign story</div>
           </div>
-        </div>
-        <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="showCampaignSection('members')">Members</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">Sessions</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('characters')">Characters</button>
         </div>
       </div>
 
@@ -372,11 +367,11 @@
       </div>
 
       <div class="sess-tabs">
-        <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">&#128203; Story</div>
-        <div class="sess-tab" id="stab-characters" onclick="switchSessionTab('characters')">&#128100; Characters</div>
-        <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">&#128269; Review</div>
-        <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">&#127912; Storyboard</div>
-        <div class="sess-tab dm-only" id="stab-export" onclick="switchSessionTab('export')">&#128214; Publish</div>
+        <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">Story</div>
+        <div class="sess-tab" id="stab-characters" onclick="switchSessionTab('characters')">Characters</div>
+        <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">Review</div>
+        <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
+        <div class="sess-tab dm-only" id="stab-export" onclick="switchSessionTab('export')">Publish</div>
       </div>
 
       <!-- COMBINED SESSION NOTES + TRANSCRIPT TAB -->

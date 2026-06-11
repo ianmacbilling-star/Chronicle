@@ -712,7 +712,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members', archives:'Archives'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Publish', members:'Members', archives:'Archives'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
@@ -5877,7 +5877,7 @@ function showCampaignSection(section) {
   }
 
   // Breadcrumb
-  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Graphic Novel', members:'Members', archives:'Archives'}[section] || section;
+  var sectionLabel = {sessions:'Sessions', characters:'Characters', assets:'Asset Library', novel:'Publish', members:'Members', archives:'Archives'}[section] || section;
   setBreadcrumb([
     {label:'My Campaigns', action:"showView('campaigns')"},
     {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
