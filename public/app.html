@@ -174,7 +174,7 @@
       <div id="novel-tab-preview" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')">Layout: Classic</button>
+            <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
             <button class="btn btn-sm" id="novel-custom-btn" onclick="openCustomLayout('novel')">Custom Layout</button>
             <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower).">Quick View</button>
           </div>
@@ -497,7 +497,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <div>
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
-            <button class="btn btn-sm" id="layout-style-btn" onclick="openStylePicker('layout')">Layout: Classic</button>
+            <button class="btn btn-sm" id="layout-style-btn" onclick="openStylePicker('layout')" style="display:none">Layout: Classic</button>
             <button class="btn btn-sm" id="session-custom-btn" onclick="openCustomLayout('session')" style="margin-left:6px;">&#9881; Custom Layout</button>
             <button class="btn btn-sm" id="session-preview-mode-btn" onclick="toggleSessionPreviewMode()" style="margin-left:6px;" title="Quick View = fast on-screen preview. True View = the exact paged PDF (slower).">Quick View</button>
           </div>
@@ -1355,13 +1355,6 @@
           <option value="dirt">Dirt &amp; grime</option>
           <option value="wrinkle">Wrinkled</option>
           <option value="blood">Blood splatter</option>
-        </select>
-      </label>
-      <label class="cl-field" title="Spacing between panels"><span>Gutter spacing</span>
-        <select id="cl-gutter">
-          <option value="tight">Tight</option>
-          <option value="normal">Normal</option>
-          <option value="airy">Airy</option>
         </select>
       </label>
       <label class="cl-field" title="Plain paragraphs, or text inside a tinted box"><span>Narrative text</span>
