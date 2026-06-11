@@ -2559,6 +2559,33 @@ function setCampaignBackCover(archiveId) {
   .catch(function(){ showAlert('Could not update the back cover.'); });
 }
 
+// Set/clear the interior TITLE-PAGE image from an archived image. DM-only.
+function setCampaignTitleImage(archiveId) {
+  var c = state.currentCampaign;
+  if (!c) return;
+  var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
+  if (!a) return;
+  var newTitle = (c.title_image_url === a.image_url) ? '' : a.image_url;
+  fetch('/api/campaigns/' + c.id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title_image_url: newTitle })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data && data.id) {
+      c.title_image_url = data.title_image_url || '';
+      var i = state.campaigns.findIndex(function(x){ return x.id === data.id; });
+      if (i >= 0) state.campaigns[i].title_image_url = data.title_image_url || '';
+      renderArchives();
+      showAlert(newTitle ? 'Title-page image set.' : 'Title-page image cleared.');
+    } else {
+      showAlert((data && data.error) || 'Could not update the title image.');
+    }
+  })
+  .catch(function(){ showAlert('Could not update the title-page image.'); });
+}
+
 function showErrorDialog(msg, title) {
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -5389,6 +5416,7 @@ function renderArchives() {
         '<div class="archive-actions">' +
           (isDM ? '<label class="archive-cover-toggle" title="Use as campaign cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignCover(' + a.id + ')" /> Cover</label>' : '') +
           (isDM ? '<label class="archive-cover-toggle" title="Use as back cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.back_cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignBackCover(' + a.id + ')" /> Back</label>' : '') +
+          (isDM ? '<label class="archive-cover-toggle" title="Use as interior title-page image"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.title_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignTitleImage(' + a.id + ')" /> Title</label>' : '') +
           (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
         '</div>' +
       '</div>' +

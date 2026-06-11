@@ -1686,7 +1686,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   }).join('');
 
   // Get DM name from campaign
-  const dmName = campaign.dm_name || 'The Story Master';
+  const dmName = campaign.owner_name || campaign.dm_name || 'The Story Master';
 
   // Build session content. When paginated, only one session is rendered,
   // but it keeps its real session number, and the chapter seam is suppressed
@@ -1728,6 +1728,40 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     return '<div class="toc-row"><span class="toc-name">Session ' + (idx+1) + ' &mdash; ' + s.name + '</span><span class="toc-dots"></span><span class="toc-date">' + formatDate(s.session_date, {year:'numeric',month:'short',day:'numeric'}) + '</span></div>';
   }).join('');
   var tocBlock = '<div class="content-page toc-page"><div class="toc-title">Contents</div><div class="cast-divider"></div>' + tocRows + '</div>';
+
+  // --- Front matter: interior title page + details / copyright page ----------
+  // Conventional book opening (Lulu wants a title page, then a copyright page,
+  // before the body). Rendered for the on-screen novel AND the print interior
+  // (they are interior content, not the separate wrap cover), so they are NOT
+  // gated on fCover -- only on page 1 when the preview is paginated.
+  function _fmEsc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  var titleImg = campaign.title_image_url || '';
+  var _pseen = {};
+  var playerNames = characters.map(function(c){ return (c.player_name || '').trim(); })
+    .filter(function(n){ if (!n) return false; var k = n.toLowerCase(); if (_pseen[k]) return false; _pseen[k] = 1; return true; })
+    .join(', ');
+  var copyYear = _dts.length ? new Date(Math.max.apply(null, _dts)).getFullYear() : new Date().getFullYear();
+  var copyHolder = campaign.owner_name || campaign.dm_name || dmName;
+  var titlePageHTML =
+    '<div class="titlepage">' +
+      '<div class="tp-title">' + _fmEsc(campaign.name) + '</div>' +
+      (titleImg
+        ? '<div class="tp-image-wrap"><div class="tp-image-border" style="' + picBorderCss(co) + '">' +
+            '<img class="tp-image" src="' + titleImg + '" alt="" />' + picOverlay(co) + '</div></div>'
+        : '') +
+      (fHideLogo ? '' : '<img class="tp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
+    '</div>';
+  var detailsPageHTML =
+    '<div class="detailspage">' +
+      '<div class="dp-title">' + _fmEsc(campaign.name) + '</div>' +
+      (dateRange ? '<div class="dp-dates">' + dateRange + '</div>' : '') +
+      '<div class="dp-divider"></div>' +
+      (playerNames ? '<div class="dp-block"><div class="dp-label">Players</div><div class="dp-value">' + _fmEsc(playerNames) + '</div></div>' : '') +
+      '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' +
+      '<div class="dp-copyright">&copy; ' + copyYear + ' ' + _fmEsc(copyHolder) + '. All rights reserved.</div>' +
+      '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
+        'This chronicle was assembled from recorded tabletop role-playing sessions. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
+    '</div>';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1778,10 +1812,27 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-player { font-family:'Cinzel',serif;font-size:8pt;color:#9e9088;letter-spacing:0.05em;margin-bottom:0.05in; }
   .cast-desc { font-family:'Crimson Text',serif;font-size:9pt;color:#6b5f55;line-height:1.4; }
 
+  /* FRONT MATTER — interior title page + details / copyright page */
+  .titlepage { width:8.5in;min-height:9.4in;padding:0.85in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
+  .tp-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#2c1810;letter-spacing:0.04em;line-height:1.15;text-transform:uppercase;margin-bottom:0.4in; }
+  .tp-image-wrap { margin:0 auto;max-width:100%; }
+  .tp-image-border { display:inline-block;position:relative;line-height:0;border-radius:4px;overflow:hidden; }
+  .tp-image { display:block;max-width:4.6in;max-height:5in;width:auto;height:auto; }
+  .tp-logo { width:0.95in;height:auto;object-fit:contain;margin-top:0.5in;opacity:0.9; }
+  .detailspage { width:8.5in;min-height:9.4in;padding:1in 1.1in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
+  .dp-title { font-family:'Cinzel',serif;font-size:20pt;font-weight:700;color:#2c1810;letter-spacing:0.03em;margin-bottom:0.08in; }
+  .dp-dates { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;font-style:italic;margin-bottom:0.15in; }
+  .dp-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.1in auto 0.3in; }
+  .dp-block { margin-bottom:0.22in; }
+  .dp-label { font-family:'Cinzel',serif;font-size:8.5pt;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.04in; }
+  .dp-value { font-family:'Crimson Text',serif;font-size:12pt;color:#2c1810;line-height:1.5; }
+  .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
+  .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.25in;max-width:4.6in; }
+
   /* CONTENT */
   .content-page { width:8.5in;padding:0.5in 0.85in;position:relative; }
   .content-page:last-of-type { page-break-after:avoid; }
-  .cast-page, .content-page { ${paperCSS} }
+  .cast-page, .content-page, .titlepage, .detailspage { ${paperCSS} }
   .toc-page { page-break-after:always; }
   .toc-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .toc-row { display:flex;align-items:baseline;gap:8px;margin:0.12in 0;font-family:'Cinzel',serif; }
@@ -1861,6 +1912,8 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
   </div>`}
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
+${(!paginated || pageOpts.page === 1) ? titlePageHTML : ''}
+${(!paginated || pageOpts.page === 1) ? detailsPageHTML : ''}
 ${(fCast && (!paginated || pageOpts.page === 1)) ? `<!-- CAST & CREW PAGE -->
 <div class="cast-page">
   <div class="cast-page-title">The Company</div>
@@ -1991,7 +2044,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
 
   const campaign = await db.prepare(
-    'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+    'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
 
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
@@ -2080,7 +2133,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   const db = await getDb();
 
   const campaign = await db.prepare(
-    'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+    'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
 
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
@@ -2275,7 +2328,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
   try {
     const db = await getDb();
     const campaign = await db.prepare(
-      'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+      'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
     ).get(req.params.campaignId, req.session.userId);
     if (!campaign) return res.status(403).json({ error: 'Access denied' });
     var _allowNovel = campaign.allow_player_novel_access === true || campaign.allow_player_novel_access === 1 ||
