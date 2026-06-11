@@ -806,7 +806,13 @@ function vignetteOverlayHtml(){
 function picOverlay(opts){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
-  if (b === 'frame') return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1.5px #c9a84c;"></div>';
+  if (b === 'frame') return '<div style="position:absolute;inset:0;pointer-events:none;' +
+    'box-shadow:inset 0 0 0 1px #c9a84c, inset 0 0 0 2.5px #2c1e10, inset 0 0 0 4px #e8d5a3, inset 0 0 0 5.5px #2c1e10, inset 0 0 0 6.5px #c9a84c;">' +
+    '<i style="position:absolute;top:6px;left:6px;width:11px;height:11px;border-top:2px solid #e8d5a3;border-left:2px solid #e8d5a3;"></i>' +
+    '<i style="position:absolute;top:6px;right:6px;width:11px;height:11px;border-top:2px solid #e8d5a3;border-right:2px solid #e8d5a3;"></i>' +
+    '<i style="position:absolute;bottom:6px;left:6px;width:11px;height:11px;border-bottom:2px solid #e8d5a3;border-left:2px solid #e8d5a3;"></i>' +
+    '<i style="position:absolute;bottom:6px;right:6px;width:11px;height:11px;border-bottom:2px solid #e8d5a3;border-right:2px solid #e8d5a3;"></i>' +
+    '</div>';
   return '';
 }
 
