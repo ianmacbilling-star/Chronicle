@@ -530,6 +530,22 @@ function coCaptionBelow(m, i, caption) {
   return '';
 }
 
+// Caption for cover-filled cells (Comic / Magazine): every style renders ON the image,
+// since there is no 'below the image' room. bar/engraved get their own backgrounds so
+// they stay readable on a dark photo.
+function coCaptionCover(m, caption) {
+  if (!m.title) return '';
+  if (caption === 'plate')
+    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+  if (caption === 'gradient')
+    return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;">' + m.title + '</div>';
+  if (caption === 'bar')
+    return '<div style="position:absolute;left:0;right:0;bottom:0;background:#f9f4e8;border-top:3px solid #c9a84c;padding:4px 9px;font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;line-height:1.2;">' + m.title + '</div>';
+  if (caption === 'engraved')
+    return '<div style="position:absolute;left:0;right:0;bottom:0;background:rgba(245,239,225,0.92);padding:4px 6px;text-align:center;font-family:Cinzel,serif;font-size:9pt;letter-spacing:0.12em;text-transform:uppercase;color:#7a5d22;line-height:1.2;">' + m.title + '</div>';
+  return '';
+}
+
 function coNarr(text, opts, isIntro) {
   if (!text) return '';
   if (opts.narr === 'box' && !isIntro) return '<div style="margin:0.16in 0;">' + buildClassicTextPanel(text) + '</div>';
@@ -836,7 +852,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
 }
 
@@ -850,7 +866,7 @@ function cgFlowWide(m, opts, narrHtml) {
     : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    media + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+    media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
 }
 
@@ -861,7 +877,7 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
     return '<div style="' + cgBorder(opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+      'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
@@ -880,7 +896,7 @@ function cgFlowFeature(m, opts, narrHtml) {
       : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
     var wbox = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-      media + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+      media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
     return wbox + (narrHtml || '');
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
@@ -893,7 +909,7 @@ function cgFlowFeature(m, opts, narrHtml) {
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    img + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+    img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
 }
 
@@ -928,7 +944,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var spanCss = (span === 'tall') ? 'grid-row:span 2;' : ((span === 'wide') ? 'grid-column:span 2;' : '');
     return '<div style="' + cgBorder(opts) + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
       'height:' + h.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' +
-      spanCss + '">' + media + picOverlay(opts) + coCaptionOverlay(m, opts.caption) + '</div>';
+      spanCss + '">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   }
 
   var cells = [];
