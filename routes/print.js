@@ -42,6 +42,22 @@ function applyPrintMarkup(totalCost, printCost, pct) {
   var charge = Number(totalCost || 0) + Number(printCost || 0) * (pct / 100);
   return Math.round(charge * 100) / 100;
 }
+// Customer-facing charge breakdown. Markup applies to the PRINT cost only
+// (Lulu print cost * (1 + pct/100)); shipping passes through at cost. The
+// displayed line items therefore sum to the total: print(marked) + shipping,
+// so the math always reconciles for the customer.
+function markedCharge(quote, pct) {
+  var r2 = function (n) { return Math.round(Number(n || 0) * 100) / 100; };
+  var printAtCost = r2(quote.printCost);
+  var printMarked = r2(Number(quote.printCost || 0) * (1 + Number(pct || 0) / 100));
+  var shipping = r2(quote.shippingCost);
+  return {
+    printAtCost: printAtCost,
+    printMarked: printMarked,
+    shipping: shipping,
+    customerCharge: r2(printMarked + shipping),
+  };
+}
 
 function requireSession(req, res, next) {
   if (!req.session || !req.session.userId) {
@@ -149,15 +165,16 @@ router.post('/quote', requireSession, async function (req, res) {
     const quote = await provider.getQuote(orderReq);
     const db = await getDb();
     const pct = await getPrintMarkupPct(db);
+    const _m = markedCharge(quote, pct);
 
     res.json({
       podPackageId: provider._packageId ? provider._packageId(built.spec) : undefined,
       printedPageCount: built.spec.pageCount,
       providerCost: quote.totalCost,
       currency: quote.currency,
-      customerCharge: applyPrintMarkup(quote.totalCost, quote.printCost, pct),
+      customerCharge: _m.customerCharge,
       markupPct: pct,
-      breakdown: { print: quote.printCost, shipping: quote.shippingCost },
+      breakdown: { print: _m.printMarked, printAtCost: _m.printAtCost, shipping: _m.shipping },
     });
   } catch (e) {
     res.status(502).json({ error: 'Quote failed', detail: String(e && e.message || e) });
@@ -197,7 +214,7 @@ router.post('/order', requireSession, async function (req, res) {
     const quoteReq = buildOrderRequest(body, built.spec, 'quote', contactEmail);
     const quote = await provider.getQuote(quoteReq);
     const pct = await getPrintMarkupPct(db);
-    const customerCharge = applyPrintMarkup(quote.totalCost, quote.printCost, pct);
+    const customerCharge = markedCharge(quote, pct).customerCharge;
     const podPackageId = provider._packageId ? provider._packageId(built.spec) : null;
 
     // 2) Persist the order up-front (status pending) so we have a stable
