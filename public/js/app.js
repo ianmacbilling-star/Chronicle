@@ -9351,6 +9351,7 @@ function printSelectionBody() {
   return {
     campaignId: state.currentCampaign.id,
     orderName: val('print-order-name'),
+    bookTitle: val('print-book-title'),
     sourceUserId: state.novelAsUser || null,
     pageCount: currentPageCount(),
     quantity: parseInt(val('print-qty'), 10) || 1,
@@ -9426,6 +9427,7 @@ function printCoverUrl() {
     '&color=' + encodeURIComponent(s.colorTier || '') +
     '&finish=' + encodeURIComponent(s.coverFinish || '') +
     '&pageCount=' + encodeURIComponent(pc) +
+    '&bookTitle=' + encodeURIComponent((sel && sel.bookTitle) || '') +
     customOptsQ('novel', '&');
 }
 
@@ -9694,6 +9696,7 @@ function orderCardHtml(o) {
   html += '<div style="font-weight:600;color:var(--gold);font-size:15px;">' + esc(title) + '</div>';
   html += '<div style="font-size:11px;color:rgba(245,232,200,0.55);">' + esc(when) + '</div>';
   html += '</div>';
+  if (o.book_title) html += row('Book title', o.book_title);
   if (o.campaign_name && o.order_name) html += row('Campaign', o.campaign_name);
   if (o.source_kind === 'member' && o.source_user_name) html += row('Version', o.source_user_name + ' (player)');
   html += row('Format', fmt);

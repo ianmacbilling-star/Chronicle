@@ -841,6 +841,7 @@ async function migrateCasting(pool) {
       carrier TEXT,
       error TEXT,
       order_name TEXT,
+      book_title TEXT,
       campaign_name TEXT,
       source_kind TEXT,
       source_user_id INTEGER,
@@ -854,6 +855,7 @@ async function migrateCasting(pool) {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_print_orders_provider_job ON print_orders(provider_order_id)');
   // Added after the table shipped — CREATE above won't alter existing tables.
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS order_name TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS book_title TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS campaign_name TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_kind TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_user_id INTEGER');

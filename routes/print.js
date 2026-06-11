@@ -276,8 +276,9 @@ router.post('/order', requireSession, async function (req, res) {
     await db.prepare('UPDATE print_orders SET payment_status = ?, external_id = ? WHERE id = ?')
       .run(paymentStatus, externalId, orderId);
     // Snapshot the card used onto the order, and persist it to the user if asked.
-    await db.prepare('UPDATE print_orders SET card_brand = ?, card_last4 = ? WHERE id = ?')
-      .run(payBrand, payLast4, orderId);
+    var bookTitle = (body.bookTitle != null ? String(body.bookTitle) : '').trim().slice(0, 200) || null;
+    await db.prepare('UPDATE print_orders SET card_brand = ?, card_last4 = ?, book_title = ? WHERE id = ?')
+      .run(payBrand, payLast4, bookTitle, orderId);
     if (body.saveCard && payBrand && payLast4) {
       const _exp = (body.card && body.card.exp) ? String(body.card.exp).slice(0, 7) : null;
       await db.prepare('UPDATE users SET card_brand = ?, card_last4 = ?, card_exp = ? WHERE id = ?')
@@ -339,7 +340,7 @@ router.get('/orders', requireSession, async function (req, res) {
   try {
     const db = await getDb();
     const rows = await db.prepare(
-      `SELECT id, external_id, provider_order_id, order_name, campaign_name,
+      `SELECT id, external_id, provider_order_id, order_name, book_title, campaign_name,
               source_kind, source_user_name, binding, color_tier, cover_finish,
               page_count, quantity, customer_charge, currency, payment_status,
               status, tracking_url, carrier, card_brand, card_last4, ship_name,
