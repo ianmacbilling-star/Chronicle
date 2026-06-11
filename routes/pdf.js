@@ -1694,13 +1694,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
       var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
       return '<div class="cast-member">' +
-        (primaryImg
-          ? '<img class="cast-portrait" style="' + _ps + '" src="' + primaryImg + '" alt="" />'
-          : '<div class="cast-portrait cast-no-img" style="' + _ps + 'font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
+        '<div class="cast-portrait-frame" style="' + _ps + picBorderCss(co) + '">' +
+          (primaryImg
+            ? '<img class="cast-portrait" src="' + primaryImg + '" alt="" />'
+            : '<div class="cast-no-img" style="font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
+          picOverlay(co) +
+        '</div>' +
         '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
-        ((_castFields === 'full' || _castFields === 'mid') ? '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' : '') +
-        ((_castFields === 'full' && c.player_name) ? '<div class="cast-player">Played by ' + _fmEsc(c.player_name) + '</div>' : '') +
-        (_castFields === 'full' ? '<div class="cast-desc">' + _fmEsc((c.description || '').slice(0, 80)) + (c.description && c.description.length > 80 ? '...' : '') + '</div>' : '') +
+        '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
+        (((_castFields === 'full' || _castFields === 'mid') && c.player_name) ? '<div class="cast-player">Played by ' + _fmEsc(c.player_name) + '</div>' : '') +
       '</div>';
     }).join('');
     castBlockHTML = '<div class="cast-grid" style="grid-template-columns:repeat(' + _castCols + ',1fr);gap:' + _castGap + 'in;">' + _members + '</div>';
@@ -1773,7 +1775,6 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         ? '<div class="tp-image-wrap"><div class="tp-image-border" style="' + picBorderCss(co) + '">' +
             '<img class="tp-image" src="' + titleImg + '" alt="" />' + picOverlay(co) + '</div></div>'
         : '') +
-      (fHideLogo ? '' : '<img class="tp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
     '</div>';
   var detailsPageHTML =
     '<div class="detailspage">' +
@@ -1783,6 +1784,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       (playerNames ? '<div class="dp-block"><div class="dp-label">Players</div><div class="dp-value">' + _fmEsc(playerNames) + '</div></div>' : '') +
       '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' +
       '<div class="dp-copyright">&copy; ' + copyYear + ' ' + _fmEsc(copyHolder) + '. All rights reserved.</div>' +
+      (fHideLogo ? '' : '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
       '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
         'This chronicle was assembled from recorded tabletop role-playing sessions. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
     '</div>';
@@ -1829,8 +1831,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.2in auto; }
   .cast-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:0.25in;margin-top:0.1in; }
   .cast-member { text-align:center;padding:0.15in;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:#fff; }
-  .cast-portrait { width:1.2in;height:1.2in;object-fit:cover;object-position:center top;border-radius:50%;border:2px solid rgba(201,168,76,0.3);margin-bottom:0.1in;box-shadow:${CO_IMG_SHADOW}; }
-  .cast-no-img { width:1.2in;height:1.2in;border-radius:50%;border:2px solid rgba(201,168,76,0.3);background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:24pt;font-weight:700;margin:0 auto 0.1in; }
+  .cast-portrait-frame { box-sizing:border-box;position:relative;display:block;overflow:hidden;line-height:0;border-radius:4px;margin:0 auto 0.08in; }
+  .cast-portrait { width:100%;height:100%;object-fit:cover;object-position:center top;display:block; }
+  .cast-no-img { width:100%;height:100%;background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-weight:700; }
   .cast-name { font-family:'Cinzel',serif;font-size:11pt;font-weight:600;color:#2c1810;margin-bottom:0.03in; }
   .cast-cls { font-family:'Crimson Text',serif;font-size:10pt;color:#8a6a2a;font-style:italic;margin-bottom:0.03in; }
   .cast-player { font-family:'Cinzel',serif;font-size:8pt;color:#9e9088;letter-spacing:0.05em;margin-bottom:0.05in; }
@@ -1857,7 +1860,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .dp-label { font-family:'Cinzel',serif;font-size:8.5pt;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.04in; }
   .dp-value { font-family:'Crimson Text',serif;font-size:12pt;color:#2c1810;line-height:1.5; }
   .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
-  .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.25in;max-width:4.6in; }
+  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.3in auto 0.12in;opacity:0.9; }
+  .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:4.6in; }
 
   /* CONTENT */
   .content-page { width:8.5in;padding:0.5in 0.85in;position:relative; }
