@@ -252,12 +252,21 @@ function companionEligible(m) { var s = normShape(m); return s === 'standard' ||
 // AND the title page / cast portraits so the 'frame' option looks identical
 // everywhere. inline=true makes the frame hug a fixed-size image (title/cast);
 // the default is a full-width block (interior columns).
-function bronzeFrame(inner, inline) {
-  var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:6px;height:6px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
+function bronzeFrame(inner, inline, scale) {
+  // scale (default 1) shrinks the whole frame proportionally. The interior story
+  // images are large so the full-size frame reads thin; the title image and the
+  // (often small) cast portraits pass a smaller scale so the frame stays in
+  // proportion instead of swallowing the picture.
+  var sc = scale || 1;
+  var padO = Math.max(2, Math.round(8 * sc));
+  var padM = Math.max(1, Math.round(2 * sc));
+  var gold = Math.max(1, Math.round(2 * sc));
+  var dia = Math.max(3, Math.round(6 * sc));
+  var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:' + dia + 'px;height:' + dia + 'px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
   var _dia = _d('top:0;left:0;', 'translate(-50%,-50%)') + _d('top:0;right:0;', 'translate(50%,-50%)') + _d('bottom:0;left:0;', 'translate(-50%,50%)') + _d('bottom:0;right:0;', 'translate(50%,50%)');
-  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-    '<div style="padding:2px;background:#0a0806;">' +
-    '<div style="position:relative;border:2px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
+  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + padO + 'px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
+    '<div style="padding:' + padM + 'px;background:#0a0806;">' +
+    '<div style="position:relative;border:' + gold + 'px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
     '</div>' +
   '</div>';
 }
@@ -1710,13 +1719,16 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     var _members = characters.map(function(c) {
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
       var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
+      // Frame scale follows the portrait size so small portraits get a thin frame
+      // (the fixed-size frame would otherwise swallow them).
+      var _fsc = Math.max(0.38, Math.min(0.7, _castPort * 0.62));
       return '<div class="cast-member">' +
         ((co && co.border === 'frame')
           ? '<div style="margin-bottom:0.08in;">' + bronzeFrame(
               (primaryImg
                 ? '<img style="' + _ps + 'object-fit:cover;object-position:center top;display:block;" src="' + primaryImg + '" alt="" />'
                 : '<div style="' + _ps + 'background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:\'Cinzel\',serif;font-weight:700;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>'),
-              true) + '</div>'
+              true, _fsc) + '</div>'
           : '<div class="cast-portrait-frame" style="' + _ps + picBorderCss(co) + '">' +
               (primaryImg
                 ? '<img class="cast-portrait" src="' + primaryImg + '" alt="" />'
@@ -1797,7 +1809,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       (titleImg
         ? '<div class="tp-image-wrap">' +
             ((co && co.border === 'frame')
-              ? bronzeFrame('<img class="tp-image" src="' + titleImg + '" alt="" />', true)
+              ? bronzeFrame('<img class="tp-image" src="' + titleImg + '" alt="" />', true, 0.6)
               : '<div class="tp-image-border" style="' + picBorderCss(co) + '">' + '<img class="tp-image" src="' + titleImg + '" alt="" />' + picOverlay(co) + '</div>') +
           '</div>'
         : '') +
