@@ -252,10 +252,16 @@ function framedMedia(m) {
   var inner = m.image
     ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#160e06;"></div>';
-  return '<div style="padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
+  // Small scroll flourish in each corner (scales with the frame, capped). Matches
+  // the Comic frame motif so every layout reads consistently.
+  var _scroll = '<path d="M4 28 C4 14 14 4 28 4 C19 4 15 9 15 15 C15 19 18 20 21 18" fill="none" stroke="#e8d5a3" stroke-width="1.8" stroke-linecap="round"/>';
+  var _corners = ['top:0;left:0;', 'top:0;right:0;transform:rotate(90deg);', 'bottom:0;right:0;transform:rotate(180deg);', 'bottom:0;left:0;transform:rotate(270deg);']
+    .map(function(_p){ return '<svg viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" style="position:absolute;' + _p + 'width:13%;height:auto;max-width:0.34in;overflow:visible;z-index:2;pointer-events:none;">' + _scroll + '</svg>'; })
+    .join('');
+  return '<div style="position:relative;padding:8px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
     '<div style="padding:2px;background:#0a0806;">' +
     '<div style="border:1.5px solid #c9a84c;line-height:0;">' + inner + '</div>' +
-    '</div>' +
+    '</div>' + _corners +
   '</div>';
 }
 function frameCell(m, pct, showCaption) {
