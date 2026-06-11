@@ -2218,12 +2218,18 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var logo = hideLogo ? '' : '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
   var spineFont = Math.max(7, Math.min(22, Math.round(spineW * 64)));
 
+  var framing = '<div class="wc-bg"></div><div class="wc-border"></div><div class="wc-border-inner"></div>';
   var frontInner = frontImg
-    ? '<img class="wc-img" src="' + frontImg + '" alt="" />' +
-      '<div class="wc-front-cap"><div class="wc-title">' + name + '</div>' + logo + '</div>'
-    : '<div class="wc-textfront">' + logo +
-      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title">' + name + '</div></div>';
-  var backInner = backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '';
+    ? framing +
+      '<div class="wc-frame"><img class="wc-img" src="' + frontImg + '" alt="" />' +
+      '<div class="wc-fade"></div>' +
+      '<div class="wc-front-cap"><div class="wc-title">' + name + '</div>' + logo + '</div></div>'
+    : framing +
+      '<div class="wc-frame"><div class="wc-textfront">' + logo +
+      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title">' + name + '</div></div></div>';
+  var backInner = framing + (backImg
+    ? '<div class="wc-frame"><img class="wc-img" src="' + backImg + '" alt="" /></div>'
+    : '');
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
     '@page { size: ' + W + 'in ' + H + 'in; margin: 0; }' +
@@ -2235,14 +2241,19 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-back  { left:0; width:' + sideW + 'in; }' +
     '.wc-front { right:0; width:' + sideW + 'in; }' +
     '.wc-spine { left:' + sideW + 'in; width:' + spineW + 'in; display:flex; align-items:center; justify-content:center; background:#0a0604; border-left:1px solid rgba(201,168,76,0.18); border-right:1px solid rgba(201,168,76,0.18); }' +
-    '.wc-img { width:100%; height:100%; object-fit:cover; object-position:center; display:block; }' +
+    '.wc-img { width:100%; height:100%; object-fit:cover; object-position:center top; display:block; }' +
+    '.wc-bg { position:absolute; inset:0; background:radial-gradient(ellipse at center, #3a2010 0%, #0a0604 70%); }' +
+    '.wc-border { position:absolute; inset:0.5in; border:2px solid rgba(201,168,76,0.4); pointer-events:none; }' +
+    '.wc-border-inner { position:absolute; inset:0.6in; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
+    '.wc-frame { position:absolute; inset:0.8in; border:2px solid rgba(201,168,76,0.55); border-radius:8px; overflow:hidden; background:#0a0604; box-shadow:0 4px 24px rgba(0,0,0,0.5); }' +
+    '.wc-fade { position:absolute; inset:0; box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85); pointer-events:none; }' +
     '.wc-spine-text { transform:rotate(90deg); transform-origin:center; white-space:nowrap; font-size:' + spineFont + 'pt; color:#f0d98a; letter-spacing:0.06em; }' +
-    '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:46%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.5in 0.55in 0.45in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
+    '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
     '.wc-title { font-size:26pt; font-weight:700; color:#f0d98a; letter-spacing:0.03em; line-height:1.12; text-align:center; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
     '.wc-eyebrow { font-size:10pt; color:rgba(201,168,76,0.6); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.12in; }' +
     '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:0.92; }' +
-    '.wc-barcode { position:absolute; left:0.5in; bottom:0.5in; width:2in; height:1.2in; background:#ffffff; border-radius:3px; }' +
+    '.wc-barcode { position:absolute; left:1.05in; bottom:1.05in; width:1.75in; height:1in; background:#ffffff; border-radius:3px; }' +
     '</style></head><body>' +
     '<div class="wrap">' +
       '<div class="wc-panel wc-back">' + backInner + '</div>' +
