@@ -1539,11 +1539,22 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { width: 8.5in; }
     .cover-page { height: 11in; }
+    .cover-art-frame { flex:none; height:9.6in; }
     .content-page { min-height: 0; padding-top: 0; padding-bottom: 0; }
     @page { size: 8.5in 11in; margin: 0.65in 0; }
     ${fCover ? '@page :first { margin:0; }' : ''}
     .content-page + .content-page { margin-top:0.4in; }
   }
+  .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in;text-align:center; }
+  .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
+  .cover-art-img { width:100%;height:100%;object-fit:cover;object-position:center top;display:block; }
+  .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
+  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
+  .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
+  .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
+  .cover-art-logo { width:110px;height:auto;object-fit:contain; }
+  .backcover-page { width:8.5in;height:11in;background:#0a0604;page-break-before:always;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
+  .backcover-img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
 </style>
 </head>
 <body>
@@ -1553,14 +1564,24 @@ ${fCover ? `<!-- COVER PAGE -->
   <div class="cover-bg"></div>
   <div class="cover-border"></div>
   <div class="cover-border-inner"></div>
-  <div class="cover-content">
+  ${campaign.cover_image_url ? `<div class="cover-content cover-image-layout">
+    <div class="cover-art-frame">
+      <img class="cover-art-img" src="${campaign.cover_image_url}" alt="" />
+      <div class="cover-art-fade"></div>
+      <div class="cover-art-caption">
+        <div class="cover-art-title">${campaign.name}</div>
+        <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
+        ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
+      </div>
+    </div>
+  </div>` : `<div class="cover-content">
     ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     <div class="cover-eyebrow">A Saga of</div>
     <div class="cover-campaign">${campaign.name}</div>
     <div class="cover-divider"></div>
     <div class="cover-session">${session.name}</div>
     <div class="cover-date">${formatDate(session.session_date)}</div>
-  </div>
+  </div>`}
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
 
@@ -1578,6 +1599,9 @@ ${fCover ? `<!-- COVER PAGE -->
 </div>
 
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
+
+${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
+<div class="backcover-page"><img class="backcover-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : ''}
 
 </body>
 </html>`;
@@ -1777,6 +1801,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     .content-page + .content-page { margin-top:0.4in; }
     .cover-art-frame { flex:none; height:9.6in; }
   }
+  .backcover-page { width:8.5in;height:11in;background:#0a0604;page-break-before:always;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center; }
+  .backcover-img { width:100%;height:100%;object-fit:cover;object-position:center;display:block; }
 </style>
 </head>
 <body>
@@ -1822,6 +1848,9 @@ ${(fToc && (!paginated || pageOpts.page === 1)) ? tocBlock : ''}
 ${allSessionsHTML}
 
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
+
+${(fCover && campaign.back_cover_image_url && !paginated) ? `<!-- BACK COVER PAGE -->
+<div class="backcover-page"><img class="backcover-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : ''}
 
 </body>
 </html>`;
