@@ -2221,10 +2221,10 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var logo = hideLogo ? '' : '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
   var spineLogo = hideLogo ? '' : '<img class="wc-spine-logo" src="/images/Campaignia_Logo.png" alt="" />';
   var spineFont = Math.max(7, Math.min(20, Math.round(spineW * 56)));
-  var spineLogoH = Math.max(0.1, Math.min(0.42, spineW * 0.62));
+  var spineLogoW = Math.max(0.12, Math.min(0.5, spineW * 0.78));
 
   var framing = '<div class="wc-bg"></div><div class="wc-border"></div><div class="wc-border-inner"></div>';
-  var mark = '<div class="wc-mark">Campaignia</div>';
+  var mark = '<div class="wc-mark">CAMPAIGNIA</div>';
   var frontInner = frontImg
     ? framing +
       '<div class="wc-frame"><img class="wc-img" src="' + frontImg + '" alt="" />' +
@@ -2252,10 +2252,10 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-border-inner { position:absolute; inset:0.6in; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
     '.wc-frame { position:absolute; inset:0.8in; border:2px solid rgba(201,168,76,0.55); border-radius:8px; overflow:hidden; background:#0a0604; box-shadow:0 4px 24px rgba(0,0,0,0.5); }' +
     '.wc-fade { position:absolute; inset:0; box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85); pointer-events:none; }' +
-    '.wc-mark { position:absolute; right:0.2in; bottom:0.16in; font-size:8pt; color:rgba(201,168,76,0.4); letter-spacing:0.12em; z-index:2; }' +
-    '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; display:flex; align-items:center; gap:0.12in; }' +
+    '.wc-mark { position:absolute; left:0; right:0; bottom:0.16in; text-align:center; font-size:8pt; color:rgba(201,168,76,0.45); letter-spacing:0.18em; z-index:2; }' +
+    '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
     '.wc-spine-text { font-size:' + spineFont + 'pt; color:#f0d98a; letter-spacing:0.06em; }' +
-    '.wc-spine-logo { height:' + spineLogoH + 'in; width:auto; object-fit:contain; opacity:0.95; }' +
+    '.wc-spine-logo { position:absolute; left:50%; bottom:0.16in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
     '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
     '.wc-title { font-size:26pt; font-weight:700; color:#f0d98a; letter-spacing:0.03em; line-height:1.12; text-align:center; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
@@ -2266,7 +2266,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '<div class="wrap">' +
       '<div class="wc-panel wc-back">' + backInner + '</div>' +
       '<div class="wc-barcode"></div>' +
-      '<div class="wc-panel wc-spine"><div class="wc-spine-group"><span class="wc-spine-text">' + bookTitle + '</span>' + spineLogo + '</div></div>' +
+      '<div class="wc-panel wc-spine"><div class="wc-spine-group"><span class="wc-spine-text">' + bookTitle + '</span></div>' + spineLogo + '</div>' +
       '<div class="wc-panel wc-front">' + frontInner + '</div>' +
     '</div></body></html>';
 }
