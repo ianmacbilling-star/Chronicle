@@ -1671,19 +1671,40 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   }
   const coverImg = campaign.cover_image_url || '';
 
-  // Cast page
-  const castHTML = characters.map(function(c) {
-    var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
-    return '<div class="cast-member">' +
-      (primaryImg
-        ? '<img class="cast-portrait" src="' + primaryImg + '" alt="' + c.name + '" />'
-        : '<div class="cast-portrait cast-no-img">' + c.name.charAt(0) + '</div>') +
-      '<div class="cast-name">' + c.name + '</div>' +
-      '<div class="cast-cls">' + (c.cls || '') + '</div>' +
-      (c.player_name ? '<div class="cast-player">Played by ' + c.player_name + '</div>' : '') +
-      '<div class="cast-desc">' + ((c.description || '').slice(0, 80)) + (c.description && c.description.length > 80 ? '...' : '') + '</div>' +
-    '</div>';
-  }).join('');
+  // Cast page -- "The Company". Density scales with the number of characters so
+  // a large cast never spills past one page: portraits shrink + columns grow,
+  // then a very large cast falls back to a names-only list. A hard print height
+  // cap (see CSS) is the final backstop against any overflow.
+  var _castN = characters.length;
+  var _castCols, _castPort, _castGap, _castFields;
+  if (_castN <= 12)      { _castCols = 3; _castPort = 1.1;  _castGap = 0.25; _castFields = 'full'; }
+  else if (_castN <= 30) { _castCols = 4; _castPort = 0.85; _castGap = 0.16; _castFields = 'mid';  }
+  else if (_castN <= 60) { _castCols = 6; _castPort = 0.55; _castGap = 0.10; _castFields = 'name'; }
+  else                   { _castCols = 0; _castPort = 0;    _castGap = 0;    _castFields = 'list'; }
+  var castBlockHTML;
+  if (_castFields === 'list') {
+    castBlockHTML = '<div class="cast-names">' + characters.map(function(c){
+      return '<div class="cast-name-item">' + _fmEsc(c.name) +
+        (c.player_name ? ' <span class="cast-name-player">(' + _fmEsc(c.player_name) + ')</span>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+  } else {
+    var _noImgFont = Math.max(9, Math.round(_castPort * 21));
+    var _members = characters.map(function(c) {
+      var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+      var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
+      return '<div class="cast-member">' +
+        (primaryImg
+          ? '<img class="cast-portrait" style="' + _ps + '" src="' + primaryImg + '" alt="" />'
+          : '<div class="cast-portrait cast-no-img" style="' + _ps + 'font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
+        '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
+        ((_castFields === 'full' || _castFields === 'mid') ? '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' : '') +
+        ((_castFields === 'full' && c.player_name) ? '<div class="cast-player">Played by ' + _fmEsc(c.player_name) + '</div>' : '') +
+        (_castFields === 'full' ? '<div class="cast-desc">' + _fmEsc((c.description || '').slice(0, 80)) + (c.description && c.description.length > 80 ? '...' : '') + '</div>' : '') +
+      '</div>';
+    }).join('');
+    castBlockHTML = '<div class="cast-grid" style="grid-template-columns:repeat(' + _castCols + ',1fr);gap:' + _castGap + 'in;">' + _members + '</div>';
+  }
 
   // Get DM name from campaign
   const dmName = campaign.owner_name || campaign.dm_name || 'The Story Master';
@@ -1727,7 +1748,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var tocRows = sessions.map(function(s, idx){
     return '<div class="toc-row"><span class="toc-name">Session ' + (idx+1) + ' &mdash; ' + s.name + '</span><span class="toc-dots"></span><span class="toc-date">' + formatDate(s.session_date, {year:'numeric',month:'short',day:'numeric'}) + '</span></div>';
   }).join('');
-  var tocBlock = '<div class="content-page toc-page"><div class="toc-title">Contents</div><div class="cast-divider"></div>' + tocRows + '</div>';
+  var _tocCols = sessions.length <= 30 ? 1 : (sessions.length <= 70 ? 2 : 3);
+  var tocBlock = '<div class="content-page toc-page"><div class="toc-title">Contents</div><div class="cast-divider"></div><div class="toc-cols" style="column-count:' + _tocCols + ';">' + tocRows + '</div></div>';
 
   // --- Front matter: interior title page + details / copyright page ----------
   // Conventional book opening (Lulu wants a title page, then a copyright page,
@@ -1813,6 +1835,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-cls { font-family:'Crimson Text',serif;font-size:10pt;color:#8a6a2a;font-style:italic;margin-bottom:0.03in; }
   .cast-player { font-family:'Cinzel',serif;font-size:8pt;color:#9e9088;letter-spacing:0.05em;margin-bottom:0.05in; }
   .cast-desc { font-family:'Crimson Text',serif;font-size:9pt;color:#6b5f55;line-height:1.4; }
+  .cast-names { column-count:4;column-gap:0.3in;text-align:left;margin-top:0.1in; }
+  .cast-name-item { break-inside:avoid;font-family:'Cinzel',serif;font-size:9.5pt;color:#2c1810;padding:0.025in 0;line-height:1.3; }
+  .cast-name-player { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a6a2a;font-style:italic; }
+  /* The Company page can never spill to a 2nd sheet: cap height + clip. The
+     density tiers keep realistic casts well within this height. */
+  @media print { .cast-page { box-sizing:border-box;height:9.55in;overflow:hidden; } }
 
   /* FRONT MATTER — interior title page + details / copyright page */
   .titlepage { width:8.5in;min-height:9.4in;padding:0.85in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
@@ -1837,7 +1865,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-page, .content-page, .titlepage, .detailspage { ${paperCSS} }
   .toc-page { page-break-after:always; }
   .toc-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
-  .toc-row { display:flex;align-items:baseline;gap:8px;margin:0.12in 0;font-family:'Cinzel',serif; }
+  .toc-cols { column-gap:0.4in; }
+  .toc-row { display:flex;align-items:baseline;gap:8px;margin:0.12in 0;font-family:'Cinzel',serif;break-inside:avoid; }
   .toc-name { font-size:11pt;color:#2c1810;white-space:nowrap; }
   .toc-dots { flex:1;border-bottom:1px dotted rgba(110,75,28,0.5);transform:translateY(-3px); }
   .toc-date { font-size:9.5pt;color:#8a6a2a;font-style:italic;white-space:nowrap; }
@@ -1922,7 +1951,7 @@ ${(fCast && (!paginated || pageOpts.page === 1)) ? `<!-- CAST & CREW PAGE -->
   <div class="cast-page-subtitle">${campaign.description || ''}</div>
   <div class="cast-divider"></div>
   <div class="cast-page-dm">Story Master: ${dmName} &nbsp;&nbsp;|&nbsp;&nbsp; ${dateRange}</div>
-  <div class="cast-grid">${castHTML}</div>
+  ${castBlockHTML}
 </div>` : ''}
 ${(fToc && (!paginated || pageOpts.page === 1)) ? tocBlock : ''}
 
