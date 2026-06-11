@@ -6,6 +6,8 @@ const { getEffectiveTier } = require('../middleware/tiers');
 const path = require('path');
 const { uploadFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
+const { getPrintProvider } = require('../services/printing');
+const catalog = require('../services/printing/catalog');
 
 // Shared drop shadow for gallery panels AND character portraits (kept in lockstep).
 var CO_IMG_SHADOW = '7px 7px 10px -2px rgba(0,0,0,0.5), 18px 18px 30px -10px rgba(0,0,0,0.5)';
@@ -2106,6 +2108,145 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: String(e && e.message ? e.message : e) });
+  }
+});
+
+// ============================================================
+// PRINT COVER (Phase 3) -- one-piece wrap PDF: back | spine | front.
+// Sized to Lulu's exact cover-dimensions (spine width derives from page
+// count + binding). Front reuses the campaign cover art; back uses the
+// campaign's chosen back-cover image; the spine carries the campaign name.
+// GEOMETRY NOTE: the back|spine|front split below assumes perfect-bound
+// bleed geometry (and a 0.75in casewrap allowance for hardcover). The total
+// sheet size comes from Lulu; the internal split is computed here and should
+// be verified against a Lulu sandbox proof, especially for hardcover.
+// ============================================================
+function coverGeometry(binding, totalWidthIn) {
+  var bleed = 0.125, trimW = 8.5;
+  var sideOuter = (binding === 'hardcover') ? (trimW + 0.75) : (trimW + bleed);
+  var spineW = Math.max(0, Math.round((totalWidthIn - 2 * sideOuter) * 1000) / 1000);
+  var sideW = Math.round(((totalWidthIn - spineW) / 2) * 1000) / 1000;
+  return { bleed: bleed, sideW: sideW, spineW: spineW };
+}
+
+function buildWrapCoverHTML(campaign, spec, dims, opts) {
+  opts = opts || {};
+  var hideLogo = !!opts.hideLogo;
+  var W = dims.widthIn, H = dims.heightIn;
+  var geo = coverGeometry(spec.binding, W);
+  var sideW = geo.sideW, spineW = geo.spineW;
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+  var name = esc(campaign.name || 'Campaignia');
+  var frontImg = campaign.cover_image_url || '';
+  var backImg = campaign.back_cover_image_url || '';
+  var logo = hideLogo ? '' : '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
+  var spineFont = Math.max(7, Math.min(22, Math.round(spineW * 64)));
+
+  var frontInner = frontImg
+    ? '<img class="wc-img" src="' + frontImg + '" alt="" />' +
+      '<div class="wc-front-cap"><div class="wc-title">' + name + '</div>' + logo + '</div>'
+    : '<div class="wc-textfront">' + logo +
+      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title">' + name + '</div></div>';
+  var backInner = backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '';
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+    '@page { size: ' + W + 'in ' + H + 'in; margin: 0; }' +
+    '* { box-sizing: border-box; margin: 0; padding: 0; }' +
+    'html, body { width: ' + W + 'in; height: ' + H + 'in; }' +
+    "body { font-family: 'Cinzel','Georgia',serif; background:#0a0604; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact; }" +
+    '.wrap { position:relative; width:' + W + 'in; height:' + H + 'in; background:#0a0604; overflow:hidden; }' +
+    '.wc-panel { position:absolute; top:0; height:' + H + 'in; overflow:hidden; }' +
+    '.wc-back  { left:0; width:' + sideW + 'in; }' +
+    '.wc-front { right:0; width:' + sideW + 'in; }' +
+    '.wc-spine { left:' + sideW + 'in; width:' + spineW + 'in; display:flex; align-items:center; justify-content:center; background:#0a0604; border-left:1px solid rgba(201,168,76,0.18); border-right:1px solid rgba(201,168,76,0.18); }' +
+    '.wc-img { width:100%; height:100%; object-fit:cover; object-position:center; display:block; }' +
+    '.wc-spine-text { transform:rotate(90deg); transform-origin:center; white-space:nowrap; font-size:' + spineFont + 'pt; color:#f0d98a; letter-spacing:0.06em; }' +
+    '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:46%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.5in 0.55in 0.45in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
+    '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
+    '.wc-title { font-size:26pt; font-weight:700; color:#f0d98a; letter-spacing:0.03em; line-height:1.12; text-align:center; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
+    '.wc-eyebrow { font-size:10pt; color:rgba(201,168,76,0.6); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.12in; }' +
+    '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:0.92; }' +
+    '.wc-barcode { position:absolute; left:0.5in; bottom:0.5in; width:2in; height:1.2in; background:#ffffff; border-radius:3px; }' +
+    '</style></head><body>' +
+    '<div class="wrap">' +
+      '<div class="wc-panel wc-back">' + backInner + '</div>' +
+      '<div class="wc-barcode"></div>' +
+      '<div class="wc-panel wc-spine"><div class="wc-spine-text">' + name + '</div></div>' +
+      '<div class="wc-panel wc-front">' + frontInner + '</div>' +
+    '</div></body></html>';
+}
+
+// GET print-ready one-piece COVER PDF (R2-hosted, or ?download=1 inline).
+router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
+  try {
+    const db = await getDb();
+    const campaign = await db.prepare(
+      'SELECT c.*, cm.role AS my_role FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id WHERE c.id = ? AND cm.user_id = ?'
+    ).get(req.params.campaignId, req.session.userId);
+    if (!campaign) return res.status(403).json({ error: 'Access denied' });
+    var _allowNovel = campaign.allow_player_novel_access === true || campaign.allow_player_novel_access === 1 ||
+      campaign.allow_player_novel_access === 't' || campaign.allow_player_novel_access === 'true';
+    if (campaign.my_role !== 'dm' && !_allowNovel) {
+      return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
+    }
+
+    var selection = {
+      binding: req.query.binding || 'paperback',
+      colorTier: req.query.color || 'premium',
+      coverFinish: req.query.finish || 'matte',
+    };
+    var pageCount = parseInt(req.query.pageCount, 10);
+    if (!(pageCount > 0)) return res.status(400).json({ error: 'pageCount required' });
+    var built = catalog.buildSpec(selection, pageCount);
+    if (!built.ok) return res.status(400).json({ error: 'Invalid selection', details: built.errors });
+
+    var dims;
+    try {
+      var provider = getPrintProvider();
+      dims = await provider.getCoverDimensions(built.spec, built.spec.pageCount);
+    } catch (e) {
+      console.error('[print-cover] dimensions failed:', e && e.message ? e.message : e);
+      return res.status(502).json({ error: 'Could not get cover dimensions from the print provider', detail: String(e && e.message ? e.message : e) });
+    }
+    if (!(dims.widthIn > 0 && dims.heightIn > 0)) {
+      return res.status(502).json({ error: 'Print provider returned invalid cover dimensions' });
+    }
+
+    var co = req.query.co ? parseCustomOpts(req.query.co) : null;
+    if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
+    var fHideLogo = co ? !!co.hideLogo : false;
+
+    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo });
+    var baseUrl = (process.env.PUBLIC_BASE_URL || '');
+    if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
+    if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+
+    var pdfBuffer;
+    try {
+      pdfBuffer = await renderHtmlToPdf(html, { widthIn: dims.widthIn, heightIn: dims.heightIn });
+    } catch (e) {
+      console.error('[print-cover] render failed:', e && e.message ? e.message : e);
+      return res.status(500).json({ error: 'Cover render failed', detail: String(e && e.message ? e.message : e) });
+    }
+
+    if (req.query.download) {
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'inline; filename="cover-' + campaign.id + '.pdf"');
+      return res.send(pdfBuffer);
+    }
+    try {
+      var fname = 'cover-' + campaign.id + '-' + Date.now() + '.pdf';
+      var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
+      return res.json({ url: url, bytes: pdfBuffer.length, widthIn: dims.widthIn, heightIn: dims.heightIn });
+    } catch (e) {
+      console.error('[print-cover] upload failed:', e && e.message ? e.message : e);
+      return res.status(500).json({ error: 'Cover upload failed', detail: String(e && e.message ? e.message : e) });
+    }
+  } catch (e) {
+    console.error('[print-cover] error:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Server error', detail: String(e && e.message ? e.message : e) });
   }
 });
 

@@ -2526,6 +2526,32 @@ function setCampaignCover(archiveId) {
   .catch(function(){ showAlert('Could not update the campaign cover.'); });
 }
 
+function setCampaignBackCover(archiveId) {
+  var c = state.currentCampaign;
+  if (!c) return;
+  var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
+  if (!a) return;
+  var newBack = (c.back_cover_image_url === a.image_url) ? '' : a.image_url;
+  fetch('/api/campaigns/' + c.id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ back_cover_image_url: newBack })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data && data.id) {
+      c.back_cover_image_url = data.back_cover_image_url || '';
+      var i = state.campaigns.findIndex(function(x){ return x.id === data.id; });
+      if (i >= 0) state.campaigns[i].back_cover_image_url = data.back_cover_image_url || '';
+      renderArchives();
+      showAlert(newBack ? 'Back cover set.' : 'Back cover cleared.');
+    } else {
+      showAlert((data && data.error) || 'Could not update the back cover.');
+    }
+  })
+  .catch(function(){ showAlert('Could not update the back cover.'); });
+}
+
 function showErrorDialog(msg, title) {
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -5355,6 +5381,7 @@ function renderArchives() {
         meta +
         '<div class="archive-actions">' +
           (isDM ? '<label class="archive-cover-toggle" title="Use as campaign cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignCover(' + a.id + ')" /> Cover</label>' : '') +
+          (isDM ? '<label class="archive-cover-toggle" title="Use as back cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.back_cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignBackCover(' + a.id + ')" /> Back</label>' : '') +
           (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
         '</div>' +
       '</div>' +
@@ -9286,12 +9313,28 @@ function quotePrintOrder() {
 // plus a link to PREVIEW that exact PDF, and requires an explicit confirm
 // before the order is submitted. preparedInteriorUrl holds the generated file.
 var preparedInteriorUrl = '';
+var preparedCoverUrl = '';
 
 function printInteriorUrl() {
   // Same params the on-screen novel preview uses, so the printed interior
   // matches what the reader sees (the cover page is omitted server-side).
   return '/api/pdf/print-interior/' + state.currentCampaign.id +
     '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');
+}
+
+function printCoverUrl() {
+  // The wrap cover is sized to the chosen format (binding + page count drive
+  // the spine), so it carries the format selection + page count, plus co for
+  // the Platinum hide-logo flag. as_user does not change the cover.
+  var sel = printSelectionBody();
+  var s = (sel && sel.selection) || {};
+  var pc = (printNovelInfo && printNovelInfo.pageEstimate) || 0;
+  return '/api/pdf/print-cover/' + state.currentCampaign.id +
+    '?binding=' + encodeURIComponent(s.binding || '') +
+    '&color=' + encodeURIComponent(s.colorTier || '') +
+    '&finish=' + encodeURIComponent(s.coverFinish || '') +
+    '&pageCount=' + encodeURIComponent(pc) +
+    customOptsQ('novel', '&');
 }
 
 function reviewPrintOrder() {
@@ -9303,16 +9346,25 @@ function reviewPrintOrder() {
   }
   var btn = document.getElementById('print-place-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing your book...'; }
-  showPrintMsg('Building your print-ready book and pricing it. This can take a moment for longer books...', null);
+  showPrintMsg('Preparing your book for final approval...', null);
   preparedInteriorUrl = '';
+  preparedCoverUrl = '';
 
   fetch(printInteriorUrl())
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) {
-        throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the print file.');
+        throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the interior file.');
       }
       preparedInteriorUrl = res.j.url;
+      return fetch(printCoverUrl())
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+    })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.url) {
+        throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the cover file.');
+      }
+      preparedCoverUrl = res.j.url;
       return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
     })
@@ -9357,7 +9409,20 @@ function renderPrintReview(body, quote) {
   html += row('Total', '$' + Number(quote.customerCharge).toFixed(2) + ' ' + (quote.currency || 'USD'));
   sum.innerHTML = html;
   var prev = document.getElementById('print-review-preview');
-  if (prev) prev.href = preparedInteriorUrl;
+  if (prev) {
+    prev.href = preparedInteriorUrl;
+    prev.textContent = 'Preview your interior (opens the PDF in a new tab)';
+    var oldCov = document.getElementById('print-review-cover-preview');
+    if (oldCov && oldCov.parentNode) oldCov.parentNode.removeChild(oldCov);
+    if (preparedCoverUrl) {
+      var ca = document.createElement('a');
+      ca.id = 'print-review-cover-preview';
+      ca.href = preparedCoverUrl; ca.target = '_blank'; ca.rel = 'noopener';
+      ca.textContent = 'Preview your cover (opens the PDF in a new tab)';
+      ca.style.cssText = 'display:inline-block;margin-bottom:10px;margin-left:14px;font-size:13px;color:#7fb0e0;text-decoration:underline;';
+      prev.insertAdjacentElement('afterend', ca);
+    }
+  }
   var place = document.getElementById('print-place-btn');
   if (place) place.style.display = 'none';
   panel.style.display = 'block';
@@ -9376,13 +9441,13 @@ function submitPrintOrder() {
   var body = printSelectionBody();
   if (!body || !body.selection.binding) { showPrintMsg('Pick your format first.', null); return; }
   body.interiorPdfUrl = preparedInteriorUrl || ((document.getElementById('print-interior-url') || {}).value || '');
-  body.coverPdfUrl = (document.getElementById('print-cover-url') || {}).value || '';
+  body.coverPdfUrl = preparedCoverUrl || ((document.getElementById('print-cover-url') || {}).value || '');
   if (!body.interiorPdfUrl) {
     showPrintMsg('Your print file was not prepared. Please go Back and try again.', null);
     return;
   }
   if (!body.coverPdfUrl) {
-    showPrintMsg('A cover file is required. Covers are generated in the next phase; for sandbox testing, paste a cover PDF URL under "(testing) cover PDF URL".', null);
+    showPrintMsg('Your cover file was not prepared. Please go Back and try again.', null);
     return;
   }
   var btn = document.getElementById('print-confirm-btn');

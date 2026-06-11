@@ -230,6 +230,26 @@ class LuluProvider extends PrintProvider {
     };
   }
 
+  // Full-wrap cover dimensions (back + spine + front, including bleed) for a
+  // spec + interior page count. Lulu derives the spine width from page count +
+  // paper, and the casewrap allowance for hardcover. Normalized to inches.
+  // NOTE: written to Lulu's documented shape; CONFIRM against the sandbox.
+  async getCoverDimensions(spec, pageCount) {
+    const raw = await this._fetch('/print-job-cover-dimensions/', {
+      method: 'POST',
+      body: {
+        pod_package_id: this._packageId(spec),
+        interior_page_count: pageCount,
+        unit: 'in',
+      },
+    });
+    let w = Number(raw.width), h = Number(raw.height);
+    const unit = String(raw.unit || raw.unit_name || '').toLowerCase();
+    if (unit === 'pt' || unit === 'point' || unit === 'points') { w = w / 72; h = h / 72; }
+    else if (unit === 'mm') { w = w / 25.4; h = h / 25.4; }
+    return { widthIn: w, heightIn: h, raw };
+  }
+
   async createOrder(req) {
     const raw = await this._fetch('/print-jobs/', {
       method: 'POST',

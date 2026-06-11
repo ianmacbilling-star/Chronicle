@@ -68,11 +68,12 @@ router.put('/:id', requireAuth, async function(req, res) {
   var _allowNovel = (req.body.allow_player_novel_access !== undefined)
     ? (req.body.allow_player_novel_access === true || req.body.allow_player_novel_access === 'true' || req.body.allow_player_novel_access === 1)
     : campaign.allow_player_novel_access;
-  await db.prepare('UPDATE campaigns SET name=?, description=?, cover_image_url=?, allow_player_novel_access=?, edited_at=?, edited_by=? WHERE id=?')
+  await db.prepare('UPDATE campaigns SET name=?, description=?, cover_image_url=?, back_cover_image_url=?, allow_player_novel_access=?, edited_at=?, edited_by=? WHERE id=?')
     .run(
       req.body.name || campaign.name,
       req.body.description !== undefined ? req.body.description : campaign.description,
       req.body.cover_image_url !== undefined ? req.body.cover_image_url : campaign.cover_image_url,
+      req.body.back_cover_image_url !== undefined ? req.body.back_cover_image_url : campaign.back_cover_image_url,
       _allowNovel,
       now, req.session.userId, campaign.id
     );
