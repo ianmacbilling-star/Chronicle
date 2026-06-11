@@ -806,13 +806,16 @@ function vignetteOverlayHtml(){
 function picOverlay(opts){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
-  if (b === 'frame') return '<div style="position:absolute;inset:0;pointer-events:none;' +
-    'box-shadow:inset 0 0 0 1px #c9a84c, inset 0 0 0 2.5px #2c1e10, inset 0 0 0 4px #e8d5a3, inset 0 0 0 5.5px #2c1e10, inset 0 0 0 6.5px #c9a84c;">' +
-    '<i style="position:absolute;top:6px;left:6px;width:11px;height:11px;border-top:2px solid #e8d5a3;border-left:2px solid #e8d5a3;"></i>' +
-    '<i style="position:absolute;top:6px;right:6px;width:11px;height:11px;border-top:2px solid #e8d5a3;border-right:2px solid #e8d5a3;"></i>' +
-    '<i style="position:absolute;bottom:6px;left:6px;width:11px;height:11px;border-bottom:2px solid #e8d5a3;border-left:2px solid #e8d5a3;"></i>' +
-    '<i style="position:absolute;bottom:6px;right:6px;width:11px;height:11px;border-bottom:2px solid #e8d5a3;border-right:2px solid #e8d5a3;"></i>' +
-    '</div>';
+  if (b === 'frame') {
+    // Two thin gold lines (lighter than before) + a small scroll flourish in each
+    // corner. The scroll is an SVG sized as a % of the frame, so it scales down on
+    // small pictures (cast portraits) and up on full-page images. All inset -> no bleed.
+    var _scroll = '<path d="M4 28 C4 14 14 4 28 4 C19 4 15 9 15 15 C15 19 18 20 21 18" fill="none" stroke="#e8d5a3" stroke-width="1.8" stroke-linecap="round"/>';
+    var _corners = ['top:0;left:0;', 'top:0;right:0;transform:rotate(90deg);', 'bottom:0;right:0;transform:rotate(180deg);', 'bottom:0;left:0;transform:rotate(270deg);']
+      .map(function(_p){ return '<svg viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" style="position:absolute;' + _p + 'width:15%;height:auto;max-width:0.32in;overflow:visible;">' + _scroll + '</svg>'; })
+      .join('');
+    return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px #c9a84c, inset 0 0 0 2px #2c1e10, inset 0 0 0 3px #e8d5a3;">' + _corners + '</div>';
+  }
   return '';
 }
 
