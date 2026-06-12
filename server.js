@@ -118,6 +118,12 @@ app.get('/login', function(req, res) {
 });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Stripe webhook -- mounted BEFORE the rate limiter and the session-gated
+// token router. Stripe authenticates via signature (req.rawBody, captured by
+// express.json's verify hook above), not a user session, and must not be
+// throttled or events could be dropped.
+app.post('/api/tokens/stripe-webhook', require('./routes/tokens').stripeWebhook);
+
 // Global backstop limiter across all API routes (after session so it can
 // key by user). Must precede the route mounts below.
 app.use('/api', apiLimiter);

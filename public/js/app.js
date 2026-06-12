@@ -210,17 +210,38 @@ function renderTokenPacks() {
 }
 
 function buyTokenPack(packId) {
-  // Stripe wiring is pending. For now show a friendly "coming soon"
-  // message anchored at the pack grid, so the surface is usable even
-  // before purchasing actually works.
+  // Start a Stripe Checkout. Until billing is configured (pre-LLC) the server
+  // returns 503 and we show the friendly "coming soon" message instead.
   var msg = document.getElementById('token-purchase-msg');
-  if (!msg) return;
   var pack = TOKEN_PACKS.filter(function(p){return p.id===packId;})[0];
   var label = pack ? pack.name + ' pack ($' + pack.price + ')' : 'this pack';
-  msg.innerHTML = '&#9881; Purchasing is being set up. ' + label + ' will be available very soon. ' +
-    'In the meantime, contact your admin to add tokens to your account.';
-  msg.style.display = 'block';
-  msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  function showComingSoon() {
+    if (!msg) return;
+    msg.innerHTML = '&#9881; Purchasing is being set up. ' + label + ' will be available very soon. ' +
+      'In the meantime, contact your admin to add tokens to your account.';
+    msg.style.display = 'block';
+    msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+  function showError(text) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+  fetch('/api/tokens/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ packId: packId })
+  }).then(function(r) {
+    if (r.status === 503) { showComingSoon(); return null; }
+    return r.json();
+  }).then(function(data) {
+    if (!data) return;
+    if (data.url) { window.location = data.url; return; }
+    showError('Could not start checkout. Please try again.');
+  }).catch(function() {
+    showError('Could not reach the billing service. Please try again.');
+  });
 }
 
 // Renders the INSUFFICIENT_TOKENS error as a message + "Buy more tokens"
@@ -8765,6 +8786,8 @@ function renderCampaignLockBanner() {
 // ============================================================
 var TIER_FIELD_LABELS = {
   price: 'Price ($ / month, 0 = Invite only)',
+  monthly_utlt: 'Monthly UTOLT tokens',
+  monthly_cot: 'Monthly CO tokens',
   max_archives_per_campaign: 'Archived images / campaign',
   max_assets: 'Max campaign assets (blank = unlimited)',
   max_moments_short: 'Max moments \u2014 short (<2k words)',
@@ -8813,14 +8836,15 @@ function renderTiersConfig(data) {
     if (!t) return;
     html += '<div class="settings-section tier-config-panel" id="tier-panel-' + tierKey + '">';
     html += '<div class="settings-section-title">' + (t.name || tierKey) + '</div>';
-    html += '<div class="tier-config-grid">';
+    html += '<div style="columns:2;column-gap:30px;">';
     fields.forEach(function (f) {
       var val = (t[f] === null || t[f] === undefined) ? '' : t[f];
       var label = TIER_FIELD_LABELS[f] || f;
-      html += '<div class="form-group" style="margin-bottom:0;">' +
-        '<label class="form-label">' + label + '</label>' +
-        '<input class="form-input tier-config-input" type="number" min="0" step="1" ' +
-        'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" />' +
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);break-inside:avoid;">' +
+        '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;color:rgba(245,232,200,0.78);">' + label + '</label>' +
+        '<input id="tcf-' + tierKey + '-' + f + '" class="form-input tier-config-input" type="number" min="0" step="1" ' +
+        'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" ' +
+        'style="width:74px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
         '</div>';
     });
     html += '</div>';

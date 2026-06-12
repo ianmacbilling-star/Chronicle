@@ -8,6 +8,8 @@ const TIERS = {
     name: 'Copper',
     rank: 1,
     price: 0,
+    monthly_utlt: 0,         // UTOLT: use-it-or-lose-it tokens granted each cycle (expires)
+    monthly_cot: 0,          // CO: carry-over tokens granted each cycle (never expires)
     trial_days: 30,
     max_campaigns: 1,
     max_sessions: 5,         // per campaign
@@ -28,6 +30,8 @@ const TIERS = {
     name: 'Silver',
     rank: 2,
     price: 10,
+    monthly_utlt: 20,        // UTOLT granted each cycle (expires)
+    monthly_cot: 10,         // CO granted each cycle (carries over)
     max_campaigns: 1,
     max_sessions: null,      // unlimited
     max_archives_per_campaign: 10,
@@ -47,6 +51,8 @@ const TIERS = {
     name: 'Gold',
     rank: 3,
     price: 15,
+    monthly_utlt: 30,        // UTOLT granted each cycle (expires)
+    monthly_cot: 15,         // CO granted each cycle (carries over)
     max_campaigns: 3,
     max_archives_per_campaign: 15,
     max_assets: null,
@@ -66,6 +72,8 @@ const TIERS = {
     name: 'Platinum',
     rank: 4,
     price: 22,
+    monthly_utlt: 35,        // UTOLT granted each cycle (expires)
+    monthly_cot: 20,         // CO granted each cycle (carries over)
     max_campaigns: null,     // unlimited
     max_archives_per_campaign: 20,
     max_assets: null,
@@ -96,6 +104,8 @@ let TIER_OVERRIDES = {};
 // list grows in later phases (styles, startup tokens, SM bonus, ...).
 const EDITABLE_TIER_FIELDS = [
   'price',
+  'monthly_utlt',
+  'monthly_cot',
   'max_archives_per_campaign',
   'max_assets',
   'max_moments_short',

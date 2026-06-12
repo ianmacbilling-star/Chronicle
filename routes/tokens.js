@@ -12,6 +12,9 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
+const { getTier } = require('../middleware/tiers');
+const { getPack, listPacks } = require('../services/billing/packs');
+const stripeProvider = require('../services/billing/stripeProvider');
 
 // ------------------------------------------------------------
 // Cost lookup — per model, defaults to 1 if unset.
@@ -44,7 +47,63 @@ async function getBalance(userId) {
   return { utlt, cot, total: utlt + cot };
 }
 
+// ------------------------------------------------------------
+// UTOLT monthly grant + expiry (use-it-or-lose-it).
+// currentCycleKey is the calendar month for now; TODO(stripe): swap to
+// the user's billing-cycle window once subscriptions land.
+// ------------------------------------------------------------
+function currentCycleKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+}
+
+// Grants this cycle's utlt allotment for the user's ACCOUNT tier exactly once
+// per cycle. Before granting, any leftover utlt from a prior cycle is expired
+// (zeroed) -- that is the "lose it" half. Idempotent: a marker ledger row
+// (event_type 'monthly_grant', source=cycle) short-circuits repeat calls to a
+// single SELECT. The cot (carry-over) bucket is never touched here.
+// NOTE: not transaction-locked; a rare double-call at a cycle boundary could
+// double-grant once. Acceptable for the stub; tighten with a unique index later.
+async function ensureMonthlyGrant(userId) {
+  if (!userId) return;
+  const db = await getDb();
+  const cycle = currentCycleKey();
+  const got = await db.prepare(
+    "SELECT 1 AS x FROM token_ledger WHERE user_id = ? AND event_type = 'monthly_grant' AND source = ? LIMIT 1"
+  ).get(userId, cycle);
+  if (got) return;
+  // Account tier's monthly allotments (own tier, not effective campaign tier).
+  // UTOLT is use-it-or-lose-it (expires each cycle); CO carries over forever.
+  let allotUtlt = 0, allotCot = 0;
+  try {
+    const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
+    const tier = getTier((u && u.tier) || 'copper');
+    allotUtlt = parseInt(tier && tier.monthly_utlt, 10);
+    allotCot = parseInt(tier && tier.monthly_cot, 10);
+    if (!Number.isFinite(allotUtlt) || allotUtlt < 0) allotUtlt = 0;
+    if (!Number.isFinite(allotCot) || allotCot < 0) allotCot = 0;
+  } catch (e) { allotUtlt = 0; allotCot = 0; }
+  // Expire any leftover utlt from prior cycles (the "lose it" half).
+  const bal = await getBalance(userId);
+  if (bal.utlt > 0) {
+    await db.prepare(
+      "INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, ?, 'utlt', 'utlt_expire', ?)"
+    ).run(userId, -bal.utlt, cycle);
+  }
+  // Grant this cycle's utlt (a 0-amount row still serves as the once-per-cycle marker).
+  await db.prepare(
+    "INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, ?, 'utlt', 'monthly_grant', ?)"
+  ).run(userId, allotUtlt, cycle);
+  // Grant this cycle's cot (carry-over; accumulates, never expires).
+  if (allotCot > 0) {
+    await db.prepare(
+      "INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, ?, 'cot', 'monthly_cot_grant', ?)"
+    ).run(userId, allotCot, cycle);
+  }
+}
+
 async function canAfford(userId, cost) {
+  await ensureMonthlyGrant(userId);
   const { total } = await getBalance(userId);
   return total >= cost;
 }
@@ -134,6 +193,7 @@ async function requireAdmin(req, res) {
 router.get('/balance', async function(req, res) {
   if (!requireSession(req, res)) return;
   try {
+    await ensureMonthlyGrant(req.session.userId);
     const bal = await getBalance(req.session.userId);
     res.json(bal);
   } catch (e) {
@@ -243,11 +303,117 @@ router.post('/admin/set-balance', async function(req, res) {
   }
 });
 
+// ------------------------------------------------------------
+// BILLING -- Stripe token-pack purchases (stub; live at go-live).
+// ------------------------------------------------------------
+
+// GET /api/tokens/packs -- server-authoritative catalog (for display/sync).
+router.get('/packs', function(req, res) {
+  res.json(listPacks());
+});
+
+// POST /api/tokens/checkout -- begin a Stripe Checkout for a token pack.
+// body: { packId }. Returns { url } to redirect to. Before the LLC/keys exist,
+// returns 503 { error:'billing_unconfigured' } so the UI shows "coming soon".
+router.post('/checkout', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  const pack = getPack((req.body || {}).packId);
+  if (!pack) return res.status(400).json({ error: 'Unknown pack' });
+  if (!stripeProvider.isConfigured()) {
+    return res.status(503).json({ error: 'billing_unconfigured' });
+  }
+  try {
+    const db = await getDb();
+    // last_active_campaign_id drives the DM 10% bonus attribution.
+    let attributed = null;
+    try {
+      const u = await db.prepare('SELECT last_active_campaign_id FROM users WHERE id = ?').get(req.session.userId);
+      attributed = (u && u.last_active_campaign_id != null) ? u.last_active_campaign_id : null;
+    } catch (e) { attributed = null; }
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    const session = await stripeProvider.createCheckoutSession({
+      pack: pack,
+      userId: req.session.userId,
+      attributedCampaignId: attributed,
+      successUrl: base + '/?purchase=success',
+      cancelUrl: base + '/?purchase=cancel'
+    });
+    res.json({ url: session.url });
+  } catch (e) {
+    if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
+    res.status(500).json({ error: 'Could not start checkout' });
+  }
+});
+
+// Stripe webhook handler. Mounted in server.js BEFORE the API rate limiter and
+// WITHOUT session auth (Stripe authenticates via signature). Verifies against
+// req.rawBody (captured by express.json's verify hook). Idempotent per checkout
+// session id. Exported, not attached to the session-gated router.
+async function stripeWebhook(req, res) {
+  if (!stripeProvider.isConfigured()) return res.status(503).send('billing_unconfigured');
+  let event;
+  try {
+    event = stripeProvider.constructEvent(req.rawBody, req.headers['stripe-signature']);
+  } catch (e) {
+    return res.status(400).send('Webhook signature verification failed');
+  }
+  try {
+    if (event.type === 'checkout.session.completed') {
+      await fulfillCheckout(event.data.object, event.id);
+    }
+    res.json({ received: true });
+  } catch (e) {
+    res.status(500).send('Webhook handler error');
+  }
+}
+
+// Grant tokens for a completed checkout. Idempotent: one token_purchases row per
+// Stripe session id. Re-derives tokens from the server pack (never trusts the
+// session for amounts). Credits the buyer's cot bucket, then a 10% cot DM bonus
+// to the attributed campaign's owner (if it isn't the buyer).
+async function fulfillCheckout(session, eventId) {
+  const db = await getDb();
+  const sessionId = session.id;
+  const existing = await db.prepare('SELECT id FROM token_purchases WHERE stripe_session_id = ?').get(sessionId);
+  if (existing) return; // already fulfilled
+  const md = session.metadata || {};
+  const userId = parseInt(md.user_id, 10);
+  const pack = getPack(md.pack_id);
+  if (!userId || !pack) return;
+  const attributed = md.attributed_campaign_id ? parseInt(md.attributed_campaign_id, 10) : null;
+  const paid = (session.amount_total != null) ? session.amount_total : pack.price_cents;
+  const insRes = await db.prepare(
+    `INSERT INTO token_purchases
+       (user_id, pack_tier, price_paid_cents, tokens_granted, stripe_session_id, stripe_payment_id, attributed_campaign_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(userId, pack.id, paid, pack.tokens, sessionId, session.payment_intent || null, attributed);
+  const purchaseId = (insRes && insRes.lastInsertRowid) ? insRes.lastInsertRowid : null;
+  await creditTokens(userId, pack.tokens, {
+    bucket: 'cot', event_type: 'purchase', source: 'stripe',
+    related_purchase_id: purchaseId, stripe_event_id: eventId
+  });
+  if (attributed) {
+    try {
+      const camp = await db.prepare('SELECT user_id FROM campaigns WHERE id = ?').get(attributed);
+      const dmId = (camp && camp.user_id) ? camp.user_id : null;
+      const bonus = Math.floor(pack.tokens * 0.10);
+      if (dmId && dmId !== userId && bonus > 0) {
+        await creditTokens(dmId, bonus, {
+          bucket: 'cot', event_type: 'dm_bonus', source: 'stripe',
+          related_purchase_id: purchaseId, related_campaign_id: attributed,
+          stripe_event_id: eventId, triggered_by_user_id: userId
+        });
+      }
+    } catch (e) { /* DM bonus is best-effort */ }
+  }
+}
 module.exports = {
   router,
   getTokenCost,
   getBalance,
   canAfford,
   creditTokens,
-  spendTokens
+  spendTokens,
+  ensureMonthlyGrant,
+  stripeWebhook
 };
