@@ -94,6 +94,19 @@ function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom
 function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
+// Display aspect for the IMG box. Towers are GENERATED tall (1:4) but their nominal shape
+// ratio is 9:16 (Picture Book's towerthin is 2:5), so a cover-fit box at the nominal ratio
+// crops the tall tower. When the real pixel dims are stored, use them for towers so
+// object-fit:cover fills the box with NO crop. Every other shape, and any image without
+// stored dims, keeps the exact nominal ratio -> byte-identical to before.
+function dispRatioCSS(m) {
+  var s = normShape(m);
+  if (s === 'tower' || s === 'towerthin') {
+    var w = m && Number(m.img_w), h = m && Number(m.img_h);
+    if (w > 0 && h > 0) return Math.round(w) + ' / ' + Math.round(h);
+  }
+  return shapeRatioCSS(s);
+}
 function normShape(m) {
   var s = (m && m.shape) || '';
   return (['wide', 'tall', 'square', 'panoramic', 'tower', 'towerthin', 'fullpage'].indexOf(s) >= 0) ? s : 'standard';
@@ -123,7 +136,7 @@ function packRows(items) {
 // was generated at this exact ratio, object-fit:cover fills the box with no
 // cropping; placeholders use the same ratio so empty panels keep their shape.
 function shapedImage(m, border, radius) {
-  var ratio = shapeRatioCSS(normShape(m));
+  var ratio = dispRatioCSS(m);
   var b = border || '';
   var rad = (radius == null) ? '3px' : radius;
   if (m.image) {
@@ -158,7 +171,7 @@ function buildClassicTextPanel(text) {
 // optional emphasis burst. Width is a percentage so the row tiles at a common
 // height (height = containerWidth / rowSum) without cropping any shape.
 function comicCell(m, pct, showCaption, showEmphasis) {
-  var ratio = shapeRatioCSS(normShape(m));
+  var ratio = dispRatioCSS(m);
   var media = m.image
     ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;display:flex;align-items:center;justify-content:center;"><span style="font-size:30pt;opacity:0.25;color:#c9a84c;">&#128444;</span></div>';
@@ -201,7 +214,7 @@ function mosaicRow(row) {
 }
 
 function bleedMedia(m) {
-  var ratio = shapeRatioCSS(normShape(m));
+  var ratio = dispRatioCSS(m);
   if (m.image) {
     return '<div style="position:relative;width:100%;margin-bottom:0.12in;page-break-inside:avoid;">' +
       '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
@@ -213,7 +226,7 @@ function bleedMedia(m) {
 
 function vignetteMedia(m) {
   var shape = normShape(m);
-  var ratio = shapeRatioCSS(shape);
+  var ratio = dispRatioCSS(m);
   var widthPct = isLandscape(shape) ? 100 : (shape === 'square' ? 64 : 54);
   if (m.image) {
     return '<div style="position:relative;width:' + widthPct + '%;margin:0.3in auto 0.1in;page-break-inside:avoid;">' +
@@ -227,7 +240,7 @@ function vignetteMedia(m) {
 
 function galleryMedia(m) {
   var shape = normShape(m);
-  var ratio = shapeRatioCSS(shape);
+  var ratio = dispRatioCSS(m);
   var widthPct = isLandscape(shape) ? 92 : (shape === 'square' ? 60 : 52);
   var img = m.image
     ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" />'
@@ -271,7 +284,7 @@ function bronzeFrame(inner, inline, scale) {
   '</div>';
 }
 function framedMedia(m) {
-  var ratio = shapeRatioCSS(normShape(m));
+  var ratio = dispRatioCSS(m);
   var inner = m.image
     ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#160e06;"></div>';
@@ -294,7 +307,7 @@ function frameRow(row, showCaption) {
 
 function portraitMedia(m, kind) {
   if (kind === 'frame') return framedMedia(m);
-  var ratio = shapeRatioCSS(normShape(m));
+  var ratio = dispRatioCSS(m);
   if (!m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);"></div>';
   var img = '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
   if (kind === 'comic') {
@@ -547,7 +560,7 @@ function coPackRows(items, opts) {
 
 // The chosen border treatment, applied to one image at its true ratio.
 function coMedia(m, border) {
-  var ratio = shapeRatioCSS(normShape(m));
+  var ratio = dispRatioCSS(m);
   var img = m.image
     ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;"></div>';
@@ -761,19 +774,17 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // sentinel preserved below; tune pbCol to trade image size vs side-text width.)
       var pbTower = (normShape(m) === 'tower');
       var pbCol = 2.6;
-      // Picture Book shows towers in their OWN thin full-page box (towerthin = 2:5)
-      // via a shape-overridden clone, so the shared tower ratio stays at the true 9:16
-      // for Magazine/grid/momentAspect (a too-thin shared box letterboxes them). coMedia
-      // uses object-fit:cover here, so the real image is cropped to fill -- no black bars.
-      var pbDispShape = pbTower ? 'towerthin' : normShape(m);
-      var pbMediaM = pbTower ? Object.assign({}, m, { shape: 'towerthin' }) : m;
+      // Towers are generated as a true tall column (1:4); show them at their REAL aspect.
+      // coMedia uses dispRatioCSS (the stored pixel ratio for towers), so object-fit:cover
+      // fills the box with NO crop. Tower width is derived from the real aspect at a ~9.2in
+      // target height so it stands nearly full-page; tall shots keep the 7.0in target below.
       var pbW = pbTower
-        ? Math.min(6.8 - pbCol, 9.2 * shapeAspect(pbDispShape))
+        ? Math.min(6.8 - pbCol, 9.2 * momentAspect(m))
         : Math.min(6.8 - pbCol, 7.0 * shapeAspect(normShape(m)));
       var pbLeft = (pbN % 2 === 0); pbN += 1;
       var pbFl = pbLeft ? 'float:left;margin:0 0.24in 0.12in 0;' : 'float:right;margin:0 0 0.12in 0.24in;';
       var pbImg = '<div style="' + pbFl + 'width:' + pbW.toFixed(2) + 'in;page-break-inside:avoid;">' +
-        '<div style="position:relative;line-height:0;">' + coMedia(pbMediaM, opts.border) + overlay + '</div>' +
+        '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
       html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
     } else {
@@ -999,27 +1010,34 @@ function renderComicPage(moments, sections, intro, outro, opts) {
   // text independently (align:start). Spill/auto-fit comes next.
   var html = coDropOrIntro(intro, opts);
 
-  function comicArt(m, span, h) {
+  function comicArt(m, span, h, boxW) {
     var media = m.image
       ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
       : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
     var spanCss = (span === 'tall') ? 'grid-row:span 2;' : ((span === 'wide') ? 'grid-column:span 2;' : '');
+    // Tall/tower cells hug the image's TRUE width at this height (boxW) and center in the
+    // column, so an extreme (1:4) tower shows in FULL with no crop -- the column gaps stay
+    // page-colored, not black. Normal portraits have boxW == colW, so they fill as before.
+    var sizeCss = (span === 'tall' && boxW) ? ('width:' + boxW.toFixed(2) + 'in;max-width:100%;justify-self:center;') : '';
     return '<div style="' + cgBorder(opts) + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
       'height:' + h.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' +
-      spanCss + '">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      spanCss + sizeCss + '">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   }
 
   var cells = [];
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var asp = Math.max(0.3, momentAspect(m));
+    var ta = momentAspect(m);
+    var asp = Math.max(0.3, ta);
     var tall = isPortrait(m);
     var wide = (asp >= 1.5);
     var colW = (CG_W - CG_GAP) / 2;
     var span = tall ? 'tall' : (wide ? 'wide' : '');
     var imgH = wide ? (CG_W / asp) : Math.min(7.0, colW / asp);
-    cells.push({ slots: tall ? 2 : 1, html: comicArt(m, span, imgH) });
+    // For tall/tower, hug the image's true width at this height so a 1:4 tower isn't cropped.
+    var boxW = tall ? Math.min(colW, imgH * ta) : null;
+    cells.push({ slots: tall ? 2 : 1, html: comicArt(m, span, imgH, boxW) });
     var nchunks = [];
     if (sec.before) nchunks = nchunks.concat(cgSplitNarr(sec.before));
     if (sec.after) nchunks = nchunks.concat(cgSplitNarr(sec.after));
