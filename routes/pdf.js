@@ -813,6 +813,7 @@ function coDropOrIntro(intro, opts) {
 // every band fills the full content width -- no holes, no black show-through.
 var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
 var CG_GAP = 0.12;  // gutter between panels (inches)
+var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
 var CG_FRAME  = 'border:12px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
 function picBorderCss(opts){
@@ -929,6 +930,18 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
   return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
 }
 
+function cgFlowTower(m, opts, narrHtml, sideLeft) {
+  // Tower: full-page-height image flush to a margin; narrative wraps beside (and below).
+  var ta = momentAspect(m);
+  var imgH = CO_TOWER_H;
+  var imgW = imgH * ta;
+  var fl = sideLeft ? 'float:left;margin:0 0.20in 0.10in 0;'
+                    : 'float:right;margin:0 0 0.10in 0.20in;';
+  var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
+    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
+}
+
 // A wide/panoramic image breaks the column full width; prose flows after it.
 function cgFlowWide(m, opts, narrHtml) {
   // Full-width wide image at its NATURAL height -- no fixed-height box, no contain,
@@ -1025,9 +1038,28 @@ function renderComicPage(moments, sections, intro, outro, opts) {
   }
 
   var cells = [];
+  var towerN = 0;
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
+    if (normShape(m) === 'tower') {
+      // Towers ALWAYS get a full-page-height panel flush to a margin (alternating sides),
+      // with the narration butting right up to the picture border (gap:0). Sized to the
+      // true 1:4 aspect so the image is shown in full, never cropped.
+      var twTa = momentAspect(m);
+      var twW = CO_TOWER_H * twTa;
+      var twMedia = m.image
+        ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+        : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+      var twBox = '<div style="' + cgBorder(opts) + 'background:#000;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + twMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      var twNarr = '';
+      if (sec.before) twNarr += buildNarrativeHTML(sec.before, false);
+      if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
+      var twText = '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;flex:1 1 auto;min-width:0;padding:0.16in 0.18in;line-height:1.4;overflow:hidden;">' + twNarr + '</div>';
+      var twLeft = (towerN % 2 === 0); towerN += 1;
+      cells.push({ slots: 2, html: '<div style="grid-column:span 2;display:flex;gap:0;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
+      continue;
+    }
     var ta = momentAspect(m);
     var asp = Math.max(0.3, ta);
     var tall = isPortrait(m);
@@ -1140,11 +1172,13 @@ function renderMagazine(moments, sections, intro, outro, opts) {
   var i = 0, sideLeft = true;
   while (i < panels.length) {
     var p = panels[i];
-    if (p.feature) {
+    if (normShape(p.m) === 'tower') {
+      html += cgFlowTower(p.m, opts, p.narr, sideLeft); sideLeft = !sideLeft; i += 1;
+    } else if (p.feature) {
       html += cgFlowFeature(p.m, opts, p.narr); i += 1;
     } else if (p.asp >= 1.5) {
       html += cgFlowWide(p.m, opts, p.narr); i += 1;
-    } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5) {
+    } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5 && normShape(panels[i + 1].m) !== 'tower') {
       html += cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr); i += 2;
     } else {
       html += cgFlowFloat(p.m, opts, p.narr, sideLeft); sideLeft = !sideLeft; i += 1;
