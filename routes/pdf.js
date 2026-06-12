@@ -757,6 +757,14 @@ function renderSplash(moments, sections, intro, outro, opts) {
   return html;
 }
 
+function pbBesidePanel(m, sec, idx, opts) {
+  // A small panel rendered to STACK in the column beside a full-height Picture Book tower.
+  var ov = coCaptionOverlay(m, opts.caption);
+  var img = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + ov + '</div>' + coCaptionBelow(m, idx, opts.caption);
+  var nb = sec.before ? '<div style="margin-top:0.1in;">' + coNarr(sec.before, opts, false) + '</div>' : '';
+  var na = sec.after ? '<div style="margin-top:0.1in;">' + coNarr(sec.after, opts, false) + '</div>' : '';
+  return '<div style="margin-bottom:0.14in;">' + img + nb + na + '</div>';
+}
 function renderPaired(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
   var pbN = 0;
@@ -786,7 +794,26 @@ function renderPaired(moments, sections, intro, outro, opts) {
       var pbImg = '<div style="' + pbFl + 'width:' + pbW.toFixed(2) + 'in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
-      html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
+      if (pbTower) {
+        // Fill the wide empty space beside the thin full-height tower: pull up to 3 following
+        // SMALL panels (not wide/panoramic/another tower) into a block-formatting-context column
+        // that sits alongside the float. The shared flow-root still clears, so document flow after
+        // the tower is unchanged -- only the previously-empty side column gets populated.
+        var pbBeside = '', pbAdv = 0, pbFill = 0;
+        while ((i + 1 + pbAdv) < moments.length && pbFill < 3) {
+          var pbNs = normShape(moments[i + 1 + pbAdv]);
+          if (pbNs === 'tower' || pbNs === 'panoramic' || pbNs === 'wide') break;
+          var pbIdx = i + 1 + pbAdv;
+          var pbNsec = sections.find(function (s) { return s.panel_index === pbIdx; }) || {};
+          pbBeside += pbBesidePanel(moments[pbIdx], pbNsec, pbIdx, opts);
+          pbAdv += 1; pbFill += 1;
+        }
+        var pbCol = '<div style="display:flow-root;">' + beforeHtml + afterHtml + pbBeside + '</div>';
+        html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + pbCol + '</div>';
+        i += pbAdv;
+      } else {
+        html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
+      }
     } else {
       // Wide / panoramic / square / standard: keep the image + caption together
       // in the avoid-block, but let the narrative flow BELOW as its own block so
@@ -930,8 +957,11 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
   return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
 }
 
-function cgFlowTower(m, opts, narrHtml, sideLeft) {
-  // Tower: full-page-height image flush to a margin; narrative wraps beside (and below).
+function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
+  // Tower: full-page-height image flush to a margin. Its narrative PLUS any absorbed small
+  // panels (besideHtml) stack in a block that sits BESIDE the tower -- a new block-formatting
+  // context is shortened to fit alongside the float -- filling the tall column instead of
+  // leaving white space next to the thin tower.
   var ta = momentAspect(m);
   var imgH = CO_TOWER_H;
   var imgW = imgH * ta;
@@ -939,7 +969,13 @@ function cgFlowTower(m, opts, narrHtml, sideLeft) {
                     : 'float:right;margin:0 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
     'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-  return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
+  var col = '<div style="display:flow-root;">' + (narrHtml || '') + (besideHtml || '') + '</div>';
+  return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + col + '</div>';
+}
+function cgBesidePanel(m, opts, narrHtml) {
+  // A small panel rendered to STACK in the column beside a full-height tower (NOT floated).
+  var box = '<div style="' + cgBorder(opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:#000;line-height:0;margin-bottom:0.06in;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  return '<div style="margin-bottom:0.12in;">' + box + (narrHtml || '') + '</div>';
 }
 
 // A wide/panoramic image breaks the column full width; prose flows after it.
@@ -1057,7 +1093,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
       var twText = '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;flex:1 1 auto;min-width:0;padding:0.16in 0.18in;line-height:1.4;overflow:hidden;">' + twNarr + '</div>';
       var twLeft = (towerN % 2 === 0); towerN += 1;
-      cells.push({ slots: 2, html: '<div style="grid-column:span 2;display:flex;gap:0;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
+      cells.push({ slots: 2, html: '<div style="grid-column:span 2;display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
       continue;
     }
     var ta = momentAspect(m);
@@ -1173,7 +1209,14 @@ function renderMagazine(moments, sections, intro, outro, opts) {
   while (i < panels.length) {
     var p = panels[i];
     if (normShape(p.m) === 'tower') {
-      html += cgFlowTower(p.m, opts, p.narr, sideLeft); sideLeft = !sideLeft; i += 1;
+      var mzBeside = '', mzAdv = 1, mzFill = 0;
+      while ((i + mzAdv) < panels.length && mzFill < 3) {
+        var mzNp = panels[i + mzAdv];
+        if (normShape(mzNp.m) === 'tower' || mzNp.feature || mzNp.asp >= 1.5) break;
+        mzBeside += cgBesidePanel(mzNp.m, opts, mzNp.narr);
+        mzAdv += 1; mzFill += 1;
+      }
+      html += cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       html += cgFlowFeature(p.m, opts, p.narr); i += 1;
     } else if (p.asp >= 1.5) {
