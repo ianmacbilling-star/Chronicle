@@ -64,14 +64,17 @@ function currentCycleKey() {
 // single SELECT. The cot (carry-over) bucket is never touched here.
 // NOTE: not transaction-locked; a rare double-call at a cycle boundary could
 // double-grant once. Acceptable for the stub; tighten with a unique index later.
-async function ensureMonthlyGrant(userId) {
-  if (!userId) return;
+async function ensureMonthlyGrant(userId, cycleKey) {
+  if (!userId) return { skipped: true };
   const db = await getDb();
-  const cycle = currentCycleKey();
+  // cycleKey lets the caller key the grant on the SUBSCRIPTION billing period (the
+  // Stripe invoice id) instead of the calendar month, so exactly one grant fires per
+  // renewal. Falls back to the calendar month when no key is supplied.
+  const cycle = cycleKey || currentCycleKey();
   const got = await db.prepare(
     "SELECT 1 AS x FROM token_ledger WHERE user_id = ? AND event_type = 'monthly_grant' AND source = ? LIMIT 1"
   ).get(userId, cycle);
-  if (got) return;
+  if (got) return { skipped: true, cycle: cycle };
   // Account tier's monthly allotments (own tier, not effective campaign tier).
   // UTOLT is use-it-or-lose-it (expires each cycle); CO carries over forever.
   let allotUtlt = 0, allotCot = 0;
@@ -100,6 +103,7 @@ async function ensureMonthlyGrant(userId) {
       "INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, ?, 'cot', 'monthly_cot_grant', ?)"
     ).run(userId, allotCot, cycle);
   }
+  return { skipped: false, cycle: cycle, utlt: allotUtlt, cot: allotCot };
 }
 
 async function canAfford(userId, cost) {
@@ -383,6 +387,9 @@ async function stripeWebhook(req, res) {
   try {
     if (event.type === 'checkout.session.completed') {
       await fulfillCheckout(event.data.object, event.id);
+    } else if (event.type === 'invoice.paid') {
+      // Subscription renewal (and first charge): disseminate the monthly tokens.
+      await fulfillSubscriptionInvoice(event.data.object, event.id);
     }
     res.json({ received: true });
   } catch (e) {
@@ -430,6 +437,38 @@ async function fulfillCheckout(session, eventId) {
     } catch (e) { /* DM bonus is best-effort */ }
   }
 }
+// ------------------------------------------------------------
+// Subscription renewal -> monthly token grant.
+// ------------------------------------------------------------
+// Stripe charges the card on the renewal date and fires invoice.paid; this hands
+// the user their tier's monthly tokens for that billing period. Because the grant
+// is keyed on the invoice id, it lands exactly ONCE per period even if Stripe
+// re-delivers the webhook, and it only ever fires on a SUCCESSFUL charge (no money,
+// no tokens). Covers both the first subscription invoice and every renewal.
+//
+// PREREQUISITE (subscription management, built separately): users.stripe_subscription_id
+// must be set so we can resolve the buyer from the invoice, and users.tier must reflect
+// the subscribed plan so the amounts are right. Until that wiring exists, this no-ops
+// safely (it just won't find a matching user).
+async function fulfillSubscriptionInvoice(invoice, eventId) {
+  if (!invoice || !invoice.subscription) return; // ignore one-off (non-subscription) invoices
+  // Grant on the first subscription invoice and on each renewal cycle only. Proration /
+  // mid-cycle update invoices are not a new token period, so they're skipped.
+  const reason = invoice.billing_reason || '';
+  if (reason && reason !== 'subscription_create' && reason !== 'subscription_cycle') return;
+  const db = await getDb();
+  // Resolve the user from the subscription id (preferred), else the customer id.
+  let user = await db.prepare('SELECT id FROM users WHERE stripe_subscription_id = ?').get(invoice.subscription);
+  if (!user && invoice.customer) {
+    user = await db.prepare('SELECT id FROM users WHERE stripe_customer_id = ?').get(invoice.customer);
+  }
+  if (!user) return; // subscription not linked to a user yet
+  // One grant per invoice id = one grant per billing period. ensureMonthlyGrant reads
+  // the user's account tier (users.tier) for the UTOLT + CO amounts and expires any
+  // leftover use-it-or-lose-it balance before granting the new period.
+  await ensureMonthlyGrant(user.id, invoice.id);
+}
+
 module.exports = {
   router,
   getTokenCost,
@@ -438,5 +477,6 @@ module.exports = {
   creditTokens,
   spendTokens,
   ensureMonthlyGrant,
+  fulfillSubscriptionInvoice,
   stripeWebhook
 };
