@@ -390,6 +390,9 @@ async function stripeWebhook(req, res) {
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.
       await fulfillSubscriptionInvoice(event.data.object, event.id);
+    } else if (event.type === 'customer.subscription.updated') {
+      // Mid-cycle plan change: top up the difference if it was an upgrade.
+      await fulfillSubscriptionUpdate(event.data.object, event.data.previous_attributes || {}, event.id);
     }
     res.json({ received: true });
   } catch (e) {
@@ -469,6 +472,68 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
   await ensureMonthlyGrant(user.id, invoice.id);
 }
 
+// ------------------------------------------------------------
+// Mid-cycle UPGRADE proration.
+// ------------------------------------------------------------
+// When a subscriber moves to a richer plan partway through a billing period, hand
+// them the DIFFERENCE in monthly allotment right away (Stripe prorates the money
+// separately). This is ADDITIVE -- unlike a renewal it does NOT expire the current
+// cycle's use-it-or-lose-it balance; it only adds the extra the upgrade entitles them
+// to. Downgrades grant nothing (the smaller allotment just takes effect next renewal).
+// Idempotent per opts.key.
+//
+// Proration model: grants the FULL monthly difference immediately (new - old, per
+// bucket), not a day-weighted fraction -- cleanest with whole tokens and the more
+// generous, common choice. To day-weight instead, multiply dUtlt/dCot by
+// (secondsLeftInPeriod / periodLengthSeconds) and round before crediting.
+async function applyUpgradeProration(userId, oldTierName, newTierName, opts = {}) {
+  if (!userId) return { skipped: true };
+  const pos = function (v) { const x = parseInt(v, 10); return (Number.isFinite(x) && x > 0) ? x : 0; };
+  const oldT = getTier(oldTierName) || {};
+  const newT = getTier(newTierName) || {};
+  const dUtlt = Math.max(0, pos(newT.monthly_utlt) - pos(oldT.monthly_utlt));
+  const dCot  = Math.max(0, pos(newT.monthly_cot)  - pos(oldT.monthly_cot));
+  if (dUtlt === 0 && dCot === 0) return { skipped: true, reason: 'no_increase' };
+  const db = await getDb();
+  // Idempotency: one upgrade top-up per key (the Stripe event id). Matches either
+  // bucket's marker so a utlt-only or cot-only top-up still short-circuits a retry.
+  if (opts.key) {
+    const got = await db.prepare(
+      "SELECT 1 AS x FROM token_ledger WHERE user_id = ? AND source = ? AND event_type IN ('upgrade_grant','upgrade_cot_grant') LIMIT 1"
+    ).get(userId, opts.key);
+    if (got) return { skipped: true, reason: 'already_applied' };
+  }
+  if (dUtlt > 0) await creditTokens(userId, dUtlt, { bucket: 'utlt', event_type: 'upgrade_grant', source: opts.key || 'upgrade', stripe_event_id: opts.eventId || null });
+  if (dCot > 0)  await creditTokens(userId, dCot,  { bucket: 'cot', event_type: 'upgrade_cot_grant', source: opts.key || 'upgrade', stripe_event_id: opts.eventId || null });
+  return { skipped: false, from: oldTierName, to: newTierName, utlt: dUtlt, cot: dCot };
+}
+
+// Mid-cycle plan change -> upgrade proration. Stripe fires customer.subscription.updated
+// with previous_attributes describing the change. We map the NEW price (current first
+// item) and the OLD price (from previous_attributes, falling back to the user's stored
+// tier) to tier names; if the user moved up, the difference is granted immediately.
+// Safely no-ops until STRIPE_TIER_PRICES is configured (tierForPrice returns null), and
+// skips downgrades / non-plan updates.
+//
+// More robust once the subscription-management flow exists: call applyUpgradeProration
+// directly from the upgrade handler with the tiers it already knows, instead of
+// re-deriving them from the event here.
+async function fulfillSubscriptionUpdate(subscription, previousAttributes, eventId) {
+  if (!subscription || !subscription.id) return;
+  let newPriceId = null, oldPriceId = null;
+  try { newPriceId = subscription.items.data[0].price.id; } catch (e) { newPriceId = null; }
+  try { oldPriceId = previousAttributes.items.data[0].price.id; } catch (e) { oldPriceId = null; }
+  const newTier = stripeProvider.tierForPrice(newPriceId);
+  if (!newTier) return; // price not mapped to a tier yet -> nothing to do
+  const db = await getDb();
+  const user = await db.prepare('SELECT id, tier FROM users WHERE stripe_subscription_id = ?').get(subscription.id);
+  if (!user) return;
+  let oldTier = oldPriceId ? stripeProvider.tierForPrice(oldPriceId) : null;
+  if (!oldTier) oldTier = user.tier || null;
+  if (!oldTier || oldTier === newTier) return; // no actionable change
+  await applyUpgradeProration(user.id, oldTier, newTier, { key: eventId, eventId: eventId });
+}
+
 module.exports = {
   router,
   getTokenCost,
@@ -478,5 +543,7 @@ module.exports = {
   spendTokens,
   ensureMonthlyGrant,
   fulfillSubscriptionInvoice,
+  applyUpgradeProration,
+  fulfillSubscriptionUpdate,
   stripeWebhook
 };

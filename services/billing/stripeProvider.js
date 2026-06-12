@@ -78,4 +78,16 @@ function constructEvent(rawBody, signature) {
   return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret());
 }
 
-module.exports = { isConfigured, createCheckoutSession, constructEvent, webhookSecret };
+// Resolve a Stripe Price id to one of our tier names (copper/silver/gold/platinum).
+// The subscription system supplies the mapping at go-live via STRIPE_TIER_PRICES, a
+// JSON env like {"price_abc":"silver","price_def":"gold","price_ghi":"platinum"}.
+// Returns null until configured (or for an unmapped price), so callers no-op safely.
+function tierForPrice(priceId) {
+  if (!priceId) return null;
+  let map = {};
+  try { map = JSON.parse(process.env.STRIPE_TIER_PRICES || '{}'); } catch (e) { map = {}; }
+  const t = map && map[priceId];
+  return (t && typeof t === 'string') ? t : null;
+}
+
+module.exports = { isConfigured, createCheckoutSession, constructEvent, webhookSecret, tierForPrice };
