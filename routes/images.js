@@ -1051,8 +1051,21 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     const falUrl = falImg && falImg.url;
     // Real pixel size from fal's payload -> stored on the moment so layout can
     // size to the true aspect (kills most cropping). Null if fal omits it.
-    const imgW = (falImg && Number(falImg.width)) || null;
-    const imgH = (falImg && Number(falImg.height)) || null;
+    let imgW = (falImg && Number(falImg.width)) || null;
+    let imgH = (falImg && Number(falImg.height)) || null;
+    // nano-banana-2 returns width/height as NULL in its webhook payload, so the real pixel
+    // size is unknown. Fall back to the aspect ratio we REQUESTED for this moment's shape:
+    // without it a tower's true 1:4 shape is lost and every layout collapses it to the
+    // nominal 9:16 (cropping in Comic/Picture Book, letterboxing in Magazine). The stored
+    // numbers are synthetic ratio markers (shape ratio * 256), used only for aspect math.
+    if ((!imgW || !imgH) && job.moment_id) {
+      try {
+        const mShapeRow = await db.prepare('SELECT shape FROM moments WHERE id = ?').get(job.moment_id);
+        const arParts = String(shapeAspectRatio((mShapeRow && mShapeRow.shape) || '')).split(':');
+        const arW = Number(arParts[0]), arH = Number(arParts[1]);
+        if (arW > 0 && arH > 0) { imgW = Math.round(arW * 256); imgH = Math.round(arH * 256); }
+      } catch (e) { /* leave dims null -> renderer uses the nominal shape aspect */ }
+    }
     if (!falUrl) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
