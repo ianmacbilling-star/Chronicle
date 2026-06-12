@@ -280,8 +280,38 @@ function devAddTokens() {
       if (data && data.ok) {
         show('Added ' + amt + ' tokens. Balance: ' + (data.balance && data.balance.total) + '.', true);
         refreshTokenBalance();
+        if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
       } else {
         show((data && data.error) || 'Could not add tokens.', false);
+      }
+    })
+    .catch(function() { show('Network error.', false); });
+}
+
+// ----- TESTING: manually grant this user's current-tier monthly allotment.
+// The monthly grant no longer fires automatically on page load; this is the
+// manual trigger. Remove with the other testing controls at launch. -----
+function devGrantMonthly() {
+  var msg = document.getElementById('dev-add-tokens-msg');
+  function show(text, ok) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
+    msg.style.color = ok ? '#3c9142' : '#c0392b';
+  }
+  fetch('/api/tokens/dev-grant-monthly', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.ok) {
+        show('Granted ' + data.granted.utlt + ' UTOLT + ' + data.granted.cot + ' CO (' + data.tier + ' tier). Balance: ' + (data.balance && data.balance.total) + '.', true);
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
+      } else {
+        show((data && data.error) || 'Could not grant monthly tokens.', false);
       }
     })
     .catch(function() { show('Network error.', false); });
@@ -614,7 +644,24 @@ function renderAccountUsage(usage) {
     card(usage.sessions || 0, 'TOTAL SESSIONS') +
     card(usage.storyboards || 0, 'STORYBOARDS') +
     card(usage.imagesThisMonth || 0, 'IMAGES THIS MONTH') +
-    card(usage.imagesAllTime || 0, 'IMAGES ALL TIME');
+    card(usage.imagesAllTime || 0, 'IMAGES ALL TIME') +
+    card('<span id="usage-utlt">&mdash;</span>', 'UTOLT TOKENS') +
+    card('<span id="usage-cot">&mdash;</span>', 'CARRY-OVER TOKENS');
+  refreshUsageTokens();
+}
+
+// Read-only token balances for the Usage panel. Pure read -- does NOT grant.
+function refreshUsageTokens() {
+  var u = document.getElementById('usage-utlt');
+  var c = document.getElementById('usage-cot');
+  if (!u && !c) return;
+  fetch('/api/tokens/balance')
+    .then(function(r) { return r.json(); })
+    .then(function(b) {
+      if (u) u.textContent = (b && typeof b.utlt === 'number') ? b.utlt.toLocaleString() : '0';
+      if (c) c.textContent = (b && typeof b.cot === 'number') ? b.cot.toLocaleString() : '0';
+    })
+    .catch(function() {});
 }
 
 function renderAccountPlans(me) {
@@ -8834,14 +8881,14 @@ function renderTiersConfig(data) {
   (data.order || []).forEach(function (tierKey) {
     var t = data.tiers[tierKey];
     if (!t) return;
-    html += '<div class="settings-section tier-config-panel" id="tier-panel-' + tierKey + '">';
+    html += '<div class="settings-section tier-config-panel panel-dark" id="tier-panel-' + tierKey + '">';
     html += '<div class="settings-section-title">' + (t.name || tierKey) + '</div>';
     html += '<div style="columns:2;column-gap:30px;">';
     fields.forEach(function (f) {
       var val = (t[f] === null || t[f] === undefined) ? '' : t[f];
       var label = TIER_FIELD_LABELS[f] || f;
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);break-inside:avoid;">' +
-        '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;color:rgba(245,232,200,0.78);">' + label + '</label>' +
+        '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + '</label>' +
         '<input id="tcf-' + tierKey + '-' + f + '" class="form-input tier-config-input" type="number" min="0" step="1" ' +
         'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" ' +
         'style="width:74px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +

@@ -1826,3 +1826,63 @@ body.role-player #stab-export { display: block !important; }
 /* Order Printed Copy tab -- readable blue-grey placeholders on dark fields */
 #novel-tab-order input::placeholder,
 #novel-tab-order textarea::placeholder { color:#9fb0c4; opacity:1; }
+
+/* ============================================================
+   PANEL TEXT CONTRAST STANDARD
+   The app sits on a dark background image. Panels are one of two kinds:
+     - LIGHT panels (white surface): DARK text + light inputs.
+     - DARK / transparent panels: the gold/light base text above.
+   The light redesign migrated panel backgrounds + titles but left
+   .form-label / .form-input on their original dark-theme colors, so
+   forms on white panels rendered gold-on-white. These rules pin form
+   controls inside the known light panels (.settings-section, .modal) to
+   dark text. For any NEW panel, add .panel-light or .panel-dark instead
+   of restyling per field, so contrast stays consistent automatically.
+   ============================================================ */
+.settings-section .form-label,
+.modal .form-label,
+.panel-light .form-label { color: var(--text-muted); }
+
+.settings-section .form-input,
+.modal .form-input,
+.panel-light .form-input {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.settings-section .form-input:focus,
+.modal .form-input:focus,
+.panel-light .form-input:focus { border-color: var(--gold); }
+.settings-section .form-input::placeholder,
+.modal .form-input::placeholder,
+.panel-light .form-input::placeholder { color: var(--text-light); }
+
+/* Explicit dark/transparent panel: keep the gold/light treatment even
+   when nested inside a light panel. */
+.panel-dark .form-label { color: rgba(201,168,76,0.6); }
+.panel-dark .form-input {
+  background: rgba(15,10,5,0.7);
+  color: var(--gold-light);
+  border-color: rgba(201,168,76,0.2);
+}
+.panel-dark .form-input::placeholder { color: rgba(201,168,76,0.55); }
+
+/* ============================================================
+   PANEL TEXT STANDARDIZATION
+   The page backdrop is dark (Chronicle image). Two panel styles:
+   - WHITE panels (.settings-section, default): opaque white -> DARK text.
+   - TRANSPARENT panels (.panel-dark): reveal the dark backdrop -> GOLD/LIGHT
+     text. Add .panel-dark to any panel that should go transparent.
+   Scoped so they never recolor forms elsewhere (auth, modals, cards).
+   ============================================================ */
+.settings-section .form-label{color:var(--text-muted);}
+.settings-section .form-input{background:#fff;border-color:var(--border);color:var(--text);}
+.settings-section .form-input::placeholder{color:var(--text-light);}
+.settings-section .form-input:focus{border-color:var(--gold);}
+/* Transparent/dark panel variant -- must follow the light rules to win the cascade. */
+.panel-dark{background:rgba(20,14,6,0.5);border-color:rgba(201,168,76,0.18);}
+.panel-dark .settings-section-title{color:var(--gold-light);}
+.panel-dark .settings-section-desc{color:rgba(201,168,76,0.6);}
+.panel-dark .form-label{color:rgba(201,168,76,0.78);}
+.panel-dark .form-input{background:rgba(15,10,5,0.6);border-color:rgba(201,168,76,0.28);color:var(--gold-light);}
+.panel-dark .form-input::placeholder{color:rgba(201,168,76,0.5);}
