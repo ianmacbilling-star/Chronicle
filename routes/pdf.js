@@ -959,7 +959,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
 }
 
@@ -974,13 +974,13 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0 0.20in 0.10in 0;'
                     : 'float:right;margin:0 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-    'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   var col = '<div style="display:flow-root;">' + (narrHtml || '') + (besideHtml || '') + '</div>';
   return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + col + '</div>';
 }
 function cgBesidePanel(m, opts, narrHtml) {
   // A small panel rendered to STACK in the column beside a full-height tower (NOT floated).
-  var box = '<div style="' + cgBorder(opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:#000;line-height:0;margin-bottom:0.06in;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  var box = '<div style="' + cgBorder(opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:transparent;line-height:0;margin-bottom:0.06in;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   return '<div style="margin-bottom:0.12in;">' + box + (narrHtml || '') + '</div>';
 }
 
@@ -1005,7 +1005,7 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
     return '<div style="' + cgBorder(opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;position:relative;background:#000;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
@@ -1036,7 +1036,7 @@ function cgFlowFeature(m, opts, narrHtml) {
     ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
-    'position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
+    'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
     img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   return box + (narrHtml || '');
 }
@@ -1074,7 +1074,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     // column, so an extreme (1:4) tower shows in FULL with no crop -- the column gaps stay
     // page-colored, not black. Normal portraits have boxW == colW, so they fill as before.
     var sizeCss = (span === 'tall' && boxW) ? ('width:' + boxW.toFixed(2) + 'in;max-width:100%;justify-self:center;') : '';
-    return '<div style="' + cgBorder(opts) + 'background:#000;position:relative;overflow:hidden;line-height:0;' +
+    return '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' +
       'height:' + h.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' +
       spanCss + sizeCss + '">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   }
@@ -1093,7 +1093,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var twMedia = m.image
         ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
         : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
-      var twBox = '<div style="' + cgBorder(opts) + 'background:#000;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + twMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      var twBox = '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + twMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
       var twNarr = '';
       if (sec.before) twNarr += buildNarrativeHTML(sec.before, false);
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
