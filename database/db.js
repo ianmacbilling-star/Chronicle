@@ -837,6 +837,8 @@ async function migrateCasting(pool) {
       payment_status TEXT DEFAULT 'pending',
       card_brand TEXT,
       card_last4 TEXT,
+      stripe_session_id TEXT,
+      stripe_payment_intent_id TEXT,
       status TEXT DEFAULT 'created',
       tracking_url TEXT,
       tracking_number TEXT,
@@ -865,6 +867,8 @@ async function migrateCasting(pool) {
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS source_user_name TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS card_brand TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS card_last4 TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS stripe_session_id TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

@@ -146,6 +146,45 @@ function priceForTier(tierName) {
   return null;
 }
 
+// Create a hosted Checkout Session for a ONE-TIME payment of an arbitrary
+// amount (used by book/print orders). The amount is set by the caller from a
+// server-side computed total -- never trusted from the client. metadata is
+// echoed back on the webhook so the fulfillment can find the order.
+async function createOneTimeCheckout(opts) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.checkout.sessions.create({
+    mode: 'payment',
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: opts.currency || 'usd',
+        unit_amount: opts.amountCents,
+        product_data: { name: opts.description || 'Campaignia order' }
+      }
+    }],
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    client_reference_id: opts.userId != null ? String(opts.userId) : undefined,
+    customer_email: opts.customerEmail || undefined,
+    metadata: opts.metadata || {}
+  });
+}
+
+// Best-effort card brand + last4 from a completed payment, for display only
+// (order history). Never throws; returns null when unavailable.
+async function cardForPayment(paymentIntentId) {
+  const stripe = getClient();
+  if (!stripe || !paymentIntentId) return null;
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
+    const ch = pi && pi.latest_charge;
+    const card = ch && ch.payment_method_details && ch.payment_method_details.card;
+    if (card) return { brand: card.brand || null, last4: card.last4 || null };
+  } catch (e) {}
+  return null;
+}
+
 module.exports = {
   isConfigured,
   createCheckoutSession,
@@ -154,5 +193,7 @@ module.exports = {
   constructEvent,
   webhookSecret,
   tierForPrice,
-  priceForTier
+  priceForTier,
+  createOneTimeCheckout,
+  cardForPayment
 };

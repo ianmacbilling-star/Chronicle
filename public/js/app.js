@@ -320,7 +320,8 @@ function handleBillingReturn() {
   var purchase = params.get('purchase');
   var subscribe = params.get('subscribe');
   var portal = params.get('portal');
-  if (!purchase && !subscribe && !portal) return;
+  var order = params.get('order');
+  if (!purchase && !subscribe && !portal && !order) return;
   function refreshAccount() {
     if (typeof checkAuth === 'function') checkAuth();
     if (document.getElementById('account-plans')) loadAccount();
@@ -339,6 +340,11 @@ function handleBillingReturn() {
   } else if (portal === 'return') {
     billingToast('Billing updated.', 'success');
     setTimeout(refreshAccount, 800);
+  } else if (order === 'success') {
+    billingToast('Payment received - your book is being sent to the printer.', 'success');
+    setTimeout(function () { if (typeof loadOrders === 'function') loadOrders(); }, 1000);
+  } else if (order === 'cancel') {
+    billingToast('Order canceled - no charge was made.', 'info');
   }
   try { window.history.replaceState({}, '', window.location.pathname); } catch (e) {}
 }
@@ -9801,7 +9807,6 @@ function renderPrintReview(body, quote) {
   }
   var place = document.getElementById('print-place-btn');
   if (place) place.style.display = 'none';
-  setupReviewPayment();
   hideFinalConfirm();
   preparedSignature = printOrderSignature();
   panel.style.display = 'block';
@@ -9827,30 +9832,19 @@ function submitPrintOrder() {
   }
   body.interiorPdfUrl = preparedInteriorUrl || ((document.getElementById('print-interior-url') || {}).value || '');
   body.coverPdfUrl = preparedCoverUrl || ((document.getElementById('print-cover-url') || {}).value || '');
-  if (!body.interiorPdfUrl) {
-    showPrintMsg('Your print file was not prepared. Please go Back and try again.', null);
-    return;
-  }
-  if (!body.coverPdfUrl) {
-    showPrintMsg('Your cover file was not prepared. Please go Back and try again.', null);
-    return;
-  }
-  var payErr = applyPaymentToBody(body);
-  if (payErr) { showPrintMsg(payErr, null); return; }
-  var btn = document.getElementById('print-final-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Placing...'; }
+  if (!body.interiorPdfUrl) { showPrintMsg('Your print file was not prepared. Please go Back and try again.', null); return; }
+  if (!body.coverPdfUrl) { showPrintMsg('Your cover file was not prepared. Please go Back and try again.', null); return; }
+  var btn = document.getElementById('print-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Redirecting to payment...'; }
   fetch('/api/print/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
     .then(function (res) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Place my order & charge my card'; }
-      if (!res.ok) { showPrintMsg(res.j && res.j.error ? res.j.error : 'Order failed.', null); return; }
-      var ref = res.j.externalId || ('po-' + res.j.orderId);
-      resetPrintForm();
-      showPrintMsg('Order complete! Your book is now being processed. You can view it any time on your My Orders page. (Order ' + ref + ')', 'ok');
-      var msg = document.getElementById('print-msg');
-      if (msg && msg.scrollIntoView) msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (res.ok && res.j && res.j.url) { window.location = res.j.url; return; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; }
+      if (res.status === 503) { showPrintMsg('Payments are being set up and will be available shortly.', null); return; }
+      showPrintMsg(res.j && res.j.error ? res.j.error : 'Could not start payment.', null);
     })
-    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Place my order & charge my card'; } showPrintMsg('Order failed.', null); });
+    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; } showPrintMsg('Could not reach the payment service. Please try again.', null); });
 }
 
 // Final point-of-no-return gate. The first confirm button reveals this; only
@@ -9880,12 +9874,10 @@ function hideFinalConfirm() {
 function resetPrintForm() {
   var ids = ['print-book-title','print-order-name','print-ship-name','print-ship-street1',
     'print-ship-street2','print-ship-city','print-ship-state','print-ship-postcode',
-    'print-ship-country','print-ship-phone','print-card-number','print-card-exp',
-    'print-card-cvc','print-card-name'];
+    'print-ship-country','print-ship-phone'];
   ids.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
   var qty = document.getElementById('print-qty'); if (qty) qty.value = '1';
   var tcol = document.getElementById('print-title-color'); if (tcol) tcol.value = '#f0d98a';
-  var save = document.getElementById('print-card-save'); if (save) save.checked = false;
   var review = document.getElementById('print-review'); if (review) review.style.display = 'none';
   hideFinalConfirm();
   var place = document.getElementById('print-place-btn'); if (place) place.style.display = '';

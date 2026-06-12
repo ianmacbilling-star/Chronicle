@@ -28,6 +28,7 @@ const { getDb } = require('../database/db');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail } = require('./email');
+const stripeProvider = require('../services/billing/stripeProvider');
 
 // Markup is read from app_settings ('print_markup_pct', default 10) and
 // applied to the PRINT cost only -- shipping (and tax) pass through at cost.
@@ -83,6 +84,26 @@ function buildOrderRequest(body, spec, externalId, contactEmail) {
       name: s.name, street1: s.street1, street2: s.street2,
       city: s.city, postcode: s.postcode, stateCode: s.stateCode,
       countryCode: s.countryCode, phone: s.phone,
+    },
+  };
+}
+
+// Same neutral OrderRequest, but rebuilt from a stored print_orders row (used by
+// the webhook fulfillment, where there is no request body).
+function buildOrderRequestFromRow(row, spec, externalId, contactEmail) {
+  return {
+    externalId: externalId,
+    title: row.book_title || row.order_name || 'Campaignia',
+    contactEmail: contactEmail || '',
+    interiorPdfUrl: row.interior_pdf_url || '',
+    coverPdfUrl: row.cover_pdf_url || '',
+    spec: spec,
+    quantity: Math.max(1, parseInt(row.quantity, 10) || 1),
+    shippingLevel: row.shipping_level || 'cheapest',
+    shipTo: {
+      name: row.ship_name, street1: row.ship_street1, street2: row.ship_street2,
+      city: row.ship_city, postcode: row.ship_postcode, stateCode: row.ship_state,
+      countryCode: row.ship_country, phone: row.ship_phone,
     },
   };
 }
@@ -199,43 +220,29 @@ router.post('/order', requireSession, async function (req, res) {
   if (!body.interiorPdfUrl || !body.coverPdfUrl) {
     return res.status(400).json({ error: 'interiorPdfUrl and coverPdfUrl are required' });
   }
-
-  let db, provider, contactEmail = null, contactName = null;
-  try {
-    db = await getDb();
-    provider = getPrintProvider();
-    const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(userId);
-    contactEmail = u && u.email ? u.email : null;
-    contactName = u && u.name ? u.name : null;
-  } catch (e) {
-    return res.status(500).json({ error: 'Server error', detail: String(e && e.message || e) });
+  if (!stripeProvider.isConfigured()) {
+    return res.status(503).json({ error: 'billing_unconfigured' });
   }
 
   try {
-    // 1) Fresh quote at the moment of checkout (prices/shipping move).
+    const db = await getDb();
+    const provider = getPrintProvider();
+    const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(userId);
+    const contactEmail = u && u.email ? u.email : null;
+
+    // 1) Fresh quote at checkout time (prices/shipping move).
     const quoteReq = buildOrderRequest(body, built.spec, 'quote', contactEmail);
     const quote = await provider.getQuote(quoteReq);
     const pct = await getPrintMarkupPct(db);
     const customerCharge = markedCharge(quote, pct).customerCharge;
-    // --- Stubbed payment method (Stripe replaces this whole block later) ---
-    // The client never sends the full card number; only brand + last4 (+ exp).
-    var payUseOnFile = !!body.useCardOnFile;
-    var payBrand = null, payLast4 = null;
-    if (payUseOnFile) {
-      const _uc = await db.prepare('SELECT card_brand, card_last4 FROM users WHERE id = ?').get(userId);
-      if (_uc) { payBrand = _uc.card_brand || null; payLast4 = _uc.card_last4 || null; }
-    } else if (body.card) {
-      payBrand = body.card.brand ? String(body.card.brand).slice(0, 24) : null;
-      payLast4 = body.card.last4 ? String(body.card.last4).replace(/\D/g, '').slice(-4) : null;
-    }
     const podPackageId = provider._packageId ? provider._packageId(built.spec) : null;
 
-    // 2) Persist the order up-front (status pending) so we have a stable
-    //    external_id and a record even if a later step throws.
-    //    Snapshot the campaign + version names server-side so the order
-    //    record stays meaningful even if things are later renamed/removed.
+    // 2) Persist the order as pending_payment BEFORE creating the Checkout
+    //    session, so the webhook can find it by id and we keep a record even if
+    //    the customer abandons payment.
     const s = body.shipTo || {};
     const orderName = (body.orderName != null ? String(body.orderName) : '').trim().slice(0, 200) || null;
+    const bookTitle = (body.bookTitle != null ? String(body.bookTitle) : '').trim().slice(0, 200) || null;
     const sourceUserId = body.sourceUserId ? parseInt(body.sourceUserId, 10) : null;
     const sourceKind = sourceUserId ? 'member' : 'canonical';
     let campaignName = null, sourceUserName = null;
@@ -255,8 +262,8 @@ router.post('/order', requireSession, async function (req, res) {
          ship_name, ship_street1, ship_street2, ship_city, ship_state,
          ship_postcode, ship_country, ship_phone, shipping_level,
          provider_cost, currency, customer_charge, payment_status, status,
-         order_name, campaign_name, source_kind, source_user_id, source_user_name)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         order_name, book_title, campaign_name, source_kind, source_user_id, source_user_name)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       userId, body.campaignId || null, body.sessionId || null, provider.name, podPackageId,
       built.spec.binding, (body.selection || {}).colorTier, built.spec.coverFinish,
@@ -264,93 +271,36 @@ router.post('/order', requireSession, async function (req, res) {
       body.interiorPdfUrl, body.coverPdfUrl,
       s.name || null, s.street1 || null, s.street2 || null, s.city || null, s.stateCode || null,
       s.postcode || null, s.countryCode || null, s.phone || null, quoteReq.shippingLevel,
-      quote.totalCost, quote.currency, customerCharge, 'pending', 'pending',
-      orderName, campaignName, sourceKind, sourceUserId, sourceUserName
+      quote.totalCost, quote.currency, customerCharge, 'unpaid', 'pending_payment',
+      orderName, bookTitle, campaignName, sourceKind, sourceUserId, sourceUserName
     );
     const orderId = ins.lastInsertRowid;
     const externalId = 'po-' + orderId;
+    await db.prepare('UPDATE print_orders SET external_id = ? WHERE id = ?').run(externalId, orderId);
 
-    // 3) CHARGE THE CUSTOMER. This must succeed before we submit to Lulu.
-    //    >>> Stripe seam: charge `customerCharge` here; on failure, mark the
-    //    order payment_failed and return WITHOUT submitting. <<<
-    //    Stubbed for now:
-    const paymentStatus = 'stubbed';
-    await db.prepare('UPDATE print_orders SET payment_status = ?, external_id = ? WHERE id = ?')
-      .run(paymentStatus, externalId, orderId);
-    // Snapshot the card used onto the order, and persist it to the user if asked.
-    var bookTitle = (body.bookTitle != null ? String(body.bookTitle) : '').trim().slice(0, 200) || null;
-    // Stubbed shipping tracking (Lulu supplies the real values once the book ships).
-    var trackNum = 'CMP' + String(orderId).padStart(6, '0') + Math.floor(1000 + Math.random() * 9000);
-    var trackUrl = 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' + trackNum;
-    await db.prepare('UPDATE print_orders SET card_brand = ?, card_last4 = ?, book_title = ?, tracking_number = ?, carrier = ?, tracking_url = ? WHERE id = ?')
-      .run(payBrand, payLast4, bookTitle, trackNum, 'USPS', trackUrl, orderId);
-    if (body.saveCard && payBrand && payLast4) {
-      const _exp = (body.card && body.card.exp) ? String(body.card.exp).slice(0, 7) : null;
-      await db.prepare('UPDATE users SET card_brand = ?, card_last4 = ?, card_exp = ? WHERE id = ?')
-        .run(payBrand, payLast4, _exp, userId);
-    }
+    // 3) Create the Stripe Checkout session (one-time). The amount is the
+    //    server-computed customerCharge. On payment, checkout.session.completed
+    //    fires and the webhook (fulfillPrintOrder) submits the job to the
+    //    vendor -- payment-first, so we never print what we were not paid for.
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    const amountCents = Math.round(Number(customerCharge) * 100);
+    const descBits = [bookTitle || orderName || 'Campaignia book'];
+    if (quoteReq.quantity > 1) descBits.push('x' + quoteReq.quantity);
+    const session = await stripeProvider.createOneTimeCheckout({
+      amountCents: amountCents,
+      currency: (quote.currency || 'usd').toLowerCase(),
+      description: descBits.join(' '),
+      userId: userId,
+      customerEmail: contactEmail,
+      metadata: { kind: 'print_order', order_id: String(orderId), user_id: String(userId) },
+      successUrl: base + '/app.html?order=success',
+      cancelUrl: base + '/app.html?order=cancel'
+    });
+    await db.prepare('UPDATE print_orders SET stripe_session_id = ? WHERE id = ?').run(session.id, orderId);
 
-    // 4) Submit to the vendor only now that "payment" has cleared.
-    try {
-      const orderReq = buildOrderRequest(body, built.spec, externalId, contactEmail);
-      const placed = await provider.createOrder(orderReq);
-      await db.prepare(
-        'UPDATE print_orders SET provider_order_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-      ).run(placed.providerOrderId, placed.status || 'created', orderId);
-      // Confirmation email (fire-and-forget; the sender swallows its own errors).
-      if (contactEmail) {
-        sendOrderConfirmationEmail({
-          to_email: contactEmail,
-          name: contactName,
-          order: {
-            orderNo: externalId,
-            providerOrderId: placed.providerOrderId,
-            bookTitle: bookTitle,
-            orderName: orderName,
-            campaignName: campaignName,
-            binding: built.spec.binding,
-            colorTier: (body.selection || {}).colorTier,
-            coverFinish: built.spec.coverFinish,
-            pageCount: built.spec.pageCount,
-            quantity: quoteReq.quantity,
-            total: customerCharge,
-            currency: quote.currency,
-            cardBrand: payBrand,
-            cardLast4: payLast4,
-            trackingNumber: trackNum,
-            trackingUrl: trackUrl,
-            shipTo: body.shipTo || {}
-          }
-        });
-      }
-      return res.json({ orderId, externalId, providerOrderId: placed.providerOrderId, status: placed.status, customerCharge, currency: quote.currency });
-    } catch (submitErr) {
-      // Paid but the print job didn't go. Flag for refund + retry.
-      // >>> Stripe seam: refund `customerCharge` here if payment was real. <<<
-      await db.prepare(
-        'UPDATE print_orders SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-      ).run('order_failed', String(submitErr && submitErr.message || submitErr), orderId);
-      // Notify the customer (BCC support); fire-and-forget, swallows its own errors.
-      if (contactEmail) {
-        sendOrderProblemEmail({
-          to_email: contactEmail,
-          name: contactName,
-          order: {
-            orderNo: externalId,
-            bookTitle: bookTitle,
-            orderName: orderName,
-            campaignName: campaignName,
-            binding: built.spec.binding,
-            colorTier: (body.selection || {}).colorTier,
-            coverFinish: built.spec.coverFinish,
-            pageCount: built.spec.pageCount,
-            quantity: quoteReq.quantity
-          }
-        });
-      }
-      return res.status(502).json({ error: 'Print job submission failed after payment; order flagged for refund', orderId });
-    }
+    return res.json({ url: session.url, orderId: orderId, externalId: externalId, customerCharge: customerCharge, currency: quote.currency });
   } catch (e) {
+    if (e && e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
     return res.status(502).json({ error: 'Order failed', detail: String(e && e.message || e) });
   }
 });
@@ -403,30 +353,90 @@ router.get('/orders', requireSession, async function (req, res) {
 });
 
 // ------------------------------------------------------------
-// GET /card -> the caller's saved card on file (brand + last4 only), or null.
-// POST /card/forget -> remove the saved card. (Stubbed; real Stripe later.)
+// fulfillPrintOrder(session) -- webhook fulfillment for a paid book order
+// (checkout.session.completed with metadata.kind === 'print_order'). Payment
+// has cleared, so NOW submit the job to the vendor. Idempotent: a duplicate
+// delivery that finds the order already submitted does nothing. Exported and
+// called from the Stripe webhook in routes/tokens.js.
 // ------------------------------------------------------------
-router.get('/card', requireSession, async function (req, res) {
-  try {
-    const db = await getDb();
-    const u = await db.prepare('SELECT card_brand, card_last4, card_exp FROM users WHERE id = ?').get(req.session.userId);
-    if (u && u.card_brand && u.card_last4) {
-      return res.json({ card: { brand: u.card_brand, last4: u.card_last4, exp: u.card_exp || null } });
-    }
-    res.json({ card: null });
-  } catch (e) {
-    res.status(500).json({ error: 'Could not load card' });
-  }
-});
+async function fulfillPrintOrder(session, eventId) {
+  if (!session || !session.metadata) return;
+  const orderId = parseInt(session.metadata.order_id, 10);
+  if (!orderId) return;
+  const db = await getDb();
+  const row = await db.prepare('SELECT * FROM print_orders WHERE id = ?').get(orderId);
+  if (!row) return;
+  // Idempotency: already submitted to the vendor -> nothing to do.
+  if (row.provider_order_id) return;
 
-router.post('/card/forget', requireSession, async function (req, res) {
+  // 1) Mark paid + capture the Stripe payment id and (best-effort) card display.
+  const paymentIntentId = (session.payment_intent && typeof session.payment_intent === 'object')
+    ? session.payment_intent.id : (session.payment_intent || null);
+  let cardBrand = null, cardLast4 = null;
   try {
-    const db = await getDb();
-    await db.prepare('UPDATE users SET card_brand = NULL, card_last4 = NULL, card_exp = NULL WHERE id = ?').run(req.session.userId);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Could not remove card' });
+    const card = await stripeProvider.cardForPayment(paymentIntentId);
+    if (card) { cardBrand = card.brand || null; cardLast4 = card.last4 || null; }
+  } catch (e) {}
+  await db.prepare(
+    'UPDATE print_orders SET payment_status = ?, status = ?, stripe_payment_intent_id = ?, card_brand = ?, card_last4 = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).run('paid', 'paid', paymentIntentId, cardBrand, cardLast4, orderId);
+
+  // 2) Resolve contact + submit to the vendor now that payment cleared.
+  const externalId = row.external_id || ('po-' + orderId);
+  let contactEmail = null, contactName = null;
+  try {
+    const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(row.user_id);
+    contactEmail = u && u.email ? u.email : null;
+    contactName = u && u.name ? u.name : null;
+  } catch (e) {}
+
+  try {
+    const built = catalog.buildSpec(
+      { binding: row.binding, colorTier: row.color_tier, coverFinish: row.cover_finish },
+      parseInt(row.page_count, 10)
+    );
+    if (!built.ok) throw new Error('Stored selection invalid: ' + (built.errors || []).join('; '));
+    const provider = getPrintProvider();
+    const orderReq = buildOrderRequestFromRow(row, built.spec, externalId, contactEmail);
+    const placed = await provider.createOrder(orderReq);
+    const trackNum = 'CMP' + String(orderId).padStart(6, '0') + Math.floor(1000 + Math.random() * 9000);
+    const trackUrl = 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' + trackNum;
+    await db.prepare(
+      'UPDATE print_orders SET provider_order_id = ?, status = ?, tracking_number = ?, carrier = ?, tracking_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(placed.providerOrderId, placed.status || 'created', trackNum, 'USPS', trackUrl, orderId);
+    if (contactEmail) {
+      sendOrderConfirmationEmail({
+        to_email: contactEmail, name: contactName,
+        order: {
+          orderNo: externalId, providerOrderId: placed.providerOrderId,
+          bookTitle: row.book_title, orderName: row.order_name, campaignName: row.campaign_name,
+          binding: row.binding, colorTier: row.color_tier, coverFinish: row.cover_finish,
+          pageCount: row.page_count, quantity: row.quantity,
+          total: row.customer_charge, currency: row.currency,
+          cardBrand: cardBrand, cardLast4: cardLast4,
+          trackingNumber: trackNum, trackingUrl: trackUrl,
+          shipTo: { name: row.ship_name, street1: row.ship_street1, street2: row.ship_street2, city: row.ship_city, stateCode: row.ship_state, postcode: row.ship_postcode, countryCode: row.ship_country }
+        }
+      });
+    }
+  } catch (submitErr) {
+    // Paid but the print job did not go -> flag for refund/retry.
+    await db.prepare(
+      'UPDATE print_orders SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run('order_failed', String(submitErr && submitErr.message || submitErr), orderId);
+    if (contactEmail) {
+      sendOrderProblemEmail({
+        to_email: contactEmail, name: contactName,
+        order: {
+          orderNo: externalId, bookTitle: row.book_title, orderName: row.order_name,
+          campaignName: row.campaign_name, binding: row.binding, colorTier: row.color_tier,
+          coverFinish: row.cover_finish, pageCount: row.page_count, quantity: row.quantity
+        }
+      });
+    }
   }
-});
+}
+
+router.fulfillPrintOrder = fulfillPrintOrder;
 
 module.exports = router;

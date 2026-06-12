@@ -450,6 +450,9 @@ async function stripeWebhook(req, res) {
         // Tier subscription started: link the user; tier/status follow via
         // customer.subscription.created. (Token packs are mode:payment, below.)
         await linkSubscriptionCheckout(s);
+      } else if (s && s.metadata && s.metadata.kind === 'print_order') {
+        // Paid book order: submit the job to the print vendor now (payment-first).
+        await require('./print').fulfillPrintOrder(s, event.id);
       } else {
         await fulfillCheckout(s, event.id);
       }
