@@ -103,7 +103,6 @@ async function ensureMonthlyGrant(userId) {
 }
 
 async function canAfford(userId, cost) {
-  await ensureMonthlyGrant(userId);
   const { total } = await getBalance(userId);
   return total >= cost;
 }
@@ -193,7 +192,6 @@ async function requireAdmin(req, res) {
 router.get('/balance', async function(req, res) {
   if (!requireSession(req, res)) return;
   try {
-    await ensureMonthlyGrant(req.session.userId);
     const bal = await getBalance(req.session.userId);
     res.json(bal);
   } catch (e) {
@@ -235,6 +233,31 @@ router.post('/dev-credit', async function(req, res) {
       source: 'self_test'
     });
     res.json({ ok: true, balance: bal });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/tokens/dev-grant-monthly -- TESTING. Manually grant THIS user's
+// current-tier monthly allotment (UTOLT + CO). The monthly grant no longer
+// fires automatically on page load; this button is the manual trigger while
+// testing. Session-gated, self only. REMOVE once a production grant trigger
+// (cron or login hook) is decided.
+router.post('/dev-grant-monthly', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    const tierName = (u && u.tier) || 'copper';
+    const tier = getTier(tierName);
+    let gUtlt = parseInt(tier && tier.monthly_utlt, 10);
+    let gCot = parseInt(tier && tier.monthly_cot, 10);
+    if (!Number.isFinite(gUtlt) || gUtlt < 0) gUtlt = 0;
+    if (!Number.isFinite(gCot) || gCot < 0) gCot = 0;
+    if (gUtlt > 0) await creditTokens(req.session.userId, gUtlt, { bucket: 'utlt', event_type: 'monthly_grant', source: 'manual_test' });
+    if (gCot > 0) await creditTokens(req.session.userId, gCot, { bucket: 'cot', event_type: 'monthly_cot_grant', source: 'manual_test' });
+    const bal = await getBalance(req.session.userId);
+    res.json({ ok: true, tier: tierName, granted: { utlt: gUtlt, cot: gCot }, balance: bal });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
