@@ -372,6 +372,65 @@ router.post('/checkout', async function(req, res) {
   }
 });
 
+// POST /api/tokens/subscribe -- start a hosted Checkout for a paid-tier subscription.
+// body: { tier } (silver|gold|platinum). The recurring Price is resolved SERVER-side
+// from STRIPE_TIER_PRICES; the client never supplies a price. Returns { url }.
+router.post('/subscribe', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  const tier = String((req.body || {}).tier || '').toLowerCase();
+  if (tier !== 'silver' && tier !== 'gold' && tier !== 'platinum') {
+    return res.status(400).json({ error: 'Unknown tier' });
+  }
+  if (!stripeProvider.isConfigured()) {
+    return res.status(503).json({ error: 'billing_unconfigured' });
+  }
+  const priceId = stripeProvider.priceForTier(tier);
+  if (!priceId) return res.status(503).json({ error: 'tier_price_unconfigured' });
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT email, stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    const session = await stripeProvider.createSubscriptionCheckout({
+      priceId: priceId,
+      userId: req.session.userId,
+      customerId: (u && u.stripe_customer_id) || null,
+      customerEmail: (u && u.email) || null,
+      successUrl: base + '/?subscribe=success',
+      cancelUrl: base + '/?subscribe=cancel'
+    });
+    res.json({ url: session.url });
+  } catch (e) {
+    if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
+    res.status(500).json({ error: 'Could not start subscription' });
+  }
+});
+
+// POST /api/tokens/portal -- open the Stripe Billing Portal (hosted manage page:
+// upgrade / downgrade / cancel / update card). Requires an existing Stripe customer.
+// Whatever the user changes there returns to us as a customer.subscription.* webhook.
+router.post('/portal', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  if (!stripeProvider.isConfigured()) {
+    return res.status(503).json({ error: 'billing_unconfigured' });
+  }
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
+    if (!u || !u.stripe_customer_id) {
+      return res.status(400).json({ error: 'no_customer' });
+    }
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    const session = await stripeProvider.createBillingPortalSession({
+      customerId: u.stripe_customer_id,
+      returnUrl: base + '/?portal=return'
+    });
+    res.json({ url: session.url });
+  } catch (e) {
+    if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
+    res.status(500).json({ error: 'Could not open billing portal' });
+  }
+});
+
 // Stripe webhook handler. Mounted in server.js BEFORE the API rate limiter and
 // WITHOUT session auth (Stripe authenticates via signature). Verifies against
 // req.rawBody (captured by express.json's verify hook). Idempotent per checkout
@@ -386,13 +445,28 @@ async function stripeWebhook(req, res) {
   }
   try {
     if (event.type === 'checkout.session.completed') {
-      await fulfillCheckout(event.data.object, event.id);
+      const s = event.data.object;
+      if (s && s.mode === 'subscription') {
+        // Tier subscription started: link the user; tier/status follow via
+        // customer.subscription.created. (Token packs are mode:payment, below.)
+        await linkSubscriptionCheckout(s);
+      } else {
+        await fulfillCheckout(s, event.id);
+      }
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.
       await fulfillSubscriptionInvoice(event.data.object, event.id);
+    } else if (event.type === 'customer.subscription.created') {
+      await syncSubscriptionToUser(event.data.object);
     } else if (event.type === 'customer.subscription.updated') {
-      // Mid-cycle plan change: top up the difference if it was an upgrade.
+      // Proration FIRST (reads previous_attributes; falls back to the still-current
+      // users.tier as the OLD tier), THEN sync the new tier/status onto the user.
       await fulfillSubscriptionUpdate(event.data.object, event.data.previous_attributes || {}, event.id);
+      await syncSubscriptionToUser(event.data.object);
+    } else if (event.type === 'customer.subscription.deleted' ||
+               event.type === 'customer.subscription.paused' ||
+               event.type === 'customer.subscription.resumed') {
+      await syncSubscriptionToUser(event.data.object);
     }
     res.json({ received: true });
   } catch (e) {
@@ -441,6 +515,92 @@ async function fulfillCheckout(session, eventId) {
   }
 }
 // ------------------------------------------------------------
+// ------------------------------------------------------------
+// Subscription helpers + webhook-driven state sync.
+// ------------------------------------------------------------
+// Resolve the subscription id from an invoice across Stripe API versions. As of
+// 2025-03-31.basil (and the 2026-05-27.dahlia our webhook is pinned to) the flat
+// invoice.subscription field was removed in favor of
+// invoice.parent.subscription_details.subscription. We check the new path first and
+// fall back to the legacy field so a mixed/older payload still resolves. Returns a
+// string id or null. (A field may arrive as an id string or an expanded object.)
+function invoiceSubscriptionId(invoice) {
+  if (!invoice) return null;
+  const asId = function (v) { return (v && typeof v === 'object') ? (v.id || null) : (v || null); };
+  try {
+    if (invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.subscription) {
+      return asId(invoice.parent.subscription_details.subscription);
+    }
+  } catch (e) {}
+  if (invoice.subscription) return asId(invoice.subscription); // legacy (<= acacia)
+  try {
+    if (invoice.subscription_details && invoice.subscription_details.subscription) {
+      return asId(invoice.subscription_details.subscription);
+    }
+  } catch (e) {}
+  return null;
+}
+
+// First price id off a subscription object (webhook payload).
+function subscriptionPriceId(subscription) {
+  try { return subscription.items.data[0].price.id || null; } catch (e) { return null; }
+}
+
+// Subscription-mode checkout completed: establish the user<->customer<->subscription
+// link right away so the Billing Portal works immediately. The customer.subscription
+// .created event also lands and sets tier + status via syncSubscriptionToUser. We
+// resolve the user from the session metadata / client_reference_id.
+async function linkSubscriptionCheckout(session) {
+  if (!session) return;
+  const md = session.metadata || {};
+  const userId = parseInt(md.user_id || session.client_reference_id, 10);
+  if (!userId) return;
+  const customerId = (session.customer && typeof session.customer === 'object') ? session.customer.id : (session.customer || null);
+  const subId = (session.subscription && typeof session.subscription === 'object') ? session.subscription.id : (session.subscription || null);
+  if (!customerId && !subId) return;
+  const db = await getDb();
+  await db.prepare(
+    "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = COALESCE(?, stripe_subscription_id) WHERE id = ?"
+  ).run(customerId, subId, userId);
+}
+
+// Webhook-driven state sync: STRIPE IS THE SOURCE OF TRUTH for paid tier + status.
+// On any customer.subscription.* event we resolve the user (by stored subscription
+// id, else the subscription metadata.user_id, else the customer id) and write
+// stripe_customer_id / stripe_subscription_id / subscription_status, deriving
+// users.tier from the subscribed price via STRIPE_TIER_PRICES. Naturally idempotent
+// (last-write-wins state). The monthly token GRANT is NOT done here -- it rides on
+// invoice.paid so tokens only land on a real successful charge.
+//
+// Tier policy by status:
+//   active / trialing                      -> paid tier from the price (access on)
+//   past_due / unpaid / incomplete         -> keep current tier (grace; Stripe retries)
+//   canceled / incomplete_expired / paused -> revert to copper (no paid access)
+async function syncSubscriptionToUser(subscription) {
+  if (!subscription || !subscription.id) return { skipped: true };
+  const db = await getDb();
+  const subId = subscription.id;
+  const customerId = (subscription.customer && typeof subscription.customer === 'object') ? subscription.customer.id : (subscription.customer || null);
+  const status = subscription.status || '';
+  const metaUserId = (subscription.metadata && subscription.metadata.user_id) ? parseInt(subscription.metadata.user_id, 10) : null;
+  let user = await db.prepare('SELECT id, tier FROM users WHERE stripe_subscription_id = ?').get(subId);
+  if (!user && metaUserId) user = await db.prepare('SELECT id, tier FROM users WHERE id = ?').get(metaUserId);
+  if (!user && customerId) user = await db.prepare('SELECT id, tier FROM users WHERE stripe_customer_id = ?').get(customerId);
+  if (!user) return { skipped: true, reason: 'no_user' };
+  const priceTier = stripeProvider.tierForPrice(subscriptionPriceId(subscription));
+  let nextTier = user.tier; // default: leave unchanged
+  if (status === 'active' || status === 'trialing') {
+    if (priceTier) nextTier = priceTier;
+  } else if (status === 'canceled' || status === 'incomplete_expired' || status === 'paused') {
+    nextTier = 'copper';
+  } // past_due / unpaid / incomplete -> keep current tier (grace period)
+  await db.prepare(
+    "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = ?, subscription_status = ?, tier = ? WHERE id = ?"
+  ).run(customerId, subId, status, nextTier, user.id);
+  return { skipped: false, userId: user.id, status: status, tier: nextTier };
+}
+
+// ------------------------------------------------------------
 // Subscription renewal -> monthly token grant.
 // ------------------------------------------------------------
 // Stripe charges the card on the renewal date and fires invoice.paid; this hands
@@ -454,14 +614,15 @@ async function fulfillCheckout(session, eventId) {
 // the subscribed plan so the amounts are right. Until that wiring exists, this no-ops
 // safely (it just won't find a matching user).
 async function fulfillSubscriptionInvoice(invoice, eventId) {
-  if (!invoice || !invoice.subscription) return; // ignore one-off (non-subscription) invoices
+  const subId = invoiceSubscriptionId(invoice);
+  if (!subId) return; // ignore one-off (non-subscription) invoices
   // Grant on the first subscription invoice and on each renewal cycle only. Proration /
   // mid-cycle update invoices are not a new token period, so they're skipped.
   const reason = invoice.billing_reason || '';
   if (reason && reason !== 'subscription_create' && reason !== 'subscription_cycle') return;
   const db = await getDb();
   // Resolve the user from the subscription id (preferred), else the customer id.
-  let user = await db.prepare('SELECT id FROM users WHERE stripe_subscription_id = ?').get(invoice.subscription);
+  let user = await db.prepare('SELECT id FROM users WHERE stripe_subscription_id = ?').get(subId);
   if (!user && invoice.customer) {
     user = await db.prepare('SELECT id FROM users WHERE stripe_customer_id = ?').get(invoice.customer);
   }
@@ -545,5 +706,7 @@ module.exports = {
   fulfillSubscriptionInvoice,
   applyUpgradeProration,
   fulfillSubscriptionUpdate,
+  syncSubscriptionToUser,
+  linkSubscriptionCheckout,
   stripeWebhook
 };
