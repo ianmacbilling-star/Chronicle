@@ -27,7 +27,7 @@ const router = express.Router();
 const { getDb } = require('../database/db');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
-const { sendOrderConfirmationEmail } = require('./email');
+const { sendOrderConfirmationEmail, sendOrderProblemEmail } = require('./email');
 
 // Markup is read from app_settings ('print_markup_pct', default 10) and
 // applied to the PRINT cost only -- shipping (and tax) pass through at cost.
@@ -330,6 +330,24 @@ router.post('/order', requireSession, async function (req, res) {
       await db.prepare(
         'UPDATE print_orders SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
       ).run('order_failed', String(submitErr && submitErr.message || submitErr), orderId);
+      // Notify the customer (BCC support); fire-and-forget, swallows its own errors.
+      if (contactEmail) {
+        sendOrderProblemEmail({
+          to_email: contactEmail,
+          name: contactName,
+          order: {
+            orderNo: externalId,
+            bookTitle: bookTitle,
+            orderName: orderName,
+            campaignName: campaignName,
+            binding: built.spec.binding,
+            colorTier: (body.selection || {}).colorTier,
+            coverFinish: built.spec.coverFinish,
+            pageCount: built.spec.pageCount,
+            quantity: quoteReq.quantity
+          }
+        });
+      }
       return res.status(502).json({ error: 'Print job submission failed after payment; order flagged for refund', orderId });
     }
   } catch (e) {

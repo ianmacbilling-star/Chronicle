@@ -7,7 +7,7 @@ const crypto = require('crypto');
 // EMAIL SERVICE
 // ============================================================
 
-async function sendEmail(to, subject, html) {
+async function sendEmail(to, subject, html, opts) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('RESEND_API_KEY not set');
@@ -19,12 +19,14 @@ async function sendEmail(to, subject, html) {
 
   const fromEmail = process.env.FROM_EMAIL || 'noreply@campaignia.com';
 
-  const { data, error } = await resend.emails.send({
+  const payload = {
     from: 'Campaignia <' + fromEmail + '>',
     to: to,
     subject: subject,
     html: html
-  });
+  };
+  if (opts && opts.bcc) payload.bcc = opts.bcc;
+  const { data, error } = await resend.emails.send(payload);
 
   if (error) throw new Error(error.message);
   return data;
@@ -498,4 +500,73 @@ async function sendOrderConfirmationEmail(opts) {
   }
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail };
+function orderProblemHTML(name, order) {
+  order = order || {};
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function row(label, value) {
+    if (value == null || value === '') return '';
+    return '<tr><td style="padding:6px 0;color:rgba(201,168,76,0.6);font-size:13px;">' + esc(label) +
+      '</td><td style="padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;">' + esc(value) + '</td></tr>';
+  }
+  var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
+  var bookTitle = order.bookTitle || order.orderName || order.campaignName || 'your book';
+  var rows = '';
+  rows += row('Order number', order.orderNo);
+  rows += row('Book title', order.bookTitle);
+  rows += row('Campaign', order.campaignName);
+  rows += row('Format', fmt);
+  rows += row('Pages', order.pageCount);
+  rows += row('Quantity', order.quantity);
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: rgba(20,15,8,0.95); border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    .header { background: #1a0f08; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
+    .logo { font-family: Georgia, serif; font-size: 28px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; }
+    .body { padding: 32px; }
+    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
+    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    table { width: 100%; border-collapse: collapse; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">CAMPAIGNIA</div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:rgba(201,168,76,0.5);letter-spacing:2px;">ORDER ISSUE</div>
+    </div>
+    <div class="body">
+      <div class="title">There was a problem with your order</div>
+      <div class="text">${name ? esc(name) + ', we' : 'We'} ran into a problem while placing your print order for <strong>${esc(bookTitle)}</strong>, so it has not been sent to print.</div>
+      <div class="text">If your card was charged, that charge will be reversed. Our team has been notified and will look into it &mdash; you can also reply to this email and we&rsquo;ll help sort it out.</div>
+      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:8px;"><table>' + rows + '</table></div>' : ''}
+      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">Sorry for the inconvenience.</div>
+    </div>
+    <div class="footer">Campaignia &middot; Support@campaignia.com</div>
+  </div>
+</body>
+</html>`;
+}
+
+async function sendOrderProblemEmail(opts) {
+  // opts: { to_email, name, order }. Sends to the customer and BCCs support.
+  try {
+    var order = opts.order || {};
+    var subject = 'There was a problem with your Campaignia order' + (order.orderNo ? ' (' + order.orderNo + ')' : '');
+    var html = orderProblemHTML(opts.name, order);
+    await sendEmail(opts.to_email, subject, html, { bcc: 'Support@campaignia.com' });
+  } catch (e) {
+    console.error('Order problem email error:', e.message); // Non-fatal
+  }
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail };
