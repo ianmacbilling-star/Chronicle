@@ -362,8 +362,8 @@ router.post('/checkout', async function(req, res) {
       pack: pack,
       userId: req.session.userId,
       attributedCampaignId: attributed,
-      successUrl: base + '/?purchase=success',
-      cancelUrl: base + '/?purchase=cancel'
+      successUrl: base + '/app.html?purchase=success',
+      cancelUrl: base + '/app.html?purchase=cancel'
     });
     res.json({ url: session.url });
   } catch (e) {
@@ -395,8 +395,8 @@ router.post('/subscribe', async function(req, res) {
       userId: req.session.userId,
       customerId: (u && u.stripe_customer_id) || null,
       customerEmail: (u && u.email) || null,
-      successUrl: base + '/?subscribe=success',
-      cancelUrl: base + '/?subscribe=cancel'
+      successUrl: base + '/app.html?subscribe=success',
+      cancelUrl: base + '/app.html?subscribe=cancel'
     });
     res.json({ url: session.url });
   } catch (e) {
@@ -422,7 +422,7 @@ router.post('/portal', async function(req, res) {
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
     const session = await stripeProvider.createBillingPortalSession({
       customerId: u.stripe_customer_id,
-      returnUrl: base + '/?portal=return'
+      returnUrl: base + '/app.html?portal=return'
     });
     res.json({ url: session.url });
   } catch (e) {

@@ -244,6 +244,105 @@ function buyTokenPack(packId) {
   });
 }
 
+// ============================================================
+// SUBSCRIPTIONS + BILLING (Stripe-hosted: Checkout + Billing Portal)
+// ============================================================
+// All plan management is Stripe-hosted. subscribeTier starts a recurring
+// Checkout; openBillingPortal opens the white-labeled portal where the user
+// upgrades / downgrades / cancels / updates their card. The server is the
+// source of truth (tier follows the customer.subscription.* webhooks); the
+// client just kicks off the hosted flows and reflects the result on return.
+
+function hasLiveSubscription(me) {
+  if (!me || !me.hasSubscription) return false;
+  var st = me.subscriptionStatus || '';
+  return st === 'active' || st === 'trialing' || st === 'past_due' || st === 'unpaid' || st === 'paused';
+}
+
+function subscribeTier(tier) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+  fetch('/api/tokens/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tier: tier })
+  }).then(function(r) {
+    if (r.status === 503) {
+      return r.json().then(function(j) {
+        show((j && j.error === 'tier_price_unconfigured')
+          ? 'Subscriptions are being set up and will be available shortly.'
+          : 'Billing is being set up and will be available shortly.');
+        return null;
+      });
+    }
+    return r.json();
+  }).then(function(data) {
+    if (!data) return;
+    if (data.url) { window.location = data.url; return; }
+    show('Could not start the subscription. Please try again.');
+  }).catch(function() {
+    show('Could not reach the billing service. Please try again.');
+  });
+}
+
+function openBillingPortal() {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+  fetch('/api/tokens/portal', { method: 'POST' }).then(function(r) {
+    if (r.status === 503) { show('Billing is being set up and will be available shortly.'); return null; }
+    if (r.status === 400) { show('No billing account yet - subscribe to a plan first.'); return null; }
+    return r.json();
+  }).then(function(data) {
+    if (!data) return;
+    if (data.url) { window.location = data.url; return; }
+    show('Could not open the billing portal. Please try again.');
+  }).catch(function() {
+    show('Could not reach the billing service. Please try again.');
+  });
+}
+
+function billingToast(text, kind) {
+  var bg = (kind === 'error') ? 'rgba(120,40,30,0.96)'
+    : (kind === 'info') ? 'rgba(45,45,55,0.96)' : 'rgba(40,90,52,0.96)';
+  var el = document.createElement('div');
+  el.textContent = text;
+  el.style.cssText = 'position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:99999;' +
+    'background:' + bg + ';color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;' +
+    'box-shadow:0 6px 20px rgba(0,0,0,0.35);max-width:90vw;text-align:center;';
+  document.body.appendChild(el);
+  setTimeout(function() { el.style.transition = 'opacity 0.4s'; el.style.opacity = '0'; }, 4200);
+  setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 4800);
+}
+
+function handleBillingReturn() {
+  var params;
+  try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
+  var purchase = params.get('purchase');
+  var subscribe = params.get('subscribe');
+  var portal = params.get('portal');
+  if (!purchase && !subscribe && !portal) return;
+  function refreshAccount() {
+    if (typeof checkAuth === 'function') checkAuth();
+    if (document.getElementById('account-plans')) loadAccount();
+  }
+  if (purchase === 'success') {
+    billingToast('Payment complete - your tokens have been added.', 'success');
+    setTimeout(function() { if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, 1200);
+  } else if (purchase === 'cancel') {
+    billingToast('Checkout canceled - no charge was made.', 'info');
+  } else if (subscribe === 'success') {
+    billingToast('Subscription active - welcome aboard!', 'success');
+    setTimeout(refreshAccount, 1500);
+    setTimeout(refreshAccount, 4500);
+  } else if (subscribe === 'cancel') {
+    billingToast('Subscription checkout canceled - no charge was made.', 'info');
+  } else if (portal === 'return') {
+    billingToast('Billing updated.', 'success');
+    setTimeout(refreshAccount, 800);
+  }
+  try { window.history.replaceState({}, '', window.location.pathname); } catch (e) {}
+}
+
 // Renders the INSUFFICIENT_TOKENS error as a message + "Buy more tokens"
 // button, returned as an HTML string. Callers drop it into the appropriate
 // container via .innerHTML. If the error isn't a token error, returns
@@ -396,6 +495,7 @@ function showAdminBalanceMsg(text, kind) {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
   checkAuth();
+  handleBillingReturn();
   var charImageInput = document.getElementById('char-image-input');
   if (charImageInput) charImageInput.addEventListener('change', previewCharImage);
   var sessionDate = document.getElementById('session-date');
@@ -670,6 +770,7 @@ function renderAccountPlans(me) {
   var all = me.allTiers || {};
   var current = me.tier || 'copper';
   var order = ['copper','silver','gold','platinum'];
+  var live = hasLiveSubscription(me);
 
   el.innerHTML = order.map(function(key) {
     var t = all[key];
@@ -677,9 +778,15 @@ function renderAccountPlans(me) {
     var isCurrent = (key === current);
     var col = TIER_COLORS[key] || TIER_COLORS.copper;
     var priceText = t.price ? ('$' + t.price + '<span style="font-size:11px;color:var(--text-light);">/mo</span>') : 'Free';
+    var action = '';
+    if (key !== 'copper' && !isCurrent && !live) {
+      action = '<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="subscribeTier(&#39;' + key + '&#39;)">Subscribe</button>';
+    } else if (key !== 'copper' && isCurrent && live) {
+      action = '<button class="btn btn-sm" style="margin-top:10px;width:100%;" onclick="openBillingPortal()">Manage</button>';
+    }
     return '<div style="border:1px solid ' + (isCurrent ? 'var(--gold)' : 'rgba(201,168,76,0.2)') + ';' +
       'border-radius:var(--radius-lg);padding:16px;background:' +
-      (isCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';">' +
+      (isCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;">' +
         '<span style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + col.bg + ';">' +
           (t.name || key).toUpperCase() + '</span>' +
@@ -687,8 +794,12 @@ function renderAccountPlans(me) {
       '</div>' +
       '<div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin:8px 0;">' + priceText + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);line-height:1.5;">' + (t.description || '') + '</div>' +
+      action +
     '</div>';
   }).join('');
+
+  var mb = document.getElementById('account-manage-billing-btn');
+  if (mb) mb.style.display = (me && me.hasBilling) ? 'inline-block' : 'none';
 }
 
 // Get API key — prefer settings field, fall back to nothing

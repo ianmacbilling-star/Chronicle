@@ -173,7 +173,7 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, render_thinking FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, stripe_customer_id, stripe_subscription_id, render_thinking FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     const tier = getTier(user.tier || 'copper');
@@ -211,6 +211,8 @@ router.get('/me', async function(req, res) {
       trialExpired: trialExpired,
       trialDaysLeft: trialDaysLeft,
       subscriptionStatus: user.subscription_status || 'trialing',
+      hasBilling: !!user.stripe_customer_id,
+      hasSubscription: !!user.stripe_subscription_id,
       renderThinking: !!user.render_thinking,
       inFreeTrial: inFreeTrial,
       trialStartedAt: user.trial_started_at || null,
