@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Campaignia — You make it legendary. We make it forever.</title>
   <meta name="description" content="Turn your TTRPG sessions into stunning graphic novels. AI-powered storyboards, image generation, and PDF export for Dungeon Masters." />
@@ -66,6 +67,10 @@
       border-bottom: 3px solid var(--ink);
       box-shadow: 0 3px 0 rgba(201,168,76,0.15);
     }
+
+    /* STAGING ENV INDICATOR */
+    html.staging-env nav { background:#ff6a00; border-bottom:3px solid #7a2e00; box-shadow:0 3px 0 rgba(0,0,0,0.25); }
+    html.staging-env .nav-logo-text { color:#2b1400; }
 
     .nav-logo {
       display: flex;

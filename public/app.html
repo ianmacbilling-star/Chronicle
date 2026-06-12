@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Campaignia</title>
   <meta name="description" content="Campaignia — TTRPG Session Graphic Novel Generator" />
@@ -642,6 +643,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
           <input class="form-input" id="dev-add-tokens-input" type="number" min="1" step="1" value="100" style="max-width:140px;" />
           <button class="btn btn-primary btn-sm" onclick="devAddTokens()">Add tokens</button>
+          <button class="btn btn-sm" onclick="devGrantMonthly()">Grant monthly (current tier)</button>
         </div>
         <div id="dev-add-tokens-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
       </div>

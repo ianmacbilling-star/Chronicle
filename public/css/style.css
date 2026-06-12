@@ -1886,3 +1886,11 @@ body.role-player #stab-export { display: block !important; }
 .panel-dark .form-label{color:rgba(201,168,76,0.78);}
 .panel-dark .form-input{background:rgba(15,10,5,0.6);border-color:rgba(201,168,76,0.28);color:var(--gold-light);}
 .panel-dark .form-input::placeholder{color:rgba(201,168,76,0.5);}
+
+/* ===== STAGING ENVIRONMENT INDICATOR ===== */
+html.staging-env .app-header{
+  background:#ff6a00;
+  border-bottom:1px solid #7a2e00;
+  box-shadow:0 2px 12px rgba(0,0,0,0.35);
+}
+html.staging-env .app-logo-text{color:#2b1400;}
