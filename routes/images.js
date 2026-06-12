@@ -53,7 +53,7 @@ function shapeAspectRatio(shape) {
   if (shape === 'tall') return '2:3';
   if (shape === 'square') return '1:1';
   if (shape === 'panoramic') return '21:9';
-  if (shape === 'tower') return '2:5';
+  if (shape === 'tower') return '1:4';  // nano-banana-2 has no '2:5' aspect; '1:4' is the closest valid tall ratio (the PDF layout displays towers in a 2:5 box via object-fit:cover)
   if (shape === 'fullpage') return '3:4';
   return '4:3';
 }
