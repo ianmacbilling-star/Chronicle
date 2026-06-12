@@ -936,11 +936,14 @@ function cgCaptionTier(inner) {
 // ---- Comic (intermixed flow): full prose always, images woven INTO the text ----
 // The inner media of one comic image: cover-cropped, focal-aware, crop_safe honored.
 function cgImgMedia(m, opts) {
+  // Cover images OVERSCAN the box by 1px on every side so a sub-pixel rounding gap at certain
+  // browser-zoom levels can't reveal the dark box background as a thin black hairline at the
+  // edge (the overflow:hidden box clips the overscan). Contain (letterbox) images stay exact.
   var fit = lmCropSafe(m)
-    ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';')
-    : 'object-fit:contain;';
+    ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;')
+    : 'object-fit:contain;width:100%;height:100%;';
   return m.image
-    ? '<img style="width:100%;height:100%;' + fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    ? '<img style="' + fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
 }
 
@@ -1027,7 +1030,7 @@ function cgFlowFeature(m, opts, narrHtml) {
   var W = Math.min(CG_W, H * asp);
   var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
   var img = m.image
-    ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:#000;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
@@ -1061,7 +1064,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
 
   function comicArt(m, span, h, boxW) {
     var media = m.image
-      ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+      ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
       : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
     var spanCss = (span === 'tall') ? 'grid-row:span 2;' : ((span === 'wide') ? 'grid-column:span 2;' : '');
     // Tall/tower cells hug the image's TRUE width at this height (boxW) and center in the
@@ -1085,7 +1088,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var twTa = momentAspect(m);
       var twW = CO_TOWER_H * twTa;
       var twMedia = m.image
-        ? '<img style="width:100%;height:100%;object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+        ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
         : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
       var twBox = '<div style="' + cgBorder(opts) + 'background:#000;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + twMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
       var twNarr = '';
