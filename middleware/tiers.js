@@ -230,12 +230,26 @@ function getMomentRange(tier, wordCount) {
 }
 
 function isTrialExpired(user) {
-  if (user.tier !== 'copper') return false;
+  if (!user || user.tier !== 'trial') return false;
   if (!user.trial_started_at) return false;
-  const trialDays = getTier('copper').trial_days;
+  const trialDays = getTier('trial').trial_days;
   const started = new Date(user.trial_started_at);
   const expires = new Date(started.getTime() + trialDays * 24 * 60 * 60 * 1000);
   return new Date() > expires;
+}
+
+// Lazy trial lapse (no cron): when a trial user's window has elapsed, drop them
+// to copper on their next activity. Mutates the in-memory user object AND
+// persists, so callers can keep using `user` after this resolves.
+async function lapseTrialIfExpired(user, db) {
+  try {
+    if (user && user.tier === 'trial' && isTrialExpired(user)) {
+      await db.prepare('UPDATE users SET tier = ? WHERE id = ?').run('copper', user.id);
+      user.tier = 'copper';
+      return true;
+    }
+  } catch (e) { /* non-fatal: keep current tier for this request */ }
+  return false;
 }
 
 // Middleware to check campaign limit
@@ -246,15 +260,8 @@ async function checkCampaignLimit(req, res, next) {
     const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.status(401).json({ error: 'Not authenticated' });
 
+    await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier);
-
-    // Check trial expiry
-    if (isTrialExpired(user)) {
-      return res.status(403).json({
-        error: 'Your free trial has expired. Please upgrade to continue.',
-        code: 'TRIAL_EXPIRED'
-      });
-    }
 
     // Check campaign limit
     if (tier.max_campaigns !== null) {
@@ -285,14 +292,8 @@ async function checkSessionLimit(req, res, next) {
     const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.status(401).json({ error: 'Not authenticated' });
 
+    await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier);
-
-    if (isTrialExpired(user)) {
-      return res.status(403).json({
-        error: 'Your free trial has expired. Please upgrade to continue.',
-        code: 'TRIAL_EXPIRED'
-      });
-    }
 
     if (tier.max_sessions !== null) {
       const count = await db.prepare(
@@ -322,10 +323,8 @@ async function checkCharacterLimit(req, res, next) {
     const db = await getDb();
     const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier);
-    if (isTrialExpired(user)) {
-      return res.status(403).json({ error: 'Your free trial has expired. Please upgrade to continue.', code: 'TRIAL_EXPIRED' });
-    }
     if (tier.max_characters !== null && tier.max_characters !== undefined && tier.max_characters >= 0) {
       const row = await db.prepare('SELECT COUNT(*) as count FROM characters WHERE campaign_id = ?').get(req.params.campaignId);
       if (Number(row.count) >= tier.max_characters) {
@@ -351,6 +350,7 @@ async function attachTier(req, res, next) {
     const db = await getDb();
     const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
     if (user) {
+      await lapseTrialIfExpired(user, db);
       req.user = user;
       req.userTier = getTier(user.tier);
       req.trialExpired = isTrialExpired(user);
@@ -450,4 +450,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

@@ -400,6 +400,44 @@ function devAddTokens() {
     .catch(function() { show('Network error.', false); });
 }
 
+// ----- TESTING: set EXACT cot/utlt balances (+ optional current-tier reserve).
+// Wipes the ledger first. Remove with the other testing controls at launch. -----
+function devSetBalance() {
+  var msg = document.getElementById('dev-add-tokens-msg');
+  function show(text, ok) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
+    msg.style.color = ok ? '#3c9142' : '#c0392b';
+  }
+  var cotEl = document.getElementById('dev-set-cot');
+  var utltEl = document.getElementById('dev-set-utlt');
+  var resEl = document.getElementById('dev-set-reserve');
+  var cot = cotEl ? parseInt(cotEl.value, 10) : NaN;
+  var utlt = utltEl ? parseInt(utltEl.value, 10) : NaN;
+  if (!Number.isFinite(cot) || cot < 0 || !Number.isFinite(utlt) || utlt < 0) { show('Enter non-negative CO and UTOLT amounts.', false); return; }
+  var bodyObj = { cot: cot, utlt: utlt };
+  if (resEl && resEl.value !== '') bodyObj.reserve = parseInt(resEl.value, 10);
+  fetch('/api/tokens/dev-set-balance', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bodyObj)
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.ok) {
+        var extra = data.reserve ? (' Reserve set to ' + data.reserve.session_reserve + ' on ' + data.reserve.tier + '.') : '';
+        show('Set CO ' + cot + ' + UTOLT ' + utlt + '. Balance: ' + (data.balance && data.balance.total) + '.' + extra, true);
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
+      } else {
+        show((data && data.error) || 'Could not set balance.', false);
+      }
+    })
+    .catch(function() { show('Network error.', false); });
+}
+
 // ----- TESTING: manually grant this user's current-tier monthly allotment.
 // The monthly grant no longer fires automatically on page load; this is the
 // manual trigger. Remove with the other testing controls at launch. -----
@@ -419,7 +457,7 @@ function devGrantMonthly() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.ok) {
-        show('Granted ' + data.granted.utlt + ' UTOLT + ' + data.granted.cot + ' CO (' + data.tier + ' tier). Balance: ' + (data.balance && data.balance.total) + '.', true);
+        show('Reset to ' + data.granted.utlt + ' UTOLT + ' + data.granted.cot + ' CO (' + data.tier + ' tier, fresh account). Balance: ' + (data.balance && data.balance.total) + '.', true);
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
         if (typeof refreshUsageTokens === 'function') refreshUsageTokens();
       } else {

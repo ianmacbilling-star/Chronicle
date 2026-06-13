@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
-const { getTier, isTrialExpired, TIERS } = require('../middleware/tiers');
+const { getTier, isTrialExpired, lapseTrialIfExpired, TIERS } = require('../middleware/tiers');
 const { creditTokens } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 
@@ -26,13 +26,13 @@ router.post('/register', async function(req, res) {
 
     const hash = await bcrypt.hash(password, 10);
     const now = new Date().toISOString();
-    // NOTE: New accounts default to PLATINUM during early testing so
-    // testers don't hit tier limits. Flip this back (or remove the
-    // explicit value to let the schema default decide) when monetization
-    // goes live.
+    // New accounts start on the FREE TRIAL tier (rank 0): generous, watermarked,
+    // capped (1 campaign / 1 session / a few characters) with a session-token
+    // reserve, and a 30-day window. They lapse to Copper at expiry (lazy, on next
+    // activity -- see lapseTrialIfExpired). trial_started_at stamps the window.
     const result = await db.prepare(
       'INSERT INTO users (name, email, password, tier, created_at, trial_started_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, 'platinum', now, now);
+    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now);
 
     const newUserId = result.lastInsertRowid;
 
@@ -176,6 +176,7 @@ router.get('/me', async function(req, res) {
     const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, stripe_customer_id, stripe_subscription_id, render_thinking FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
+    await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier || 'copper');
     const trialExpired = isTrialExpired(user);
     // Free trial = within the 30-day window from trial_started_at and not yet
@@ -187,7 +188,7 @@ router.get('/me', async function(req, res) {
 
     // Calculate trial days remaining
     let trialDaysLeft = null;
-    if (user.tier === 'copper' && user.trial_started_at) {
+    if (user.tier === 'trial' && user.trial_started_at) {
       const started = new Date(user.trial_started_at);
       const expires = new Date(started.getTime() + 30 * 24 * 60 * 60 * 1000);
       trialDaysLeft = Math.max(0, Math.ceil((expires - new Date()) / (24 * 60 * 60 * 1000)));
@@ -258,7 +259,14 @@ router.post('/set-tier', async function(req, res) {
   if (!TIERS[tier]) return res.status(400).json({ error: 'Unknown tier' });
   try {
     const db = await getDb();
-    await db.prepare('UPDATE users SET tier = ? WHERE id = ?').run(tier, req.session.userId);
+    // Flipping TO the trial tier starts a fresh 30-day window so it won't lapse
+    // straight back to copper on the next request (use the Free Trial date control
+    // to backdate the start when testing expiry/lapse).
+    if (tier === 'trial') {
+      await db.prepare('UPDATE users SET tier = ?, trial_started_at = ? WHERE id = ?').run(tier, new Date().toISOString(), req.session.userId);
+    } else {
+      await db.prepare('UPDATE users SET tier = ? WHERE id = ?').run(tier, req.session.userId);
+    }
     res.json({ success: true, tier: tier });
   } catch (e) {
     console.error('set-tier error:', e.message);

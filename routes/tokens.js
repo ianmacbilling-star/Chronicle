@@ -12,7 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
-const { getTier } = require('../middleware/tiers');
+const { getTier, saveTierConfig } = require('../middleware/tiers');
 const { getPack, listPacks } = require('../services/billing/packs');
 const stripeProvider = require('../services/billing/stripeProvider');
 
@@ -278,10 +278,53 @@ router.post('/dev-grant-monthly', async function(req, res) {
     let gCot = parseInt(tier && tier.monthly_cot, 10);
     if (!Number.isFinite(gUtlt) || gUtlt < 0) gUtlt = 0;
     if (!Number.isFinite(gCot) || gCot < 0) gCot = 0;
+    // Reset to a fresh state first so repeated clicks reproduce a brand-new
+    // account at this tier rather than stacking grants.
+    await db.prepare('DELETE FROM token_ledger WHERE user_id = ?').run(req.session.userId);
+    await db.prepare("INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, 0, 'cot', 'admin_reset', ?)").run(req.session.userId, 'dev_grant_monthly_reset');
     if (gUtlt > 0) await creditTokens(req.session.userId, gUtlt, { bucket: 'utlt', event_type: 'monthly_grant', source: 'manual_test' });
     if (gCot > 0) await creditTokens(req.session.userId, gCot, { bucket: 'cot', event_type: 'monthly_cot_grant', source: 'manual_test' });
     const bal = await getBalance(req.session.userId);
     res.json({ ok: true, tier: tierName, granted: { utlt: gUtlt, cot: gCot }, balance: bal });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/tokens/dev-set-balance -- TESTING. Self only. Wipes the caller's
+// ledger and sets EXACT cot + utlt balances, and (optionally) the session
+// reserve on the caller's CURRENT tier (tier config is global). Lets us dial
+// in precise trial states. REMOVE with the other testing controls before prod.
+router.post('/dev-set-balance', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  const body = req.body || {};
+  const cot = parseInt(body.cot, 10);
+  const utlt = parseInt(body.utlt, 10);
+  if (!Number.isFinite(cot) || cot < 0 || !Number.isFinite(utlt) || utlt < 0) {
+    return res.status(400).json({ error: 'Provide non-negative cot and utlt amounts' });
+  }
+  if (cot > 100000 || utlt > 100000) {
+    return res.status(400).json({ error: 'Amount too large (max 100000)' });
+  }
+  try {
+    const db = await getDb();
+    const uid = req.session.userId;
+    await db.prepare('DELETE FROM token_ledger WHERE user_id = ?').run(uid);
+    await db.prepare("INSERT INTO token_ledger (user_id, amount, bucket, event_type, source) VALUES (?, 0, 'cot', 'admin_reset', ?)").run(uid, 'dev_set_balance');
+    if (utlt > 0) await creditTokens(uid, utlt, { bucket: 'utlt', event_type: 'manual_credit', source: 'dev_set_balance' });
+    if (cot > 0) await creditTokens(uid, cot, { bucket: 'cot', event_type: 'manual_credit', source: 'dev_set_balance' });
+    let reserveSet = null;
+    if (body.reserve !== undefined && body.reserve !== null && body.reserve !== '') {
+      const rv = parseInt(body.reserve, 10);
+      if (Number.isFinite(rv) && rv >= 0) {
+        const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(uid);
+        const tierName = (u && u.tier) || 'copper';
+        await saveTierConfig(tierName, { session_reserve: rv });
+        reserveSet = { tier: tierName, session_reserve: rv };
+      }
+    }
+    const bal = await getBalance(uid);
+    res.json({ ok: true, balance: bal, reserve: reserveSet });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
