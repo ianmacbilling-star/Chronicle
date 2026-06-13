@@ -491,7 +491,15 @@ function devApplyTrial() {
     .then(function(data) {
       if (data && data.success) {
         state.inFreeTrial = !!data.inTrial;
-        show(data.inTrial ? 'Account is now IN the free trial. Open a session to see the watermark.' : 'Account is now OUT of the free trial (watermark off).', true);
+        if (state.user) state.user.tier = data.tier;
+        var tb = document.getElementById('trial-badge');
+        if (tb) tb.style.display = (data.tier === 'trial') ? 'inline-flex' : 'none';
+        var tbd = document.getElementById('trial-badge-days');
+        if (tbd && data.tier === 'trial' && data.trial_started_at) {
+          var msLeft = (new Date(data.trial_started_at).getTime() + 30 * 24 * 60 * 60 * 1000) - Date.now();
+          tbd.textContent = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000))) + 'd left';
+        }
+        show(data.inTrial ? ('Account is now ON the Free Trial tier (' + data.tier + ') -- badge + caps active, and it persists across logins.') : ('Out of free trial. Tier is now ' + data.tier + '.'), true);
       } else {
         show((data && data.error) || 'Could not update trial state.', false);
       }
@@ -681,7 +689,7 @@ function loadAccount() {
       renderAccountTier(me);
       renderAccountPlans(me);
       var _tk = document.getElementById('setting-thinking'); if (_tk) _tk.checked = !!me.renderThinking;
-      var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = !!me.inFreeTrial;
+      var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = (me.tier === 'trial');
       var _td = document.getElementById('dev-trial-date'); if (_td && me.trialStartedAt) _td.value = String(me.trialStartedAt).slice(0,10);
       return fetch('/api/auth/usage').then(function(r) { return r.json(); });
     })

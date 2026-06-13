@@ -345,13 +345,18 @@ router.put('/trial-testing', async function(req, res) {
       const raw = req.body && req.body.started_at;
       if (raw) { const d = new Date(raw); if (!isNaN(d.getTime())) startedAt = d.toISOString(); }
       if (!startedAt) startedAt = now;
-      await db.prepare("UPDATE users SET subscription_status = 'trialing', trial_started_at = ?, edited_at = ?, edited_by = ? WHERE id = ?")
+      // Put the account ON the real trial TIER (badge + caps engage, exactly like a
+      // fresh signup) and start the window. Persisted in the DB -> survives logins.
+      await db.prepare("UPDATE users SET tier = 'trial', subscription_status = 'trialing', trial_started_at = ?, edited_at = ?, edited_by = ? WHERE id = ?")
         .run(startedAt, now, req.session.userId, req.session.userId);
     } else {
-      await db.prepare("UPDATE users SET subscription_status = 'active', edited_at = ?, edited_by = ? WHERE id = ?")
+      // Out of trial: drop a trial account to copper (the real post-trial tier); leave
+      // any non-trial tier untouched so this never clobbers a tier set via the override.
+      await db.prepare("UPDATE users SET tier = CASE WHEN tier = 'trial' THEN 'copper' ELSE tier END, subscription_status = 'active', edited_at = ?, edited_by = ? WHERE id = ?")
         .run(now, req.session.userId, req.session.userId);
     }
-    res.json({ success: true, inTrial: inTrial, trial_started_at: startedAt });
+    const trow = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    res.json({ success: true, inTrial: inTrial, trial_started_at: startedAt, tier: trow ? trow.tier : null });
   } catch (e) {
     console.error('trial-testing error:', e.message);
     res.status(500).json({ error: 'Could not update trial state' });
