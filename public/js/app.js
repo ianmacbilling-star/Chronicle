@@ -578,6 +578,19 @@ function checkAuth() {
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
+      // Free Trial badge in the top bar -- driven by the ACTUAL tier (tier === 'trial'),
+      // i.e. the state where the trial caps apply. If this badge is hidden, the trial
+      // caps are NOT in effect for this account regardless of any watermark/trial window.
+      var trialBadge = document.getElementById('trial-badge');
+      if (trialBadge) {
+        if (data.tier === 'trial') {
+          var tbDays = document.getElementById('trial-badge-days');
+          if (tbDays) tbDays.textContent = (typeof data.trialDaysLeft === 'number') ? (data.trialDaysLeft + 'd left') : '';
+          trialBadge.style.display = 'inline-flex';
+        } else {
+          trialBadge.style.display = 'none';
+        }
+      }
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -6057,6 +6070,19 @@ function checkAuth() {
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
+      // Free Trial badge in the top bar -- driven by the ACTUAL tier (tier === 'trial'),
+      // i.e. the state where the trial caps apply. If this badge is hidden, the trial
+      // caps are NOT in effect for this account regardless of any watermark/trial window.
+      var trialBadge = document.getElementById('trial-badge');
+      if (trialBadge) {
+        if (data.tier === 'trial') {
+          var tbDays = document.getElementById('trial-badge-days');
+          if (tbDays) tbDays.textContent = (typeof data.trialDaysLeft === 'number') ? (data.trialDaysLeft + 'd left') : '';
+          trialBadge.style.display = 'inline-flex';
+        } else {
+          trialBadge.style.display = 'none';
+        }
+      }
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
