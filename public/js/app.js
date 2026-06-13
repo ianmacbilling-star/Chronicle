@@ -1107,7 +1107,9 @@ function renderSessions() {
   if (!state.sessions.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
+      '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
+    maybeShowNoCharacterHint();
     return;
   }
 
@@ -3084,6 +3086,23 @@ function deleteAsset(assetId) {
     .catch(function() { alert('Could not delete the asset.'); });
 }
 
+
+// Empty-session hint: nudge the user to create characters first, but only when
+// THIS campaign has none. Fetched fresh (state.characters can be stale from a
+// previously-opened campaign). Safe no-op if the hint element isn't present.
+function maybeShowNoCharacterHint() {
+  if (!state.currentCampaign || !state.currentCampaign.id) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var arr = Array.isArray(data) ? data : [];
+      if (arr.length === 0) {
+        var h = document.getElementById('no-char-session-hint');
+        if (h) h.style.display = 'block';
+      }
+    })
+    .catch(function() {});
+}
 
 function loadCharacters() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters')
@@ -6361,7 +6380,9 @@ function renderSessions() {
   if (!state.sessions.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
+      '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
+    maybeShowNoCharacterHint();
     return;
   }
 
