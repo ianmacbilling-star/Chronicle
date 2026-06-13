@@ -445,7 +445,7 @@ function orderConfirmationHTML(name, order) {
   rows += row('Total', total);
   rows += row('Paid with', card);
   rows += row('Ship to', addr);
-  rows += row('Tracking', order.trackingNumber);
+  rows += row('Tracking', order.trackingNumber || 'Sent to Printer, Awaiting Tracking');
   var trackBtn = order.trackingUrl ? ('<div style="text-align:center;margin:24px 0;"><a href="' + esc(order.trackingUrl) + '" class="btn">Track your shipment</a></div>') : '';
   return `
 <!DOCTYPE html>

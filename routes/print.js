@@ -399,11 +399,11 @@ async function fulfillPrintOrder(session, eventId) {
     const provider = getPrintProvider();
     const orderReq = buildOrderRequestFromRow(row, built.spec, externalId, contactEmail);
     const placed = await provider.createOrder(orderReq);
-    const trackNum = 'CMP' + String(orderId).padStart(6, '0') + Math.floor(1000 + Math.random() * 9000);
-    const trackUrl = 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' + trackNum;
+    // Tracking is left null until Lulu returns it (picked up by the /order/:id
+    // status refresh once the job ships). We deliberately do NOT invent one.
     await db.prepare(
-      'UPDATE print_orders SET provider_order_id = ?, status = ?, tracking_number = ?, carrier = ?, tracking_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run(placed.providerOrderId, placed.status || 'created', trackNum, 'USPS', trackUrl, orderId);
+      'UPDATE print_orders SET provider_order_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(placed.providerOrderId, placed.status || 'created', orderId);
     if (contactEmail) {
       sendOrderConfirmationEmail({
         to_email: contactEmail, name: contactName,
@@ -414,7 +414,7 @@ async function fulfillPrintOrder(session, eventId) {
           pageCount: row.page_count, quantity: row.quantity,
           total: row.customer_charge, currency: row.currency,
           cardBrand: cardBrand, cardLast4: cardLast4,
-          trackingNumber: trackNum, trackingUrl: trackUrl,
+          trackingNumber: null, trackingUrl: null,
           shipTo: { name: row.ship_name, street1: row.ship_street1, street2: row.ship_street2, city: row.ship_city, stateCode: row.ship_state, postcode: row.ship_postcode, countryCode: row.ship_country }
         }
       });

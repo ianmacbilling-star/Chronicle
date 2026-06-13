@@ -10039,7 +10039,11 @@ function orderCardHtml(o) {
   if (charge) html += row('Total', charge);
   if (card) html += row('Paid with', card);
   if (o.ship_name) html += row('Ship to', o.ship_name);
-  if (o.tracking_number) html += row('Tracking', o.tracking_number + (o.carrier ? (' (' + o.carrier + ')') : ''));
+  if (o.tracking_number) {
+    html += row('Tracking', o.tracking_number + (o.carrier ? (' (' + o.carrier + ')') : ''));
+  } else if (['paid','created','accepted','in_production'].indexOf(o.status) !== -1) {
+    html += row('Tracking', 'Sent to Printer, Awaiting Tracking');
+  }
   html += row('Status', orderStatusLabel(o));
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
   html += '</div>';
