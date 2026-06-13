@@ -4,6 +4,30 @@
 // ============================================================
 
 const TIERS = {
+  trial: {
+    name: 'Free Trial',
+    rank: 0,
+    price: 0,
+    monthly_utlt: 35,        // trial token grant (Platinum-level for now; tunable)
+    monthly_cot: 20,
+    trial_days: 30,
+    max_campaigns: 1,
+    max_sessions: 1,         // per campaign -- get them to ONE rendered session (the aha)
+    max_characters: 4,       // per campaign (new)
+    session_reserve: 8,      // tokens fenced off for sessions (enforced in Part B)
+    max_archives_per_campaign: 10,
+    max_assets: null,
+    moment_algorithm: 'extended',
+    max_moments_short: 5,
+    max_moments_medium: 8,
+    max_moments_long: 12,
+    max_moments_epic: 15,
+    watermark: true,
+    can_export: true,
+    can_print: true,
+    can_edit_prompts: true,
+    description: 'Generous free trial (watermarked); lapses to Copper'
+  },
   copper: {
     name: 'Copper',
     rank: 1,
@@ -24,6 +48,8 @@ const TIERS = {
     can_export: false,
     can_print: false,
     can_edit_prompts: true,
+    max_characters: null,
+    session_reserve: 0,
     description: '30-day free trial'
   },
   silver: {
@@ -45,6 +71,8 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
+    max_characters: null,
+    session_reserve: 0,
     description: '1 campaign, unlimited sessions'
   },
   gold: {
@@ -66,6 +94,8 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
+    max_characters: null,
+    session_reserve: 0,
     description: '3 campaigns, extended moment counts'
   },
   platinum: {
@@ -87,6 +117,8 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
+    max_characters: null,
+    session_reserve: 0,
     description: 'Unlimited everything + prompt editing'
   }
 };
@@ -106,6 +138,10 @@ const EDITABLE_TIER_FIELDS = [
   'price',
   'monthly_utlt',
   'monthly_cot',
+  'max_campaigns',
+  'max_sessions',
+  'max_characters',
+  'session_reserve',
   'max_archives_per_campaign',
   'max_assets',
   'max_moments_short',
@@ -117,7 +153,7 @@ const EDITABLE_TIER_FIELDS = [
 // Fields where an empty value means "unlimited" (stored as null). Every
 // other editable field is a required count: an empty value clears the
 // override so the code default applies (never stored as null/NaN).
-const NULLABLE_TIER_FIELDS = { max_assets: true };
+const NULLABLE_TIER_FIELDS = { max_assets: true, max_campaigns: true, max_sessions: true, max_characters: true };
 
 // Read the tier_config row into the in-memory cache. Call at boot and
 // after every save. Never throws -- on any error the cache is left as-is
@@ -162,6 +198,7 @@ async function saveTierConfig(tierName, values) {
       if (NULLABLE_TIER_FIELDS[f]) clean[f] = null; else delete clean[f];
       return;
     }
+    if (NULLABLE_TIER_FIELDS[f] && n < 0) { clean[f] = null; return; } // -1 sentinel = unlimited
     clean[f] = n;
   });
   TIER_OVERRIDES[tierName] = clean;
@@ -277,6 +314,35 @@ async function checkSessionLimit(req, res, next) {
   }
 }
 
+// Middleware: per-campaign character cap (mainly the free trial). Unlimited when
+// the tier max_characters is null/negative. Mirrors checkSessionLimit.
+async function checkCharacterLimit(req, res, next) {
+  const { getDb } = require('../database/db');
+  try {
+    const db = await getDb();
+    const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const tier = getTier(user.tier);
+    if (isTrialExpired(user)) {
+      return res.status(403).json({ error: 'Your free trial has expired. Please upgrade to continue.', code: 'TRIAL_EXPIRED' });
+    }
+    if (tier.max_characters !== null && tier.max_characters !== undefined && tier.max_characters >= 0) {
+      const row = await db.prepare('SELECT COUNT(*) as count FROM characters WHERE campaign_id = ?').get(req.params.campaignId);
+      if (Number(row.count) >= tier.max_characters) {
+        return res.status(403).json({
+          error: `Your ${tier.name} plan allows ${tier.max_characters} character${tier.max_characters === 1 ? '' : 's'} per campaign. Please upgrade for more.`,
+          code: 'CHARACTER_LIMIT'
+        });
+      }
+    }
+    req.userTier = tier;
+    req.user = user;
+    next();
+  } catch (e) {
+    next(e);
+  }
+}
+
 // Middleware to attach tier info to request
 async function attachTier(req, res, next) {
   if (!req.session || !req.session.userId) return next();
@@ -384,4 +450,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

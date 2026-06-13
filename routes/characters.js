@@ -5,6 +5,7 @@ const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrC
 const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
+const { checkCharacterLimit } = require('../middleware/tiers');
 const multer = require('multer');
 const path = require('path');
 
@@ -52,7 +53,7 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
 });
 
 // POST create character
-router.post('/', requireAuth, verifyCampaignDM, uploadFields, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, uploadFields, async function(req, res) {
   const { name, player_name, cls, description, is_npc } = req.body;
   if (!name) return res.json({ error: 'Character name is required' });
 

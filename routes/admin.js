@@ -10,7 +10,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const tiers = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 
-const TIER_ORDER = ['copper', 'silver', 'gold', 'platinum'];
+const TIER_ORDER = ['copper', 'silver', 'gold', 'platinum', 'trial'];
 
 // GET /api/admin/tier-config
 // Returns the EFFECTIVE (code defaults merged with DB overrides) value of
