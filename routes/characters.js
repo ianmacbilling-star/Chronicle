@@ -4,7 +4,7 @@ const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
 const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
 const imageHelpers = require('./images');
-const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
+const { getTokenCost, canAfford, spendTokens, getBalance, characterReserveStatus } = require('./tokens');
 const { checkCharacterLimit } = require('../middleware/tiers');
 const multer = require('multer');
 const path = require('path');
@@ -191,6 +191,10 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     if (falKey && !(await canAfford(req.session.userId, refCost))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Building a character prompt generates a reference image. Add more tokens to continue.' });
     }
+    const _resv = falKey ? await characterReserveStatus(req.session.userId, refCost) : { blocked: false };
+    if (_resv.blocked) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', code: 'session_reserve', message: 'You have used your character budget for the free trial. ' + _resv.reserve + ' tokens are held back so you can still create a session -- buy more tokens to keep generating characters.' });
+    }
 
     // Collect any uploaded reference images (public R2 URLs) for vision input
     const imageUrls = [char.image_portrait, char.image_fullbody, char.image_action, char.image_other, char.image]
@@ -313,6 +317,10 @@ router.post('/:id/regenerate-reference', requireAuth, verifyCampaignDmOrCharacte
     if (!(await canAfford(req.session.userId, cost))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You’re out of tokens. Re-rolling the reference image costs tokens. Add more to continue.' });
     }
+    const _resv = await characterReserveStatus(req.session.userId, cost);
+    if (_resv.blocked) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', code: 'session_reserve', message: 'You have used your character budget for the free trial. ' + _resv.reserve + ' tokens are held back so you can still create a session -- buy more tokens to keep generating characters.' });
+    }
     // Generate from the EXISTING prompt. A failure throws to the catch below,
     // so tokens are never spent on a failed generation.
     const portrait = char.image_portrait || char.image_fullbody || char.image || null;
@@ -352,6 +360,10 @@ router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOw
     const cost = await getTokenCost(modelKey);
     if (!(await canAfford(req.session.userId, cost))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You’re out of tokens. Add more to keep generating.' });
+    }
+    const _resv = await characterReserveStatus(req.session.userId, cost);
+    if (_resv.blocked) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', code: 'session_reserve', message: 'You have used your character budget for the free trial. ' + _resv.reserve + ' tokens are held back so you can still create a session -- buy more tokens to keep generating characters.' });
     }
     // Empty style => no style prefix; retouchImage keeps the existing look and
     // changes only the instruction. Failure throws -> no spend.

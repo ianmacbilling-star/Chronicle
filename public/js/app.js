@@ -28,6 +28,13 @@ function refreshTokenBalance() {
       var el = document.getElementById('token-balance-value');
       if (el && data && typeof data.total === 'number') {
         el.textContent = data.total.toLocaleString();
+        if (data.reserveLow) {
+          el.title = data.reserve + ' tokens are reserved so you can still create a session.';
+          if (!window.__reserveWarned && typeof billingToast === 'function') {
+            window.__reserveWarned = true;
+            billingToast('Heads up - you are getting low. ' + data.reserve + ' tokens are reserved so you can still create a session. Save them to finish your story.', 'info');
+          }
+        } else if (el.title) { el.title = ''; }
       }
     })
     .catch(function() { /* non-fatal: keep last shown value */ });

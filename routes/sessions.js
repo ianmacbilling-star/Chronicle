@@ -5,7 +5,7 @@ const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, artStyleAllowed } = require('../middleware/tiers');
 const imageHelpers = require('./images');
-const { getTokenCost, canAfford, spendTokens } = require('./tokens');
+const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require('./tokens');
 
 // GET last used art style and layout style
 // Phase 4 Step 3c — resolve which version the caller is acting on: the DM
@@ -378,6 +378,10 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     if (!(await canAfford(req.session.userId, cost))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
     }
+    const _resv = await characterReserveStatus(req.session.userId, cost);
+    if (_resv.blocked) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', code: 'session_reserve', message: 'You have used your character budget for the free trial. ' + _resv.reserve + ' tokens are held back so you can still create a session -- buy more tokens to keep generating characters.' });
+    }
 
     const webhookUrl = imageHelpers.falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
@@ -438,6 +442,10 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
     const cost = await getTokenCost(modelKey);
     if (!(await canAfford(req.session.userId, cost))) {
       return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' });
+    }
+    const _resv = await characterReserveStatus(req.session.userId, cost);
+    if (_resv.blocked) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', code: 'session_reserve', message: 'You have used your character budget for the free trial. ' + _resv.reserve + ' tokens are held back so you can still create a session -- buy more tokens to keep generating characters.' });
     }
 
     const webhookUrl = imageHelpers.falWebhookUrl();

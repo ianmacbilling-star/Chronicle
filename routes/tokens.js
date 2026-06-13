@@ -111,6 +111,20 @@ async function canAfford(userId, cost) {
   return total >= cost;
 }
 
+// Session-reserve gate for CHARACTER generation. A tier may fence off
+// `session_reserve` tokens that ONLY session rendering may spend, so a trial
+// user can't burn everything on character art and never reach a session.
+// blocked = a character spend of `cost` would drop the total below the reserve.
+async function characterReserveStatus(userId, cost) {
+  const db = await getDb();
+  const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
+  const tier = getTier((u && u.tier) || 'copper');
+  const reserve = Number(tier.session_reserve) > 0 ? Number(tier.session_reserve) : 0;
+  const { total } = await getBalance(userId);
+  if (!reserve) return { blocked: false, reserve: 0, balance: total };
+  return { blocked: (total - cost) < reserve, reserve: reserve, balance: total };
+}
+
 // ------------------------------------------------------------
 // Credit tokens. bucket defaults to 'cot' (purchases, bonuses, carry-
 // over all land in cot). Monthly grants pass bucket='utlt'.
@@ -197,7 +211,13 @@ router.get('/balance', async function(req, res) {
   if (!requireSession(req, res)) return;
   try {
     const bal = await getBalance(req.session.userId);
-    res.json(bal);
+    const db = await getDb();
+    const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    const tier = getTier((u && u.tier) || 'copper');
+    const reserve = Number(tier.session_reserve) > 0 ? Number(tier.session_reserve) : 0;
+    const spendable = reserve ? Math.max(0, bal.total - reserve) : bal.total;
+    const reserveLow = reserve > 0 && spendable <= reserve;
+    res.json(Object.assign({}, bal, { reserve: reserve, spendable: spendable, reserveLow: reserveLow }));
   } catch (e) {
     res.status(500).json({ error: 'Could not load balance' });
   }
@@ -703,6 +723,7 @@ module.exports = {
   getTokenCost,
   getBalance,
   canAfford,
+  characterReserveStatus,
   creditTokens,
   spendTokens,
   ensureMonthlyGrant,
