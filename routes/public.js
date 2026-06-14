@@ -36,17 +36,17 @@ router.get('/library', async function (req, res) {
     if (limit > 60) limit = 60;
     const beforeId = parseInt(req.query.beforeId, 10) || 0;
     const all = req.query.window === 'all';
-    let sql = 'SELECT id, image_url, title FROM campaign_archives WHERE public = TRUE';
+    let sql = 'SELECT a.id, a.image_url, a.title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
     const params = [];
-    if (!all) sql += " AND created_at >= NOW() - INTERVAL '6 months'";
-    if (beforeId > 0) { sql += ' AND id < ?'; params.push(beforeId); }
-    sql += ' ORDER BY id DESC LIMIT ?';
+    if (!all) sql += " AND a.created_at >= NOW() - INTERVAL '6 months'";
+    if (beforeId > 0) { sql += ' AND a.id < ?'; params.push(beforeId); }
+    sql += ' ORDER BY a.id DESC LIMIT ?';
     params.push(limit + 1);
     const stmt = db.prepare(sql);
     const rows = await stmt.all.apply(stmt, params);
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
-    const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '' }; });
+    const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '' }; });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
   } catch (e) {

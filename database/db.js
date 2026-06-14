@@ -787,6 +787,29 @@ async function migrateArchives(pool) {
   // public = owner opted this archived image into the anonymous Public Library.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS public BOOLEAN DEFAULT FALSE');
   await pool.query("CREATE INDEX IF NOT EXISTS idx_archives_public ON campaign_archives(created_at DESC, id DESC) WHERE public = TRUE");
+
+  // public_stories: a fork owner's graphic-novel PDF published to the Public
+  // Library (Stories tab). One row per (campaign, publisher) -- re-publishing
+  // upserts (refreshes the frozen PDF). author_name snapshots the pen name at
+  // publish time for display + search. public = moderation flag (admins unpublish).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public_stories (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      author_name TEXT,
+      title TEXT NOT NULL,
+      pdf_url TEXT NOT NULL,
+      cover_url TEXT,
+      public BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP,
+      UNIQUE (campaign_id, user_id)
+    )
+  `);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_public_stories_public ON public_stories(created_at DESC, id DESC) WHERE public = TRUE");
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_public_stories_author ON public_stories(lower(author_name))');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_public_stories_user ON public_stories(user_id)');
 }
 
 // migrateCasting: idempotent. Explicit per-panel casting (Pass 2). A panel's

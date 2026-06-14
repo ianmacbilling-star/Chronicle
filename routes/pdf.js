@@ -1708,6 +1708,10 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-logo { width:110px;height:auto;object-fit:contain; }
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
   .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
+  .backcover-default { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
+  .bc-title { font-family:'Cinzel',serif;font-size:24pt;font-weight:700;color:#f5e8c8;letter-spacing:0.04em;line-height:1.2; }
+  .bc-rule { width:80px;height:2px;background:rgba(201,168,76,0.6);margin:0.3in 0; }
+  .bc-tag { font-family:'Crimson Text',serif;font-style:italic;font-size:13pt;color:rgba(245,232,200,0.65); }
 </style>
 </head>
 <body>
@@ -1768,6 +1772,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   pageOpts = pageOpts || {};
   var co = opts || null;
   var fHideLogo = co ? !!co.hideLogo : false;
+  var fPublic = !!(pageOpts && pageOpts.publicMode);
+  // Public Library render: each real name is replaced by that person's pen
+  // name (members + Story Master); a missing pen name renders blank. Off for
+  // every private/preview/print render -- byte-identical when fPublic is false.
+  function _pubName(real, pen) { return fPublic ? (pen || '') : (real || ''); }
   var fCover  = (pageOpts && pageOpts.noCover) ? false : (co ? !!co.cover : true);
   var fCast   = co ? !!co.cast      : true;
   var fToc    = co ? !!co.toc       : false;
@@ -1812,7 +1821,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   if (_castFields === 'list') {
     castBlockHTML = '<div class="cast-names">' + characters.map(function(c){
       return '<div class="cast-name-item">' + _fmEsc(c.name) +
-        (c.player_name ? ' <span class="cast-name-player">(' + _fmEsc(c.player_name) + ')</span>' : '') +
+        (_pubName(c.player_name, c.player_pen_name) ? ' <span class="cast-name-player">(' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + ')</span>' : '') +
       '</div>';
     }).join('') + '</div>';
   } else {
@@ -1839,7 +1848,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
             '</div>') +
         '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
         '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
-        (((_castFields === 'full' || _castFields === 'mid') && c.player_name) ? '<div class="cast-player">Played by ' + _fmEsc(c.player_name) + '</div>' : '') +
+        (((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '') +
       '</div>';
     }).join('');
     castBlockHTML = '<div class="cast-grid" style="grid-template-columns:repeat(' + _castCols + ',1fr);gap:' + _castGap + 'in;">' + _members + '</div>';
@@ -1898,11 +1907,14 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   function _fmEsc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   var titleImg = campaign.title_image_url || '';
   var _pseen = {};
-  var playerNames = characters.map(function(c){ return (c.player_name || '').trim(); })
+  var playerNames = characters.map(function(c){ return (_pubName(c.player_name, c.player_pen_name) || '').trim(); })
     .filter(function(n){ if (!n) return false; var k = n.toLowerCase(); if (_pseen[k]) return false; _pseen[k] = 1; return true; })
     .join(', ');
   var copyYear = _dts.length ? new Date(Math.max.apply(null, _dts)).getFullYear() : new Date().getFullYear();
-  var copyHolder = campaign.owner_name || campaign.dm_name || dmName;
+  var copyHolder = fPublic ? (campaign.owner_pen_name || '') : (campaign.owner_name || campaign.dm_name || dmName);
+  var _castDmLine = fPublic
+    ? (copyHolder ? ('Chronicled by ' + _fmEsc(copyHolder) + (dateRange ? ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange : '')) : (dateRange || ''))
+    : ('Story Master: ' + dmName + ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange);
   var _bookTitleFM = (pageOpts && pageOpts.bookTitle != null && String(pageOpts.bookTitle).trim())
     ? String(pageOpts.bookTitle).trim() : campaign.name;
   var titlePageHTML =
@@ -1922,8 +1934,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       (dateRange ? '<div class="dp-dates">' + dateRange + '</div>' : '') +
       '<div class="dp-divider"></div>' +
       (playerNames ? '<div class="dp-block"><div class="dp-label">Players</div><div class="dp-value">' + _fmEsc(playerNames) + '</div></div>' : '') +
-      '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' +
-      '<div class="dp-copyright">&copy; ' + copyYear + ' ' + _fmEsc(copyHolder) + '. All rights reserved.</div>' +
+      (fPublic
+        ? (copyHolder ? '<div class="dp-block"><div class="dp-label">Chronicled by</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' : '')
+        : '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>') +
+      '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
       (fHideLogo ? '' : '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
       '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
         'This chronicle was assembled from recorded tabletop role-playing sessions. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
@@ -2056,6 +2070,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   }
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
   .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
+  .backcover-default { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
+  .bc-title { font-family:'Cinzel',serif;font-size:24pt;font-weight:700;color:#f5e8c8;letter-spacing:0.04em;line-height:1.2; }
+  .bc-rule { width:80px;height:2px;background:rgba(201,168,76,0.6);margin:0.3in 0; }
+  .bc-tag { font-family:'Crimson Text',serif;font-style:italic;font-size:13pt;color:rgba(245,232,200,0.65); }
 </style>
 </head>
 <body>
@@ -2094,7 +2112,7 @@ ${(fCast && (!paginated || pageOpts.page === 1)) ? `<!-- CAST & CREW PAGE -->
   <div class="cast-page-title">The Company</div>
   <div class="cast-page-subtitle">${campaign.description || ''}</div>
   <div class="cast-divider"></div>
-  <div class="cast-page-dm">Story Master: ${dmName} &nbsp;&nbsp;|&nbsp;&nbsp; ${dateRange}</div>
+  <div class="cast-page-dm">${_castDmLine}</div>
   ${castBlockHTML}
 </div>` : ''}
 ${(fToc && (!paginated || pageOpts.page === 1)) ? tocBlock : ''}
@@ -2104,8 +2122,8 @@ ${allSessionsHTML}
 
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
-${(fCover && campaign.back_cover_image_url && !paginated) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div></div>` : ''}
+${(fCover && !paginated && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div></div>` : ''}
 
 </body>
 </html>`;

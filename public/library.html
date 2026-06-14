@@ -47,7 +47,9 @@
     .gallery { column-width:250px; column-gap:14px; padding:0 16px 40px; max-width:1300px; margin:0 auto; }
     .card { break-inside:avoid; margin:0 0 14px; border:3px solid var(--ink); background:#0d0804; border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
     .card img { display:block; width:100%; height:auto; background:#160e06; }
-    .card figcaption { font-style:italic; font-size:13px; color:rgba(240,232,208,0.75); padding:9px 12px; border-top:2px solid rgba(201,168,76,0.12); }
+    .card figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:13px; padding:9px 12px; border-top:2px solid rgba(201,168,76,0.12); }
+    .card .cap-title { font-style:italic; color:rgba(240,232,208,0.75); min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    .card .cap-author { font-style:normal; font-size:12px; color:rgba(201,168,76,0.9); white-space:nowrap; flex:0 0 auto; }
 
     .lib-status { text-align:center; padding:30px 18px 60px; color:rgba(240,232,208,0.55); font-style:italic; }
     .lib-status .btn-nav { display:inline-block; margin-top:14px; }
@@ -127,9 +129,16 @@
       img.src = item.image_url;
       img.addEventListener('click', function () { openLb(item.image_url, item.caption); });
       fig.appendChild(img);
-      if (item.caption) {
+      if (item.caption || item.author) {
         var cap = document.createElement('figcaption');
-        cap.textContent = item.caption;   // textContent = safe against HTML/script in user captions
+        var capT = document.createElement('span');
+        capT.className = 'cap-title';
+        capT.textContent = item.caption || '';   // textContent = safe against HTML/script in user text
+        var capA = document.createElement('span');
+        capA.className = 'cap-author';
+        capA.textContent = item.author || '';     // pen name, right-aligned; blank when unset
+        cap.appendChild(capT);
+        cap.appendChild(capA);
         fig.appendChild(cap);
       }
       gallery.appendChild(fig);
