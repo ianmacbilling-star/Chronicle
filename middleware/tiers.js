@@ -264,6 +264,10 @@ async function checkCampaignLimit(req, res, next) {
     await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier);
 
+    if (user.tier === 'copper') {
+      return res.status(403).json({ error: 'Creating campaigns is not available on the Copper plan. Upgrade to a paid plan to start a new campaign.', code: 'CAMPAIGN_LIMIT' });
+    }
+
     // Check campaign limit
     if (tier.max_campaigns !== null) {
       const count = await db.prepare(
@@ -295,6 +299,10 @@ async function checkSessionLimit(req, res, next) {
 
     await lapseTrialIfExpired(user, db);
     const tier = getTier(user.tier);
+
+    if (user.tier === 'copper') {
+      return res.status(403).json({ error: 'Creating sessions is not available on the Copper plan. Upgrade to a paid plan to add sessions.', code: 'SESSION_LIMIT' });
+    }
 
     if (tier.max_sessions !== null) {
       const count = await db.prepare(

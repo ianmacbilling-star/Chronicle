@@ -155,7 +155,7 @@ var TOKEN_PACKS = [
   { id:'small',  name:'Small',  price:15,  tokens:85,   tagline:'Try it out' },
   { id:'medium', name:'Medium', price:40,  tokens:250,  tagline:'Most popular', highlight:true },
   { id:'large',  name:'Large',  price:100, tokens:650,  tagline:'For active campaigns' },
-  { id:'huge',   name:'Huge',   price:250, tokens:1700, tagline:'Best per-token value' }
+  { id:'huge',   name:'Huge',   price:250, tokens:1700, tagline:'Best value' }
 ];
 
 function openTokensModal() {
@@ -194,8 +194,10 @@ function closeTokensModal() {
 function renderTokenPacks() {
   var wrap = document.getElementById('token-packs');
   if (!wrap) return;
+  var _baseRate = (TOKEN_PACKS[0] && TOKEN_PACKS[0].price) ? (TOKEN_PACKS[0].tokens / TOKEN_PACKS[0].price) : 0;
   var html = TOKEN_PACKS.map(function(p) {
-    var perTok = (p.price / p.tokens).toFixed(3);
+    var _rate = p.price ? (p.tokens / p.price) : 0;
+    var _bonusPct = _baseRate ? Math.round((_rate / _baseRate - 1) * 100) : 0;
     var highlightStyle = p.highlight
       ? 'border:2px solid #c9a84c;box-shadow:0 0 0 1px rgba(201,168,76,0.3),0 6px 18px rgba(201,168,76,0.1);'
       : 'border:1px solid rgba(201,168,76,0.2);';
@@ -208,7 +210,7 @@ function renderTokenPacks() {
         '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(201,168,76,0.7);">' + p.name + '</div>' +
         '<div style="font-size:32px;font-weight:700;color:#c9a84c;line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
         '<div style="font-size:16px;color:var(--text);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
-        '<div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:6px;">$' + perTok + ' per token</div>' +
+        (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:#7ec98f;margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
         (p.highlight ? '' : '<div style="font-size:11px;color:rgba(201,168,76,0.6);font-style:italic;">' + p.tagline + '</div>') +
         '<button class="btn btn-primary btn-sm" onclick="buyTokenPack(\'' + p.id + '\')" style="margin-top:auto;">Buy ' + p.name + '</button>' +
       '</div>';
@@ -1242,6 +1244,7 @@ function selectCampaignNovel(id) {
 }
 
 function openCampaignModal(editId) {
+  if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
   document.getElementById('campaign-save-btn').textContent = editId ? 'Save changes' : 'Create campaign';
@@ -1356,6 +1359,7 @@ function renderSessions() {
 }
 
 function openSessionModal() {
+  if (blockCopperCreate('session')) return;
   document.getElementById('session-name').value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('session-modal-error').classList.add('hidden');
@@ -6813,6 +6817,7 @@ function selectCampaignNovel(id) {
 }
 
 function openCampaignModal(editId) {
+  if (!editId && blockCopperCreate('campaign')) return;
   document.getElementById('campaign-edit-id').value = editId || '';
   document.getElementById('campaign-modal-title').textContent = editId ? 'Edit Campaign' : 'New Campaign';
   document.getElementById('campaign-save-btn').textContent = editId ? 'Save changes' : 'Create campaign';
@@ -6927,6 +6932,7 @@ function renderSessions() {
 }
 
 function openSessionModal() {
+  if (blockCopperCreate('session')) return;
   document.getElementById('session-name').value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('session-modal-error').classList.add('hidden');
@@ -10874,4 +10880,14 @@ function sectionBack() {
     return;
   }
   showCampaignSection(t);
+}
+
+// Copper (free) plan cannot create campaigns or sessions -- prompt to upgrade.
+function blockCopperCreate(kind) {
+  if (state.user && state.user.tier === 'copper') {
+    var what = (kind === 'session') ? 'sessions' : 'campaigns';
+    uiConfirm('Creating ' + what + ' is not available on the Copper plan. Upgrade to a paid plan to continue.', { okText: 'See plans', cancelText: 'Not now' }).then(function(go){ if (go) showView('account'); });
+    return true;
+  }
+  return false;
 }
