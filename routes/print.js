@@ -25,6 +25,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
+const { getTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 const { sendOrderConfirmationEmail, sendOrderProblemEmail } = require('./email');
@@ -215,6 +216,17 @@ router.post('/quote', requireSession, async function (req, res) {
 router.post('/order', requireSession, async function (req, res) {
   const userId = req.session.userId;
   const body = req.body || {};
+  // Watermarked books (the Free Trial tier) can't be ordered as physical
+  // prints. Enforce server-side so the client-side button hide can't be
+  // bypassed. Keyed on the account tier's watermark flag.
+  try {
+    const _wdb = await getDb();
+    const _wu = await _wdb.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
+    const _wt = getTier((_wu && _wu.tier) || 'copper');
+    if (_wt && _wt.watermark) {
+      return res.status(403).json({ error: "This book is watermarked and can't be ordered as a physical print. Upgrade to a paid plan to remove the watermark and order." });
+    }
+  } catch (e) { /* lookup failure -> fall through to the normal flow */ }
   const built = catalog.buildSpec(body.selection, parseInt(body.pageCount, 10));
   if (!built.ok) return res.status(400).json({ error: 'Invalid selection', details: built.errors });
   if (!body.interiorPdfUrl || !body.coverPdfUrl) {

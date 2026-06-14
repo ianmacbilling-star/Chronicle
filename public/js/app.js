@@ -9646,7 +9646,6 @@ function prepareInteriorCount() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.pages > 0) {
     printActualPages = printInteriorCache.pages;
-    preparedInteriorUrl = printInteriorCache.url;
     updatePrintPageDisplay(printActualPages, true);
     refreshPrintOptions(printActualPages);
     return;
@@ -9657,7 +9656,6 @@ function prepareInteriorCount() {
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) { updatePrintPageDisplay(-1, false); return; }
       printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
-      preparedInteriorUrl = res.j.url;
       if (res.j.pages && res.j.pages > 0) {
         printActualPages = res.j.pages;
         updatePrintPageDisplay(printActualPages, true);
@@ -9687,10 +9685,49 @@ function showPrintMsg(text, kind) {
   el.textContent = text;
 }
 
+// Order feedback shown DOWN BY THE BUTTON (prepare/order failures + the
+// 'details changed' notice), as opposed to showPrintMsg which is the
+// top-of-form load-error slot.
+function showPrintBtnMsg(text, kind) {
+  var el = document.getElementById('print-place-msg');
+  if (!el) return;
+  if (!text) { el.style.display = 'none'; el.textContent = ''; return; }
+  var ok = kind === 'ok';
+  el.style.display = 'block';
+  el.style.background = ok ? 'rgba(120,180,90,0.12)' : 'rgba(201,120,76,0.12)';
+  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : 'rgba(201,120,76,0.4)');
+  el.style.color = ok ? 'rgba(200,235,180,0.95)' : 'rgba(245,200,180,0.95)';
+  el.textContent = text;
+}
+function printProgress(pct) {
+  var wrap = document.getElementById('print-progress');
+  var bar = document.getElementById('print-progress-bar');
+  if (wrap) wrap.style.display = 'block';
+  if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+}
+function printProgressDone() {
+  var wrap = document.getElementById('print-progress');
+  var bar = document.getElementById('print-progress-bar');
+  if (bar) bar.style.width = '0%';
+  if (wrap) wrap.style.display = 'none';
+}
+
 function loadPrintTab() {
   if (!state.currentCampaign) return;
   wirePrintOrderLock();
   showPrintMsg('', null);
+  showPrintBtnMsg('', null);
+  printProgressDone();
+  (function(){
+    var _trial = !!(state.user && state.user.tier === 'trial');
+    var _pb = document.getElementById('print-place-btn');
+    var _tn = document.getElementById('print-trial-notice');
+    if (_pb) _pb.disabled = _trial;
+    if (_tn) {
+      _tn.style.display = _trial ? 'block' : 'none';
+      if (_trial) _tn.textContent = "Free Trial books are watermarked, so they can't be ordered as physical prints. Upgrade to a paid plan to remove the watermark and order your book.";
+    }
+  })();
   var q = document.getElementById('print-quote');
   if (q) q.textContent = '';
   fetch('/api/print/novel-info/' + state.currentCampaign.id)
@@ -9790,7 +9827,7 @@ function quotePrintOrder() {
 }
 
 // --- Print order: final review + confirm gate ------------------------------
-// "Place order" now builds the actual print-ready interior, shows a summary
+// "Prepare Your Order" now builds the actual print-ready interior, shows a summary
 // plus a link to PREVIEW that exact PDF, and requires an explicit confirm
 // before the order is submitted. preparedInteriorUrl holds the generated file.
 var preparedInteriorUrl = '';
@@ -9808,7 +9845,7 @@ function printOrderSignature() {
 }
 
 // Drop any prepared files/price and collapse the review + final-confirm panels,
-// sending the user back to the Place order step so the files and price rebuild
+// sending the user back to the Prepare Your Order step so the files and price rebuild
 // from the current form. No-op if nothing was prepared yet.
 function invalidatePreparedOrder() {
   var panel = document.getElementById('print-review');
@@ -9820,8 +9857,8 @@ function invalidatePreparedOrder() {
   if (panel) panel.style.display = 'none';
   hideFinalConfirm();
   var place = document.getElementById('print-place-btn');
-  if (place) { place.style.display = ''; place.disabled = false; place.textContent = 'Place order'; }
-  showPrintMsg('Your order details changed. Click Place order to rebuild your print files and update the price.', null);
+  if (place) { place.style.display = ''; place.disabled = false; place.textContent = 'Prepare Your Order'; }
+  showPrintBtnMsg('Your order details changed. Click Prepare Your Order to rebuild your print files and update the price.', null);
 }
 
 // Attach change/input listeners to every order-affecting control once, so any
@@ -9889,18 +9926,20 @@ function printCoverUrl() {
 
 function reviewPrintOrder() {
   var body = printSelectionBody();
-  if (!body || !body.selection.binding) { showPrintMsg('Pick your format first.', null); return; }
+  if (!body || !body.selection.binding) { showPrintBtnMsg('Pick your format first.', null); return; }
   if (!body.shipTo.name || !body.shipTo.street1 || !body.shipTo.city || !body.shipTo.postcode) {
-    showPrintMsg('Please complete the shipping address.', null);
+    showPrintBtnMsg('Please complete the shipping address.', null);
     return;
   }
   var btn = document.getElementById('print-place-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing your book...'; }
-  showPrintMsg('Preparing your book for final approval...', null);
+  showPrintBtnMsg('', null);
+  printProgress(12);
   preparedCoverUrl = '';
 
   ensureInterior()
     .then(function (intr) {
+      printProgress(45);
       preparedInteriorUrl = intr.url;
       if (intr.pages && intr.pages > 0) {
         printActualPages = intr.pages;
@@ -9914,24 +9953,29 @@ function reviewPrintOrder() {
       if (!res.ok || !res.j || !res.j.url) {
         throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the cover file.');
       }
+      printProgress(72);
       preparedCoverUrl = res.j.url;
       return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
     })
     .then(function (res) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Place order'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Prepare Your Order'; }
       if (!res.ok || !res.j) {
+        printProgressDone();
         var msg = res.j && res.j.error ? res.j.error : 'Could not price this order.';
         if (res.j && res.j.details) msg += ' (' + res.j.details.join('; ') + ')';
-        showPrintMsg(msg, null);
+        showPrintBtnMsg(msg, null);
         return;
       }
-      showPrintMsg('', null);
+      printProgress(100);
+      showPrintBtnMsg('', null);
       renderPrintReview(body, res.j);
+      setTimeout(printProgressDone, 450);
     })
     .catch(function (e) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Place order'; }
-      showPrintMsg((e && e.message) ? e.message : 'Could not prepare your order.', null);
+      if (btn) { btn.disabled = false; btn.textContent = 'Prepare Your Order'; }
+      printProgressDone();
+      showPrintBtnMsg((e && e.message) ? e.message : 'Could not prepare your order.', null);
     });
 }
 
@@ -9987,21 +10031,22 @@ function cancelPrintReview() {
   var place = document.getElementById('print-place-btn');
   if (place) place.style.display = '';
   preparedSignature = '';
-  showPrintMsg('', null);
+  showPrintBtnMsg('', null);
+  printProgressDone();
 }
 
 function submitPrintOrder() {
   var body = printSelectionBody();
-  if (!body || !body.selection.binding) { showPrintMsg('Pick your format first.', null); return; }
+  if (!body || !body.selection.binding) { showPrintBtnMsg('Pick your format first.', null); return; }
   if (preparedSignature && printOrderSignature() !== preparedSignature) {
     invalidatePreparedOrder();
-    showPrintMsg('Your order details changed. Click Place order to rebuild your print files and update the price before ordering.', null);
+    showPrintBtnMsg('Your order details changed. Click Prepare Your Order to rebuild your print files and update the price before ordering.', null);
     return;
   }
   body.interiorPdfUrl = preparedInteriorUrl || ((document.getElementById('print-interior-url') || {}).value || '');
   body.coverPdfUrl = preparedCoverUrl || ((document.getElementById('print-cover-url') || {}).value || '');
-  if (!body.interiorPdfUrl) { showPrintMsg('Your print file was not prepared. Please go Back and try again.', null); return; }
-  if (!body.coverPdfUrl) { showPrintMsg('Your cover file was not prepared. Please go Back and try again.', null); return; }
+  if (!body.interiorPdfUrl) { showPrintBtnMsg('Your print file was not prepared. Please go Back and try again.', null); return; }
+  if (!body.coverPdfUrl) { showPrintBtnMsg('Your cover file was not prepared. Please go Back and try again.', null); return; }
   var btn = document.getElementById('print-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Redirecting to payment...'; }
   fetch('/api/print/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -10009,10 +10054,10 @@ function submitPrintOrder() {
     .then(function (res) {
       if (res.ok && res.j && res.j.url) { window.location = res.j.url; return; }
       if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; }
-      if (res.status === 503) { showPrintMsg('Payments are being set up and will be available shortly.', null); return; }
-      showPrintMsg(res.j && res.j.error ? res.j.error : 'Could not start payment.', null);
+      if (res.status === 503) { showPrintBtnMsg('Payments are being set up and will be available shortly.', null); return; }
+      showPrintBtnMsg(res.j && res.j.error ? res.j.error : 'Could not start payment.', null);
     })
-    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; } showPrintMsg('Could not reach the payment service. Please try again.', null); });
+    .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; } showPrintBtnMsg('Could not reach the payment service. Please try again.', null); });
 }
 
 // Final point-of-no-return gate. The first confirm button reveals this; only
