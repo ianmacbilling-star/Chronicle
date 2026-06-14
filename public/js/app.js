@@ -1006,7 +1006,7 @@ function renderCampaigns() {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       (c.cover_image_url
         ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
-        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Icon.png" alt="" /></div>') +
+        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
@@ -1592,6 +1592,7 @@ function openChangeReview(charId) {
 // Piece 5: regenerate the reference image as a draft. The DM can do
 // this repeatedly; the latest draft URL is held until Approve.
 function regenerateReference(charId) {
+  if (!ensureGenFree()) return;
   var msg = document.getElementById('sc-review-msg-' + charId);
   var btn = document.getElementById('sc-regen-' + charId);
   var textEl = document.getElementById('sc-review-text-' + charId);
@@ -2301,6 +2302,7 @@ function pollImageBatch(jobs, meta) {
   var MAX_MS = 12 * 60 * 1000;
   var INTERVAL = 4000;
   function reset() {
+    clearGenLock();
     setTimeout(function() {
       if (btn) btn.disabled = false;
       if (progressWrap) progressWrap.style.display = 'none';
@@ -2538,7 +2540,28 @@ function loadLastArtStyle(artStyle, layoutStyle) {
 // Notes), then runs image generation. The narrative is produced for the first
 // time here, so it reflects the casting and directions set on the Review tab.
 // ============================================================
+// === Session-wide generation lock ========================================
+// Only ONE session-wide generation (Generate Story / Images / Narrative) may
+// run at a time; while one runs, single-image regen/retouch are blocked too.
+// Auto-expires after 15 min so a missed clear can never lock a user out for
+// good (the image batch itself caps at 12 min).
+function sessionGenBusy() {
+  var L = state.sessionGenLock;
+  if (!L) return null;
+  if (Date.now() - L.at > 15 * 60 * 1000) { state.sessionGenLock = null; return null; }
+  return L.label;
+}
+function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; }
+function clearGenLock() { state.sessionGenLock = null; }
+function ensureGenFree() {
+  var b = sessionGenBusy();
+  if (b) { showAlert('A session-wide generation is already running (' + b + '\u2026). Please wait for it to finish before starting another.'); return false; }
+  return true;
+}
+
 function generateNarrativeAndImages() {
+  if (!ensureGenFree()) return;
+  setGenLock('Generate Narrative');
   var btn = document.getElementById('review-generate-btn');
   var origLabel = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = 'Writing narrative\u2026'; }
@@ -2562,6 +2585,7 @@ function generateNarrativeAndImages() {
   }, 400);
   function endBar(done) {
     clearInterval(ticker);
+    clearGenLock();
     var _ncb = document.getElementById('narr-cancel-btn'); if (_ncb) _ncb.style.display = 'none';
     if (done && fill) fill.style.width = '100%';
     setTimeout(function() {
@@ -2595,7 +2619,7 @@ function generateNarrativeAndImages() {
     // Hand off to image generation — it overlays per-panel busy spinners on the
     // image areas; the narrative text stays readable underneath while they run.
     setTimeout(function() {
-      if (typeof generateAllImages === 'function') generateAllImages();
+      if (typeof generateAllImages === 'function') generateAllImages(true);
     }, 60);
   })
   .catch(function(e){
@@ -2607,6 +2631,7 @@ function generateNarrativeAndImages() {
 }
 
 function cancelExtract() {
+  clearGenLock();
   if (state.abortExtract) { try { state.abortExtract.abort(); } catch (e) {} }
   var w = document.getElementById('progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('extract-cancel-btn'); if (c) c.style.display = 'none';
@@ -2614,6 +2639,7 @@ function cancelExtract() {
 }
 
 function cancelGenAll() {
+  clearGenLock();
   if (state.abortGenAll) { try { state.abortGenAll.abort(); } catch (e) {} }
   if (typeof hideAllPanelBusy === 'function') hideAllPanelBusy();
   var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
@@ -2622,6 +2648,7 @@ function cancelGenAll() {
 }
 
 function cancelNarr() {
+  clearGenLock();
   if (state.abortNarr) { try { state.abortNarr.abort(); } catch (e) {} }
   var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('narr-cancel-btn'); if (c) c.style.display = 'none';
@@ -2632,6 +2659,8 @@ function cancelNarr() {
 // button, but it stops after painting the prose into the panels. Lets you
 // rewrite the story without regenerating art / spending image tokens.
 function generateNarrativeOnly() {
+  if (!ensureGenFree()) return;
+  setGenLock('Generate Narrative');
   var btn = document.getElementById('sb-generate-narr-btn');
   var origLabel = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Writing narrative\u2026'; }
@@ -2651,6 +2680,7 @@ function generateNarrativeOnly() {
   }, 400);
   function endBar(done) {
     clearInterval(ticker);
+    clearGenLock();
     var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'none';
     if (done && fill) fill.style.width = '100%';
     setTimeout(function () { if (wrap) wrap.style.display = 'none'; if (fill) fill.style.width = '0%'; }, done ? 350 : 0);
@@ -2679,6 +2709,7 @@ function generateNarrativeOnly() {
 }
 
 function cancelNarrOnly() {
+  clearGenLock();
   if (state.abortNarrOnly) { try { state.abortNarrOnly.abort(); } catch (e) {} }
   var w = document.getElementById('generate-progress'); if (w) w.style.display = 'none';
   var c = document.getElementById('sb-narr-cancel-btn'); if (c) c.style.display = 'none';
@@ -3315,6 +3346,7 @@ function rebuildCharPromptCore(charId) {
 // Re-roll the canonical reference IMAGE from the existing prompt (option A:
 // no prompt rewrite). The moment "Regenerate" pill, applied to a character.
 function regenCharRef(charId) {
+  if (!ensureGenFree()) return;
   var refTargetId = 'char-ref-image-' + charId;
   var refEl = document.getElementById(refTargetId);
   if (refEl && !refEl.querySelector('img')) refEl.style.minHeight = '180px';
@@ -3382,6 +3414,7 @@ function openRetouchSessionChar(charId) {
 // session_ref webhook persists/spends/logs but only writes the snapshot on
 // Approve. Replaces the old Regenerate/Retouch pills on this screen.
 function retouchSessionInline(charId) {
+  if (!ensureGenFree()) return;
   var textEl = document.getElementById('sc-review-text-' + charId);
   var instruction = textEl ? textEl.value.trim() : '';
   var msg = document.getElementById('sc-review-msg-' + charId);
@@ -3787,6 +3820,8 @@ function applyLayoutStyle(layout) {
 }
 
 function extractMoments() {
+  if (!ensureGenFree()) return;
+  setGenLock('Generate Story');
   var key = getApiKey();
   var transcript = document.getElementById('transcript-input').value.trim();
   var errorEl = document.getElementById('extract-error');
@@ -3864,6 +3899,7 @@ function extractMoments() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     clearInterval(ticker);
+    clearGenLock();
     var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (data.error) {
       var _emsg = data.message || ('Error: ' + data.error);
@@ -3901,6 +3937,7 @@ function extractMoments() {
   })
   .catch(function(e) {
     clearInterval(ticker);
+    clearGenLock();
     var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
@@ -4070,7 +4107,9 @@ function refreshStoryboardImages() {
     .catch(function(){});
 }
 
-function generateAllImages() {
+function generateAllImages(fromChain) {
+  if (!fromChain) { if (!ensureGenFree()) return; }
+  setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
 
@@ -4078,6 +4117,7 @@ function generateAllImages() {
   var hasImages = state.moments && state.moments.some(function(m) { return m.image; });
   if (hasImages) {
     if (!confirm('This will replace all existing panel images that are not locked. Are you sure?')) {
+      clearGenLock();
       return;
     }
   }
@@ -4120,6 +4160,7 @@ function generateAllImages() {
     if (data.error) {
       // Generation refused — clear ALL busy overlays so the user's
       // existing images are fully visible again (not dimmed).
+      clearGenLock();
       hideAllPanelBusy();
       var errEl = document.getElementById('generate-error');
       if (data.error === 'INSUFFICIENT_TOKENS') {
@@ -4153,6 +4194,7 @@ function generateAllImages() {
     }, 2000);
   })
   .catch(function(e) {
+    clearGenLock();
     hideAllPanelBusy();
     var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'none';
     if (e && e.name === 'AbortError') { btn.disabled = false; progressWrap.style.display = 'none'; return; }
@@ -4164,6 +4206,7 @@ function generateAllImages() {
 }
 
 function regenImage(momentId, index) {
+  if (!ensureGenFree()) return;
   var falKey = getFalKey() || 'platform';
 
   var moment = state.moments.find(function(m) { return m.id === momentId; });
@@ -4976,6 +5019,8 @@ function loadNarrative() {
 }
 
 function generateNarrative() {
+  if (!ensureGenFree()) return;
+  setGenLock('Generate Narrative');
   var key = getApiKey() || 'platform';  // Platform key used server-side
 
   var btn = document.getElementById('regen-narrative-btn');
@@ -5006,6 +5051,7 @@ function generateNarrative() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     clearInterval(ticker);
+    clearGenLock();
     if (progress) progress.style.display = 'none';
     if (btn) btn.disabled = false;
 
@@ -5020,6 +5066,7 @@ function generateNarrative() {
   })
   .catch(function(e) {
     clearInterval(ticker);
+    clearGenLock();
     if (progress) progress.style.display = 'none';
     if (btn) btn.disabled = false;
     if (errorEl) { errorEl.textContent = 'Error: ' + e.message; errorEl.classList.remove('hidden'); }
@@ -5398,6 +5445,7 @@ function closeRetouch() {
 }
 
 function submitRetouch() {
+  if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
   if (!instruction) { if (ta) ta.focus(); return; }
@@ -6284,7 +6332,7 @@ function renderCampaigns() {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       (c.cover_image_url
         ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
-        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Icon.png" alt="" /></div>') +
+        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
@@ -6817,6 +6865,8 @@ function applyLayoutStyle(layout) {
 }
 
 function extractMoments() {
+  if (!ensureGenFree()) return;
+  setGenLock('Generate Story');
   var key = getApiKey();
   var transcript = document.getElementById('transcript-input').value.trim();
   var errorEl = document.getElementById('extract-error');
@@ -6894,6 +6944,7 @@ function extractMoments() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     clearInterval(ticker);
+    clearGenLock();
     var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (data.error) {
       var _emsg = data.message || ('Error: ' + data.error);
@@ -6931,6 +6982,7 @@ function extractMoments() {
   })
   .catch(function(e) {
     clearInterval(ticker);
+    clearGenLock();
     var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
     if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
@@ -7082,7 +7134,9 @@ function regenNarrativeSection(type, panelIndex) {
   });
 }
 
-function generateAllImages() {
+function generateAllImages(fromChain) {
+  if (!fromChain) { if (!ensureGenFree()) return; }
+  setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
   document.getElementById('generate-error').classList.add('hidden');
 
@@ -7090,6 +7144,7 @@ function generateAllImages() {
   var hasImages = state.moments && state.moments.some(function(m) { return m.image; });
   if (hasImages) {
     if (!confirm('This will replace all existing panel images that are not locked. Are you sure?')) {
+      clearGenLock();
       return;
     }
   }
@@ -7132,6 +7187,7 @@ function generateAllImages() {
     if (data.error) {
       // Generation refused — clear ALL busy overlays so the user's
       // existing images are fully visible again (not dimmed).
+      clearGenLock();
       hideAllPanelBusy();
       var errEl = document.getElementById('generate-error');
       if (data.error === 'INSUFFICIENT_TOKENS') {
@@ -7165,6 +7221,7 @@ function generateAllImages() {
     }, 2000);
   })
   .catch(function(e) {
+    clearGenLock();
     hideAllPanelBusy();
     var _gcb = document.getElementById('genall-cancel-btn'); if (_gcb) _gcb.style.display = 'none';
     if (e && e.name === 'AbortError') { btn.disabled = false; progressWrap.style.display = 'none'; return; }
@@ -7176,6 +7233,7 @@ function generateAllImages() {
 }
 
 function regenImage(momentId, index) {
+  if (!ensureGenFree()) return;
   var falKey = getFalKey() || 'platform';
 
   var moment = state.moments.find(function(m) { return m.id === momentId; });
@@ -7926,6 +7984,8 @@ function loadNarrative() {
 }
 
 function generateNarrative() {
+  if (!ensureGenFree()) return;
+  setGenLock('Generate Narrative');
   var key = getApiKey() || 'platform';  // Platform key used server-side
 
   var btn = document.getElementById('regen-narrative-btn');
@@ -7956,6 +8016,7 @@ function generateNarrative() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     clearInterval(ticker);
+    clearGenLock();
     if (progress) progress.style.display = 'none';
     if (btn) btn.disabled = false;
 
@@ -7970,6 +8031,7 @@ function generateNarrative() {
   })
   .catch(function(e) {
     clearInterval(ticker);
+    clearGenLock();
     if (progress) progress.style.display = 'none';
     if (btn) btn.disabled = false;
     if (errorEl) { errorEl.textContent = 'Error: ' + e.message; errorEl.classList.remove('hidden'); }
