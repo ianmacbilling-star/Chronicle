@@ -1146,6 +1146,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 }
 .archive-card:hover .archive-prompt-btn { opacity: 1; }
 .archive-prompt-btn:hover { background: rgba(0,0,0,0.9); color: var(--gold); }
+.archive-del-thumb{position:absolute;top:6px;right:6px;padding:3px 8px;font-size:10px;background:rgba(0,0,0,0.6);color:rgba(201,168,76,0.8);border:1px solid rgba(201,168,76,0.3);border-radius:6px;cursor:pointer;opacity:0;transition:opacity 0.15s;}
+.archive-card:hover .archive-del-thumb{opacity:1;}
+.archive-del-thumb:hover{background:rgba(0,0,0,0.85);color:var(--gold);}
 .archive-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; margin-top: 3px; }
 .archive-row span { color: var(--gold-dim); }
 .archive-row b { color: var(--gold-light); font-weight: 600; text-align: right; word-break: break-word; }

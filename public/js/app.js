@@ -5735,6 +5735,7 @@ function renderArchives() {
       '<div class="archive-thumb">' +
         '<img loading="lazy" src="' + a.image_url + '" alt="' + escapeHtml(a.title || 'archived image') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
         promptBtn +
+        (canDelete ? '<button class="archive-del-thumb" onclick="deleteArchive(' + a.id + ')" title="Remove from Archive">&#10005; Remove</button>' : '') +
       '</div>' +
       '<div class="archive-meta">' +
         '<div class="archive-title">' + escapeHtml(a.title || '(untitled)') + '</div>' +
@@ -5744,7 +5745,6 @@ function renderArchives() {
           (isDM ? '<label class="archive-cover-toggle" title="Use as back cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.back_cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignBackCover(' + a.id + ')" /> Back</label>' : '') +
           (isDM ? '<label class="archive-cover-toggle" title="Use as interior title-page image"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.title_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignTitleImage(' + a.id + ')" /> Title</label>' : '') +
           (canDelete ? '<label class="archive-cover-toggle" title="Show this image in the anonymous public Library"><input type="checkbox" ' + (a.public ? 'checked' : '') + ' onchange="setArchivePublic(' + a.id + ', this.checked)" /> Public</label>' : '') +
-          (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
         '</div>' +
       '</div>' +
     '</div>';

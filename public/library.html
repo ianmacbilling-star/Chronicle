@@ -59,6 +59,13 @@
     footer a { color:rgba(201,168,76,0.6); text-decoration:none; }
     footer a:hover { color:var(--gold); }
 
+    .card img { cursor: zoom-in; }
+    .lb { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:24px; background:rgba(8,5,3,0.94); cursor:zoom-out; }
+    .lb.open { display:flex; }
+    .lb img { max-width:96vw; max-height:82vh; border:3px solid var(--ink); border-radius:3px; box-shadow:0 10px 40px rgba(0,0,0,0.6); }
+    .lb .lb-cap { font-style:italic; color:var(--gold-light); max-width:760px; text-align:center; font-size:15px; }
+    .lb .lb-close { position:absolute; top:14px; right:20px; font-family:'Bangers',cursive; font-size:26px; color:var(--gold); background:none; border:none; cursor:pointer; letter-spacing:2px; }
+
     @media (max-width:600px) {
       .nav-logo-text { font-size:14px; letter-spacing:2px; }
       .gallery { column-width:100%; padding:0 14px 30px; }
@@ -91,6 +98,12 @@
   <div id="sentinel"></div>
   <div class="lib-status" id="status"></div>
 
+  <div class="lb" id="lightbox" onclick="closeLb()">
+    <button class="lb-close" onclick="closeLb()" aria-label="Close">&#10005;</button>
+    <img id="lb-img" alt="" />
+    <div class="lb-cap" id="lb-cap"></div>
+  </div>
+
   <footer>
     &copy; <span id="yr"></span> Campaignia &middot; <a href="/">Home</a> &middot; <a href="/login">Sign In</a>
   </footer>
@@ -112,6 +125,7 @@
       img.setAttribute('loading', 'lazy');
       img.setAttribute('alt', item.caption || 'Campaignia creation');
       img.src = item.image_url;
+      img.addEventListener('click', function () { openLb(item.image_url, item.caption); });
       fig.appendChild(img);
       if (item.caption) {
         var cap = document.createElement('figcaption');
@@ -167,6 +181,18 @@
       }, { rootMargin: '600px' });
       io.observe(document.getElementById('sentinel'));
     }
+    var lb = document.getElementById('lightbox');
+    var lbImg = document.getElementById('lb-img');
+    var lbCap = document.getElementById('lb-cap');
+    function openLb(src, caption) {
+      lbImg.src = src;
+      lbImg.alt = caption || '';
+      lbCap.textContent = caption || '';
+      lb.classList.add('open');
+    }
+    function closeLb() { lb.classList.remove('open'); lbImg.src = ''; }
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLb(); });
+
     load();
   </script>
 </body>
