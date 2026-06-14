@@ -37,6 +37,15 @@ function inviteExpiresAt() {
 // Either character_id (existing unclaimed PC) OR character_name (creates
 // a stub PC) is required.
 router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, async function(req, res) {
+  // Inviting players is a paid feature -- Free Trial campaigns are single-player.
+  // Enforced server-side so the client intercept can't be bypassed.
+  try {
+    const _idb = await getDb();
+    const _iu = await _idb.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
+    if (_iu && _iu.tier === 'trial') {
+      return res.status(403).json({ error: 'Inviting players is a paid feature. Upgrade to a paid plan to invite your table.' });
+    }
+  } catch (e) { /* lookup failure -> fall through */ }
   const { email, character_id, character_name, character_class } = req.body || {};
   if (!email || typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email is required' });

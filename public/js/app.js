@@ -8194,6 +8194,12 @@ function openInviteModal() {
     showAlert('No campaign selected');
     return;
   }
+  // The invite button stays visible on the Free Trial (it shows what's
+  // possible), but inviting is a paid feature -- stop them on click.
+  if (state.user && state.user.tier === 'trial') {
+    showAlert('Inviting players is a paid feature. Free Trial campaigns are single-player. Upgrade to a paid plan to invite your table.');
+    return;
+  }
   // Reset modal state.
   document.getElementById('invite-modal-error').classList.add('hidden');
   document.getElementById('invite-modal-step1').style.display = '';
