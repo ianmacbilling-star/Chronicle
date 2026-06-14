@@ -2701,19 +2701,18 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (teaser.length > 500) teaser = teaser.slice(0, 500);
     var snapshotObj = { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
     var snapshotJson = JSON.stringify(snapshotObj);
-    await db.prepare(
+    var _ins = await db.prepare(
       'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, TRUE, ?, ?) ' +
-      'ON CONFLICT (campaign_id, user_id) DO UPDATE SET author_name = EXCLUDED.author_name, title = EXCLUDED.title, pdf_url = EXCLUDED.pdf_url, cover_url = EXCLUDED.cover_url, snapshot = EXCLUDED.snapshot, slug = EXCLUDED.slug, blurb = EXCLUDED.blurb, teaser = EXCLUDED.teaser, public = TRUE, updated_at = EXCLUDED.updated_at'
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, TRUE, ?, ?)'
     ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, nowIso, nowIso);
+    var _newStoryId = _ins ? _ins.lastInsertRowid : null;
   } catch (e) {
     console.error('[publish-story] db upsert failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not record your published story. Please try again.' });
   }
 
   try {
-    var _srow = await db.prepare('SELECT id FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(campaign.id, req.session.userId);
-    var _storyId = _srow ? _srow.id : null;
+    var _storyId = (typeof _newStoryId !== 'undefined') ? _newStoryId : null;
     if (_storyId) {
       var _imgSet = {};
       if (coverUrl) _imgSet[coverUrl] = true;
@@ -2762,8 +2761,8 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
 router.get('/my-stories', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var rows = await db.prepare('SELECT campaign_id, title, author_name, cover_url, pdf_url, blurb, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
-    var items = (rows || []).map(function(r){ return { campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, blurb: r.blurb || '', created_at: r.created_at }; });
+    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, blurb, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
+    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, blurb: r.blurb || '', created_at: r.created_at }; });
     return res.json({ items: items });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);
@@ -2783,6 +2782,36 @@ router.post('/story-blurb/:campaignId', requireAuth, async function(req, res) {
     return res.json({ success: true, blurb: blurb });
   } catch (e) {
     console.error('[story-blurb] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not save your blurb.' });
+  }
+});
+
+// Remove ONE published story by its id (owner-only). Multiple stories may be
+// published from the same campaign, so deletion is per-item, not per-campaign.
+router.post('/story/:id/unpublish', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var row = await db.prepare('SELECT pdf_url FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!row) return res.status(404).json({ error: 'Story not found.' });
+    await db.prepare('DELETE FROM public_stories WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
+    if (row.pdf_url) { try { await deleteFile(row.pdf_url); } catch (e2) { console.error('[story unpublish] R2 cleanup failed (non-fatal):', e2 && e2.message ? e2.message : e2); } }
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[story unpublish] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not remove your story.' });
+  }
+});
+
+// Update the blurb on ONE published story by its id (owner-only).
+router.post('/story/:id/blurb', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var blurb = (req.body && req.body.blurb != null) ? String(req.body.blurb).trim() : '';
+    if (blurb.length > 600) blurb = blurb.slice(0, 600);
+    await db.prepare('UPDATE public_stories SET blurb = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(blurb || null, new Date().toISOString(), req.params.id, req.session.userId);
+    return res.json({ success: true, blurb: blurb });
+  } catch (e) {
+    console.error('[story blurb] failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not save your blurb.' });
   }
 });

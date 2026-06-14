@@ -368,13 +368,16 @@ function uiPublishPrompt(message, opts) {
     var ta = document.createElement('textarea');
     ta.maxLength = 600;
     ta.placeholder = 'Leave blank to use your opening narrative as the teaser.';
-    ta.style.cssText = 'width:100%;min-height:64px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:16px;';
+    ta.style.cssText = 'width:100%;min-height:64px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:8px;';
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
     var ok = document.createElement('button'); ok.className = 'btn btn-primary btn-sm'; ok.textContent = opts.okText || 'Publish';
     row.appendChild(cancel); row.appendChild(ok);
-    box.appendChild(msg); box.appendChild(label); box.appendChild(ta); box.appendChild(row); overlay.appendChild(box);
+    var hint = document.createElement('div');
+    hint.textContent = 'You can manage your published content on your Account page.';
+    hint.style.cssText = 'color:rgba(240,232,208,0.5);font-size:11px;margin:0 0 16px;';
+    box.appendChild(msg); box.appendChild(label); box.appendChild(ta); box.appendChild(hint); box.appendChild(row); overlay.appendChild(box);
     document.body.appendChild(overlay);
     function done(val) {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -796,6 +799,11 @@ function myStoryCard(it) {
   meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.85);padding:6px 8px;line-height:1.35;';
   meta.textContent = it.title || 'Untitled';
   card.appendChild(meta);
+  var dateLine = document.createElement('div');
+  var _dt = it.created_at ? new Date(it.created_at) : null;
+  dateLine.textContent = _dt ? ('Published ' + _dt.toLocaleDateString()) : '';
+  dateLine.style.cssText = 'font-size:10px;color:rgba(201,168,76,0.5);padding:0 8px 4px;';
+  card.appendChild(dateLine);
   var blWrap = document.createElement('div');
   blWrap.style.cssText = 'padding:0 8px 8px;';
   var blView = document.createElement('div');
@@ -815,7 +823,7 @@ function myStoryCard(it) {
     cancel.onclick = function(){ showView(); };
     save.onclick = function(){
       save.disabled = true; save.textContent = 'Saving...';
-      fetch('/api/pdf/story-blurb/' + it.campaign_id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blurb: ta.value }) })
+      fetch('/api/pdf/story/' + it.id + '/blurb', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blurb: ta.value }) })
         .then(function(r){ return r.json(); })
         .then(function(d){ if (d && d.success) { it.blurb = d.blurb || ''; showView(); } else { save.disabled = false; save.textContent = 'Save'; billingToast((d && d.error) || 'Could not save blurb.', 'error'); } })
         .catch(function(){ save.disabled = false; save.textContent = 'Save'; billingToast('Could not save blurb.', 'error'); });
@@ -829,15 +837,15 @@ function myStoryCard(it) {
   btn.onclick = function(){
     if (!armed) { armed = true; btn.textContent = 'Click again to remove'; tmr = setTimeout(function(){ armed = false; btn.textContent = 'Remove from Library'; }, 3000); return; }
     if (tmr) clearTimeout(tmr);
-    removeMyStory(it.campaign_id, card, btn);
+    removeMyStory(it.id, card, btn);
   };
   card.appendChild(btn);
   return card;
 }
 
-function removeMyStory(campaignId, card, btn) {
+function removeMyStory(storyId, card, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
-  fetch('/api/pdf/unpublish-story/' + campaignId, { method: 'POST' })
+  fetch('/api/pdf/story/' + storyId + '/unpublish', { method: 'POST' })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d && d.success) {
@@ -4744,7 +4752,7 @@ async function publishStory() {
     .then(function(d){
       if (btn) btn.disabled = false;
       if (d && d.success) {
-        if (st) st.textContent = d.author ? ('Published to the Library, listed as ' + d.author + '.') : 'Published to the Library. You have no pen name set, so it is listed without a name.';
+        if (st) st.textContent = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
         setStoryPublishedUI(true, d.url);
       } else {
         if (st) st.textContent = (d && d.error) ? d.error : 'Could not publish. Please try again.';
@@ -4781,8 +4789,10 @@ async function unpublishStory() {
 function setStoryPublishedUI(published, url) {
   var btn = document.getElementById('novel-publish-btn');
   if (!btn) return;
-  if (published) { btn.textContent = 'Unpublish from Library'; btn.onclick = unpublishStory; }
-  else { btn.textContent = 'Publish to Library'; btn.onclick = publishStory; }
+  // Publishing/unpublishing is managed on the Account page, not here. This button
+  // always (re)publishes the current content; it never flips to an unpublish toggle.
+  btn.textContent = 'Publish to Library';
+  btn.onclick = publishStory;
 }
 
 function refreshStoryStatus() {
@@ -4793,7 +4803,7 @@ function refreshStoryStatus() {
   setStoryPublishedUI(false);
   fetch('/api/pdf/story-status/' + state.currentCampaign.id)
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.published) setStoryPublishedUI(true, d.url); })
+    .then(function(d){ if (d && d.published && st) { st.style.display = 'block'; st.textContent = 'You have already published from this campaign. Each Publish creates a new Library entry. Manage or remove your entries on your Account page.'; } })
     .catch(function(){});
 }
 

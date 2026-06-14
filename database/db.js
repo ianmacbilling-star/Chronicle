@@ -803,8 +803,7 @@ async function migrateArchives(pool) {
       cover_url TEXT,
       public BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP,
-      UNIQUE (campaign_id, user_id)
+      updated_at TIMESTAMP
     )
   `);
   await pool.query("CREATE INDEX IF NOT EXISTS idx_public_stories_public ON public_stories(created_at DESC, id DESC) WHERE public = TRUE");
@@ -818,6 +817,9 @@ async function migrateArchives(pool) {
   await pool.query('ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS slug TEXT');
   await pool.query('ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS blurb TEXT');
   await pool.query('ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS teaser TEXT');
+  // Each Publish is now its own Library entry -- drop the legacy one-row-per
+  // (campaign, publisher) uniqueness so multiple stories can coexist per campaign.
+  await pool.query('ALTER TABLE public_stories DROP CONSTRAINT IF EXISTS public_stories_campaign_id_user_id_key');
 
   // public_story_images: one row per distinct image URL a published story uses,
   // so releaseImage() protects those URLs from reference-counted deletion the
