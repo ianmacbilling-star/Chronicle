@@ -4673,7 +4673,9 @@ async function publishStory() {
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
   if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&');
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+  var _blurbEl = document.getElementById('novel-publish-blurb');
+  var _blurb = _blurbEl ? String(_blurbEl.value || '').trim() : '';
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blurb: _blurb }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (btn) btn.disabled = false;
@@ -4727,7 +4729,7 @@ function refreshStoryStatus() {
   setStoryPublishedUI(false);
   fetch('/api/pdf/story-status/' + state.currentCampaign.id)
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.published) setStoryPublishedUI(true, d.url); })
+    .then(function(d){ if (d && d.published) setStoryPublishedUI(true, d.url); var _bb = document.getElementById('novel-publish-blurb'); if (_bb) _bb.value = (d && d.blurb) ? d.blurb : ''; })
     .catch(function(){});
 }
 

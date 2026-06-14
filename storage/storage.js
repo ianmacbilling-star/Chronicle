@@ -136,7 +136,8 @@ async function releaseImage(db, fileUrl) {
       ['SELECT 1 FROM characters WHERE image = ? OR image_portrait = ? OR image_fullbody = ? OR image_action = ? OR image_other = ? OR canonical_reference_url = ? LIMIT 1',
         [fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl]],
       ['SELECT 1 FROM campaign_assets WHERE image_url = ? LIMIT 1', [fileUrl]],
-      ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]]
+      ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]],
+      ['SELECT 1 FROM public_story_images WHERE image_url = ? LIMIT 1', [fileUrl]]
     ];
     for (let i = 0; i < checks.length; i++) {
       const row = await db.prepare(checks[i][0]).get(...checks[i][1]);

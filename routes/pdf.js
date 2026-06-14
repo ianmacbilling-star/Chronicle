@@ -2691,14 +2691,42 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
 
   try {
     var nowIso = new Date().toISOString();
+    var blurb = (req.body && req.body.blurb && String(req.body.blurb).trim()) ? String(req.body.blurb).trim() : '';
+    if (blurb.length > 600) blurb = blurb.slice(0, 600);
+    var _slugify = function(s){ s = String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); if (!s) s = 'story'; if (s.length > 80) s = s.slice(0, 80).replace(/-+$/, ''); return s; };
+    var slug = _slugify(title);
+    var _firstPara = function(txt){ if (!txt) return ''; var t = String(txt).replace(/\r/g, '').trim(); if (!t) return ''; var idx = t.indexOf('\n\n'); var p = (idx > -1) ? t.slice(0, idx) : t; return p.trim(); };
+    var teaser = '';
+    for (var _ti = 0; _ti < sessionsWithData.length && !teaser; _ti++) { teaser = _firstPara(sessionsWithData[_ti].narrative_intro); }
+    if (teaser.length > 500) teaser = teaser.slice(0, 500);
+    var snapshotObj = { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
+    var snapshotJson = JSON.stringify(snapshotObj);
     await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, ?) ' +
-      'ON CONFLICT (campaign_id, user_id) DO UPDATE SET author_name = EXCLUDED.author_name, title = EXCLUDED.title, pdf_url = EXCLUDED.pdf_url, cover_url = EXCLUDED.cover_url, public = TRUE, updated_at = EXCLUDED.updated_at'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, nowIso, nowIso);
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, TRUE, ?, ?) ' +
+      'ON CONFLICT (campaign_id, user_id) DO UPDATE SET author_name = EXCLUDED.author_name, title = EXCLUDED.title, pdf_url = EXCLUDED.pdf_url, cover_url = EXCLUDED.cover_url, snapshot = EXCLUDED.snapshot, slug = EXCLUDED.slug, blurb = EXCLUDED.blurb, teaser = EXCLUDED.teaser, public = TRUE, updated_at = EXCLUDED.updated_at'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, nowIso, nowIso);
   } catch (e) {
     console.error('[publish-story] db upsert failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not record your published story. Please try again.' });
+  }
+
+  try {
+    var _srow = await db.prepare('SELECT id FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(campaign.id, req.session.userId);
+    var _storyId = _srow ? _srow.id : null;
+    if (_storyId) {
+      var _imgSet = {};
+      if (coverUrl) _imgSet[coverUrl] = true;
+      for (var _sx = 0; _sx < sessionsWithData.length; _sx++) {
+        var _mz = sessionsWithData[_sx].moments || [];
+        for (var _mx = 0; _mx < _mz.length; _mx++) { if (_mz[_mx] && _mz[_mx].image) _imgSet[_mz[_mx].image] = true; }
+      }
+      var _urls = Object.keys(_imgSet);
+      await db.prepare('DELETE FROM public_story_images WHERE story_id = ?').run(_storyId);
+      for (var _ux = 0; _ux < _urls.length; _ux++) { await db.prepare('INSERT INTO public_story_images (story_id, image_url) VALUES (?, ?)').run(_storyId, _urls[_ux]); }
+    }
+  } catch (e) {
+    console.error('[publish-story] image-index rebuild failed (non-fatal):', e && e.message ? e.message : e);
   }
 
   return res.json({ success: true, url: pdfUrl, author: authorName });
@@ -2722,8 +2750,8 @@ router.post('/unpublish-story/:campaignId', requireAuth, async function(req, res
 router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var row = await db.prepare('SELECT pdf_url, public, updated_at FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
-    return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null });
+    var row = await db.prepare('SELECT pdf_url, public, updated_at, blurb FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
+    return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null, blurb: row ? (row.blurb || '') : '' });
   } catch (e) {
     return res.json({ published: false });
   }

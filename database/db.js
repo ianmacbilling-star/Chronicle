@@ -810,6 +810,27 @@ async function migrateArchives(pool) {
   await pool.query("CREATE INDEX IF NOT EXISTS idx_public_stories_public ON public_stories(created_at DESC, id DESC) WHERE public = TRUE");
   await pool.query('CREATE INDEX IF NOT EXISTS idx_public_stories_author ON public_stories(lower(author_name))');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_public_stories_user ON public_stories(user_id)');
+  // Public story pages (companion: PUBLIC_STORY_PAGES_SPEC.md). snapshot freezes
+  // the rendered content at publish so the public HTML view never reflects later
+  // edits; slug = canonical URL slug; blurb = optional author teaser; teaser =
+  // auto first narrative paragraph. Guarded ALTERs are safe to re-run.
+  await pool.query('ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS snapshot JSONB');
+  await pool.query('ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS slug TEXT');
+  await pool.query('ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS blurb TEXT');
+  await pool.query('ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS teaser TEXT');
+
+  // public_story_images: one row per distinct image URL a published story uses,
+  // so releaseImage() protects those URLs from reference-counted deletion the
+  // same way campaign_archives does. ON DELETE CASCADE clears them on unpublish.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public_story_images (
+      id SERIAL PRIMARY KEY,
+      story_id INTEGER NOT NULL REFERENCES public_stories(id) ON DELETE CASCADE,
+      image_url TEXT NOT NULL
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_public_story_images_url ON public_story_images(image_url)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_public_story_images_story ON public_story_images(story_id)');
 }
 
 // migrateCasting: idempotent. Explicit per-panel casting (Pass 2). A panel's
