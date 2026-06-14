@@ -79,8 +79,9 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
       '<script type="application/ld+json">' + ldSafe(JSON.stringify(ld)) + '</script>';
 
     const header =
-      '<div style="max-width:880px;margin:0 auto;padding:24px 18px 8px;font-family:Georgia,serif;">' +
-        '<a href="/library" style="color:#c9a84c;text-decoration:none;font-size:13px;">&larr; Public Library</a>' +
+      '<div style="background:#0a0806;border-bottom:3px solid #c9a84c;">' +
+      '<div style="max-width:880px;margin:0 auto;padding:22px 18px;font-family:Georgia,serif;">' +
+        '<a href="/library#stories" style="color:#c9a84c;text-decoration:none;font-size:13px;">&larr; Back to Stories</a>' +
         '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;margin-top:14px;">' +
           (cover ? '<img src="' + esc(cover) + '" alt="' + esc(title) + ' cover" style="width:160px;aspect-ratio:17/22;object-fit:cover;border-radius:4px;background:#160e06;flex-shrink:0;" />' : '') +
           '<div style="flex:1;min-width:220px;">' +
@@ -91,7 +92,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
             (row.pdf_url ? '<a href="' + esc(row.pdf_url) + '" target="_blank" rel="noopener" style="display:inline-block;background:#c9a84c;color:#160e06;padding:8px 16px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;">Download PDF</a>' : '') +
           '</div>' +
         '</div>' +
-        '<hr style="border:none;border-top:1px solid rgba(201,168,76,0.25);margin:22px 0 0;" />' +
+      '</div>' +
       '</div>';
 
     const snap = row.snapshot || null;

@@ -362,6 +362,13 @@ function uiPublishPrompt(message, opts) {
     var msg = document.createElement('div');
     msg.textContent = (message == null) ? '' : String(message);
     msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:14px;';
+    var tlabel = document.createElement('div');
+    tlabel.textContent = 'Title for this story';
+    tlabel.style.cssText = 'color:rgba(201,168,76,0.9);font-size:12px;margin-bottom:6px;';
+    var ti = document.createElement('input');
+    ti.type = 'text'; ti.maxLength = 200; ti.value = opts.defaultTitle || '';
+    ti.placeholder = 'e.g. The Shattered Crown';
+    ti.style.cssText = 'width:100%;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px;';
     var label = document.createElement('div');
     label.textContent = 'Add a short blurb for your Library page (optional)';
     label.style.cssText = 'color:rgba(201,168,76,0.9);font-size:12px;margin-bottom:6px;';
@@ -377,7 +384,7 @@ function uiPublishPrompt(message, opts) {
     var hint = document.createElement('div');
     hint.textContent = 'You can manage your published content on your Account page.';
     hint.style.cssText = 'color:rgba(240,232,208,0.5);font-size:11px;margin:0 0 16px;';
-    box.appendChild(msg); box.appendChild(label); box.appendChild(ta); box.appendChild(hint); box.appendChild(row); overlay.appendChild(box);
+    box.appendChild(msg); box.appendChild(tlabel); box.appendChild(ti); box.appendChild(label); box.appendChild(ta); box.appendChild(hint); box.appendChild(row); overlay.appendChild(box);
     document.body.appendChild(overlay);
     function done(val) {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -386,10 +393,10 @@ function uiPublishPrompt(message, opts) {
     }
     function onKey(e) { if (e.key === 'Escape') done(null); }
     cancel.onclick = function () { done(null); };
-    ok.onclick = function () { done(String(ta.value || '').trim()); };
+    ok.onclick = function () { done({ title: String(ti.value || '').trim(), blurb: String(ta.value || '').trim() }); };
     overlay.onclick = function (e) { if (e.target === overlay) done(null); };
     document.addEventListener('keydown', onKey);
-    setTimeout(function () { try { ta.focus(); } catch (e) {} }, 0);
+    setTimeout(function () { try { ti.focus(); } catch (e) {} }, 0);
   });
 }
 
@@ -4740,14 +4747,14 @@ function exportNovelPDF() {
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
   var msg = 'Publish this graphic novel to the public Library? It will be shown publicly under your pen name (set one in Settings first if you want one). Player real names are hidden in the public version.';
-  var _blurb = await uiPublishPrompt(msg);
-  if (_blurb === null) return;
+  var _res = await uiPublishPrompt(msg, { defaultTitle: (state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '' });
+  if (_res === null) return;
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
   if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&');
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blurb: _blurb }) })
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: _res.title, blurb: _res.blurb }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (btn) btn.disabled = false;

@@ -318,7 +318,7 @@
     function closeLb() { lb.classList.remove('open'); lbImg.src = ''; }
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLb(); });
 
-    load();
+    if (location.hash === '#stories') { switchTab('stories'); } else { load(); }
   </script>
 </body>
 </html>
