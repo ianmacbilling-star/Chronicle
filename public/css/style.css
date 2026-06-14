@@ -1899,3 +1899,8 @@ html.staging-env .app-header{
   box-shadow:0 2px 12px rgba(0,0,0,0.35);
 }
 html.staging-env .app-logo-text{color:#2b1400;}
+
+/* Storyboard moment prominence control */
+.moment-prom{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:rgba(201,168,76,0.7);}
+.moment-prom-select{background:rgba(20,12,4,0.9);color:var(--gold);border:1px solid rgba(201,168,76,0.35);border-radius:5px;font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer;}
+.moment-prom-static{opacity:0.85;}

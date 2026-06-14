@@ -80,4 +80,29 @@ router.put('/:momentId/lock', requireAuth, verifyCampaignMember, async function(
   res.json({ success: true, locked: locked });
 });
 
+// PUT prominence -- set how much visual weight (1-5) a moment gets in the
+// comic layout. Stored in layout_meta JSON (merged, so focal etc. survive).
+// Owner-only on the caller's OWN version; read by lmProminence at PDF time.
+router.put('/:momentId/prominence', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const moment = await db.prepare(
+    'SELECT m.id, m.layout_meta, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
+  ).get(req.params.momentId, req.params.sessionId);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  if (String(moment.fork_owner) !== String(req.session.userId)) {
+    return res.status(403).json({ error: 'You can only edit your own version' });
+  }
+  var p = parseInt(req.body && req.body.prominence, 10);
+  if (!(p >= 1 && p <= 5)) return res.status(400).json({ error: 'Prominence must be 1 to 5' });
+  var meta = {};
+  try { if (moment.layout_meta) meta = (typeof moment.layout_meta === 'string') ? JSON.parse(moment.layout_meta) : moment.layout_meta; } catch (e) { meta = {}; }
+  if (!meta || typeof meta !== 'object') meta = {};
+  meta.prominence = p;
+  var metaStr = JSON.stringify(meta);
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE moments SET layout_meta = ?, edited_at = ?, edited_by = ? WHERE id = ? AND session_id = ?')
+    .run(metaStr, now, req.session.userId, req.params.momentId, req.params.sessionId);
+  res.json({ success: true, prominence: p, layout_meta: metaStr });
+});
+
 module.exports = router;

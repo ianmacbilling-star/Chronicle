@@ -6456,6 +6456,16 @@ function renderStoryboard() {
         (_arched ? 'In your Archive - click to remove' : 'Save this image to your Archive') +
         '">' + (_arched ? 'Archived' : 'Archive') + '</button>';
     }
+    var _prom = momProminence(m);
+    var _promLabels = { 1: 'Minor', 2: 'Small', 3: 'Normal', 4: 'Major', 5: 'Hero' };
+    var promCtrl;
+    if (_canLock) {
+      var _po = '';
+      for (var _pv = 1; _pv <= 5; _pv++) { _po += '<option value="' + _pv + '"' + (_pv === _prom ? ' selected' : '') + '>' + _pv + ' - ' + _promLabels[_pv] + '</option>'; }
+      promCtrl = '<label class="moment-prom" title="How prominent this panel is in the comic layout (1 = minor, 5 = hero or splash)">Prominence <select class="moment-prom-select" onchange="setMomentProminence(' + m.id + ', this.value)">' + _po + '</select></label>';
+    } else {
+      promCtrl = '<span class="moment-meta-list moment-prom-static" title="Layout prominence">Prominence: ' + _prom + ' - ' + _promLabels[_prom] + '</span>';
+    }
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
@@ -6465,6 +6475,7 @@ function renderStoryboard() {
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
         '<span class="moment-title">' + m.title + '</span>' +
         '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleName(m.style) : 'Unknown') + ', ' + (typeLabel[m.type]||m.type) + ', ' + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
+        promCtrl +
       '</div>' +
       buildNarrative('narrative-moment-' + i, 'Panel ' + (i + 1) + ' moment', 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true) +
     '</div>';
@@ -10890,4 +10901,29 @@ function blockCopperCreate(kind) {
     return true;
   }
   return false;
+}
+
+// Read a moment layout prominence (1-5) from its layout_meta JSON; default 3.
+// Mirrors lmProminence in routes/pdf.js so the storyboard and PDF agree.
+function momProminence(m) {
+  try {
+    var meta = m && m.layout_meta;
+    if (typeof meta === 'string') meta = JSON.parse(meta);
+    var n = meta ? Number(meta.prominence) : NaN;
+    return (n >= 1 && n <= 5) ? Math.round(n) : 3;
+  } catch (e) { return 3; }
+}
+function setMomentProminence(momentId, value) {
+  var moment = (state.moments || []).find(function(m){ return m.id === momentId; });
+  if (!moment || !state.currentCampaign || !state.currentSession) return;
+  var v = parseInt(value, 10); if (!(v >= 1 && v <= 5)) v = 3;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + momentId + '/prominence', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prominence: v })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.success) { moment.layout_meta = d.layout_meta; }
+      else { billingToast((d && (d.error || d.message)) || 'Could not update prominence.', 'error'); }
+    })
+    .catch(function(){ billingToast('Could not update prominence.', 'error'); });
 }
