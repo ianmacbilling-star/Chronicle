@@ -4278,6 +4278,7 @@ function switchNovelTab(tab) {
     if (_npb) _npb.textContent = 'Quick View';
     if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
     if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
+    if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
   }
 }
 
@@ -4548,6 +4549,76 @@ function previewNovelPDF() {
 function exportNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&format=pdf';
   window.open(url, '_blank');
+}
+
+// --- Publish to Public Library (Stories) -------------------------------------
+// Owner-only on the server; here we just drive the button. We send the SAME
+// layout + custom options the preview is showing so the published book matches.
+function publishStory() {
+  if (!state.currentCampaign || !state.currentCampaign.id) return;
+  var msg = 'Publish this graphic novel to the public Library? It will be shown publicly under your pen name (set one in Settings first if you want one). Player real names are hidden in the public version.';
+  if (!confirm(msg)) return;
+  var btn = document.getElementById('novel-publish-btn');
+  var st = document.getElementById('novel-publish-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
+  if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
+  var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&');
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (btn) btn.disabled = false;
+      if (d && d.success) {
+        if (st) st.textContent = d.author ? ('Published to the Library, listed as ' + d.author + '.') : 'Published to the Library. You have no pen name set, so it is listed without a name.';
+        setStoryPublishedUI(true, d.url);
+      } else {
+        if (st) st.textContent = (d && d.error) ? d.error : 'Could not publish. Please try again.';
+        if (btn) btn.textContent = 'Publish to Library';
+      }
+    })
+    .catch(function(){
+      if (btn) { btn.disabled = false; btn.textContent = 'Publish to Library'; }
+      if (st) st.textContent = 'Could not publish. Please try again.';
+    });
+}
+
+function unpublishStory() {
+  if (!state.currentCampaign || !state.currentCampaign.id) return;
+  if (!confirm('Remove your story from the public Library?')) return;
+  var btn = document.getElementById('novel-publish-btn');
+  var st = document.getElementById('novel-publish-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
+  fetch('/api/pdf/unpublish-story/' + state.currentCampaign.id, { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (btn) btn.disabled = false;
+      if (d && d.success) {
+        setStoryPublishedUI(false);
+        if (st) { st.style.display = 'block'; st.textContent = 'Removed from the Library.'; }
+      } else {
+        if (btn) btn.textContent = 'Unpublish from Library';
+        if (st) st.textContent = (d && d.error) || 'Could not remove.';
+      }
+    })
+    .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Unpublish from Library'; } if (st) st.textContent = 'Could not remove.'; });
+}
+
+function setStoryPublishedUI(published, url) {
+  var btn = document.getElementById('novel-publish-btn');
+  if (!btn) return;
+  if (published) { btn.textContent = 'Unpublish from Library'; btn.onclick = unpublishStory; }
+  else { btn.textContent = 'Publish to Library'; btn.onclick = publishStory; }
+}
+
+function refreshStoryStatus() {
+  var btn = document.getElementById('novel-publish-btn');
+  var st = document.getElementById('novel-publish-status');
+  if (st) { st.style.display = 'none'; st.textContent = ''; }
+  if (!btn || !state.currentCampaign || !state.currentCampaign.id) return;
+  setStoryPublishedUI(false);
+  fetch('/api/pdf/story-status/' + state.currentCampaign.id)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d && d.published) setStoryPublishedUI(true, d.url); })
+    .catch(function(){});
 }
 
 function loadNovelSummary() {
@@ -5769,6 +5840,7 @@ function setArchivePublic(id, makePublic) {
 
 // ---- Admin: Public Library moderation modal ----
 var adminLib = { cursor: 0, loading: false, done: false, any: false };
+var adminStories = { cursor: 0, loading: false, done: false, any: false };
 function openAdminLibrary() {
   var m = document.getElementById('admin-library-modal');
   if (m) m.classList.remove('hidden');
@@ -5841,6 +5913,79 @@ function adminUnpublish(id, card, btn) {
     }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
 }
 
+function openAdminStories() {
+  var m = document.getElementById('admin-stories-modal');
+  if (m) m.classList.remove('hidden');
+  var grid = document.getElementById('admin-stories-grid');
+  if (grid) grid.innerHTML = '';
+  adminStories = { cursor: 0, loading: false, done: false, any: false };
+  if (grid && !grid._scrollBound) {
+    grid._scrollBound = true;
+    grid.addEventListener('scroll', function () {
+      if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 400) loadAdminStories();
+    });
+  }
+  loadAdminStories();
+}
+function closeAdminStories() {
+  var m = document.getElementById('admin-stories-modal');
+  if (m) m.classList.add('hidden');
+}
+function loadAdminStories() {
+  if (adminStories.loading || adminStories.done) return;
+  adminStories.loading = true;
+  var st = document.getElementById('admin-stories-status');
+  if (st) st.textContent = 'Loading...';
+  var url = '/api/admin/stories?limit=48' + (adminStories.cursor ? '&beforeId=' + adminStories.cursor : '');
+  fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+    adminStories.loading = false;
+    var grid = document.getElementById('admin-stories-grid');
+    var items = (d && d.items) || [];
+    items.forEach(function (it) { adminStories.any = true; if (grid) grid.appendChild(adminStoryCard(it)); });
+    if (d && d.nextCursor) adminStories.cursor = d.nextCursor;
+    if (!d || !d.hasMore || !d.nextCursor) {
+      adminStories.done = true;
+      if (st) st.textContent = adminStories.any ? 'End of list.' : 'No stories have been published yet.';
+    } else if (st) { st.textContent = ''; }
+  }).catch(function () {
+    adminStories.loading = false;
+    if (st) st.textContent = 'Could not load. Please try again.';
+  });
+}
+function adminStoryCard(it) {
+  var card = document.createElement('div');
+  card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.5);display:flex;flex-direction:column;';
+  var a = document.createElement('a');
+  a.href = it.pdf_url; a.target = '_blank'; a.rel = 'noopener'; a.style.cssText = 'display:block;text-decoration:none;';
+  if (it.cover_url) {
+    var img = document.createElement('img');
+    img.setAttribute('loading', 'lazy'); img.src = it.cover_url; img.alt = it.title || 'story';
+    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:#160e06;';
+    a.appendChild(img);
+  } else {
+    var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(201,168,76,0.45);font-size:12px;text-align:center;padding:8px;';
+    a.appendChild(ph);
+  }
+  card.appendChild(a);
+  var meta = document.createElement('div');
+  meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.8);padding:6px 8px;';
+  meta.textContent = (it.title || 'Untitled') + (it.author ? (' by ' + it.author) : '');
+  card.appendChild(meta);
+  var btn = document.createElement('button');
+  btn.className = 'btn btn-sm archive-del'; btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:6px 8px 8px;';
+  btn.onclick = function () { adminUnpublishStory(it.id, card, btn); };
+  card.appendChild(btn);
+  return card;
+}
+function adminUnpublishStory(id, card, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
+  fetch('/api/admin/stories/' + id + '/unpublish', { method: 'POST' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok) { if (card && card.parentNode) card.parentNode.removeChild(card); }
+      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
+    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
+}
 function deleteArchive(id) {
   if (!confirm('Remove this image from the campaign Archive? This permanently deletes the saved copy.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + id, { method: 'DELETE' })
@@ -7395,6 +7540,7 @@ function switchNovelTab(tab) {
     if (_npb) _npb.textContent = 'Quick View';
     if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
     if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
+    if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
   }
 }
 

@@ -72,6 +72,20 @@
       .nav-logo-text { font-size:14px; letter-spacing:2px; }
       .gallery { column-width:100%; padding:0 14px 30px; }
     }
+    .lib-tabs { display:flex; gap:8px; justify-content:center; margin:0 auto 6px; }
+    .tab-btn { background:transparent; border:2px solid var(--ink); color:var(--gold); font-family:'Cinzel',serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; padding:8px 20px; border-radius:3px; cursor:pointer; }
+    .tab-btn.active { background:var(--gold); color:#160e06; }
+    .lib-search { display:flex; justify-content:center; padding:0 14px 10px; }
+    .lib-search input { width:100%; max-width:440px; background:#0d0804; border:2px solid var(--ink); color:var(--parchment); font-family:'Crimson Text',serif; font-size:15px; padding:10px 14px; border-radius:3px; }
+    .lib-search input::placeholder { color:rgba(240,232,208,0.4); }
+    .stories { max-width:1100px; margin:0 auto; padding:0 14px 30px; }
+    .author-block { margin:0 0 28px; }
+    .author-name { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--gold); border-bottom:1px solid rgba(201,168,76,0.25); padding-bottom:6px; margin-bottom:14px; letter-spacing:1px; }
+    .author-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:16px; }
+    .story-card { display:block; background:#0d0804; border:3px solid var(--ink); border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); cursor:pointer; text-decoration:none; }
+    .story-card .sc-cover { width:100%; aspect-ratio:17/22; object-fit:cover; background:#160e06; display:block; }
+    .story-card .sc-ph { width:100%; aspect-ratio:17/22; background:#160e06; display:flex; align-items:center; justify-content:center; color:rgba(201,168,76,0.45); font-family:'Cinzel',serif; font-size:13px; text-align:center; padding:10px; }
+    .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--parchment); padding:8px 10px 11px; line-height:1.3; }
   </style>
 </head>
 <body>
@@ -91,12 +105,22 @@
     <div class="lib-sub">Worlds and heroes forged by other Game Masters. Take a look at what's possible.</div>
   </header>
 
-  <div class="lib-filter">
+  <div class="lib-tabs">
+    <button class="tab-btn active" id="tab-images" onclick="switchTab('images')">Images</button>
+    <button class="tab-btn" id="tab-stories" onclick="switchTab('stories')">Stories</button>
+  </div>
+
+  <div class="lib-filter" id="images-filter">
     <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
     <button class="filter-btn" data-window="all" id="f-all">All Time</button>
   </div>
 
+  <div class="lib-search" id="stories-search" style="display:none;">
+    <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" />
+  </div>
+
   <div class="gallery" id="gallery"></div>
+  <div class="stories" id="stories" style="display:none;"></div>
   <div id="sentinel"></div>
   <div class="lib-status" id="status"></div>
 
@@ -115,7 +139,10 @@
 
     var gallery = document.getElementById('gallery');
     var statusEl = document.getElementById('status');
-    var state = { cursor: 0, window: 'recent', loading: false, done: false, any: false };
+    var state = { cursor: 0, window: 'recent', loading: false, done: false, any: false, tab: 'images' };
+    var sstate = { cursor: 0, q: '', loading: false, done: false, any: false };
+    var storiesEl = document.getElementById('stories');
+    var authorSections = {};
 
     function setStatus(html) { statusEl.innerHTML = html; }
     function spinner() { setStatus('<span class="spinner"></span>'); }
@@ -183,10 +210,88 @@
     fr.addEventListener('click', function () { pick(fr, 'recent'); });
     fa.addEventListener('click', function () { pick(fa, 'all'); });
 
+    function onSentinel() { if (state.tab === 'stories') loadStories(); else load(); }
+
+    function switchTab(tab) {
+      if (state.tab === tab) return;
+      state.tab = tab;
+      var onStories = tab === 'stories';
+      document.getElementById('tab-images').classList.toggle('active', !onStories);
+      document.getElementById('tab-stories').classList.toggle('active', onStories);
+      document.getElementById('images-filter').style.display = onStories ? 'none' : '';
+      document.getElementById('stories-search').style.display = onStories ? '' : 'none';
+      gallery.style.display = onStories ? 'none' : '';
+      storiesEl.style.display = onStories ? '' : 'none';
+      setStatus('');
+      if (onStories && !sstate.any && !sstate.loading) resetStories();
+    }
+
+    function resetStories() {
+      storiesEl.innerHTML = '';
+      authorSections = {};
+      sstate.cursor = 0; sstate.done = false; sstate.loading = false; sstate.any = false;
+      loadStories();
+    }
+
+    function storyAuthorRow(author) {
+      var key = (author || '').trim().toLowerCase() || '__anon';
+      if (authorSections[key]) return authorSections[key];
+      var block = document.createElement('div'); block.className = 'author-block';
+      var nm = document.createElement('div'); nm.className = 'author-name';
+      nm.textContent = (author && author.trim()) ? author.trim() : 'Anonymous';
+      var row = document.createElement('div'); row.className = 'author-row';
+      block.appendChild(nm); block.appendChild(row);
+      storiesEl.appendChild(block); authorSections[key] = row;
+      return row;
+    }
+
+    function renderStoryCard(item) {
+      var row = storyAuthorRow(item.author);
+      var a = document.createElement('a'); a.className = 'story-card';
+      a.href = item.pdf_url; a.target = '_blank'; a.rel = 'noopener';
+      if (item.cover_url) {
+        var img = document.createElement('img'); img.className = 'sc-cover';
+        img.setAttribute('loading', 'lazy'); img.src = item.cover_url; img.alt = item.title || 'story cover';
+        a.appendChild(img);
+      } else {
+        var ph = document.createElement('div'); ph.className = 'sc-ph'; ph.textContent = item.title || 'Untitled';
+        a.appendChild(ph);
+      }
+      var t = document.createElement('div'); t.className = 'sc-title'; t.textContent = item.title || 'Untitled';
+      a.appendChild(t); row.appendChild(a);
+    }
+
+    function loadStories() {
+      if (sstate.loading || sstate.done) return;
+      sstate.loading = true; spinner();
+      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
+      fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+        sstate.loading = false;
+        var items = (d && d.items) || [];
+        items.forEach(function (it) { sstate.any = true; renderStoryCard(it); });
+        if (d && d.nextCursor) sstate.cursor = d.nextCursor;
+        if (!d || !d.hasMore || !d.nextCursor) {
+          sstate.done = true;
+          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : 'No stories have been published yet &mdash; be the first to share your chronicle.<br><a href="/login" class="btn-nav">START FREE</a>'));
+        } else { setStatus(''); }
+      }).catch(function () {
+        sstate.loading = false;
+        setStatus('Could not load stories right now. Please try again later.');
+      });
+    }
+
+    var sq = document.getElementById('stories-q'); var sqTimer = null;
+    if (sq) {
+      sq.addEventListener('input', function () {
+        clearTimeout(sqTimer);
+        sqTimer = setTimeout(function () { sstate.q = sq.value.trim(); resetStories(); }, 300);
+      });
+    }
+
     // Lazy pagination: load the next page when the sentinel scrolls into view.
     if ('IntersectionObserver' in window) {
       var io = new IntersectionObserver(function (entries) {
-        if (entries[0].isIntersecting) load();
+        if (entries[0].isIntersecting) onSentinel();
       }, { rootMargin: '600px' });
       io.observe(document.getElementById('sentinel'));
     }

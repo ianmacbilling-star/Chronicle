@@ -182,7 +182,9 @@
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()">Next</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">Open in New Tab</button>
+          <button class="btn btn-sm" id="novel-publish-btn" onclick="publishStory()">Publish to Library</button>
         </div>
+        <div id="novel-publish-status" style="display:none;font-size:12px;margin:-2px 0 10px;color:rgba(201,168,76,0.85);"></div>
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
         </div>
@@ -738,6 +740,7 @@
         <div class="settings-section-title">Public Library</div>
         <div class="settings-section-desc">Browse everything users have shared to the anonymous public Library and remove anything inappropriate. Removing only un-publishes it; the owner&#39;s archived copy is left intact.</div>
         <button class="btn btn-primary btn-sm" onclick="openAdminLibrary()">&#128218; Open Public Library</button>
+        <button class="btn btn-primary btn-sm" onclick="openAdminStories()" style="margin-left:8px;">&#128214; Open Stories</button>
       </div>
 
       <!-- ==================== ADMIN TESTING WIDGET ====================
@@ -1442,6 +1445,18 @@
     <div class="muted" style="font-size:13px;margin:6px 0 12px;">Remove anything inappropriate. This only un-publishes it from the public Library &mdash; the owner&#39;s archived copy is untouched.</div>
     <div id="admin-library-grid" style="overflow-y:auto;flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;align-content:start;"></div>
     <div id="admin-library-status" class="muted" style="text-align:center;padding:14px;"></div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="admin-stories-modal" onclick="if(event.target===this)closeAdminStories()">
+  <div class="modal" style="max-width:1040px;width:96%;max-height:90vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div class="modal-title">Published Stories &mdash; Moderation</div>
+      <button class="btn btn-sm" onclick="closeAdminStories()">&#10005;</button>
+    </div>
+    <div class="muted" style="font-size:13px;margin:6px 0 12px;">Remove anything inappropriate. This only un-publishes the Story from the public Library &mdash; the owner&#39;s book is untouched.</div>
+    <div id="admin-stories-grid" style="overflow-y:auto;flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;align-content:start;"></div>
+    <div id="admin-stories-status" class="muted" style="text-align:center;padding:14px;"></div>
   </div>
 </div>
 
