@@ -10850,8 +10850,28 @@ function _visibleViewId() {
 function sectionBack() {
   var t = _sectionBackFrom || 'sessions';
   if (t === 'session-detail') {
-    if (state.currentSession && state.currentSession.id) { selectSession(state.currentSession.id); return; }
-    showCampaignSection('sessions'); return;
+    // selectSession() only hides a partial set of views, which left the
+    // Asset/Archive view stacked above the session. The detail DOM is still
+    // populated (it was only hidden), so just hide every view and reveal it.
+    if (!(state.currentSession && state.currentSession.id)) { showCampaignSection('sessions'); return; }
+    var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings'];
+    ids.forEach(function(v){ var el = document.getElementById('view-' + v); if (el) el.style.display = 'none'; });
+    var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
+    state.currentView = 'session-detail';
+    document.querySelectorAll('.sidebar-item').forEach(function(el){ el.classList.remove('active'); });
+    var _sx = document.getElementById('snav-sessions'); if (_sx) _sx.classList.add('active');
+    var _cs = document.getElementById('campaign-subnav'); if (_cs) _cs.style.display = 'block';
+    if (state.currentCampaign) { var _scn = document.getElementById('sidebar-campaign-name'); if (_scn) _scn.textContent = state.currentCampaign.name; }
+    if (state.currentCampaign && state.currentSession) {
+      setBreadcrumb([
+        {label:'My Campaigns', action:"showView('campaigns')"},
+        {label:state.currentCampaign.name, action:"showCampaignSection('sessions')"},
+        {label:'Sessions', action:"showCampaignSection('sessions')"},
+        {label:(state.currentSession.name || 'Session')}
+      ]);
+    }
+    if (typeof applyRoleVisibility === 'function') applyRoleVisibility();
+    return;
   }
   showCampaignSection(t);
 }
