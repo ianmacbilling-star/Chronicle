@@ -259,7 +259,7 @@
     function renderStoryCard(item) {
       var row = storyAuthorRow(item.author);
       var a = document.createElement('a'); a.className = 'story-card';
-      a.href = item.pdf_url; a.target = '_blank'; a.rel = 'noopener';
+      a.href = '/library/story/' + item.id + '/' + (item.slug || 'story'); a.target = '_blank'; a.rel = 'noopener';
       if (item.cover_url) {
         var img = document.createElement('img'); img.className = 'sc-cover';
         img.setAttribute('loading', 'lazy'); img.src = item.cover_url; img.alt = item.title || 'story cover';

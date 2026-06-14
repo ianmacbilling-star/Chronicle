@@ -188,6 +188,10 @@ app.get('/invite/:token', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'invite.html'));
 });
 
+// Public, server-rendered per-story pages (SEO). Mounted before the SPA
+// catch-all so /library/story/:id/:slug renders real HTML, not the app shell.
+app.use('/', require('./routes/story-pages'));
+
 app.get('*', function(req, res) {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

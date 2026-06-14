@@ -2817,3 +2817,4 @@ router.post('/story/:id/blurb', requireAuth, async function(req, res) {
 });
 
 module.exports = router;
+module.exports.buildNovelHTML = buildNovelHTML;
