@@ -2595,6 +2595,12 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
 
+  // Publishing to the public Library requires a paid plan -- free-trial users
+  // are blocked here (server-side enforcement; the client also pre-checks).
+  if (await userInFreeTrial(db, req.session.userId)) {
+    return res.status(403).json({ error: 'You need to sign up to publish to the library.', code: 'publish_requires_subscription' });
+  }
+
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name, u.pen_name AS owner_pen_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);

@@ -4749,6 +4749,11 @@ function exportNovelPDF() {
 // layout + custom options the preview is showing so the published book matches.
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
+  if (state.user && state.user.inFreeTrial) {
+    var _go = await uiConfirm('You need to sign up to publish to the library. Publishing is available once you are on a paid plan.', { okText: 'See plans', cancelText: 'Not now' });
+    if (_go) showView('account');
+    return;
+  }
   var msg = 'Publish this graphic novel to the public Library? It will be shown publicly under your pen name (set one in Settings first if you want one). Player real names are hidden in the public version.';
   var _res = await uiPublishPrompt(msg, { defaultTitle: (state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '' });
   if (_res === null) return;
