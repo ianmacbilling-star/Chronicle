@@ -1147,6 +1147,7 @@ function showView(view) {
 }
 
 function showCampaignSection(section) {
+  if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
     var _c = state.currentCampaign;
@@ -6712,6 +6713,7 @@ function showView(view) {
 }
 
 function showCampaignSection(section) {
+  if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
     var _c = state.currentCampaign;
@@ -10823,4 +10825,28 @@ function syncPrintVersionDisplay() {
     label = top.options[top.selectedIndex].text || label;
   }
   disp.value = label;
+}
+
+// ============================================================
+// SECTION BACK NAVIGATION
+// Remembers the view you were on before opening Asset Library or
+// Archives, so a Back button returns you exactly where you were
+// (re-opening the same session if that is where you came from).
+// ============================================================
+var _sectionBackFrom = null;
+function _visibleViewId() {
+  var ids = ['session-detail','sessions','characters','assets','novel','members','archives','campaigns','account','settings','orders'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById('view-' + ids[i]);
+    if (el && el.style.display === 'block') return ids[i];
+  }
+  return null;
+}
+function sectionBack() {
+  var t = _sectionBackFrom || 'sessions';
+  if (t === 'session-detail') {
+    if (state.currentSession && state.currentSession.id) { selectSession(state.currentSession.id); return; }
+    showCampaignSection('sessions'); return;
+  }
+  showCampaignSection(t);
 }

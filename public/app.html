@@ -113,11 +113,7 @@
           <div class="page-subtitle">Locations, NPCs and items — referenced in your storyboard panels by name</div>
         </div>
         <div class="flex gap-1">
-          <button class="btn btn-sm" onclick="showCampaignSection('members')">Members</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('sessions')">Sessions</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('characters')">Characters</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
-          <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
+          <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
         </div>
       </div>
       <div class="char-grid" id="asset-grid">
@@ -133,6 +129,9 @@
         <div>
           <div class="page-title">Archives</div>
           <div class="page-subtitle">Saved copies of generated images — kept safe even if a panel is regenerated or a session is deleted</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
         </div>
       </div>
       <div id="archives-filters" class="archives-filters"></div>
@@ -354,6 +353,8 @@
           <span id="session-access-status-chip"
                 class="session-access-chip"
                 style="display:none;"></span>
+          <button class="btn btn-sm" onclick="showCampaignSection('assets')">Assets</button>
+          <button class="btn btn-sm" onclick="showCampaignSection('archives')">Archives</button>
           <!-- Version selector - DM canonical + any versions the viewer may see. -->
           <select id="session-fork-select"
                   class="form-input session-fork-select"
