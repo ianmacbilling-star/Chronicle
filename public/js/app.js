@@ -2280,6 +2280,7 @@ function _saveCast(p) {
   .then(function(data){
     if (data.error) { showAlert('Could not save casting: ' + data.error); loadReview(); return; }
     renderReview(state.reviewData);   // reflect Custom badge + updated chips
+    if (typeof _refreshOpenMomentOptions === 'function') _refreshOpenMomentOptions(p.moment_id);
   })
   .catch(function(e){ showAlert('Could not save casting: ' + e.message); loadReview(); });
 }
@@ -2322,7 +2323,11 @@ function castReset(momentId) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showAlert('Could not reset casting: ' + data.error); return; }
-    loadReview();   // re-fetch so the auto (name-match) cast comes back
+    state.reviewData = null;   // force a fresh fetch so the auto cast returns
+    ensureReviewData(function(){
+      if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);
+      _refreshOpenMomentOptions(momentId);
+    });
   })
   .catch(function(e){ showAlert('Could not reset casting: ' + e.message); });
 }
@@ -6456,16 +6461,7 @@ function renderStoryboard() {
         (_arched ? 'In your Archive - click to remove' : 'Save this image to your Archive') +
         '">' + (_arched ? 'Archived' : 'Archive') + '</button>';
     }
-    var _prom = momProminence(m);
-    var _promLabels = { 1: 'Minor', 2: 'Small', 3: 'Normal', 4: 'Major', 5: 'Hero' };
-    var promCtrl;
-    if (_canLock) {
-      var _po = '';
-      for (var _pv = 1; _pv <= 5; _pv++) { _po += '<option value="' + _pv + '"' + (_pv === _prom ? ' selected' : '') + '>' + _pv + ' - ' + _promLabels[_pv] + '</option>'; }
-      promCtrl = '<label class="moment-prom" title="How prominent this panel is in the comic layout (1 = minor, 5 = hero or splash)">Prominence <select class="moment-prom-select" onchange="setMomentProminence(' + m.id + ', this.value)">' + _po + '</select></label>';
-    } else {
-      promCtrl = '<span class="moment-meta-list moment-prom-static" title="Layout prominence">Prominence: ' + _prom + ' - ' + _promLabels[_prom] + '</span>';
-    }
+    var optsBtn = '<button class="moment-opts-btn" onclick="toggleMomentOptions(' + m.id + ')" title="Cast &amp; prominence for this panel">&#8230;</button>';
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
@@ -6475,8 +6471,9 @@ function renderStoryboard() {
         '<span class="moment-num">Panel ' + (i+1) + '</span>' +
         '<span class="moment-title">' + m.title + '</span>' +
         '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleName(m.style) : 'Unknown') + ', ' + (typeLabel[m.type]||m.type) + ', ' + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
-        promCtrl +
+        optsBtn +
       '</div>' +
+      '<div class="moment-options" id="moment-options-' + m.id + '" style="display:none;"></div>' +
       buildNarrative('narrative-moment-' + i, 'Panel ' + (i + 1) + ' moment', 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true) +
     '</div>';
   }
@@ -10926,4 +10923,85 @@ function setMomentProminence(momentId, value) {
       else { billingToast((d && (d.error || d.message)) || 'Could not update prominence.', 'error'); }
     })
     .catch(function(){ billingToast('Could not update prominence.', 'error'); });
+}
+
+// ============================================================
+// STORYBOARD per-moment OPTIONS panel (cast + prominence).
+// The ... button on each panel expands an inline strip that mirrors the
+// Review casting block, so users do not have to bounce to the Review tab.
+// ============================================================
+function canEditCurrentVersion() {
+  var role = state.currentCampaign && state.currentCampaign.my_role;
+  return (role === 'dm' && !state.currentForkId) ||
+    (role === 'player' && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId)));
+}
+// Lazy-load the review payload (cast per panel + character/asset master lists)
+// once; one fetch covers every panel in the session.
+function ensureReviewData(cb) {
+  if (state.reviewData && state.reviewData.panels) { cb(); return; }
+  if (!state.currentCampaign || !state.currentSession) { cb(); return; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/review' + forkQ())
+    .then(function(r){ return r.json(); })
+    .then(function(data){ state.reviewData = data || {}; cb(); })
+    .catch(function(){ cb(); });
+}
+function toggleMomentOptions(momentId) {
+  var box = document.getElementById('moment-options-' + momentId);
+  if (!box) return;
+  if (box.style.display === 'block') { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="moment-opts-loading">Loading...</div>';
+  ensureReviewData(function(){ renderMomentOptions(momentId); });
+}
+function _refreshOpenMomentOptions(momentId) {
+  var box = document.getElementById('moment-options-' + momentId);
+  if (box && box.style.display === 'block') renderMomentOptions(momentId);
+}
+function renderMomentOptions(momentId) {
+  var box = document.getElementById('moment-options-' + momentId);
+  if (!box) return;
+  var canEdit = canEditCurrentVersion();
+  var ACAT = { location: 'Location', npc: 'NPC', item: 'Item' };
+  var p = _reviewPanel(momentId);
+  var castHtml;
+  if (!p) {
+    castHtml = '<div class="moment-opts-note">Cast will appear once this version has a saved storyboard.</div>';
+  } else {
+    var charChips = (p.characters || []).map(function(c){
+      var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
+      return '<span class="review-chip">' + escapeHtmlReview(c.name) + rm + '</span>';
+    }).join();
+    if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
+    var assetChips = (p.assets || []).map(function(a){
+      var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveAsset(' + momentId + ', ' + a.id + ')">&#215;</button>' : '';
+      return '<span class="review-chip review-chip-asset">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + rm + '</span>';
+    }).join();
+    if (!(p.assets || []).length) assetChips = '<span class="review-none">none</span>';
+    var addChar = '', addAsset = '';
+    if (canEdit) {
+      var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
+      var optsC = ((state.reviewData && state.reviewData.all_characters) || []).filter(function(c){ return !haveC[String(c.id)]; }).map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(c.name) + '</option>'; }).join('');
+      addChar = '<select class="review-add-select" onchange="castAddCharacter(' + momentId + ', this)"><option value="">+ Add character</option>' + optsC + '</select>';
+      var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
+      var optsA = ((state.reviewData && state.reviewData.all_assets) || []).filter(function(a){ return !haveA[String(a.id)]; }).map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + '</option>'; }).join('');
+      addAsset = '<select class="review-add-select" onchange="castAddAsset(' + momentId + ', this)"><option value="">+ Add asset</option>' + optsA + '</select>';
+    }
+    var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-matched</span>';
+    var resetBtn = (canEdit && p.cast_explicit) ? '<button class="review-reset-btn" onclick="castReset(' + momentId + ')" title="Drop back to automatic name-matching">Reset to auto</button>' : '';
+    castHtml = '<div class="moment-opts-casthead">' + badge + resetBtn + '</div>' +
+      '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
+      '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>';
+  }
+  var m = (state.moments || []).find(function(x){ return x.id === momentId; });
+  var prom = m ? momProminence(m) : 3;
+  var plab = { 1: 'Minor', 2: 'Small', 3: 'Normal', 4: 'Major', 5: 'Hero' };
+  var promHtml;
+  if (canEdit) {
+    var po = '';
+    for (var pv = 1; pv <= 5; pv++) { po += '<option value="' + pv + '"' + (pv === prom ? ' selected' : '') + '>' + pv + ' - ' + plab[pv] + '</option>'; }
+    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> <select class="moment-prom-select" onchange="setMomentProminence(' + momentId + ', this.value)">' + po + '</select> <span class="moment-opts-hint">how big this panel gets in the comic layout</span></div>';
+  } else {
+    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> ' + prom + ' - ' + plab[prom] + '</div>';
+  }
+  box.innerHTML = '<div class="moment-opts-inner">' + castHtml + promHtml + '</div>';
 }

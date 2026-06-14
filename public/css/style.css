@@ -1904,3 +1904,14 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .moment-prom{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:rgba(201,168,76,0.7);}
 .moment-prom-select{background:rgba(20,12,4,0.9);color:var(--gold);border:1px solid rgba(201,168,76,0.35);border-radius:5px;font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer;}
 .moment-prom-static{opacity:0.85;}
+
+/* Storyboard per-moment options panel (... button) */
+.moment-opts-btn{background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.35);border-radius:6px;font-size:14px;line-height:1;padding:2px 10px;cursor:pointer;font-weight:700;letter-spacing:1px;}
+.moment-opts-btn:hover{background:rgba(201,168,76,0.18);border-color:rgba(201,168,76,0.6);}
+.moment-options{padding:10px 14px;border-top:1px dashed rgba(201,168,76,0.2);background:rgba(10,8,5,0.45);}
+.moment-opts-inner{display:flex;flex-direction:column;gap:8px;}
+.moment-opts-casthead{display:flex;align-items:center;gap:8px;}
+.moment-options .review-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;}
+.moment-opts-hint{font-size:10px;color:rgba(201,168,76,0.45);font-style:italic;}
+.moment-opts-note{font-size:11px;color:rgba(201,168,76,0.55);font-style:italic;}
+.moment-opts-loading{font-size:11px;color:rgba(201,168,76,0.5);}
