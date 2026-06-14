@@ -136,6 +136,7 @@ async function initPostgres() {
       api_key TEXT,
       fal_key TEXT,
       render_thinking INTEGER DEFAULT 0,
+      pen_name TEXT,
       tier TEXT DEFAULT 'platinum',
       trial_started_at TIMESTAMP,
       stripe_customer_id TEXT,
@@ -303,6 +304,7 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS fal_key TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS render_thinking INTEGER DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS pen_name TEXT',
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS emphasis TEXT',
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS img_w INTEGER',
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS img_h INTEGER',
@@ -374,6 +376,10 @@ async function initPostgres() {
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
   }
+
+  // Pen name: case-insensitive unique across users, ignoring blanks/NULLs.
+  // Public-facing author identity for the Public Library.
+  try { await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_pen_name ON users (lower(pen_name)) WHERE pen_name IS NOT NULL AND pen_name <> ''"); } catch(e) {}
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS moments (

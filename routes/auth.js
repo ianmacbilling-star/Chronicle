@@ -13,15 +13,32 @@ const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./e
 // 'reset to fresh'. (Previously a hardcoded flat 100 cot, which ignored the
 // trial tier config and bypassed the use-it-or-lose-it bucket + session reserve.)
 
+// Pen name: trims, treats blank as null, enforces case-insensitive uniqueness
+// across users (DB has a matching unique index). Returns { ok:true, value }
+// (value is undefined when the field was not sent, null when cleared) or
+// { ok:false, error }.
+async function resolvePenName(db, raw, excludeUserId) {
+  if (raw === undefined) return { ok: true, value: undefined };
+  var pen = (raw == null ? "" : String(raw)).trim();
+  if (!pen) return { ok: true, value: null };
+  if (pen.length > 40) return { ok: false, error: "Pen name must be 40 characters or fewer" };
+  var clash = await db.prepare("SELECT id FROM users WHERE lower(pen_name) = lower(?) AND id <> ?").get(pen, excludeUserId || 0);
+  if (clash) return { ok: false, error: "That pen name is already taken" };
+  return { ok: true, value: pen };
+}
+
 router.post('/register', async function(req, res) {
   try {
-    const { name, email, password, invite_token } = req.body;
+    const { name, email, password, invite_token, pen_name } = req.body;
     if (!name || !email || !password) return res.json({ error: 'All fields required' });
     if (password.length < 8) return res.json({ error: 'Password must be at least 8 characters' });
 
     const db = await getDb();
     const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
     if (existing) return res.json({ error: 'An account with this email already exists' });
+
+    const penRes = await resolvePenName(db, pen_name, 0);
+    if (!penRes.ok) return res.json({ error: penRes.error });
 
     const hash = await bcrypt.hash(password, 10);
     const now = new Date().toISOString();
@@ -30,8 +47,8 @@ router.post('/register', async function(req, res) {
     // reserve, and a 30-day window. They lapse to Copper at expiry (lazy, on next
     // activity -- see lapseTrialIfExpired). trial_started_at stamps the window.
     const result = await db.prepare(
-      'INSERT INTO users (name, email, password, tier, created_at, trial_started_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now);
+      'INSERT INTO users (name, email, password, tier, created_at, trial_started_at, pen_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now, penRes.value || null);
 
     const newUserId = result.lastInsertRowid;
 
@@ -168,7 +185,7 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, stripe_customer_id, stripe_subscription_id, render_thinking FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     await lapseTrialIfExpired(user, db);
@@ -210,6 +227,7 @@ router.get('/me', async function(req, res) {
       hasBilling: !!user.stripe_customer_id,
       hasSubscription: !!user.stripe_subscription_id,
       renderThinking: !!user.render_thinking,
+      penName: user.pen_name || '',
       inFreeTrial: inFreeTrial,
       trialStartedAt: user.trial_started_at || null,
       is_admin: isAdmin,
@@ -271,11 +289,18 @@ router.post('/set-tier', async function(req, res) {
 
 router.put('/profile', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { name, email } = req.body;
+  const { name, email, pen_name } = req.body;
   const db = await getDb();
   const now = new Date().toISOString();
-  await db.prepare('UPDATE users SET name=?, email=?, edited_at=?, edited_by=? WHERE id=?')
-    .run(name, email, now, req.session.userId, req.session.userId);
+  const penRes = await resolvePenName(db, pen_name, req.session.userId);
+  if (!penRes.ok) return res.json({ error: penRes.error });
+  if (penRes.value !== undefined) {
+    await db.prepare('UPDATE users SET name=?, email=?, pen_name=?, edited_at=?, edited_by=? WHERE id=?')
+      .run(name, email, penRes.value, now, req.session.userId, req.session.userId);
+  } else {
+    await db.prepare('UPDATE users SET name=?, email=?, edited_at=?, edited_by=? WHERE id=?')
+      .run(name, email, now, req.session.userId, req.session.userId);
+  }
   req.session.userName = name;
   req.session.userEmail = email;
   res.json({ success: true });

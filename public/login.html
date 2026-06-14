@@ -186,6 +186,11 @@
         <input class="form-input" type="text" id="reg-name" placeholder="e.g. Story Master Dave" autocomplete="name" />
       </div>
       <div class="form-group">
+        <label class="form-label">Pen name <span style="font-weight:400;color:#9b8e80;">(optional)</span></label>
+        <input class="form-input" type="text" id="reg-penname" placeholder="e.g. The Bard of Baldur" autocomplete="off" maxlength="40" />
+        <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">This is the name shown publicly if you publish a story to our Library. It must be unique. You can set or change it later in your profile.</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Email</label>
         <input class="form-input" type="email" id="reg-email" placeholder="you@example.com" autocomplete="email" />
       </div>
@@ -241,11 +246,12 @@ document.getElementById('register-btn').addEventListener('click', async function
   var name = document.getElementById('reg-name').value.trim();
   var email = document.getElementById('reg-email').value.trim();
   var password = document.getElementById('reg-password').value;
+  var pen_name = document.getElementById('reg-penname').value.trim();
   if (!name||!email||!password) { showError('register-error','All fields are required.'); return; }
   if (password.length < 8) { showError('register-error','Password must be at least 8 characters.'); return; }
   this.disabled=true; this.textContent='Creating...';
   try {
-    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password})});
+    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name})});
     var data = await res.json();
     if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
     window.location.href = '/app.html';

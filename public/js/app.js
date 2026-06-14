@@ -683,6 +683,8 @@ function loadAccount() {
   if (_pn) _pn.value = (state.user && state.user.name) || '';
   var _pe = document.getElementById('settings-email');
   if (_pe) _pe.value = (state.user && state.user.email) || '';
+  var _pp = document.getElementById('settings-penname');
+  if (_pp) _pp.value = (state.user && state.user.penName) || '';
   // Pull current tier + plan info, then usage counts.
   fetch('/api/auth/me')
     .then(function(r) { return r.json(); })
@@ -691,6 +693,7 @@ function loadAccount() {
       renderAccountTier(me);
       renderAccountPlans(me);
       var _tk = document.getElementById('setting-thinking'); if (_tk) _tk.checked = !!me.renderThinking;
+      var _ppn = document.getElementById('settings-penname'); if (_ppn) _ppn.value = me.penName || '';
       var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = (me.tier === 'trial');
       var _td = document.getElementById('dev-trial-date'); if (_td && me.trialStartedAt) _td.value = String(me.trialStartedAt).slice(0,10);
       return fetch('/api/auth/usage').then(function(r) { return r.json(); });
@@ -4710,6 +4713,7 @@ function saveImageModel() {
 function saveProfile() {
   var name = document.getElementById('settings-name').value.trim();
   var email = document.getElementById('settings-email').value.trim();
+  var pen_name = document.getElementById('settings-penname').value.trim();
   document.getElementById('profile-error').classList.add('hidden');
   document.getElementById('profile-success').classList.add('hidden');
   if (!name || !email) { showSettingsError('profile-error', 'Name and email are required.'); return; }
@@ -4717,13 +4721,14 @@ function saveProfile() {
   fetch('/api/auth/profile', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, email:email})
+    body: JSON.stringify({name:name, email:email, pen_name:pen_name})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) { showSettingsError('profile-error', data.error); return; }
     state.user.name = name;
     state.user.email = email;
+    state.user.penName = pen_name;
     document.getElementById('user-name').textContent = name;
     document.getElementById('user-menu-email').textContent = email;
     var initials = name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
@@ -7763,6 +7768,7 @@ function saveImageModel() {
 function saveProfile() {
   var name = document.getElementById('settings-name').value.trim();
   var email = document.getElementById('settings-email').value.trim();
+  var pen_name = document.getElementById('settings-penname').value.trim();
   document.getElementById('profile-error').classList.add('hidden');
   document.getElementById('profile-success').classList.add('hidden');
   if (!name || !email) { showSettingsError('profile-error', 'Name and email are required.'); return; }
@@ -7770,13 +7776,14 @@ function saveProfile() {
   fetch('/api/auth/profile', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, email:email})
+    body: JSON.stringify({name:name, email:email, pen_name:pen_name})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.error) { showSettingsError('profile-error', data.error); return; }
     state.user.name = name;
     state.user.email = email;
+    state.user.penName = pen_name;
     document.getElementById('user-name').textContent = name;
     document.getElementById('user-menu-email').textContent = email;
     var initials = name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
