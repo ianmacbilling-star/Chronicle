@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
-const { getEffectiveTier } = require('../middleware/tiers');
+const { getEffectiveTier, accessRank } = require('../middleware/tiers');
 const path = require('path');
 const { uploadFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
@@ -2199,7 +2199,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     };
 
     const co = req.query.co ? parseCustomOpts(req.query.co) : null;
-    if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
+    if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
     let html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
     if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
     if (req.query.format === 'pdf') {
@@ -2282,7 +2282,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   res.set('X-Total-Sessions', String(sessionsWithData.length));
 
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
-  if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
+  if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
   if (req.query.format === 'pdf') {
@@ -2528,7 +2528,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     }
 
     var co = req.query.co ? parseCustomOpts(req.query.co) : null;
-    if (co) co.hideLogo = ((await getEffectiveTier(req.session.userId, campaign.id)) === 'platinum') && !!co.hidelogo;
+    if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
     var fHideLogo = co ? !!co.hideLogo : false;
 
     var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || '', titleColor: req.query.titleColor || '' });

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
-const { getEffectiveTier, tierRank, narrativeStyleAllowed } = require('../middleware/tiers');
+const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 
 // ============================================================
 // NARRATIVE STYLES — the prose analog of art styles.
@@ -419,7 +419,7 @@ router.put('/style/:campaignId/:sessionId', requireAuth, async function(req, res
 
   // Tier gate: the chosen narrative style must be unlocked at the caller's
   // effective tier (max of their own tier and the SM's).
-  const effRank = tierRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
+  const effRank = accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
   if (!narrativeStyleAllowed(effRank, styleId)) {
     return res.status(403).json({ error: "That narrative style isn't available on your current plan. Pick another, or upgrade for more styles.", code: 'STYLE_LOCKED' });
   }

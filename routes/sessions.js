@@ -3,7 +3,7 @@ const router = express.Router({ mergeParams: true });
 const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
-const { checkSessionLimit, getEffectiveTier, tierRank, artStyleAllowed } = require('../middleware/tiers');
+const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require('./tokens');
 
@@ -201,7 +201,7 @@ router.put('/:id/art-style', requireAuth, verifyCampaignMember, async function(r
   // Tier gate: the chosen art style must be unlocked at the caller's effective
   // tier (max of their own tier and the SM's). Empty value clears it.
   if (artStyle) {
-    const effRank = tierRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
+    const effRank = accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId));
     if (!artStyleAllowed(effRank, artStyle)) {
       return res.status(403).json({ error: "That art style isn't available on your current plan. Pick another, or upgrade for more styles.", code: 'STYLE_LOCKED' });
     }

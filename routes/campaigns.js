@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
-const { checkCampaignLimit, getEffectiveTier, tierRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
+const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile } = require('../storage/storage');
 
 // List campaigns the user is a member of (any role — DM or player). This
@@ -121,7 +121,7 @@ router.get('/:campaignId/tier-info', requireAuth, verifyCampaignMember, async fu
     const t = getTier(name);
     res.json({
       effective_tier: name,
-      effective_rank: tierRank(name),
+      effective_rank: accessRank(name),
       watermark: !!t.watermark,
       can_export: !!t.can_export,
       can_print: !!t.can_print,

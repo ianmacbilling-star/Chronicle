@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
-const { getTier, getEffectiveTier, tierRank, artStyleAllowed } = require('../middleware/tiers');
+const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
 const { fal } = require('@fal-ai/client');
@@ -675,7 +675,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
   // Tier gate: block generating with an art style locked at the caller's
   // effective tier (e.g. after an SM downgrade once the style was chosen).
   if (style) {
-    const effRank = tierRank(await getEffectiveTier(req.session.userId, moment.campaign_id));
+    const effRank = accessRank(await getEffectiveTier(req.session.userId, moment.campaign_id));
     if (!artStyleAllowed(effRank, style)) {
       return res.json({ error: 'STYLE_LOCKED', message: "That art style isn't available on your current plan. Pick another, or upgrade for more styles." });
     }
@@ -844,7 +844,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!myRole) return res.status(403).json({ error: 'Access denied' });
   // Tier gate: block generating with a locked art style.
   if (style) {
-    const effRankAll = tierRank(await getEffectiveTier(req.session.userId, campaign_id));
+    const effRankAll = accessRank(await getEffectiveTier(req.session.userId, campaign_id));
     if (!artStyleAllowed(effRankAll, style)) {
       return res.json({ error: 'STYLE_LOCKED', message: "That art style isn't available on your current plan. Pick another, or upgrade for more styles." });
     }

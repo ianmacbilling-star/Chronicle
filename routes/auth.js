@@ -3,16 +3,15 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, TIERS } = require('../middleware/tiers');
-const { creditTokens } = require('./tokens');
+const { ensureMonthlyGrant } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 
-// Welcome grant for new accounts — enough tokens to actually try the
-// product end-to-end (build a character, generate a small storyboard,
-// regen a few panels). Without this, new signups would hit 0-tokens
-// immediately and have no way to experience Chronicle. Tracked in the
-// ledger as event_type='signup_grant' so we can later report on how
-// many grant-tokens have been issued vs. purchased.
-const SIGNUP_TOKEN_GRANT = 100;
+// Welcome grant for new accounts. We grant the NEW user's tier allotment
+// (monthly_utlt + monthly_cot from the tier config -- the Free Trial tier for
+// fresh signups) via ensureMonthlyGrant, so the admin Dashboard tier settings
+// are the single source of truth and a new account starts identical to a
+// 'reset to fresh'. (Previously a hardcoded flat 100 cot, which ignored the
+// trial tier config and bypassed the use-it-or-lose-it bucket + session reserve.)
 
 router.post('/register', async function(req, res) {
   try {
@@ -41,11 +40,7 @@ router.post('/register', async function(req, res) {
     // breaks registration itself (worst case: user is created with 0
     // tokens, admin can credit later via the testing widget).
     try {
-      await creditTokens(newUserId, SIGNUP_TOKEN_GRANT, {
-        bucket: 'cot',
-        event_type: 'signup_grant',
-        source: 'welcome'
-      });
+      await ensureMonthlyGrant(newUserId);
     } catch (grantErr) {
       console.error('Signup grant failed (non-fatal):', grantErr.message);
     }

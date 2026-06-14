@@ -7,6 +7,7 @@ const TIERS = {
   trial: {
     name: 'Free Trial',
     rank: 0,
+    access_rank: 4,    // bottom of hierarchy (lapses to copper) but TOP of creative access -- Platinum-equivalent art/narrative/layout
     price: 0,
     monthly_utlt: 35,        // trial token grant (Platinum-level for now; tunable)
     monthly_cot: 20,
@@ -372,6 +373,18 @@ function tierRank(tierName) {
   return t ? (t.rank || 1) : 1;
 }
 
+// ACCESS rank -- what a tier may CREATE (art / narrative / layout gating).
+// Distinct from tierRank, which is hierarchy/seniority (maxTier, lapse
+// direction, dashboard sort). Equal for the paid ladder, so paid tiers need
+// no extra field; the Free Trial sets access_rank:4 to sit at the BOTTOM of
+// the hierarchy (rank 0) yet the TOP of creative access. Style/layout gates
+// read this; caps/watermark/ordering keep reading rank + tier config.
+function accessRank(tierName) {
+  const t = TIERS[tierName];
+  if (!t) return 1;
+  return (t.access_rank != null) ? t.access_rank : (t.rank || 1);
+}
+
 // The richer of two tier names, by rank.
 function maxTier(a, b) {
   return tierRank(a) >= tierRank(b) ? a : b;
@@ -413,9 +426,9 @@ async function getEffectiveTierFeatures(userId, campaignId) {
 // sit at rank 1 (Copper/floor) so even a Copper member -- e.g. someone who
 // inherited a campaign and runs it as SM at the floor tier -- always has a
 // working art and narrative style. Ranks: 1 Copper, 2 Silver, 3 Gold,
-// 4 Platinum. The 30-day trial grants Platinum-equivalent effective rank
-// (wired in the resolver during the monetization pass), so trial users see
-// everything unlocked. Edited here today; moves to a tier_config table
+// 4 Platinum. The Free Trial tier carries access_rank 4 (see accessRank above),
+// so trial users see every art/narrative/layout option unlocked despite sitting
+// at hierarchy rank 0. Edited here today; moves to a tier_config table
 // (DB, admin-editable) when the Admin Dashboard lands -- callers read
 // through the helpers below, never these maps directly.
 // ============================================================
@@ -450,4 +463,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
