@@ -5810,7 +5810,8 @@ function adminLibCard(it) {
   img.setAttribute('loading', 'lazy');
   img.src = it.image_url;
   img.alt = it.caption || 'shared image';
-  img.style.cssText = 'width:100%;height:auto;display:block;background:#160e06;';
+  img.style.cssText = 'width:100%;height:auto;display:block;background:#160e06;cursor:zoom-in;';
+  img.onclick = function () { openLightbox(it.image_url, it.caption); };
   card.appendChild(img);
   if (it.caption) {
     var cap = document.createElement('div');
