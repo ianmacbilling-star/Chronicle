@@ -2581,4 +2581,150 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
   }
 });
 
+// ============================================================
+// PUBLISH TO PUBLIC LIBRARY (Stories tab)
+// ------------------------------------------------------------
+// A fork OWNER publishes their OWN graphic novel to the public Stories
+// directory. We render the caller's own book with publicMode ON (real names
+// -> pen names, default back cover), snapshot the PDF to R2, capture a cover
+// thumbnail, and upsert one public_stories row per (campaign, publisher).
+// Owner-only BY CONSTRUCTION: we always render the CALLER's own fork (canonical
+// when they are the DM/owner, their player fork otherwise). There is no path to
+// publish someone else's fork -- any client as_user is ignored.
+// ============================================================
+router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
+  const db = await getDb();
+
+  const campaign = await db.prepare(
+    'SELECT c.*, cm.role AS my_role, u.name AS owner_name, u.pen_name AS owner_pen_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
+  ).get(req.params.campaignId, req.session.userId);
+  if (!campaign) return res.status(403).json({ error: 'Access denied' });
+
+  var _allowNovel = campaign.allow_player_novel_access === true || campaign.allow_player_novel_access === 1 ||
+    campaign.allow_player_novel_access === 't' || campaign.allow_player_novel_access === 'true';
+  if (campaign.my_role !== 'dm' && !_allowNovel) {
+    return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
+  }
+
+  // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
+  const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? AND (novel_include IS NULL OR novel_include = true) ORDER BY session_date ASC').all(campaign.id);
+  const characters = await db.prepare(
+    'SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?'
+  ).all(campaign.id);
+
+  function sessionDateKey(s) {
+    if (!s.session_date) return '';
+    if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
+    try { return s.session_date.toISOString().split('T')[0]; } catch (e) { return String(s.session_date); }
+  }
+  sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
+
+  const sessionsWithData = await Promise.all(sessions.map(async function(s) {
+    let forkId = null;
+    if (asUser) {
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      if (pf) forkId = pf.id;
+    }
+    if (!forkId) forkId = await getDmForkId(db, s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
+    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
+    return Object.assign({}, s, {
+      moments: moments,
+      narrative_intro: nfk ? (nfk.narrative_intro || '') : '',
+      narrative_sections: nfk ? (nfk.narrative_sections || null) : null,
+      narrative_outro: nfk ? (nfk.narrative_outro || '') : ''
+    });
+  }));
+
+  if (!sessionsWithData.length) {
+    return res.status(400).json({ error: 'No sessions are included. Enable at least one session under Include in Print before publishing.' });
+  }
+
+  const layoutStyle = req.query.layout || 'Classic';
+  // Match what the reader sees in Preview & Export: only pass co when they have
+  // a custom layout (passing a synthesized co would force the a-la-carte engine
+  // and lose their legacy preset). publicMode + default back cover ride on
+  // pageOpts, so masking works whether or not co is present.
+  var co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  if (co) co.cover = 1; // a published book always shows its cover page
+  var bookTitle = (req.body && req.body.title && String(req.body.title).trim()) ? String(req.body.title).trim() : '';
+  var pageOpts = { publicMode: true, bookTitle: bookTitle };
+
+  var html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+
+  let pdfBuffer;
+  try {
+    pdfBuffer = await renderHtmlToPdf(html, {});
+  } catch (e) {
+    console.error('[publish-story] render failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not render your story PDF. Please try again.' });
+  }
+
+  let pdfUrl;
+  try {
+    var fname = 'story-' + campaign.id + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
+    pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'story');
+  } catch (e) {
+    console.error('[publish-story] upload failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
+  }
+
+  // Cover thumbnail: campaign cover image, else the first available panel image.
+  var coverUrl = campaign.cover_image_url || '';
+  if (!coverUrl) {
+    for (var si = 0; si < sessionsWithData.length && !coverUrl; si++) {
+      var ms = sessionsWithData[si].moments || [];
+      for (var mi = 0; mi < ms.length; mi++) { if (ms[mi] && ms[mi].image) { coverUrl = ms[mi].image; break; } }
+    }
+  }
+
+  var title = bookTitle || campaign.name;
+  var authorName = '';
+  try {
+    var meRow = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(req.session.userId);
+    authorName = (meRow && meRow.pen_name) ? meRow.pen_name : '';
+  } catch (e) {}
+
+  try {
+    var nowIso = new Date().toISOString();
+    await db.prepare(
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, ?) ' +
+      'ON CONFLICT (campaign_id, user_id) DO UPDATE SET author_name = EXCLUDED.author_name, title = EXCLUDED.title, pdf_url = EXCLUDED.pdf_url, cover_url = EXCLUDED.cover_url, public = TRUE, updated_at = EXCLUDED.updated_at'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, nowIso, nowIso);
+  } catch (e) {
+    console.error('[publish-story] db upsert failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not record your published story. Please try again.' });
+  }
+
+  return res.json({ success: true, url: pdfUrl, author: authorName });
+});
+
+// Unpublish the caller's OWN story for a campaign (admin moderation is separate).
+router.post('/unpublish-story/:campaignId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    await db.prepare('DELETE FROM public_stories WHERE campaign_id = ? AND user_id = ?').run(req.params.campaignId, req.session.userId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[unpublish-story] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not unpublish. Please try again.' });
+  }
+});
+
+// Whether the caller already has a published story for this campaign (button state).
+router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var row = await db.prepare('SELECT pdf_url, public, updated_at FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
+    return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null });
+  } catch (e) {
+    return res.json({ published: false });
+  }
+});
+
 module.exports = router;
