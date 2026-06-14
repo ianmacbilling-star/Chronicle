@@ -2451,12 +2451,14 @@ function selectStyleCard(kind, id) {
     .then(function(data) {
       if (data.error) { showAlert('Could not set narrative style: ' + data.error); return; }
       state.narrativeStyle = data.style || id;
+      mpSave('session', { narrative_style: state.narrativeStyle });
       refreshNarrStyleButtons();
       closeStylePicker();
     })
     .catch(function(e) { showAlert('Could not set narrative style: ' + e.message); });
   } else if (kind === 'art') {
     state.artStyle = id;
+    mpSave('session', { art_style: id });
     if (state.currentSession && state.currentCampaign) {
       // Smart endpoint: DM -> session canonical art_style; player -> their own
       // fork's art_style_override (per-version, never touches canon).
@@ -4272,12 +4274,15 @@ function loadNovelPeople() {
 function onNovelVersionChange(val) {
   state.novelAsUser = val || null;
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
-  loadNovelSummary();
-  var prev = document.getElementById('novel-tab-preview');
-  if (prev && prev.style.display !== 'none') {
-    if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
-    loadNovelPreview(novelLayoutStyle);
-  }
+  // Switch to this member's saved look before rendering their book.
+  mpLoadAndApply('novel', function(){
+    loadNovelSummary();
+    var prev = document.getElementById('novel-tab-preview');
+    if (prev && prev.style.display !== 'none') {
+      if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
+      loadNovelPreview(novelLayoutStyle);
+    }
+  });
 }
 
 // Preview mode toggle: 'quick' = fast on-screen HTML preview for layout checks
@@ -8897,7 +8902,9 @@ function onForkChange(forkId) {
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
   updateForkEditability();
-  reloadSessionForFork();
+  // Apply this member's saved layout first; the per-fork reload then overrides
+  // art/narrative with any session-specific value.
+  mpLoadAndApply('session', function(){ reloadSessionForFork(); });
 }
 
 function updateNotesBox(data) {
@@ -9302,6 +9309,7 @@ function applyCustomLayout(){
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
   customOpts[_clCtx]=o;
   customActive[_clCtx]=true;
+  mpSave(_clCtx, { layout_opts: o });   // persist to the active member (own fork only)
   saveCustomLayoutPrefs();
   closeCustomLayout();
   refreshLayoutStyleButtons();
@@ -9316,6 +9324,62 @@ function serializeCustomOpts(o){
 function customOptsQ(ctx, prefix){
   if(!customActive[ctx]) return '';
   return (prefix||'&')+'co='+encodeURIComponent(serializeCustomOpts(customOpts[ctx]));
+}
+
+// ---- Per-member layout/style prefs (server-persisted on campaign_members) ----
+// The 'active member' depends on context: the novel/book view uses novelAsUser
+// (null = my own canonical); the session view uses the OWNER of the viewed fork
+// (null fork = my canonical). We may READ anyone's prefs (so the SM auto-loads a
+// member's look when generating their book) but auto-SAVE ONLY our own (isMe) --
+// re-enforced server-side. Layout is the primary per-member signal; art/narrative
+// are captured too (their per-session-fork values still govern within a session).
+function mpMemberFor(ctx){
+  var meId = (state.user && state.user.id) || null;
+  if (ctx === 'novel'){
+    var asU = state.novelAsUser;
+    return { userId: asU ? asU : meId, isMe: (!asU || String(asU) === String(meId)) };
+  }
+  var fid = state.currentForkId;
+  if (!fid) return { userId: meId, isMe: true };
+  var fork = (state.sessionForks || []).filter(function(f){ return String(f.fork_id) === String(fid); })[0];
+  return { userId: (fork && fork.user_id) ? fork.user_id : meId, isMe: !!(fork && fork.is_mine) };
+}
+function mpApplyPrefs(ctx, p){
+  if (!p) return;
+  if (p.layout_opts && typeof p.layout_opts === 'object'){
+    var keys = 0; for (var k in p.layout_opts){ if (p.layout_opts.hasOwnProperty(k)) keys++; }
+    if (keys){
+      customOpts[ctx] = clMerge(p.layout_opts);   // clMerge fills any newly-added params with defaults
+      customActive[ctx] = true;
+      if (p.layout_opts.arrange){
+        if (ctx === 'novel') novelLayoutStyle = p.layout_opts.arrange;
+        else state.layoutStyle = p.layout_opts.arrange;
+      }
+      saveCustomLayoutPrefs();
+      if (typeof refreshLayoutStyleButtons === 'function') refreshLayoutStyleButtons();
+    }
+  }
+  // Seed art/narrative. In the session view the per-fork loader (reloadSessionForFork)
+  // runs AFTER this and overrides with the session-specific value when present, so the
+  // member value only fills a gap; in the book view there is no competing loader.
+  if (typeof p.art_style === 'string' && p.art_style){ state.artStyle = p.art_style; if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); }
+  if (typeof p.narrative_style === 'string' && p.narrative_style){ state.narrativeStyle = p.narrative_style; if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons(); }
+}
+function mpLoadAndApply(ctx, done){
+  var m = mpMemberFor(ctx);
+  if (!state.currentCampaign || !m.userId){ if (done) done(); return; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/members/' + m.userId + '/prefs')
+    .then(function(r){ return r.json(); })
+    .then(function(p){ if (p && !p.error) mpApplyPrefs(ctx, p); })
+    .catch(function(){})
+    .then(function(){ if (done) done(); });
+}
+function mpSave(ctx, patch){
+  var m = mpMemberFor(ctx);
+  if (!state.currentCampaign || !m.userId || !m.isMe) return;   // own fork only -- never another member's
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/members/' + m.userId + '/prefs', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch)
+  }).catch(function(){});
 }
 
 // ----- Campaign settings modal (SM/DM only) -----

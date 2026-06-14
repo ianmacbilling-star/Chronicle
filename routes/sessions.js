@@ -848,6 +848,7 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
     const mine = String(f.user_id) === String(me);
     return {
       fork_id: f.id,
+      user_id: f.user_id,
       role: f.role,
       status: f.player_access_status,
       is_mine: mine,
