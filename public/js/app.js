@@ -310,13 +310,46 @@ function openBillingPortal() {
 
 // The browser native alert() prints the site URL in its header ("<site> says").
 // Route it through our own in-app toast instead -- same fire-and-forget usage,
-// no URL. confirm() dialogs are converted separately.
+// no URL. confirm() dialogs use the custom uiConfirm() modal below.
 if (typeof window !== "undefined" && !window.__alertPatched) {
   window.__alertPatched = true;
   window.alert = function (m) {
     var msg = String(m == null ? "" : m);
     try { if (typeof billingToast === "function") billingToast(msg, "info"); else if (typeof showAlert === "function") showAlert(msg); } catch (e) {}
   };
+}
+
+// In-app confirm dialog (matches our popups; no browser URL header). Returns a
+// Promise<boolean>. Enter = OK, Escape / click-outside = Cancel.
+function uiConfirm(message, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+    var msg = document.createElement('div');
+    msg.textContent = (message == null) ? '' : String(message);
+    msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:18px;';
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+    var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
+    var ok = document.createElement('button'); ok.className = 'btn btn-primary btn-sm'; ok.textContent = opts.okText || 'OK';
+    row.appendChild(cancel); row.appendChild(ok);
+    box.appendChild(msg); box.appendChild(row); overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function done(val) {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    }
+    function onKey(e) { if (e.key === 'Escape') done(false); else if (e.key === 'Enter') done(true); }
+    cancel.onclick = function () { done(false); };
+    ok.onclick = function () { done(true); };
+    overlay.onclick = function (e) { if (e.target === overlay) done(false); };
+    document.addEventListener('keydown', onKey);
+    setTimeout(function () { try { ok.focus(); } catch (e) {} }, 0);
+  });
 }
 
 function billingToast(text, kind) {
@@ -1287,8 +1320,8 @@ function updateSessionDate(value) {
     .catch(function(){});
 }
 
-function deleteSession(id) {
-  if (!confirm('Delete this session and all its moments? This cannot be undone.')) return;
+async function deleteSession(id) {
+  if (!await uiConfirm('Delete this session and all its moments? This cannot be undone.')) return;
   // Backend requires a confirmation flag in the body; without it the
   // route returns {error:'Confirmation required'} (HTTP 200) and the
   // delete silently no-ops. Send it, and surface any real error.
@@ -3190,8 +3223,8 @@ function saveAsset() {
     });
 }
 
-function deleteAsset(assetId) {
-  if (!confirm('Delete this asset? This cannot be undone.')) return;
+async function deleteAsset(assetId) {
+  if (!await uiConfirm('Delete this asset? This cannot be undone.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + assetId, { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -3768,9 +3801,9 @@ function showCharPromptNudge() {
   body.parentNode.insertBefore(nudge, body);
 }
 
-function deleteChar(id) {
+async function deleteChar(id) {
   var char = state.characters.find(function(c){return c.id===id;});
-  if (!confirm('Delete ' + (char ? char.name : 'this character') + '?')) return;
+  if (!await uiConfirm('Delete ' + (char ? char.name : 'this character') + '?')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + id, {method:'DELETE'})
     .then(function() { loadCharacters(); });
 }
@@ -3901,7 +3934,7 @@ function applyLayoutStyle(layout) {
   refreshLayoutStyleButtons();
 }
 
-function extractMoments() {
+async function extractMoments() {
   if (!ensureGenFree()) return;
   setGenLock('Generate Story');
   var key = getApiKey();
@@ -3926,7 +3959,7 @@ function extractMoments() {
 
   // Warn before overwriting an existing storyboard
   if (state.moments && state.moments.length) {
-    if (!confirm('This session already has a storyboard with ' + state.moments.length +
+    if (!await uiConfirm('This session already has a storyboard with ' + state.moments.length +
         ' panel' + (state.moments.length === 1 ? '' : 's') +
         '. Generating again will replace it — existing panels, narrative, and images will be lost. ' +
         'The character snapshots for this session will also be rebuilt. Continue?')) {
@@ -4189,7 +4222,7 @@ function refreshStoryboardImages() {
     .catch(function(){});
 }
 
-function generateAllImages(fromChain) {
+async function generateAllImages(fromChain) {
   if (!fromChain) { if (!ensureGenFree()) return; }
   setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
@@ -4198,7 +4231,7 @@ function generateAllImages(fromChain) {
   // Warn if images already exist
   var hasImages = state.moments && state.moments.some(function(m) { return m.image; });
   if (hasImages) {
-    if (!confirm('This will replace all existing panel images that are not locked. Are you sure?')) {
+    if (!await uiConfirm('This will replace all existing panel images that are not locked. Are you sure?')) {
       clearGenLock();
       return;
     }
@@ -4631,10 +4664,10 @@ function exportNovelPDF() {
 // --- Publish to Public Library (Stories) -------------------------------------
 // Owner-only on the server; here we just drive the button. We send the SAME
 // layout + custom options the preview is showing so the published book matches.
-function publishStory() {
+async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
   var msg = 'Publish this graphic novel to the public Library? It will be shown publicly under your pen name (set one in Settings first if you want one). Player real names are hidden in the public version.';
-  if (!confirm(msg)) return;
+  if (!await uiConfirm(msg)) return;
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
@@ -4658,9 +4691,9 @@ function publishStory() {
     });
 }
 
-function unpublishStory() {
+async function unpublishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
-  if (!confirm('Remove your story from the public Library?')) return;
+  if (!await uiConfirm('Remove your story from the public Library?')) return;
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
@@ -6063,8 +6096,8 @@ function adminUnpublishStory(id, card, btn) {
       else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
     }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
 }
-function deleteArchive(id) {
-  if (!confirm('Remove this image from the campaign Archive? This permanently deletes the saved copy.')) return;
+async function deleteArchive(id) {
+  if (!await uiConfirm('Remove this image from the campaign Archive? This permanently deletes the saved copy.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + id, { method: 'DELETE' })
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -6848,8 +6881,8 @@ function updateSessionDate(value) {
     .catch(function(){});
 }
 
-function deleteSession(id) {
-  if (!confirm('Delete this session and all its moments? This cannot be undone.')) return;
+async function deleteSession(id) {
+  if (!await uiConfirm('Delete this session and all its moments? This cannot be undone.')) return;
   // Backend requires a confirmation flag in the body; without it the
   // route returns {error:'Confirmation required'} (HTTP 200) and the
   // delete silently no-ops. Send it, and surface any real error.
@@ -7181,7 +7214,7 @@ function applyLayoutStyle(layout) {
   refreshLayoutStyleButtons();
 }
 
-function extractMoments() {
+async function extractMoments() {
   if (!ensureGenFree()) return;
   setGenLock('Generate Story');
   var key = getApiKey();
@@ -7206,7 +7239,7 @@ function extractMoments() {
 
   // Warn before overwriting an existing storyboard
   if (state.moments && state.moments.length) {
-    if (!confirm('This session already has a storyboard with ' + state.moments.length +
+    if (!await uiConfirm('This session already has a storyboard with ' + state.moments.length +
         ' panel' + (state.moments.length === 1 ? '' : 's') +
         '. Generating again will replace it — existing panels, narrative, and images will be lost. ' +
         'The character snapshots for this session will also be rebuilt. Continue?')) {
@@ -7451,7 +7484,7 @@ function regenNarrativeSection(type, panelIndex) {
   });
 }
 
-function generateAllImages(fromChain) {
+async function generateAllImages(fromChain) {
   if (!fromChain) { if (!ensureGenFree()) return; }
   setGenLock('Generate Images');
   var falKey = getFalKey() || 'platform';
@@ -7460,7 +7493,7 @@ function generateAllImages(fromChain) {
   // Warn if images already exist
   var hasImages = state.moments && state.moments.some(function(m) { return m.image; });
   if (hasImages) {
-    if (!confirm('This will replace all existing panel images that are not locked. Are you sure?')) {
+    if (!await uiConfirm('This will replace all existing panel images that are not locked. Are you sure?')) {
       clearGenLock();
       return;
     }
@@ -9394,9 +9427,9 @@ function makeMyVersion() {
     });
 }
 
-function deleteMyVersion() {
+async function deleteMyVersion() {
   if (!state.currentCampaign || !state.currentSession || !state.myForkId) return;
-  if (!confirm('Delete your version of this session? This cannot be undone.')) return;
+  if (!await uiConfirm('Delete your version of this session? This cannot be undone.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + state.myForkId, { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
