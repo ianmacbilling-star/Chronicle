@@ -550,12 +550,17 @@ async function initPostgres() {
       campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
       user_id INTEGER NOT NULL REFERENCES users(id),
       role TEXT NOT NULL,
+      member_prefs TEXT,
       joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (campaign_id, user_id)
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_cm_user ON campaign_members(user_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_cm_campaign ON campaign_members(campaign_id)');
+  // Per-member saved Art Style / Narrative Style / Layout (co) bundle, as a
+  // JSON string. Absent => the member has no saved prefs (UI falls back to
+  // campaign/session defaults). Guarded ALTER so it is safe to re-run.
+  await pool.query('ALTER TABLE campaign_members ADD COLUMN IF NOT EXISTS member_prefs TEXT');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS campaign_invites (

@@ -133,4 +133,82 @@ router.get('/:campaignId/tier-info', requireAuth, verifyCampaignMember, async fu
   }
 });
 
+// ============================================================
+// PER-MEMBER LAYOUT / STYLE PREFERENCES (member_prefs on campaign_members).
+// A member's saved Art Style / Narrative Style / Layout (co) bundle, stored at
+// the member level so it carries across sessions and switches with the active
+// fork. READ: the DM may read ANY member's prefs (so SM book-gen auto-loads a
+// member's look); a player reads only their own. WRITE: a member may write ONLY
+// their OWN prefs -- you can never save onto another member's fork, even as DM.
+// Stored as a JSON string (TEXT), matching the layout_meta precedent; the blob
+// is expected to grow with more layout params, so it is round-tripped whole and
+// merged (a partial PUT never wipes the untouched fields).
+// ============================================================
+function safeParsePrefs(v) {
+  var empty = { art_style: null, narrative_style: null, layout_opts: {} };
+  if (!v) return empty;
+  try {
+    var o = (typeof v === 'string') ? JSON.parse(v) : v;
+    if (!o || typeof o !== 'object') return empty;
+    return {
+      art_style: (typeof o.art_style === 'string') ? o.art_style : null,
+      narrative_style: (typeof o.narrative_style === 'string') ? o.narrative_style : null,
+      layout_opts: (o.layout_opts && typeof o.layout_opts === 'object') ? o.layout_opts : {}
+    };
+  } catch (e) { return empty; }
+}
+
+router.get('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    var targetId = parseInt(req.params.userId, 10);
+    if (!Number.isFinite(targetId)) return res.status(400).json({ error: 'Bad user id' });
+    // READ: DM may read any member; a player only their own.
+    if (req.campaignRole !== 'dm' && targetId !== req.session.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    var db = await getDb();
+    var row = await db.prepare(
+      'SELECT member_prefs FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+    ).get(req.params.campaignId, targetId);
+    if (!row) return res.status(404).json({ error: 'Not a member of this campaign' });
+    res.json(safeParsePrefs(row.member_prefs));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load member prefs' });
+  }
+});
+
+router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    var targetId = parseInt(req.params.userId, 10);
+    if (!Number.isFinite(targetId)) return res.status(400).json({ error: 'Bad user id' });
+    // WRITE: own fork only -- you may save ONLY your own prefs, even as DM.
+    if (targetId !== req.session.userId) {
+      return res.status(403).json({ error: 'You can only save preferences on your own fork' });
+    }
+    var db = await getDb();
+    var cur0 = await db.prepare(
+      'SELECT member_prefs FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+    ).get(req.params.campaignId, targetId);
+    if (!cur0) return res.status(404).json({ error: 'Not a member of this campaign' });
+    var cur = safeParsePrefs(cur0.member_prefs);
+    var body = req.body || {};
+    // Merge: a field provided as a string sets it; explicit null clears it;
+    // omitted leaves the stored value. layout_opts is replaced whole when given.
+    var next = {
+      art_style: (typeof body.art_style === 'string') ? body.art_style : (body.art_style === null ? null : cur.art_style),
+      narrative_style: (typeof body.narrative_style === 'string') ? body.narrative_style : (body.narrative_style === null ? null : cur.narrative_style),
+      layout_opts: (body.layout_opts && typeof body.layout_opts === 'object') ? body.layout_opts : cur.layout_opts
+    };
+    var json = JSON.stringify(next);
+    if (json.length > 20000) return res.status(413).json({ error: 'Preferences too large' });
+    await db.prepare(
+      'UPDATE campaign_members SET member_prefs = ? WHERE campaign_id = ? AND user_id = ?'
+    ).run(json, req.params.campaignId, targetId);
+    res.json({ success: true, prefs: next });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save member prefs' });
+  }
+});
+
+
 module.exports = router;
