@@ -67,7 +67,7 @@ router.get('/stories', async function (req, res) {
     if (limit > 60) limit = 60;
     const beforeId = parseInt(req.query.beforeId, 10) || 0;
     const q = (req.query.q || '').trim();
-    let sql = 'SELECT id, author_name, title, cover_url, pdf_url, slug FROM public_stories WHERE public = TRUE';
+    let sql = 'SELECT id, author_name, title, cover_url, pdf_url, slug, created_at FROM public_stories WHERE public = TRUE';
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
     if (beforeId > 0) { sql += ' AND id < ?'; params.push(beforeId); }
@@ -78,7 +78,7 @@ router.get('/stories', async function (req, res) {
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
-      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '' };
+      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', created_at: r.created_at };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });

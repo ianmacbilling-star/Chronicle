@@ -4761,6 +4761,7 @@ async function publishStory() {
       if (d && d.success) {
         if (st) st.textContent = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
         setStoryPublishedUI(true, d.url);
+        var _pt = document.getElementById('print-book-title'); if (_pt && _res && _res.title) _pt.value = _res.title;
       } else {
         if (st) st.textContent = (d && d.error) ? d.error : 'Could not publish. Please try again.';
         if (btn) btn.textContent = 'Publish to Library';
