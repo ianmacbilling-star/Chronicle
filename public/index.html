@@ -825,18 +825,43 @@
       .comic-row { flex-direction: column; }
       .panel-players { width: 100%; min-height: 400px; }
       .panel-pricing { width: 100%; }
-      .panel-payoff { min-height: 500px; }
+      .panel-payoff { min-height: 460px; }
       .features-strip-body { grid-template-columns: 1fr 1fr; }
       .faq-grid { grid-template-columns: 1fr; }
       .faq-cell { border-right: none; }
       footer { flex-direction: column; gap: 16px; text-align: center; }
       nav .nav-link { display: none; }
+      /* Hero stacks: text first, image below */
+      .hero-split { flex-direction: column; min-height: 0 !important; }
+      .hero-text-panel { padding: 32px 28px !important; }
+      .hero-content { padding: 0 !important; max-width: 100%; }
+      .hero-img-panel { min-height: 42vh; }
     }
 
     @media (max-width: 600px) {
-      .hero-content { padding: 24px; }
       .features-strip-body { grid-template-columns: 1fr; }
-      .hero-title { font-size: 52px; }
+      .feature-cell { border-right: none; }
+      .hero-text-panel { padding: 26px 20px !important; }
+      .hero-title { font-size: 42px; }
+      .hero-sub { font-size: 16px; }
+      .features-strip-title { font-size: 21px; letter-spacing: 2px; }
+      .faq-header-title { font-size: 21px; letter-spacing: 2px; }
+      .features-strip-header, .faq-header { padding: 12px 18px; }
+      .cta-strip { flex-direction: column; text-align: center; padding: 24px 20px; }
+      .cta-strip-text { text-align: center; }
+      .btn-cta { font-size: 22px; padding: 14px 34px; letter-spacing: 2px; }
+      /* Pricing: coin + info on line 1, price + button wrap to line 2 */
+      .tier-row { flex-wrap: wrap; row-gap: 8px; padding: 14px 16px; }
+      .tier-info { flex: 1 1 calc(100% - 68px); }
+      .tier-price-tag { text-align: left; }
+      .btn-tier { margin-left: auto; }
+    }
+
+    @media (max-width: 400px) {
+      .hero-title { font-size: 34px; }
+      .nav-logo-text { font-size: 14px; letter-spacing: 2px; }
+      .btn-nav { font-size: 14px; padding: 8px 16px; }
+      .hero-text-panel { padding: 22px 16px !important; }
     }
   </style>
 </head>
@@ -861,10 +886,10 @@
   <!-- ============================================================
        PANEL 1 — HERO SPLIT (text left, image right)
        ============================================================ -->
-  <div style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);min-height:calc(100vh - 84px);">
+  <div class="hero-split" style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);min-height:calc(100vh - 84px);">
 
     <!-- LEFT: Text panel -->
-    <div class="panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:16px 44px;position:relative;overflow:hidden;">
+    <div class="panel hero-text-panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:16px 44px;position:relative;overflow:hidden;">
       <!-- subtle background texture -->
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(201,168,76,0.02) 0px,rgba(201,168,76,0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
       <div class="hero-content" style="position:relative;z-index:1;">
@@ -890,7 +915,7 @@
     </div>
 
     <!-- RIGHT: DM image panel -->
-    <div class="panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;">
+    <div class="panel hero-img-panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;">
       <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(10,8,6,0.3) 0%,transparent 40%);"></div>
     </div>
 
