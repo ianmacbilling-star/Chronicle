@@ -816,29 +816,31 @@ function myStoryCard(it) {
   var blView = document.createElement('div');
   blView.style.cssText = 'font-size:11px;color:rgba(240,232,208,0.6);line-height:1.4;margin-bottom:6px;white-space:pre-wrap;';
   var renderBlurbView = function(){ blView.textContent = (it.blurb && String(it.blurb).trim()) ? it.blurb : 'No blurb yet.'; };
-  var editBtn = document.createElement('button'); editBtn.className = 'btn btn-sm'; editBtn.textContent = 'Edit blurb';
+  var editBtn = document.createElement('button'); editBtn.className = 'btn btn-sm'; editBtn.textContent = 'Edit';
   editBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
   var showView = function(){ blWrap.innerHTML = ''; renderBlurbView(); blWrap.appendChild(blView); blWrap.appendChild(editBtn); };
   editBtn.onclick = function(){
-    var ta = document.createElement('textarea'); ta.value = it.blurb || ''; ta.maxLength = 600;
+    var ti = document.createElement('input'); ti.type = 'text'; ti.value = it.title || ''; ti.maxLength = 200; ti.placeholder = 'Title';
+    ti.style.cssText = 'width:100%;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:6px;';
+    var ta = document.createElement('textarea'); ta.value = it.blurb || ''; ta.maxLength = 600; ta.placeholder = 'Blurb (optional)';
     ta.style.cssText = 'width:100%;min-height:54px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:6px;';
     var save = document.createElement('button'); save.className = 'btn btn-primary btn-sm'; save.textContent = 'Save'; save.style.cssText = 'font-size:11px;padding:3px 10px;margin-right:6px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = 'Cancel'; cancel.style.cssText = 'font-size:11px;padding:3px 10px;';
-    blWrap.innerHTML = ''; blWrap.appendChild(ta);
+    blWrap.innerHTML = ''; blWrap.appendChild(ti); blWrap.appendChild(ta);
     var brow = document.createElement('div'); brow.appendChild(save); brow.appendChild(cancel); blWrap.appendChild(brow);
-    try { ta.focus(); } catch(e){}
+    try { ti.focus(); } catch(e){}
     cancel.onclick = function(){ showView(); };
     save.onclick = function(){
       save.disabled = true; save.textContent = 'Saving...';
-      fetch('/api/pdf/story/' + it.id + '/blurb', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blurb: ta.value }) })
+      fetch('/api/pdf/story/' + it.id + '/meta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: ti.value, blurb: ta.value }) })
         .then(function(r){ return r.json(); })
-        .then(function(d){ if (d && d.success) { it.blurb = d.blurb || ''; showView(); } else { save.disabled = false; save.textContent = 'Save'; billingToast((d && d.error) || 'Could not save blurb.', 'error'); } })
-        .catch(function(){ save.disabled = false; save.textContent = 'Save'; billingToast('Could not save blurb.', 'error'); });
+        .then(function(d){ if (d && d.success) { it.title = d.title || it.title; it.blurb = d.blurb || ''; meta.textContent = it.title || 'Untitled'; showView(); } else { save.disabled = false; save.textContent = 'Save'; billingToast((d && d.error) || 'Could not save.', 'error'); } })
+        .catch(function(){ save.disabled = false; save.textContent = 'Save'; billingToast('Could not save.', 'error'); });
     };
   };
   showView();
   card.appendChild(blWrap);
-  var btn = document.createElement('button'); btn.className = 'btn btn-sm';
+  var btn = document.createElement('button'); btn.className = 'btn btn-sm lib-remove-btn';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
   var armed = false; var tmr = null;
   btn.onclick = function(){

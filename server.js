@@ -128,7 +128,7 @@ app.use(function(req, res, next) {
 app.get('/robots.txt', function(req, res) {
   res.type('text/plain');
   var body = isProdHost(req)
-    ? 'User-agent: *\r\nDisallow: /api/\r\n'
+    ? 'User-agent: *\r\nDisallow: /api/\r\nSitemap: ' + (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '') + '/sitemap.xml\r\n'
     : 'User-agent: *\r\nDisallow: /\r\n';
   res.send(body);
 });

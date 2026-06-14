@@ -2816,5 +2816,23 @@ router.post('/story/:id/blurb', requireAuth, async function(req, res) {
   }
 });
 
+// Update title and/or blurb on ONE published story by id (owner-only). Blank
+// title keeps the existing one (a story always needs a title).
+router.post('/story/:id/meta', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var title = (req.body && req.body.title != null) ? String(req.body.title).trim() : '';
+    if (title.length > 200) title = title.slice(0, 200);
+    var blurb = (req.body && req.body.blurb != null) ? String(req.body.blurb).trim() : '';
+    if (blurb.length > 600) blurb = blurb.slice(0, 600);
+    await db.prepare("UPDATE public_stories SET title = COALESCE(NULLIF(?, ''), title), blurb = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(title, blurb || null, new Date().toISOString(), req.params.id, req.session.userId);
+    var row = await db.prepare('SELECT title, blurb FROM public_stories WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    return res.json({ success: true, title: row ? row.title : title, blurb: row ? (row.blurb || '') : blurb });
+  } catch (e) {
+    console.error('[story meta] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not save your changes.' });
+  }
+});
+
 module.exports = router;
 module.exports.buildNovelHTML = buildNovelHTML;

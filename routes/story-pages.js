@@ -121,4 +121,75 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
   }
 });
 
+function xmlEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+function baseUrl() { return (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, ''); }
+var SITEMAP_CHUNK = 10000;
+
+// sitemap.xml is a sitemap INDEX. It stays tiny no matter how many stories
+// exist -- it points to a static-pages sitemap and one or more story sitemaps,
+// each capped at SITEMAP_CHUNK urls (well under the 50k-per-file limit). This
+// scales to millions of entries without bloating robots.txt or any one file.
+router.get('/sitemap.xml', async function (req, res) {
+  try {
+    const db = await getDb();
+    var base = baseUrl();
+    var cnt = await db.prepare('SELECT COUNT(*) AS n FROM public_stories WHERE public = TRUE').get();
+    var n = cnt ? Number(cnt.n) : 0;
+    var chunks = Math.max(1, Math.ceil(n / SITEMAP_CHUNK));
+    var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      '<sitemap><loc>' + xmlEsc(base + '/sitemap-pages.xml') + '</loc></sitemap>'];
+    for (var i = 1; i <= chunks; i++) {
+      parts.push('<sitemap><loc>' + xmlEsc(base + '/sitemap-stories.xml?page=' + i) + '</loc></sitemap>');
+    }
+    parts.push('</sitemapindex>');
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.send(parts.join('\n'));
+  } catch (e) {
+    console.error('[sitemap index] failed:', e && e.message ? e.message : e);
+    res.status(500).send('');
+  }
+});
+
+router.get('/sitemap-pages.xml', function (req, res) {
+  var base = baseUrl();
+  var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    '<url><loc>' + xmlEsc(base + '/') + '</loc></url>',
+    '<url><loc>' + xmlEsc(base + '/library') + '</loc></url>',
+    '</urlset>'];
+  res.set('Content-Type', 'application/xml; charset=utf-8');
+  res.send(parts.join('\n'));
+});
+
+router.get('/sitemap-stories.xml', async function (req, res) {
+  try {
+    const db = await getDb();
+    var base = baseUrl();
+    var page = parseInt(req.query.page, 10); if (!page || page < 1) page = 1;
+    var offset = (page - 1) * SITEMAP_CHUNK;
+    var rows = await db.prepare('SELECT id, slug, title, created_at, updated_at FROM public_stories WHERE public = TRUE ORDER BY id ASC LIMIT ? OFFSET ?').all(SITEMAP_CHUNK, offset);
+    var parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
+    (rows || []).forEach(function (r) {
+      var slug = r.slug || slugify(r.title);
+      var loc = base + '/library/story/' + r.id + '/' + slug;
+      var when = r.updated_at || r.created_at;
+      var lm = '';
+      if (when) { try { lm = new Date(when).toISOString(); } catch (e) { lm = ''; } }
+      parts.push('<url><loc>' + xmlEsc(loc) + '</loc>' + (lm ? '<lastmod>' + lm + '</lastmod>' : '') + '</url>');
+    });
+    parts.push('</urlset>');
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.send(parts.join('\n'));
+  } catch (e) {
+    console.error('[sitemap stories] failed:', e && e.message ? e.message : e);
+    res.status(500).send('');
+  }
+});
+
 module.exports = router;
