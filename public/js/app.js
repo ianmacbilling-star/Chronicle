@@ -10994,14 +10994,17 @@ function renderMomentOptions(momentId) {
   }
   var m = (state.moments || []).find(function(x){ return x.id === momentId; });
   var prom = m ? momProminence(m) : 3;
-  var plab = { 1: 'Minor', 2: 'Small', 3: 'Normal', 4: 'Major', 5: 'Hero' };
+  // Map the stored 1-5 value into the 3-way control: Minimize / Default / Maximize.
+  var ptier = (prom >= 4) ? 5 : (prom <= 2 ? 1 : 3);
+  var POPTS = [[1, 'Minimize'], [3, 'Default'], [5, 'Maximize']];
+  var plabel = (ptier === 5) ? 'Maximize' : (ptier === 1 ? 'Minimize' : 'Default');
   var promHtml;
   if (canEdit) {
     var po = '';
-    for (var pv = 1; pv <= 5; pv++) { po += '<option value="' + pv + '"' + (pv === prom ? ' selected' : '') + '>' + pv + ' - ' + plab[pv] + '</option>'; }
-    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> <select class="moment-prom-select" onchange="setMomentProminence(' + momentId + ', this.value)">' + po + '</select> <span class="moment-opts-hint">how big this panel gets in the comic layout</span></div>';
+    for (var pi = 0; pi < POPTS.length; pi++) { po += '<option value="' + POPTS[pi][0] + '"' + (POPTS[pi][0] === ptier ? ' selected' : '') + '>' + POPTS[pi][1] + '</option>'; }
+    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> <select class="moment-prom-select" onchange="setMomentProminence(' + momentId + ', this.value)">' + po + '</select> <span class="moment-opts-hint">how big this panel gets in the comic &amp; magazine layouts</span></div>';
   } else {
-    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> ' + prom + ' - ' + plab[prom] + '</div>';
+    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> ' + plabel + '</div>';
   }
   box.innerHTML = '<div class="moment-opts-inner">' + castHtml + promHtml + '</div>';
 }

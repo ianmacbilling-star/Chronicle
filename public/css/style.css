@@ -1906,7 +1906,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .moment-prom-static{opacity:0.85;}
 
 /* Storyboard per-moment options panel (... button) */
-.moment-opts-btn{background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.35);border-radius:6px;font-size:14px;line-height:1;padding:2px 10px;cursor:pointer;font-weight:700;letter-spacing:1px;}
+.moment-opts-btn{background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.35);border-radius:6px;font-size:14px;line-height:1;padding:2px 10px;cursor:pointer;font-weight:700;letter-spacing:1px;margin-left:auto;}
 .moment-opts-btn:hover{background:rgba(201,168,76,0.18);border-color:rgba(201,168,76,0.6);}
 .moment-options{padding:10px 14px;border-top:1px dashed rgba(201,168,76,0.2);background:rgba(10,8,5,0.45);}
 .moment-opts-inner{display:flex;flex-direction:column;gap:8px;}

@@ -90,6 +90,8 @@ function lmMeta(m) {
   try { var o = JSON.parse(v); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
 }
 function lmProminence(m) { var n = Number(lmMeta(m).prominence); return (n >= 1 && n <= 5) ? Math.round(n) : 3; }
+// Three-tier size from prominence: Minimize (1-2) / Default (3) / Maximize (4-5).
+function lmSizeTier(m) { var p = lmProminence(m); return p >= 4 ? 'max' : (p <= 2 ? 'min' : 'def'); }
 function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom', 'left', 'right'].indexOf(f) >= 0) ? f : 'center'; }
 function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
@@ -951,11 +953,12 @@ function cgImgMedia(m, opts) {
 }
 
 // A floated image with the panel's full narrative flowing around and below it.
-function cgFlowFloat(m, opts, narrHtml, sideLeft) {
+function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
   var asp = Math.max(0.3, momentAspect(m));
-  var imgH = (asp < 0.85) ? 3.5 : 2.7;
+  var imgH = small ? ((asp < 0.85) ? 2.2 : 1.7) : ((asp < 0.85) ? 3.5 : 2.7);
   var imgW = imgH * asp;
-  if (imgW > 3.3) { imgW = 3.3; imgH = imgW / asp; }
+  var capW = small ? 2.1 : 3.3;
+  if (imgW > capW) { imgW = capW; imgH = imgW / asp; }
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
@@ -1102,11 +1105,12 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       cells.push({ slots: 2, html: '<div style="grid-column:span 2;display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
       continue;
     }
-    // Hero (prominence 5): break the grid and run a full-width SPLASH that blows
-    // up toward full page. Shape-aware (mirrors the Magazine feature): wide art
-    // becomes a full-width band; portrait/square art blows up centered, aspect-
-    // preserved (no crop), with its narration in a full-width box below.
-    if (lmProminence(m) >= 5) {
+    // Maximize (prominence 4-5): break the grid and run a full-width SPLASH that
+    // blows up toward full page. Shape-aware (mirrors the Magazine feature): wide
+    // art becomes a full-width band; portrait/square art blows up centered,
+    // aspect-preserved (no crop), with its narration in a full-width box below.
+    var _tier = lmSizeTier(m);
+    if (_tier === 'max') {
       var _fAsp = Math.max(0.3, momentAspect(m));
       var _fMedia = m.image
         ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
@@ -1140,6 +1144,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var imgH = wide ? (CG_W / asp) : Math.min(7.0, colW / asp);
     // For tall/tower, hug the image's true width at this height so a 1:4 tower isn't cropped.
     var boxW = tall ? Math.min(colW, imgH * ta) : null;
+    if (_tier === 'min') { tall = false; wide = false; span = ''; imgH = Math.min(2.6, colW / asp); boxW = null; }
     cells.push({ slots: tall ? 2 : 1, html: comicArt(m, span, imgH, boxW) });
     var nchunks = [];
     if (sec.before) nchunks = nchunks.concat(cgSplitNarr(sec.before));
@@ -1230,14 +1235,12 @@ function renderMagazine(moments, sections, intro, outro, opts) {
     var parts = [];
     if (sec.before) parts.push(coNarr(sec.before, opts, false));
     if (sec.after) parts.push(coNarr(sec.after, opts, false));
-    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''), prom: lmProminence(mm), feature: false });
+    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''), prom: lmProminence(mm), tier: lmSizeTier(mm), feature: false });
   }
-  // Feature = a top-rated (5) beat that stands above its neighbors, so only a few
-  // images blow up even when the AI inflates the prominence scale.
+  // Maximize (prominence 4-5) blows the beat up to a feature. This is now a
+  // deliberate 3-way control (Minimize / Default / Maximize), so no peak gate.
   for (var h = 0; h < panels.length; h++) {
-    var pp = (h > 0) ? panels[h - 1].prom : -1;
-    var pn = (h < panels.length - 1) ? panels[h + 1].prom : -1;
-    panels[h].feature = (panels[h].prom >= 5 && panels[h].prom > pp && panels[h].prom > pn);
+    panels[h].feature = (panels[h].tier === 'max');
   }
 
   var i = 0, sideLeft = true;
@@ -1254,6 +1257,8 @@ function renderMagazine(moments, sections, intro, outro, opts) {
       html += cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       html += cgFlowFeature(p.m, opts, p.narr); i += 1;
+    } else if (p.tier === 'min') {
+      html += cgFlowFloat(p.m, opts, p.narr, sideLeft, true); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
       html += cgFlowWide(p.m, opts, p.narr); i += 1;
     } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5 && normShape(panels[i + 1].m) !== 'tower') {
