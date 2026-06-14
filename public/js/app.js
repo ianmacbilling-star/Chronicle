@@ -352,6 +352,44 @@ function uiConfirm(message, opts) {
   });
 }
 
+function uiPublishPrompt(message, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
+    var msg = document.createElement('div');
+    msg.textContent = (message == null) ? '' : String(message);
+    msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:14px;';
+    var label = document.createElement('div');
+    label.textContent = 'Add a short blurb for your Library page (optional)';
+    label.style.cssText = 'color:rgba(201,168,76,0.9);font-size:12px;margin-bottom:6px;';
+    var ta = document.createElement('textarea');
+    ta.maxLength = 600;
+    ta.placeholder = 'Leave blank to use your opening narrative as the teaser.';
+    ta.style.cssText = 'width:100%;min-height:64px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:16px;';
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+    var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
+    var ok = document.createElement('button'); ok.className = 'btn btn-primary btn-sm'; ok.textContent = opts.okText || 'Publish';
+    row.appendChild(cancel); row.appendChild(ok);
+    box.appendChild(msg); box.appendChild(label); box.appendChild(ta); box.appendChild(row); overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function done(val) {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    }
+    function onKey(e) { if (e.key === 'Escape') done(null); }
+    cancel.onclick = function () { done(null); };
+    ok.onclick = function () { done(String(ta.value || '').trim()); };
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    document.addEventListener('keydown', onKey);
+    setTimeout(function () { try { ta.focus(); } catch (e) {} }, 0);
+  });
+}
+
 function billingToast(text, kind) {
   var bg = (kind === 'error') ? 'rgba(120,40,30,0.96)'
     : (kind === 'info') ? 'rgba(45,45,55,0.96)' : 'rgba(40,90,52,0.96)';
@@ -758,6 +796,33 @@ function myStoryCard(it) {
   meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.85);padding:6px 8px;line-height:1.35;';
   meta.textContent = it.title || 'Untitled';
   card.appendChild(meta);
+  var blWrap = document.createElement('div');
+  blWrap.style.cssText = 'padding:0 8px 8px;';
+  var blView = document.createElement('div');
+  blView.style.cssText = 'font-size:11px;color:rgba(240,232,208,0.6);line-height:1.4;margin-bottom:6px;white-space:pre-wrap;';
+  var renderBlurbView = function(){ blView.textContent = (it.blurb && String(it.blurb).trim()) ? it.blurb : 'No blurb yet.'; };
+  var editBtn = document.createElement('button'); editBtn.className = 'btn btn-sm'; editBtn.textContent = 'Edit blurb';
+  editBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
+  var showView = function(){ blWrap.innerHTML = ''; renderBlurbView(); blWrap.appendChild(blView); blWrap.appendChild(editBtn); };
+  editBtn.onclick = function(){
+    var ta = document.createElement('textarea'); ta.value = it.blurb || ''; ta.maxLength = 600;
+    ta.style.cssText = 'width:100%;min-height:54px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:6px;';
+    var save = document.createElement('button'); save.className = 'btn btn-primary btn-sm'; save.textContent = 'Save'; save.style.cssText = 'font-size:11px;padding:3px 10px;margin-right:6px;';
+    var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = 'Cancel'; cancel.style.cssText = 'font-size:11px;padding:3px 10px;';
+    blWrap.innerHTML = ''; blWrap.appendChild(ta);
+    var brow = document.createElement('div'); brow.appendChild(save); brow.appendChild(cancel); blWrap.appendChild(brow);
+    try { ta.focus(); } catch(e){}
+    cancel.onclick = function(){ showView(); };
+    save.onclick = function(){
+      save.disabled = true; save.textContent = 'Saving...';
+      fetch('/api/pdf/story-blurb/' + it.campaign_id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blurb: ta.value }) })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d && d.success) { it.blurb = d.blurb || ''; showView(); } else { save.disabled = false; save.textContent = 'Save'; billingToast((d && d.error) || 'Could not save blurb.', 'error'); } })
+        .catch(function(){ save.disabled = false; save.textContent = 'Save'; billingToast('Could not save blurb.', 'error'); });
+    };
+  };
+  showView();
+  card.appendChild(blWrap);
   var btn = document.createElement('button'); btn.className = 'btn btn-sm';
   btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
   var armed = false; var tmr = null;
@@ -4667,14 +4732,13 @@ function exportNovelPDF() {
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
   var msg = 'Publish this graphic novel to the public Library? It will be shown publicly under your pen name (set one in Settings first if you want one). Player real names are hidden in the public version.';
-  if (!await uiConfirm(msg)) return;
+  var _blurb = await uiPublishPrompt(msg);
+  if (_blurb === null) return;
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
   if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&');
-  var _blurbEl = document.getElementById('novel-publish-blurb');
-  var _blurb = _blurbEl ? String(_blurbEl.value || '').trim() : '';
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blurb: _blurb }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
@@ -4729,7 +4793,7 @@ function refreshStoryStatus() {
   setStoryPublishedUI(false);
   fetch('/api/pdf/story-status/' + state.currentCampaign.id)
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.published) setStoryPublishedUI(true, d.url); var _bb = document.getElementById('novel-publish-blurb'); if (_bb) _bb.value = (d && d.blurb) ? d.blurb : ''; })
+    .then(function(d){ if (d && d.published) setStoryPublishedUI(true, d.url); })
     .catch(function(){});
 }
 

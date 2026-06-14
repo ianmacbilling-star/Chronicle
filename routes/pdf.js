@@ -2750,8 +2750,8 @@ router.post('/unpublish-story/:campaignId', requireAuth, async function(req, res
 router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var row = await db.prepare('SELECT pdf_url, public, updated_at, blurb FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
-    return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null, blurb: row ? (row.blurb || '') : '' });
+    var row = await db.prepare('SELECT pdf_url, public, updated_at FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
+    return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null });
   } catch (e) {
     return res.json({ published: false });
   }
@@ -2762,12 +2762,28 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
 router.get('/my-stories', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var rows = await db.prepare('SELECT campaign_id, title, author_name, cover_url, pdf_url, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
-    var items = (rows || []).map(function(r){ return { campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, created_at: r.created_at }; });
+    var rows = await db.prepare('SELECT campaign_id, title, author_name, cover_url, pdf_url, blurb, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
+    var items = (rows || []).map(function(r){ return { campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, blurb: r.blurb || '', created_at: r.created_at }; });
     return res.json({ items: items });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not load your stories.' });
+  }
+});
+
+// Update just the blurb on a published story (owner-only via user_id). Lets
+// authors manage their Library blurb from the Account page without a full
+// republish. Capped at 600 to match publish; bumps updated_at for sitemap lastmod.
+router.post('/story-blurb/:campaignId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var blurb = (req.body && req.body.blurb != null) ? String(req.body.blurb).trim() : '';
+    if (blurb.length > 600) blurb = blurb.slice(0, 600);
+    await db.prepare('UPDATE public_stories SET blurb = ?, updated_at = ? WHERE campaign_id = ? AND user_id = ?').run(blurb || null, new Date().toISOString(), req.params.campaignId, req.session.userId);
+    return res.json({ success: true, blurb: blurb });
+  } catch (e) {
+    console.error('[story-blurb] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not save your blurb.' });
   }
 });
 
