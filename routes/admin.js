@@ -215,4 +215,45 @@ router.put('/print-settings', requireAuth, requireAdmin, async function (req, re
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// GET /api/admin/library -- moderation view of ALL public Library images (no
+// time window), newest first, keyset-paginated. Returns the archive id so an
+// admin can pull an item down.
+router.get('/library', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    let limit = parseInt(req.query.limit, 10) || 48;
+    if (limit < 1) limit = 1;
+    if (limit > 60) limit = 60;
+    const beforeId = parseInt(req.query.beforeId, 10) || 0;
+    let sql = 'SELECT id, image_url, title, created_at FROM campaign_archives WHERE public = TRUE';
+    const params = [];
+    if (beforeId > 0) { sql += ' AND id < ?'; params.push(beforeId); }
+    sql += ' ORDER BY id DESC LIMIT ?';
+    params.push(limit + 1);
+    const stmt = db.prepare(sql);
+    const rows = await stmt.all.apply(stmt, params);
+    const hasMore = rows.length > limit;
+    const slice = rows.slice(0, limit);
+    const items = slice.map(function (r) { return { id: r.id, image_url: r.image_url, caption: r.title || '', created_at: r.created_at }; });
+    const nextCursor = slice.length ? slice[slice.length - 1].id : null;
+    res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
+  } catch (e) {
+    console.error('admin library list error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/admin/library/:archiveId/unpublish -- pull an image from the public
+// Library (public=false). The owner's archived copy is untouched.
+router.post('/library/:archiveId/unpublish', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    await db.prepare('UPDATE campaign_archives SET public = FALSE WHERE id = ?').run(req.params.archiveId);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('admin unpublish error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

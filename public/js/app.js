@@ -606,6 +606,8 @@ function checkAuth() {
       refreshTokenBalance();
       var adminBox = document.getElementById('account-admin-testing');
       if (adminBox) adminBox.style.display = data.is_admin ? 'block' : 'none';
+      var libModBox = document.getElementById('admin-library-section');
+      if (libModBox) libModBox.style.display = data.is_admin ? 'block' : 'none';
       var navSettingsItem = document.getElementById('nav-settings-item');
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
 
@@ -5741,11 +5743,96 @@ function renderArchives() {
           (isDM ? '<label class="archive-cover-toggle" title="Use as campaign cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignCover(' + a.id + ')" /> Cover</label>' : '') +
           (isDM ? '<label class="archive-cover-toggle" title="Use as back cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.back_cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignBackCover(' + a.id + ')" /> Back</label>' : '') +
           (isDM ? '<label class="archive-cover-toggle" title="Use as interior title-page image"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.title_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignTitleImage(' + a.id + ')" /> Title</label>' : '') +
+          (canDelete ? '<label class="archive-cover-toggle" title="Show this image in the anonymous public Library"><input type="checkbox" ' + (a.public ? 'checked' : '') + ' onchange="setArchivePublic(' + a.id + ', this.checked)" /> Public</label>' : '') +
           (canDelete ? '<button class="btn btn-sm archive-del" onclick="deleteArchive(' + a.id + ')">&#10005; Remove</button>' : '') +
         '</div>' +
       '</div>' +
     '</div>';
   }).join('');
+}
+
+function setArchivePublic(id, makePublic) {
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + id + '/public', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public: !!makePublic })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d && d.error) { showAlert(d.error); renderArchives(); return; }
+    var a = (state.archives || []).find(function (x) { return x.id === id; });
+    if (a) a.public = !!makePublic;
+  }).catch(function () { showAlert('Could not update the Public setting.'); renderArchives(); });
+}
+
+// ---- Admin: Public Library moderation modal ----
+var adminLib = { cursor: 0, loading: false, done: false, any: false };
+function openAdminLibrary() {
+  var m = document.getElementById('admin-library-modal');
+  if (m) m.classList.remove('hidden');
+  var grid = document.getElementById('admin-library-grid');
+  if (grid) grid.innerHTML = '';
+  adminLib = { cursor: 0, loading: false, done: false, any: false };
+  if (grid && !grid._scrollBound) {
+    grid._scrollBound = true;
+    grid.addEventListener('scroll', function () {
+      if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 400) loadAdminLibrary();
+    });
+  }
+  loadAdminLibrary();
+}
+function closeAdminLibrary() {
+  var m = document.getElementById('admin-library-modal');
+  if (m) m.classList.add('hidden');
+}
+function loadAdminLibrary() {
+  if (adminLib.loading || adminLib.done) return;
+  adminLib.loading = true;
+  var st = document.getElementById('admin-library-status');
+  if (st) st.textContent = 'Loading...';
+  var url = '/api/admin/library?limit=48' + (adminLib.cursor ? '&beforeId=' + adminLib.cursor : '');
+  fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+    adminLib.loading = false;
+    var grid = document.getElementById('admin-library-grid');
+    var items = (d && d.items) || [];
+    items.forEach(function (it) { adminLib.any = true; if (grid) grid.appendChild(adminLibCard(it)); });
+    if (d && d.nextCursor) adminLib.cursor = d.nextCursor;
+    if (!d || !d.hasMore || !d.nextCursor) {
+      adminLib.done = true;
+      if (st) st.textContent = adminLib.any ? 'End of list.' : 'Nothing has been shared to the public Library yet.';
+    } else if (st) { st.textContent = ''; }
+  }).catch(function () {
+    adminLib.loading = false;
+    if (st) st.textContent = 'Could not load. Please try again.';
+  });
+}
+function adminLibCard(it) {
+  var card = document.createElement('div');
+  card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.5);display:flex;flex-direction:column;';
+  var img = document.createElement('img');
+  img.setAttribute('loading', 'lazy');
+  img.src = it.image_url;
+  img.alt = it.caption || 'shared image';
+  img.style.cssText = 'width:100%;height:auto;display:block;background:#160e06;';
+  card.appendChild(img);
+  if (it.caption) {
+    var cap = document.createElement('div');
+    cap.textContent = it.caption;
+    cap.style.cssText = 'font-size:12px;font-style:italic;color:rgba(240,232,208,0.75);padding:6px 8px;';
+    card.appendChild(cap);
+  }
+  var btn = document.createElement('button');
+  btn.className = 'btn btn-sm archive-del';
+  btn.textContent = 'Remove from Library';
+  btn.style.cssText = 'margin:6px 8px 8px;';
+  btn.onclick = function () { adminUnpublish(it.id, card, btn); };
+  card.appendChild(btn);
+  return card;
+}
+function adminUnpublish(id, card, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
+  fetch('/api/admin/library/' + id + '/unpublish', { method: 'POST' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok) { if (card && card.parentNode) card.parentNode.removeChild(card); }
+      else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
+    }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
 }
 
 function deleteArchive(id) {
@@ -6170,6 +6257,8 @@ function checkAuth() {
       refreshTokenBalance();
       var adminBox = document.getElementById('account-admin-testing');
       if (adminBox) adminBox.style.display = data.is_admin ? 'block' : 'none';
+      var libModBox = document.getElementById('admin-library-section');
+      if (libModBox) libModBox.style.display = data.is_admin ? 'block' : 'none';
       var navSettingsItem = document.getElementById('nav-settings-item');
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
 

@@ -728,6 +728,13 @@
         <button class="btn btn-primary btn-sm" onclick="saveImageModel()">Save model</button>
       </div>
 
+      <!-- ADMIN: Public Library moderation -->
+      <div id="admin-library-section" class="settings-section" style="display:none;">
+        <div class="settings-section-title">Public Library</div>
+        <div class="settings-section-desc">Browse everything users have shared to the anonymous public Library and remove anything inappropriate. Removing only un-publishes it; the owner&#39;s archived copy is left intact.</div>
+        <button class="btn btn-primary btn-sm" onclick="openAdminLibrary()">&#128218; Open Public Library</button>
+      </div>
+
       <!-- ==================== ADMIN TESTING WIDGET ====================
            TEMPORARY: lets admins set their own token balance for testing
            edge cases (out-of-tokens, exactly-enough, etc.). Backed by the
@@ -1420,6 +1427,18 @@
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
   .cl-toggle input { accent-color:#c9a84c;width:15px;height:15px; }
 </style>
+
+<div class="modal-overlay hidden" id="admin-library-modal" onclick="if(event.target===this)closeAdminLibrary()">
+  <div class="modal" style="max-width:1040px;width:96%;max-height:90vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div class="modal-title">Public Library &mdash; Moderation</div>
+      <button class="btn btn-sm" onclick="closeAdminLibrary()">&#10005;</button>
+    </div>
+    <div class="muted" style="font-size:13px;margin:6px 0 12px;">Remove anything inappropriate. This only un-publishes it from the public Library &mdash; the owner&#39;s archived copy is untouched.</div>
+    <div id="admin-library-grid" style="overflow-y:auto;flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;align-content:start;"></div>
+    <div id="admin-library-status" class="muted" style="text-align:center;padding:14px;"></div>
+  </div>
+</div>
 
 <script src="/js/app.js"></script>
 </body>
