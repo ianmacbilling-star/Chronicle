@@ -789,7 +789,7 @@ function myStoryCard(it) {
   var card = document.createElement('div');
   card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.4);display:flex;flex-direction:column;';
   var a = document.createElement('a');
-  a.href = it.pdf_url; a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open the PDF in a new tab';
+  a.href = '/library/story/' + it.id + '/' + (it.slug || 'story'); a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open your published story page';
   a.style.cssText = 'display:block;text-decoration:none;';
   if (it.cover_url) {
     var img = document.createElement('img');

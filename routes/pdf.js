@@ -2761,8 +2761,8 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
 router.get('/my-stories', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
-    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, blurb, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
-    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, blurb: r.blurb || '', created_at: r.created_at }; });
+    var rows = await db.prepare('SELECT id, campaign_id, title, author_name, cover_url, pdf_url, slug, blurb, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
+    var items = (rows || []).map(function(r){ return { id: r.id, campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', blurb: r.blurb || '', created_at: r.created_at }; });
     return res.json({ items: items });
   } catch (e) {
     console.error('[my-stories] failed:', e && e.message ? e.message : e);

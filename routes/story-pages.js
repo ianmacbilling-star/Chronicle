@@ -102,6 +102,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
       html = buildNovelHTML(snap.campaign, snap.sessions, snap.characters, snap.layoutStyle || 'Classic', pageOpts, snap.co || null);
       html = html.replace('<head>', '<head>' + seo);
       html = html.replace('<body>', '<body>' + header);
+      html = html.split('<div class="print-bar" id="printBar"><button onclick="window.print()">Save as PDF / Print</button></div>').join('');
     } else {
       // Legacy entry without a snapshot -- still a valid SEO page (cover + meta +
       // download), just no inline reading view until the author republishes.
