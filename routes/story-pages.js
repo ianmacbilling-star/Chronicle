@@ -81,7 +81,10 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     const header =
       '<div style="background:#0a0806;border-bottom:3px solid #c9a84c;">' +
       '<div style="max-width:880px;margin:0 auto;padding:22px 18px;font-family:Georgia,serif;">' +
-        '<a href="/library#stories" style="color:#c9a84c;text-decoration:none;font-size:13px;">&larr; Back to Stories</a>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">' +
+          '<a href="/library#stories" style="color:#c9a84c;text-decoration:none;font-size:13px;">&larr; Back to Stories</a>' +
+          '<a href="/?ref=story" style="color:rgba(201,168,76,0.85);text-decoration:none;font-size:12px;letter-spacing:0.04em;">Made with <strong style="color:#e8d5a3;">Campaignia</strong></a>' +
+        '</div>' +
         '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;margin-top:14px;">' +
           (cover ? '<img src="' + esc(cover) + '" alt="' + esc(title) + ' cover" style="width:160px;aspect-ratio:17/22;object-fit:cover;border-radius:4px;background:#160e06;flex-shrink:0;" />' : '') +
           '<div style="flex:1;min-width:220px;">' +
@@ -89,9 +92,22 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
             (author ? '<div style="color:#c9a84c;font-size:14px;margin-bottom:12px;">Chronicled by ' + esc(author) + '</div>' : '') +
             (blurb ? '<p style="color:#f0e8d0;font-size:15px;line-height:1.5;margin:0 0 10px;">' + esc(blurb) + '</p>' : '') +
             (teaser ? '<p style="color:rgba(240,232,208,0.7);font-size:14px;line-height:1.5;font-style:italic;margin:0 0 14px;">' + esc(teaser) + '</p>' : '') +
-            (row.pdf_url ? '<a href="' + esc(row.pdf_url) + '" target="_blank" rel="noopener" style="display:inline-block;background:#c9a84c;color:#160e06;padding:8px 16px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;">Download PDF</a>' : '') +
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+              '<a href="/?ref=story" style="display:inline-block;background:#c9a84c;color:#160e06;padding:9px 18px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;">Make your own &rarr;</a>' +
+              (row.pdf_url ? '<a href="' + esc(row.pdf_url) + '" target="_blank" rel="noopener" style="display:inline-block;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">Download PDF</a>' : '') +
+            '</div>' +
           '</div>' +
         '</div>' +
+      '</div>' +
+      '</div>';
+
+    const footerCta =
+      '<div style="background:#0a0806;border-top:3px solid #c9a84c;">' +
+      '<div style="max-width:880px;margin:0 auto;padding:34px 18px;text-align:center;font-family:Georgia,serif;">' +
+        '<div style="color:rgba(201,168,76,0.85);font-size:12px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Made with Campaignia</div>' +
+        '<h2 style="font-family:Cinzel,Georgia,serif;color:#e8d5a3;font-size:24px;margin:0 0 10px;">Turn your campaign into a book</h2>' +
+        '<p style="color:#f0e8d0;font-size:15px;line-height:1.5;margin:0 auto 18px;max-width:520px;">Campaignia turns your tabletop RPG sessions into a styled graphic novel you can read online or hold in print.</p>' +
+        '<a href="/?ref=story" style="display:inline-block;background:#c9a84c;color:#160e06;padding:11px 26px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;">Make your own &rarr;</a>' +
       '</div>' +
       '</div>';
 
@@ -103,6 +119,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
       html = html.replace('<head>', '<head>' + seo);
       html = html.replace('<body>', '<body>' + header);
       html = html.split('<div class="print-bar" id="printBar"><button onclick="window.print()">Save as PDF / Print</button></div>').join('');
+      html = html.replace('</body>', footerCta + '</body>');
     } else {
       // Legacy entry without a snapshot -- still a valid SEO page (cover + meta +
       // download), just no inline reading view until the author republishes.
@@ -111,7 +128,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
         '<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text&display=swap" rel="stylesheet" />' +
         '</head><body style="margin:0;background:#0a0806;color:#f0e8d0;min-height:100vh;">' + header +
         '<div style="max-width:880px;margin:0 auto;padding:20px 18px;color:rgba(240,232,208,0.6);font-family:Georgia,serif;">Open the PDF to read this chronicle.</div>' +
-        '</body></html>';
+        footerCta + '</body></html>';
     }
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
