@@ -381,7 +381,7 @@
         <div class="sess-tab" id="stab-characters" onclick="switchSessionTab('characters')">Characters</div>
         <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">Review</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
-        <div class="sess-tab dm-only" id="stab-export" onclick="switchSessionTab('export')">Publish</div>
+        <div class="sess-tab dm-only" id="stab-export" onclick="switchSessionTab('export')">Preview</div>
       </div>
 
       <!-- COMBINED SESSION NOTES + TRANSCRIPT TAB -->
@@ -499,6 +499,10 @@
 
       <!-- PUBLISH TAB -->
       <div id="session-tab-export" style="display:none;">
+        <div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div style="font-size:13px;color:rgba(240,232,208,0.85);">This is a quick preview of <strong>just this session</strong>. To publish your full campaign to the Library or order a printed book&hellip;</div>
+          <button class="btn btn-primary btn-sm" onclick="showCampaignSection('novel'); switchNovelTab('sessions');">All publishing options &rarr;</button>
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <div>
             <div class="form-label" style="margin-bottom:6px;">Choose a layout — preview updates instantly</div>
@@ -1125,7 +1129,7 @@
 
     <!-- Intro -->
     <div style="font-size:13px;color:rgba(201,168,76,0.7);margin-bottom:18px;line-height:1.55;">
-      Tokens are used to generate images &mdash; a storyboard panel, a character reference, or an amended portrait. Bigger packs are a better per-token rate. Purchased tokens never expire.
+      Tokens are used to generate images &mdash; a storyboard panel, a character reference, or an amended portrait. Bigger packs give you more tokens for your money. Purchased tokens never expire.
     </div>
 
     <!-- The pack ladder -->
