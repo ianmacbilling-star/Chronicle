@@ -218,6 +218,27 @@ router.delete('/:archiveId', requireAuth, verifyCampaignMember, async function(r
   }
 });
 
+// PUT /api/campaigns/:campaignId/archives/:archiveId/public
+// Owner (archived_by) or Story Master flips an archived image into / out of
+// the anonymous Public Library. Body: { public: true|false }.
+router.put('/:archiveId/public', requireAuth, verifyCampaignMember, async function(req, res) {
+  try {
+    const db = await getDb();
+    const wantPublic = !!req.body.public;
+    const row = await db.prepare('SELECT id, campaign_id, archived_by FROM campaign_archives WHERE id = ?').get(req.params.archiveId);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (String(row.campaign_id) !== String(req.params.campaignId)) return res.status(403).json({ error: 'Not in this campaign' });
+    const isOwner = String(row.archived_by) === String(req.session.userId);
+    const isDm = req.campaignRole === 'dm';
+    if (!isOwner && !isDm) return res.status(403).json({ error: 'Only the person who archived this (or the Story Master) can change this.' });
+    await db.prepare('UPDATE campaign_archives SET public = ? WHERE id = ?').run(wantPublic, row.id);
+    res.json({ success: true, public: wantPublic });
+  } catch (e) {
+    console.error('archive public-toggle error:', e.message);
+    res.status(500).json({ error: 'Could not update. Please try again.' });
+  }
+});
+
 // POST /api/campaigns/:campaignId/archives/:archiveId/apply
 // Replace a target image (a moment panel, or a session-character snapshot)
 // with the chosen archived image. The archive's protected bytes are copied

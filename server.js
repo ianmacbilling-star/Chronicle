@@ -116,6 +116,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/login', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
+app.get('/library', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'library.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Stripe webhook -- mounted BEFORE the rate limiter and the session-gated

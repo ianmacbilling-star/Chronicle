@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Public Library — Campaignia</title>
+  <meta name="description" content="A gallery of graphic-novel art created by Game Masters with Campaignia." />
+  <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Bangers&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --ink:#0a0806; --gold:#c9a84c; --gold-light:#e8d5a3; --crimson-bright:#c0392b; --parchment:#f0e8d0; }
+    html { scroll-behavior: smooth; }
+    body { font-family:'Crimson Text',Georgia,serif; background:#1a1008; color:var(--parchment); min-height:100vh; }
+
+    nav {
+      position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between;
+      padding:12px 20px; background:rgba(10,8,6,0.96); border-bottom:3px solid var(--ink);
+      box-shadow:0 3px 0 rgba(201,168,76,0.15); gap:12px; flex-wrap:wrap;
+    }
+    .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+    .nav-logo img { height:30px; }
+    .nav-logo-text { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--gold); letter-spacing:3px; }
+    .nav-actions { display:flex; align-items:center; gap:14px; }
+    .nav-link { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; color:rgba(201,168,76,0.6); text-decoration:none; transition:color .2s; }
+    .nav-link:hover { color:var(--gold); }
+    .btn-nav {
+      font-family:'Bangers',cursive; font-size:15px; letter-spacing:2px; padding:7px 18px;
+      background:var(--crimson-bright); color:var(--parchment); border:3px solid var(--ink); border-radius:3px;
+      text-decoration:none; box-shadow:3px 3px 0 var(--ink); transition:all .15s;
+    }
+    .btn-nav:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
+
+    .lib-head { text-align:center; padding:34px 18px 18px; max-width:760px; margin:0 auto; }
+    .lib-title { font-family:'Bangers',cursive; font-size:clamp(34px,6vw,56px); color:var(--gold); letter-spacing:2px; text-shadow:3px 3px 0 var(--ink); line-height:1; }
+    .lib-sub { font-style:italic; color:var(--gold-light); font-size:clamp(15px,2.2vw,18px); margin-top:10px; }
+
+    .lib-filter { display:flex; justify-content:center; gap:10px; padding:6px 14px 22px; }
+    .filter-btn {
+      font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer;
+      background:transparent; color:rgba(201,168,76,0.7); border:2px solid rgba(201,168,76,0.35); border-radius:3px; transition:all .15s;
+    }
+    .filter-btn:hover { border-color:var(--gold); color:var(--gold); }
+    .filter-btn.active { background:var(--gold); color:var(--ink); border-color:var(--gold); }
+
+    .gallery { column-width:250px; column-gap:14px; padding:0 16px 40px; max-width:1300px; margin:0 auto; }
+    .card { break-inside:avoid; margin:0 0 14px; border:3px solid var(--ink); background:#0d0804; border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
+    .card img { display:block; width:100%; height:auto; background:#160e06; }
+    .card figcaption { font-style:italic; font-size:13px; color:rgba(240,232,208,0.75); padding:9px 12px; border-top:2px solid rgba(201,168,76,0.12); }
+
+    .lib-status { text-align:center; padding:30px 18px 60px; color:rgba(240,232,208,0.55); font-style:italic; }
+    .lib-status .btn-nav { display:inline-block; margin-top:14px; }
+    .spinner { display:inline-block; width:26px; height:26px; border:3px solid rgba(201,168,76,0.25); border-top-color:var(--gold); border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #sentinel { height:1px; }
+
+    footer { border-top:3px solid var(--ink); background:var(--ink); padding:22px; text-align:center; color:rgba(201,168,76,0.4); font-size:12px; font-family:'Cinzel',serif; letter-spacing:1px; }
+    footer a { color:rgba(201,168,76,0.6); text-decoration:none; }
+    footer a:hover { color:var(--gold); }
+
+    @media (max-width:600px) {
+      .nav-logo-text { font-size:14px; letter-spacing:2px; }
+      .gallery { column-width:100%; padding:0 14px 30px; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/images/Campaignia_Logo.png" alt="Campaignia" />
+      <span class="nav-logo-text">Campaignia</span>
+    </a>
+    <div class="nav-actions">
+      <a href="/" class="nav-link">HOME</a>
+      <a href="/login" class="btn-nav">CREATE YOUR OWN</a>
+    </div>
+  </nav>
+
+  <header class="lib-head">
+    <div class="lib-title">The Public Library</div>
+    <div class="lib-sub">Worlds and heroes forged by other Game Masters. Take a look at what's possible.</div>
+  </header>
+
+  <div class="lib-filter">
+    <button class="filter-btn active" data-window="recent" id="f-recent">Last 6 Months</button>
+    <button class="filter-btn" data-window="all" id="f-all">All Time</button>
+  </div>
+
+  <div class="gallery" id="gallery"></div>
+  <div id="sentinel"></div>
+  <div class="lib-status" id="status"></div>
+
+  <footer>
+    &copy; <span id="yr"></span> Campaignia &middot; <a href="/">Home</a> &middot; <a href="/login">Sign In</a>
+  </footer>
+
+  <script>
+    document.getElementById('yr').textContent = new Date().getFullYear();
+
+    var gallery = document.getElementById('gallery');
+    var statusEl = document.getElementById('status');
+    var state = { cursor: 0, window: 'recent', loading: false, done: false, any: false };
+
+    function setStatus(html) { statusEl.innerHTML = html; }
+    function spinner() { setStatus('<span class="spinner"></span>'); }
+
+    function renderCard(item) {
+      var fig = document.createElement('figure');
+      fig.className = 'card';
+      var img = document.createElement('img');
+      img.setAttribute('loading', 'lazy');
+      img.setAttribute('alt', item.caption || 'Campaignia creation');
+      img.src = item.image_url;
+      fig.appendChild(img);
+      if (item.caption) {
+        var cap = document.createElement('figcaption');
+        cap.textContent = item.caption;   // textContent = safe against HTML/script in user captions
+        fig.appendChild(cap);
+      }
+      gallery.appendChild(fig);
+    }
+
+    function load() {
+      if (state.loading || state.done) return;
+      state.loading = true;
+      spinner();
+      var url = '/api/public/library?limit=48&window=' + state.window + (state.cursor ? '&beforeId=' + state.cursor : '');
+      fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+        state.loading = false;
+        var items = (d && d.items) || [];
+        items.forEach(function (it) { state.any = true; renderCard(it); });
+        if (d && d.nextCursor) state.cursor = d.nextCursor;
+        if (!d || !d.hasMore || !d.nextCursor) {
+          state.done = true;
+          setStatus(state.any ? '' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>');
+        } else {
+          setStatus('');
+        }
+      }).catch(function () {
+        state.loading = false;
+        setStatus('Could not load the library right now. Please try again later.');
+      });
+    }
+
+    function reset() {
+      gallery.innerHTML = '';
+      state.cursor = 0; state.done = false; state.loading = false; state.any = false;
+      load();
+    }
+
+    var fr = document.getElementById('f-recent'), fa = document.getElementById('f-all');
+    function pick(btn, win) {
+      if (state.window === win) return;
+      state.window = win;
+      fr.classList.toggle('active', win === 'recent');
+      fa.classList.toggle('active', win === 'all');
+      reset();
+    }
+    fr.addEventListener('click', function () { pick(fr, 'recent'); });
+    fa.addEventListener('click', function () { pick(fa, 'all'); });
+
+    // Lazy pagination: load the next page when the sentinel scrolls into view.
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting) load();
+      }, { rootMargin: '600px' });
+      io.observe(document.getElementById('sentinel'));
+    }
+    load();
+  </script>
+</body>
+</html>

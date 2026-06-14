@@ -761,6 +761,7 @@ async function migrateArchives(pool) {
       title TEXT,
       image_url TEXT NOT NULL,
       image_prompt TEXT,
+      public BOOLEAN DEFAULT FALSE,
       archived_by INTEGER NOT NULL REFERENCES users(id),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -777,6 +778,9 @@ async function migrateArchives(pool) {
   // lives in image_url). Lets the chest reflect whether THIS image is saved.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS source_url TEXT');
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS art_style TEXT');
+  // public = owner opted this archived image into the anonymous Public Library.
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS public BOOLEAN DEFAULT FALSE');
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_archives_public ON campaign_archives(created_at DESC, id DESC) WHERE public = TRUE");
 }
 
 // migrateCasting: idempotent. Explicit per-panel casting (Pass 2). A panel's
