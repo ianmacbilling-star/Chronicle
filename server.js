@@ -110,6 +110,29 @@ const aiLimiter = rateLimit({
   message: { error: "You're generating very quickly. Please wait a moment before generating again." }
 });
 
+// ------------------------------------------------------------
+// SEO / crawler control. Only the production public domain may be
+// indexed. Every other host (staging chroniclemygame.com, *.railway.app,
+// preview URLs) is kept out of search engines entirely via a noindex
+// header + a disallow-all robots.txt. Production hosts mirror the
+// landing-page staging-env allowlist.
+// ------------------------------------------------------------
+var PROD_HOSTS = ['campaignia.com', 'www.campaignia.com'];
+function isProdHost(req) { return PROD_HOSTS.indexOf(String(req.hostname || '').toLowerCase()) !== -1; }
+
+app.use(function(req, res, next) {
+  if (!isProdHost(req)) res.set('X-Robots-Tag', 'noindex, nofollow');
+  next();
+});
+
+app.get('/robots.txt', function(req, res) {
+  res.type('text/plain');
+  var body = isProdHost(req)
+    ? 'User-agent: *\r\nDisallow: /api/\r\n'
+    : 'User-agent: *\r\nDisallow: /\r\n';
+  res.send(body);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicit page routes
