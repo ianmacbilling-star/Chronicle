@@ -308,6 +308,17 @@ function openBillingPortal() {
   });
 }
 
+// The browser native alert() prints the site URL in its header ("<site> says").
+// Route it through our own in-app toast instead -- same fire-and-forget usage,
+// no URL. confirm() dialogs are converted separately.
+if (typeof window !== "undefined" && !window.__alertPatched) {
+  window.__alertPatched = true;
+  window.alert = function (m) {
+    var msg = String(m == null ? "" : m);
+    try { if (typeof billingToast === "function") billingToast(msg, "info"); else if (typeof showAlert === "function") showAlert(msg); } catch (e) {}
+  };
+}
+
 function billingToast(text, kind) {
   var bg = (kind === 'error') ? 'rgba(120,40,30,0.96)'
     : (kind === 'info') ? 'rgba(45,45,55,0.96)' : 'rgba(40,90,52,0.96)';
@@ -677,7 +688,73 @@ function suspendAccount() {
     });
 }
 
+function loadMyStories() {
+  var list = document.getElementById('my-stories-list');
+  var empty = document.getElementById('my-stories-empty');
+  if (!list) return;
+  list.innerHTML = '';
+  if (empty) empty.style.display = 'none';
+  fetch('/api/pdf/my-stories')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var items = (d && d.items) || [];
+      if (!items.length) { if (empty) empty.style.display = 'block'; return; }
+      items.forEach(function(it){ list.appendChild(myStoryCard(it)); });
+    })
+    .catch(function(){ if (empty) { empty.style.display = 'block'; empty.textContent = 'Could not load your published stories right now.'; } });
+}
+
+function myStoryCard(it) {
+  var card = document.createElement('div');
+  card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.4);display:flex;flex-direction:column;';
+  var a = document.createElement('a');
+  a.href = it.pdf_url; a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open the PDF in a new tab';
+  a.style.cssText = 'display:block;text-decoration:none;';
+  if (it.cover_url) {
+    var img = document.createElement('img');
+    img.setAttribute('loading', 'lazy'); img.src = it.cover_url; img.alt = it.title || 'story';
+    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:#160e06;';
+    a.appendChild(img);
+  } else {
+    var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(201,168,76,0.45);font-size:12px;text-align:center;padding:8px;';
+    a.appendChild(ph);
+  }
+  card.appendChild(a);
+  var meta = document.createElement('div');
+  meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.85);padding:6px 8px;line-height:1.35;';
+  meta.textContent = it.title || 'Untitled';
+  card.appendChild(meta);
+  var btn = document.createElement('button'); btn.className = 'btn btn-sm';
+  btn.textContent = 'Remove from Library'; btn.style.cssText = 'margin:0 8px 8px;';
+  var armed = false; var tmr = null;
+  btn.onclick = function(){
+    if (!armed) { armed = true; btn.textContent = 'Click again to remove'; tmr = setTimeout(function(){ armed = false; btn.textContent = 'Remove from Library'; }, 3000); return; }
+    if (tmr) clearTimeout(tmr);
+    removeMyStory(it.campaign_id, card, btn);
+  };
+  card.appendChild(btn);
+  return card;
+}
+
+function removeMyStory(campaignId, card, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
+  fetch('/api/pdf/unpublish-story/' + campaignId, { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.success) {
+        if (card && card.parentNode) card.parentNode.removeChild(card);
+        var list = document.getElementById('my-stories-list'); var empty = document.getElementById('my-stories-empty');
+        if (list && !list.children.length && empty) empty.style.display = 'block';
+      } else {
+        if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; }
+        billingToast((d && d.error) || 'Could not remove.', 'error');
+      }
+    })
+    .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } billingToast('Could not remove.', 'error'); });
+}
 function loadAccount() {
+  if (typeof loadMyStories === 'function') loadMyStories();
   // Profile fields moved here from Settings — populate name/email from state.
   var _pn = document.getElementById('settings-name');
   if (_pn) _pn.value = (state.user && state.user.name) || '';

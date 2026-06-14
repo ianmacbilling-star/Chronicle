@@ -4,7 +4,7 @@ const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier, accessRank } = require('../middleware/tiers');
 const path = require('path');
-const { uploadFile } = require('../storage/storage');
+const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
@@ -2708,7 +2708,9 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
 router.post('/unpublish-story/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
   try {
+    var row = await db.prepare('SELECT pdf_url FROM public_stories WHERE campaign_id = ? AND user_id = ?').get(req.params.campaignId, req.session.userId);
     await db.prepare('DELETE FROM public_stories WHERE campaign_id = ? AND user_id = ?').run(req.params.campaignId, req.session.userId);
+    if (row && row.pdf_url) { try { await deleteFile(row.pdf_url); } catch (e2) { console.error('[unpublish-story] R2 cleanup failed (non-fatal):', e2 && e2.message ? e2.message : e2); } }
     return res.json({ success: true });
   } catch (e) {
     console.error('[unpublish-story] failed:', e && e.message ? e.message : e);
@@ -2724,6 +2726,20 @@ router.get('/story-status/:campaignId', requireAuth, async function(req, res) {
     return res.json({ published: !!(row && row.public), url: row ? row.pdf_url : null, updatedAt: row ? row.updated_at : null });
   } catch (e) {
     return res.json({ published: false });
+  }
+});
+
+// The caller's own published Stories, across all campaigns -- the durable place
+// to manage them even after they lose access to a campaign.
+router.get('/my-stories', requireAuth, async function(req, res) {
+  const db = await getDb();
+  try {
+    var rows = await db.prepare('SELECT campaign_id, title, author_name, cover_url, pdf_url, created_at, updated_at FROM public_stories WHERE user_id = ? AND public = TRUE ORDER BY COALESCE(updated_at, created_at) DESC').all(req.session.userId);
+    var items = (rows || []).map(function(r){ return { campaign_id: r.campaign_id, title: r.title || 'Untitled', author: r.author_name || '', cover_url: r.cover_url || '', pdf_url: r.pdf_url, created_at: r.created_at }; });
+    return res.json({ items: items });
+  } catch (e) {
+    console.error('[my-stories] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Could not load your stories.' });
   }
 });
 
