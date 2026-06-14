@@ -1102,6 +1102,35 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       cells.push({ slots: 2, html: '<div style="grid-column:span 2;display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
       continue;
     }
+    // Hero (prominence 5): break the grid and run a full-width SPLASH that blows
+    // up toward full page. Shape-aware (mirrors the Magazine feature): wide art
+    // becomes a full-width band; portrait/square art blows up centered, aspect-
+    // preserved (no crop), with its narration in a full-width box below.
+    if (lmProminence(m) >= 5) {
+      var _fAsp = Math.max(0.3, momentAspect(m));
+      var _fMedia = m.image
+        ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+        : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+      var _fImgBox;
+      if (_fAsp >= 1.5) {
+        var _fH = CG_W / _fAsp;
+        _fImgBox = '<div style="' + cgBorder(opts) + 'width:100%;height:' + _fH.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + _fMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      } else {
+        var _fH2 = Math.min(8.4, CG_W / _fAsp);
+        var _fW2 = Math.min(CG_W, _fH2 * _fAsp);
+        var _fCtr = (_fW2 < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
+        _fImgBox = '<div style="' + cgBorder(opts) + 'width:' + _fW2.toFixed(2) + 'in;height:' + _fH2.toFixed(2) + 'in;' + _fCtr + 'position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + _fMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      }
+      cells.push({ slots: 2, html: '<div style="grid-column:span 2;break-inside:avoid;page-break-inside:avoid;">' + _fImgBox + '</div>' });
+      var _fParts = [];
+      if (sec.before) _fParts = _fParts.concat(cgSplitNarr(sec.before));
+      if (sec.after) _fParts = _fParts.concat(cgSplitNarr(sec.after));
+      var _fTxt = _fParts.join(' ');
+      if (_fTxt) {
+        cells.push({ slots: 2, html: '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(_fTxt, false) + '</div>' });
+      }
+      continue;
+    }
     var ta = momentAspect(m);
     var asp = Math.max(0.3, ta);
     var tall = isPortrait(m);
