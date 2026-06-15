@@ -20,7 +20,7 @@ const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = requir
 // these same ids — keep the ids in sync.
 // ============================================================
 const NARRATIVE_STYLES = (function () {
-  const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
+  const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
   return {
     classic: {
       name: 'Classic',
@@ -211,7 +211,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '- Read like prose for a graphic novel — NOT a transcription of what players said\n' +
     '- Roughly 2-4 sentences per block — punchy, not bloated\n' +
     '- Reference characters by name when relevant\n\n' +
-    'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise. Tell only the user\'s own story, in your own original words.\n\n' +
+    'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise, and never invent a new name lifted from a real franchise (do not borrow a same-named character\'s known allies, sidekicks, or places). Tell only the user\'s own story, in your own original words.\n\n' +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
     styleBundle.voice + '\n\n' +
     'CRITICAL - continuity and chronology:\n' +
@@ -222,6 +222,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '- If the transcript covers events the panels skip, those belong in the BRIDGE blocks\n\n' +
     'Return ONLY valid JSON, no markdown. The sections array must have EXACTLY ' + moments.length +
     ' entries (one per panel), in order, with panel_index 0 through ' + (moments.length - 1) + ':\n' +
+    'IMPORTANT: panel_index is ZERO-BASED \u2014 PANEL 1 above is panel_index 0, PANEL 2 is panel_index 1, and so on. List the sections in panel order, PANEL 1 first.\n' +
     '{\n' +
     '  "intro": "Opening paragraph that sets the scene BEFORE panel 1 (2-3 sentences)",\n' +
     '  "intro_summary": "A terse outline of the opening — what the reader needs to know. Maximum 25 words; aim shorter.",\n' +
@@ -260,6 +261,22 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
+
+    // Defensive alignment: the prompt labels panels 1-based but asks for a
+    // 0-based panel_index, an easy off-by-one that shifts every section in
+    // the UI. Reordering is forbidden, so trust array ORDER over the model's
+    // index: sort by the reported panel_index, clamp to the moment count,
+    // then re-key to 0..N-1 by position so sections always line up.
+    try {
+      var _secs = Array.isArray(parsed.sections) ? parsed.sections.slice() : [];
+      _secs.sort(function (a, b) {
+        var ai = (a && typeof a.panel_index === 'number') ? a.panel_index : 0;
+        var bi = (b && typeof b.panel_index === 'number') ? b.panel_index : 0;
+        return ai - bi;
+      });
+      if (_secs.length > moments.length) _secs = _secs.slice(0, moments.length);
+      parsed.sections = _secs.map(function (sec, i) { sec = sec || {}; sec.panel_index = i; return sec; });
+    } catch (e) { /* leave parsed.sections as-is on any unexpected shape */ }
 
     // Save to database — sections JSON already carries each panel's
     // after_summary; intro/outro summaries get their own columns.
