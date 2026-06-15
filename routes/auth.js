@@ -219,9 +219,13 @@ router.get('/me', async function(req, res) {
     // Free trial = within the 30-day window from trial_started_at and not yet
     // converted to a paid plan. Drives the on-screen trial watermark.
     const _trialMs = 30 * 24 * 60 * 60 * 1000;
-    const inFreeTrial = !!user.trial_started_at &&
-      (Date.now() - new Date(user.trial_started_at).getTime()) < _trialMs &&
-      (user.subscription_status || 'trialing') === 'trialing';
+    // On the free trial = still on the 'trial' TIER and inside the 30-day window.
+    // Keyed off tier (the authoritative signal), NOT subscription_status: a paid
+    // subscriber whose Stripe subscription is in its own 'trialing' period would
+    // otherwise be misread as on our free trial.
+    const inFreeTrial = (user.tier === 'trial') &&
+      !!user.trial_started_at &&
+      (Date.now() - new Date(user.trial_started_at).getTime()) < _trialMs;
 
     // Calculate trial days remaining
     let trialDaysLeft = null;
@@ -301,9 +305,14 @@ router.post('/set-tier', async function(req, res) {
     // straight back to copper on the next request (use the Free Trial date control
     // to backdate the start when testing expiry/lapse).
     if (tier === 'trial') {
-      await db.prepare('UPDATE users SET tier = ?, trial_started_at = ? WHERE id = ?').run(tier, new Date().toISOString(), req.session.userId);
+      await db.prepare("UPDATE users SET tier = ?, subscription_status = 'trialing', trial_started_at = ? WHERE id = ?").run(tier, new Date().toISOString(), req.session.userId);
     } else {
-      await db.prepare('UPDATE users SET tier = ? WHERE id = ?').run(tier, req.session.userId);
+      // Switching to any non-trial tier means the account is no longer on the free
+      // trial, so mark it active. inFreeTrial / userInFreeTrial key off
+      // subscription_status, so without this the tier override alone leaves the
+      // account flagged as trialing (and blocked from publishing). Matches the
+      // trial-testing OFF path.
+      await db.prepare("UPDATE users SET tier = ?, subscription_status = 'active' WHERE id = ?").run(tier, req.session.userId);
     }
     res.json({ success: true, tier: tier });
   } catch (e) {

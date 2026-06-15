@@ -2174,10 +2174,12 @@ ${(fCover && !paginated && (campaign.back_cover_image_url || fPublic)) ? `<!-- B
 var TRIAL_WM_URI = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22320%22%20height%3D%22200%22%3E%3Ctext%20x%3D%22160%22%20y%3D%22108%22%20fill%3D%22%233a2410%22%20fill-opacity%3D%220.18%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.12%22%20stroke-width%3D%220.5%22%20font-family%3D%22Georgia%2Cserif%22%20font-size%3D%2222%22%20font-weight%3D%22700%22%20letter-spacing%3D%223%22%20text-anchor%3D%22middle%22%20transform%3D%22rotate%28-30%20160%20108%29%22%3ECAMPAIGNIA%20TRIAL%3C%2Ftext%3E%3C%2Fsvg%3E';
 async function userInFreeTrial(db, userId) {
   try {
-    var u = await db.prepare('SELECT subscription_status, trial_started_at FROM users WHERE id = ?').get(userId);
-    if (!u || !u.trial_started_at) return false;
+    var u = await db.prepare('SELECT tier, trial_started_at FROM users WHERE id = ?').get(userId);
+    // Free trial = still on the 'trial' tier and inside the 30-day window. Keyed
+    // off tier so a paid subscriber in a Stripe-side trial is never blocked here.
+    if (!u || u.tier !== 'trial' || !u.trial_started_at) return false;
     var within = (Date.now() - new Date(u.trial_started_at).getTime()) < 30 * 24 * 60 * 60 * 1000;
-    return within && ((u.subscription_status || 'trialing') === 'trialing');
+    return within;
   } catch (e) { return false; }
 }
 function injectTrialWatermark(html) {
