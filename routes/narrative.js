@@ -174,9 +174,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     const aDirLine = aDir
       ? '\n    DIRECTOR STEERING for this bridge (you MUST follow this): ' + aDir
       : '';
-    return 'PANEL ' + (i + 1) + ' - "' + m.title + '"\n' +
-      '  MOMENT block ("before"): narrate the events THIS panel\'s image depicts - what is happening in the picture and how it came to happen - picking up exactly where ' + prevRef + ' left off. Lead the reader INTO the image so the depicted action is told in prose, never skipped.' + mDirLine + '\n' +
-      '  BRIDGE block ("after"): resume where the MOMENT block ended and carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover travel, deliberation, and side events the panels skip. Do NOT re-tell this panel\'s depicted action, and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine;
+    return 'PANEL ' + (i + 1) + ' - "' + m.title + '" -- THIS panel\'s image depicts: ' + m.description + '\n' +
+      '  MOMENT block ("before"): its PRIMARY job is to narrate THIS panel\'s image -- the scene just described above -- telling what is happening in THIS picture and how it comes about. Connect smoothly from ' + prevRef + ', but do NOT spend this block continuing the previous panel\'s action; the bulk of it must describe and lead INTO this specific image, and THIS panel\'s depicted action MUST be told here in this block, not deferred to the bridge.' + mDirLine + '\n' +
+      '  BRIDGE block ("after"): ONLY after this panel\'s depicted action has been told in the MOMENT block above, carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover only travel, deliberation, and side events between this panel and the next. Do NOT narrate this panel\'s own depicted action here (that belongs in the MOMENT block above), and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine;
   }).join('\n\n');
 
   const prompt =
