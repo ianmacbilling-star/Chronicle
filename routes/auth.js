@@ -6,6 +6,23 @@ const { getTier, isTrialExpired, lapseTrialIfExpired, TIERS } = require('../midd
 const { ensureMonthlyGrant } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 
+// Current Terms of Service / EULA version. Bump when the terms change so we
+// can require re-acceptance later. Stored per user at sign-up.
+const TOS_VERSION = '1.0';
+
+// Whole years between a YYYY-MM-DD date string and today. Returns null if
+// the input is not a valid date.
+function ageFromDob(dob) {
+  if (!dob) return null;
+  var d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  var now = new Date();
+  var age = now.getFullYear() - d.getFullYear();
+  var m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age;
+}
+
 // Welcome grant for new accounts. We grant the NEW user's tier allotment
 // (monthly_utlt + monthly_cot from the tier config -- the Free Trial tier for
 // fresh signups) via ensureMonthlyGrant, so the admin Dashboard tier settings
@@ -29,9 +46,17 @@ async function resolvePenName(db, raw, excludeUserId) {
 
 router.post('/register', async function(req, res) {
   try {
-    const { name, email, password, invite_token, pen_name } = req.body;
+    const { name, email, password, invite_token, pen_name, dob, accept_terms, accept_upload } = req.body;
     if (!name || !email || !password) return res.json({ error: 'All fields required' });
     if (password.length < 8) return res.json({ error: 'Password must be at least 8 characters' });
+
+    // Age + consent gate. DOB is required (age verification); under-13 is
+    // blocked (COPPA). Both attestations must be checked to create an account.
+    const userAge = ageFromDob(dob);
+    if (userAge === null) return res.json({ error: 'Please enter a valid date of birth.' });
+    if (userAge < 13) return res.json({ error: 'You must be at least 13 years old to create an account.' });
+    if (!accept_terms) return res.json({ error: 'You must read and accept the Terms of Service to create an account.' });
+    if (!accept_upload) return res.json({ error: 'You must accept the content/copyright agreement to create an account.' });
 
     const db = await getDb();
     const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
@@ -47,8 +72,8 @@ router.post('/register', async function(req, res) {
     // reserve, and a 30-day window. They lapse to Copper at expiry (lazy, on next
     // activity -- see lapseTrialIfExpired). trial_started_at stamps the window.
     const result = await db.prepare(
-      'INSERT INTO users (name, email, password, tier, created_at, trial_started_at, pen_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now, penRes.value || null);
+      'INSERT INTO users (name, email, password, tier, created_at, trial_started_at, pen_name, date_of_birth, tos_accepted_version, tos_accepted_at, upload_terms_accepted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now, penRes.value || null, dob, TOS_VERSION, now, true);
 
     const newUserId = result.lastInsertRowid;
 

@@ -386,7 +386,17 @@ function uiPublishPrompt(message, opts) {
     var hint = document.createElement('div');
     hint.textContent = 'You can manage your published content on your Account page.';
     hint.style.cssText = 'color:rgba(240,232,208,0.5);font-size:11px;margin:0 0 16px;';
-    box.appendChild(msg); box.appendChild(tlabel); box.appendChild(ti); box.appendChild(label); box.appendChild(ta); box.appendChild(hint); box.appendChild(row); overlay.appendChild(box);
+    var attestWrap = document.createElement('label');
+    attestWrap.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#cbb994;line-height:1.4;margin:0 0 14px;cursor:pointer;';
+    var attestBox = document.createElement('input');
+    attestBox.type = 'checkbox';
+    attestBox.style.cssText = 'margin-top:2px;flex-shrink:0;';
+    var attestText = document.createElement('span');
+    attestText.textContent = 'I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).';
+    attestWrap.appendChild(attestBox); attestWrap.appendChild(attestText);
+    ok.disabled = true;
+    attestBox.addEventListener('change', function () { ok.disabled = !attestBox.checked; });
+    box.appendChild(msg); box.appendChild(tlabel); box.appendChild(ti); box.appendChild(label); box.appendChild(ta); box.appendChild(hint); box.appendChild(attestWrap); box.appendChild(row); overlay.appendChild(box);
     document.body.appendChild(overlay);
     function done(val) {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -395,7 +405,7 @@ function uiPublishPrompt(message, opts) {
     }
     function onKey(e) { if (e.key === 'Escape') done(null); }
     cancel.onclick = function () { done(null); };
-    ok.onclick = function () { done({ title: String(ti.value || '').trim(), blurb: String(ta.value || '').trim() }); };
+    ok.onclick = function () { if (!attestBox.checked) return; done({ title: String(ti.value || '').trim(), blurb: String(ta.value || '').trim(), attested: true }); };
     overlay.onclick = function (e) { if (e.target === overlay) done(null); };
     document.addEventListener('keydown', onKey);
     setTimeout(function () { try { ti.focus(); } catch (e) {} }, 0);
@@ -4771,7 +4781,7 @@ async function publishStory() {
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
   if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&');
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: _res.title, blurb: _res.blurb }) })
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: _res.title, blurb: _res.blurb, attested: _res.attested === true }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (btn) btn.disabled = false;

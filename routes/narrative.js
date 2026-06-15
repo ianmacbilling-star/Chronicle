@@ -20,12 +20,12 @@ const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = requir
 // these same ids — keep the ids in sync.
 // ============================================================
 const NARRATIVE_STYLES = (function () {
-  const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.';
+  const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Do not introduce, name, or describe characters, creatures, settings, or proper nouns owned by another franchise; treat the campaign as the user\'s own original fictional world.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
   return {
     classic: {
       name: 'Classic',
       voice: `Vivid, dramatic, and engaging — like a fantasy novel or comic-book caption. Use PRESENT tense and THIRD-PERSON narrative voice. Capture mood, tension, and drama.\nExample: "Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat."`,
-      system: 'You are a skilled fantasy author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for fantasy graphic novels. You always return valid JSON.'
+      system: 'You are a skilled fantasy author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for fantasy graphic novels. You always return valid JSON.' + IP_GUARD
     },
     epic: {
       name: 'Epic Chronicle',
@@ -211,6 +211,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '- Read like prose for a graphic novel — NOT a transcription of what players said\n' +
     '- Roughly 2-4 sentences per block — punchy, not bloated\n' +
     '- Reference characters by name when relevant\n\n' +
+    'COPYRIGHT \u2014 the transcript may mention names, places, or text from other works; do NOT reproduce any verbatim copyrighted text and do NOT describe any character or setting owned by another franchise. Retell everything as the user\'s own original world, in your own original words.\n\n' +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
     styleBundle.voice + '\n\n' +
     'CRITICAL - continuity and chronology:\n' +

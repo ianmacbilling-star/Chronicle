@@ -148,6 +148,10 @@ async function initPostgres() {
       card_exp TEXT,
       reset_token TEXT,
       reset_token_expires TIMESTAMP,
+      date_of_birth DATE,
+      tos_accepted_version TEXT,
+      tos_accepted_at TIMESTAMP,
+      upload_terms_accepted BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       edited_at TIMESTAMP,
       edited_by INTEGER
@@ -372,6 +376,12 @@ async function initPostgres() {
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS cast_explicit BOOLEAN DEFAULT false',
     "ALTER TABLE moments ADD COLUMN IF NOT EXISTS shape TEXT DEFAULT 'standard'",
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS novel_include BOOLEAN DEFAULT true',
+    // Account terms + age. Collected at sign-up: DOB (age verification),
+    // which Terms version they accepted + when, and the upload/IP attestation.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS tos_accepted_version TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS tos_accepted_at TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS upload_terms_accepted BOOLEAN DEFAULT false',
   ];
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}

@@ -88,7 +88,8 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'Your job is to identify the key moments that will make the most compelling graphic novel panels. ' +
     'You follow the DM\'s director instructions precisely and without deviation. ' +
     'When a DM specifies a scene must be included, you include it. ' +
-    'When a DM specifies a visual style or atmosphere, you apply it consistently to every panel.';
+    'When a DM specifies a visual style or atmosphere, you apply it consistently to every panel. ' +
+    'COPYRIGHT & ORIGINALITY \u2014 CRITICAL: Treat this campaign as the user\'s own original fictional world. Every character, creature, place, and item is the user\'s original creation, identified only by the reference images and the transcript. Do NOT introduce, name, or describe any character, creature, location, item, logo, costume, or design that originates from a third-party copyrighted or trademarked work (for example other video games, films, comics, anime, novels, or another game publisher\'s proprietary content). If a name in the transcript coincides with a character or property from another franchise, that is a coincidence \u2014 it refers to the USER\'s own original character as shown in the reference image, NEVER the franchise\'s character, and you must never reach for the franchise\'s likeness or design. Image prompts must describe ONLY the user\'s own characters and scene. Do NOT copy verbatim or near-verbatim text from any published source (such as a published adventure module, rulebook, or novel) into any title, description, or image prompt \u2014 always describe events in your own original words.';
 
   const userPrompt =
     '## ART STYLE\n' + style + '\n\n' +

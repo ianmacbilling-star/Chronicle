@@ -375,6 +375,45 @@ async function sendPlayerJoinedWelcomeEmail(opts) {
 // ALERTS_ENABLED so staging restarts don't generate noise.
 // NEVER throws — safe to call from crash/shutdown handlers.
 // ============================================================
+// Report from the public Library -- a reader flagging a story/image. Sends to
+// the support inbox. Best-effort: never throws back to the caller (the route
+// returns success regardless so we do not leak whether mail is configured).
+async function sendReportEmail(opts) {
+  try {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) { console.error('[report] RESEND_API_KEY not set'); return false; }
+    const to = process.env.SUPPORT_EMAIL || 'support@campaignia.com';
+    const from = process.env.FROM_EMAIL || 'noreply@campaignia.com';
+    function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    const ts = new Date().toISOString();
+    const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222;">' +
+      '<h2 style="margin:0 0 12px;">Library content report</h2>' +
+      '<p><strong>Story:</strong> ' + esc(opts.storyTitle || '(unknown)') + '</p>' +
+      '<p><strong>Story ID:</strong> ' + esc(opts.storyId) + '</p>' +
+      '<p><strong>Story URL:</strong> ' + esc(opts.storyUrl || '') + '</p>' +
+      '<p><strong>Reporter email:</strong> ' + esc(opts.reporterEmail || '(not provided)') + '</p>' +
+      '<p><strong>Reason:</strong></p>' +
+      '<pre style="white-space:pre-wrap;background:#f4f4f4;border:1px solid #ddd;border-radius:6px;padding:12px;">' + esc(opts.reason || '') + '</pre>' +
+      '<p style="color:#888;font-size:12px;">Received ' + esc(ts) + '</p>' +
+      '</div>';
+    const { Resend } = require('resend');
+    const resend = new Resend(apiKey);
+    const payload = {
+      from: 'Campaignia Reports <' + from + '>',
+      to: to,
+      subject: '[Campaignia] Content report: ' + (opts.storyTitle || ('story #' + opts.storyId)),
+      html: html
+    };
+    if (opts.reporterEmail) payload.reply_to = opts.reporterEmail;
+    const { error } = await resend.emails.send(payload);
+    if (error) { console.error('[report] send failed:', error.message); return false; }
+    return true;
+  } catch (e) {
+    console.error('[report] unexpected error:', (e && e.message) ? e.message : e);
+    return false;
+  }
+}
+
 async function sendAlertEmail(subject, message) {
   try {
     if (process.env.ALERTS_ENABLED !== 'true') {
@@ -569,4 +608,4 @@ async function sendOrderProblemEmail(opts) {
   }
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail };
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail };

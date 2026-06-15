@@ -2635,6 +2635,13 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     return res.status(403).json({ error: 'You need to sign up to publish to the library.', code: 'publish_requires_subscription' });
   }
 
+  // Publish-time attestation (client shows a required checkbox; enforced here
+  // too). The author confirms they own/have rights to the content and that it
+  // is suitable for a general audience.
+  if (!(req.body && req.body.attested === true)) {
+    return res.status(400).json({ error: 'You must confirm you own this content and that it is suitable for a general audience before publishing.', code: 'publish_requires_attestation' });
+  }
+
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name, u.pen_name AS owner_pen_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);

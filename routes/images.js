@@ -87,6 +87,8 @@ var FADE_WHITE = ' EDGES: render as a loose vignette where the medium thins and 
 var FADE_STYLES = { 'Fantasy oil painting': 1, 'Fantasy pastel': 1, 'Charcoal drawing': 1, 'Classic pen and ink': 1 };
 function isFadeStyle(s){ return !!FADE_STYLES[s]; }
 
+var IP_GUARD_IMG = ' ORIGINAL CONTENT ONLY: depict ONLY the user\'s own original characters, creatures, locations, and items as described and as shown in any reference images. Do NOT draw, imitate, or incorporate any recognizable copyrighted or trademarked character, creature, mascot, logo, costume, vehicle, or branded design from any other franchise (films, video games, comics, anime, novels, toys, or another game publisher). If a name or description resembles a famous character or property from another franchise, treat it as the user\'s OWN original creation and render an original design \u2014 NEVER that franchise\'s likeness.';
+
 function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
@@ -137,7 +139,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   // Flux has no system_prompt, so it keeps the style in the prompt (styleFinal).
   const stylePrefix = getStylePrefix(style);
   const styleSystem =
-    'You are a graphic-novel illustrator. Render the ENTIRE image in ONE single, ' +
+    'You are a graphic-novel illustrator.' + IP_GUARD_IMG + ' Render the ENTIRE image in ONE single, ' +
     'consistent art style — every character, NPC, location, and item included, ' +
     'not just the background — so everything looks genuinely DRAWN in this ' +
     'style rather than pasted on top of it. A consistent art style means one shared ' +
@@ -188,6 +190,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
       ? '\n\nSCENE ASSETS (match these to their reference images): ' + assetText
       : '';
     var editPrompt =
+      IP_GUARD_IMG +
       'REFERENCE IMAGES — CONTENT & IDENTITY SOURCE ONLY (HIGHEST PRIORITY): ' + refMap + ' ' +
       'Use every reference image ONLY for WHAT each element is — for characters and ' +
       'NPCs, their exact face, hair, build, distinctive features, and gear; for ' +
@@ -215,7 +218,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   } else if (key === 'nano2') {
     // Nano Banana 2 text-to-image — no reference images for this panel.
     input = {
-      prompt: rosterDirective + prompt + charSection + hint,
+      prompt: IP_GUARD_IMG + rosterDirective + prompt + charSection + hint,
       num_images: 1,
       aspect_ratio: ar,
       output_format: 'png',
@@ -225,7 +228,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
   } else {
     // Flux schnell: text-to-image only — no /edit endpoint, no references.
     input = {
-      prompt: rosterDirective + prompt + charSection + hint + styleFinal,
+      prompt: IP_GUARD_IMG + rosterDirective + prompt + charSection + hint + styleFinal,
       image_size: flux,
       num_inference_steps: 4,
       num_images: 1,
@@ -564,6 +567,7 @@ async function logImageGeneration(db, userId, source, refId, forkId) {
 // text-to-image. Returns the image URL. Caller stores it + logs it.
 function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
   const refPrompt =
+    IP_GUARD_IMG +
     'Full-body character reference portrait. Neutral standing pose, ' +
     'facing forward, plain neutral background, even soft lighting, ' +
     'comic book art style.\n\n' +

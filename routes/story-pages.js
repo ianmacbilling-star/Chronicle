@@ -101,6 +101,24 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
       '</div>' +
       '</div>';
 
+    var legalReportBar =
+      '<div style="background:#0a0806;border-top:1px solid rgba(201,168,76,0.18);">' +
+      '<div style="max-width:880px;margin:0 auto;padding:20px 18px;font-family:Georgia,serif;text-align:center;">' +
+        '<a href="javascript:void(0)" id="cmpReportToggle" style="color:rgba(201,168,76,0.7);font-size:12px;text-decoration:underline;cursor:pointer;">Report this story or an image</a>' +
+        '<div id="cmpReport" style="display:none;max-width:460px;margin:14px auto 0;text-align:left;">' +
+          '<textarea id="cmpReportReason" maxlength="2000" placeholder="What is wrong with this story or one of its images? (for example: it uses copyrighted characters, or contains inappropriate content)" style="width:100%;min-height:80px;background:#140f08;color:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;box-sizing:border-box;"></textarea>' +
+          '<input id="cmpReportEmail" type="email" maxlength="200" placeholder="Your email (optional, so we can follow up)" style="width:100%;margin-top:8px;background:#140f08;color:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;box-sizing:border-box;" />' +
+          '<button id="cmpReportBtn" style="margin-top:8px;background:#c9a84c;color:#160e06;border:none;padding:8px 16px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">Submit report</button>' +
+          '<span id="cmpReportMsg" style="margin-left:10px;font-size:12px;color:rgba(240,232,208,0.75);"></span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="max-width:880px;margin:0 auto;padding:0 18px 24px;font-family:Georgia,serif;text-align:center;color:rgba(201,168,76,0.4);font-size:11px;line-height:1.6;">' +
+        '&copy; ' + (new Date().getFullYear()) + ' So It Begins, LLC &middot; Campaignia. Some content may incorporate the Dungeons &amp; Dragons SRD, &copy; Wizards of the Coast LLC, used under CC BY 4.0. ' +
+        '<a href="/terms.html" style="color:rgba(201,168,76,0.6);">Terms</a>' +
+      '</div>' +
+      '<script>(function(){var t=document.getElementById("cmpReportToggle");var box=document.getElementById("cmpReport");if(t&&box){t.addEventListener("click",function(){box.style.display=(box.style.display==="block"?"none":"block");});}var b=document.getElementById("cmpReportBtn");if(!b)return;b.addEventListener("click",function(){var r=document.getElementById("cmpReportReason").value.trim();var e=document.getElementById("cmpReportEmail").value.trim();var m=document.getElementById("cmpReportMsg");if(!r){m.textContent="Please describe the problem.";return;}b.disabled=true;m.textContent="Sending...";fetch("/api/public/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({story_id:' + row.id + ',reason:r,email:e})}).then(function(x){return x.json();}).then(function(d){if(d&&d.ok){m.textContent="Thank you. Your report has been sent.";document.getElementById("cmpReportReason").value="";document.getElementById("cmpReportEmail").value="";}else{b.disabled=false;m.textContent=(d&&d.error)||"Could not send. Please try again.";}}).catch(function(){b.disabled=false;m.textContent="Could not send. Please try again.";});});})();</script>' +
+      '</div>';
+
     const footerCta =
       '<div style="background:#0a0806;border-top:3px solid #c9a84c;">' +
       '<div style="max-width:880px;margin:0 auto;padding:34px 18px;text-align:center;font-family:Georgia,serif;">' +
@@ -109,7 +127,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
         '<p style="color:#f0e8d0;font-size:15px;line-height:1.5;margin:0 auto 18px;max-width:520px;">Campaignia turns your tabletop RPG sessions into a styled graphic novel you can read online or hold in print.</p>' +
         '<a href="/?ref=story" style="display:inline-block;background:#c9a84c;color:#160e06;padding:11px 26px;border-radius:6px;text-decoration:none;font-weight:700;font-size:15px;">Make your own &rarr;</a>' +
       '</div>' +
-      '</div>';
+      '</div>' + legalReportBar;
 
     const snap = row.snapshot || null;
     let html;

@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const { TIERS, getTier } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
+const { sendReportEmail } = require('./email');
 
 // GET /api/public/pricing -- per-tier monthly price (whole dollars) for the
 // landing page. Reads the live tier config (admin overrides + code defaults).
@@ -85,6 +86,35 @@ router.get('/stories', async function (req, res) {
   } catch (e) {
     console.error('GET public stories error:', e.message);
     res.status(500).json({ error: 'stories unavailable' });
+  }
+});
+
+// POST /api/public/report -- a reader flags a published story (or an image in
+// it) as infringing or inappropriate. Emails the support inbox in the
+// background. Always returns success so we never leak mailer state; the email
+// send itself is best-effort.
+router.post('/report', async function (req, res) {
+  try {
+    const storyId = parseInt((req.body && req.body.story_id), 10);
+    let reason = (req.body && req.body.reason ? String(req.body.reason) : '').trim();
+    let reporterEmail = (req.body && req.body.email ? String(req.body.email) : '').trim();
+    if (!storyId) return res.status(400).json({ error: 'A story is required.' });
+    if (!reason) return res.status(400).json({ error: 'Please tell us what is wrong.' });
+    if (reason.length > 2000) reason = reason.slice(0, 2000);
+    if (reporterEmail.length > 200) reporterEmail = reporterEmail.slice(0, 200);
+    const db = await getDb();
+    let story = null;
+    try { story = await db.prepare('SELECT id, title, slug FROM public_stories WHERE id = ? AND public = TRUE').get(storyId); } catch (e) {}
+    if (!story) return res.status(404).json({ error: 'Story not found.' });
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    const storyUrl = base + '/library/story/' + story.id + '/' + (story.slug || '');
+    // Fire-and-forget; do not block the response on the mailer.
+    sendReportEmail({ storyId: story.id, storyTitle: story.title, storyUrl: storyUrl, reason: reason, reporterEmail: reporterEmail })
+      .catch(function (e) { console.error('[report] mail error:', e && e.message ? e.message : e); });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST public report error:', e.message);
+    res.status(500).json({ error: 'Could not submit report.' });
   }
 });
 
