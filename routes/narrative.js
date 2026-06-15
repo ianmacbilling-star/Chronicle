@@ -20,7 +20,7 @@ const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = requir
 // these same ids — keep the ids in sync.
 // ============================================================
 const NARRATIVE_STYLES = (function () {
-  const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Do not introduce, name, or describe characters, creatures, settings, or proper nouns owned by another franchise; treat the campaign as the user\'s own original fictional world.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
+  const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
   return {
     classic: {
       name: 'Classic',
@@ -211,7 +211,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '- Read like prose for a graphic novel — NOT a transcription of what players said\n' +
     '- Roughly 2-4 sentences per block — punchy, not bloated\n' +
     '- Reference characters by name when relevant\n\n' +
-    'COPYRIGHT \u2014 the transcript may mention names, places, or text from other works; do NOT reproduce any verbatim copyrighted text and do NOT describe any character or setting owned by another franchise. Retell everything as the user\'s own original world, in your own original words.\n\n' +
+    'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise. Tell only the user\'s own story, in your own original words.\n\n' +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
     styleBundle.voice + '\n\n' +
     'CRITICAL - continuity and chronology:\n' +
