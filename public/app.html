@@ -971,14 +971,14 @@
       <div class="modal-title">Session title image</div>
       <button class="modal-close" onclick="closeEstablishingModal()">&times;</button>
     </div>
-    <div class="establishing-img-wrap">
+    <div class="establishing-img-wrap" id="establishing-img-wrap">
       <img id="establishing-modal-img" alt="Session title image" title="Click to enlarge" onclick="openLightbox(this.src, this.alt)" />
       <div class="panel-img-actions dm-only">
         <button class="panel-pill" onclick="event.stopPropagation();regenerateEstablishing()" title="Re-roll the title image from its prompt">Regenerate</button>
         <button class="panel-pill" onclick="event.stopPropagation();toggleEstablishingRetouch()" title="Keep this image and change one thing">Retouch</button>
         <button class="panel-pill" onclick="event.stopPropagation();toggleEstablishingPromptEdit()" title="Edit the title-image prompt">Edit prompt</button>
         <button class="panel-pill" onclick="event.stopPropagation();replaceEstablishing()" title="Replace from the Archive">Replace</button>
-        <button class="panel-pill" onclick="event.stopPropagation();archiveEstablishing()" title="Save this image to your Archive">Archive</button>
+        <button class="panel-pill" id="establishing-archive-btn" onclick="event.stopPropagation();archiveEstablishing()" title="Save this image to your Archive">Archive</button>
         <button class="panel-pill" id="establishing-lock-btn" onclick="event.stopPropagation();toggleEstablishingLock()" title="Lock to skip regeneration">Lock</button>
       </div>
     </div>

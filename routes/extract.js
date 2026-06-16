@@ -184,8 +184,13 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
         // establishing-scene description; store it as the (editable) establishing
         // prompt. COALESCE keeps any existing prompt if the model omits the field.
         var estScene = (parsed.establishing_scene && String(parsed.establishing_scene).trim()) ? String(parsed.establishing_scene).trim() : null;
-        await db.prepare('UPDATE sessions SET art_style = ?, establishing_prompt = COALESCE(?, establishing_prompt), edited_at = ?, edited_by = ? WHERE id = ?')
+        // The story changed, so the old title IMAGE no longer matches it - clear
+        // it (like the panels above) so it regenerates on the next Generate Images.
+        // The lock check earlier already refused if it was locked, so this is safe.
+        var oldEst = session.establishing_image || null;
+        await db.prepare('UPDATE sessions SET art_style = ?, establishing_prompt = COALESCE(?, establishing_prompt), establishing_image = NULL, establishing_img_w = NULL, establishing_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
           .run(style, estScene, now, req.session.userId, session.id);
+        if (oldEst) { try { await releaseImage(db, oldEst); } catch (e) {} }
       }
 
       const insert = await db.prepare(

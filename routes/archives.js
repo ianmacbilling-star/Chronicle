@@ -154,6 +154,21 @@ router.delete('/', requireAuth, verifyCampaignMember, async function(req, res) {
       return res.json({ success: true, removed: mine.length });
     }
 
+    if (imageType === 'session_establishing') {
+      const sess = await db.prepare('SELECT id, campaign_id, establishing_image FROM sessions WHERE id = ?').get(req.body.session_id);
+      if (!sess) return res.status(404).json({ error: 'Session not found' });
+      if (String(sess.campaign_id) !== String(req.params.campaignId)) {
+        return res.status(403).json({ error: 'That session is not in this campaign' });
+      }
+      const mine = await db.prepare(
+        "SELECT id, image_url FROM campaign_archives WHERE session_id = ? AND image_type = 'session_establishing' AND archived_by = ? AND source_url IS NOT DISTINCT FROM ?"
+      ).all(sess.id, req.session.userId, sess.establishing_image);
+      if (!mine || mine.length === 0) return res.json({ success: true, removed: 0 });
+      for (const a of mine) { await db.prepare('DELETE FROM campaign_archives WHERE id = ?').run(a.id); }
+      for (const a of mine) { try { await releaseImage(db, a.image_url); } catch (e) { console.error('release archive copy:', e.message); } }
+      return res.json({ success: true, removed: mine.length });
+    }
+
     if (imageType === 'character') {
       const characterId = req.body.character_id;
       const forkId = req.body.fork_id || null;

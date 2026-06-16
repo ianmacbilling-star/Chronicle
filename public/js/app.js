@@ -1334,8 +1334,9 @@ function renderSessions() {
   });
 
   list.innerHTML = ordered.map(function(s) {
-    var thumb = s.first_image_url
-      ? '<img class="session-thumb" src="' + s.first_image_url + '" alt="" loading="lazy" />'
+    var thumbSrc = s.establishing_image || s.first_image_url;
+    var thumb = thumbSrc
+      ? '<img class="session-thumb" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
@@ -1456,6 +1457,7 @@ function openEstablishingModal() {
   var pe = document.getElementById('establishing-prompt-edit'); if (pe) pe.style.display = 'none';
   var re = document.getElementById('establishing-retouch-edit'); if (re) re.style.display = 'none';
   updateEstablishingLockBtn();
+  updateEstablishingArchiveBtn();
   establishingMsg('');
   var modal = document.getElementById('establishing-modal'); if (modal) modal.classList.remove('hidden');
 }
@@ -1476,7 +1478,7 @@ function saveEstablishingPrompt() {
   fetch('/api/images/session-establishing/' + s.id + '/prompt', {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ prompt: prompt })
   }).then(function(r){ return r.json(); }).then(function(data){
-    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    if (data && data.error) { if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); establishingMsg(data.message || data.error); return; }
     s.establishing_prompt = prompt; establishingMsg('Prompt saved.');
   }).catch(function(e){ establishingMsg('Could not save: ' + e.message); });
 }
@@ -1485,7 +1487,7 @@ function toggleEstablishingLock() {
   fetch('/api/images/session-establishing/' + s.id + '/lock', {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({})
   }).then(function(r){ return r.json(); }).then(function(data){
-    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    if (data && data.error) { if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); establishingMsg(data.message || data.error); return; }
     s.establishing_locked = data.locked; updateEstablishingLockBtn();
     establishingMsg(data.locked ? 'Locked. It will not regenerate with the batch.' : 'Unlocked.');
   }).catch(function(e){ establishingMsg('Could not update lock: ' + e.message); });
@@ -1504,17 +1506,18 @@ function regenerateEstablishing() {
   var s = state.currentSession; if (!s) return;
   if (s.establishing_locked) { establishingMsg('Unlock the title image to regenerate it.'); return; }
   establishingMsg('Regenerating...');
+  if (typeof showBusyOverlay === 'function') showBusyOverlay('establishing-img-wrap', 'Regenerating');
   fetch('/api/images/session-establishing/' + s.id + '/regenerate', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ style: state.artStyle, fal_key: getFalKey() || 'platform' })
   }).then(function(r){ return r.json(); }).then(function(data){
-    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    if (data && data.error) { if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); establishingMsg(data.message || data.error); return; }
     if (data && data.job_id) {
       pollEstablishingJob(data.job_id);
       establishingMsg('Regenerating - the new title image will appear here when it is ready.');
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     }
-  }).catch(function(e){ establishingMsg('Could not regenerate: ' + e.message); });
+  }).catch(function(e){ if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); establishingMsg('Could not regenerate: ' + e.message); });
 }
 function toggleEstablishingRetouch() {
   var sec = document.getElementById('establishing-retouch-edit'); if (!sec) return;
@@ -1529,28 +1532,42 @@ function retouchEstablishing() {
   var instruction = ri ? ri.value.trim() : '';
   if (!instruction) { establishingMsg('Tell me what to change first.'); return; }
   establishingMsg('Retouching...');
+  if (typeof showBusyOverlay === 'function') showBusyOverlay('establishing-img-wrap', 'Retouching');
   fetch('/api/images/session-establishing/' + s.id + '/retouch', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ instruction: instruction, style: state.artStyle, fal_key: getFalKey() || 'platform' })
   }).then(function(r){ return r.json(); }).then(function(data){
-    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    if (data && data.error) { if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); establishingMsg(data.message || data.error); return; }
     if (data && data.job_id) {
       pollEstablishingJob(data.job_id);
       establishingMsg('Retouching - the updated title image will appear here when it is ready.');
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     }
-  }).catch(function(e){ establishingMsg('Could not retouch: ' + e.message); });
+  }).catch(function(e){ if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); establishingMsg('Could not retouch: ' + e.message); });
 }
 function archiveEstablishing() {
   var s = state.currentSession; if (!s || !state.currentCampaign) return;
   if (!s.establishing_image) { establishingMsg('There is no title image to archive yet.'); return; }
+  var isArch = isEstablishingArchived(s);
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
+    method: isArch ? 'DELETE' : 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ image_type: 'session_establishing', session_id: s.id })
   }).then(function(r){ return r.json(); }).then(function(data){
-    if (data && data.success) { establishingMsg('Saved to your Archive.'); }
-    else { establishingMsg((data && data.error) || 'Could not save to the Archive.'); }
-  }).catch(function(){ establishingMsg('Could not save to the Archive.'); });
+    if (data && data.success) {
+      s.establishing_archived = !isArch;
+      updateEstablishingArchiveBtn();
+      establishingMsg(isArch ? 'Removed from your Archive.' : 'Saved to your Archive.');
+    } else { establishingMsg((data && data.error) || 'Could not update the Archive.'); }
+  }).catch(function(){ establishingMsg('Could not update the Archive.'); });
+}
+function isEstablishingArchived(s) {
+  return !!(s && (s.establishing_archived === true || s.establishing_archived === 1 || s.establishing_archived === '1' || s.establishing_archived === 't'));
+}
+function updateEstablishingArchiveBtn() {
+  var btn = document.getElementById('establishing-archive-btn'); if (!btn) return;
+  var on = isEstablishingArchived(state.currentSession);
+  btn.textContent = on ? 'Archived' : 'Archive';
+  if (on) btn.classList.add('is-on'); else btn.classList.remove('is-on');
 }
 
 function renderSessionEstablishing(data) {
@@ -4529,9 +4546,10 @@ function pollEstablishingJob(jobId) {
             if (typeof renderSessionEstablishing === 'function') renderSessionEstablishing(state.currentSession);
           }
           var emi = document.getElementById('establishing-modal-img'); if (emi) emi.src = d.image_url;
+          if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap');
           return;
         }
-        if (d && d.status === 'failed') return;
+        if (d && d.status === 'failed') { if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); return; }
         if (Date.now() - started < MAX_MS) setTimeout(tick, 4000);
       })
       .catch(function(){ if (Date.now() - started < MAX_MS) setTimeout(tick, 4000); });
@@ -7163,8 +7181,9 @@ function renderSessions() {
   });
 
   list.innerHTML = ordered.map(function(s) {
-    var thumb = s.first_image_url
-      ? '<img class="session-thumb" src="' + s.first_image_url + '" alt="" loading="lazy" />'
+    var thumbSrc = s.establishing_image || s.first_image_url;
+    var thumb = thumbSrc
+      ? '<img class="session-thumb" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'

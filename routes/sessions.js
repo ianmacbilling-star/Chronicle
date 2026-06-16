@@ -109,7 +109,10 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
 // GET single session
 router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const session = await db.prepare('SELECT * FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
+  const session = await db.prepare(
+    'SELECT s.*, EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.session_id = s.id AND ca.image_type = \'session_establishing\' AND ca.source_url = s.establishing_image AND ca.archived_by = ?) AS establishing_archived ' +
+    'FROM sessions s WHERE s.id=? AND s.campaign_id=?'
+  ).get(req.session.userId, req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
   // Deploy 4.0 — override the (now-stale) sessions column with the DM
   // fork's status so the frontend keeps reading the same key.
