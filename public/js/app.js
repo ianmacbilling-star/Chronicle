@@ -9620,7 +9620,7 @@ function switchSettingsTab(tab) {
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', t === tab);
   });
-  if (tab === 'general') loadPrintMarkup();
+  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); }
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
@@ -10845,6 +10845,33 @@ function savePrintMarkup() {
     .then(function (res) {
       if (msg) msg.textContent = res.ok ? 'Saved.' : (res.j && res.j.error ? res.j.error : 'Could not save.');
       if (res.ok && res.j && res.j.printMarkupPct != null) inp.value = res.j.printMarkupPct;
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+// ---- Admin: Signup bonus CO tokens to the Story Master (dashboard Settings tab) ----
+function loadSignupBonus() {
+  var inp = document.getElementById('signup-bonus-input');
+  if (!inp) return;
+  fetch('/api/admin/signup-bonus')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j && j.signupBonusCot != null) inp.value = j.signupBonusCot; })
+    .catch(function () {});
+}
+
+function saveSignupBonus() {
+  var inp = document.getElementById('signup-bonus-input');
+  var msg = document.getElementById('signup-bonus-msg');
+  if (!inp) return;
+  var n = parseInt(inp.value, 10);
+  if (!isFinite(n) || n < 0) { if (msg) msg.textContent = 'Enter a whole number of 0 or more.'; return; }
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/signup-bonus', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ signupBonusCot: n })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (msg) msg.textContent = res.ok ? 'Saved.' : (res.j && res.j.error ? res.j.error : 'Could not save.');
+      if (res.ok && res.j && res.j.signupBonusCot != null) inp.value = res.j.signupBonusCot;
     })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }

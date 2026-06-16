@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, TIERS } = require('../middleware/tiers');
-const { ensureMonthlyGrant } = require('./tokens');
+const { ensureMonthlyGrant, creditTokens } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 
 // Current Terms of Service / EULA version. Bump when the terms change so we
@@ -115,6 +115,19 @@ router.post('/register', async function(req, res) {
             'UPDATE campaign_invites SET used_at = ?, used_by = ? WHERE id = ?'
           ).run(new Date().toISOString(), newUserId, invite.id);
           autoJoinedCampaignId = invite.campaign_id;
+
+          // Signup bonus: credit the Story Master (the invite's creator) N
+          // carry-over tokens, configured on the admin Dashboard -> Settings tab.
+          // Non-fatal; the invite is single-use so this fires at most once.
+          try {
+            const bonusRow = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'signup_bonus_cot'").get();
+            const bonusN = bonusRow && bonusRow.value != null ? parseInt(bonusRow.value, 10) : 0;
+            if (Number.isFinite(bonusN) && bonusN > 0 && invite.created_by) {
+              await creditTokens(invite.created_by, bonusN, { bucket: 'cot', event_type: 'signup_bonus', source: 'invite_signup:' + invite.id });
+            }
+          } catch (bonusErr) {
+            console.error('Signup-bonus grant failed (non-fatal):', bonusErr.message);
+          }
 
           // Phase 3 Deploy 3 — fire join-lifecycle emails (DM notification
           // + player welcome). Same pattern as routes/invites.js accept,

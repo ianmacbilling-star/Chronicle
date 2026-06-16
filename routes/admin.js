@@ -215,6 +215,30 @@ router.put('/print-settings', requireAuth, requireAdmin, async function (req, re
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// Signup bonus: carry-over (CO) tokens granted to the Story Master when a new
+// member signs up through their campaign invite. Stored in app_settings as
+// signup_bonus_cot (default 0 = off).
+router.get('/signup-bonus', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('signup_bonus_cot');
+    const n = r && r.value != null ? parseInt(r.value, 10) : NaN;
+    res.json({ signupBonusCot: Number.isFinite(n) && n >= 0 ? n : 0 });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.put('/signup-bonus', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    var n = parseInt(req.body && req.body.signupBonusCot, 10);
+    if (!Number.isFinite(n) || n < 0 || n > 100000) return res.status(400).json({ error: 'signupBonusCot must be a whole number >= 0' });
+    const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get('signup_bonus_cot');
+    if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(String(n), 'signup_bonus_cot');
+    else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run('signup_bonus_cot', String(n));
+    res.json({ ok: true, signupBonusCot: n });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 // GET /api/admin/library -- moderation view of ALL public Library images (no
 // time window), newest first, keyset-paginated. Returns the archive id so an
 // admin can pull an item down.

@@ -839,6 +839,20 @@
         </div>
       </div>
 
+
+      <!-- Signup bonus (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Signup bonus</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Carry-over (CO) tokens granted to the Story Master when a new member signs up through their campaign invite. Set to 0 to turn off.</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label for="signup-bonus-input" style="color:var(--gold);font-size:13px;">Signup Bonus Tokens to the SM</label>
+          <input class="form-input" id="signup-bonus-input" type="number" min="0" step="1" value="0" style="width:110px;">
+          <span style="color:rgba(245,232,200,0.6);">CO</span>
+          <button class="btn btn-primary btn-sm" onclick="saveSignupBonus()">Save</button>
+          <span class="settings-section-desc" id="signup-bonus-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       </div><!-- /settings-pane-general -->
 
       <div class="settings-pane" id="settings-pane-tiers" style="display:none;">
