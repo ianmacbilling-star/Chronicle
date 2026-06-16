@@ -1965,3 +1965,15 @@ html.staging-env .app-logo-text{color:#2b1400;}
   .fr-tools { flex-wrap: wrap; }
   .notes-toolbar { flex-wrap: wrap; }
 }
+
+/* Phase 3 follow-up #2: the session/novel TAB BARS were a no-wrap flex row, so
+   on a phone the later tabs (e.g. Preview) ran off-screen. Squeeze the tabs and
+   let them wrap, left-aligned. Also compact the preview-tab control buttons. */
+@media (max-width: 640px) {
+  .sess-tabs { flex-wrap: wrap; }
+  .sess-tab { padding: 7px 11px; font-size: 12px; }
+  #session-tab-export > div:first-child,
+  #novel-tab-preview > div:first-child { justify-content: flex-start; }
+  #session-tab-export .btn,
+  #novel-tab-preview .btn { padding: 5px 9px; font-size: 11.5px; }
+}
