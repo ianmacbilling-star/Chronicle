@@ -1094,7 +1094,8 @@ router.post('/session-establishing/:sessionId/regenerate', requireAuth, async fu
   if (!estPrompt) return res.json({ error: 'There is no title-image prompt yet. Generate the session images first.' });
   try {
     const style = req.body && req.body.style;
-    const fal_key = (req.body && req.body.fal_key) || 'platform';
+    const fal_key = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
+    if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
     const modelKey = await getSelectedModel(db);
     const cost = await getTokenCost(modelKey);
     if (!(await canAfford(req.session.userId, cost))) {
@@ -1132,7 +1133,8 @@ router.post('/session-establishing/:sessionId/retouch', requireAuth, async funct
   if (!instruction) return res.json({ error: 'Tell me what to change (for example, make it dusk).' });
   try {
     const style = req.body && req.body.style;
-    const fal_key = (req.body && req.body.fal_key) || 'platform';
+    const fal_key = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
+    if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
     const modelKey = await getSelectedModel(db);
     const cost = await getTokenCost(modelKey);
     if (!(await canAfford(req.session.userId, cost))) {
