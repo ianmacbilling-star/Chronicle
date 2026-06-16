@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — Campaignia</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px; box-sizing: border-box; text-align: center;
+      background: #0a0806; color: #f0e8d0; font-family: Georgia, serif;
+    }
+    img { width: 96px; height: 96px; margin-bottom: 18px; opacity: 0.9; }
+    h1 { font-family: 'Cinzel', Georgia, serif; color: #e8d5a3; font-size: 24px; margin: 0 0 10px; letter-spacing: 1px; }
+    p { color: rgba(240,232,208,0.7); font-size: 15px; line-height: 1.5; max-width: 420px; margin: 0 0 22px; }
+    button {
+      font-family: 'Cinzel', Georgia, serif; font-size: 14px; letter-spacing: 1px;
+      background: #c9a84c; color: #160e06; border: none; padding: 11px 24px;
+      border-radius: 6px; cursor: pointer; font-weight: 700;
+    }
+    button:hover { background: #e8c870; }
+  </style>
+</head>
+<body>
+  <img src="/images/cmp-icon-192.png" alt="Campaignia" />
+  <h1>You're offline</h1>
+  <p>This page isn't available without a connection. Stories you've already opened may still be readable from here.</p>
+  <button onclick="location.reload()">Try again</button>
+</body>
+</html>

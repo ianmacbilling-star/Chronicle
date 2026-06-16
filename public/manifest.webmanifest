@@ -1,0 +1,17 @@
+{
+  "name": "Campaignia",
+  "short_name": "Campaignia",
+  "description": "Turn your tabletop RPG sessions into a styled graphic novel you can read online or hold in print.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0806",
+  "theme_color": "#0a0806",
+  "icons": [
+    { "src": "/images/cmp-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/cmp-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/images/cmp-icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/images/cmp-icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

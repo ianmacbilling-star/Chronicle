@@ -133,6 +133,15 @@ app.get('/robots.txt', function(req, res) {
   res.send(body);
 });
 
+// Service worker: served from root scope with no-cache so updates always
+// propagate. Declared before express.static so these headers win.
+app.get('/sw.js', function(req, res) {
+  res.set('Cache-Control', 'no-cache');
+  res.set('Service-Worker-Allowed', '/');
+  res.type('application/javascript');
+  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicit page routes
