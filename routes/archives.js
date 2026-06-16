@@ -308,6 +308,19 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       return res.json({ success: true, image_url: freshUrl });
     }
 
+    if (targetType === 'session_establishing') {
+      const sess = await db.prepare('SELECT id, establishing_image, establishing_locked FROM sessions WHERE id = ? AND campaign_id = ?').get(req.body.session_id, req.params.campaignId);
+      if (!sess) return res.json({ error: 'The session no longer exists.' });
+      if (req.campaignRole !== 'dm') return res.status(403).json({ error: 'Only the DM can replace the session title image.' });
+      if (sess.establishing_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to replace it.' });
+      const freshUrl = await restoreCopy(archive.image_url);
+      const prevImg = sess.establishing_image;
+      await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = NULL, establishing_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
+        .run(freshUrl, archive.art_style || null, now, req.session.userId, sess.id);
+      if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
+      return res.json({ success: true, image_url: freshUrl });
+    }
+
     return res.json({ error: 'Unknown replace target.' });
   } catch (e) {
     console.error('archive apply error:', e.message);

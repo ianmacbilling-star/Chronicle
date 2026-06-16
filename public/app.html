@@ -341,7 +341,7 @@
     <div id="view-session-detail" class="view" style="display:none;">
       <div class="session-detail-head">
         <div class="sdh-left">
-          <img id="session-establishing-thumb" class="session-establishing-thumb" alt="Session title image" title="Click to enlarge" style="display:none;cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" />
+          <img id="session-establishing-thumb" class="session-establishing-thumb" alt="Session title image" title="Click to enlarge" style="display:none;cursor:zoom-in;" onclick="openEstablishingModal()" />
           <div class="sdh-titlewrap">
             <div class="page-title sdh-title-row">
               <span id="session-detail-name">Session</span>
@@ -965,6 +965,28 @@
 </div>
 
 <!-- ASSET MODAL -->
+<div class="modal-overlay hidden" id="establishing-modal" onclick="if(event.target===this)closeEstablishingModal()">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <div class="modal-title">Session title image</div>
+      <button class="modal-close" onclick="closeEstablishingModal()">&times;</button>
+    </div>
+    <img id="establishing-modal-img" alt="Session title image" title="Click to enlarge" style="width:100%;border-radius:10px;border:1px solid rgba(201,168,76,0.3);display:block;margin-bottom:12px;cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" />
+    <div class="dm-only">
+      <div class="form-group">
+        <label class="form-label">Prompt</label>
+        <textarea class="form-input" id="establishing-prompt-input" style="min-height:84px;resize:vertical;" placeholder="Describe the establishing shot..."></textarea>
+      </div>
+      <div class="establishing-pill-row">
+        <button class="btn btn-primary btn-sm" onclick="saveEstablishingPrompt()">Save prompt</button>
+        <button class="btn btn-sm" onclick="replaceEstablishing()">Replace</button>
+        <button class="btn btn-sm" id="establishing-lock-btn" onclick="toggleEstablishingLock()">Lock</button>
+      </div>
+      <div class="establishing-modal-hint" id="establishing-modal-msg"></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="asset-modal">
   <div class="modal">
     <div class="modal-header">

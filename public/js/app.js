@@ -1446,6 +1446,53 @@ async function deleteSession(id) {
 // of the session detail page. Stage 2 = display + click-to-enlarge (reuses the
 // shared lightbox). The control pills come in the next stage. Hidden when the
 // session has no establishing image yet.
+// Session establishing image editor modal (opened from the header thumbnail).
+// DM-only controls; view-only players just see the enlarged image.
+function openEstablishingModal() {
+  var s = state.currentSession;
+  if (!s || !s.establishing_image) return;
+  var img = document.getElementById('establishing-modal-img'); if (img) img.src = s.establishing_image;
+  var pi = document.getElementById('establishing-prompt-input'); if (pi) pi.value = s.establishing_prompt || '';
+  updateEstablishingLockBtn();
+  establishingMsg('');
+  var modal = document.getElementById('establishing-modal'); if (modal) modal.classList.remove('hidden');
+}
+function closeEstablishingModal() {
+  var modal = document.getElementById('establishing-modal'); if (modal) modal.classList.add('hidden');
+}
+function establishingMsg(t) { var m = document.getElementById('establishing-modal-msg'); if (m) m.textContent = t || ''; }
+function updateEstablishingLockBtn() {
+  var s = state.currentSession;
+  var btn = document.getElementById('establishing-lock-btn'); if (!btn) return;
+  var locked = !!(s && s.establishing_locked);
+  btn.textContent = locked ? 'Locked' : 'Lock';
+  if (locked) btn.classList.add('is-on'); else btn.classList.remove('is-on');
+}
+function saveEstablishingPrompt() {
+  var s = state.currentSession; if (!s) return;
+  var pi = document.getElementById('establishing-prompt-input'); var prompt = pi ? pi.value : '';
+  fetch('/api/images/session-establishing/' + s.id + '/prompt', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ prompt: prompt })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    s.establishing_prompt = prompt; establishingMsg('Prompt saved.');
+  }).catch(function(e){ establishingMsg('Could not save: ' + e.message); });
+}
+function toggleEstablishingLock() {
+  var s = state.currentSession; if (!s) return;
+  fetch('/api/images/session-establishing/' + s.id + '/lock', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({})
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    s.establishing_locked = data.locked; updateEstablishingLockBtn();
+    establishingMsg(data.locked ? 'Locked. It will not regenerate with the batch.' : 'Unlocked.');
+  }).catch(function(e){ establishingMsg('Could not update lock: ' + e.message); });
+}
+function replaceEstablishing() {
+  var s = state.currentSession; if (!s) return;
+  openReplacePicker('establishing', s.id);
+}
+
 function renderSessionEstablishing(data) {
   // Establishing image now lives as a small thumbnail beside the session title.
   var thumb = document.getElementById('session-establishing-thumb');
@@ -5996,6 +6043,9 @@ function openReplacePicker(mode, id) {
     f.type = 'character';
     f.character = String(id);
     if (tEl) tEl.textContent = 'Replace character image from Archive';
+  } else if (mode === 'establishing') {
+    state.pickerCtx.sessionId = id;
+    if (tEl) tEl.textContent = 'Replace title image from Archive';
   } else {
     state.pickerCtx.characterId = id;
     state.pickerCtx.sessionId = state.currentSession ? state.currentSession.id : null;
@@ -6057,6 +6107,8 @@ function applyArchiveToTarget(archiveId) {
     body = { target_type: 'moment', target_moment_id: ctx.momentId };
   } else if (ctx.mode === 'canonical') {
     body = { target_type: 'canonical_character', target_character_id: ctx.characterId };
+  } else if (ctx.mode === 'establishing') {
+    body = { target_type: 'session_establishing', session_id: ctx.sessionId };
   } else {
     body = { target_type: 'character', target_character_id: ctx.characterId, session_id: ctx.sessionId, fork_id: ctx.forkId };
   }
@@ -6069,6 +6121,13 @@ function applyArchiveToTarget(archiveId) {
     else if (ctx.mode === 'canonical') {
       var _ch = charById(ctx.characterId);
       if (_ch && data.image_url) { _ch.canonical_reference_url = data.image_url; _ch.archived = false; renderCharModalPrompt(_ch); }
+    }
+    else if (ctx.mode === 'establishing') {
+      if (state.currentSession && data.image_url) {
+        state.currentSession.establishing_image = data.image_url;
+        renderSessionEstablishing(state.currentSession);
+        var _emi = document.getElementById('establishing-modal-img'); if (_emi) _emi.src = data.image_url;
+      }
     }
     else { if (typeof loadSessionCharacters === 'function') loadSessionCharacters(); }
   }).catch(function(e){ alert('Replace failed: ' + e.message); });

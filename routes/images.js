@@ -1028,6 +1028,34 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   res.status(202).json({ status: 'queued', jobs: jobs, establishing: establishingJob, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
 });
 
+// Session establishing image -- simple (no-generation) actions: edit prompt + lock.
+// DM-only. (Regenerate / Retouch / Archive are handled elsewhere.)
+// POST /api/images/session-establishing/:sessionId/prompt  { prompt }
+router.post('/session-establishing/:sessionId/prompt', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const sess = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id = ?').get(req.params.sessionId);
+  if (!sess) return res.status(404).json({ error: 'Session not found' });
+  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
+  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can edit the title image.' });
+  const prompt = (req.body && typeof req.body.prompt === 'string') ? req.body.prompt : '';
+  await db.prepare('UPDATE sessions SET establishing_prompt = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(prompt, new Date().toISOString(), req.session.userId, sess.id);
+  res.json({ success: true, establishing_prompt: prompt });
+});
+
+// POST /api/images/session-establishing/:sessionId/lock  (toggles establishing_locked)
+router.post('/session-establishing/:sessionId/lock', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const sess = await db.prepare('SELECT id, campaign_id, establishing_locked FROM sessions WHERE id = ?').get(req.params.sessionId);
+  if (!sess) return res.status(404).json({ error: 'Session not found' });
+  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
+  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can lock the title image.' });
+  const newLocked = sess.establishing_locked ? 0 : 1;
+  await db.prepare('UPDATE sessions SET establishing_locked = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(newLocked, new Date().toISOString(), req.session.userId, sess.id);
+  res.json({ success: true, locked: newLocked });
+});
+
 // ============================================================
 // ASYNC IMAGE DELIVERY — fal queue webhook + job polling
 // fal POSTs here when a queued generation finishes; we persist the image,
