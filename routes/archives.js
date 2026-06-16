@@ -92,6 +92,25 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
       return res.json({ success: true, archive: row });
     }
 
+    if (imageType === 'session_establishing') {
+      const sess = await db.prepare(
+        'SELECT id, name, campaign_id, establishing_image, establishing_prompt, establishing_style FROM sessions WHERE id = ?'
+      ).get(req.body.session_id);
+      if (!sess) return res.status(404).json({ error: 'Session not found' });
+      if (String(sess.campaign_id) !== String(req.params.campaignId)) {
+        return res.status(403).json({ error: 'That session is not in this campaign' });
+      }
+      if (!sess.establishing_image) return res.json({ error: 'This session has no title image to archive yet.' });
+      const archivedUrl = await archiveCopy(sess.establishing_image);
+      const now = new Date().toISOString();
+      const result = await db.prepare(
+        'INSERT INTO campaign_archives (campaign_id, session_id, image_type, title, image_url, source_url, image_prompt, art_style, archived_by, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(req.params.campaignId, sess.id, 'session_establishing', (sess.name ? sess.name + ' (title image)' : 'Title image'), archivedUrl, sess.establishing_image, sess.establishing_prompt || null, sess.establishing_style || null, req.session.userId, now);
+      const row2 = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
+      return res.json({ success: true, archive: row2 });
+    }
+
     return res.status(400).json({ error: 'Unsupported image type' });
   } catch (e) {
     console.error('archive create error:', e.message);

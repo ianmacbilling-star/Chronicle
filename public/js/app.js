@@ -1454,6 +1454,7 @@ function openEstablishingModal() {
   var img = document.getElementById('establishing-modal-img'); if (img) img.src = s.establishing_image;
   var pi = document.getElementById('establishing-prompt-input'); if (pi) pi.value = s.establishing_prompt || '';
   var pe = document.getElementById('establishing-prompt-edit'); if (pe) pe.style.display = 'none';
+  var re = document.getElementById('establishing-retouch-edit'); if (re) re.style.display = 'none';
   updateEstablishingLockBtn();
   establishingMsg('');
   var modal = document.getElementById('establishing-modal'); if (modal) modal.classList.remove('hidden');
@@ -1498,6 +1499,58 @@ function toggleEstablishingPromptEdit() {
   var open = sec.style.display !== 'none';
   sec.style.display = open ? 'none' : 'block';
   if (!open) { var pi = document.getElementById('establishing-prompt-input'); if (pi) pi.focus(); }
+}
+function regenerateEstablishing() {
+  var s = state.currentSession; if (!s) return;
+  if (s.establishing_locked) { establishingMsg('Unlock the title image to regenerate it.'); return; }
+  establishingMsg('Regenerating...');
+  fetch('/api/images/session-establishing/' + s.id + '/regenerate', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ style: state.artStyle, fal_key: getFalKey() || 'platform' })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    if (data && data.job_id) {
+      pollEstablishingJob(data.job_id);
+      establishingMsg('Regenerating - the new title image will appear here when it is ready.');
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    }
+  }).catch(function(e){ establishingMsg('Could not regenerate: ' + e.message); });
+}
+function toggleEstablishingRetouch() {
+  var sec = document.getElementById('establishing-retouch-edit'); if (!sec) return;
+  var open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  if (!open) { var ri = document.getElementById('establishing-retouch-input'); if (ri) ri.focus(); }
+}
+function retouchEstablishing() {
+  var s = state.currentSession; if (!s) return;
+  if (s.establishing_locked) { establishingMsg('Unlock the title image to retouch it.'); return; }
+  var ri = document.getElementById('establishing-retouch-input');
+  var instruction = ri ? ri.value.trim() : '';
+  if (!instruction) { establishingMsg('Tell me what to change first.'); return; }
+  establishingMsg('Retouching...');
+  fetch('/api/images/session-establishing/' + s.id + '/retouch', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ instruction: instruction, style: state.artStyle, fal_key: getFalKey() || 'platform' })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data && data.error) { establishingMsg(data.message || data.error); return; }
+    if (data && data.job_id) {
+      pollEstablishingJob(data.job_id);
+      establishingMsg('Retouching - the updated title image will appear here when it is ready.');
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    }
+  }).catch(function(e){ establishingMsg('Could not retouch: ' + e.message); });
+}
+function archiveEstablishing() {
+  var s = state.currentSession; if (!s || !state.currentCampaign) return;
+  if (!s.establishing_image) { establishingMsg('There is no title image to archive yet.'); return; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ image_type: 'session_establishing', session_id: s.id })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data && data.success) { establishingMsg('Saved to your Archive.'); }
+    else { establishingMsg((data && data.error) || 'Could not save to the Archive.'); }
+  }).catch(function(){ establishingMsg('Could not save to the Archive.'); });
 }
 
 function renderSessionEstablishing(data) {

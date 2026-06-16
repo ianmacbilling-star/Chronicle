@@ -1009,7 +1009,13 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         try { await db.prepare('UPDATE sessions SET establishing_prompt = ? WHERE id = ?').run(estPrompt, sidInt); } catch (e) {}
       }
       const estSeed = (baseSeed + sessionOffset + 99991) % 2147483647;
-      const estSub = await submitPanelGen(estPrompt, style, fal_key, null, estSeed, modelKey, webhookUrl, estShape, userThinkingAll);
+      // Attach references for any character/asset NAMED in the establishing
+      // prompt, so people in the title image resemble the real characters
+      // (mirrors the per-panel block; name-matched, no explicit cast).
+      const estCharList = buildCharacterBlock(chars, estPrompt, 0, null);
+      const estAssetList = buildAssetBlock(assets, estPrompt, null);
+      const estBlock = { text: estCharList.text, textTrimmed: estCharList.textTrimmed, assetText: estAssetList.text, refs: combineRefs(estCharList.refs, estAssetList.refs), castExplicit: false, castNames: [] };
+      const estSub = await submitPanelGen(estPrompt, style, fal_key, estBlock, estSeed, modelKey, webhookUrl, estShape, userThinkingAll);
       const nowTsE = new Date().toISOString();
       const estIns = await db.prepare(
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -1054,6 +1060,99 @@ router.post('/session-establishing/:sessionId/lock', requireAuth, async function
   await db.prepare('UPDATE sessions SET establishing_locked = ?, edited_at = ?, edited_by = ? WHERE id = ?')
     .run(newLocked, new Date().toISOString(), req.session.userId, sess.id);
   res.json({ success: true, locked: newLocked });
+});
+
+// Build the character + asset reference block for a session title image the
+// same way panels do (name-matched against the establishing prompt) so people
+// in the title image resemble the real characters. Uses the DM canonical fork.
+async function buildEstablishingBlock(db, sessionId, campId, forkId, estPrompt) {
+  const chars = await db.prepare(
+    'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+    'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+    'sc.change_note, sc.change_moment_index, sc.change_status ' +
+    'FROM characters ch ' +
+    'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
+    'WHERE ch.campaign_id = ?'
+  ).all(forkId, campId);
+  await attachPriorReferences(db, chars, sessionId, campId);
+  const charList = buildCharacterBlock(chars, estPrompt, 0, null);
+  const assets = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campId);
+  const assetList = buildAssetBlock(assets, estPrompt, null);
+  return { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text, refs: combineRefs(charList.refs, assetList.refs), castExplicit: false, castNames: [] };
+}
+
+// POST /api/images/session-establishing/:sessionId/regenerate  { style?, fal_key? }
+// DM-only single re-roll of the title image, through the fal queue + webhook.
+router.post('/session-establishing/:sessionId/regenerate', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const sess = await db.prepare('SELECT id, campaign_id, establishing_prompt, establishing_shape, establishing_locked, establishing_image FROM sessions WHERE id = ?').get(req.params.sessionId);
+  if (!sess) return res.status(404).json({ error: 'Session not found' });
+  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
+  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can regenerate the title image.' });
+  if (sess.establishing_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to regenerate.' });
+  const estPrompt = (sess.establishing_prompt || '').trim();
+  if (!estPrompt) return res.json({ error: 'There is no title-image prompt yet. Generate the session images first.' });
+  try {
+    const style = req.body && req.body.style;
+    const fal_key = (req.body && req.body.fal_key) || 'platform';
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: "You're out of tokens. Add more to keep generating." });
+    }
+    const webhookUrl = falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const forkId = await getDmForkId(db, sess.id);
+    const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, estPrompt);
+    const randomSeed = Math.floor(Math.random() * 2147483647);
+    const userThinking = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
+    const sub = await submitPanelGen(estPrompt, style, fal_key, estBlock, randomSeed, modelKey, webhookUrl, sess.establishing_shape || 'wide', userThinking);
+    const nowTs = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, sess.establishing_image || null, nowTs, nowTs);
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
+  } catch (e) {
+    console.error('establishing regenerate error:', e.message);
+    res.json({ error: e.message });
+  }
+});
+
+// POST /api/images/session-establishing/:sessionId/retouch  { instruction, style?, fal_key? }
+router.post('/session-establishing/:sessionId/retouch', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const sess = await db.prepare('SELECT id, campaign_id, establishing_prompt, establishing_shape, establishing_locked, establishing_image FROM sessions WHERE id = ?').get(req.params.sessionId);
+  if (!sess) return res.status(404).json({ error: 'Session not found' });
+  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
+  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can retouch the title image.' });
+  if (sess.establishing_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to retouch.' });
+  if (!sess.establishing_image) return res.json({ error: 'There is no title image to retouch yet.' });
+  const instruction = (req.body && typeof req.body.instruction === 'string') ? req.body.instruction.trim() : '';
+  if (!instruction) return res.json({ error: 'Tell me what to change (for example, make it dusk).' });
+  try {
+    const style = req.body && req.body.style;
+    const fal_key = (req.body && req.body.fal_key) || 'platform';
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: "You're out of tokens. Add more to keep generating." });
+    }
+    const webhookUrl = falWebhookUrl();
+    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
+    const forkId = await getDmForkId(db, sess.id);
+    const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, (sess.establishing_prompt || '').trim());
+    const sub = await submitRetouch(sess.establishing_image, instruction, style, fal_key, webhookUrl, { refs: estBlock.refs, text: estBlock.text }, sess.establishing_shape || 'wide');
+    const nowTs = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, sess.establishing_image || null, nowTs, nowTs);
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
+  } catch (e) {
+    console.error('establishing retouch error:', e.message);
+    res.json({ error: e.message });
+  }
 });
 
 // ============================================================

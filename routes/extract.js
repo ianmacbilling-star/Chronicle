@@ -110,7 +110,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'Return ONLY valid JSON with no markdown fences or explanation:\n' +
     '{\n' +
     '  "title": "Session title (4-6 dramatic words)",\n' +
-    '  "establishing_scene": "A vivid 2-3 sentence WIDE ESTABLISHING SHOT that opens the session - the setting, location, environment, time of day, weather, and overall mood as the story begins. A scene-setting TITLE CARD, NOT a dramatic action beat: do NOT center it on a fight or a single character; capture the place and atmosphere the party finds itself in at the start, the kind of opening frame the first narration paragraph would describe. Style-neutral (do NOT name an art style or medium).",\n' +
+    '  "establishing_scene": "A vivid 2-3 sentence WIDE ESTABLISHING SHOT that opens the session - the setting, location, environment, time of day, weather, and overall mood as the story begins. A scene-setting TITLE CARD: keep it a wide, scene-setting view, not a close-up portrait. If characters are genuinely present in this opening view you MAY include them, but refer to each KNOWN character BY THEIR EXACT NAME (e.g. \\"Ruk\\", \\"Zara\\") and NEVER by a group term (\\"the party\\") or an anonymous label (\\"a warrior\\") - the exact name lets the system attach the matching reference image so they look like themselves. Name only the characters actually in this opening frame, and show them within the wider scene rather than as a posed portrait. If the opening is an empty landscape or location with no one present, describe it with no people. Style-neutral (do NOT name an art style or medium).",\n' +
     '  "moments": [\n' +
     '    {\n' +
     '      "title": "Short evocative panel title",\n' +
