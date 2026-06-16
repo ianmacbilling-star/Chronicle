@@ -1341,9 +1341,7 @@ function renderSessions() {
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
       : '<span class="session-badge session-badge-draft">Draft</span>';
-    var transcriptChip = s.transcript
-      ? '<span class="session-badge">Has transcript</span>'
-      : '<span class="session-badge empty">No transcript</span>';
+    var transcriptChip = '';
     var menuId = 'session-menu-' + s.id;
     var deleteMenu =
       '<div class="row-menu dm-only">' +
@@ -7188,9 +7186,7 @@ function renderSessions() {
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
       : '<span class="session-badge session-badge-draft">Draft</span>';
-    var transcriptChip = s.transcript
-      ? '<span class="session-badge">Has transcript</span>'
-      : '<span class="session-badge empty">No transcript</span>';
+    var transcriptChip = '';
     var menuId = 'session-menu-' + s.id;
     var deleteMenu =
       '<div class="row-menu dm-only">' +

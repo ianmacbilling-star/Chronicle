@@ -1443,10 +1443,10 @@ function buildLayout(layoutStyle, moments, sections, intro, outro, opts) {
 // ============================================================
 // Generate PDF HTML for a session
 // ============================================================
-function buildSessionHTML(session, moments, campaign, characters, narrative, opts) {
+function buildSessionHTML(session, moments, campaign, characters, narrative, opts, renderOpts) {
   var co = opts || null;
   var fHideLogo = co ? !!co.hideLogo : false;
-  var fCover  = co ? !!co.cover     : true;
+  var fCover  = (renderOpts && renderOpts.noCover) ? false : (co ? !!co.cover     : true);
   var fHeader = co ? !!co.header    : true;
   var fWmark  = true; // watermark always on
   var paperCSS = co ? coPaperCSS(co.paper, co.condition) : '';
@@ -1473,6 +1473,12 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   // Build panels using selected layout
   var layoutStyle = narrative.layout_style || 'Classic';
   var panelsHTML = buildLayout(layoutStyle, moments, sections, intro, outro, co);
+  // Session title image: the wide establishing shot that sets the scene for the
+  // first narrative. Additive block above the session content - does NOT touch
+  // buildLayout / renderPaired. (Stage 4.1: Session Preview only.)
+  var titleImageHTML = session.establishing_image
+    ? '<div class="session-title-image" style="width:100%;margin:0 0 0.28in;page-break-inside:avoid;line-height:0;"><img style="width:100%;display:block;border-radius:3px;" src="' + session.establishing_image + '" alt="" /></div>'
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1785,6 +1791,7 @@ ${fCover ? `<!-- COVER PAGE -->
     <div class="page-header-campaign">${campaign.name}</div>
     <div class="page-header-session">${session.name}</div>
   </div>` : ''}
+  ${titleImageHTML}
   ${panelsHTML}
   </div>
 </div>
@@ -2254,7 +2261,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
 
     const co = req.query.co ? parseCustomOpts(req.query.co) : null;
     if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
-    let html = buildSessionHTML(session, moments, campaign, characters, narrative, co);
+    let html = buildSessionHTML(session, moments, campaign, characters, narrative, co, { noCover: true });
     if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
     if (req.query.format === 'pdf') {
       var sfo = await db.prepare("SELECT u.name AS uname, sf.role AS srole FROM session_forks sf JOIN users u ON u.id = sf.user_id WHERE sf.id = ?").get(viewForkId);
