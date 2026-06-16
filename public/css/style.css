@@ -1924,11 +1924,15 @@ html.staging-env .app-logo-text{color:#2b1400;}
    ============================================================ */
 
 /* Storyboard + reference-image action pills are hover-revealed (opacity:0
-   until :hover). Touch devices have no hover, so on touch reveal them and lay
-   the storyboard toolbar out BELOW the image instead of as an overlay.
-   .dm-only stays display:none for view-only players, so this never exposes
-   edit controls to someone who cannot edit. */
-@media (any-hover: none) and (any-pointer: coarse) {
+   until :hover) and overlaid on the image. On NARROW screens (phones / small
+   tablets) reveal them and lay the toolbar out BELOW the image instead.
+   Gated on WIDTH, NOT on hover/pointer media features: touchscreen laptops and
+   desktops misreport (hover:none / pointer:coarse) even with a mouse attached,
+   which wrongly pushed the buttons below the image on big screens. A real
+   desktop/laptop viewport is far wider than 820px, so it always keeps the
+   on-image overlay. .dm-only stays display:none for view-only players, so this
+   never exposes edit controls to someone who cannot edit. */
+@media (max-width: 820px) {
   .panel-img-actions { position: static; margin: 6px 0 2px; padding: 0 6px; }
   .panel-pill { opacity: 1 !important; padding: 7px 11px; font-size: 12px; }
   .char-ref-imgwrap .panel-pill,
