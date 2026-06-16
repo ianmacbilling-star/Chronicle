@@ -110,6 +110,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'Return ONLY valid JSON with no markdown fences or explanation:\n' +
     '{\n' +
     '  "title": "Session title (4-6 dramatic words)",\n' +
+    '  "establishing_scene": "A vivid 2-3 sentence WIDE ESTABLISHING SHOT that opens the session - the setting, location, environment, time of day, weather, and overall mood as the story begins. A scene-setting TITLE CARD, NOT a dramatic action beat: do NOT center it on a fight or a single character; capture the place and atmosphere the party finds itself in at the start, the kind of opening frame the first narration paragraph would describe. Style-neutral (do NOT name an art style or medium).",\n' +
     '  "moments": [\n' +
     '    {\n' +
     '      "title": "Short evocative panel title",\n' +
@@ -172,8 +173,12 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       // Save the art style used so future sessions can inherit it (canonical
       // session field is DM-owned; a player's style choice stays on their fork).
       if (callerRole === 'dm') {
-        await db.prepare('UPDATE sessions SET art_style = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-          .run(style, now, req.session.userId, session.id);
+        // Heavy option for the title image: the extraction writes a dedicated
+        // establishing-scene description; store it as the (editable) establishing
+        // prompt. COALESCE keeps any existing prompt if the model omits the field.
+        var estScene = (parsed.establishing_scene && String(parsed.establishing_scene).trim()) ? String(parsed.establishing_scene).trim() : null;
+        await db.prepare('UPDATE sessions SET art_style = ?, establishing_prompt = COALESCE(?, establishing_prompt), edited_at = ?, edited_by = ? WHERE id = ?')
+          .run(style, estScene, now, req.session.userId, session.id);
       }
 
       const insert = await db.prepare(

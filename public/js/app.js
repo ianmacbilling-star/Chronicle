@@ -1453,6 +1453,7 @@ function openEstablishingModal() {
   if (!s || !s.establishing_image) return;
   var img = document.getElementById('establishing-modal-img'); if (img) img.src = s.establishing_image;
   var pi = document.getElementById('establishing-prompt-input'); if (pi) pi.value = s.establishing_prompt || '';
+  var pe = document.getElementById('establishing-prompt-edit'); if (pe) pe.style.display = 'none';
   updateEstablishingLockBtn();
   establishingMsg('');
   var modal = document.getElementById('establishing-modal'); if (modal) modal.classList.remove('hidden');
@@ -1491,6 +1492,12 @@ function toggleEstablishingLock() {
 function replaceEstablishing() {
   var s = state.currentSession; if (!s) return;
   openReplacePicker('establishing', s.id);
+}
+function toggleEstablishingPromptEdit() {
+  var sec = document.getElementById('establishing-prompt-edit'); if (!sec) return;
+  var open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  if (!open) { var pi = document.getElementById('establishing-prompt-input'); if (pi) pi.focus(); }
 }
 
 function renderSessionEstablishing(data) {
@@ -4453,6 +4460,32 @@ function regenNarrativeSection(type, panelIndex) {
   });
 }
 
+// Poll the session title (establishing) image job after a batch generate so
+// its thumbnail updates live, without leaving and re-entering the session.
+function pollEstablishingJob(jobId) {
+  if (!jobId) return;
+  var started = Date.now();
+  var MAX_MS = 6 * 60 * 1000;
+  function tick() {
+    fetch('/api/images/jobs/' + jobId)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d && d.status === 'done' && d.image_url) {
+          if (state.currentSession) {
+            state.currentSession.establishing_image = d.image_url;
+            if (typeof renderSessionEstablishing === 'function') renderSessionEstablishing(state.currentSession);
+          }
+          var emi = document.getElementById('establishing-modal-img'); if (emi) emi.src = d.image_url;
+          return;
+        }
+        if (d && d.status === 'failed') return;
+        if (Date.now() - started < MAX_MS) setTimeout(tick, 4000);
+      })
+      .catch(function(){ if (Date.now() - started < MAX_MS) setTimeout(tick, 4000); });
+  }
+  setTimeout(tick, 4000);
+}
+
 // Re-fetch the current session from the server and re-render the storyboard
 // in place. Used after image generation so new images appear without a reload.
 function refreshStoryboardImages() {
@@ -4464,6 +4497,7 @@ function refreshStoryboardImages() {
     .then(function(data) {
       if (!data || data.error) return;
       state.currentSession = data;
+      if (typeof renderSessionEstablishing === 'function') renderSessionEstablishing(data);
       state.moments = data.moments || [];
       renderStoryboard();
       if (typeof renderNovelWithImages === 'function') renderNovelWithImages();
@@ -4541,6 +4575,7 @@ async function generateAllImages(fromChain) {
     // Async batch: the server queued one job per panel and returned their ids.
     // Poll them to completion, driving the progress bar as each lands. (Falls
     // back to the old synchronous shape if the server returns counts directly.)
+    if (data.establishing && data.establishing.job_id) pollEstablishingJob(data.establishing.job_id);
     if (data.jobs) {
       pollImageBatch(data.jobs, { total: data.total, skipped_locked: data.skipped_locked });
       return;
@@ -7836,6 +7871,7 @@ async function generateAllImages(fromChain) {
     // Async batch: the server queued one job per panel and returned their ids.
     // Poll them to completion, driving the progress bar as each lands. (Falls
     // back to the old synchronous shape if the server returns counts directly.)
+    if (data.establishing && data.establishing.job_id) pollEstablishingJob(data.establishing.job_id);
     if (data.jobs) {
       pollImageBatch(data.jobs, { total: data.total, skipped_locked: data.skipped_locked });
       return;

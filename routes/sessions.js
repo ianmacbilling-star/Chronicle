@@ -44,7 +44,12 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     if (!forkId) forkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
     const fk = await db.prepare('SELECT player_access_status FROM session_forks WHERE id = ?').get(forkId);
-    return Object.assign({}, s, { moments, fork_status: fk ? fk.player_access_status : 'draft' });
+    // Session card thumbnail: prefer the session title (establishing) image,
+    // fall back to the first panel image that exists.
+    let firstMomentImg = null;
+    for (let mi = 0; mi < moments.length; mi++) { if (moments[mi].image) { firstMomentImg = moments[mi].image; break; } }
+    const first_image_url = s.establishing_image || firstMomentImg || null;
+    return Object.assign({}, s, { moments, fork_status: fk ? fk.player_access_status : 'draft', first_image_url: first_image_url });
   }));
   res.json(result);
 });

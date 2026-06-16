@@ -971,19 +971,25 @@
       <div class="modal-title">Session title image</div>
       <button class="modal-close" onclick="closeEstablishingModal()">&times;</button>
     </div>
-    <img id="establishing-modal-img" alt="Session title image" title="Click to enlarge" style="width:100%;border-radius:10px;border:1px solid rgba(201,168,76,0.3);display:block;margin-bottom:12px;cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" />
-    <div class="dm-only">
-      <div class="form-group">
+    <div class="establishing-img-wrap">
+      <img id="establishing-modal-img" alt="Session title image" title="Click to enlarge" onclick="openLightbox(this.src, this.alt)" />
+      <div class="panel-img-actions dm-only">
+        <button class="panel-pill" onclick="event.stopPropagation();toggleEstablishingPromptEdit()" title="Edit the title-image prompt">Edit prompt</button>
+        <button class="panel-pill" onclick="event.stopPropagation();replaceEstablishing()" title="Replace from the Archive">Replace</button>
+        <button class="panel-pill" id="establishing-lock-btn" onclick="event.stopPropagation();toggleEstablishingLock()" title="Lock to skip regeneration">Lock</button>
+      </div>
+    </div>
+    <div class="dm-only" id="establishing-prompt-edit" style="display:none;">
+      <div class="form-group" style="margin-top:12px;">
         <label class="form-label">Prompt</label>
         <textarea class="form-input" id="establishing-prompt-input" style="min-height:84px;resize:vertical;" placeholder="Describe the establishing shot..."></textarea>
       </div>
       <div class="establishing-pill-row">
         <button class="btn btn-primary btn-sm" onclick="saveEstablishingPrompt()">Save prompt</button>
-        <button class="btn btn-sm" onclick="replaceEstablishing()">Replace</button>
-        <button class="btn btn-sm" id="establishing-lock-btn" onclick="toggleEstablishingLock()">Lock</button>
+        <button class="btn btn-sm" onclick="toggleEstablishingPromptEdit()">Close</button>
       </div>
-      <div class="establishing-modal-hint" id="establishing-modal-msg"></div>
     </div>
+    <div class="establishing-modal-hint dm-only" id="establishing-modal-msg"></div>
   </div>
 </div>
 
