@@ -1915,3 +1915,45 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .moment-opts-hint{font-size:10px;color:rgba(201,168,76,0.45);font-style:italic;}
 .moment-opts-note{font-size:11px;color:rgba(201,168,76,0.55);font-style:italic;}
 .moment-opts-loading{font-size:11px;color:rgba(201,168,76,0.5);}
+
+/* ============================================================
+   MOBILE -- Phase 3: the app on a phone.
+   Header fits, content stacks, and the storyboard image actions
+   (Edit prompt / Regenerate / Retouch / Replace / Lock / Archive)
+   work on touch. Additive only -- desktop is unchanged.
+   ============================================================ */
+
+/* Storyboard + reference-image action pills are hover-revealed (opacity:0
+   until :hover). Touch devices have no hover, so on touch reveal them and lay
+   the storyboard toolbar out BELOW the image instead of as an overlay.
+   .dm-only stays display:none for view-only players, so this never exposes
+   edit controls to someone who cannot edit. */
+@media (hover: none) and (pointer: coarse) {
+  .panel-img-actions { position: static; margin: 6px 0 2px; padding: 0 6px; }
+  .panel-pill { opacity: 1 !important; padding: 7px 11px; font-size: 12px; }
+  .char-ref-imgwrap .panel-pill,
+  .sc-review-imgwrap .panel-pill { opacity: 1 !important; padding: 6px 10px; font-size: 12px; }
+  .storyboard-panel .moment-regen-btn,
+  .storyboard-panel .moment-replace-btn { opacity: 1 !important; }
+}
+
+/* Phone layout: compact header, stacked page headers, tighter padding. */
+@media (max-width: 640px) {
+  .app-header { padding: 0 0.75rem; gap: 8px; }
+  .app-logo-text { display: none; }            /* keep just the logo mark */
+  #user-name { display: none; }                /* avatar-only menu button */
+  #header-campaigns-btn { display: none; }      /* still reachable via the breadcrumb */
+  .app-header-right { gap: 7px; }
+  .app-header-right > .btn,
+  .app-header-right > #token-balance-label { height: 28px; }
+  #trial-badge { font-size: 10px; padding: 3px 6px; }
+
+  .breadcrumb { padding: 4px 0.9rem; }
+  .main-content > div:not(#view-campaigns) { padding: 1rem; }
+  .page-header { flex-direction: column; align-items: stretch; gap: 10px; }
+
+  /* Section nav scrolls horizontally instead of overflowing. */
+  #campaign-subnav { overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+
+  .modal { padding: 18px; }
+}
