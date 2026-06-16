@@ -1459,11 +1459,25 @@ function renderSessionEstablishing(data) {
 // Inline edit of the session title + description (mirrors the campaign editor:
 // pencil swaps the title to an input and the description to a textarea, saves on
 // blur once focus leaves both fields, never blanks the name).
+function fmtSessionDateShort(dateVal) {
+  if (!dateVal) return '';
+  var dateStr = (typeof dateVal === 'string') ? dateVal : (dateVal && dateVal.toISOString ? dateVal.toISOString() : String(dateVal));
+  var datePart = dateStr.split('T')[0];
+  try { return new Date(datePart + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch (e) { return datePart; }
+}
+function sessionDateISO(dateVal) {
+  if (!dateVal) return '';
+  var dateStr = (typeof dateVal === 'string') ? dateVal : (dateVal && dateVal.toISOString ? dateVal.toISOString() : String(dateVal));
+  return dateStr.split('T')[0];
+}
 function renderSessionHeaderDisplay() {
   var s = state.currentSession;
   var nameEl = document.getElementById('session-detail-name');
+  var dateEl = document.getElementById('session-detail-date-display');
   var descEl = document.getElementById('session-detail-desc');
   if (nameEl) nameEl.textContent = (s && s.name) ? s.name : 'Session';
+  if (dateEl) dateEl.textContent = (s && s.session_date) ? fmtSessionDateShort(s.session_date) : '';
   if (descEl) descEl.textContent = (s && s.description) ? s.description : '';
 }
 function startSessionEdit() {
@@ -1471,11 +1485,15 @@ function startSessionEdit() {
   if (!s) return;
   if (document.getElementById('session-edit-name-input')) return;
   var nameEl = document.getElementById('session-detail-name');
+  var dateEl = document.getElementById('session-detail-date-display');
   var descEl = document.getElementById('session-detail-desc');
   if (nameEl) nameEl.innerHTML = '<input id="session-edit-name-input" class="camp-edit-input" onblur="sessionEditBlur()" onkeydown="sessionEditKey(event)" />';
+  if (dateEl) dateEl.innerHTML = '<input type="date" id="session-edit-date-input" class="camp-edit-input sdh-date-edit" onblur="sessionEditBlur()" />';
   if (descEl) descEl.innerHTML = '<textarea id="session-edit-desc-input" class="camp-edit-textarea" placeholder="Add a description..." onblur="sessionEditBlur()"></textarea>';
   var ni = document.getElementById('session-edit-name-input');
   if (ni) { ni.value = s.name || ''; ni.focus(); ni.select(); }
+  var ddi = document.getElementById('session-edit-date-input');
+  if (ddi) ddi.value = sessionDateISO(s.session_date);
   var di = document.getElementById('session-edit-desc-input');
   if (di) di.value = s.description || '';
 }
@@ -1485,27 +1503,29 @@ function sessionEditKey(e) {
 function sessionEditBlur() {
   setTimeout(function() {
     var ni = document.getElementById('session-edit-name-input');
+    var ddi = document.getElementById('session-edit-date-input');
     var di = document.getElementById('session-edit-desc-input');
     var ae = document.activeElement;
-    if (ae === ni || ae === di) return;
+    if (ae === ni || ae === ddi || ae === di) return;
     var s = state.currentSession;
     if (!s) { renderSessionHeaderDisplay(); return; }
     var newName = ni ? ni.value.trim() : (s.name || '');
     var newDesc = di ? di.value : (s.description || '');
+    var newDate = (ddi && ddi.value) ? ddi.value : sessionDateISO(s.session_date);
     if (!newName) newName = s.name;
-    if (newName === s.name && newDesc === (s.description || '')) { renderSessionHeaderDisplay(); return; }
+    if (newName === s.name && newDesc === (s.description || '') && newDate === sessionDateISO(s.session_date)) { renderSessionHeaderDisplay(); return; }
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + s.id, {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ name: newName, description: newDesc })
+      body: JSON.stringify({ name: newName, description: newDesc, session_date: newDate })
     })
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.id) { state.currentSession = Object.assign({}, s, data); }
-      else { s.name = newName; s.description = newDesc; }
+      else { s.name = newName; s.description = newDesc; s.session_date = newDate; }
       renderSessionHeaderDisplay();
     })
-    .catch(function(){ s.name = newName; s.description = newDesc; renderSessionHeaderDisplay(); });
+    .catch(function(){ s.name = newName; s.description = newDesc; s.session_date = newDate; renderSessionHeaderDisplay(); });
   }, 0);
 }
 
@@ -1525,8 +1545,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
-      var _sdesc = document.getElementById('session-detail-desc');
-      if (_sdesc) _sdesc.textContent = data.description || '';
+      renderSessionHeaderDisplay();
       renderSessionEstablishing(data);
       // Set editable date input
       var dateInput = document.getElementById('session-detail-date-input');
@@ -7121,8 +7140,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
-      var _sdesc = document.getElementById('session-detail-desc');
-      if (_sdesc) _sdesc.textContent = data.description || '';
+      renderSessionHeaderDisplay();
       renderSessionEstablishing(data);
       // Set editable date input
       var dateInput = document.getElementById('session-detail-date-input');

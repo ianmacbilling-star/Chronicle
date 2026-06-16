@@ -345,12 +345,9 @@
           <div class="sdh-titlewrap">
             <div class="page-title sdh-title-row">
               <span id="session-detail-name">Session</span>
-              <button class="camp-edit-pencil dm-only" id="session-edit-btn" onclick="startSessionEdit()" title="Edit session title &amp; description">&#9998;</button>
+              <span id="session-detail-date-display" class="sdh-date-display"></span>
+              <button class="camp-edit-pencil dm-only" id="session-edit-btn" onclick="startSessionEdit()" title="Edit session title, date &amp; description">&#9998;</button>
             </div>
-            <input type="date" id="session-detail-date-input"
-              class="form-input session-detail-date"
-              onchange="updateSessionDate(this.value)"
-            />
             <div class="page-subtitle" id="session-detail-desc"></div>
           </div>
         </div>
