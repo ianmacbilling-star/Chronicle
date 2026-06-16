@@ -1957,3 +1957,11 @@ html.staging-env .app-logo-text{color:#2b1400;}
 
   .modal { padding: 18px; }
 }
+
+/* Phase 3 follow-up: button/toolbar rows wrap on a phone instead of running
+   off-screen (campaign section nav, find/replace tools, preview header). */
+@media (max-width: 640px) {
+  .page-header .flex { flex-wrap: wrap; }
+  .fr-tools { flex-wrap: wrap; }
+  .notes-toolbar { flex-wrap: wrap; }
+}

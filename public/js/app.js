@@ -4012,6 +4012,7 @@ function resizePreviewIframe() {
   // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('session-preview-iframe');
   var frame = document.getElementById('session-preview-frame');
+  _fitPreviewMobile('session-preview-iframe', typeof sessionPreviewMode !== 'undefined' && sessionPreviewMode !== 'wysiwyg');
   if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
@@ -4455,7 +4456,7 @@ function regenImage(momentId, index) {
       if (data.error === 'INSUFFICIENT_TOKENS') {
         showPanelError(momentId, insufficientTokensHtml(data.message), true);
       } else {
-        showPanelError(momentId, 'Could not regenerate: ' + data.error);
+        showPanelError(momentId, 'Could not regenerate: ' + (data.message || data.error));
       }
       return;
     }
@@ -4740,6 +4741,7 @@ function resizeNovelPreviewIframe() {
   // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
+  _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
   if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
@@ -7307,6 +7309,7 @@ function resizePreviewIframe() {
   // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('session-preview-iframe');
   var frame = document.getElementById('session-preview-frame');
+  _fitPreviewMobile('session-preview-iframe', typeof sessionPreviewMode !== 'undefined' && sessionPreviewMode !== 'wysiwyg');
   if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
@@ -7732,7 +7735,7 @@ function regenImage(momentId, index) {
       if (data.error === 'INSUFFICIENT_TOKENS') {
         showPanelError(momentId, insufficientTokensHtml(data.message), true);
       } else {
-        showPanelError(momentId, 'Could not regenerate: ' + data.error);
+        showPanelError(momentId, 'Could not regenerate: ' + (data.message || data.error));
       }
       return;
     }
@@ -7955,6 +7958,7 @@ function resizeNovelPreviewIframe() {
   // internally, so keep a fixed-height pane instead of growing to content.
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
+  _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
   if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
@@ -11017,4 +11021,21 @@ function renderMomentOptions(momentId) {
     promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> ' + plabel + '</div>';
   }
   box.innerHTML = '<div class="moment-opts-inner">' + castHtml + promHtml + '</div>';
+}
+
+// Mobile: in Quick View the preview iframe renders the print-width (8.5in) HTML,
+// which overflows a phone. Same-origin, so on a narrow screen we zoom the iframe
+// body to fit its width. True View (PDF) and desktop are left untouched.
+function _fitPreviewMobile(iframeId, isQuickView) {
+  try {
+    if (!isQuickView) return;
+    if ((window.innerWidth || 9999) > 640) return;
+    var ifr = document.getElementById(iframeId);
+    if (!ifr) return;
+    var doc = ifr.contentDocument || (ifr.contentWindow && ifr.contentWindow.document);
+    if (!doc || !doc.body) return;
+    var avail = ifr.clientWidth || ifr.offsetWidth || window.innerWidth;
+    var bookW = 816;
+    doc.body.style.zoom = (avail && avail < bookW) ? String(avail / bookW) : "";
+  } catch (e) {}
 }
