@@ -2772,7 +2772,15 @@ function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now
 function clearGenLock() { state.sessionGenLock = null; }
 function ensureGenFree() {
   var b = sessionGenBusy();
-  if (b) { showAlert('A session-wide generation is already running (' + b + '\u2026). Please wait for it to finish before starting another.'); return false; }
+  if (b) {
+    // Client-side lock; auto-expires in 15 min. If a run got stuck (a hung or
+    // aborted request that skipped its clear), offer a manual override so the user
+    // is never blocked waiting it out. Two-step on purpose: override clears the
+    // lock, then they start again.
+    uiConfirm('A session-wide generation (' + b + '\u2026) appears to be running, so this action is blocked. If it looks stuck, you can override and clear the lock, then try again.', { okText: 'Override & unlock', cancelText: 'Keep waiting' })
+      .then(function (ok) { if (ok) { clearGenLock(); showAlert('Generation lock cleared. You can start again now.'); } });
+    return false;
+  }
   return true;
 }
 

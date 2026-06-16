@@ -1928,7 +1928,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
    the storyboard toolbar out BELOW the image instead of as an overlay.
    .dm-only stays display:none for view-only players, so this never exposes
    edit controls to someone who cannot edit. */
-@media (hover: none) and (pointer: coarse) {
+@media (any-hover: none) and (any-pointer: coarse) {
   .panel-img-actions { position: static; margin: 6px 0 2px; padding: 0 6px; }
   .panel-pill { opacity: 1 !important; padding: 7px 11px; font-size: 12px; }
   .char-ref-imgwrap .panel-pill,
