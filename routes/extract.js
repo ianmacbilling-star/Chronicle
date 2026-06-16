@@ -46,6 +46,13 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     return res.json({ error: 'LOCKED_MOMENTS', message: 'Locked moments exist, so you can’t regenerate the story. Unlock them first to rebuild this version.' });
   }
 
+  // The session title (establishing) image is locked. Like a locked panel, a
+  // locked title image stops a story regeneration (re-extraction would rewrite
+  // its scene). Only the DM owns the canonical title image, so gate on the DM.
+  if (callerRole === 'dm' && session.establishing_locked) {
+    return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The session title image is locked, so the story cannot be regenerated. Unlock the title image first to rebuild this version.' });
+  }
+
   // An accepted character change pinned to a specific panel (change_moment_index)
   // anchors to a moment that re-extraction would rebuild from scratch — the
   // change would land on the wrong beat. Refuse up front, same as locked images.
