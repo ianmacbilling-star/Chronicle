@@ -4742,6 +4742,7 @@ function switchNovelTab(tab) {
     if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
     if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
+    if (typeof prepPanelSync === 'function') prepPanelSync();
   }
 }
 
@@ -5018,6 +5019,13 @@ function exportNovelPDF() {
 // --- Publish to Public Library (Stories) -------------------------------------
 // Owner-only on the server; here we just drive the button. We send the SAME
 // layout + custom options the preview is showing so the published book matches.
+// Pre-Publish Prep panel: seed the title from the campaign name. (B2 will also
+// reflect the chosen cover/back/title images here.)
+function prepPanelSync() {
+  var tEl = document.getElementById('prep-title');
+  if (tEl && !tEl.value && state.currentCampaign && state.currentCampaign.name) tEl.value = state.currentCampaign.name;
+}
+
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
   if (state.user && state.user.inFreeTrial) {
@@ -5025,22 +5033,26 @@ async function publishStory() {
     if (_go) showView('account');
     return;
   }
-  var msg = 'Publish this graphic novel to the public Library? It will be shown publicly under your pen name (set one in Settings first if you want one). Player real names are hidden in the public version.';
-  var _res = await uiPublishPrompt(msg, { defaultTitle: (state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '' });
-  if (_res === null) return;
+  var tEl = document.getElementById('prep-title');
+  var bEl = document.getElementById('prep-blurb');
+  var aEl = document.getElementById('prep-attest');
+  var _title = tEl ? tEl.value.trim() : '';
+  var _blurb = bEl ? bEl.value.trim() : '';
+  var _attested = aEl ? !!aEl.checked : false;
   var btn = document.getElementById('novel-publish-btn');
   var st = document.getElementById('novel-publish-status');
+  if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
   if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
   var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&');
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: _res.title, blurb: _res.blurb, attested: _res.attested === true }) })
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: _title, blurb: _blurb, attested: _attested }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (btn) btn.disabled = false;
       if (d && d.success) {
         if (st) st.textContent = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
         setStoryPublishedUI(true, d.url);
-        var _pt = document.getElementById('print-book-title'); if (_pt && _res && _res.title) _pt.value = _res.title;
+        var _pt = document.getElementById('print-book-title'); if (_pt && _title) _pt.value = _title;
       } else {
         if (st) st.textContent = (d && d.error) ? d.error : 'Could not publish. Please try again.';
         if (btn) btn.textContent = 'Publish to Library';
@@ -8037,6 +8049,7 @@ function switchNovelTab(tab) {
     if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
     if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
+    if (typeof prepPanelSync === 'function') prepPanelSync();
   }
 }
 

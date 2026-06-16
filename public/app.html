@@ -178,6 +178,8 @@
 
       <!-- Preview & Export tab -->
       <div id="novel-tab-preview" style="display:none;">
+        <div class="novel-preview-layout">
+        <div class="novel-preview-col">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
@@ -190,9 +192,7 @@
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()">Next</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">Open in New Tab</button>
-          <button class="btn btn-sm" id="novel-publish-btn" onclick="publishStory()">Publish to Library</button>
         </div>
-        <div id="novel-publish-status" style="display:none;font-size:12px;margin:-2px 0 10px;color:rgba(201,168,76,0.85);"></div>
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
         </div>
@@ -216,6 +216,20 @@
           </select>
           <button class="btn btn-sm" id="novel-pager-next-bottom" onclick="novelPageNext()">Next</button>
         </div>
+        </div><!-- /novel-preview-col -->
+        <aside class="novel-prep-panel" id="novel-prep-panel">
+          <div class="prep-h">Prepare to Publish</div>
+          <div class="prep-field-label">Title</div>
+          <input type="text" id="prep-title" maxlength="200" placeholder="e.g. The Shattered Crown" class="prep-input" />
+          <div class="prep-field-label">Blurb for your Library page (optional)</div>
+          <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
+          <!-- B2: Cover / Back Cover / Title image picker goes here -->
+          <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).</span></label>
+          <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
+          <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
+          <div class="prep-hint">You can manage published content on your Account page.</div>
+        </aside>
+        </div><!-- /novel-preview-layout -->
       </div>
 
       <!-- Order Printed Copy tab -->
