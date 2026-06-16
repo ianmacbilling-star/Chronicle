@@ -1440,6 +1440,25 @@ async function deleteSession(id) {
     });
 }
 
+// Session establishing image (auto-generated wide title card) shown at the top
+// of the session detail page. Stage 2 = display + click-to-enlarge (reuses the
+// shared lightbox). The control pills come in the next stage. Hidden when the
+// session has no establishing image yet.
+function renderSessionEstablishing(data) {
+  var box = document.getElementById('session-establishing');
+  if (!box) return;
+  var img = data && data.establishing_image;
+  if (!img) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'flex';
+  box.innerHTML =
+    '<img class="session-establishing-thumb" src="' + img + '" alt="Session title image" ' +
+      'style="cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" title="Click to enlarge" />' +
+    '<div class="session-establishing-meta">' +
+      '<div class="session-establishing-label">Title image</div>' +
+      '<div class="session-establishing-hint">A wide establishing shot for this session. Click to enlarge.</div>' +
+    '</div>';
+}
+
 function selectSession(id) {
   // Clear previous session state
   state.moments = [];
@@ -1456,6 +1475,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      renderSessionEstablishing(data);
       // Set editable date input
       var dateInput = document.getElementById('session-detail-date-input');
       if (dateInput && data.session_date) {
@@ -7047,6 +7067,7 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      renderSessionEstablishing(data);
       // Set editable date input
       var dateInput = document.getElementById('session-detail-date-input');
       if (dateInput && data.session_date) {
