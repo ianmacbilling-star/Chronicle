@@ -118,6 +118,39 @@
       transition: all 0.15s;
     }
     .btn-nav:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink); }
+    .nav-toggle {
+      display: none;
+      background: none;
+      border: 2px solid rgba(201,168,76,0.4);
+      color: var(--gold);
+      font-size: 20px;
+      line-height: 1;
+      padding: 4px 11px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 64px; left: 0; right: 0;
+      z-index: 499;
+      flex-direction: column;
+      background: rgba(10,8,6,0.98);
+      border-bottom: 3px solid var(--ink);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+      padding: 6px 0;
+    }
+    .mobile-menu a {
+      font-family: 'Cinzel', serif;
+      font-size: 14px;
+      letter-spacing: 2px;
+      color: rgba(201,168,76,0.85);
+      text-decoration: none;
+      padding: 14px 24px;
+      border-bottom: 1px solid rgba(201,168,76,0.12);
+    }
+    .mobile-menu a:last-child { border-bottom: none; }
+    .mobile-menu a:hover, .mobile-menu a:active { color: var(--gold); background: rgba(201,168,76,0.06); }
 
     /* COMIC BOOK PAGE */
     .comic-book {
@@ -833,6 +866,8 @@
       .faq-cell { border-right: none; }
       footer { flex-direction: column; gap: 16px; text-align: center; }
       nav .nav-link { display: none; }
+      .nav-toggle { display: inline-flex; align-items: center; }
+      .mobile-menu.open { display: flex; }
       /* Hero stacks: text first, image below */
       .hero-split { flex-direction: column; min-height: 0 !important; }
       .hero-text-panel { padding: 32px 28px !important; }
@@ -880,8 +915,14 @@
     <a href="#pricing" class="nav-link">PRICING</a>
     <a href="#faq" class="nav-link">FAQ</a>
     <a href="/login" class="btn-nav">SIGN IN</a>
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" onclick="cmpToggleNav()">&#9776;</button>
   </div>
 </nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/library" onclick="cmpCloseNav()">LIBRARY</a>
+  <a href="#pricing" onclick="cmpCloseNav()">PRICING</a>
+  <a href="#faq" onclick="cmpCloseNav()">FAQ</a>
+</div>
 
 <div class="comic-book">
 <div class="comic-page">
@@ -1158,6 +1199,10 @@
     });
   }).catch(function(){});
 })();
+</script>
+<script>
+function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
+function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
 </script>
 </body>
 </html>
