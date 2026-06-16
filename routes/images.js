@@ -836,6 +836,19 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
   }
 });
 
+// Build a deterministic "establishing shot" prompt for a session's title-card
+// image: a wide, scene-setting view of the setting/mood, NOT a dramatic beat and
+// NOT character-focused. Seeded from the session's opening narrative so it
+// reflects this chapter's setting. Stored on sessions.establishing_prompt and
+// thereafter editable + controllable like a panel image.
+function buildEstablishingPrompt(session) {
+  var src = (session.narrative_intro_summary || session.narrative_intro || session.session_notes || '').toString();
+  src = src.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 600);
+  var base = 'A wide, sweeping establishing shot that sets the scene for this chapter of the story: the location, environment, time of day, and overall atmosphere. This is a scene-setting title card, not a specific dramatic action moment, and it should not focus on any single character or show characters in close-up.';
+  if (src) base += ' Setting and mood to depict: ' + src;
+  return base;
+}
+
 // POST /api/images/generate-all
 router.post('/generate-all', requireAuth, async function(req, res) {
   const { session_id, campaign_id, style } = req.body;
@@ -867,6 +880,20 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // Image locking — skip locked panels (don't regenerate, don't charge for them).
   const lockedCount = moments.filter(function(m){ return m.locked; }).length;
   const toGenerate = moments.filter(function(m){ return !m.locked; });
+
+  // Stage 1: the session establishing image rides along with the panel batch.
+  // Skipped when locked (exactly like a locked panel). Fetched here so its cost
+  // is folded into the upfront token gate below.
+  const sidInt = parseInt(session_id, 10);
+  // Defensive: if the Stage 0 schema is not deployed yet, the establishing_*
+  // columns are missing -> this SELECT throws. Swallow it so the panel batch is
+  // never affected (the establishing feature simply no-ops until schema lands).
+  let sessRow = {}, estColsOk = false;
+  try {
+    sessRow = (await db.prepare('SELECT establishing_image, establishing_prompt, establishing_locked, establishing_shape, narrative_intro, narrative_intro_summary, session_notes FROM sessions WHERE id = ?').get(sidInt)) || {};
+    estColsOk = true;
+  } catch (e) { console.error('establishing: session fetch failed (schema not deployed?):', e && e.message); }
+  const estWillGen = estColsOk && !sessRow.establishing_locked;
   if (!toGenerate.length) {
     return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, message: 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.' });
   }
@@ -917,7 +944,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // charged — but the upfront check guarantees they can cover a full run.
   const perImageCost = await getTokenCost(modelKey);
   const userThinkingAll = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
-  const batchCost = perImageCost * toGenerate.length;
+  const batchCost = perImageCost * toGenerate.length + (estWillGen ? perImageCost : 0);
   if (!(await canAfford(req.session.userId, batchCost))) {
     const bal = await getBalance(req.session.userId);
     return res.json({
@@ -969,11 +996,36 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     else { submitFailed++; console.error('generate-all submit failed:', submitResults[si].reason && submitResults[si].reason.message); }
   }
 
+  // Stage 1: submit the session establishing image alongside the panels. Routed
+  // through submitPanelGen so it inherits the same IP guard, style, and model.
+  // Non-fatal: a failure here never breaks the panel batch.
+  let establishingJob = null;
+  if (estWillGen) {
+    try {
+      const estShape = sessRow.establishing_shape || 'wide';
+      let estPrompt = (sessRow.establishing_prompt || '').trim();
+      if (!estPrompt) {
+        estPrompt = buildEstablishingPrompt(sessRow);
+        try { await db.prepare('UPDATE sessions SET establishing_prompt = ? WHERE id = ?').run(estPrompt, sidInt); } catch (e) {}
+      }
+      const estSeed = (baseSeed + sessionOffset + 99991) % 2147483647;
+      const estSub = await submitPanelGen(estPrompt, style, fal_key, null, estSeed, modelKey, webhookUrl, estShape, userThinkingAll);
+      const nowTsE = new Date().toISOString();
+      const estIns = await db.prepare(
+        'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(estSub.request_id, req.session.userId, campaign_id, sidInt, targetForkId, 'session_establishing', 'queued', estSub.model, style || null, perImageCost, sessRow.establishing_image || null, nowTsE, nowTsE);
+      establishingJob = { session_id: sidInt, job_id: estIns.lastInsertRowid };
+    } catch (e) {
+      console.error('generate-all establishing submit failed (non-fatal):', e && e.message);
+    }
+  }
+
   if (myRole === 'player' && jobs.length) {
     try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campaign_id, req.session.userId); } catch (e) {}
   }
 
-  res.status(202).json({ status: 'queued', jobs: jobs, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
+  res.status(202).json({ status: 'queued', jobs: jobs, establishing: establishingJob, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
 });
 
 // ============================================================
@@ -1070,6 +1122,16 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (arW > 0 && arH > 0) { imgW = Math.round(arW * 256); imgH = Math.round(arH * 256); }
       } catch (e) { /* leave dims null -> renderer uses the nominal shape aspect */ }
     }
+    // Same dims fallback for the session establishing image (nano-banana returns
+    // null width/height): fall back to the requested establishing shape's aspect.
+    if ((!imgW || !imgH) && job.session_id && job.kind === 'session_establishing') {
+      try {
+        const sShapeRow = await db.prepare('SELECT establishing_shape FROM sessions WHERE id = ?').get(job.session_id);
+        const arPartsE = String(shapeAspectRatio((sShapeRow && sShapeRow.establishing_shape) || 'wide')).split(':');
+        const arWe = Number(arPartsE[0]), arHe = Number(arPartsE[1]);
+        if (arWe > 0 && arHe > 0) { imgW = Math.round(arWe * 256); imgH = Math.round(arHe * 256); }
+      } catch (e) { /* leave dims null */ }
+    }
     if (!falUrl) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
@@ -1107,9 +1169,16 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (job.kind === 'session_ref' && job.character_id) {
           await logImageGeneration(db, job.user_id, 'session_reference', job.character_id, job.fork_id);
         }
+        if (job.kind === 'session_establishing' && job.session_id) {
+          await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = ?, establishing_img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+            .run(imageUrl, job.style || null, imgW, imgH, new Date().toISOString(), job.user_id, job.session_id);
+          if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
+          await logImageGeneration(db, job.user_id, 'session_establishing', job.session_id, job.fork_id);
+        }
       if (job.cost && job.cost > 0) {
         const spendSource = (job.kind === 'char_ref') ? 'character_reference'
           : (job.kind === 'session_ref') ? 'amendment_reference'
+          : (job.kind === 'session_establishing') ? 'session_establishing'
           : (job.kind === 'retouch') ? 'panel_retouch'
           : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: spendSource, event_type: 'generation_spend' });
