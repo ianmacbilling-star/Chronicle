@@ -20,6 +20,23 @@ function ldSafe(json) {
   return json.split('<').join(String.fromCharCode(92) + 'u003c');
 }
 
+// Mobile fit-to-width for the reading view. The reading view is rendered from
+// the fixed 8.5in print template, so on a phone it overflows. WEB_STYLE makes
+// the page body fluid (so the injected header/footer reflow responsively), and
+// the #cmp-book wrapper around the book pages is scaled to fit the viewport
+// width (like a comic/PDF page view). Screen-only: print restores 8.5in.
+const WEB_STYLE =
+  '<style id="cmp-web-style">' +
+    'body{width:100% !important;max-width:100% !important;margin:0 !important;overflow-x:hidden;}' +
+    '#cmp-book{margin:0 auto;}' +
+    '@media print{body{width:8.5in !important;margin:0 auto !important;}#cmp-book{zoom:1 !important;}}' +
+  '</style>';
+const FIT_SCRIPT =
+  '<script>(function(){var B=816;var el=document.getElementById("cmp-book");function f(){if(!el)return;' +
+  'var w=document.documentElement.clientWidth||window.innerWidth;el.style.zoom=(w&&w<B)?(w/B):"";}' +
+  'window.addEventListener("resize",f);window.addEventListener("orientationchange",f);' +
+  'if(document.readyState!=="loading"){f();}else{document.addEventListener("DOMContentLoaded",f);}})();</script>';
+
 // Public, server-rendered per-story page. Real HTML (title, author, blurb,
 // teaser, and the full reading view) so search engines can index it. Built from
 // the frozen snapshot taken at publish, never live campaign data.
@@ -134,10 +151,10 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     if (snap && snap.sessions) {
       const pageOpts = { publicMode: true, bookTitle: snap.bookTitle || title };
       html = buildNovelHTML(snap.campaign, snap.sessions, snap.characters, snap.layoutStyle || 'Classic', pageOpts, snap.co || null);
-      html = html.replace('<head>', '<head>' + seo);
-      html = html.replace('<body>', '<body>' + header);
+      html = html.replace('<head>', '<head>' + seo + WEB_STYLE);
+      html = html.replace('<body>', '<body>' + header + '<div id="cmp-book">');
       html = html.split('<div class="print-bar" id="printBar"><button onclick="window.print()">Save as PDF / Print</button></div>').join('');
-      html = html.replace('</body>', footerCta + '</body>');
+      html = html.replace('</body>', '</div>' + footerCta + FIT_SCRIPT + '</body>');
     } else {
       // Legacy entry without a snapshot -- still a valid SEO page (cover + meta +
       // download), just no inline reading view until the author republishes.
