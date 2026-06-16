@@ -341,6 +341,25 @@ async function initPostgres() {
     // Review tab — terse summaries of the opening and closing narrative.
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_intro_summary TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS narrative_outro_summary TEXT',
+    // Session establishing image -- an auto-generated wide "title card" shot of
+    // the session setting, created during Generate Story and controllable like a
+    // panel image (edit prompt / regenerate / retouch / replace / lock / archive).
+    // Mirrors the moments image columns. Used as the title image on a single-session
+    // publish and as an interior session divider on a multi-session publish.
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_image TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_prompt TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_img_w INTEGER',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_img_h INTEGER',
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_shape TEXT DEFAULT 'wide'",
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_style TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_locked INTEGER DEFAULT 0',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS establishing_layout_meta TEXT',
+    // Optional short session description (blurb under the session title),
+    // set at create time or edited inline; mirrors the campaign description.
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS description TEXT',
+    // image_jobs.session_id routes a kind='session_establishing' generation back
+    // to its session (the table already keys moment/character jobs by their ids).
+    'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS session_id INTEGER',
     // Forgot-password flow. These were previously added to production by
     // hand and never captured as migrations, so a fresh DB (e.g. staging)
     // was missing them and forgot-password silently failed. Now migrated

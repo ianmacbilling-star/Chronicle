@@ -341,11 +341,18 @@
     <div id="view-session-detail" class="view" style="display:none;">
       <div class="session-detail-head">
         <div class="sdh-left">
-          <div class="page-title" id="session-detail-name">Session</div>
-          <input type="date" id="session-detail-date-input"
-            class="form-input session-detail-date"
-            onchange="updateSessionDate(this.value)"
-          />
+          <img id="session-establishing-thumb" class="session-establishing-thumb" alt="Session title image" title="Click to enlarge" style="display:none;cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" />
+          <div class="sdh-titlewrap">
+            <div class="page-title sdh-title-row">
+              <span id="session-detail-name">Session</span>
+              <button class="camp-edit-pencil dm-only" id="session-edit-btn" onclick="startSessionEdit()" title="Edit session title &amp; description">&#9998;</button>
+            </div>
+            <input type="date" id="session-detail-date-input"
+              class="form-input session-detail-date"
+              onchange="updateSessionDate(this.value)"
+            />
+            <div class="page-subtitle" id="session-detail-desc"></div>
+          </div>
         </div>
         <div class="sdh-right">
           <!-- DM sees an editable Draft/Ready dropdown; players see a read-only chip. -->
@@ -381,12 +388,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Session establishing image (auto-generated wide title card). Display +
-           click-to-enlarge now; control pills (Edit prompt / Regenerate / Retouch /
-           Replace / Lock / Archive) arrive in the next stage. Filled by
-           renderSessionEstablishing(); hidden until the session has one. -->
-      <div id="session-establishing" class="session-establishing" style="display:none;"></div>
 
       <div class="sess-tabs">
         <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">Story</div>
@@ -954,6 +955,10 @@
     <div class="form-group">
       <label class="form-label">Session date</label>
       <input class="form-input" type="date" id="session-date" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="opacity:0.6;font-weight:400;">(optional)</span></label>
+      <textarea class="form-input" id="session-desc" style="min-height:64px;resize:vertical;" placeholder="A short description of this session (optional)"></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeSessionModal()">Cancel</button>

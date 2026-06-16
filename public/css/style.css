@@ -302,6 +302,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #view-session-detail .sess-tab{padding-top:5px;padding-bottom:5px;}
 #view-session-detail .sess-tabs{margin-bottom:8px;}
 .sdh-left{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;}
+.sdh-titlewrap{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.sdh-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0;}
 .sdh-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;}
 .session-detail-head .form-input{height:30px;box-sizing:border-box;padding-top:0;padding-bottom:0;width:auto;flex:0 0 auto;}
 .session-detail-head .btn{height:30px;box-sizing:border-box;}
@@ -1919,11 +1921,11 @@ html.staging-env .app-logo-text{color:#2b1400;}
 /* Session establishing image (auto-generated title card) at the top of the
    session detail page. Compact thumbnail + label; click the thumb to enlarge. */
 .session-establishing{display:flex;align-items:center;gap:14px;margin:10px 0 6px;padding:10px 12px;background:rgba(20,12,4,0.5);border:1px solid rgba(201,168,76,0.18);border-radius:10px;}
-.session-establishing-thumb{width:150px;height:84px;object-fit:cover;border-radius:8px;border:1px solid rgba(201,168,76,0.3);display:block;flex:0 0 auto;}
+.session-establishing-thumb{width:112px;height:63px;object-fit:cover;border-radius:8px;border:1px solid rgba(201,168,76,0.3);display:block;flex:0 0 auto;}
 .session-establishing-meta{display:flex;flex-direction:column;gap:3px;min-width:0;}
 .session-establishing-label{font-size:13px;color:var(--gold);font-weight:600;letter-spacing:0.3px;}
 .session-establishing-hint{font-size:11px;color:rgba(201,168,76,0.55);line-height:1.35;}
-@media (max-width:640px){.session-establishing{gap:10px;padding:8px 10px;}.session-establishing-thumb{width:116px;height:66px;}}
+@media (max-width:640px){.session-establishing-thumb{width:92px;height:52px;}}
 
 /* ============================================================
    MOBILE -- Phase 3: the app on a phone.

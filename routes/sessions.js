@@ -143,13 +143,13 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
 
 // POST create session
 router.post('/', requireAuth, verifyCampaignDM, checkSessionLimit, async function(req, res) {
-  const { name, session_date } = req.body;
+  const { name, session_date, description } = req.body;
   if (!name || !session_date) return res.json({ error: 'Name and date required' });
   const db = await getDb();
   const now = new Date().toISOString();
   const result = await db.prepare(
-    'INSERT INTO sessions (campaign_id, name, session_date, created_at, created_by) VALUES (?,?,?,?,?)'
-  ).run(req.params.campaignId, name.trim(), session_date, now, req.session.userId);
+    'INSERT INTO sessions (campaign_id, name, session_date, description, created_at, created_by) VALUES (?,?,?,?,?,?)'
+  ).run(req.params.campaignId, name.trim(), session_date, ((description||'').trim() || null), now, req.session.userId);
   // Deploy 4.0 — every session is born with a DM fork row. All its
   // moments / session_characters reference this fork_id.
   await getOrCreateDmFork(db, result.lastInsertRowid, req.session.userId);
@@ -164,10 +164,11 @@ router.put('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
   if (!session) return res.status(404).json({ error: 'Session not found' });
   const now = new Date().toISOString();
   await db.prepare(
-    'UPDATE sessions SET name=?, session_date=?, transcript=?, session_notes=?, art_style=?, layout_style=?, edited_at=?, edited_by=? WHERE id=?'
+    'UPDATE sessions SET name=?, session_date=?, description=?, transcript=?, session_notes=?, art_style=?, layout_style=?, edited_at=?, edited_by=? WHERE id=?'
   ).run(
     req.body.name || session.name,
     req.body.session_date || session.session_date,
+    req.body.description !== undefined ? req.body.description : session.description,
     req.body.transcript !== undefined ? req.body.transcript : session.transcript,
     req.body.session_notes !== undefined ? req.body.session_notes : session.session_notes,
     req.body.art_style !== undefined ? req.body.art_style : session.art_style,

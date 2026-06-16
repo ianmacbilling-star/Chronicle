@@ -1371,6 +1371,7 @@ function renderSessions() {
 function openSessionModal() {
   if (blockCopperCreate('session')) return;
   document.getElementById('session-name').value = '';
+  var _nsd = document.getElementById('session-desc'); if (_nsd) _nsd.value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('session-modal-error').classList.add('hidden');
   document.getElementById('session-modal').classList.remove('hidden');
@@ -1381,12 +1382,13 @@ function closeSessionModal() { document.getElementById('session-modal').classLis
 function saveSession() {
   var name = document.getElementById('session-name').value.trim();
   var date = document.getElementById('session-date').value;
+  var desc = document.getElementById('session-desc') ? document.getElementById('session-desc').value : '';
   if (!name) { showModalError('session-modal-error', 'Session name is required.'); return; }
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, session_date:date})
+    body: JSON.stringify({name:name, session_date:date, description:desc})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -1445,18 +1447,66 @@ async function deleteSession(id) {
 // shared lightbox). The control pills come in the next stage. Hidden when the
 // session has no establishing image yet.
 function renderSessionEstablishing(data) {
-  var box = document.getElementById('session-establishing');
-  if (!box) return;
+  // Establishing image now lives as a small thumbnail beside the session title.
+  var thumb = document.getElementById('session-establishing-thumb');
+  if (!thumb) return;
   var img = data && data.establishing_image;
-  if (!img) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.style.display = 'flex';
-  box.innerHTML =
-    '<img class="session-establishing-thumb" src="' + img + '" alt="Session title image" ' +
-      'style="cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" title="Click to enlarge" />' +
-    '<div class="session-establishing-meta">' +
-      '<div class="session-establishing-label">Title image</div>' +
-      '<div class="session-establishing-hint">A wide establishing shot for this session. Click to enlarge.</div>' +
-    '</div>';
+  if (!img) { thumb.style.display = 'none'; thumb.removeAttribute('src'); return; }
+  thumb.src = img;
+  thumb.style.display = 'block';
+}
+
+// Inline edit of the session title + description (mirrors the campaign editor:
+// pencil swaps the title to an input and the description to a textarea, saves on
+// blur once focus leaves both fields, never blanks the name).
+function renderSessionHeaderDisplay() {
+  var s = state.currentSession;
+  var nameEl = document.getElementById('session-detail-name');
+  var descEl = document.getElementById('session-detail-desc');
+  if (nameEl) nameEl.textContent = (s && s.name) ? s.name : 'Session';
+  if (descEl) descEl.textContent = (s && s.description) ? s.description : '';
+}
+function startSessionEdit() {
+  var s = state.currentSession;
+  if (!s) return;
+  if (document.getElementById('session-edit-name-input')) return;
+  var nameEl = document.getElementById('session-detail-name');
+  var descEl = document.getElementById('session-detail-desc');
+  if (nameEl) nameEl.innerHTML = '<input id="session-edit-name-input" class="camp-edit-input" onblur="sessionEditBlur()" onkeydown="sessionEditKey(event)" />';
+  if (descEl) descEl.innerHTML = '<textarea id="session-edit-desc-input" class="camp-edit-textarea" placeholder="Add a description..." onblur="sessionEditBlur()"></textarea>';
+  var ni = document.getElementById('session-edit-name-input');
+  if (ni) { ni.value = s.name || ''; ni.focus(); ni.select(); }
+  var di = document.getElementById('session-edit-desc-input');
+  if (di) di.value = s.description || '';
+}
+function sessionEditKey(e) {
+  if (e && e.key === 'Enter' && e.target && e.target.id === 'session-edit-name-input') { e.preventDefault(); e.target.blur(); }
+}
+function sessionEditBlur() {
+  setTimeout(function() {
+    var ni = document.getElementById('session-edit-name-input');
+    var di = document.getElementById('session-edit-desc-input');
+    var ae = document.activeElement;
+    if (ae === ni || ae === di) return;
+    var s = state.currentSession;
+    if (!s) { renderSessionHeaderDisplay(); return; }
+    var newName = ni ? ni.value.trim() : (s.name || '');
+    var newDesc = di ? di.value : (s.description || '');
+    if (!newName) newName = s.name;
+    if (newName === s.name && newDesc === (s.description || '')) { renderSessionHeaderDisplay(); return; }
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + s.id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name: newName, description: newDesc })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.id) { state.currentSession = Object.assign({}, s, data); }
+      else { s.name = newName; s.description = newDesc; }
+      renderSessionHeaderDisplay();
+    })
+    .catch(function(){ s.name = newName; s.description = newDesc; renderSessionHeaderDisplay(); });
+  }, 0);
 }
 
 function selectSession(id) {
@@ -1475,6 +1525,8 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      var _sdesc = document.getElementById('session-detail-desc');
+      if (_sdesc) _sdesc.textContent = data.description || '';
       renderSessionEstablishing(data);
       // Set editable date input
       var dateInput = document.getElementById('session-detail-date-input');
@@ -6982,6 +7034,7 @@ function renderSessions() {
 function openSessionModal() {
   if (blockCopperCreate('session')) return;
   document.getElementById('session-name').value = '';
+  var _nsd = document.getElementById('session-desc'); if (_nsd) _nsd.value = '';
   document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('session-modal-error').classList.add('hidden');
   document.getElementById('session-modal').classList.remove('hidden');
@@ -6992,12 +7045,13 @@ function closeSessionModal() { document.getElementById('session-modal').classLis
 function saveSession() {
   var name = document.getElementById('session-name').value.trim();
   var date = document.getElementById('session-date').value;
+  var desc = document.getElementById('session-desc') ? document.getElementById('session-desc').value : '';
   if (!name) { showModalError('session-modal-error', 'Session name is required.'); return; }
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, session_date:date})
+    body: JSON.stringify({name:name, session_date:date, description:desc})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -7067,6 +7121,8 @@ function selectSession(id) {
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
+      var _sdesc = document.getElementById('session-detail-desc');
+      if (_sdesc) _sdesc.textContent = data.description || '';
       renderSessionEstablishing(data);
       // Set editable date input
       var dateInput = document.getElementById('session-detail-date-input');
