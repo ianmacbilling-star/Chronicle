@@ -1911,6 +1911,13 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     };
 
     var panelsHTML = buildLayout(layoutStyle, moments, narrative.sections, narrative.intro, narrative.outro, co);
+    // Session title image: the wide establishing shot that opens each session,
+    // placed below the session marker and above the narrative. Additive - does
+    // NOT touch buildLayout / renderPaired. Flows through preview, print, publish,
+    // and the public story page (snapshot carries establishing_image). (Stage 4.2)
+    var titleImageHTML = s.establishing_image
+      ? '<div class="session-title-image" style="width:100%;margin:0 0 0.28in;page-break-inside:avoid;line-height:0;"><img style="width:100%;display:block;border-radius:3px;" src="' + s.establishing_image + '" alt="" /></div>'
+      : '';
 
     var chapterHeading = (paginated || !fMarkers)
       ? ''
@@ -1929,6 +1936,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
       '</div>') : '') +
       chapterHeading +
+      titleImageHTML +
       panelsHTML +
       '</div>' +
     '</div>';
