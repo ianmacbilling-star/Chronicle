@@ -1410,7 +1410,10 @@
 </div>
 
 <!-- Ask Us: floating opener + persistent white side panel -->
-<button id="help-fab" class="help-fab" type="button" onclick="openHelp()" title="Ask us for help">Ask ?</button>
+<div id="corner-fabs" class="corner-fabs">
+  <button id="tour-replay" class="tour-replay" type="button" onclick="showTour((window.state&&state.currentView)||'campaigns')" title="Replay this screen's tour" aria-label="Replay this screen tour">Tour</button>
+  <button id="help-fab" class="help-fab" type="button" onclick="openHelp()" title="Ask us for help">Ask ?</button>
+</div>
 <aside id="help-panel" class="help-panel hidden" aria-label="Help">
   <div class="help-panel-head">
     <div class="help-panel-title">Ask Us</div>
@@ -1646,6 +1649,5 @@
     </div>
   </div>
 </div>
-<button id="tour-replay" class="tour-replay" type="button" onclick="showTour((window.state&&state.currentView)||'campaigns')" title="Replay this screen's tour" aria-label="Replay this screen tour">Tour</button>
 </body>
 </html>
