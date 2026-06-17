@@ -1476,8 +1476,9 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   // Session title image: the wide establishing shot that sets the scene for the
   // first narrative. Additive block above the session content - does NOT touch
   // buildLayout / renderPaired. (Stage 4.1: Session Preview only.)
+  var _estM = { image: session.establishing_image, title: '', shape: (session.establishing_shape || 'wide'), img_w: session.establishing_img_w || null, img_h: session.establishing_img_h || null };
   var titleImageHTML = session.establishing_image
-    ? '<div class="session-title-image" style="width:100%;margin:0 0 0.28in;page-break-inside:avoid;line-height:0;"><img style="width:100%;display:block;border-radius:3px;" src="' + session.establishing_image + '" alt="" /></div>'
+    ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
     : '';
 
   return `<!DOCTYPE html>
@@ -1915,8 +1916,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     // placed below the session marker and above the narrative. Additive - does
     // NOT touch buildLayout / renderPaired. Flows through preview, print, publish,
     // and the public story page (snapshot carries establishing_image). (Stage 4.2)
+    var _estM = { image: s.establishing_image, title: '', shape: (s.establishing_shape || 'wide'), img_w: s.establishing_img_w || null, img_h: s.establishing_img_h || null };
     var titleImageHTML = s.establishing_image
-      ? '<div class="session-title-image" style="width:100%;margin:0 0 0.28in;page-break-inside:avoid;line-height:0;"><img style="width:100%;display:block;border-radius:3px;" src="' + s.establishing_image + '" alt="" /></div>'
+      ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
       : '';
 
     var chapterHeading = (paginated || !fMarkers)
