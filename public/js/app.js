@@ -3474,21 +3474,20 @@ function renderAssets() {
   if (!grid) return;
   var cards = (state.assets || []).map(function(a) {
     var img = a.image_url
-      ? '<img src="' + a.image_url + '" class="sc-thumb" alt="' + a.name + '" ' +
-        'style="cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" />'
-      : '<div class="sc-thumb sc-thumb-empty">&#127912;</div>';
+      ? '<img src="' + a.image_url + '" class="asset-card-photo" alt="' + a.name + '" onclick="openLightbox(this.src,this.alt)" />'
+      : '<div class="asset-card-photo asset-photo-empty">&#127912;</div>';
     var cat = ASSET_CAT_LABEL[a.category] || 'Location';
-    return '<div class="sc-card">' +
-      '<div class="sc-card-head">' +
+    return '<div class="asset-card">' +
+      '<div class="asset-card-img">' +
         img +
-        '<div class="sc-card-id">' +
-          '<div class="sc-card-name">' + a.name + '</div>' +
-          '<div class="sc-card-cls">' + cat + '</div>' +
+        '<div class="panel-img-actions">' +
+          '<button class="panel-pill" onclick="openAssetModal(' + a.id + ')" title="Edit this asset">&#9998; Edit</button>' +
+          '<button class="panel-pill" onclick="deleteAsset(' + a.id + ')" title="Delete this asset">&#10005; Delete</button>' +
         '</div>' +
       '</div>' +
-      '<div class="char-prompt-actions">' +
-        '<button class="btn btn-sm" onclick="openAssetModal(' + a.id + ')">&#9998; Edit</button>' +
-        '<button class="btn btn-sm" onclick="deleteAsset(' + a.id + ')">&#10005; Delete</button>' +
+      '<div class="asset-card-meta">' +
+        '<div class="asset-card-name">' + a.name + '</div>' +
+        '<div class="asset-card-cls">' + cat + '</div>' +
       '</div>' +
     '</div>';
   }).join('');
