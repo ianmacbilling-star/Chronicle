@@ -4998,7 +4998,16 @@ function resizeNovelPreviewIframe() {
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
   _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
-  if (iframe) iframe.style.height = '75vh';
+  var _ph = '75vh';
+  if (window.innerWidth > 900) {
+    var _prep = document.querySelector('.novel-prep-panel');
+    if (_prep && _prep.offsetHeight > 0) {
+      var _h = _prep.offsetHeight;
+      if (_h < 520) _h = 520;
+      _ph = _h + 'px';
+    }
+  }
+  if (iframe) iframe.style.height = _ph;
   if (frame) frame.style.height = '';
 }
 
@@ -6402,9 +6411,6 @@ function renderArchives() {
         '<div class="archive-title">' + escapeHtml(a.title || '(untitled)') + '</div>' +
         meta +
         '<div class="archive-actions">' +
-          (isDM ? '<label class="archive-cover-toggle" title="Use as campaign cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignCover(' + a.id + ')" /> Cover</label>' : '') +
-          (isDM ? '<label class="archive-cover-toggle" title="Use as back cover"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.back_cover_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignBackCover(' + a.id + ')" /> Back</label>' : '') +
-          (isDM ? '<label class="archive-cover-toggle" title="Use as interior title-page image"><input type="checkbox" ' + ((state.currentCampaign && state.currentCampaign.title_image_url === a.image_url) ? 'checked' : '') + ' onchange="setCampaignTitleImage(' + a.id + ')" /> Title</label>' : '') +
           (canDelete ? '<label class="archive-cover-toggle" title="Show this image in the anonymous public Library"><input type="checkbox" ' + (a.public ? 'checked' : '') + ' onchange="setArchivePublic(' + a.id + ', this.checked)" /> Public</label>' : '') +
         '</div>' +
       '</div>' +
@@ -8328,7 +8334,16 @@ function resizeNovelPreviewIframe() {
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
   _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
-  if (iframe) iframe.style.height = '75vh';
+  var _ph = '75vh';
+  if (window.innerWidth > 900) {
+    var _prep = document.querySelector('.novel-prep-panel');
+    if (_prep && _prep.offsetHeight > 0) {
+      var _h = _prep.offsetHeight;
+      if (_h < 520) _h = 520;
+      _ph = _h + 'px';
+    }
+  }
+  if (iframe) iframe.style.height = _ph;
   if (frame) frame.style.height = '';
 }
 
