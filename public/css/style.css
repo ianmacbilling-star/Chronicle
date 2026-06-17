@@ -2100,3 +2100,11 @@ html.staging-env .app-logo-text{color:#2b1400;}
    even on mobile, where the shared rule would otherwise push them below the image. */
 .asset-card .panel-pill{opacity:1;}
 .asset-card .panel-img-actions{position:absolute;top:8px;left:8px;right:8px;}
+
+/* ===== Cast picker (image+name tiles) and its '+ Add' buttons ===== */
+.review-add-btn{font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;background:rgba(0,0,0,0.4);color:rgba(201,168,76,0.85);border:1px dashed rgba(201,168,76,0.35);}
+.review-add-btn:hover{border-color:var(--gold);color:var(--gold);}
+.prep-img-pick-named{display:flex;flex-direction:column;gap:0;border:none;background:transparent;cursor:pointer;padding:0;}
+.prep-img-pick-named .prep-img-pick-img{aspect-ratio:1/1;border:2px solid rgba(201,168,76,0.2);border-radius:8px;background-size:cover;background-position:center;background-color:rgba(20,12,4,0.6);display:flex;align-items:center;justify-content:center;font-size:34px;color:rgba(201,168,76,0.4);transition:border-color 0.15s;}
+.prep-img-pick-named:hover .prep-img-pick-img{border-color:var(--gold);}
+.prep-img-pick-named .prep-img-cap{text-align:center;line-height:1.25;}

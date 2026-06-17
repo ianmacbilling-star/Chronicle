@@ -2435,13 +2435,11 @@ function renderReview(data) {
       var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
       var optsC = (state.reviewData.all_characters || []).filter(function(c){ return !haveC[String(c.id)]; })
         .map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(c.name) + '</option>'; }).join('');
-      addChar = '<select class="review-add-select" onchange="castAddCharacter(' + mid + ', this)">' +
-        '<option value="">+ Add character</option>' + optsC + '</select>';
+      addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + mid + ')">+ Add character</button>';
       var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
       var optsA = (state.reviewData.all_assets || []).filter(function(a){ return !haveA[String(a.id)]; })
         .map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' \u00b7 ' + (ASSET_CAT[a.category] || a.category) + '</option>'; }).join('');
-      addAsset = '<select class="review-add-select" onchange="castAddAsset(' + mid + ', this)">' +
-        '<option value="">+ Add asset</option>' + optsA + '</select>';
+      addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + mid + ')">+ Add asset</button>';
     }
 
     // Auto vs Custom indicator + reset-to-auto (only when explicit + editable).
@@ -11706,10 +11704,10 @@ function renderMomentOptions(momentId) {
     if (canEdit) {
       var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
       var optsC = ((state.reviewData && state.reviewData.all_characters) || []).filter(function(c){ return !haveC[String(c.id)]; }).map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(c.name) + '</option>'; }).join('');
-      addChar = '<select class="review-add-select" onchange="castAddCharacter(' + momentId + ', this)"><option value="">+ Add character</option>' + optsC + '</select>';
+      addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + momentId + ')">+ Add character</button>';
       var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
       var optsA = ((state.reviewData && state.reviewData.all_assets) || []).filter(function(a){ return !haveA[String(a.id)]; }).map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + '</option>'; }).join('');
-      addAsset = '<select class="review-add-select" onchange="castAddAsset(' + momentId + ', this)"><option value="">+ Add asset</option>' + optsA + '</select>';
+      addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + momentId + ')">+ Add asset</button>';
     }
     var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-matched</span>';
     var resetBtn = (canEdit && p.cast_explicit) ? '<button class="review-reset-btn" onclick="castReset(' + momentId + ')" title="Drop back to automatic name-matching">Reset to auto</button>' : '';
@@ -11941,4 +11939,92 @@ function devClearTours() {
       }
     })
     .catch(function(){ if (msg) msg.textContent = 'Could not clear.'; });
+}
+
+// ===== Cast picker modal: image grid (replaces the +Add character/asset dropdowns) =====
+var _castCharImg = {};
+var _castAssetImg = {};
+
+function _loadCastImages(cb) {
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  _castCharImg = {}; _castAssetImg = {};
+  if (!cid) { cb(); return; }
+  var done = 0;
+  function step(){ if (++done >= 2) cb(); }
+  fetch('/api/campaigns/' + cid + '/characters').then(function(r){ return r.json(); }).then(function(rows){ (Array.isArray(rows)?rows:[]).forEach(function(c){ if (c && c.id != null) _castCharImg[String(c.id)] = c.canonical_reference_url || ''; }); step(); }).catch(step);
+  fetch('/api/campaigns/' + cid + '/assets').then(function(r){ return r.json(); }).then(function(rows){ (Array.isArray(rows)?rows:[]).forEach(function(a){ if (a && a.id != null) _castAssetImg[String(a.id)] = a.image_url || ''; }); step(); }).catch(step);
+}
+
+function openCastPicker(kind, momentId) {
+  if (!state.currentCampaign) return;
+  if (!_reviewPanel(momentId)) return;
+  _loadCastImages(function(){ _buildCastPicker(kind, momentId); });
+}
+
+function _buildCastPicker(kind, momentId) {
+  closeCastPicker();
+  var p = _reviewPanel(momentId); if (!p) return;
+  var isChar = (kind === 'character');
+  var ACAT = { location: 'Location', npc: 'NPC', item: 'Item' };
+  var have = {};
+  (isChar ? (p.characters || []) : (p.assets || [])).forEach(function(x){ have[String(x.id)] = true; });
+  var src = isChar ? ((state.reviewData && state.reviewData.all_characters) || []) : ((state.reviewData && state.reviewData.all_assets) || []);
+  var items = src.filter(function(x){ return !have[String(x.id)]; });
+  var overlay = document.createElement('div');
+  overlay.id = 'cast-pick-modal'; overlay.className = 'prep-img-modal';
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) closeCastPicker(); });
+  var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+  var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+  var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = isChar ? 'Add a character' : 'Add an asset';
+  var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+  x.addEventListener('click', closeCastPicker);
+  head.appendChild(h); head.appendChild(x);
+  var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+  if (!items.length) {
+    var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+    empty.textContent = isChar ? 'No more characters to add. Create characters on the Characters tab.' : 'No more assets to add. Create assets on the Asset Library tab.';
+    grid.appendChild(empty);
+  } else {
+    items.forEach(function(it){
+      var img = isChar ? (_castCharImg[String(it.id)] || '') : (_castAssetImg[String(it.id)] || '');
+      var label = isChar ? it.name : (it.name + ' \u00b7 ' + (ACAT[it.category] || it.category || ''));
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'prep-img-pick-named';
+      var imgEl = document.createElement('span'); imgEl.className = 'prep-img-pick-img';
+      if (img) { imgEl.style.backgroundImage = 'url("' + encodeURI(img) + '")'; }
+      else { imgEl.innerHTML = isChar ? '&#128100;' : '&#127991;'; }
+      var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = label;
+      btn.appendChild(imgEl); btn.appendChild(cap);
+      btn.addEventListener('click', function(){ if (isChar) castPickCharacter(momentId, it.id); else castPickAsset(momentId, it.id); closeCastPicker(); });
+      grid.appendChild(btn);
+    });
+  }
+  box.appendChild(head); box.appendChild(grid);
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
+function closeCastPicker() {
+  var m = document.getElementById('cast-pick-modal');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
+function castPickCharacter(momentId, id) {
+  id = parseInt(id, 10); if (!id) return;
+  var p = _reviewPanel(momentId); if (!p) return;
+  var name = '';
+  ((state.reviewData && state.reviewData.all_characters) || []).some(function(c){ if (String(c.id) === String(id)) { name = c.name; return true; } return false; });
+  p.characters = p.characters || [];
+  if (!p.characters.some(function(c){ return String(c.id) === String(id); })) p.characters.push({ id: id, name: name });
+  p.cast_explicit = true;
+  _saveCast(p);
+}
+
+function castPickAsset(momentId, id) {
+  id = parseInt(id, 10); if (!id) return;
+  var p = _reviewPanel(momentId); if (!p) return;
+  var meta = null;
+  ((state.reviewData && state.reviewData.all_assets) || []).some(function(a){ if (String(a.id) === String(id)) { meta = a; return true; } return false; });
+  p.assets = p.assets || [];
+  if (!p.assets.some(function(a){ return String(a.id) === String(id); })) p.assets.push({ id: id, name: meta ? meta.name : '', category: meta ? meta.category : '' });
+  p.cast_explicit = true;
+  _saveCast(p);
 }
