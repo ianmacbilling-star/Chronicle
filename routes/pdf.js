@@ -1059,6 +1059,26 @@ function cgSplitNarr(text){
   if (buf.trim()) chunks.push(buf.trim());
   return chunks;
 }
+function cgBelowNarrCells(chunks, opts) {
+  // Emit a full-width BELOW-image narrative as ONE or TWO keep-together cells, split at a
+  // sentence-chunk seam, so a long block can fill a page bottom and flow on instead of
+  // bumping whole (white-space fix). Each cell stays un-splittable so the grid lattice never
+  // fragments. Tuning dial: split into TWO halves; raise granularity here if needed.
+  var css = picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;';
+  var groups;
+  if (chunks.length >= 2) {
+    var mid = Math.ceil(chunks.length / 2);
+    groups = [chunks.slice(0, mid).join(' '), chunks.slice(mid).join(' ')];
+  } else {
+    groups = [chunks.join(' ')];
+  }
+  var out = [];
+  for (var gi = 0; gi < groups.length; gi++) {
+    if (!groups[gi]) continue;
+    out.push({ slots: 2, html: '<div style="' + css + '">' + buildNarrativeHTML(groups[gi], false) + '</div>' });
+  }
+  return out;
+}
 function renderComicPage(moments, sections, intro, outro, opts) {
   // Comic = a tic-tac-toe LATTICE (v4). Two-column base grid of bold-framed cells.
   // ORIENTATION IS KEYED OFF THE IMAGE ASPECT: wide/panoramic art spans BOTH columns
@@ -1129,9 +1149,8 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var _fParts = [];
       if (sec.before) _fParts = _fParts.concat(cgSplitNarr(sec.before));
       if (sec.after) _fParts = _fParts.concat(cgSplitNarr(sec.after));
-      var _fTxt = _fParts.join(' ');
-      if (_fTxt) {
-        cells.push({ slots: 2, html: '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(_fTxt, false) + '</div>' });
+      if (_fParts.length) {
+        cgBelowNarrCells(_fParts, opts).forEach(function (c) { cells.push(c); });
       }
       continue;
     }
@@ -1164,16 +1183,17 @@ function renderComicPage(moments, sections, intro, outro, opts) {
         besideTxt += (besideTxt ? ' ' : '') + nchunks[qi]; acc += nchunks[qi].length;
       }
     }
-    // Overflow past the picture + everything else become ONE full-width box below.
-    for (; qi < nchunks.length; qi++) restTxt += (restTxt ? ' ' : '') + nchunks[qi];
+    // Overflow past the picture + everything else: emit as ONE or TWO full-width
+    // keep-together boxes below (split at a sentence-chunk seam) so a long block fills a
+    // page bottom and flows on, instead of bumping whole and stranding white space.
+    var restChunks = nchunks.slice(qi);
     if (besideTxt) {
       var bspan = (besideRows > 1) ? ('grid-row:span ' + besideRows + ';') : '';
       cells.push({ slots: besideRows, html: '<div style="' + picBorderCss(opts) +
         'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:' + imgH.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' + bspan + '">' + buildNarrativeHTML(besideTxt, false) + '</div>' });
     }
-    if (restTxt) {
-      cells.push({ slots: 2, html: '<div style="' + picBorderCss(opts) +
-        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(restTxt, false) + '</div>' });
+    if (restChunks.length) {
+      cgBelowNarrCells(restChunks, opts).forEach(function (c) { cells.push(c); });
     }
   }
 
