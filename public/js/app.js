@@ -4833,6 +4833,8 @@ function loadNovelPreview(layout) {
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
     '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') +
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
+  var _ptEl = document.getElementById('prep-title');
+  if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   // Paginate by session only in Quick View; True View renders the whole
   // continuous document so the PDF viewer's own page navigation moves through it.
   if (total > 1 && novelPreviewMode === 'quick') {
@@ -5092,7 +5094,7 @@ function openPrepImagePicker(kind) {
   });
 }
 function selectPrepImage(kind, archiveId) {
-  var cb = function(){ renderPrepThumbs(); if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); };
+  var cb = function(){ renderPrepThumbs(); };
   if (kind === 'cover') setCampaignCover(archiveId, cb);
   else if (kind === 'back') setCampaignBackCover(archiveId, cb);
   else if (kind === 'title') setCampaignTitleImage(archiveId, cb);
@@ -5101,6 +5103,15 @@ function selectPrepImage(kind, archiveId) {
 function closePrepImagePicker() {
   var m = document.getElementById('prep-img-modal');
   if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+// Refresh button: sync the title to the Order tab, then re-render the preview
+// with the current title + image picks (one trigger for both).
+function refreshNovelPreview() {
+  var tEl = document.getElementById('prep-title');
+  var title = tEl ? tEl.value.trim() : '';
+  var pt = document.getElementById('print-book-title');
+  if (pt && title) pt.value = title;
+  if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
 }
 
 async function publishStory() {
@@ -8152,6 +8163,8 @@ function loadNovelPreview(layout) {
   var url = '/api/pdf/novel/' + state.currentCampaign.id +
     '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') +
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
+  var _ptEl = document.getElementById('prep-title');
+  if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
   // Paginate by session only in Quick View; True View renders the whole
   // continuous document so the PDF viewer's own page navigation moves through it.
   if (total > 1 && novelPreviewMode === 'quick') {

@@ -2032,3 +2032,5 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-img-pick.selected { border-color:var(--gold); box-shadow:0 0 0 2px rgba(201,168,76,0.4); }
 .prep-img-empty { color:rgba(240,232,208,0.6); font-size:13px; padding:20px; text-align:center; }
 .prep-img-modal-foot { margin-top:12px; font-size:11px; color:rgba(240,232,208,0.5); }
+
+.prep-divider { height:1px; background:rgba(201,168,76,0.2); margin:4px 0 14px; }

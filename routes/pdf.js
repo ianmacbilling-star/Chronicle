@@ -1981,7 +1981,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     '</div>';
   var detailsPageHTML =
     '<div class="detailspage">' +
-      '<div class="dp-title">' + _fmEsc(campaign.name) + '</div>' +
+      '<div class="dp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
+      ((_bookTitleFM && _bookTitleFM !== campaign.name) ? '<div class="dp-campaign">' + _fmEsc(campaign.name) + '</div>' : '') +
       (dateRange ? '<div class="dp-dates">' + dateRange + '</div>' : '') +
       '<div class="dp-divider"></div>' +
       (playerNames ? '<div class="dp-block"><div class="dp-label">Players</div><div class="dp-value">' + _fmEsc(playerNames) + '</div></div>' : '') +
@@ -2059,6 +2060,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .tp-logo { width:0.95in;height:auto;object-fit:contain;margin-top:0.5in;opacity:0.9; }
   .detailspage { width:8.5in;min-height:9.4in;padding:1in 1.1in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
   .dp-title { font-family:'Cinzel',serif;font-size:20pt;font-weight:700;color:#2c1810;letter-spacing:0.03em;margin-bottom:0.08in; }
+  .dp-campaign { font-family:'Crimson Text',serif;font-size:12.5pt;font-style:italic;color:#6b5f55;margin:-0.02in 0 0.12in; }
   .dp-dates { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;font-style:italic;margin-bottom:0.15in; }
   .dp-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.1in auto 0.3in; }
   .dp-block { margin-bottom:0.22in; }
@@ -2141,7 +2143,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <img class="cover-art-img" src="${coverImg}" alt="" />
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
-        <div class="cover-art-title">${campaign.name}</div>
+        <div class="cover-art-title">${_fmEsc(_bookTitleFM)}</div>
         <div class="cover-art-dates">${dateRange}</div>
         ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
       </div>
@@ -2149,7 +2151,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
   </div>` : `<div class="cover-content">
     ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     <div class="cover-eyebrow">The Saga of</div>
-    <div class="cover-title">${campaign.name}</div>
+    <div class="cover-title">${_fmEsc(_bookTitleFM)}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
     <div class="cover-dates">${dateRange}</div>
@@ -2350,6 +2352,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   if (!isNaN(pageNum) && pageNum > 0) {
     pageOpts.page = pageNum;
   }
+  if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
   res.set('X-Total-Sessions', String(sessionsWithData.length));
 
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
