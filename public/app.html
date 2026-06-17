@@ -1397,6 +1397,22 @@
   </div>
 </div>
 
+<!-- Ask Claudia: floating contextual help button + modal -->
+<button id="help-fab" class="help-fab" type="button" onclick="openHelp()" title="Ask Claudia for help">Ask ?</button>
+<div class="modal-overlay hidden" id="help-modal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Ask Claudia</div>
+      <button class="modal-close" onclick="closeHelp()">&times;</button>
+    </div>
+    <div class="help-intro">Ask anything about using Campaignia - features, tokens, billing, or how to do something. Claudia knows your account and the screen you are on.</div>
+    <textarea class="form-textarea" id="help-question" placeholder="What do you need help with?" style="min-height:70px;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitHelp();}"></textarea>
+    <div class="help-actions">
+      <button class="btn btn-primary" id="help-ask-btn" onclick="submitHelp()">Ask</button>
+    </div>
+    <div id="help-answer" class="help-answer hidden"></div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="narr-direction-modal">
   <div class="modal archive-picker" style="max-width:480px;">
     <div class="modal-header">

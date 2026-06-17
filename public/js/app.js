@@ -2578,6 +2578,51 @@ function generateFromReview() {
 // state.narrDirGap holds the gap key currently being edited
 // ('opening' | 'between:<i>' | 'closing').
 // ============================================================
+// --- Ask Claudia: contextual help (read-only, one-shot Q&A). ----------------
+// Coarse current-view hint; the server enriches the rest (tier, tokens, role).
+function _helpCurrentViewId() {
+  if (state && state.currentSession && state.currentSession.id) return 'session_detail_view';
+  return '';
+}
+function openHelp() {
+  var m = document.getElementById('help-modal'); if (!m) return;
+  var ans = document.getElementById('help-answer');
+  if (ans) { ans.classList.add('hidden'); ans.classList.remove('help-answer-error'); ans.textContent = ''; }
+  m.classList.remove('hidden');
+  var q = document.getElementById('help-question');
+  if (q) setTimeout(function(){ q.focus(); }, 0);
+}
+function closeHelp() {
+  var m = document.getElementById('help-modal'); if (m) m.classList.add('hidden');
+}
+function submitHelp() {
+  var qEl = document.getElementById('help-question');
+  var ansEl = document.getElementById('help-answer');
+  var btn = document.getElementById('help-ask-btn');
+  var q = qEl ? qEl.value.trim() : '';
+  if (!q) { if (qEl) qEl.focus(); return; }
+  if (ansEl) { ansEl.classList.remove('hidden'); ansEl.classList.remove('help-answer-error'); ansEl.textContent = 'Thinking\u2026'; }
+  if (btn) btn.disabled = true;
+  var body = { question: q, current_view_id: _helpCurrentViewId() };
+  if (state && state.currentCampaign && state.currentCampaign.id) body.current_campaign_id = state.currentCampaign.id;
+  fetch('/api/help/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (btn) btn.disabled = false;
+      if (!ansEl) return;
+      if (data && data.ok && data.answer) {
+        ansEl.textContent = data.answer; ansEl.classList.remove('help-answer-error');
+      } else {
+        ansEl.textContent = (data && data.error) ? data.error : 'Could not answer that right now - try again?';
+        ansEl.classList.add('help-answer-error');
+      }
+    })
+    .catch(function(){
+      if (btn) btn.disabled = false;
+      if (ansEl) { ansEl.textContent = 'Could not answer that right now - try again?'; ansEl.classList.add('help-answer-error'); }
+    });
+}
+
 function openNarrDirection(gapKey, label) {
   state.narrDirGap = gapKey;
   var titleEl = document.getElementById('narr-direction-title');
