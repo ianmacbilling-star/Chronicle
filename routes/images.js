@@ -267,6 +267,30 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, s
 // Async generation: submit to fal's queue with our webhook and return the fal
 // request id immediately. The webhook finishes the job when fal is done, so a
 // slow or queued fal can never time out the user's HTTP request.
+// Per-panel "Direction" set on the Review tab. It is stored on the fork's
+// narrative_directions JSON under 'moment:<rank>' -- the SAME entry the
+// narrative MOMENT-block steering reads -- so one direction drives both the
+// prose and the image. Here we map it onto each moment by panel_order rank and
+// tack it onto the image prompt at generate/regenerate time.
+async function loadMomentDirections(db, forkId) {
+  let dirs = {};
+  try {
+    const fk = await db.prepare('SELECT narrative_directions FROM session_forks WHERE id = ?').get(forkId);
+    if (fk && fk.narrative_directions) dirs = JSON.parse(fk.narrative_directions) || {};
+  } catch (e) { dirs = {}; }
+  const ms = await db.prepare('SELECT id FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
+  const byMomentId = {};
+  ms.forEach(function(m, i) {
+    const d = dirs['moment:' + i];
+    if (d && String(d).trim()) byMomentId[m.id] = String(d).trim();
+  });
+  return byMomentId;
+}
+function applyMomentDirection(basePrompt, dirText) {
+  if (!dirText) return basePrompt || '';
+  return (basePrompt || '') + '\n\nDIRECTOR STEERING (you MUST follow this): ' + dirText;
+}
+
 async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape, thinkingLevel) {
   fal.config({ credentials: falKey });
   const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel);
@@ -775,7 +799,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
     const userThinking = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
-    const sub = await submitPanelGen(prompt, style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking);
+    const momentDirsS = await loadMomentDirections(db, moment.fork_id);
+    const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -986,6 +1011,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   const webhookUrl = falWebhookUrl();
   if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
 
+  const momentDirs = await loadMomentDirections(db, targetForkId);
   const submitResults = await Promise.allSettled(
     toGenerate.map(async function(m) {
       const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
@@ -1004,7 +1030,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castExplicit: !!m.cast_explicit,
         castNames: castNames
       };
-      const sub = await submitPanelGen(m.prompt, style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll);
+      const sub = await submitPanelGen(applyMomentDirection(m.prompt, momentDirs[m.id]), style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll);
       const nowTs = new Date().toISOString();
       const jobIns = await db.prepare(
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +

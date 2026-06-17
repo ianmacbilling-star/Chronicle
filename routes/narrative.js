@@ -392,7 +392,7 @@ router.put('/direction/:campaignId/:sessionId', requireAuth, async function(req,
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
   const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
-  if (!/^(opening|closing|between:\d+)$/.test(gap)) {
+  if (!/^(opening|closing|between:\d+|moment:\d+)$/.test(gap)) {
     return res.json({ error: 'Invalid gap key' });
   }
 

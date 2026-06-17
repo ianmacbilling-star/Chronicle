@@ -2458,11 +2458,16 @@ function renderReview(data) {
           (p.change_marks.length === 1 ? '\u2019 look changes here' : ' \u2014 looks change here') + '</div>'
       : '';
 
+    var pDirKey = 'moment:' + i;
+    var pHasDir = !!(state.narrativeDirections && state.narrativeDirections[pDirKey]);
+    var pDirBtn = canEditNarr
+      ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'Panel ' + num + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
+      : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + num + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
-        castBadge + resetBtn +
+        castBadge + resetBtn + pDirBtn +
       '</div>' +
       (p.moment ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(p.moment) + '</div>' : '') +
       (p.snippet ? '<div class="review-snippet">' + escapeHtmlReview(p.snippet) + '</div>' : '') +
