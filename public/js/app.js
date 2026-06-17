@@ -2585,15 +2585,17 @@ function _helpCurrentViewId() {
   return '';
 }
 function openHelp() {
-  var m = document.getElementById('help-modal'); if (!m) return;
+  var m = document.getElementById('help-panel'); if (!m) return;
   var ans = document.getElementById('help-answer');
   if (ans) { ans.classList.add('hidden'); ans.classList.remove('help-answer-error'); ans.textContent = ''; }
   m.classList.remove('hidden');
+  var fab = document.getElementById('help-fab'); if (fab) fab.style.display = 'none';
   var q = document.getElementById('help-question');
   if (q) setTimeout(function(){ q.focus(); }, 0);
 }
 function closeHelp() {
-  var m = document.getElementById('help-modal'); if (m) m.classList.add('hidden');
+  var m = document.getElementById('help-panel'); if (m) m.classList.add('hidden');
+  var fab = document.getElementById('help-fab'); if (fab) fab.style.display = '';
 }
 function submitHelp() {
   var qEl = document.getElementById('help-question');
