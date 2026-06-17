@@ -3231,7 +3231,7 @@ function campaignEditBlur() {
 
 // Set (or clear, by re-clicking the current one) the campaign cover from an
 // archived image. DM-only; the button is only rendered for the DM.
-function setCampaignCover(archiveId) {
+function setCampaignCover(archiveId, cb) {
   var c = state.currentCampaign;
   if (!c) return;
   var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
@@ -3250,6 +3250,7 @@ function setCampaignCover(archiveId) {
       if (i >= 0) state.campaigns[i].cover_image_url = data.cover_image_url || '';
       renderArchives();
       showAlert(newCover ? 'Campaign cover set.' : 'Campaign cover cleared.');
+      if (typeof cb === 'function') cb();
     } else {
       showAlert((data && data.error) || 'Could not update the cover.');
     }
@@ -3257,7 +3258,7 @@ function setCampaignCover(archiveId) {
   .catch(function(){ showAlert('Could not update the campaign cover.'); });
 }
 
-function setCampaignBackCover(archiveId) {
+function setCampaignBackCover(archiveId, cb) {
   var c = state.currentCampaign;
   if (!c) return;
   var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
@@ -3276,6 +3277,7 @@ function setCampaignBackCover(archiveId) {
       if (i >= 0) state.campaigns[i].back_cover_image_url = data.back_cover_image_url || '';
       renderArchives();
       showAlert(newBack ? 'Back cover set.' : 'Back cover cleared.');
+      if (typeof cb === 'function') cb();
     } else {
       showAlert((data && data.error) || 'Could not update the back cover.');
     }
@@ -3284,7 +3286,7 @@ function setCampaignBackCover(archiveId) {
 }
 
 // Set/clear the interior TITLE-PAGE image from an archived image. DM-only.
-function setCampaignTitleImage(archiveId) {
+function setCampaignTitleImage(archiveId, cb) {
   var c = state.currentCampaign;
   if (!c) return;
   var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
@@ -3303,6 +3305,7 @@ function setCampaignTitleImage(archiveId) {
       if (i >= 0) state.campaigns[i].title_image_url = data.title_image_url || '';
       renderArchives();
       showAlert(newTitle ? 'Title-page image set.' : 'Title-page image cleared.');
+      if (typeof cb === 'function') cb();
     } else {
       showAlert((data && data.error) || 'Could not update the title image.');
     }
@@ -5019,11 +5022,85 @@ function exportNovelPDF() {
 // --- Publish to Public Library (Stories) -------------------------------------
 // Owner-only on the server; here we just drive the button. We send the SAME
 // layout + custom options the preview is showing so the published book matches.
-// Pre-Publish Prep panel: seed the title from the campaign name. (B2 will also
-// reflect the chosen cover/back/title images here.)
+// Pre-Publish Prep panel: seed the title + reflect the chosen cover/back/title images.
+var PREP_IMG_KINDS = {
+  cover: { label: 'Choose a Cover image', field: 'cover_image_url' },
+  back:  { label: 'Choose a Back Cover image', field: 'back_cover_image_url' },
+  title: { label: 'Choose a Title image', field: 'title_image_url' }
+};
 function prepPanelSync() {
   var tEl = document.getElementById('prep-title');
   if (tEl && !tEl.value && state.currentCampaign && state.currentCampaign.name) tEl.value = state.currentCampaign.name;
+  renderPrepThumbs();
+  _prepEnsureArchives();
+}
+function renderPrepThumbs() {
+  var c = state.currentCampaign; if (!c) return;
+  ['cover','back','title'].forEach(function(kind){
+    var el = document.getElementById('prep-thumb-' + kind); if (!el) return;
+    var url = c[PREP_IMG_KINDS[kind].field] || '';
+    if (url) { el.style.backgroundImage = 'url("' + encodeURI(url) + '")'; el.classList.add('has-img'); el.innerHTML = ''; }
+    else { el.style.backgroundImage = ''; el.classList.remove('has-img'); el.innerHTML = '<span class="prep-thumb-plus">+</span>'; }
+  });
+}
+function _prepEnsureArchives(cb) {
+  if (state.archives && state.archives.length) { if (cb) cb(); return; }
+  if (!state.currentCampaign) { if (cb) cb(); return; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', { cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(rows){ state.archives = Array.isArray(rows) ? rows : []; if (cb) cb(); })
+    .catch(function(){ state.archives = state.archives || []; if (cb) cb(); });
+}
+function openPrepImagePicker(kind) {
+  var cfg = PREP_IMG_KINDS[kind]; if (!cfg || !state.currentCampaign) return;
+  _prepEnsureArchives(function(){
+    closePrepImagePicker();
+    var c = state.currentCampaign;
+    var curUrl = c[cfg.field] || '';
+    var rows = (state.archives || []).filter(function(a){ return a && a.image_url; });
+    var overlay = document.createElement('div');
+    overlay.id = 'prep-img-modal'; overlay.className = 'prep-img-modal';
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) closePrepImagePicker(); });
+    var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+    var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+    var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = cfg.label;
+    var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+    x.addEventListener('click', closePrepImagePicker);
+    head.appendChild(h); head.appendChild(x);
+    var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+    if (!rows.length) {
+      var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+      empty.textContent = 'No archived images yet. Lock or archive images from the Storyboard, then choose one here.';
+      grid.appendChild(empty);
+    } else {
+      rows.forEach(function(a){
+        var btn = document.createElement('button'); btn.type = 'button';
+        btn.className = 'prep-img-pick' + (a.image_url === curUrl ? ' selected' : '');
+        btn.style.backgroundImage = 'url("' + encodeURI(a.image_url) + '")';
+        if (a.title) btn.title = a.title;
+        btn.addEventListener('click', function(){ selectPrepImage(kind, a.id); });
+        grid.appendChild(btn);
+      });
+    }
+    box.appendChild(head); box.appendChild(grid);
+    if (curUrl) {
+      var foot = document.createElement('div'); foot.className = 'prep-img-modal-foot';
+      foot.textContent = 'Tip: click the highlighted image to remove it.';
+      box.appendChild(foot);
+    }
+    overlay.appendChild(box); document.body.appendChild(overlay);
+  });
+}
+function selectPrepImage(kind, archiveId) {
+  var cb = function(){ renderPrepThumbs(); if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); };
+  if (kind === 'cover') setCampaignCover(archiveId, cb);
+  else if (kind === 'back') setCampaignBackCover(archiveId, cb);
+  else if (kind === 'title') setCampaignTitleImage(archiveId, cb);
+  closePrepImagePicker();
+}
+function closePrepImagePicker() {
+  var m = document.getElementById('prep-img-modal');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
 }
 
 async function publishStory() {

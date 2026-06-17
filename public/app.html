@@ -223,7 +223,12 @@
           <input type="text" id="prep-title" maxlength="200" placeholder="e.g. The Shattered Crown" class="prep-input" />
           <div class="prep-field-label">Blurb for your Library page (optional)</div>
           <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
-          <!-- B2: Cover / Back Cover / Title image picker goes here -->
+          <div class="prep-field-label">Cover, Back &amp; Title images</div>
+          <div class="prep-img-slots">
+            <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-cover" onclick="openPrepImagePicker('cover')"></div><div class="prep-img-cap">Cover</div></div>
+            <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-back" onclick="openPrepImagePicker('back')"></div><div class="prep-img-cap">Back</div></div>
+            <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-title" onclick="openPrepImagePicker('title')"></div><div class="prep-img-cap">Title</div></div>
+          </div>
           <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).</span></label>
           <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
           <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
