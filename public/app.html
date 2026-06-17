@@ -1027,6 +1027,32 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="copy-asset-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Copy to Assets</div>
+      <button class="modal-close" onclick="closeCopyToAssetModal()">&times;</button>
+    </div>
+    <div id="ca-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">Asset name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">&mdash; used to match this asset into panels</span></label>
+      <input class="form-input" id="ca-name" placeholder="e.g. Castle Ravenhollow" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-input" id="ca-category">
+        <option value="location">Location</option>
+        <option value="npc">NPC</option>
+        <option value="item">Item</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCopyToAssetModal()">Cancel</button>
+      <button class="btn btn-primary" id="ca-save-btn" onclick="submitCopyToAsset()">Copy to Assets</button>
+    </div>
+    <div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">A copy of this image is saved as a reusable asset, independent of the archived original.</div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="asset-modal">
   <div class="modal">
     <div class="modal-header">

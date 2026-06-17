@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
-const { uploadFile, deleteFile } = require('../storage/storage');
+const { uploadFile, deleteFile, restoreCopy } = require('../storage/storage');
 const multer = require('multer');
 const path = require('path');
 
@@ -68,6 +68,43 @@ router.post('/', requireAuth, verifyCampaignDM, uploadSingle, async function(req
   } catch (e) {
     console.error('create asset error:', e.message);
     res.json({ error: 'Could not create the asset.' });
+  }
+});
+
+// POST create an asset FROM an existing archived image. The image is copied to
+// a fresh R2 object so the asset owns its bytes independently -- asset deletion
+// hard-deletes its image, so it must never share the archive's object.
+router.post('/from-archive', requireAuth, verifyCampaignDM, async function(req, res) {
+  try {
+    const db = await getDb();
+    const archiveId = req.body && req.body.archive_id;
+    const name = (req.body && req.body.name || '').trim();
+    const category = cleanCategory(req.body && req.body.category);
+    if (!archiveId) return res.json({ error: 'Missing source image.' });
+    if (!name) return res.json({ error: 'Asset name is required' });
+    const archive = await db.prepare(
+      'SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?'
+    ).get(archiveId, req.params.campaignId);
+    if (!archive || !archive.image_url) return res.status(404).json({ error: 'Source image not found.' });
+
+    let imageUrl;
+    try {
+      imageUrl = await restoreCopy(archive.image_url);
+    } catch (e) {
+      console.error('copy-to-asset image copy failed:', e.message);
+      return res.json({ error: 'Could not copy the image. Please try again.' });
+    }
+
+    const now = new Date().toISOString();
+    const result = await db.prepare(
+      'INSERT INTO campaign_assets (campaign_id, name, category, image_url, created_at, created_by) ' +
+      'VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(req.params.campaignId, name, category, imageUrl, now, req.session.userId);
+    const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(result.lastInsertRowid);
+    res.json(asset);
+  } catch (e) {
+    console.error('copy-to-asset error:', e.message);
+    res.json({ error: 'Could not copy this image to Assets.' });
   }
 });
 

@@ -6442,6 +6442,7 @@ function renderArchives() {
       '<div class="archive-thumb">' +
         '<img loading="lazy" src="' + a.image_url + '" alt="' + escapeHtml(a.title || 'archived image') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
         promptBtn +
+        (isDM ? '<button class="archive-asset-thumb" onclick="openCopyToAssetModal(' + a.id + ')" title="Copy this image to Assets">&#43; Assets</button>' : '') +
         (canDelete ? '<button class="archive-del-thumb" onclick="deleteArchive(' + a.id + ')" title="Remove from Archive">&#10005; Remove</button>' : '') +
       '</div>' +
       '<div class="archive-meta">' +
@@ -6614,6 +6615,63 @@ function adminUnpublishStory(id, card, btn) {
       else { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert((d && d.error) || 'Could not remove.'); }
     }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Remove from Library'; } showAlert('Could not remove.'); });
 }
+// --- Copy an archived image into the campaign's Assets (DM-only). ------------
+// Opens a small modal for Name + Type, then posts to the from-archive route
+// which gives the new asset its OWN copy of the image (independent of the
+// archived original, so deleting one never affects the other).
+var _caArchiveId = null;
+function openCopyToAssetModal(archiveId) {
+  _caArchiveId = archiveId;
+  var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
+  var nameEl = document.getElementById('ca-name');
+  var catEl = document.getElementById('ca-category');
+  var errEl = document.getElementById('ca-error');
+  if (errEl) errEl.classList.add('hidden');
+  if (nameEl) nameEl.value = (a && a.title) ? a.title : '';
+  if (catEl) catEl.value = 'location';
+  var m = document.getElementById('copy-asset-modal');
+  if (m) m.classList.remove('hidden');
+  if (nameEl) setTimeout(function(){ nameEl.focus(); nameEl.select(); }, 0);
+}
+function closeCopyToAssetModal() {
+  var m = document.getElementById('copy-asset-modal');
+  if (m) m.classList.add('hidden');
+  _caArchiveId = null;
+}
+function submitCopyToAsset() {
+  var nameEl = document.getElementById('ca-name');
+  var catEl = document.getElementById('ca-category');
+  var errEl = document.getElementById('ca-error');
+  var saveBtn = document.getElementById('ca-save-btn');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) {
+    if (errEl) { errEl.textContent = 'Asset name is required.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  if (!_caArchiveId || !state.currentCampaign) { closeCopyToAssetModal(); return; }
+  if (saveBtn) saveBtn.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/from-archive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ archive_id: _caArchiveId, name: name, category: catEl ? catEl.value : 'location' })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (saveBtn) saveBtn.disabled = false;
+    if (data && data.error) {
+      if (errEl) { errEl.textContent = data.error; errEl.classList.remove('hidden'); }
+      return;
+    }
+    closeCopyToAssetModal();
+    showAlert('Copied to Assets.');
+    if (typeof loadAssets === 'function' && document.getElementById('asset-grid')) loadAssets();
+  })
+  .catch(function(){
+    if (saveBtn) saveBtn.disabled = false;
+    if (errEl) { errEl.textContent = 'Could not copy this image to Assets.'; errEl.classList.remove('hidden'); }
+  });
+}
+
 async function deleteArchive(id) {
   if (!await uiConfirm('Remove this image from the campaign Archive? This permanently deletes the saved copy.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + id, { method: 'DELETE' })
