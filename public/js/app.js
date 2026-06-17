@@ -1214,8 +1214,8 @@ function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
   var html = state.campaigns.map(function(c) {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
-      (c.cover_image_url
-        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
+      ((c.campaign_image_url || c.cover_image_url)
+        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.campaign_image_url || c.cover_image_url) + '\');"></div>'
         : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
@@ -5039,9 +5039,46 @@ var PREP_IMG_KINDS = {
   back:  { label: 'Choose a Back Cover image', field: 'back_cover_image_url' },
   title: { label: 'Choose a Title image', field: 'title_image_url' }
 };
+// First-publish convenience: if this campaign has a Campaign image but no
+// explicit publish Cover yet, seed the Cover with the Campaign image so it is
+// already in place when the user opens publish prep. The fields stay
+// independent afterward -- the user can change or clear the Cover freely, and
+// changing the Campaign image later does not alter an already-chosen Cover.
+function prepSeedCoverFromCampaignImage() {
+  var c = state.currentCampaign;
+  if (!c || c.cover_image_url || !c.campaign_image_url) return;
+  var url = c.campaign_image_url;
+  var prev = c.cover_image_url || '';
+  c.cover_image_url = url;
+  var i = state.campaigns.findIndex(function(x){ return x.id === c.id; });
+  if (i >= 0) state.campaigns[i].cover_image_url = url;
+  fetch('/api/campaigns/' + c.id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cover_image_url: url })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data && data.id) {
+      c.cover_image_url = data.cover_image_url || '';
+      if (i >= 0) state.campaigns[i].cover_image_url = data.cover_image_url || '';
+    } else {
+      c.cover_image_url = prev;
+      if (i >= 0) state.campaigns[i].cover_image_url = prev;
+    }
+    renderPrepThumbs();
+  })
+  .catch(function(){
+    c.cover_image_url = prev;
+    if (i >= 0) state.campaigns[i].cover_image_url = prev;
+    renderPrepThumbs();
+  });
+}
+
 function prepPanelSync() {
   var tEl = document.getElementById('prep-title');
   if (tEl && !tEl.value && state.currentCampaign && state.currentCampaign.name) tEl.value = state.currentCampaign.name;
+  prepSeedCoverFromCampaignImage();
   renderPrepThumbs();
   _prepEnsureArchives();
 }
@@ -7165,8 +7202,8 @@ function renderCampaigns() {
   var grid = document.getElementById('campaigns-grid');
   var html = state.campaigns.map(function(c) {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
-      (c.cover_image_url
-        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.cover_image_url) + '\');"></div>'
+      ((c.campaign_image_url || c.cover_image_url)
+        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.campaign_image_url || c.cover_image_url) + '\');"></div>'
         : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
       '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
@@ -10313,6 +10350,107 @@ function mpSave(ctx, patch){
 // starts with "allow players access to graphic novel" and has room to grow.
 var _csCampaignId = null;
 
+// --- Campaign tile image (DM-only, set from the campaign settings modal). ----
+// Stored on the campaign as campaign_image_url. Drives the home tile, and acts
+// as the default publish cover when no explicit cover has been chosen.
+function renderCampaignSettingsThumb() {
+  var el = document.getElementById('cs-image-thumb');
+  if (!el) return;
+  var c = (state.campaigns || []).filter(function(x){ return x.id === _csCampaignId; })[0];
+  var url = (c && c.campaign_image_url) ? c.campaign_image_url : '';
+  if (url) {
+    el.style.backgroundImage = 'url("' + encodeURI(url) + '")';
+    el.classList.add('has-img');
+    el.innerHTML = '';
+  } else {
+    el.style.backgroundImage = '';
+    el.classList.remove('has-img');
+    el.innerHTML = '<span class="prep-thumb-plus">+</span>';
+  }
+}
+
+// PUT the new campaign image (or '' to clear). Operates on the settings modal's
+// target campaign (_csCampaignId), which may differ from the current campaign.
+function setCampaignImage(campaignId, newUrl, cb) {
+  fetch('/api/campaigns/' + campaignId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaign_image_url: newUrl })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data && data.id) {
+      var i = state.campaigns.findIndex(function(x){ return x.id === data.id; });
+      if (i >= 0) state.campaigns[i].campaign_image_url = data.campaign_image_url || '';
+      if (state.currentCampaign && state.currentCampaign.id === data.id) {
+        state.currentCampaign.campaign_image_url = data.campaign_image_url || '';
+      }
+      renderCampaigns();
+      renderCampaignSettingsThumb();
+      showAlert(newUrl ? 'Campaign image set.' : 'Campaign image cleared.');
+      if (typeof cb === 'function') cb();
+    } else {
+      showAlert((data && data.error) || 'Could not update the campaign image.');
+    }
+  })
+  .catch(function(){ showAlert('Could not update the campaign image.'); });
+}
+
+// Archive picker for the campaign image. Same look as the Pre-Publish Prep
+// picker (shared CSS classes), but self-contained: it loads the target
+// campaign's own archives so it works from the home grid for any campaign.
+function openCampaignImagePicker(campaignId) {
+  if (!campaignId) return;
+  fetch('/api/campaigns/' + campaignId + '/archives', { cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(rows){
+      var archives = Array.isArray(rows) ? rows.filter(function(a){ return a && a.image_url; }) : [];
+      var c = (state.campaigns || []).filter(function(x){ return x.id === campaignId; })[0];
+      var curUrl = (c && c.campaign_image_url) ? c.campaign_image_url : '';
+      closeCampaignImagePicker();
+      var overlay = document.createElement('div');
+      overlay.id = 'cs-img-modal'; overlay.className = 'prep-img-modal';
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) closeCampaignImagePicker(); });
+      var box = document.createElement('div'); box.className = 'prep-img-modal-box';
+      var head = document.createElement('div'); head.className = 'prep-img-modal-head';
+      var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = 'Choose a Campaign image';
+      var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
+      x.addEventListener('click', closeCampaignImagePicker);
+      head.appendChild(h); head.appendChild(x);
+      var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+      if (!archives.length) {
+        var empty = document.createElement('div'); empty.className = 'prep-img-empty';
+        empty.textContent = 'No archived images yet. Lock or archive images from the Storyboard, then choose one here.';
+        grid.appendChild(empty);
+      } else {
+        archives.forEach(function(a){
+          var btn = document.createElement('button'); btn.type = 'button';
+          btn.className = 'prep-img-pick' + (a.image_url === curUrl ? ' selected' : '');
+          btn.style.backgroundImage = 'url("' + encodeURI(a.image_url) + '")';
+          if (a.title) btn.title = a.title;
+          btn.addEventListener('click', function(){
+            var nu = (a.image_url === curUrl) ? '' : a.image_url;
+            setCampaignImage(campaignId, nu, null);
+            closeCampaignImagePicker();
+          });
+          grid.appendChild(btn);
+        });
+      }
+      box.appendChild(head); box.appendChild(grid);
+      if (curUrl) {
+        var foot = document.createElement('div'); foot.className = 'prep-img-modal-foot';
+        foot.textContent = 'Tip: click the highlighted image to remove it.';
+        box.appendChild(foot);
+      }
+      overlay.appendChild(box); document.body.appendChild(overlay);
+    })
+    .catch(function(){ showAlert('Could not load archived images.'); });
+}
+function closeCampaignImagePicker() {
+  var m = document.getElementById('cs-img-modal');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
 function openCampaignSettings(id, ev) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
   _csCampaignId = id;
@@ -10326,6 +10464,7 @@ function openCampaignSettings(id, ev) {
   if (err) err.classList.add('hidden');
   var modal = document.getElementById('campaign-settings-modal');
   if (modal) modal.classList.remove('hidden');
+  renderCampaignSettingsThumb();
 }
 
 function closeCampaignSettings() {

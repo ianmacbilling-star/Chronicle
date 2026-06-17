@@ -2260,6 +2260,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     if (!viewForkId) return res.status(403).json({ error: 'Access denied' });
 
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
+    if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(viewForkId);
     const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
@@ -2295,6 +2296,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
+  if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
 
@@ -2385,6 +2387,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
+  if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
 
@@ -2580,6 +2583,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     const campaign = await db.prepare(
       'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
     ).get(req.params.campaignId, req.session.userId);
+    if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
     if (!campaign) return res.status(403).json({ error: 'Access denied' });
     var _allowNovel = campaign.allow_player_novel_access === true || campaign.allow_player_novel_access === 1 ||
       campaign.allow_player_novel_access === 't' || campaign.allow_player_novel_access === 'true';
@@ -2668,6 +2672,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name, u.pen_name AS owner_pen_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
+  if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
   if (!campaign) return res.status(403).json({ error: 'Access denied' });
 
   var _allowNovel = campaign.allow_player_novel_access === true || campaign.allow_player_novel_access === 1 ||

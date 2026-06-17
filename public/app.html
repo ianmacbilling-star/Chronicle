@@ -1445,6 +1445,13 @@
       <span>Allow players access to graphic novel</span>
     </label>
     <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, players can view and export this campaign's graphic novel. Off by default.</div>
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:10px;">Campaign image</div>
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <div style="flex:0 0 96px;"><div class="prep-img-thumb" id="cs-image-thumb" onclick="openCampaignImagePicker(_csCampaignId)"><span class="prep-thumb-plus">+</span></div></div>
+        <div class="settings-section-desc" style="margin:0;">Shown on this campaign's tile, and used as the default cover when you publish if no cover has been chosen.</div>
+      </div>
+    </div>
     <div class="modal-footer" style="margin-top:20px;">
       <button class="btn" onclick="closeCampaignSettings()">Cancel</button>
       <button class="btn btn-primary" id="cs-save-btn" onclick="saveCampaignSettings()">Save</button>
