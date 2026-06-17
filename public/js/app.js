@@ -11926,3 +11926,20 @@ function _tourMarkComplete(viewId) {
     body: JSON.stringify({ viewId: viewId })
   }).catch(function(){});
 }
+
+// Testing helper: clear this account's tour history (self only) and reset the
+// client cache so tours fire again immediately. Backed by /api/auth/tour-reset.
+function devClearTours() {
+  var msg = document.getElementById('dev-tours-msg');
+  fetch('/api/auth/tour-reset', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.success) {
+        _tourProgress = {};
+        if (msg) msg.textContent = 'Tour history cleared. Visit any screen to see its tour again.';
+      } else {
+        if (msg) msg.textContent = (d && d.error) ? d.error : 'Could not clear.';
+      }
+    })
+    .catch(function(){ if (msg) msg.textContent = 'Could not clear.'; });
+}

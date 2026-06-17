@@ -695,6 +695,18 @@
         <div id="account-tier-override-msg" class="settings-section-desc" style="margin-top:6px;"></div>
       </div>
 
+      <!-- TESTING ONLY: clear this account's guided-tour history so tours
+           play again on every screen. Self only. Remove with the other
+           testing controls before production. -->
+      <div class="settings-section" id="dev-tours-section" style="border:1px dashed rgba(201,168,76,0.5);">
+        <div class="settings-section-title">Testing &mdash; Guided Tours</div>
+        <div class="settings-section-desc">Temporary: clears your own tour history so the guided tours play again on every screen. Will be removed later.</div>
+        <div class="form-group" style="margin-top:10px;">
+          <button class="btn btn-sm" onclick="devClearTours()">Clear tour history</button>
+        </div>
+        <div id="dev-tours-msg" class="settings-section-desc" style="margin-top:6px;"></div>
+      </div>
+
       <!-- TESTING ONLY: put this account in/out of the free trial to exercise
            the trial watermark. Backed by /api/auth/trial-testing (self only).
            REMOVE with the other testing controls before production. -->

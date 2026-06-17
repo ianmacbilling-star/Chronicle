@@ -596,4 +596,17 @@ router.patch('/tour-complete', async function(req, res) {
   }
 });
 
+// POST /api/auth/tour-reset -> clears the current user's tour history (testing).
+router.post('/tour-reset', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    await db.prepare("UPDATE users SET tour_progress = '{}'::jsonb WHERE id = ?").run(req.session.userId);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('tour-reset error:', e.message);
+    res.status(500).json({ error: 'Could not clear' });
+  }
+});
+
 module.exports = router;
