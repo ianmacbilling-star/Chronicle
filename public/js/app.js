@@ -10624,6 +10624,14 @@ function printProgressDone() {
 }
 
 function loadPrintTab() {
+  // The book title is set on the Preview & Export tab and is read-only here;
+  // mirror the current prep title (or campaign name) into this field.
+  var _pbt = document.getElementById('print-book-title');
+  if (_pbt) {
+    var _prep = document.getElementById('prep-title');
+    var _v = (_prep && _prep.value.trim()) || (state.currentCampaign && state.currentCampaign.name) || '';
+    if (_v) _pbt.value = _v;
+  }
   if (!state.currentCampaign) return;
   wirePrintOrderLock();
   showPrintMsg('', null);

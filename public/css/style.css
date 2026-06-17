@@ -2034,3 +2034,8 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-img-modal-foot { margin-top:12px; font-size:11px; color:rgba(240,232,208,0.5); }
 
 .prep-divider { height:1px; background:rgba(201,168,76,0.2); margin:4px 0 14px; }
+
+.prep-color-row { display:flex; align-items:center; gap:9px; margin:0 0 14px; }
+.prep-color-input { width:36px; height:26px; padding:0; border:1px solid rgba(201,168,76,0.3); border-radius:4px; background:transparent; cursor:pointer; flex:0 0 auto; }
+.prep-color-label { font-size:12px; color:rgba(201,168,76,0.8); }
+.prep-color-label span { color:rgba(201,168,76,0.5); }
