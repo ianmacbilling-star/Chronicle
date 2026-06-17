@@ -1990,9 +1990,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         ? (copyHolder ? '<div class="dp-block"><div class="dp-label">Chronicled by</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>' : '')
         : '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>') +
       '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
-      (fHideLogo ? '' : '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
-      '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
-        'This chronicle was assembled from recorded tabletop role-playing sessions. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
+      '<div class="dp-footer">' +
+        (fHideLogo ? '' : '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
+        '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
+          'This chronicle was assembled from recorded tabletop role-playing sessions. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
+      '</div>' +
     '</div>';
 
   return `<!DOCTYPE html>
@@ -2068,7 +2070,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .dp-value { font-family:'Crimson Text',serif;font-size:12pt;color:#2c1810;line-height:1.5; }
   .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
   .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.3in auto 0.12in;opacity:0.9; }
-  .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:4.6in; }
+  .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:6in; }
+  .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }
 
   /* CONTENT */
   .content-page { width:8.5in;padding:0.5in 0.85in;position:relative; }
@@ -2163,9 +2166,7 @@ ${(!paginated || pageOpts.page === 1) ? detailsPageHTML : ''}
 ${(fCast && (!paginated || pageOpts.page === 1)) ? `<!-- CAST & CREW PAGE -->
 <div class="cast-page">
   <div class="cast-page-title">The Company</div>
-  <div class="cast-page-subtitle">${campaign.description || ''}</div>
   <div class="cast-divider"></div>
-  <div class="cast-page-dm">${_castDmLine}</div>
   ${castBlockHTML}
 </div>` : ''}
 ${(fToc && (!paginated || pageOpts.page === 1)) ? tocBlock : ''}
