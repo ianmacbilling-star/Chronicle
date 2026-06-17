@@ -546,4 +546,54 @@ router.put('/image-model', async function(req, res) {
   }
 });
 
+// ---- Guided Tours: data + per-user progress -------------------------------
+// GET /api/auth/tours -> the data-driven tour step definitions (public/tours.json).
+router.get('/tours', function(req, res) {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const file = path.join(__dirname, '..', 'public', 'tours.json');
+    const raw = fs.readFileSync(file, 'utf8');
+    res.json(JSON.parse(raw));
+  } catch (e) {
+    console.error('tours load error:', e.message);
+    res.json({ version: 0, tours: {} });
+  }
+});
+
+// GET /api/auth/tour-progress -> map of { viewId: true } for the current user.
+router.get('/tour-progress', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    const row = await db.prepare('SELECT tour_progress FROM users WHERE id = ?').get(req.session.userId);
+    let tp = row && row.tour_progress;
+    if (typeof tp === 'string') { try { tp = JSON.parse(tp); } catch (e) { tp = {}; } }
+    res.json({ progress: tp || {} });
+  } catch (e) {
+    console.error('tour-progress error:', e.message);
+    res.json({ progress: {} });
+  }
+});
+
+// PATCH /api/auth/tour-complete  body { viewId } -> marks that tour as seen.
+router.patch('/tour-complete', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  const viewId = (req.body && req.body.viewId) ? String(req.body.viewId) : '';
+  if (!/^[a-z0-9_-]+$/i.test(viewId)) return res.status(400).json({ error: 'Bad viewId' });
+  try {
+    const db = await getDb();
+    const row = await db.prepare('SELECT tour_progress FROM users WHERE id = ?').get(req.session.userId);
+    let tp = row && row.tour_progress;
+    if (typeof tp === 'string') { try { tp = JSON.parse(tp); } catch (e) { tp = {}; } }
+    if (!tp || typeof tp !== 'object') tp = {};
+    tp[viewId] = true;
+    await db.prepare('UPDATE users SET tour_progress = ?::jsonb WHERE id = ?').run(JSON.stringify(tp), req.session.userId);
+    res.json({ success: true, progress: tp });
+  } catch (e) {
+    console.error('tour-complete error:', e.message);
+    res.status(500).json({ error: 'Could not save' });
+  }
+});
+
 module.exports = router;

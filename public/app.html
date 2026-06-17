@@ -1618,5 +1618,22 @@
 </div>
 
 <script src="/js/app.js"></script>
+<!-- Guided Tours: spotlight overlay + per-screen replay control -->
+<div id="tour-overlay" class="tour-overlay hidden" aria-hidden="true">
+  <div class="tour-backdrop" id="tour-backdrop"></div>
+  <div class="tour-highlight" id="tour-highlight"></div>
+  <div class="tour-tip" id="tour-tip" role="dialog" aria-label="Guided tour">
+    <div class="tour-tip-title" id="tour-tip-title"></div>
+    <div class="tour-tip-text" id="tour-tip-text"></div>
+    <div class="tour-tip-foot">
+      <span class="tour-tip-count" id="tour-tip-count"></span>
+      <span class="tour-tip-btns">
+        <button type="button" class="tour-btn tour-btn-skip" id="tour-btn-skip" onclick="tourSkip()">Skip</button>
+        <button type="button" class="tour-btn tour-btn-next" id="tour-btn-next" onclick="tourNext()">Next</button>
+      </span>
+    </div>
+  </div>
+</div>
+<button id="tour-replay" class="tour-replay" type="button" onclick="showTour((window.state&&state.currentView)||'campaigns')" title="Replay this screen's tour" aria-label="Replay this screen tour">Tour</button>
 </body>
 </html>

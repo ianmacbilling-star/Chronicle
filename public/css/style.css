@@ -2061,3 +2061,25 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-color-input { width:36px; height:26px; padding:0; border:1px solid rgba(201,168,76,0.3); border-radius:4px; background:transparent; cursor:pointer; flex:0 0 auto; }
 .prep-color-label { font-size:12px; color:rgba(201,168,76,0.8); }
 .prep-color-label span { color:rgba(201,168,76,0.5); }
+
+/* ===== Guided Tours ===== */
+.tour-overlay{position:fixed;inset:0;z-index:9998;}
+.tour-overlay.hidden{display:none;}
+.tour-backdrop{position:fixed;inset:0;background:transparent;pointer-events:auto;}
+.tour-overlay.no-target .tour-backdrop{background:rgba(0,0,0,0.6);}
+.tour-highlight{position:fixed;border-radius:10px;border:2px solid var(--gold);box-shadow:0 0 0 9999px rgba(0,0,0,0.6);pointer-events:none;transition:top .18s ease,left .18s ease,width .18s ease,height .18s ease;}
+.tour-overlay.no-target .tour-highlight{display:none;}
+.tour-tip{position:fixed;z-index:10000;max-width:330px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:16px 18px;pointer-events:auto;}
+.tour-tip-title{font-family:var(--font-display);font-size:17px;font-weight:700;color:var(--ink);margin:0 0 6px;}
+.tour-tip-text{font-size:14px;line-height:1.5;color:var(--text-muted);margin:0 0 14px;}
+.tour-tip-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.tour-tip-count{font-size:12px;color:var(--text-light);}
+.tour-tip-btns{display:flex;gap:8px;}
+.tour-btn{font:inherit;font-size:13px;border-radius:var(--radius);padding:7px 14px;cursor:pointer;border:1px solid var(--border-dark);background:var(--surface);color:var(--text);}
+.tour-btn-skip{background:transparent;border-color:transparent;color:var(--text-light);}
+.tour-btn-next{background:var(--gold);border-color:var(--gold);color:#fff;font-weight:600;}
+.tour-replay{position:fixed;left:16px;bottom:16px;z-index:95;font:inherit;font-size:13px;padding:8px 14px;border-radius:999px;border:1px solid var(--gold);background:var(--surface);color:var(--ink);cursor:pointer;box-shadow:var(--shadow);}
+@media (max-width:640px){
+  .tour-tip{left:12px!important;right:12px!important;max-width:none;bottom:84px!important;top:auto!important;}
+  .tour-replay{bottom:84px;left:12px;}
+}

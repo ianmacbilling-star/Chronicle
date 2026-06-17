@@ -1156,6 +1156,7 @@ function showView(view) {
     ]);
     loadSettingsForm();
   }
+  try { if (typeof maybeStartTour === 'function') maybeStartTour(view); } catch (e) {}
 }
 
 function showCampaignSection(section) {
@@ -7285,6 +7286,7 @@ function showView(view) {
     ]);
     loadSettingsForm();
   }
+  try { if (typeof maybeStartTour === 'function') maybeStartTour(view); } catch (e) {}
 }
 
 function showCampaignSection(section) {
@@ -11748,4 +11750,179 @@ function _fitPreviewMobile(iframeId, isQuickView) {
     var bookW = 816;
     doc.body.style.zoom = (avail && avail < bookW) ? String(avail / bookW) : "";
   } catch (e) {}
+}
+
+// ============================================================
+// GUIDED TOURS ENGINE (data-driven; steps in public/tours.json)
+// Self-contained: module-level state, hoisted fns. maybeStartTour(view)
+// is called from showView. Never throws into navigation.
+// ============================================================
+var _toursData = null;
+var _tourProgress = null;
+var _tourActive = false;
+var _tourSteps = [];
+var _tourIdx = 0;
+var _tourViewId = '';
+var _tourCurEl = null;
+var _tourCurStep = null;
+
+function _tourEnsureData(cb) {
+  if (_toursData) { cb(); return; }
+  fetch('/api/auth/tours')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ _toursData = (d && d.tours) ? d.tours : {}; cb(); })
+    .catch(function(){ _toursData = {}; cb(); });
+}
+
+function _tourEnsureProgress(cb) {
+  if (_tourProgress) { cb(); return; }
+  fetch('/api/auth/tour-progress')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ _tourProgress = (d && d.progress) ? d.progress : {}; cb(); })
+    .catch(function(){ _tourProgress = {}; cb(); });
+}
+
+function _tourStepsFor(viewId) {
+  var t = _toursData && _toursData[viewId];
+  return (t && Array.isArray(t.steps)) ? t.steps : [];
+}
+
+function maybeStartTour(viewId) {
+  if (_tourActive || !viewId) return;
+  _tourEnsureData(function(){
+    if (_tourStepsFor(viewId).length === 0) return;
+    _tourEnsureProgress(function(){
+      if (_tourProgress[viewId]) return;
+      startTour(viewId, false);
+    });
+  });
+}
+
+function showTour(viewId) {
+  if (_tourActive) return;
+  _tourEnsureData(function(){
+    if (_tourStepsFor(viewId).length === 0) return;
+    startTour(viewId, true);
+  });
+}
+
+function startTour(viewId, manual) {
+  _tourViewId = viewId;
+  _tourSteps = _tourStepsFor(viewId);
+  if (_tourSteps.length === 0) return;
+  _tourIdx = 0;
+  _tourActive = true;
+  var ov = document.getElementById('tour-overlay');
+  if (ov) { ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); }
+  document.addEventListener('keydown', _tourKey);
+  window.addEventListener('resize', _tourReposition);
+  window.addEventListener('scroll', _tourReposition, true);
+  _tourRenderStep();
+}
+
+function _tourKey(e) {
+  if (!_tourActive) return;
+  if (e.key === 'Escape') { tourSkip(); }
+  else if (e.key === 'Enter') { tourNext(); }
+}
+
+function _tourRenderStep() {
+  var step = _tourSteps[_tourIdx];
+  if (!step) { _tourFinish(); return; }
+  var titleEl = document.getElementById('tour-tip-title');
+  var textEl = document.getElementById('tour-tip-text');
+  var countEl = document.getElementById('tour-tip-count');
+  var nextEl = document.getElementById('tour-btn-next');
+  if (titleEl) titleEl.textContent = step.title || '';
+  if (textEl) textEl.textContent = step.text || '';
+  if (countEl) countEl.textContent = 'Step ' + (_tourIdx + 1) + ' of ' + _tourSteps.length;
+  if (nextEl) nextEl.textContent = (_tourIdx === _tourSteps.length - 1) ? 'Done' : 'Next';
+  _tourFindTarget(step.selector, 8, function(el){ _tourPlace(el, step); });
+}
+
+function _tourFindTarget(selector, tries, cb) {
+  var el = null;
+  try { el = selector ? document.querySelector(selector) : null; } catch(e) { el = null; }
+  if (el || tries <= 0) { cb(el); return; }
+  setTimeout(function(){ _tourFindTarget(selector, tries - 1, cb); }, 80);
+}
+
+function _tourPlace(el, step) {
+  _tourCurEl = el; _tourCurStep = step;
+  var ov = document.getElementById('tour-overlay');
+  var hl = document.getElementById('tour-highlight');
+  var tip = document.getElementById('tour-tip');
+  if (!ov || !hl || !tip) return;
+  if (!el) {
+    ov.classList.add('no-target');
+    var w = tip.offsetWidth || 320, h = tip.offsetHeight || 160;
+    tip.style.left = Math.max(12, (window.innerWidth - w) / 2) + 'px';
+    tip.style.top = Math.max(12, (window.innerHeight - h) / 2) + 'px';
+    return;
+  }
+  ov.classList.remove('no-target');
+  var r = el.getBoundingClientRect();
+  var pad = 6;
+  hl.style.top = Math.max(0, r.top - pad) + 'px';
+  hl.style.left = Math.max(0, r.left - pad) + 'px';
+  hl.style.width = (r.width + pad * 2) + 'px';
+  hl.style.height = (r.height + pad * 2) + 'px';
+  var tw = tip.offsetWidth || 320, th = tip.offsetHeight || 160;
+  var place = step.placement || 'auto';
+  var ttop, tleft;
+  if (place === 'left') {
+    tleft = Math.max(12, r.left - tw - 14);
+    ttop = Math.min(window.innerHeight - th - 12, Math.max(12, r.top));
+  } else {
+    tleft = Math.min(window.innerWidth - tw - 12, Math.max(12, r.left));
+    if (r.bottom + 14 + th < window.innerHeight) { ttop = r.bottom + 14; }
+    else if (r.top - 14 - th > 0) { ttop = r.top - 14 - th; }
+    else { ttop = Math.max(12, window.innerHeight - th - 12); }
+  }
+  tip.style.left = tleft + 'px';
+  tip.style.top = ttop + 'px';
+  try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch(e) {}
+}
+
+function _tourReposition() {
+  if (!_tourActive) return;
+  _tourPlace(_tourCurEl, _tourCurStep || {});
+}
+
+function tourNext() {
+  if (!_tourActive) return;
+  if (_tourIdx >= _tourSteps.length - 1) { _tourFinish(); return; }
+  _tourIdx++;
+  _tourRenderStep();
+}
+
+function tourSkip() {
+  if (!_tourActive) return;
+  _tourFinish();
+}
+
+function _tourFinish() {
+  var viewId = _tourViewId;
+  _tourTeardown();
+  _tourMarkComplete(viewId);
+}
+
+function _tourTeardown() {
+  _tourActive = false;
+  var ov = document.getElementById('tour-overlay');
+  if (ov) { ov.classList.add('hidden'); ov.classList.remove('no-target'); ov.setAttribute('aria-hidden','true'); }
+  document.removeEventListener('keydown', _tourKey);
+  window.removeEventListener('resize', _tourReposition);
+  window.removeEventListener('scroll', _tourReposition, true);
+  _tourCurEl = null; _tourCurStep = null;
+}
+
+function _tourMarkComplete(viewId) {
+  if (!viewId) return;
+  if (_tourProgress) _tourProgress[viewId] = true;
+  fetch('/api/auth/tour-complete', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ viewId: viewId })
+  }).catch(function(){});
 }

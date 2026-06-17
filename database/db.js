@@ -310,6 +310,7 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS fal_key TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS render_thinking INTEGER DEFAULT 0',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS pen_name TEXT',
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS tour_progress JSONB DEFAULT '{}'::jsonb",
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS emphasis TEXT',
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS img_w INTEGER',
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS img_h INTEGER',

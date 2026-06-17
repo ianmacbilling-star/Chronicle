@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "tours": {
+    "campaigns": {
+      "title": "Your campaigns",
+      "steps": [
+        {
+          "selector": "#campaigns-grid",
+          "title": "Welcome to Campaignia",
+          "text": "This is your campaigns home. Each card is one campaign \u2014 the world your sessions and graphic novel live inside.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".add-campaign-card",
+          "title": "Start a campaign",
+          "text": "Click here to create your first campaign. You can name it, describe it, and give it a cover image later.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#help-fab",
+          "title": "Stuck? Ask us",
+          "text": "Open this anytime for quick answers about how Campaignia works.",
+          "placement": "left"
+        }
+      ]
+    },
+    "sessions": { "title": "Sessions", "steps": [] },
+    "characters": { "title": "Characters", "steps": [] },
+    "assets": { "title": "Asset Library", "steps": [] },
+    "archives": { "title": "Archives", "steps": [] },
+    "novel": { "title": "Publish", "steps": [] },
+    "session-detail": { "title": "Storyboard", "steps": [] }
+  }
+}
