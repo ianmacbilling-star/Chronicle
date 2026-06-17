@@ -45,9 +45,15 @@
   </div>
 </div>
 
-<!-- BREADCRUMB -->
-<div class="breadcrumb" id="breadcrumb">
-  <span class="breadcrumb-link" onclick="showView('campaigns')">My Campaigns</span>
+<!-- BREADCRUMB ROW: breadcrumb (left) + corner actions Tour/Ask (far right) -->
+<div class="breadcrumb-row">
+  <div class="breadcrumb" id="breadcrumb">
+    <span class="breadcrumb-link" onclick="showView('campaigns')">My Campaigns</span>
+  </div>
+  <div id="corner-fabs" class="corner-fabs">
+    <button id="tour-replay" class="tour-replay" type="button" onclick="showTour((window.state&&state.currentView)||'campaigns')" title="Replay this screen's tour" aria-label="Replay this screen tour">Tour</button>
+    <button id="help-fab" class="help-fab" type="button" onclick="openHelp()" title="Ask us for help">Ask ?</button>
+  </div>
 </div>
 
 <!-- MAIN LAYOUT -->
@@ -70,7 +76,7 @@
 
     <!-- ==================== CAMPAIGN SECTION: SESSIONS ==================== -->
     <div id="view-sessions" class="view" style="display:none;">
-      <div class="page-header">
+      <div class="page-header sticky-band">
         <div style="min-width:0;">
           <div class="page-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
             <span id="sessions-camp-name">Sessions</span><span id="sessions-count" style="font-size:0.6em;font-weight:400;color:var(--text-light);"></span>
@@ -1410,11 +1416,7 @@
   </div>
 </div>
 
-<!-- Ask Us: floating opener + persistent white side panel -->
-<div id="corner-fabs" class="corner-fabs">
-  <button id="tour-replay" class="tour-replay" type="button" onclick="showTour((window.state&&state.currentView)||'campaigns')" title="Replay this screen's tour" aria-label="Replay this screen tour">Tour</button>
-  <button id="help-fab" class="help-fab" type="button" onclick="openHelp()" title="Ask us for help">Ask ?</button>
-</div>
+<!-- Ask Us: persistent side panel (opener button moved to the breadcrumb row) -->
 <aside id="help-panel" class="help-panel hidden" aria-label="Help">
   <div class="help-panel-head">
     <div class="help-panel-title">Ask Us</div>
