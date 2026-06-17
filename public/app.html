@@ -1035,8 +1035,8 @@
     </div>
     <div id="ca-error" class="alert alert-error hidden"></div>
     <div class="form-group">
-      <label class="form-label">Asset name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">&mdash; used to match this asset into panels</span></label>
-      <input class="form-input" id="ca-name" placeholder="e.g. Castle Ravenhollow" />
+      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
+      <input class="form-input" id="ca-name" placeholder="e.g. Castle Ravenhollow / the keep" />
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -1061,8 +1061,8 @@
     </div>
     <div id="asset-modal-error" class="alert alert-error hidden"></div>
     <div class="form-group">
-      <label class="form-label">Asset name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— used to match this asset into panels</span></label>
-      <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow" />
+      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— names the AI matches into panels; separate alternates with /</span></label>
+      <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow / the keep" />
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -1087,7 +1087,7 @@
       </div>
       <input type="file" id="asset-image" accept="image/*" style="display:none;"
         onchange="handleAssetFileSelect(event)" />
-      <div class="form-hint" style="margin-top:4px;">A reference image fed to panel generation when this asset's name appears. Click the image to enlarge.</div>
+      <div class="form-hint" style="margin-top:4px;">A reference image fed to panel generation when one of its names or keywords appears. Click the image to enlarge.</div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeAssetModal()">Cancel</button>

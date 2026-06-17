@@ -485,6 +485,30 @@ var MAX_PANEL_REFS = 14;
 // an asset is "present" if its name appears in the panel's text.
 // Returns { text, refs } — each ref carries its category so the prompt
 // can describe it correctly (Piece 5).
+// An asset's Name field may hold several slash-separated aliases, e.g.
+// "Blackrock Keep / The Sundered Hold / the fortress". The FIRST alias is the
+// canonical name -- the only one shown to the image model. ANY alias found in
+// the panel prose marks the asset present. The canonical alias matches at any
+// length (so existing single-name assets are unchanged); extra aliases need
+// >= 3 chars to avoid matching short, common substrings.
+function assetTokens(name) {
+  return String(name || '').split('/').map(function(t){ return t.trim(); }).filter(function(t){ return t.length > 0; });
+}
+function assetCanonicalName(name) {
+  var t = assetTokens(name);
+  return t.length ? t[0] : String(name || '').trim();
+}
+function assetNameMatches(name, lowerText) {
+  var t = assetTokens(name);
+  for (var i = 0; i < t.length; i++) {
+    var tok = t[i].toLowerCase();
+    if (i === 0 || tok.length >= 3) {
+      if (lowerText.indexOf(tok) !== -1) return true;
+    }
+  }
+  return false;
+}
+
 function buildAssetBlock(assets, panelText, explicitAssetIds) {
   if (!assets || !assets.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
@@ -498,7 +522,7 @@ function buildAssetBlock(assets, panelText, explicitAssetIds) {
   } else {
     present = assets.filter(function(a) {
       if (!a.name || !a.image_url) return false;
-      return text.indexOf(a.name.toLowerCase()) !== -1;
+      return assetNameMatches(a.name, text);
     });
   }
   if (!present.length) return { text: '', refs: [] };
@@ -508,8 +532,9 @@ function buildAssetBlock(assets, panelText, explicitAssetIds) {
   present.forEach(function(a) {
     var cat = a.category || 'location';
     if (/^https?:\/\//.test(a.image_url)) {
-      refs.push({ name: a.name, url: a.image_url, category: cat, isAsset: true });
-      lines.push(a.name + ' (' + cat + ')');
+      var canon = assetCanonicalName(a.name);
+      refs.push({ name: canon, url: a.image_url, category: cat, isAsset: true });
+      lines.push(canon + ' (' + cat + ')');
     }
   });
   return { text: lines.join('\n'), refs: refs };
