@@ -1405,12 +1405,11 @@
     <button class="help-close" type="button" onclick="closeHelp()" title="Close">&times;</button>
   </div>
   <div class="help-panel-body">
-    <div class="help-intro">Ask anything about using Campaignia - features, tokens, billing, or how to do something. Claudia knows your account and the screen you are on.</div>
-    <textarea class="help-input" id="help-question" placeholder="What do you need help with?" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitHelp();}"></textarea>
-    <div class="help-actions">
+    <div id="help-thread" class="help-thread"></div>
+    <div class="help-compose">
+      <textarea class="help-input" id="help-question" placeholder="What do you need help with?" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitHelp();}"></textarea>
       <button class="btn btn-primary" id="help-ask-btn" onclick="submitHelp()">Ask</button>
     </div>
-    <div id="help-answer" class="help-answer hidden"></div>
   </div>
 </aside>
 <div class="modal-overlay hidden" id="narr-direction-modal">

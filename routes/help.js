@@ -4,12 +4,14 @@ const { getDb } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
 
-// Contextual "Ask Claudia" help: a read-only, one-shot Q&A. Short answers, so a
-// lightweight model is plenty; overridable via HELP_MODEL without a code change.
+// Contextual "Ask Claudia" help: a short, read-only CHAT. It can ask a
+// clarifying question before answering. Short turns, so a lightweight model is
+// plenty; overridable via HELP_MODEL without a code change.
 const HELP_MODEL = process.env.HELP_MODEL || 'claude-haiku-4-5-20251001';
+const MAX_TURNS = 12;   // cap conversation history sent to the model
 
 // In-memory per-user rate limit (sliding 60s window). Resets on restart, which
-// is fine -- this is abuse / runaway-cost protection, not billing. No schema.
+// is fine -- abuse / runaway-cost protection, not billing. No schema.
 const RATE_MAX = 15;
 const RATE_WINDOW_MS = 60000;
 const _hits = new Map();
@@ -32,12 +34,30 @@ const VIEW_NAMES = {
   account_view: 'Account / Billing'
 };
 
-// POST /api/help/ask  { question, current_view_id?, current_campaign_id? }
+// Normalize the client-sent chat history into a valid alternating message list
+// that starts with a user turn and ends with a user turn.
+function normalizeMessages(body) {
+  let msgs = [];
+  if (body && Array.isArray(body.messages)) {
+    msgs = body.messages
+      .filter(function(m){ return m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim(); })
+      .map(function(m){ return { role: m.role, content: String(m.content).trim().slice(0, 2000) }; });
+  }
+  if (!msgs.length && body && typeof body.question === 'string' && body.question.trim()) {
+    msgs = [{ role: 'user', content: body.question.trim().slice(0, 2000) }];
+  }
+  msgs = msgs.slice(-MAX_TURNS);
+  while (msgs.length && msgs[0].role !== 'user') msgs.shift();   // must start with user
+  return msgs;
+}
+
+// POST /api/help/ask  { messages:[{role,content}], current_view_id?, current_campaign_id? }
 router.post('/ask', requireAuth, async function(req, res) {
   const userId = req.session.userId;
-  const question = (req.body && typeof req.body.question === 'string') ? req.body.question.trim() : '';
-  if (!question) return res.json({ ok: false, error: 'Type a question first.' });
-  if (question.length > 1000) return res.json({ ok: false, error: 'That question is a bit long -- try shortening it.' });
+  const msgs = normalizeMessages(req.body);
+  if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
+    return res.json({ ok: false, error: 'Type a question first.' });
+  }
   if (rateLimited(userId)) {
     return res.json({ ok: false, error: 'You are asking very quickly -- give it a moment and try again.' });
   }
@@ -64,41 +84,41 @@ router.post('/ask', requireAuth, async function(req, res) {
   const viewName = VIEW_NAMES[viewId] || 'the app';
   if (campaignId) { try { ctx.role = await getCampaignRole(userId, campaignId); } catch (e) {} }
 
-  const system =
-    'You are Claudia, the in-app assistant for Campaignia, a tabletop-RPG-to-graphic-novel web app. ' +
-    'Answer the question directly and concisely in 1-3 sentences, assuming they already know what Campaignia is. ' +
-    'Be warm, confident, and practical. Do not apologize and do not pad the answer.\n\n' +
-    'WHO YOU ARE HELPING:\n' +
-    '- Name: ' + ctx.name + '\n' +
-    '- Plan/tier: ' + ctx.tier + (ctx.in_free_trial ? ' (currently in the free trial)' : '') + '\n' +
-    '- Subscription status: ' + ctx.subscription_status + '\n' +
-    '- Token balance: ' + ctx.utlt + ' monthly (use-it-or-lose-it) plus ' + ctx.cot + ' carry-over, ' + ctx.total + ' total\n' +
-    '- Current screen: ' + viewName + (ctx.role ? '. Role in the current campaign: ' + ctx.role : '') + '\n\n' +
-    'HOW CAMPAIGNIA WORKS:\n' +
-    'A user creates a campaign, adds characters, then creates sessions and pastes a game transcript. ' +
-    'Generate Story extracts the narrative and panel scenes, and images are generated one per panel. ' +
-    'On the Storyboard they can edit a panel prompt, regenerate, retouch (an in-place edit), replace from the Archive, ' +
-    'lock, or archive an image, and set a per-panel Direction that steers both the prose and the image. ' +
-    'Assets (locations, NPCs, items) are reference images matched into panels by name or keyword. ' +
-    'Finished stories publish to the public Library or order a printed book. ' +
-    'Image generation spends tokens: monthly use-it-or-lose-it tokens first, then carry-over tokens. ' +
-    'Tiers from lowest to highest: Free Trial, Copper, Silver, Gold, Platinum.\n\n' +
-    'RULES:\n' +
-    '- Use the actual tier and token numbers above when the question is about what they can do or afford.\n' +
-    '- If a feature needs a higher tier than theirs, say so plainly.\n' +
-    '- If the question is not about Campaignia, briefly say so and point them elsewhere.\n' +
-    '- You can only answer questions. You cannot change settings, spend tokens, or take any action.';
+  const lines = [
+    'You are Claudia, the friendly in-app assistant for Campaignia, a tabletop-RPG-to-graphic-novel web app. You are in a short chat inside the app. Keep every message to 1-4 sentences, warm and practical; do not apologize or pad.',
+    '',
+    'BE INQUISITIVE: when a request could mean several different things, ask ONE short clarifying question (offer the likely options) before answering, instead of guessing. Use the current screen below as a strong hint about what they probably mean. Ask at most two clarifying questions in a row; after that, give your best concrete answer. If the request is already specific, just answer with the steps.',
+    '',
+    'WHO YOU ARE HELPING:',
+    '- Name: ' + ctx.name,
+    '- Plan/tier: ' + ctx.tier + (ctx.in_free_trial ? ' (in the free trial)' : '') + '; subscription: ' + ctx.subscription_status,
+    '- Tokens: ' + ctx.utlt + ' monthly (use-it-or-lose-it) plus ' + ctx.cot + ' carry-over, ' + ctx.total + ' total',
+    '- Current screen: ' + viewName + (ctx.role ? '. Role in the current campaign: ' + ctx.role : ''),
+    '',
+    'WHAT CAMPAIGNIA CAN DO (use these concrete steps when answering):',
+    '- Create a campaign on the home screen; open it to add characters and sessions.',
+    '- CAMPAIGN TILE IMAGE: open a campaign, click its three-dots menu (Campaign settings), and under "Campaign image" pick an image from the Archive. It shows on the campaign tile and becomes the default cover when publishing if no cover is set.',
+    '- SESSIONS: inside a campaign, create a session and paste the game transcript, then Generate Story to extract the narrative and panel scenes; one image is generated per panel.',
+    '- STORYBOARD: each panel has controls to Edit prompt, Regenerate, Retouch (an in-place edit of the current image), Replace from the Archive, Lock, and Archive.',
+    '- REVIEW TAB: each panel has a Direction button that steers BOTH the narrative and the image for that panel; it applies when the panel is generated or regenerated.',
+    '- ASSETS: the Asset Library holds reference images (locations, NPCs, items) matched into panels by name or keyword (separate alternate names with a slash). You can also turn an archived image into an asset with the Copy to Assets button on the Archive screen.',
+    '- COVERS: choose Cover, Back, and Title images in the Pre-Publish Prep panel when publishing.',
+    '- PUBLISH: publish a finished story to the public Library as a web page, or order a printed book.',
+    '- TOKENS: generating images spends tokens (monthly use-it-or-lose-it first, then carry-over). Tiers low to high: Free Trial, Copper, Silver, Gold, Platinum.',
+    '',
+    'RULES:',
+    '- Use the actual tier and token numbers above when relevant.',
+    '- If a feature needs a higher tier than theirs, say so.',
+    '- If the question is not about Campaignia, briefly redirect.',
+    '- You can only answer and guide; you cannot change settings, spend tokens, or take actions.'
+  ];
+  const system = lines.join('\n');
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: HELP_MODEL,
-        max_tokens: 400,
-        system: system,
-        messages: [{ role: 'user', content: question }]
-      })
+      body: JSON.stringify({ model: HELP_MODEL, max_tokens: 500, system: system, messages: msgs })
     });
     const data = await response.json();
     if (data.error) return res.json({ ok: false, error: 'Could not answer that right now.' });
