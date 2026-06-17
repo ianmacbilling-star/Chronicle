@@ -10955,6 +10955,9 @@ function renderPrintReview(body, quote) {
   if (place) place.style.display = 'none';
   hideFinalConfirm();
   preparedSignature = printOrderSignature();
+  var _att = document.getElementById('print-attest');
+  if (_att) _att.checked = false;
+  updatePrintConfirmGate();
   panel.style.display = 'block';
   if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -10969,9 +10972,17 @@ function cancelPrintReview() {
   printProgressDone();
 }
 
+function updatePrintConfirmGate() {
+  var cb = document.getElementById('print-attest');
+  var btn = document.getElementById('print-confirm-btn');
+  if (btn) btn.disabled = !(cb && cb.checked);
+}
+
 function submitPrintOrder() {
   var body = printSelectionBody();
   if (!body || !body.selection.binding) { showPrintBtnMsg('Pick your format first.', null); return; }
+  var _att = document.getElementById('print-attest');
+  if (!_att || !_att.checked) { showPrintBtnMsg('Please confirm you have reviewed the interior and cover PDFs before continuing.', null); return; }
   if (preparedSignature && printOrderSignature() !== preparedSignature) {
     invalidatePreparedOrder();
     showPrintBtnMsg('Your order details changed. Click Prepare Your Order to rebuild your print files and update the price before ordering.', null);
