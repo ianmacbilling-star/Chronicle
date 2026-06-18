@@ -2111,7 +2111,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 
 /* ===== Breadcrumb band holds the corner actions (Tour / Ask). Desktop: two pills.
    Mobile (<=480px): collapse into a kebab menu so they don't stretch the row. ===== */
-.breadcrumb-row{display:flex;align-items:center;gap:8px;padding:4px 1.5rem;background:rgba(20,15,8,0.75);border-bottom:1px solid rgba(201,168,76,0.15);backdrop-filter:blur(8px);}
+.breadcrumb-row{display:flex;align-items:center;gap:8px;padding:4px 1.5rem;background:rgba(20,15,8,0.75);border-bottom:1px solid rgba(201,168,76,0.15);backdrop-filter:blur(8px);position:relative;z-index:60;}
 .corner-kebab{display:none;align-items:center;justify-content:center;padding:6px 11px;font-size:18px;line-height:1;background:rgba(0,0,0,0.72);color:rgba(201,168,76,0.95);border:1px solid rgba(201,168,76,0.45);border-radius:8px;cursor:pointer;}
 
 .corner-menu{display:none;position:absolute;top:100%;right:0;margin-top:6px;background:var(--ink);border:1px solid rgba(201,168,76,0.3);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:96;min-width:130px;overflow:hidden;}
