@@ -12047,12 +12047,17 @@ function _closeCornerMenuOutside(e) {
 }
 
 // ===== Delete campaign (from Campaign settings). Safe: server refuses unless empty. =====
-function deleteCampaign() {
+async function deleteCampaign() {
   var id = (typeof _csCampaignId !== 'undefined') ? _csCampaignId : null;
   if (!id) return;
   var msg = document.getElementById('cs-delete-msg');
   if (msg) { msg.textContent = ''; msg.style.color = ''; }
-  if (!confirm('Delete this campaign? This cannot be undone.')) return;
+  if (!await uiConfirm('Delete this campaign? This cannot be undone.', { okText: 'Delete', cancelText: 'Cancel' })) return;
+  _doDeleteCampaign(id);
+}
+
+function _doDeleteCampaign(id) {
+  var msg = document.getElementById('cs-delete-msg');
   var btn = document.getElementById('cs-delete-btn');
   if (btn) btn.disabled = true;
   fetch('/api/campaigns/' + id, { method: 'DELETE' })

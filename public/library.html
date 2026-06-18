@@ -108,12 +108,12 @@
 </head>
 <body>
   <nav>
-    <a href="/" class="nav-logo">
+    <a href="/" class="nav-logo" onclick="goHome(event)">
       <img src="/images/Campaignia_Logo.png" alt="Campaignia" />
       <span class="nav-logo-text">Campaignia</span>
     </a>
     <div class="nav-actions">
-      <a href="/" class="nav-link">HOME</a>
+      <a href="/" class="nav-link" onclick="goHome(event)">HOME</a>
       <a href="/login" class="btn-nav">CREATE YOUR OWN</a>
     </div>
   </nav>
@@ -149,12 +149,28 @@
   </div>
 
   <footer>
-    &copy; <span id="yr"></span> So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/login">Sign In</a> &middot; <a href="/terms.html">Terms</a>
+    &copy; <span id="yr"></span> So It Begins, LLC &middot; Campaignia &middot; <a href="/" onclick="goHome(event)">Home</a> &middot; <a href="/login">Sign In</a> &middot; <a href="/terms.html">Terms</a>
     <div style="margin-top:8px;font-size:11px;color:rgba(201,168,76,0.3);letter-spacing:0;line-height:1.5;">Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
   </footer>
 
   <script>
     document.getElementById('yr').textContent = new Date().getFullYear();
+
+    // Home/logo: if we arrived from elsewhere on this site (e.g. the signed-in
+    // app), go Back so the user lands inside the app with their session intact.
+    // Only fall through to the landing page for cold/direct visits.
+    function goHome(e) {
+      try {
+        e.preventDefault();
+        var fromApp = /[?&]from=app/.test(location.search) ||
+          (document.referrer && new URL(document.referrer).origin === location.origin);
+        if (fromApp) {
+          if (history.length > 1) { history.back(); } else { location.href = '/app.html'; }
+          return;
+        }
+      } catch (err) {}
+      location.href = '/';
+    }
 
     var gallery = document.getElementById('gallery');
     var statusEl = document.getElementById('status');
