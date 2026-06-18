@@ -83,29 +83,53 @@ router.put('/:id', requireAuth, async function(req, res) {
   res.json(updated);
 });
 
-// Delete campaign — DM-only.
+// Delete campaign — DM/owner only. Safe by default: refuses while the campaign
+// still has content (sessions, characters, assets, archives) or other members.
+// Only an otherwise-empty campaign is deleted. Most child tables do NOT cascade
+// on the campaign FK, so we clear the non-cascading leftovers (owner membership,
+// pending invites, image jobs) first and null out print-order links (kept for
+// financial records). campaign_archives / public_stories cascade on their own.
 router.delete('/:id', requireAuth, async function(req, res) {
   const db = await getDb();
+  const cid = req.params.id;
   const role = await db.prepare(
     'SELECT role FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
-  ).get(req.params.id, req.session.userId);
+  ).get(cid, req.session.userId);
   if (!role || role.role !== 'dm') return res.status(403).json({ error: 'DM access required' });
 
-  // Gather every R2 object this campaign owns BEFORE the cascade wipes the
-  // rows; the FK cascade deletes rows, not the R2 bytes. We free them after.
+  // Count anything that should block the delete.
+  async function count(sql){ try { var r = await db.prepare(sql).get(cid); return r ? (Number(r.n) || 0) : 0; } catch(e){ console.error('campaign-delete count:', e.message); return 0; } }
+  var counts = {
+    sessions:     await count('SELECT COUNT(*) AS n FROM sessions WHERE campaign_id = ?'),
+    characters:   await count('SELECT COUNT(*) AS n FROM characters WHERE campaign_id = ?'),
+    assets:       await count('SELECT COUNT(*) AS n FROM campaign_assets WHERE campaign_id = ?'),
+    archives:     await count('SELECT COUNT(*) AS n FROM campaign_archives WHERE campaign_id = ?'),
+    otherMembers: Math.max(0, (await count('SELECT COUNT(*) AS n FROM campaign_members WHERE campaign_id = ?')) - 1)
+  };
+  if (counts.sessions || counts.characters || counts.assets || counts.archives || counts.otherMembers) {
+    return res.status(409).json({ error: 'NOT_EMPTY', counts: counts });
+  }
+
+  // Gather any R2 objects to free afterward (empty campaigns usually have none,
+  // but a campaign tile/cover image may exist). Best-effort.
   var urls = [];
-  var cid = req.params.id;
   async function grab(sql){ try { (await db.prepare(sql).all(cid)).forEach(function(r){ if (r && r.u) urls.push(r.u); }); } catch(e){ console.error('campaign-delete gather:', e.message); } }
-  await grab("SELECT m.image AS u FROM moments m JOIN sessions s ON s.id = m.session_id WHERE s.campaign_id = ?");
-  await grab("SELECT sc.reference_url AS u FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id JOIN sessions s ON s.id = sf.session_id WHERE s.campaign_id = ?");
-  await grab("SELECT canonical_reference_url AS u FROM characters WHERE campaign_id = ?");
-  await grab("SELECT image_url AS u FROM campaign_assets WHERE campaign_id = ?");
-  await grab("SELECT image_url AS u FROM campaign_archives WHERE campaign_id = ?");
+  await grab('SELECT campaign_image_url AS u FROM campaigns WHERE id = ?');
+  await grab('SELECT cover_image_url AS u FROM campaigns WHERE id = ?');
 
-  await db.prepare('DELETE FROM campaigns WHERE id=?').run(req.params.id);
+  // Clear non-cascading children first so the FK never blocks, then the campaign.
+  async function wipe(sql){ try { await db.prepare(sql).run(cid); } catch(e){ console.error('campaign-delete wipe:', e.message); } }
+  await wipe('DELETE FROM campaign_invites WHERE campaign_id = ?');
+  await wipe('DELETE FROM image_jobs WHERE campaign_id = ?');
+  await wipe('UPDATE print_orders SET campaign_id = NULL WHERE campaign_id = ?');
+  await wipe('DELETE FROM campaign_members WHERE campaign_id = ?');
+  try {
+    await db.prepare('DELETE FROM campaigns WHERE id = ?').run(cid);
+  } catch(e) {
+    console.error('campaign-delete final:', e.message);
+    return res.status(500).json({ error: 'Could not delete campaign — something still references it.' });
+  }
 
-  // Free the orphaned objects (campaign + all its rows are gone now). Best-
-  // effort, fire-and-forget, de-duped; never blocks or fails the response.
   (async function(){ var seen = {}; for (var i=0;i<urls.length;i++){ var u=urls[i]; if(!u||seen[u])continue; seen[u]=true; try{ await deleteFile(u); }catch(e){ console.error('campaign-delete release:', e.message); } } })();
 
   res.json({ success: true });

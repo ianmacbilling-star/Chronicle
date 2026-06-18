@@ -12045,3 +12045,37 @@ function _closeCornerMenuOutside(e) {
   var f = document.getElementById('corner-fabs');
   if (f && !f.contains(e.target)) closeCornerMenu();
 }
+
+// ===== Delete campaign (from Campaign settings). Safe: server refuses unless empty. =====
+function deleteCampaign() {
+  var id = (typeof _csCampaignId !== 'undefined') ? _csCampaignId : null;
+  if (!id) return;
+  var msg = document.getElementById('cs-delete-msg');
+  if (msg) { msg.textContent = ''; msg.style.color = ''; }
+  if (!confirm('Delete this campaign? This cannot be undone.')) return;
+  var btn = document.getElementById('cs-delete-btn');
+  if (btn) btn.disabled = true;
+  fetch('/api/campaigns/' + id, { method: 'DELETE' })
+    .then(function(r){ return r.json().then(function(d){ return { status: r.status, d: d }; }); })
+    .then(function(res){
+      if (btn) btn.disabled = false;
+      if (res.status === 200 && res.d && res.d.success) {
+        closeCampaignSettings();
+        loadCampaigns();
+        return;
+      }
+      if (res.status === 409 && res.d && res.d.error === 'NOT_EMPTY') {
+        var c = res.d.counts || {};
+        var parts = [];
+        if (c.sessions) parts.push(c.sessions + ' session' + (c.sessions > 1 ? 's' : ''));
+        if (c.characters) parts.push(c.characters + ' character' + (c.characters > 1 ? 's' : ''));
+        if (c.assets) parts.push(c.assets + ' asset' + (c.assets > 1 ? 's' : ''));
+        if (c.archives) parts.push(c.archives + ' archived image' + (c.archives > 1 ? 's' : ''));
+        if (c.otherMembers) parts.push(c.otherMembers + ' other member' + (c.otherMembers > 1 ? 's' : ''));
+        if (msg) { msg.style.color = '#e57373'; msg.textContent = 'Cannot delete yet \u2014 this campaign still has ' + parts.join(', ') + '. Remove those first.'; }
+        return;
+      }
+      if (msg) { msg.style.color = '#e57373'; msg.textContent = (res.d && res.d.error) ? res.d.error : 'Could not delete this campaign.'; }
+    })
+    .catch(function(){ if (btn) btn.disabled = false; if (msg) { msg.style.color = '#e57373'; msg.textContent = 'Could not delete this campaign.'; } });
+}

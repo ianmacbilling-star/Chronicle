@@ -1516,6 +1516,12 @@
         <div class="settings-section-desc" style="margin:0;">Shown on this campaign's tile, and used as the default cover when you publish if no cover has been chosen.</div>
       </div>
     </div>
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(217,83,79,0.35);padding-top:16px;">
+      <div style="font-family:var(--font-display);font-size:14px;color:#e57373;margin-bottom:8px;">Delete campaign</div>
+      <div class="settings-section-desc" style="margin:0 0 10px;">Permanently deletes this campaign. Only works when it has no sessions, characters, assets, archived images, or other members.</div>
+      <button class="btn" id="cs-delete-btn" onclick="deleteCampaign()" style="border-color:rgba(217,83,79,0.6);color:#e57373;">Delete this campaign</button>
+      <div id="cs-delete-msg" class="settings-section-desc" style="margin-top:8px;"></div>
+    </div>
     <div class="modal-footer" style="margin-top:20px;">
       <button class="btn" onclick="closeCampaignSettings()">Cancel</button>
       <button class="btn btn-primary" id="cs-save-btn" onclick="saveCampaignSettings()">Save</button>
