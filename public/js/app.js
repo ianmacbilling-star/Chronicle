@@ -12028,3 +12028,20 @@ function castPickAsset(momentId, id) {
   p.cast_explicit = true;
   _saveCast(p);
 }
+
+// ===== Mobile corner menu: collapses Tour / Ask into a kebab on small screens =====
+function toggleCornerMenu(e) {
+  if (e) e.stopPropagation();
+  var m = document.getElementById('corner-menu'); if (!m) return;
+  var open = m.classList.toggle('open');
+  if (open) { setTimeout(function(){ document.addEventListener('click', _closeCornerMenuOutside); }, 0); }
+  else { document.removeEventListener('click', _closeCornerMenuOutside); }
+}
+function closeCornerMenu() {
+  var m = document.getElementById('corner-menu'); if (m) m.classList.remove('open');
+  document.removeEventListener('click', _closeCornerMenuOutside);
+}
+function _closeCornerMenuOutside(e) {
+  var f = document.getElementById('corner-fabs');
+  if (f && !f.contains(e.target)) closeCornerMenu();
+}

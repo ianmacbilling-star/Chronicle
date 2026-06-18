@@ -53,6 +53,11 @@
   <div id="corner-fabs" class="corner-fabs">
     <button id="tour-replay" class="tour-replay" type="button" onclick="showTour((window.state&&state.currentView)||'campaigns')" title="Replay this screen's tour" aria-label="Replay this screen tour">Tour</button>
     <button id="help-fab" class="help-fab" type="button" onclick="openHelp()" title="Ask us for help">Ask ?</button>
+    <button class="corner-kebab" type="button" onclick="toggleCornerMenu(event)" aria-label="More actions" title="More">&#8942;</button>
+    <div id="corner-menu" class="corner-menu">
+      <button type="button" class="corner-menu-item" onclick="closeCornerMenu();showTour((window.state&&state.currentView)||'campaigns')">Tour</button>
+      <button type="button" class="corner-menu-item" onclick="closeCornerMenu();openHelp()">Ask ?</button>
+    </div>
   </div>
 </div>
 
@@ -76,7 +81,7 @@
 
     <!-- ==================== CAMPAIGN SECTION: SESSIONS ==================== -->
     <div id="view-sessions" class="view" style="display:none;">
-      <div class="page-header sticky-band">
+      <div class="page-header">
         <div style="min-width:0;">
           <div class="page-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
             <span id="sessions-camp-name">Sessions</span><span id="sessions-count" style="font-size:0.6em;font-weight:400;color:var(--text-light);"></span>
