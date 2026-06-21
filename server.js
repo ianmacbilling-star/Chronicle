@@ -264,13 +264,18 @@ process.on('unhandledRejection', function(reason) { handleFatal('unhandledReject
 
 getDb().then(async function() {
   try { await require('./middleware/tiers').loadTierConfig(); } catch (e) { console.error('tier_config load failed (using code defaults):', e.message); }
-  app.listen(PORT, function() {
+  var server = app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');
     console.log('  Database: ' + (process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite'));
     console.log('  Open: http://localhost:' + PORT);
     console.log('');
     startDbHeartbeat();
+  });
+
+  server.on('clientError', function(err, socket) {
+    try { console.warn('clientError ' + (err && err.code) + ' from ' + (socket && socket.remoteAddress)); } catch (e) {}
+    if (socket && socket.writable) { socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); }
   });
 }).catch(async function(err) {
   console.error('Failed to connect to database:', err.message);
