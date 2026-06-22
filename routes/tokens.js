@@ -413,7 +413,7 @@ router.post('/checkout', async function(req, res) {
   // TF-03: only subscribers (or Copper members under a paid SM) may buy token
   // packs. Authoritative gate -- the UI mirrors this but cannot be trusted.
   if (!(await canPurchaseTokens(req.session.userId))) {
-    return res.status(403).json({ error: 'A paid plan is required to buy token packs. Subscribe to Silver, Gold, or Platinum to purchase tokens.', code: 'TIER_REQUIRED' });
+    return res.status(403).json({ error: 'Buying token packs requires a paid plan - either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver, Gold, or Platinum to purchase tokens.', code: 'TIER_REQUIRED' });
   }
   if (!stripeProvider.isConfigured()) {
     return res.status(503).json({ error: 'billing_unconfigured' });

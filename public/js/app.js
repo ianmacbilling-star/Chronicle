@@ -195,6 +195,18 @@ function closeTokensModal() {
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 }
 
+// Close the Buy Tokens modal and jump to the Plans section of the Account
+// page -- the single source of truth for choosing/subscribing to a plan.
+// Shared upsell CTA from the token gate; TF-14 "See Plans" will reuse this.
+function goToPlans() {
+  closeTokensModal();
+  if (typeof showView === 'function') showView('account');
+  setTimeout(function() {
+    var sec = document.getElementById('account-tier-section');
+    if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 140);
+}
+
 function renderTokenPacks() {
   var wrap = document.getElementById('token-packs');
   if (!wrap) return;
@@ -214,7 +226,7 @@ function renderTokenPacks() {
         badge +
         '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(201,168,76,0.7);">' + p.name + '</div>' +
         '<div style="font-size:32px;font-weight:700;color:#c9a84c;line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
-        '<div style="font-size:16px;color:var(--text);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
+        '<div style="font-size:16px;color:var(--gold-light);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
         (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:#7ec98f;margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
         (p.highlight ? '' : '<div style="font-size:11px;color:rgba(201,168,76,0.6);font-style:italic;">' + p.tagline + '</div>') +
         (canBuy
@@ -226,7 +238,7 @@ function renderTokenPacks() {
   if (!canBuy) {
     var _pmsg = document.getElementById('token-purchase-msg');
     if (_pmsg) {
-      _pmsg.innerHTML = 'Token packs are available on a paid plan. Subscribe to Silver, Gold, or Platinum to purchase tokens.';
+      _pmsg.innerHTML = 'Buying token packs requires a paid plan &mdash; either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver, Gold, or Platinum to purchase tokens.<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
       _pmsg.style.display = 'block';
     }
   }
@@ -240,7 +252,7 @@ function buyTokenPack(packId) {
   var label = pack ? pack.name + ' pack ($' + pack.price + ')' : 'this pack';
   function showUpgrade() {
     if (!msg) return;
-    msg.innerHTML = 'A paid plan is required to buy token packs. Subscribe to Silver, Gold, or Platinum to purchase tokens.';
+    msg.innerHTML = 'Buying token packs requires a paid plan &mdash; either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver, Gold, or Platinum to purchase tokens.<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
     msg.style.display = 'block';
     msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
