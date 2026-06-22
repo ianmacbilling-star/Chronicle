@@ -392,7 +392,7 @@ function changePlan(tier) {
     }
     show((data.error === 'no_subscription')
       ? 'You do not have an active subscription to change. Use Subscribe instead.'
-      : 'Could not change your plan. Please try again.');
+      : ('Could not change your plan. ' + (data.detail ? ('[' + data.detail + ']') : 'Please try again.')));
   }).catch(function() {
     show('Could not reach the billing service. Please try again.');
   });

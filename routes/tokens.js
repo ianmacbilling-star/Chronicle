@@ -503,7 +503,7 @@ router.post('/change-plan', async function(req, res) {
   } catch (e) {
     if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
     console.error('change-plan error:', e.message);
-    res.status(500).json({ error: 'Could not change plan' });
+    res.status(500).json({ error: 'Could not change plan', detail: e.message });
   }
 });
 
