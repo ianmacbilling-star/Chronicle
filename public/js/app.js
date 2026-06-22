@@ -201,10 +201,20 @@ function closeTokensModal() {
 function goToPlans() {
   closeTokensModal();
   if (typeof showView === 'function') showView('account');
-  setTimeout(function() {
-    var sec = document.getElementById('account-upgrade-section');   // the 'Upgrade Your Plan' panel
-    if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 140);
+  // The account view fills several panels in asynchronously, so a single fixed
+  // delay can scroll before the layout settles and land a little short. Re-scroll
+  // a few times over ~1s so the final position lands on the 'Upgrade Your Plan'
+  // panel once everything above it has loaded. First pass is smooth; the later
+  // passes snap silently only if the layout shifted.
+  var tries = 0;
+  function settleScrollToPlans() {
+    var sec = document.getElementById('account-upgrade-section');
+    if (sec && sec.scrollIntoView) {
+      sec.scrollIntoView({ behavior: (tries === 0 ? 'smooth' : 'auto'), block: 'start' });
+    }
+    if (++tries < 5) setTimeout(settleScrollToPlans, 220);
+  }
+  setTimeout(settleScrollToPlans, 120);
 }
 
 // TF-05 (C): welcome-back modal, shown once when a login reactivated a suspended
