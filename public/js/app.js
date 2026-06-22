@@ -10207,7 +10207,7 @@ var TIER_FIELD_LABELS = {
 };
 
 function switchSettingsTab(tab) {
-  ['general', 'tiers', 'stats', 'trends', 'financial'].forEach(function (t) {
+  ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting'].forEach(function (t) {
     var pane = document.getElementById('settings-pane-' + t);
     var btn = document.getElementById('settings-tab-' + t);
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
@@ -10217,6 +10217,20 @@ function switchSettingsTab(tab) {
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
+  if (tab === 'usertesting') initUserTestingTab();
+}
+
+// Populate the User Testing tab with the signed-in account's current state
+// (trial toggle/date + tier-override dropdown) so it is accurate even when the
+// Dashboard is opened without first visiting My Account. Self only -- reads
+// /api/auth/me for the current user; never touches anyone else's account.
+function initUserTestingTab() {
+  fetch('/api/auth/me').then(function(r){ return r.json(); }).then(function(me){
+    if (!me || !me.authenticated) return;
+    var tt = document.getElementById('dev-trial-toggle'); if (tt) tt.checked = (me.tier === 'trial');
+    var td = document.getElementById('dev-trial-date'); if (td && me.trialStartedAt) td.value = String(me.trialStartedAt).slice(0,10);
+    var ov = document.getElementById('account-tier-override'); if (ov && me.tier) ov.value = me.tier;
+  }).catch(function(){});
 }
 
 function loadTiersConfig() {
