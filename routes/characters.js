@@ -152,9 +152,22 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
     if (!char) return res.status(404).json({ error: 'Character not found' });
 
-    // TF-26: clear non-cascading children first so RESTRICT FKs never block the
-    // delete. (moment_characters CASCADEs and campaign_archives SET NULLs on their own.)
-    await db.prepare('DELETE FROM session_characters WHERE character_id = ?').run(char.id);
+    // TF-26: a character can only be deleted if it isn't woven into any session.
+    // session_characters / moment_characters record the character appearing in
+    // play; clearing them would silently rewrite existing sessions, so we refuse
+    // the delete in that case rather than mutate the chronicle.
+    const scN = await db.prepare('SELECT COUNT(*) AS n FROM session_characters WHERE character_id = ?').get(char.id);
+    const mcN = await db.prepare('SELECT COUNT(*) AS n FROM moment_characters WHERE character_id = ?').get(char.id);
+    if (((Number(scN && scN.n) || 0) + (Number(mcN && mcN.n) || 0)) > 0) {
+      return res.status(409).json({
+        error: 'This character appears in one or more sessions and cannot be deleted. Remove it from those sessions first.',
+        code: 'CHARACTER_IN_SESSIONS'
+      });
+    }
+
+    // Session-free (e.g. an invite-created stub): clear the only blocking binding
+    // (an invite that created or targeted this character), then delete.
+    // moment_characters CASCADEs and campaign_archives SET NULLs on their own.
     await db.prepare('DELETE FROM campaign_invites WHERE character_id = ?').run(char.id);
     await db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
     // Release this character's images (refcounted — a generated reference
