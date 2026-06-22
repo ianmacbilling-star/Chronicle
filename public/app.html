@@ -84,7 +84,7 @@
       <div class="page-header">
         <div style="min-width:0;">
           <div class="page-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
-            <span id="sessions-camp-name">Sessions</span><span id="sessions-count" style="font-size:0.6em;font-weight:400;color:var(--text-light);"></span>
+            <span id="sessions-camp-name">Sessions</span><span id="sessions-count" style="font-size:0.6em;font-weight:400;color:var(--text-muted);"></span>
             <button class="camp-edit-pencil dm-only" id="camp-edit-btn" onclick="startCampaignEdit()" title="Edit campaign name &amp; description">&#9998;</button>
           </div>
           <div class="page-subtitle" id="sessions-camp-desc"></div>
@@ -460,7 +460,7 @@
             <div class="form-hint" style="margin-top:4px;">Only paste content you own or have the rights to use. Avoid pasting verbatim text from copyrighted sources such as published adventure modules or novels.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Story Notes and Instructions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— director's instructions for the AI</span></label>
+            <label class="form-label">Story Notes and Instructions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— director's instructions for the AI</span></label>
             <textarea class="transcript-box" id="session-notes-input" style="min-height:340px;" placeholder="Give the AI specific instructions...&#10;&#10;MANDATORY SCENES:&#10;- I want a panel showing the moment Zara betrayed the party&#10;&#10;VISUAL STYLE:&#10;- Dark gothic tone, candlelit crypts&#10;&#10;COMPOSITION:&#10;- Theron should always be shown with his wolf Shadow"></textarea>
             <div class="form-hint" style="margin-top:4px;">Specify mandatory scenes, atmosphere, and character directions. The AI follows these precisely.</div>
           </div>
@@ -801,7 +801,7 @@
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <label for="print-markup-input" style="color:var(--gold);font-size:13px;">Print Markup Percentage</label>
           <input class="form-input" id="print-markup-input" type="number" min="0" step="0.5" value="10" style="width:110px;">
-          <span style="color:rgba(245,232,200,0.6);">%</span>
+          <span style="color:var(--text-muted);">%</span>
           <button class="btn btn-primary btn-sm" onclick="savePrintMarkup()">Save</button>
           <span class="settings-section-desc" id="print-markup-msg" style="margin:0;"></span>
         </div>
@@ -815,7 +815,7 @@
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <label for="signup-bonus-input" style="color:var(--gold);font-size:13px;">Signup Bonus Tokens to the SM</label>
           <input class="form-input" id="signup-bonus-input" type="number" min="0" step="1" value="0" style="width:110px;">
-          <span style="color:rgba(245,232,200,0.6);">CO</span>
+          <span style="color:var(--text-muted);">CO</span>
           <button class="btn btn-primary btn-sm" onclick="saveSignupBonus()">Save</button>
           <span class="settings-section-desc" id="signup-bonus-msg" style="margin:0;"></span>
         </div>
@@ -1058,7 +1058,7 @@
     </div>
     <div id="ca-error" class="alert alert-error hidden"></div>
     <div class="form-group">
-      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
+      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
       <input class="form-input" id="ca-name" placeholder="e.g. Castle Ravenhollow / the keep" />
     </div>
     <div class="form-group">
@@ -1084,7 +1084,7 @@
     </div>
     <div id="asset-modal-error" class="alert alert-error hidden"></div>
     <div class="form-group">
-      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— names the AI matches into panels; separate alternates with /</span></label>
+      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— names the AI matches into panels; separate alternates with /</span></label>
       <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow / the keep" />
     </div>
     <div class="form-group">
@@ -1134,13 +1134,13 @@
       <input class="form-input" id="char-name" placeholder="e.g. Theron Ashwood" />
     </div>
     <div class="form-group">
-      <label class="form-label">Player name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— helps AI match transcript to character</span></label>
+      <label class="form-label">Player name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— helps AI match transcript to character</span></label>
       <input class="form-input" id="char-player" placeholder="e.g. Dave" />
     </div>
     <div class="form-group dm-only">
       <label class="form-checkbox-row">
         <input type="checkbox" id="char-is-npc" />
-        <span>This is an NPC <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">— a recurring, important non-player character to track across the campaign. For minor or one-off NPCs, use the campaign Asset Library instead.</span></span>
+        <span>This is an NPC <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— a recurring, important non-player character to track across the campaign. For minor or one-off NPCs, use the campaign Asset Library instead.</span></span>
       </label>
     </div>
     <div class="form-group">
@@ -1152,7 +1152,7 @@
       <textarea class="form-textarea" id="char-desc" style="min-height:100px;" placeholder="Describe appearance and personality in detail — hair, skin, clothing, weapons, distinctive features, temperament, mannerisms, speech patterns..."></textarea>
     </div>
     <div class="form-group">
-      <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-light);">The more you provide, the better the AI consistency</span></label>
+      <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">The more you provide, the better the AI consistency</span></label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
 
         <!-- Portrait -->
@@ -1298,7 +1298,7 @@
       <div class="form-group">
         <label class="form-label">Player's email</label>
         <input class="form-input" id="invite-email" type="email" placeholder="player@example.com" />
-        <div style="font-size:11px;color:rgba(245,232,200,0.75);margin-top:4px;">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
           Used to pre-fill their sign-up. They can use a forwarded link with a different email — that's fine.
         </div>
       </div>
@@ -1345,7 +1345,7 @@
     <p style="color:var(--text);margin-bottom:8px;" id="confirm-make-dm-body">
       Make this player the Story Master?
     </p>
-    <p style="color:rgba(245,232,200,0.6);font-size:13px;margin-bottom:14px;">
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">
       They take over running the campaign. You become a regular player and keep your access. Only the current Story Master can do this, and it takes effect immediately.
     </p>
     <div class="modal-footer">
@@ -1365,7 +1365,7 @@
     <p style="color:var(--text);margin-bottom:8px;" id="confirm-remove-member-body">
       Remove this player from the campaign?
     </p>
-    <p style="color:rgba(245,232,200,0.6);font-size:13px;margin-bottom:14px;">
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">
       Their character will be released and become available to re-invite. Their tokens and account stay intact. They lose access to this campaign immediately.
     </p>
     <div class="modal-footer">
@@ -1407,10 +1407,10 @@
     <p style="color:var(--text);margin-bottom:8px;">
       Marking this session <strong>Ready</strong> publishes it to your players.
     </p>
-    <p style="color:rgba(245,232,200,0.85);font-size:13px;margin-bottom:14px;">
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">
       Once any session in the campaign is Ready, players can no longer edit their own canonical characters &mdash; they'll have to fork the session to make changes. (Forking support is coming in a future update.)
     </p>
-    <p style="color:rgba(245,232,200,0.7);font-size:12px;margin-bottom:14px;">
+    <p style="color:var(--text-muted);font-size:12px;margin-bottom:14px;">
       You can switch back to Draft at any time. No data is lost when you do.
     </p>
     <div class="modal-footer">
