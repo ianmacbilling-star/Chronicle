@@ -195,9 +195,25 @@ async function cancelSubscription(subId) {
   return await stripe.subscriptions.cancel(subId);
 }
 
+// Change an existing subscription to a different tier's price, in place, with
+// proration applied to the next invoice (used by the in-app plan-change buttons).
+// The customer.subscription.updated webhook then reconciles the user's tier.
+async function changeSubscriptionPrice(subId, newPriceId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  const sub = await stripe.subscriptions.retrieve(subId);
+  const item = sub && sub.items && sub.items.data && sub.items.data[0];
+  if (!item || !item.id) throw new Error('subscription_item_not_found');
+  return await stripe.subscriptions.update(subId, {
+    items: [{ id: item.id, price: newPriceId }],
+    proration_behavior: 'create_prorations'
+  });
+}
+
 module.exports = {
   isConfigured,
   cancelSubscription,
+  changeSubscriptionPrice,
   createCheckoutSession,
   createSubscriptionCheckout,
   createBillingPortalSession,

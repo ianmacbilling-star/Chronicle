@@ -477,6 +477,36 @@ router.post('/subscribe', async function(req, res) {
   }
 });
 
+// POST /api/tokens/change-plan -- switch an EXISTING subscription to another paid
+// tier IN PLACE (proration on the next invoice). Users without a live subscription
+// use /subscribe (new checkout) instead. The customer.subscription.updated webhook
+// reconciles the tier afterward.
+router.post('/change-plan', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  const tier = String((req.body || {}).tier || '').toLowerCase();
+  if (tier !== 'silver' && tier !== 'gold' && tier !== 'platinum') {
+    return res.status(400).json({ error: 'Unknown tier' });
+  }
+  if (!stripeProvider.isConfigured()) {
+    return res.status(503).json({ error: 'billing_unconfigured' });
+  }
+  const priceId = stripeProvider.priceForTier(tier);
+  if (!priceId) return res.status(503).json({ error: 'tier_price_unconfigured' });
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT stripe_subscription_id FROM users WHERE id = ?').get(req.session.userId);
+    if (!u || !u.stripe_subscription_id) {
+      return res.status(409).json({ error: 'no_subscription' });
+    }
+    await stripeProvider.changeSubscriptionPrice(u.stripe_subscription_id, priceId);
+    res.json({ success: true });
+  } catch (e) {
+    if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
+    console.error('change-plan error:', e.message);
+    res.status(500).json({ error: 'Could not change plan' });
+  }
+});
+
 // POST /api/tokens/portal -- open the Stripe Billing Portal (hosted manage page:
 // upgrade / downgrade / cancel / update card). Requires an existing Stripe customer.
 // Whatever the user changes there returns to us as a customer.subscription.* webhook.

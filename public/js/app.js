@@ -362,6 +362,42 @@ function subscribeTier(tier) {
   });
 }
 
+// TF-15: switch an EXISTING subscription to another paid tier in place. The server
+// updates the Stripe subscription (proration on next invoice); the webhook reconciles
+// the tier, so we refresh the account shortly after.
+function changePlan(tier) {
+  var msg = document.getElementById('account-billing-msg');
+  function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
+  show('Updating your plan...');
+  fetch('/api/tokens/change-plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tier: tier })
+  }).then(function(r) {
+    if (r.status === 503) {
+      return r.json().then(function(j) {
+        show((j && j.error === 'tier_price_unconfigured')
+          ? 'Subscriptions are being set up and will be available shortly.'
+          : 'Billing is being set up and will be available shortly.');
+        return null;
+      });
+    }
+    return r.json();
+  }).then(function(data) {
+    if (!data) return;
+    if (data.success) {
+      show('Your plan is updating -- this can take a few seconds to reflect.');
+      setTimeout(function() { if (typeof loadAccount === 'function') loadAccount(); else if (typeof checkAuth === 'function') checkAuth(); }, 2500);
+      return;
+    }
+    show((data.error === 'no_subscription')
+      ? 'You do not have an active subscription to change. Use Subscribe instead.'
+      : 'Could not change your plan. Please try again.');
+  }).catch(function() {
+    show('Could not reach the billing service. Please try again.');
+  });
+}
+
 function openBillingPortal() {
   var msg = document.getElementById('account-billing-msg');
   function show(t) { if (msg) { msg.textContent = t; msg.style.display = 'block'; } }
@@ -1120,6 +1156,11 @@ function renderAccountPlans(me) {
     var action = '';
     if (key !== 'copper' && !isCurrent && !live) {
       action = '<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="subscribeTier(&#39;' + key + '&#39;)">Subscribe</button>';
+    } else if (key !== 'copper' && !isCurrent && live) {
+      // TF-15: in-place plan change for an existing subscriber (proration on next invoice).
+      var curIdx = order.indexOf(current), thisIdx = order.indexOf(key);
+      var swLabel = (thisIdx > curIdx) ? ('Upgrade to ' + (t.name || key)) : ('Switch to ' + (t.name || key));
+      action = '<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="changePlan(&#39;' + key + '&#39;)">' + swLabel + '</button>';
     } else if (key !== 'copper' && isCurrent && live) {
       action = '<button class="btn btn-sm" style="margin-top:10px;width:100%;" onclick="openBillingPortal()">Manage</button>';
     }
