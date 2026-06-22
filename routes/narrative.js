@@ -28,7 +28,7 @@ const NARRATIVE_STYLES = (function () {
       system: 'You are a skilled fantasy author writing graphic novel narrative prose. You write in a vivid, dramatic style appropriate for fantasy graphic novels. You always return valid JSON.' + IP_GUARD
     },
     epic: {
-      name: 'Epic Chronicle',
+      name: 'Epic Saga',
       voice: `Mythic, poetic, sweeping, and dramatic. Describe events as if part of a legendary saga recorded by ancient historians. Use elevated language, poetic phrasing, and a sense of destiny or grandeur. Focus on atmosphere, symbolism, and the weight of events. Avoid modern slang. Keep the narration concise but powerful. PAST tense, THIRD person.\nExample: "Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes."`,
       system: SYS
     },

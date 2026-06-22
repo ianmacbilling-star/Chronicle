@@ -2745,8 +2745,8 @@ function refreshNarrativeDirectionUI(gapKey) {
 // MUST match the server-side NARRATIVE_STYLES keys in routes/narrative.js.
 // ============================================================
 var NARR_STYLE_META = [
-  { id:'classic', name:'Classic', desc:'Vivid, dramatic graphic-novel narration in present tense \u2014 the default Chronicle voice.', example:'Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat.' },
-  { id:'epic', name:'Epic Chronicle', desc:'Mythic, poetic, and sweeping \u2014 a legendary saga recorded by ancient historians.', example:'Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes.' },
+  { id:'classic', name:'Classic', desc:'Vivid, dramatic graphic-novel narration in present tense \u2014 the default Campaignia voice.', example:'Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat.' },
+  { id:'epic', name:'Epic Saga', desc:'Mythic, poetic, and sweeping \u2014 a legendary saga recorded by ancient historians.', example:'Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes.' },
   { id:'journal', name:"Adventurer's Journal", desc:'Personal and grounded, with dry humor, like an adventurer\u2019s diary. May use first person.', example:'We thought the forest would be quiet after the fight. Turns out the turnips were louder than the monsters.' },
   { id:'cinematic', name:'Cinematic Script', desc:'Visual, fast, and minimal. Short punchy sentences describing what the camera sees.', example:'The torchlight flickers. Shadows stretch across the stone. Ruk stumbles, pale and shaking, as the shriek fades into the dark.' },
   { id:'lorekeeper', name:'Lorekeeper / Historian', desc:'Scholarly and mysterious \u2014 formal, slightly archaic, recorded by an in-world historian.', example:'In the annals of the Third Era, the incident of the SoupMaster is noted with both caution and curiosity.' },
@@ -3034,7 +3034,7 @@ function selectStyleCard(kind, id) {
 
 // ---- Art Styles (shared picker; mirrors selStyle's session persistence) ----
 var ART_STYLE_META = [
-  { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Chronicle default.' },
+  { id:'High fantasy illustration', name:'High fantasy', desc:'Rich, painterly high-fantasy illustration \u2014 the Campaignia default.' },
   { id:'Dark gritty comic book', name:'Dark and gritty', desc:'Heavy ink and deep shadow, a gritty comic-book tone.' },
   { id:'Watercolor painterly', name:'Watercolor', desc:'Soft, painterly watercolor washes and loose edges.' },
   { id:'Anime manga style', name:'Anime / manga', desc:'Clean anime / manga linework with expressive shading.' },

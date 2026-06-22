@@ -19,7 +19,7 @@
   --radius:8px;--radius-lg:12px;
   --font-display:'Cinzel',Georgia,serif;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0806;background-image:url('/images/Chronicle_background.png');background-size:cover;background-position:center;background-attachment:fixed;color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0806;background-image:url('/images/Campaignia_background.png');background-size:cover;background-position:center;background-attachment:fixed;color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;}
 
 .hidden{display:none!important;}
 .flex{display:flex;}.items-center{align-items:center;}.justify-between{justify-content:space-between;}
@@ -145,7 +145,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #view-campaigns{
   min-height:calc(100vh - 44px - 35px);
   background:#0a0806;
-  background-image:url('/images/Chronicle_background.png');
+  background-image:url('/images/Campaignia_background.png');
   background-size:cover;
   background-position:center;
   position:relative;
