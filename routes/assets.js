@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
+const { getEffectiveTier, getTier } = require('../middleware/tiers');
 const { uploadFile, deleteFile, restoreCopy } = require('../storage/storage');
 const multer = require('multer');
 const path = require('path');
@@ -48,6 +49,26 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   }
 });
 
+// Tier gate: cap assets per campaign by the creating DM's EFFECTIVE tier (max of
+// their own tier and the campaign SM's). Returns an error string to send back, or
+// null to allow. max_assets === null means unlimited; 0 blocks new assets entirely.
+async function assetCapBlock(db, userId, campaignId) {
+  try {
+    const effName = await getEffectiveTier(userId, campaignId);
+    const effTier = getTier(effName);
+    const cap = effTier ? effTier.max_assets : null;
+    if (cap !== null && cap !== undefined) {
+      const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_assets WHERE campaign_id = ?').get(campaignId);
+      if (cnt && cnt.c >= cap) {
+        return 'This campaign has hit its asset limit of ' + cap + ' on the ' + effTier.name + ' tier. Upgrade for more.';
+      }
+    }
+  } catch (e) {
+    console.error('asset cap check error:', e.message);
+  }
+  return null;
+}
+
 // POST create a new asset (with image upload).
 router.post('/', requireAuth, verifyCampaignDM, uploadSingle, async function(req, res) {
   const name = (req.body && req.body.name || '').trim();
@@ -56,6 +77,8 @@ router.post('/', requireAuth, verifyCampaignDM, uploadSingle, async function(req
 
   try {
     const db = await getDb();
+    const capMsg = await assetCapBlock(db, req.session.userId, req.params.campaignId);
+    if (capMsg) return res.json({ error: capMsg });
     let imageUrl = null;
     if (req.file) imageUrl = await handleAssetUpload(req.file, null);
     const now = new Date().toISOString();
@@ -77,6 +100,8 @@ router.post('/', requireAuth, verifyCampaignDM, uploadSingle, async function(req
 router.post('/from-archive', requireAuth, verifyCampaignDM, async function(req, res) {
   try {
     const db = await getDb();
+    const capMsg = await assetCapBlock(db, req.session.userId, req.params.campaignId);
+    if (capMsg) return res.json({ error: capMsg });
     const archiveId = req.body && req.body.archive_id;
     const name = (req.body && req.body.name || '').trim();
     const category = cleanCategory(req.body && req.body.category);
