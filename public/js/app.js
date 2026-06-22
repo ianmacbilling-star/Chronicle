@@ -202,7 +202,7 @@ function goToPlans() {
   closeTokensModal();
   if (typeof showView === 'function') showView('account');
   setTimeout(function() {
-    var sec = document.getElementById('account-tier-section');
+    var sec = document.getElementById('account-upgrade-section');   // the 'Upgrade Your Plan' panel
     if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 140);
 }
