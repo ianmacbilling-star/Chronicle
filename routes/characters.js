@@ -152,6 +152,10 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
     if (!char) return res.status(404).json({ error: 'Character not found' });
 
+    // TF-26: clear non-cascading children first so RESTRICT FKs never block the
+    // delete. (moment_characters CASCADEs and campaign_archives SET NULLs on their own.)
+    await db.prepare('DELETE FROM session_characters WHERE character_id = ?').run(char.id);
+    await db.prepare('DELETE FROM campaign_invites WHERE character_id = ?').run(char.id);
     await db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
     // Release this character's images (refcounted — a generated reference
     // still used by a session snapshot in another fork is spared).
@@ -160,7 +164,8 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
     }
     res.json({ success: true });
   } catch(e) {
-    res.json({ error: e.message });
+    console.error('Character delete error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
