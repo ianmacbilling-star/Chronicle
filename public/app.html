@@ -957,6 +957,30 @@
   </div>
 </div>
 
+<!-- TF-05 (C): WELCOME-BACK MODAL (shown once on reactivating a suspended account) -->
+<div class="modal-overlay hidden" id="reactivated-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Welcome back!</div>
+      <button class="modal-close" onclick="closeReactivatedModal()">&times;</button>
+    </div>
+    <div class="settings-section-desc" style="line-height:1.5;">
+      Your account is active again, and all your campaigns, characters, and stories
+      are right where you left them.
+    </div>
+    <div id="reactivated-upsell" style="display:none;margin-top:10px;">
+      <div class="settings-section-desc" style="line-height:1.5;color:var(--text-muted);">
+        Your subscription ended when you suspended, so you're on the free plan for now.
+        Choose a plan whenever you'd like to bring back your paid features and monthly tokens.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeReactivatedModal()">Got it</button>
+      <button class="btn btn-primary" id="reactivated-plans-btn" style="display:none;" onclick="closeReactivatedModal(); goToPlans();">See plans</button>
+    </div>
+  </div>
+</div>
+
 <!-- CAMPAIGN MODAL -->
 <div class="modal-overlay hidden" id="campaign-modal">
   <div class="modal">

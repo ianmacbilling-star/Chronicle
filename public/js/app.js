@@ -207,6 +207,29 @@ function goToPlans() {
   }, 140);
 }
 
+// TF-05 (C): welcome-back modal, shown once when a login reactivated a suspended
+// account (login redirected here with ?reactivated=1). Tier-aware: the re-subscribe
+// nudge appears only for users who previously paid (now copper + had billing).
+function maybeShowReactivatedWelcome(data) {
+  try {
+    var q = new URLSearchParams(window.location.search);
+    if (!q.has('reactivated')) return;
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+    var m = document.getElementById('reactivated-modal');
+    if (!m) return;
+    var wasPaid = !!(data && data.tier === 'copper' && data.hasBilling);
+    var up = document.getElementById('reactivated-upsell');
+    var pb = document.getElementById('reactivated-plans-btn');
+    if (up) up.style.display = wasPaid ? 'block' : 'none';
+    if (pb) pb.style.display = wasPaid ? 'inline-block' : 'none';
+    m.classList.remove('hidden');
+  } catch (e) {}
+}
+function closeReactivatedModal() {
+  var m = document.getElementById('reactivated-modal');
+  if (m) m.classList.add('hidden');
+}
+
 function renderTokenPacks() {
   var wrap = document.getElementById('token-packs');
   if (!wrap) return;
@@ -725,6 +748,7 @@ function checkAuth() {
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
+      maybeShowReactivatedWelcome(data);   // TF-05 (C): greet a just-reactivated account
       // Free Trial badge in the top bar -- driven by the ACTUAL tier (tier === 'trial'),
       // i.e. the state where the trial caps apply. If this badge is hidden, the trial
       // caps are NOT in effect for this account regardless of any watermark/trial window.
@@ -7197,6 +7221,7 @@ function checkAuth() {
       // Tier info drives feature gates (prompt editing, watermark, export)
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
+      maybeShowReactivatedWelcome(data);   // TF-05 (C): greet a just-reactivated account
       // Free Trial badge in the top bar -- driven by the ACTUAL tier (tier === 'trial'),
       // i.e. the state where the trial caps apply. If this badge is hidden, the trial
       // caps are NOT in effect for this account regardless of any watermark/trial window.

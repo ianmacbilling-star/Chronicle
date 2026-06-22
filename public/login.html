@@ -263,7 +263,7 @@ document.getElementById('login-btn').addEventListener('click', async function() 
     var res = await fetch('/api/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
     var data = await res.json();
     if (data.error) { showError('login-error', data.error); this.disabled=false; this.textContent='Enter Campaignia'; return; }
-    window.location.href = '/app.html';
+    window.location.href = data.reactivated ? '/app.html?reactivated=1' : '/app.html';
   } catch(e) { showError('login-error','Connection error. Please try again.'); this.disabled=false; this.textContent='Enter Campaignia'; }
 });
 
