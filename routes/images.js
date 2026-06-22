@@ -43,9 +43,10 @@ async function getSelectedModel(db) {
   }
 }
 
-// Optional Gemini "thinking" level for Nano Banana 2 ('minimal' | 'high'),
-// off by default. Set NANO_THINKING_LEVEL in the environment to A/B test it;
-// later this becomes a per-campaign "Render quality" dial (Campaign Settings).
+// Gemini "thinking" level for Nano Banana 2 ('minimal' | 'high'), read SOLELY
+// from the NANO_THINKING_LEVEL environment variable (set to 'high' on staging
+// and production). TF-04 removed the per-user UI toggle, so this env var is the
+// single source of truth for the feature -- unset/invalid => off.
 const NANO_THINKING_LEVEL = (['minimal', 'high'].indexOf(process.env.NANO_THINKING_LEVEL) !== -1) ? process.env.NANO_THINKING_LEVEL : null;
 
 function shapeAspectRatio(shape) {
@@ -798,7 +799,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const webhookUrl = falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
-    const userThinking = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
+    const userThinking = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
     const momentDirsS = await loadMomentDirections(db, moment.fork_id);
     const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking);
     const nowTs = new Date().toISOString();
@@ -993,7 +994,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // images that actually succeed (spend-on-success), so failures aren't
   // charged — but the upfront check guarantees they can cover a full run.
   const perImageCost = await getTokenCost(modelKey);
-  const userThinkingAll = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
+  const userThinkingAll = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
   const batchCost = perImageCost * toGenerate.length + (estWillGen ? perImageCost : 0);
   if (!(await canAfford(req.session.userId, batchCost))) {
     const bal = await getBalance(req.session.userId);
@@ -1157,7 +1158,7 @@ router.post('/session-establishing/:sessionId/regenerate', requireAuth, async fu
     const forkId = await getDmForkId(db, sess.id);
     const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, estPrompt);
     const randomSeed = Math.floor(Math.random() * 2147483647);
-    const userThinking = ((await db.prepare('SELECT render_thinking FROM users WHERE id = ?').get(req.session.userId) || {}).render_thinking) ? 'high' : null;
+    const userThinking = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
     const sub = await submitPanelGen(estPrompt, style, fal_key, estBlock, randomSeed, modelKey, webhookUrl, sess.establishing_shape || 'wide', userThinking);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(

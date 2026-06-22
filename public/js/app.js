@@ -931,7 +931,6 @@ function loadAccount() {
       if (!me || !me.authenticated) return;
       renderAccountTier(me);
       renderAccountPlans(me);
-      var _tk = document.getElementById('setting-thinking'); if (_tk) _tk.checked = !!me.renderThinking;
       var _ppn = document.getElementById('settings-penname'); if (_ppn) _ppn.value = me.penName || '';
       var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = (me.tier === 'trial');
       var _td = document.getElementById('dev-trial-date'); if (_td && me.trialStartedAt) _td.value = String(me.trialStartedAt).slice(0,10);
@@ -941,16 +940,6 @@ function loadAccount() {
       if (usage) renderAccountUsage(usage);
     })
     .catch(function(){});
-}
-
-function saveRenderThinking() {
-  var el = document.getElementById('setting-thinking');
-  if (!el) return;
-  fetch('/api/auth/render-settings', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ thinking: el.checked })
-  }).catch(function(){});
 }
 
 // TESTING ONLY: switch the signed-in account's tier so we can exercise
