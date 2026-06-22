@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, TIERS } = require('../middleware/tiers');
+const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
 const { ensureMonthlyGrant, creditTokens } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 
@@ -308,7 +309,7 @@ router.post('/suspend', async function(req, res) {
 // their OWN tier so we can exercise tier-gated features (style locking,
 // archive caps, effective tier). NOT a real upgrade path -- remove before
 // production (paid tiers will be Stripe-gated). Grep 'set-tier' to find it.
-router.post('/set-tier', async function(req, res) {
+router.post('/set-tier', requireAdmin, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const tier = (req.body && typeof req.body.tier === 'string') ? req.body.tier.trim().toLowerCase() : '';
   if (!TIERS[tier]) return res.status(400).json({ error: 'Unknown tier' });
@@ -406,7 +407,7 @@ router.put('/render-settings', async function(req, res) {
 // TESTING ONLY: put the signed-in account in/out of the free trial so we can
 // exercise the trial watermark. Sets subscription_status + trial_started_at.
 // Self only. REMOVE with the other testing controls before production.
-router.put('/trial-testing', async function(req, res) {
+router.put('/trial-testing', requireAdmin, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const db = await getDb();
@@ -602,7 +603,7 @@ router.patch('/tour-complete', async function(req, res) {
 });
 
 // POST /api/auth/tour-reset -> clears the current user's tour history (testing).
-router.post('/tour-reset', async function(req, res) {
+router.post('/tour-reset', requireAdmin, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const db = await getDb();

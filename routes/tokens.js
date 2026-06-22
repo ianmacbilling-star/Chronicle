@@ -244,6 +244,7 @@ router.get('/ledger', async function(req, res) {
 // Stripe billing goes live.
 router.post('/dev-credit', async function(req, res) {
   if (!requireSession(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
   const amt = parseInt((req.body || {}).amount, 10);
   if (!Number.isFinite(amt) || amt <= 0) {
     return res.status(400).json({ error: 'Provide a positive amount' });
@@ -270,6 +271,7 @@ router.post('/dev-credit', async function(req, res) {
 // (cron or login hook) is decided.
 router.post('/dev-grant-monthly', async function(req, res) {
   if (!requireSession(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
   try {
     const db = await getDb();
     const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
@@ -298,6 +300,7 @@ router.post('/dev-grant-monthly', async function(req, res) {
 // in precise trial states. REMOVE with the other testing controls before prod.
 router.post('/dev-set-balance', async function(req, res) {
   if (!requireSession(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
   const body = req.body || {};
   const cot = parseInt(body.cot, 10);
   const utlt = parseInt(body.utlt, 10);
