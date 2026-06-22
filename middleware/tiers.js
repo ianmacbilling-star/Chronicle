@@ -398,6 +398,44 @@ function maxTier(a, b) {
   return tierRank(a) >= tierRank(b) ? a : b;
 }
 
+// A "paid" tier is any tier above the free floor -- i.e. a real subscription
+// (Silver and up, rank >= 2). Trial (rank 0) and Copper (rank 1) are free.
+function isPaidTier(tierName) {
+  return tierRank(tierName) >= 2;
+}
+
+// TF-03: who may purchase token packs.
+//   * own tier is paid (Silver/Gold/Platinum) -> yes (they hold a subscription)
+//   * Copper -> only if a member of >=1 campaign whose SM holds a PAID tier
+//     (they buy tokens to spend in that paid campaign)
+//   * Free Trial, or a lone Copper with no paid SM -> no (must subscribe first)
+// Fails CLOSED on error: the /checkout route calls this authoritatively and the
+// only failing path is the initial tier read, which means the DB is down and
+// the whole request would fail anyway -- so a paying user is never wrongly
+// blocked in practice, while a Trial user can never slip through.
+async function canPurchaseTokens(userId) {
+  const { getDb } = require('../database/db');
+  try {
+    const db = await getDb();
+    const me = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
+    const myTier = (me && me.tier) || 'copper';
+    if (isPaidTier(myTier)) return true;
+    if (myTier !== 'copper') return false;   // trial (or any non-paid, non-copper) -> blocked
+    const paidTiers = Object.keys(TIERS).filter(function(t){ return isPaidTier(t); });
+    if (!paidTiers.length) return false;
+    const placeholders = paidTiers.map(function(){ return '?'; }).join(',');
+    const row = await db.prepare(
+      "SELECT 1 AS ok FROM campaign_members cm " +
+      "JOIN campaign_members dm ON dm.campaign_id = cm.campaign_id AND dm.role = 'dm' " +
+      "JOIN users u ON u.id = dm.user_id " +
+      "WHERE cm.user_id = ? AND u.tier IN (" + placeholders + ") LIMIT 1"
+    ).get([userId].concat(paidTiers));
+    return !!row;
+  } catch (e) {
+    return false;
+  }
+}
+
 // Resolve a user's effective tier NAME within a campaign:
 //   max(user's own account tier, the campaign SM's tier).
 // Pass campaignId null/undefined to get the user's own tier. Pair the
@@ -471,4 +509,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

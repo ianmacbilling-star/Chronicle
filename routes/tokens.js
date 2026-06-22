@@ -12,7 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
-const { getTier, saveTierConfig } = require('../middleware/tiers');
+const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/tiers');
 const { getPack, listPacks } = require('../services/billing/packs');
 const stripeProvider = require('../services/billing/stripeProvider');
 
@@ -217,7 +217,8 @@ router.get('/balance', async function(req, res) {
     const reserve = Number(tier.session_reserve) > 0 ? Number(tier.session_reserve) : 0;
     const spendable = reserve ? Math.max(0, bal.total - reserve) : bal.total;
     const reserveLow = reserve > 0 && spendable <= reserve;
-    res.json(Object.assign({}, bal, { reserve: reserve, spendable: spendable, reserveLow: reserveLow }));
+    const canBuy = await canPurchaseTokens(req.session.userId);   // TF-03 UI hint (mirrors the /checkout gate)
+    res.json(Object.assign({}, bal, { reserve: reserve, spendable: spendable, reserveLow: reserveLow, can_purchase_tokens: canBuy }));
   } catch (e) {
     res.status(500).json({ error: 'Could not load balance' });
   }
@@ -409,6 +410,11 @@ router.post('/checkout', async function(req, res) {
   if (!requireSession(req, res)) return;
   const pack = getPack((req.body || {}).packId);
   if (!pack) return res.status(400).json({ error: 'Unknown pack' });
+  // TF-03: only subscribers (or Copper members under a paid SM) may buy token
+  // packs. Authoritative gate -- the UI mirrors this but cannot be trusted.
+  if (!(await canPurchaseTokens(req.session.userId))) {
+    return res.status(403).json({ error: 'A paid plan is required to buy token packs. Subscribe to Silver, Gold, or Platinum to purchase tokens.', code: 'TIER_REQUIRED' });
+  }
   if (!stripeProvider.isConfigured()) {
     return res.status(503).json({ error: 'billing_unconfigured' });
   }

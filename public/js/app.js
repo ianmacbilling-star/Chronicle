@@ -171,9 +171,13 @@ function openTokensModal() {
       if (hdr && data && typeof data.total === 'number') {
         hdr.textContent = data.total.toLocaleString();
       }
+      // TF-03: may this user buy token packs? (subscribers, or Copper under a
+      // paid SM). Absent field => older server => default permissive; the
+      // backend /checkout gate is authoritative regardless.
+      state.canPurchaseTokens = (data && data.can_purchase_tokens !== undefined) ? !!data.can_purchase_tokens : true;
+      renderTokenPacks();
     })
-    .catch(function() { /* leave dashes */ });
-  renderTokenPacks();
+    .catch(function() { renderTokenPacks(); });
   // Hide any prior purchase message from a previous open.
   var pm = document.getElementById('token-purchase-msg');
   if (pm) pm.style.display = 'none';
@@ -194,6 +198,7 @@ function closeTokensModal() {
 function renderTokenPacks() {
   var wrap = document.getElementById('token-packs');
   if (!wrap) return;
+  var canBuy = (state.canPurchaseTokens !== false);   // TF-03: only false hard-blocks; undefined stays permissive
   var _baseRate = (TOKEN_PACKS[0] && TOKEN_PACKS[0].price) ? (TOKEN_PACKS[0].tokens / TOKEN_PACKS[0].price) : 0;
   var html = TOKEN_PACKS.map(function(p) {
     var _rate = p.price ? (p.tokens / p.price) : 0;
@@ -212,10 +217,19 @@ function renderTokenPacks() {
         '<div style="font-size:16px;color:var(--text);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
         (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:#7ec98f;margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
         (p.highlight ? '' : '<div style="font-size:11px;color:rgba(201,168,76,0.6);font-style:italic;">' + p.tagline + '</div>') +
-        '<button class="btn btn-primary btn-sm" onclick="buyTokenPack(\'' + p.id + '\')" style="margin-top:auto;">Buy ' + p.name + '</button>' +
+        (canBuy
+          ? '<button class="btn btn-primary btn-sm" onclick="buyTokenPack(\'' + p.id + '\')" style="margin-top:auto;">Buy ' + p.name + '</button>'
+          : '<button class="btn btn-sm" disabled style="margin-top:auto;opacity:0.5;cursor:not-allowed;">Buy ' + p.name + '</button>') +
       '</div>';
   }).join('');
   wrap.innerHTML = html;
+  if (!canBuy) {
+    var _pmsg = document.getElementById('token-purchase-msg');
+    if (_pmsg) {
+      _pmsg.innerHTML = 'Token packs are available on a paid plan. Subscribe to Silver, Gold, or Platinum to purchase tokens.';
+      _pmsg.style.display = 'block';
+    }
+  }
 }
 
 function buyTokenPack(packId) {
@@ -224,6 +238,14 @@ function buyTokenPack(packId) {
   var msg = document.getElementById('token-purchase-msg');
   var pack = TOKEN_PACKS.filter(function(p){return p.id===packId;})[0];
   var label = pack ? pack.name + ' pack ($' + pack.price + ')' : 'this pack';
+  function showUpgrade() {
+    if (!msg) return;
+    msg.innerHTML = 'A paid plan is required to buy token packs. Subscribe to Silver, Gold, or Platinum to purchase tokens.';
+    msg.style.display = 'block';
+    msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+  // TF-03: blocked tiers never reach checkout.
+  if (state.canPurchaseTokens === false) { showUpgrade(); return; }
   function showComingSoon() {
     if (!msg) return;
     msg.innerHTML = '&#9881; Purchasing is being set up. ' + label + ' will be available very soon. ' +
@@ -243,6 +265,7 @@ function buyTokenPack(packId) {
     body: JSON.stringify({ packId: packId })
   }).then(function(r) {
     if (r.status === 503) { showComingSoon(); return null; }
+    if (r.status === 403) { showUpgrade(); return null; }
     return r.json();
   }).then(function(data) {
     if (!data) return;
