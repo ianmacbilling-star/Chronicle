@@ -385,6 +385,7 @@ function changePlan(tier) {
     return r.json();
   }).then(function(data) {
     if (!data) return;
+    if (data.url) { window.location = data.url; return; }   // stale/canceled sub -> fresh checkout
     if (data.success) {
       show('Your plan is updating -- this can take a few seconds to reflect.');
       setTimeout(function() { if (typeof loadAccount === 'function') loadAccount(); else if (typeof checkAuth === 'function') checkAuth(); }, 2500);

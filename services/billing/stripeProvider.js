@@ -210,10 +210,19 @@ async function changeSubscriptionPrice(subId, newPriceId) {
   });
 }
 
+// Retrieve a subscription (used to check whether it's still live before an
+// in-place plan change; a canceled sub can only change its metadata).
+async function getSubscription(subId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.subscriptions.retrieve(subId);
+}
+
 module.exports = {
   isConfigured,
   cancelSubscription,
   changeSubscriptionPrice,
+  getSubscription,
   createCheckoutSession,
   createSubscriptionCheckout,
   createBillingPortalSession,

@@ -494,12 +494,35 @@ router.post('/change-plan', async function(req, res) {
   if (!priceId) return res.status(503).json({ error: 'tier_price_unconfigured' });
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT stripe_subscription_id FROM users WHERE id = ?').get(req.session.userId);
-    if (!u || !u.stripe_subscription_id) {
-      return res.status(409).json({ error: 'no_subscription' });
+    const u = await db.prepare('SELECT email, stripe_customer_id, stripe_subscription_id FROM users WHERE id = ?').get(req.session.userId);
+
+    // Is there a LIVE subscription to modify in place? Stripe is the source of
+    // truth: the stored sub can be stale (e.g. canceled by a prior suspend) while
+    // our DB hasn't caught up. A canceled sub can't be re-priced.
+    let live = false;
+    if (u && u.stripe_subscription_id) {
+      try {
+        const sub = await stripeProvider.getSubscription(u.stripe_subscription_id);
+        live = !!(sub && ['active','trialing','past_due','unpaid'].indexOf(sub.status) !== -1);
+      } catch (e) { live = false; }
     }
-    await stripeProvider.changeSubscriptionPrice(u.stripe_subscription_id, priceId);
-    res.json({ success: true });
+
+    if (live) {
+      await stripeProvider.changeSubscriptionPrice(u.stripe_subscription_id, priceId);
+      return res.json({ success: true });
+    }
+
+    // No live subscription -> start a fresh subscription checkout for this tier.
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+    const session = await stripeProvider.createSubscriptionCheckout({
+      priceId: priceId,
+      userId: req.session.userId,
+      customerId: (u && u.stripe_customer_id) || null,
+      customerEmail: (u && u.email) || null,
+      successUrl: base + '/app.html?subscribe=success',
+      cancelUrl: base + '/app.html?subscribe=cancel'
+    });
+    return res.json({ url: session.url });
   } catch (e) {
     if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
     console.error('change-plan error:', e.message);
