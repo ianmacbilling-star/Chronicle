@@ -3723,11 +3723,26 @@ function saveAsset() {
       }
       closeAssetModal();
       loadAssets();
+      _syncReviewAsset('upsert', data);   // TF-08: reflect in the storyboard picker
     })
     .catch(function() {
       if (saveBtn) saveBtn.disabled = false;
       if (errEl) { errEl.textContent = 'Could not save the asset.'; errEl.classList.remove('hidden'); }
     });
+}
+
+// TF-08: keep the cached review/storyboard asset picker list
+// (state.reviewData.all_assets) in sync with asset create/edit/delete, so a newly
+// added asset shows up in the "+ Add asset" picker without reloading the review payload.
+function _syncReviewAsset(action, asset) {
+  if (!state.reviewData || !Array.isArray(state.reviewData.all_assets)) return;
+  if (!asset || asset.id == null) return;
+  var list = state.reviewData.all_assets;
+  var i = -1;
+  for (var k = 0; k < list.length; k++) { if (String(list[k].id) === String(asset.id)) { i = k; break; } }
+  if (action === 'remove') { if (i >= 0) list.splice(i, 1); return; }
+  var entry = { id: asset.id, name: asset.name, category: asset.category, image_url: asset.image_url };
+  if (i >= 0) list[i] = entry; else list.push(entry);
 }
 
 async function deleteAsset(assetId) {
@@ -3737,6 +3752,7 @@ async function deleteAsset(assetId) {
     .then(function(data) {
       if (data && data.error) { alert(data.error); return; }
       loadAssets();
+      _syncReviewAsset('remove', { id: assetId });   // TF-08
     })
     .catch(function() { alert('Could not delete the asset.'); });
 }
@@ -6861,6 +6877,7 @@ function submitCopyToAsset() {
     closeCopyToAssetModal();
     showAlert('Copied to Assets.');
     if (typeof loadAssets === 'function' && document.getElementById('asset-grid')) loadAssets();
+    _syncReviewAsset('upsert', data);   // TF-08
   })
   .catch(function(){
     if (saveBtn) saveBtn.disabled = false;
