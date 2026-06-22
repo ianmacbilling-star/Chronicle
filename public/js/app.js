@@ -2984,6 +2984,7 @@ function pollRefJob(jobId, onDone, onFail) {
 }
 
 function applyCanonicalRef(charId, url) {
+  clearCharGenBusy(charId);   // TF-09: generation finished
   var ch = (state.characters || []).find(function(c) { return c.id === charId; });
   if (ch) { ch.canonical_reference_url = url; ch.archived = false; renderCharModalPrompt(ch); }
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -3833,6 +3834,7 @@ function renderCharModalPrompt(char) {
 }
 
 function rebuildCharPrompt(charId) {
+  if (isCharGenBusy(charId)) return;   // TF-09: don't re-enter while generating
   // Save-first guard. The character form in the modal may have pending
   // changes (uploaded reference images, edited description, etc.) that
   // haven't been persisted yet. Without this, the AI build runs against
@@ -3907,6 +3909,7 @@ function saveCharFormSilently(charId, cb) {
 // The original build logic, factored out of rebuildCharPrompt so the
 // save-first wrapper can call it after a successful save.
 function rebuildCharPromptCore(charId) {
+  setCharGenBusy(charId);   // TF-09
   var btn = document.getElementById('char-prompt-rebuild-' + charId);
   var textEl = document.getElementById('char-prompt-text-' + charId);
   if (btn) { btn.disabled = true; btn.textContent = 'Building...'; }
@@ -3959,12 +3962,13 @@ function rebuildCharPromptCore(charId) {
         // The reference image is generated async — poll for it and slot it in.
         if (data.image_job_id) {
           showBusyOverlay(refTargetId, 'Generating', 'Rendering the reference image\u2026');
-          pollRefJob(data.image_job_id, function(url){ applyCanonicalRef(charId, url); }, function(){ hideBusyOverlay(refTargetId); });
-        }
+          pollRefJob(data.image_job_id, function(url){ applyCanonicalRef(charId, url); }, function(){ hideBusyOverlay(refTargetId); clearCharGenBusy(charId); });
+        } else { clearCharGenBusy(charId); }   // TF-09: no async image job, unlock now
       } else {
         // Refusal / failure — remove the overlay so the existing image
         // (if any) is fully visible again, and show the error.
         hideBusyOverlay(refTargetId);
+        clearCharGenBusy(charId);   // TF-09
         if (data && data.error === 'INSUFFICIENT_TOKENS') {
           if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
         } else if (textEl) {
@@ -3976,6 +3980,7 @@ function rebuildCharPromptCore(charId) {
     .catch(function() {
       clearInterval(ticker);
       hideBusyOverlay(refTargetId);
+      clearCharGenBusy(charId);   // TF-09
       if (textEl) textEl.textContent = 'Could not build the prompt.';
       if (btn) { btn.disabled = false; btn.textContent = '\u21BB Rebuild prompt'; }
     });
@@ -3985,6 +3990,8 @@ function rebuildCharPromptCore(charId) {
 // no prompt rewrite). The moment "Regenerate" pill, applied to a character.
 function regenCharRef(charId) {
   if (!ensureGenFree()) return;
+  if (isCharGenBusy(charId)) return;
+  setCharGenBusy(charId);   // TF-09
   var refTargetId = 'char-ref-image-' + charId;
   var refEl = document.getElementById(refTargetId);
   if (refEl && !refEl.querySelector('img')) refEl.style.minHeight = '180px';
@@ -3998,6 +4005,7 @@ function regenCharRef(charId) {
     .then(function(data){
       if (data && data.error) {
         hideBusyOverlay(refTargetId);
+        clearCharGenBusy(charId);   // TF-09
         var textEl0 = document.getElementById('char-prompt-text-' + charId);
         if (data.error === 'INSUFFICIENT_TOKENS') {
           if (textEl0) textEl0.innerHTML = insufficientTokensHtml(data.message);
@@ -4011,14 +4019,16 @@ function regenCharRef(charId) {
       if (data && data.job_id) {
         pollRefJob(data.job_id, function(url){ applyCanonicalRef(charId, url); }, function(err){
           hideBusyOverlay(refTargetId);
+          clearCharGenBusy(charId);   // TF-09
           alert(err === 'INSUFFICIENT_TOKENS' ? 'You are out of tokens.' : 'Could not regenerate the reference image.');
         });
         return;
       }
       hideBusyOverlay(refTargetId);
+      clearCharGenBusy(charId);   // TF-09
       alert('Could not regenerate the reference image.');
     })
-    .catch(function(e){ hideBusyOverlay(refTargetId); alert('Could not regenerate the reference image: ' + e.message); });
+    .catch(function(e){ hideBusyOverlay(refTargetId); clearCharGenBusy(charId); alert('Could not regenerate the reference image: ' + e.message); });
 }
 
 // Open the shared Retouch modal targeting a CHARACTER reference (vs a moment).
@@ -4243,6 +4253,22 @@ function previewCharImage() {
   }
 }
 
+// TF-09: per-character generation lock. While a character's reference image is
+// generating (Build prompt / Regenerate / Retouch in flight), block Save and
+// re-entry into generation for that character so edits can't race the result.
+function isCharGenBusy(charId){ return !!(state.charGenBusy && state.charGenBusy[String(charId)]); }
+function setCharGenBusy(charId){ state.charGenBusy = state.charGenBusy || {}; state.charGenBusy[String(charId)] = true; _reflectCharSaveLock(charId, true); }
+function clearCharGenBusy(charId){ if (state.charGenBusy) delete state.charGenBusy[String(charId)]; _reflectCharSaveLock(charId, false); }
+// Visually disable the open character modal's Save button while that character
+// is generating; the click-time guard in saveChar is the correctness backstop.
+function _reflectCharSaveLock(charId, busy){
+  var idEl = document.getElementById('char-edit-id');
+  if (!idEl || String(idEl.value) !== String(charId)) return;
+  var btn = document.getElementById('char-save-btn');
+  if (!btn) return;
+  if (busy) { btn.disabled = true; btn.title = 'Generating the reference image\u2026 please wait'; }
+  else { btn.disabled = false; btn.title = ''; }
+}
 function saveChar() {
   var name = document.getElementById('char-name').value.trim();
   var player = document.getElementById('char-player').value.trim();
@@ -4250,6 +4276,10 @@ function saveChar() {
   var desc = document.getElementById('char-desc').value.trim();
   var editId = document.getElementById('char-edit-id').value;
   if (!name) { showModalError('char-modal-error', 'Character name is required.'); return; }
+  if (editId && isCharGenBusy(editId)) {
+    showModalError('char-modal-error', 'This character\u2019s reference image is still generating. Please wait for it to finish before saving.');
+    return;
+  }
 
   var formData = new FormData();
   formData.append('name', name);
@@ -6413,6 +6443,8 @@ function submitRetouch() {
     var charId = state.retouchCharId;
     var ch = (state.characters || []).find(function(c){ return c.id === charId; });
     if (!ch) return;
+    if (isCharGenBusy(charId)) { showAlert('This character\u2019s reference image is still generating. Please wait, then try again.'); return; }
+    setCharGenBusy(charId);   // TF-09
     closeRetouch();
     var refTargetId = 'char-ref-image-' + charId;
     showBusyOverlay(refTargetId, 'Retouching', 'Applying your change…');
@@ -6428,6 +6460,7 @@ function submitRetouch() {
           // characters.canonical_reference_url, so on done we just show it.
           pollRefJob(data.job_id, function(url){ applyCanonicalRef(charId, url); }, function(err){
             hideBusyOverlay(refTargetId);
+            clearCharGenBusy(charId);   // TF-09
             var et = document.getElementById('char-prompt-text-' + charId);
             if (et) et.textContent = 'Could not retouch: ' + err;
             else alert('Could not retouch the reference image: ' + err);
@@ -6439,8 +6472,10 @@ function submitRetouch() {
           ch.archived = false;
           renderCharModalPrompt(ch);
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          clearCharGenBusy(charId);   // TF-09
         } else {
           hideBusyOverlay(refTargetId);
+          clearCharGenBusy(charId);   // TF-09
           var textEl = document.getElementById('char-prompt-text-' + charId);
           if (data && data.error === 'INSUFFICIENT_TOKENS') {
             if (textEl) textEl.innerHTML = insufficientTokensHtml(data.message);
@@ -6450,7 +6485,7 @@ function submitRetouch() {
           }
         }
       })
-      .catch(function(e){ hideBusyOverlay(refTargetId); alert('Could not retouch the reference image: ' + e.message); });
+      .catch(function(e){ hideBusyOverlay(refTargetId); clearCharGenBusy(charId); alert('Could not retouch the reference image: ' + e.message); });
     return;
   }
 
