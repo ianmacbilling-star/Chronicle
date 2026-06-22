@@ -62,10 +62,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    semantic tokens. For an alert on a dark/transparent panel, add .panel-dark to an
    ancestor for the light-on-dark variant. NEVER hand-color a status message --
    use these classes so contrast is guaranteed everywhere. */
-.alert-error{background:var(--error-bg);border:1px solid rgba(163,45,45,0.35);color:var(--error);}
-.alert-success{background:var(--success-bg);border:1px solid rgba(15,110,86,0.35);color:var(--success);}
-.alert-warning{background:var(--warning-bg);border:1px solid rgba(138,90,0,0.35);color:var(--warning);}
-.alert-info{background:var(--info-bg);border:1px solid rgba(31,80,102,0.35);color:var(--info);}
+.alert-error{background:var(--error-bg);border:1px solid rgba(163,45,45,0.35);color:#3a1010;}
+.alert-success{background:var(--success-bg);border:1px solid rgba(15,110,86,0.35);color:#0d2a20;}
+.alert-warning{background:var(--warning-bg);border:1px solid rgba(138,90,0,0.35);color:#3a2600;}
+.alert-info{background:var(--info-bg);border:1px solid rgba(31,80,102,0.35);color:#0f2a35;}
 .panel-dark .alert-error{background:rgba(139,26,26,0.35);border-color:rgba(240,149,149,0.4);color:#f09595;}
 .panel-dark .alert-success{background:rgba(15,110,86,0.3);border-color:rgba(134,212,186,0.4);color:#86d4ba;}
 .panel-dark .alert-warning{background:rgba(120,80,0,0.32);border-color:rgba(230,190,120,0.4);color:#e6be78;}
@@ -1067,7 +1067,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .char-prompt-empty {
   font-size: 13px;
   font-style: italic;
-  color: rgba(201,168,76,0.4);
+  color: var(--text);
   background: rgba(20,12,4,0.4);
   border: 1px dashed rgba(201,168,76,0.2);
   border-radius: var(--radius);
