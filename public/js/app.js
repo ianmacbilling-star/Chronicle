@@ -4236,7 +4236,18 @@ async function deleteChar(id) {
   var char = state.characters.find(function(c){return c.id===id;});
   if (!await uiConfirm('Delete ' + (char ? char.name : 'this character') + '?')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + id, {method:'DELETE'})
-    .then(function() { loadCharacters(); });
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) {
+        if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); }
+        return;
+      }
+      loadCharacters();
+    })
+    .catch(function(e) {
+      var m = 'Delete failed: ' + (e && e.message ? e.message : 'network error');
+      if (typeof showAlert === 'function') { showAlert(m); } else { alert(m); }
+    });
 }
 
 // ============================================================
