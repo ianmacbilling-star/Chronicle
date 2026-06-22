@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Campaignia — Sign In</title>
   <meta name="description" content="Sign in to Chronicle — Your TTRPG session graphic novel generator." />
-  <link rel="icon" type="image/png" href="/images/Campaignia_Icon.png" />
-  <link rel="apple-touch-icon" href="/images/Campaignia_Icon.png" />
+  <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+  <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
 <link rel="stylesheet" href="/css/style.css">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -245,6 +245,13 @@ function showError(id, msg) {
   el.classList.remove('hidden');
 }
 function hideError(id) { document.getElementById(id).classList.add('hidden'); }
+
+// TF-06: arriving from a signup CTA (e.g. /login?signup) opens the registration
+// view directly. Plain /login still defaults to the sign-in view for returning users.
+try {
+  var _q = new URLSearchParams(window.location.search);
+  if (_q.has('signup') || _q.has('register')) showRegister();
+} catch (e) {}
 
 document.getElementById('login-btn').addEventListener('click', async function() {
   hideError('login-error');
