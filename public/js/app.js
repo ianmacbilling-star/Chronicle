@@ -11160,7 +11160,8 @@ function quotePrintOrder() {
     .then(function (res) {
       if (!res.ok) {
         var msg = res.j && res.j.error ? res.j.error : 'Could not price this order.';
-        if (res.j && res.j.details) msg += ' (' + res.j.details.join('; ') + ')';
+        if (res.j && res.j.details && res.j.details.join) msg += ' (' + res.j.details.join('; ') + ')';
+        else if (res.j && res.j.detail) msg += ' (' + res.j.detail + ')';
         if (out) out.textContent = msg;
         return;
       }
@@ -11310,7 +11311,8 @@ function reviewPrintOrder() {
       if (!res.ok || !res.j) {
         printProgressDone();
         var msg = res.j && res.j.error ? res.j.error : 'Could not price this order.';
-        if (res.j && res.j.details) msg += ' (' + res.j.details.join('; ') + ')';
+        if (res.j && res.j.details && res.j.details.join) msg += ' (' + res.j.details.join('; ') + ')';
+        else if (res.j && res.j.detail) msg += ' (' + res.j.detail + ')';
         showPrintBtnMsg(msg, null);
         return;
       }
