@@ -355,7 +355,12 @@ router.put('/profile', async function(req, res) {
 
 router.put('/password', async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
-  const { currentPassword, newPassword } = req.body;
+  // TF-01: the frontend sends snake_case (current_password/new_password). Accept
+  // both that and camelCase so the contract can't silently break again.
+  const currentPassword = (req.body.current_password != null) ? req.body.current_password : req.body.currentPassword;
+  const newPassword = (req.body.new_password != null) ? req.body.new_password : req.body.newPassword;
+  if (!currentPassword || !newPassword) return res.json({ error: 'Both your current and new password are required.' });
+  if (String(newPassword).length < 8) return res.json({ error: 'New password must be at least 8 characters.' });
   const db = await getDb();
   const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user) return res.json({ error: 'User not found' });

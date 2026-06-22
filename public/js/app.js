@@ -5556,10 +5556,13 @@ function getFalKey() {
 function changePassword() {
   var current = document.getElementById('settings-current-password').value;
   var newpw = document.getElementById('settings-new-password').value;
+  var confirmEl = document.getElementById('settings-confirm-password');
+  var confirmpw = confirmEl ? confirmEl.value : newpw;
   document.getElementById('password-error').classList.add('hidden');
   document.getElementById('password-success').classList.add('hidden');
   if (!current || !newpw) { showSettingsError('password-error', 'Both fields are required.'); return; }
   if (newpw.length < 8) { showSettingsError('password-error', 'New password must be at least 8 characters.'); return; }
+  if (newpw !== confirmpw) { showSettingsError('password-error', 'New password and confirmation do not match.'); return; }
 
   fetch('/api/auth/password', {
     method: 'PUT',
@@ -5571,6 +5574,7 @@ function changePassword() {
     if (data.error) { showSettingsError('password-error', data.error); return; }
     document.getElementById('settings-current-password').value = '';
     document.getElementById('settings-new-password').value = '';
+    if (confirmEl) confirmEl.value = '';
     document.getElementById('password-success').textContent = 'Password changed successfully!';
     document.getElementById('password-success').classList.remove('hidden');
     setTimeout(function() { document.getElementById('password-success').classList.add('hidden'); }, 2500);
@@ -8778,10 +8782,13 @@ function getFalKey() {
 function changePassword() {
   var current = document.getElementById('settings-current-password').value;
   var newpw = document.getElementById('settings-new-password').value;
+  var confirmEl = document.getElementById('settings-confirm-password');
+  var confirmpw = confirmEl ? confirmEl.value : newpw;
   document.getElementById('password-error').classList.add('hidden');
   document.getElementById('password-success').classList.add('hidden');
   if (!current || !newpw) { showSettingsError('password-error', 'Both fields are required.'); return; }
   if (newpw.length < 8) { showSettingsError('password-error', 'New password must be at least 8 characters.'); return; }
+  if (newpw !== confirmpw) { showSettingsError('password-error', 'New password and confirmation do not match.'); return; }
 
   fetch('/api/auth/password', {
     method: 'PUT',
@@ -8793,6 +8800,7 @@ function changePassword() {
     if (data.error) { showSettingsError('password-error', data.error); return; }
     document.getElementById('settings-current-password').value = '';
     document.getElementById('settings-new-password').value = '';
+    if (confirmEl) confirmEl.value = '';
     document.getElementById('password-success').textContent = 'Password changed successfully!';
     document.getElementById('password-success').classList.remove('hidden');
     setTimeout(function() { document.getElementById('password-success').classList.add('hidden'); }, 2500);

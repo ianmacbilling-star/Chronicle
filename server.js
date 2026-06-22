@@ -163,6 +163,15 @@ app.post('/api/tokens/stripe-webhook', require('./routes/tokens').stripeWebhook)
 // key by user). Must precede the route mounts below.
 app.use('/api', apiLimiter);
 
+// Attach the caller's tier/user to every authenticated API request and lapse
+// an expired trial promptly (GL-10). attachTier is defined in middleware/tiers
+// but was previously never mounted, so trial-lapse enforcement only fired on
+// /me + the create-gates. It short-circuits to next() when there's no session,
+// so unauthenticated API calls are unaffected. Mounted AFTER the rate limiter
+// (floods are rejected before the DB read) and AFTER the Stripe webhook above
+// (which has no session and must never be gated).
+app.use('/api', require('./middleware/tiers').attachTier);
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/email', require('./routes/email').router);
 app.use('/api/tokens', require('./routes/tokens').router);
