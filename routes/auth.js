@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
-const { getTier, isTrialExpired, lapseTrialIfExpired, TIERS } = require('../middleware/tiers');
+const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, TIERS } = require('../middleware/tiers');
+const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
 const { ensureMonthlyGrant, creditTokens } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
@@ -296,7 +297,23 @@ router.post('/suspend', async function(req, res) {
   try {
     const db = await getDb();
     const now = new Date().toISOString();
-    await db.prepare("UPDATE users SET status = 'suspended', suspended_at = ? WHERE id = ?").run(now, req.session.userId);
+    const uid = req.session.userId;
+
+    // TF-05 (A): cancel any paid subscription so billing stops. Stripe fires
+    // customer.subscription.deleted -> the webhook reconciles the tier to copper.
+    // Non-fatal: a missing/already-canceled sub (or unconfigured billing in
+    // dev/sandbox) must never block the user from suspending their account.
+    const u = await db.prepare('SELECT tier, stripe_subscription_id FROM users WHERE id = ?').get(uid);
+    if (u && u.stripe_subscription_id && stripeProvider.isConfigured()) {
+      try { await stripeProvider.cancelSubscription(u.stripe_subscription_id); }
+      catch (e) { console.error('Suspend: subscription cancel failed:', e.message); }
+    }
+
+    // TF-05 (B): a suspended account returns on the FREE tier. Drop paid tiers
+    // to copper now (idempotent with the cancel webhook); leave trial/copper as
+    // is so a trial simply resumes (and lapses naturally if it expires).
+    const nextTier = (u && isPaidTier(u.tier)) ? 'copper' : (u ? u.tier : 'copper');
+    await db.prepare("UPDATE users SET status = 'suspended', suspended_at = ?, tier = ? WHERE id = ?").run(now, nextTier, uid);
     req.session.destroy();
     res.json({ success: true });
   } catch (e) {

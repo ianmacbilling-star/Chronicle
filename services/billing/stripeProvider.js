@@ -185,8 +185,19 @@ async function cardForPayment(paymentIntentId) {
   return null;
 }
 
+// Immediately cancel a subscription (self-service account suspension). Stripe
+// fires customer.subscription.deleted, which our webhook reconciles to copper.
+// Throws unconfigured() when billing isn't set up -- the caller treats that as
+// non-fatal (nothing to cancel in dev/sandbox-less environments).
+async function cancelSubscription(subId) {
+  const stripe = getClient();
+  if (!stripe) throw unconfigured();
+  return await stripe.subscriptions.cancel(subId);
+}
+
 module.exports = {
   isConfigured,
+  cancelSubscription,
   createCheckoutSession,
   createSubscriptionCheckout,
   createBillingPortalSession,
