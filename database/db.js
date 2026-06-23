@@ -396,6 +396,9 @@ async function initPostgres() {
     // panel's cast, after which moment_characters/moment_assets are authoritative.
     'ALTER TABLE moments ADD COLUMN IF NOT EXISTS cast_explicit BOOLEAN DEFAULT false',
     "ALTER TABLE moments ADD COLUMN IF NOT EXISTS shape TEXT DEFAULT 'standard'",
+    // Approach B: the title image is just the first moment (kind='establishing'),
+    // created wide + high-prominence so it renders as a title/chapter image.
+    "ALTER TABLE moments ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'normal'",
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS novel_include BOOLEAN DEFAULT true',
     // Account terms + age. Collected at sign-up: DOB (age verification),
     // which Terms version they accepted + when, and the upload/IP attestation.
