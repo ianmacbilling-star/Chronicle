@@ -746,6 +746,26 @@ async function migrateForks(pool) {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_novel_book_meta_campaign ON novel_book_meta(campaign_id)');
+
+  // Per-member session title image (per-fork establishing override): each
+  // member's own title image / prompt / lock / shape for THEIR fork of a session.
+  // Empty -> falls back to the session-level establishing_* (the SM canonical) at
+  // read/render time. Mirrors novel_book_meta (covers).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS session_establishing_meta (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      establishing_image TEXT,
+      establishing_prompt TEXT,
+      establishing_locked INTEGER DEFAULT 0,
+      establishing_shape TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      edited_at TIMESTAMP,
+      UNIQUE (user_id, session_id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_session_establishing_meta_session ON session_establishing_meta(session_id)');
   // Pass 1 (narrative rework) — per-version narrative planning fields:
   //   narrative_outline    = JSON { intro, sections:[{panel_index,outline}], outro }
   //                          produced FREE during extraction so the Review tab can
@@ -1139,4 +1159,16 @@ async function effectiveBookMeta(db, campaignId, ownerUserId) {
   return row || null;
 }
 
-module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta };
+// Per-member session title image: returns a member's raw override row
+// (establishing_image/prompt/locked/shape) or null. An empty image falls back to
+// the session-level establishing_* (SM canonical) at render time; ownerUserId
+// null = the SM canonical (no override). Mirrors effectiveBookMeta.
+async function effectiveEstablishing(db, sessionId, ownerUserId) {
+  if (!ownerUserId) return null;
+  const row = await db.prepare(
+    'SELECT establishing_image, establishing_prompt, establishing_locked, establishing_shape FROM session_establishing_meta WHERE user_id = ? AND session_id = ?'
+  ).get(ownerUserId, sessionId);
+  return row || null;
+}
+
+module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, effectiveEstablishing };

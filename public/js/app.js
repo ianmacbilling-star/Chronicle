@@ -5187,6 +5187,18 @@ function novelOwnView() {
   return isSM ? (state.novelAsUser == null)
               : (myId != null && String(state.novelAsUser) === String(myId));
 }
+
+// Shared fork-edit permission (session-detail / storyboard / establishing context):
+// true when the caller may edit the CURRENTLY-VIEWED fork's images/content -- the SM
+// on the canonical version, or a member on their OWN fork. (novelOwnView is the
+// parallel rule for the publish/version-picker context.) Canonical helper for the
+// reusable image-panel primitive; new code should call this instead of re-deriving.
+function canEditFork() {
+  var role = state.currentCampaign && state.currentCampaign.my_role;
+  if (role === 'dm' && !state.currentForkId) return true;
+  return (role === 'player') && !!(state.currentForkId && state.myForkId
+    && String(state.currentForkId) === String(state.myForkId));
+}
 // Player-publish: the version picker is open to everyone for VIEWING. A member
 // defaults to their OWN version; the SM defaults to the canonical book. Publishing
 // is always your own (enforced server-side); updateNovelPublishGuard keeps the
