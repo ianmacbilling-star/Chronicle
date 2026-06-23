@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
-const { getEffectiveTier, accessRank } = require('../middleware/tiers');
+const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const path = require('path');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
@@ -2679,6 +2679,15 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     campaign.allow_player_novel_access === 't' || campaign.allow_player_novel_access === 'true';
   if (campaign.my_role !== 'dm' && !_allowNovel) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
+  }
+
+  // Per-campaign publishing gate: the EFFECTIVE tier for this campaign must be
+  // paid. A Copper player in a campaign run by a subscribing Story Master clears
+  // this (the SM's paid tier flows down via getEffectiveTier); a Copper user not
+  // under a paid SM is blocked. Trial is already rejected above (watermark).
+  const _pubTier = await getEffectiveTier(req.session.userId, campaign.id);
+  if (!isPaidTier(_pubTier)) {
+    return res.status(403).json({ error: 'Publishing to the Library requires a paid plan, or playing in a campaign run by a subscriber.', code: 'publish_requires_subscription' });
   }
 
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
