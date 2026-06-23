@@ -11439,7 +11439,7 @@ function printInteriorUrl() {
 function printCoverUrl() {
   // The wrap cover is sized to the chosen format (binding + page count drive
   // the spine), so it carries the format selection + page count, plus co for
-  // the Platinum hide-logo flag. as_user does not change the cover.
+  // the Platinum hide-logo flag, plus as_user so a member's own cover art is used.
   var sel = printSelectionBody();
   var s = (sel && sel.selection) || {};
   var pc = currentPageCount();
@@ -11450,7 +11450,7 @@ function printCoverUrl() {
     '&pageCount=' + encodeURIComponent(pc) +
     '&bookTitle=' + encodeURIComponent((sel && sel.bookTitle) || '') +
     '&titleColor=' + encodeURIComponent((document.getElementById('print-title-color') || {}).value || '') +
-    customOptsQ('novel', '&');
+    novelAsUserQ('&') + customOptsQ('novel', '&');
 }
 
 function reviewPrintOrder() {

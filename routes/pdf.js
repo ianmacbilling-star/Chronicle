@@ -2611,6 +2611,18 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
       return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
     }
 
+    // Per-member wrap cover: use the viewed fork's own cover/back/title images.
+    const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+    if (asUser) {
+      const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+      if (_bm) {
+        if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
+        if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
+        if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
+        if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+      }
+    }
+
     var selection = {
       binding: req.query.binding || 'paperback',
       colorTier: req.query.color || 'premium',
@@ -2630,7 +2642,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
     var fHideLogo = co ? !!co.hideLogo : false;
 
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || '', titleColor: req.query.titleColor || '' });
+    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || '' });
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
