@@ -33,7 +33,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const db = await getDb();
   // The DM may assemble a player's novel via ?as_user=<userId>; for any
   // session that player hasn't versioned, fall back to the DM canonical fork.
-  const asUser = (req.campaignRole === 'dm' && req.query.as_user) ? Number(req.query.as_user) : null;
+  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   const result = await Promise.all(sessions.map(async function(s) {
     let forkId = null;
@@ -56,7 +56,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
 
 // GET novel/people - the Story Master + any players who have at least one
 // version, for the Graphic Novel page's person picker. Must come before /:id.
-router.get('/novel/people', requireAuth, verifyCampaignDM, async function(req, res) {
+router.get('/novel/people', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const rows = await db.prepare(
     "SELECT u.id AS user_id, u.name, u.email, cm.role, " +

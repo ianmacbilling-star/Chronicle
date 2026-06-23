@@ -5020,31 +5020,64 @@ function novelAsUserQ(prefix) {
   return state.novelAsUser ? (prefix + 'as_user=' + encodeURIComponent(state.novelAsUser)) : '';
 }
 
+// Player-publish: the version picker is open to everyone for VIEWING. A member
+// defaults to their OWN version; the SM defaults to the canonical book. Publishing
+// is always your own (enforced server-side); updateNovelPublishGuard keeps the
+// Publish button disabled unless you are viewing your own version.
+function updateNovelPublishGuard() {
+  var btn = document.getElementById('novel-publish-btn');
+  if (!btn) return;
+  var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  var myId = (state.user && state.user.id) || null;
+  var ownView = isSM ? (state.novelAsUser == null)
+                     : (myId != null && String(state.novelAsUser) === String(myId));
+  var st = document.getElementById('novel-publish-status');
+  if (ownView) {
+    btn.disabled = false;
+    if (st && st.dataset && st.dataset.guard) { st.style.display = 'none'; st.textContent = ''; delete st.dataset.guard; }
+  } else {
+    btn.disabled = true;
+    if (st) { st.style.display = 'block'; st.textContent = 'You can only publish your own version. Switch the version selector back to your own version to publish to the Library.'; if (st.dataset) st.dataset.guard = '1'; }
+  }
+}
 function loadNovelPeople() {
   var sel = document.getElementById('novel-version-select');
+  var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  var myId = (state.user && state.user.id) || null;
+  // Set the data driver synchronously so loadNovelSummary (called right after)
+  // uses the correct version before the picker options finish loading.
+  state.novelAsUser = isSM ? null : (myId != null ? String(myId) : null);
+  updateNovelPublishGuard();
   if (!sel) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/people')
-    .then(function(r) { return r.json(); })
+    .then(function(r) { return r.ok ? r.json() : []; })
     .then(function(rows) {
       rows = Array.isArray(rows) ? rows : [];
-      // Default to the Story Master's canonical book on entry.
-      state.novelAsUser = null;
       var opts = '<option value="">Story Master \u2014 Canonical</option>';
+      var myAdded = false;
       rows.forEach(function(p) {
         var hasV = (p.has_version === true || p.has_version === 1 || p.has_version === '1' || p.has_version === 't');
         if (p.role === 'player' && hasV) {
-          var label = (p.name || p.email || 'Player') + '\u2019s version';
+          var mine = (myId != null && String(p.user_id) === String(myId));
+          var label = mine ? 'Your version' : ((p.name || p.email || 'Player') + '\u2019s version');
           opts += '<option value="' + p.user_id + '">' + label + '</option>';
+          if (mine) myAdded = true;
         }
       });
+      if (!isSM && myId != null && !myAdded) {
+        opts += '<option value="' + myId + '">Your version</option>';
+      }
       sel.innerHTML = opts;
-      sel.value = '';
+      if (isSM) { state.novelAsUser = null; sel.value = ''; }
+      else { state.novelAsUser = (myId != null) ? String(myId) : null; sel.value = (myId != null) ? String(myId) : ''; }
+      updateNovelPublishGuard();
     })
-    .catch(function(){});
+    .catch(function(){ updateNovelPublishGuard(); });
 }
 
 function onNovelVersionChange(val) {
   state.novelAsUser = val || null;
+  updateNovelPublishGuard();
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
   // Switch to this member's saved look before rendering their book.
   mpLoadAndApply('novel', function(){
@@ -5554,7 +5587,7 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
+        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ((state.currentCampaign && state.currentCampaign.my_role === 'dm') ? '' : ' disabled title="Only the Story Master can change which sessions are included"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
           '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         '</span>' +
@@ -8787,7 +8820,7 @@ function renderNovelSummary(sessions) {
       '<div class="novel-session-header">' +
         '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
         '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
+        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + ((state.currentCampaign && state.currentCampaign.my_role === 'dm') ? '' : ' disabled title="Only the Story Master can change which sessions are included"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
           '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
         '</span>' +
