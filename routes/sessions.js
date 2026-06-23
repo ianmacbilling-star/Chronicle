@@ -623,7 +623,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     const viewForkId = await getViewableForkId(db, sessionId, req.session.userId, req.query.fork_id);
     if (!viewForkId) return res.status(403).json({ error: 'Fork not viewable' });
     const moments = await db.prepare(
-      'SELECT id, title, description, type, prompt, panel_order, cast_explicit FROM moments WHERE fork_id = ? ORDER BY panel_order ASC'
+      'SELECT id, title, description, type, prompt, panel_order, cast_explicit, kind FROM moments WHERE fork_id = ? ORDER BY panel_order ASC'
     ).all(viewForkId);
 
     // Characters for this campaign, joined to this session's snapshots —
@@ -773,6 +773,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       return {
         moment_id: m.id,
         panel_order: m.panel_order,
+        kind: m.kind,
         title: m.title,
         snippet: snippet(m.description),
         type: m.type,

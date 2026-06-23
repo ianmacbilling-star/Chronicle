@@ -2668,10 +2668,13 @@ function renderReview(data) {
   }
 
   var html = '';
-  html += narrRow('opening', 'Opening', intro, 'review-nar-open');
+  var _hasEstR = panels.some(function(p){ return p.kind === 'establishing'; });
+  if (!_hasEstR) html += narrRow('opening', 'Opening', intro, 'review-nar-open');
 
+  var _pNumR = 0;
   panels.forEach(function(p, i) {
-    var num = (typeof p.panel_order === 'number' ? p.panel_order : i) + 1;
+    var _isEstR = (p.kind === 'establishing');
+    var num = _isEstR ? 0 : (++_pNumR);
     var mid = p.moment_id;
 
     // Character chips — each carries an id; × removes when editable.
@@ -2720,18 +2723,18 @@ function renderReview(data) {
           (p.change_marks.length === 1 ? '\u2019 look changes here' : ' \u2014 looks change here') + '</div>'
       : '';
 
-    var pDirKey = 'moment:' + i;
+    var pDirKey = _isEstR ? 'opening' : ('moment:' + i);
     var pHasDir = !!(state.narrativeDirections && state.narrativeDirections[pDirKey]);
     var pDirBtn = canEditNarr
-      ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'Panel ' + num + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
+      ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
       : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
-        '<span class="review-panel-num">' + num + '</span>' +
+        '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + pDirBtn +
       '</div>' +
-      (p.moment ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(p.moment) + '</div>' : '') +
+      ((_isEstR ? intro : p.moment) ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(_isEstR ? intro : p.moment) + '</div>' : '') +
       (p.snippet ? '<div class="review-snippet">' + escapeHtmlReview(p.snippet) + '</div>' : '') +
       changeNote +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
@@ -2739,7 +2742,7 @@ function renderReview(data) {
     '</div>';
 
     // Bridge gap AFTER this panel (the last gap is covered by the closing).
-    if (i < panels.length - 1) {
+    if (!_isEstR && i < panels.length - 1) {
       html += narrRow('between:' + i, 'Panel ' + num + ' \u2192 ' + (num + 1), p.bridge || '', 'review-nar-bridge');
     }
   });
