@@ -2121,7 +2121,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .review-add-btn{font-size:11px;padding:2px 8px;border-radius:8px;cursor:pointer;background:rgba(0,0,0,0.4);color:rgba(201,168,76,0.85);border:1px dashed rgba(201,168,76,0.35);}
 .review-add-btn:hover{border-color:var(--gold);color:var(--gold);}
 .prep-img-pick-named{display:flex;flex-direction:column;gap:0;border:none;background:transparent;cursor:pointer;padding:0;}
-.prep-img-pick-named .prep-img-pick-img{aspect-ratio:1/1;border:2px solid rgba(201,168,76,0.2);border-radius:8px;background-size:cover;background-position:center;background-color:rgba(20,12,4,0.6);display:flex;align-items:center;justify-content:center;font-size:34px;color:rgba(201,168,76,0.4);transition:border-color 0.15s;}
+.prep-img-pick-named .prep-img-pick-img{aspect-ratio:1/1;border:2px solid rgba(201,168,76,0.2);border-radius:8px;background-size:cover;background-position:center top;background-color:rgba(20,12,4,0.6);display:flex;align-items:center;justify-content:center;font-size:34px;color:rgba(201,168,76,0.4);transition:border-color 0.15s;}
 .prep-img-pick-named:hover .prep-img-pick-img{border-color:var(--gold);}
 .prep-img-pick-named .prep-img-cap{text-align:center;line-height:1.25;}
 
@@ -2135,3 +2135,12 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .corner-menu-item{display:block;width:100%;text-align:left;padding:10px 14px;background:transparent;border:none;color:var(--gold-light);font-size:14px;cursor:pointer;white-space:nowrap;}
 .corner-menu-item:hover{background:rgba(201,168,76,0.12);}
 @media (max-width:480px){.corner-fabs .tour-replay,.corner-fabs .help-fab{display:none;}.corner-kebab{display:inline-flex;}}
+
+/* TF-18: persistent show/hide eye on password inputs (see js/pw-eye.js) */
+.pw-eye-wrap{position:relative;display:block;width:100%;}
+.pw-eye-wrap > input{width:100%;padding-right:40px;}
+.pw-eye-btn{position:absolute;top:0;bottom:0;right:6px;margin:auto 0;height:30px;width:30px;display:flex;align-items:center;justify-content:center;padding:0;background:none;border:none;border-radius:6px;cursor:pointer;color:rgba(201,168,76,0.7);}
+.pw-eye-btn:hover{color:var(--gold);background:rgba(201,168,76,0.12);}
+.pw-eye-btn svg{display:block;}
+/* only one eye: suppress the native Edge/IE reveal control */
+input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:none;}

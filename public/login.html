@@ -313,5 +313,6 @@ document.getElementById('forgot-email').addEventListener('keydown', function(e) 
 
 fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated) window.location.href='/app.html'; });
 </script>
+<script src="/js/pw-eye.js" defer></script>
 </body>
 </html>
