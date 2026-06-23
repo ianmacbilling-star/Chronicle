@@ -236,4 +236,43 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
 });
 
 
+// Per-member book metadata (Phase 2b): a member's own cover / back / title images
+// and book title for THEIR published fork. Empty image fields fall back to the SM
+// campaign values so every book has a cover. Keyed to the requester.
+router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(req.session.userId, req.params.campaignId)) || {};
+  const camp = await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, name FROM campaigns WHERE id = ?').get(req.params.campaignId);
+  res.json({
+    cover_image_url: cur.cover_image_url || (camp ? camp.cover_image_url : '') || '',
+    back_cover_image_url: cur.back_cover_image_url || (camp ? camp.back_cover_image_url : '') || '',
+    title_image_url: cur.title_image_url || (camp ? camp.title_image_url : '') || '',
+    book_title: cur.book_title || '',
+    own_cover: cur.cover_image_url || '', own_back: cur.back_cover_image_url || '', own_title: cur.title_image_url || ''
+  });
+});
+
+router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const uid = req.session.userId, cid = req.params.campaignId, b = req.body || {};
+  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(uid, cid)) || {};
+  const cover  = (b.cover_image_url !== undefined) ? (b.cover_image_url || null) : (cur.cover_image_url || null);
+  const back   = (b.back_cover_image_url !== undefined) ? (b.back_cover_image_url || null) : (cur.back_cover_image_url || null);
+  const title  = (b.title_image_url !== undefined) ? (b.title_image_url || null) : (cur.title_image_url || null);
+  const btitle = (b.book_title !== undefined) ? (b.book_title || null) : (cur.book_title || null);
+  await db.prepare(
+    'INSERT INTO novel_book_meta (user_id, campaign_id, cover_image_url, back_cover_image_url, title_image_url, book_title, edited_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
+    'ON CONFLICT (user_id, campaign_id) DO UPDATE SET cover_image_url = EXCLUDED.cover_image_url, back_cover_image_url = EXCLUDED.back_cover_image_url, title_image_url = EXCLUDED.title_image_url, book_title = EXCLUDED.book_title, edited_at = CURRENT_TIMESTAMP'
+  ).run(uid, cid, cover, back, title, btitle);
+  const camp = await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, name FROM campaigns WHERE id = ?').get(cid);
+  res.json({
+    cover_image_url: cover || (camp ? camp.cover_image_url : '') || '',
+    back_cover_image_url: back || (camp ? camp.back_cover_image_url : '') || '',
+    title_image_url: title || (camp ? camp.title_image_url : '') || '',
+    book_title: btitle || '',
+    own_cover: cover || '', own_back: back || '', own_title: title || ''
+  });
+});
+
 module.exports = router;

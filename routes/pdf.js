@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const path = require('path');
@@ -1967,7 +1967,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     ? (copyHolder ? ('Chronicled by ' + _fmEsc(copyHolder) + (dateRange ? ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange : '')) : (dateRange || ''))
     : ('Story Master: ' + dmName + ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange);
   var _bookTitleFM = (pageOpts && pageOpts.bookTitle != null && String(pageOpts.bookTitle).trim())
-    ? String(pageOpts.bookTitle).trim() : campaign.name;
+    ? String(pageOpts.bookTitle).trim() : (campaign._memberBookTitle || campaign.name);
   var titlePageHTML =
     '<div class="titlepage">' +
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
@@ -2329,6 +2329,15 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   // Load moments and narrative for each session
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  if (asUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+    if (_bm) {
+      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
+      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
+      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
+      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    }
+  }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
@@ -2411,6 +2420,15 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  if (asUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+    if (_bm) {
+      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
+      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
+      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
+      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    }
+  }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
@@ -2708,6 +2726,15 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  if (asUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+    if (_bm) {
+      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
+      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
+      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
+      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    }
+  }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
@@ -2769,7 +2796,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     }
   }
 
-  var title = bookTitle || campaign.name;
+  var title = bookTitle || campaign._memberBookTitle || campaign.name;
   var authorName = '';
   try {
     var meRow = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(req.session.userId);

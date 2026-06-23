@@ -727,6 +727,25 @@ async function migrateForks(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_session_includes_user ON session_includes(user_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_session_includes_session ON session_includes(session_id)');
+
+  // Per-member book metadata (Phase 2b): each member's own cover / back-cover /
+  // title-page image and book title for THEIR published fork. Empty image fields
+  // fall back to the SM campaign values at render time (every book has a cover).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS novel_book_meta (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      cover_image_url TEXT,
+      back_cover_image_url TEXT,
+      title_image_url TEXT,
+      book_title TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      edited_at TIMESTAMP,
+      UNIQUE (user_id, campaign_id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_novel_book_meta_campaign ON novel_book_meta(campaign_id)');
   // Pass 1 (narrative rework) — per-version narrative planning fields:
   //   narrative_outline    = JSON { intro, sections:[{panel_index,outline}], outro }
   //                          produced FREE during extraction so the Review tab can
@@ -1109,4 +1128,15 @@ async function effectiveIncludeMap(db, campaignId, ownerUserId) {
   return map;
 }
 
-module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap };
+// Per-member book metadata: returns a member's raw override row (cover/back/title
+// images + book_title) or null. Empty image fields fall back to the SM campaign
+// values at render time; ownerUserId null = the SM canonical book (no override).
+async function effectiveBookMeta(db, campaignId, ownerUserId) {
+  if (!ownerUserId) return null;
+  const row = await db.prepare(
+    'SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?'
+  ).get(ownerUserId, campaignId);
+  return row || null;
+}
+
+module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta };

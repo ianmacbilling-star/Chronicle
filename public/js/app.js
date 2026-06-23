@@ -5084,6 +5084,7 @@ function loadNovelPeople() {
 function onNovelVersionChange(val) {
   state.novelAsUser = val || null;
   updateNovelPublishGuard();
+  if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
   // Switch to this member's saved look before rendering their book.
   mpLoadAndApply('novel', function(){
@@ -5371,17 +5372,52 @@ function prepSeedCoverFromCampaignImage() {
 }
 
 function prepPanelSync() {
-  var tEl = document.getElementById('prep-title');
-  if (tEl && !tEl.value && state.currentCampaign && state.currentCampaign.name) tEl.value = state.currentCampaign.name;
-  prepSeedCoverFromCampaignImage();
-  renderPrepThumbs();
+  prepLoadBookMeta(function(){
+    var tEl = document.getElementById('prep-title');
+    if (tEl && !tEl.value) {
+      tEl.value = (prepUseMember() && state.bookMeta && state.bookMeta.book_title)
+        ? state.bookMeta.book_title
+        : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
+    }
+    if (!prepUseMember()) prepSeedCoverFromCampaignImage();
+    renderPrepThumbs();
+  });
   _prepEnsureArchives();
+}
+// Per-member book images (Phase 2b): a member on their own fork edits their own
+// cover/back/title via /my-book-meta; the SM edits the campaign images as before.
+function prepUseMember() {
+  var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  return !isSM && (typeof novelOwnView === 'function' ? novelOwnView() : false);
+}
+function prepLoadBookMeta(cb) {
+  var c = state.currentCampaign;
+  if (!c) { if (cb) cb(); return; }
+  if (prepUseMember()) {
+    fetch('/api/campaigns/' + c.id + '/my-book-meta')
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(m){ state.bookMeta = m || {}; if (cb) cb(); })
+      .catch(function(){ state.bookMeta = {}; if (cb) cb(); });
+  } else {
+    state.bookMeta = { cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '', title_image_url: c.title_image_url || '', book_title: '' };
+    if (cb) cb();
+  }
+}
+function _prepMemberSetImage(kind, url) {
+  var c = state.currentCampaign; if (!c) return;
+  var field = PREP_IMG_KINDS[kind].field;
+  var body = {}; body[field] = url;
+  fetch('/api/campaigns/' + c.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Reverted to the campaign image.'); })
+    .catch(function(){ showAlert('Could not update your book image.'); });
 }
 function renderPrepThumbs() {
   var c = state.currentCampaign; if (!c) return;
   ['cover','back','title'].forEach(function(kind){
     var el = document.getElementById('prep-thumb-' + kind); if (!el) return;
-    var url = c[PREP_IMG_KINDS[kind].field] || '';
+    var _f = PREP_IMG_KINDS[kind].field;
+    var url = (prepUseMember() ? (state.bookMeta && state.bookMeta[_f]) : c[_f]) || '';
     if (url) { el.style.backgroundImage = 'url("' + encodeURI(url) + '")'; el.classList.add('has-img'); el.innerHTML = ''; }
     else { el.style.backgroundImage = ''; el.classList.remove('has-img'); el.innerHTML = '<span class="prep-thumb-plus">+</span>'; }
   });
@@ -5396,10 +5432,11 @@ function _prepEnsureArchives(cb) {
 }
 function openPrepImagePicker(kind) {
   var cfg = PREP_IMG_KINDS[kind]; if (!cfg || !state.currentCampaign) return;
+  if (typeof novelOwnView === 'function' && !novelOwnView()) { showAlert('Switch to your own version to change the cover, back, or title image.'); return; }
   _prepEnsureArchives(function(){
     closePrepImagePicker();
     var c = state.currentCampaign;
-    var curUrl = c[cfg.field] || '';
+    var curUrl = (prepUseMember() ? (state.bookMeta && state.bookMeta[cfg.field]) : c[cfg.field]) || '';
     var rows = (state.archives || []).filter(function(a){ return a && a.image_url; });
     var overlay = document.createElement('div');
     overlay.id = 'prep-img-modal'; overlay.className = 'prep-img-modal';
@@ -5435,11 +5472,19 @@ function openPrepImagePicker(kind) {
   });
 }
 function selectPrepImage(kind, archiveId) {
+  closePrepImagePicker();
+  if (prepUseMember()) {
+    var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
+    if (!a) return;
+    var field = PREP_IMG_KINDS[kind].field;
+    var cur = (state.bookMeta && state.bookMeta[field]) || '';
+    _prepMemberSetImage(kind, (cur === a.image_url) ? '' : a.image_url);
+    return;
+  }
   var cb = function(){ renderPrepThumbs(); };
   if (kind === 'cover') setCampaignCover(archiveId, cb);
   else if (kind === 'back') setCampaignBackCover(archiveId, cb);
   else if (kind === 'title') setCampaignTitleImage(archiveId, cb);
-  closePrepImagePicker();
 }
 function closePrepImagePicker() {
   var m = document.getElementById('prep-img-modal');
@@ -5466,6 +5511,7 @@ async function publishStory() {
   var bEl = document.getElementById('prep-blurb');
   var aEl = document.getElementById('prep-attest');
   var _title = tEl ? tEl.value.trim() : '';
+  if (prepUseMember() && _title) { fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ book_title: _title }) }).catch(function(){}); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
   var btn = document.getElementById('novel-publish-btn');
