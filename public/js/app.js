@@ -1827,10 +1827,15 @@ function updateEstablishingArchiveBtn() {
 }
 
 function renderSessionEstablishing(data) {
-  // Establishing image now lives as a small thumbnail beside the session title.
+  // Approach B: the title image is the first moment (kind='establishing'); show
+  // ITS image as the read-only thumbnail beside the session name (editing happens
+  // on the storyboard, not here).
   var thumb = document.getElementById('session-establishing-thumb');
   if (!thumb) return;
-  var img = data && data.establishing_image;
+  var moms = (data && data.moments) || state.moments || [];
+  var est = null;
+  for (var i = 0; i < moms.length; i++) { if (moms[i] && moms[i].kind === 'establishing') { est = moms[i]; break; } }
+  var img = est && est.image;
   if (!img) { thumb.style.display = 'none'; thumb.removeAttribute('src'); return; }
   thumb.src = img;
   thumb.style.display = 'block';
@@ -7454,6 +7459,9 @@ function renderStoryboard() {
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
           '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
         '</div>';
+    if (m.kind === 'establishing') {
+      imgHtml = '<div style="font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#c9a84c;margin-bottom:6px;">&#9670; Session Title Image</div>' + imgHtml;
+    }
     var _shapeVal = (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard');
     var _canLock = canEditCurrentStatus();
     var lockBtn = '';
