@@ -18,6 +18,91 @@ var state = {
 };
 
 // ============================================================
+// PHASE A - in-app history so the device/browser Back button walks backward
+// through views (and shows a soft 'leave app' guard at the campaigns root)
+// instead of dropping out of app.html to the login page. (TF-12)
+// ============================================================
+var _navSilent = false;
+
+function _navRecord(view) {
+  if (_navSilent) return;
+  if (view === 'session-detail' && !(state.currentSession && state.currentSession.id)) return;
+  var token = {
+    view: view,
+    campaignId: (state.currentCampaign && state.currentCampaign.id) || null,
+    sessionId: (view === 'session-detail' && state.currentSession) ? state.currentSession.id : null
+  };
+  var cur = history.state && history.state.nav;
+  if (cur && cur.view === token.view && cur.campaignId === token.campaignId && cur.sessionId === token.sessionId) {
+    try { history.replaceState({ nav: token }, ''); } catch (e) {}
+    return;
+  }
+  try { history.pushState({ nav: token }, ''); } catch (e) {}
+}
+
+function _navRestore(st) {
+  var v = st.view;
+  if (v === 'campaigns') { showView('campaigns'); return; }
+  if (v === 'account' || v === 'orders' || v === 'settings') { showView(v); return; }
+  if (st.campaignId && (!state.currentCampaign || state.currentCampaign.id !== st.campaignId)) {
+    var c = (state.campaigns || []).find(function (x) { return x.id === st.campaignId; });
+    if (c) { state.currentCampaign = c; if (typeof setCampaignElements === 'function') setCampaignElements(); }
+  }
+  if (!state.currentCampaign) { showView('campaigns'); return; }
+  if (v === 'session-detail') {
+    if (st.sessionId && (!state.currentSession || state.currentSession.id !== st.sessionId)) {
+      selectSession(st.sessionId);
+      return;
+    }
+    if (state.currentSession && state.currentSession.id) {
+      var ids = ['campaigns','sessions','characters','assets','novel','members','archives','orders','account','settings'];
+      ids.forEach(function (x) { var el = document.getElementById('view-' + x); if (el) el.style.display = 'none'; });
+      var d = document.getElementById('view-session-detail'); if (d) d.style.display = 'block';
+      state.currentView = 'session-detail';
+      return;
+    }
+    showCampaignSection('sessions');
+    return;
+  }
+  if (['sessions','characters','assets','novel','members','archives'].indexOf(v) !== -1) {
+    showCampaignSection(v);
+    return;
+  }
+  showView('campaigns');
+}
+
+function _navLeaveGuard() {
+  if (window.confirm('Leave Campaignia and return to the home page?')) {
+    window.location.href = '/';
+    return;
+  }
+  try { history.pushState({ nav: { view: 'campaigns', root: true } }, ''); } catch (e) {}
+  _navSilent = true;
+  try { showView('campaigns'); } catch (e) {}
+  _navSilent = false;
+}
+
+window.addEventListener('popstate', function (e) {
+  var st = e.state && e.state.nav;
+  if (!st || st.view === '__leave__') { _navLeaveGuard(); return; }
+  _navSilent = true;
+  try { _navRestore(st); } catch (err) {}
+  _navSilent = false;
+});
+
+// Seat the baseline once: a '__leave__' sentinel sits below the campaigns root
+// so the first Back from the root triggers the soft leave guard rather than
+// silently leaving app.html for the login page.
+(function () {
+  try {
+    if (!(history.state && history.state.nav)) {
+      history.replaceState({ nav: { view: '__leave__' } }, '');
+      history.pushState({ nav: { view: 'campaigns', root: true } }, '');
+    }
+  } catch (e) {}
+})();
+
+// ============================================================
 // TOKEN BALANCE — header label, refreshed on load and after any
 // token-spending action. Defined once (guarded), called globally.
 // ============================================================
@@ -224,7 +309,7 @@ function maybeShowReactivatedWelcome(data) {
   try {
     var q = new URLSearchParams(window.location.search);
     if (!q.has('reactivated')) return;
-    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+    try { history.replaceState(history.state, '', window.location.pathname); } catch (e) {}
     var m = document.getElementById('reactivated-modal');
     if (!m) return;
     var wasPaid = !!(data && data.tier === 'copper' && data.hasBilling);
@@ -562,7 +647,7 @@ function handleBillingReturn() {
   } else if (order === 'cancel') {
     billingToast('Order canceled - no charge was made.', 'info');
   }
-  try { window.history.replaceState({}, '', window.location.pathname); } catch (e) {}
+  try { window.history.replaceState(window.history.state || {}, '', window.location.pathname); } catch (e) {}
 }
 
 // Renders the INSUFFICIENT_TOKENS error as a message + "Buy more tokens"
@@ -1257,6 +1342,7 @@ function showView(view) {
     loadSettingsForm();
   }
   try { if (typeof maybeStartTour === 'function') maybeStartTour(view); } catch (e) {}
+  try { _navRecord(view); } catch (e) {}
 }
 
 function showCampaignSection(section) {
@@ -1808,6 +1894,7 @@ function selectSession(id) {
         if (el) el.style.display = 'none';
       });
       document.getElementById('view-session-detail').style.display = 'block';
+      try { _navRecord('session-detail'); } catch (e) {}
 
       // Now that view is visible, populate fields
       switchSessionTab('notes');
@@ -7580,6 +7667,7 @@ function showView(view) {
     loadSettingsForm();
   }
   try { if (typeof maybeStartTour === 'function') maybeStartTour(view); } catch (e) {}
+  try { _navRecord(view); } catch (e) {}
 }
 
 function showCampaignSection(section) {
@@ -7921,6 +8009,7 @@ function selectSession(id) {
         if (el) el.style.display = 'none';
       });
       document.getElementById('view-session-detail').style.display = 'block';
+      try { _navRecord('session-detail'); } catch (e) {}
 
       // Now that view is visible, populate fields
       switchSessionTab('notes');
