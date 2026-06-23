@@ -1911,13 +1911,23 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       outro: s.narrative_outro || ''
     };
 
-    var panelsHTML = buildLayout(layoutStyle, moments, narrative.sections, narrative.intro, narrative.outro, co);
+    // Approach B: lift the establishing/title-image moment OUT of the panel flow
+    // (it becomes the session title image below, above the intro). Story panels
+    // and their narrative sections are re-keyed so nothing shifts by one.
+    var _estMoment = null, _storyMoments = [], _idxMap = {};
+    for (var _k = 0; _k < moments.length; _k++) {
+      if (moments[_k].kind === 'establishing') { _estMoment = moments[_k]; }
+      else { _idxMap[_k] = _storyMoments.length; _storyMoments.push(moments[_k]); }
+    }
+    var _storySections = (narrative.sections || []).filter(function(_s){ return Object.prototype.hasOwnProperty.call(_idxMap, _s.panel_index); }).map(function(_s){ var _c = Object.assign({}, _s); _c.panel_index = _idxMap[_s.panel_index]; return _c; });
+    var panelsHTML = buildLayout(layoutStyle, _storyMoments, _storySections, narrative.intro, narrative.outro, co);
     // Session title image: the wide establishing shot that opens each session,
     // placed below the session marker and above the narrative. Additive - does
     // NOT touch buildLayout / renderPaired. Flows through preview, print, publish,
     // and the public story page (snapshot carries establishing_image). (Stage 4.2)
-    var _estM = { image: s.establishing_image, title: '', shape: (s.establishing_shape || 'wide'), img_w: s.establishing_img_w || null, img_h: s.establishing_img_h || null };
-    var titleImageHTML = s.establishing_image
+    var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : s.establishing_image;
+    var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (s.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || s.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || s.establishing_img_h || null };
+    var titleImageHTML = _estImg
       ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
       : '';
 
