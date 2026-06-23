@@ -5088,12 +5088,13 @@ function onNovelVersionChange(val) {
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
   // Switch to this member's saved look before rendering their book.
   mpLoadAndApply('novel', function(){
-    loadNovelSummary();
-    var prev = document.getElementById('novel-tab-preview');
-    if (prev && prev.style.display !== 'none') {
-      if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
-      loadNovelPreview(novelLayoutStyle);
-    }
+    if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
+    loadNovelSummary(function(){
+      var prev = document.getElementById('novel-tab-preview');
+      if (prev && prev.style.display !== 'none') {
+        loadNovelPreview(novelLayoutStyle);
+      }
+    });
   });
 }
 
@@ -5604,7 +5605,7 @@ function refreshStoryStatus() {
     .catch(function(){});
 }
 
-function loadNovelSummary() {
+function loadNovelSummary(cb) {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all' + novelAsUserQ('?'))
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -5620,6 +5621,7 @@ function loadNovelSummary() {
         return sessionDateKey(a).localeCompare(sessionDateKey(b));
       });
       renderNovelSummary(sessions);
+      if (typeof cb === 'function') cb();
     });
 }
 
@@ -8837,7 +8839,7 @@ function exportNovelPDF() {
   window.open(url, '_blank');
 }
 
-function loadNovelSummary() {
+function loadNovelSummary(cb) {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/all' + novelAsUserQ('?'))
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -8853,6 +8855,7 @@ function loadNovelSummary() {
         return sessionDateKey(a).localeCompare(sessionDateKey(b));
       });
       renderNovelSummary(sessions);
+      if (typeof cb === 'function') cb();
     });
 }
 
