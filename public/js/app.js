@@ -82,7 +82,66 @@ function _navLeaveGuard() {
   _navSilent = false;
 }
 
+// ------------------------------------------------------------
+// PHASE B - Back closes an open modal/overlay before changing views.
+// All modals are .modal-overlay toggled via the 'hidden' class; the image
+// lightbox is a dynamically-added #lightbox element with its own closer.
+// ------------------------------------------------------------
+function _navZ(el) {
+  var z = parseInt(window.getComputedStyle(el).zIndex, 10);
+  return isNaN(z) ? 0 : z;
+}
+
+function _navAnyModalOpen() {
+  if (document.getElementById('lightbox')) return true;
+  var ovs = document.querySelectorAll('.modal-overlay');
+  for (var i = 0; i < ovs.length; i++) {
+    if (ovs[i].classList.contains('hidden')) continue;
+    var cs = window.getComputedStyle(ovs[i]);
+    if (cs.display !== 'none' && cs.visibility !== 'hidden') return true;
+  }
+  return false;
+}
+
+function _navCloseTopModal() {
+  // The lightbox is appended to <body> last, so it sits on top when present.
+  var lb = document.getElementById('lightbox');
+  if (lb) { if (typeof closeLightbox === 'function') closeLightbox(); else lb.remove(); return true; }
+  var opens = [];
+  var ovs = document.querySelectorAll('.modal-overlay');
+  for (var i = 0; i < ovs.length; i++) {
+    var el = ovs[i];
+    if (el.classList.contains('hidden')) continue;
+    var cs = window.getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    opens.push(el);
+  }
+  if (!opens.length) return false;
+  var top = opens[0], topZ = _navZ(opens[0]);
+  for (var j = 1; j < opens.length; j++) {
+    var z = _navZ(opens[j]);
+    if (z >= topZ) { top = opens[j]; topZ = z; }
+  }
+  top.classList.add('hidden');
+  return true;
+}
+
+function _navCurrentToken() {
+  var v = state.currentView || (typeof _visibleViewId === 'function' ? _visibleViewId() : null) || 'campaigns';
+  return {
+    view: v,
+    campaignId: (state.currentCampaign && state.currentCampaign.id) || null,
+    sessionId: (v === 'session-detail' && state.currentSession) ? state.currentSession.id : null
+  };
+}
+
 window.addEventListener('popstate', function (e) {
+  // Phase B: a Back press with a modal open closes the modal and stays put.
+  if (_navAnyModalOpen()) {
+    _navCloseTopModal();
+    try { history.pushState({ nav: _navCurrentToken() }, ''); } catch (e2) {}
+    return;
+  }
   var st = e.state && e.state.nav;
   if (!st || st.view === '__leave__') { _navLeaveGuard(); return; }
   _navSilent = true;
