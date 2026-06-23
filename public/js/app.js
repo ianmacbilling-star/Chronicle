@@ -4238,6 +4238,7 @@ function openCharModal(editId) {
   var oldNudge = document.getElementById('char-prompt-nudge');
   if (oldNudge) oldNudge.remove();
   document.getElementById('char-modal-error').classList.add('hidden');
+  (function(){ var _cse = document.getElementById('char-save-error'); if (_cse) _cse.classList.add('hidden'); })();
   document.getElementById('char-modal').classList.remove('hidden');
 }
 
@@ -4270,14 +4271,15 @@ function _reflectCharSaveLock(charId, busy){
   else { btn.disabled = false; btn.title = ''; }
 }
 function saveChar() {
+  (function(){ var _e = document.getElementById('char-save-error'); if (_e) _e.classList.add('hidden'); })();
   var name = document.getElementById('char-name').value.trim();
   var player = document.getElementById('char-player').value.trim();
   var cls = document.getElementById('char-cls').value.trim();
   var desc = document.getElementById('char-desc').value.trim();
   var editId = document.getElementById('char-edit-id').value;
-  if (!name) { showModalError('char-modal-error', 'Character name is required.'); return; }
+  if (!name) { showModalError('char-save-error', 'Character name is required.'); return; }
   if (editId && isCharGenBusy(editId)) {
-    showModalError('char-modal-error', 'This character\u2019s reference image is still generating. Please wait for it to finish before saving.');
+    showModalError('char-save-error', 'This character\u2019s reference image is still generating. Please wait for it to finish before saving.');
     return;
   }
 
@@ -4307,7 +4309,7 @@ function saveChar() {
   fetch(url, {method: editId ? 'PUT' : 'POST', body: formData})
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) { showModalError('char-modal-error', data.error); return; }
+      if (data.error) { showModalError('char-save-error', data.error); return; }
 
       // If this was a NEW character that has no prompt yet, DON'T close —
       // the "Build character prompt" step is only available once the
@@ -5402,7 +5404,7 @@ async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
   if (state.user && state.user.inFreeTrial) {
     var _go = await uiConfirm('You need to sign up to publish to the library. Publishing is available once you are on a paid plan.', { okText: 'See plans', cancelText: 'Not now' });
-    if (_go) showView('account');
+    if (_go) goToPlans();
     return;
   }
   var tEl = document.getElementById('prep-title');
@@ -11124,7 +11126,7 @@ function loadPrintTab() {
     if (_pb) _pb.disabled = _trial;
     if (_tn) {
       _tn.style.display = _trial ? 'block' : 'none';
-      if (_trial) _tn.textContent = "Free Trial books are watermarked, so they can't be ordered as physical prints. Upgrade to a paid plan to remove the watermark and order your book.";
+      if (_trial) _tn.innerHTML = "Free Trial books are watermarked, so they can't be ordered as physical prints. Upgrade to a paid plan to remove the watermark and order your book." + '<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
     }
   })();
   var q = document.getElementById('print-quote');
@@ -11805,7 +11807,7 @@ function sectionBack() {
 function blockCopperCreate(kind) {
   if (state.user && state.user.tier === 'copper') {
     var what = (kind === 'session') ? 'sessions' : 'campaigns';
-    uiConfirm('Creating ' + what + ' is not available on the Copper plan. Upgrade to a paid plan to continue.', { okText: 'See plans', cancelText: 'Not now' }).then(function(go){ if (go) showView('account'); });
+    uiConfirm('Creating ' + what + ' is not available on the Copper plan. Upgrade to a paid plan to continue.', { okText: 'See plans', cancelText: 'Not now' }).then(function(go){ if (go) goToPlans(); });
     return true;
   }
   return false;
