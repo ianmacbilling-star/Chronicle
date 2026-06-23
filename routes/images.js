@@ -944,7 +944,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     sessRow = (await db.prepare('SELECT establishing_image, establishing_prompt, establishing_locked, establishing_shape, narrative_intro, narrative_intro_summary, session_notes FROM sessions WHERE id = ?').get(sidInt)) || {};
     estColsOk = true;
   } catch (e) { console.error('establishing: session fetch failed (schema not deployed?):', e && e.message); }
-  const estWillGen = estColsOk && !sessRow.establishing_locked;
+  const estWillGen = false; // Approach B: the title image is now the first moment (kind='establishing'), generated with the panels.
   if (!toGenerate.length) {
     return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, message: 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.' });
   }

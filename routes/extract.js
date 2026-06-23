@@ -177,13 +177,16 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       for (let oi = 0; oi < oldImgs.length; oi++) { await releaseImage(db, oldImgs[oi].image); }
       const now = new Date().toISOString();
 
+      // Approach B: the AI's establishing-scene description becomes the title
+      // moment's prompt (for every caller's fork, not just the DM).
+      var estScene = (parsed.establishing_scene && String(parsed.establishing_scene).trim()) ? String(parsed.establishing_scene).trim() : null;
+
       // Save the art style used so future sessions can inherit it (canonical
       // session field is DM-owned; a player's style choice stays on their fork).
       if (callerRole === 'dm') {
         // Heavy option for the title image: the extraction writes a dedicated
         // establishing-scene description; store it as the (editable) establishing
         // prompt. COALESCE keeps any existing prompt if the model omits the field.
-        var estScene = (parsed.establishing_scene && String(parsed.establishing_scene).trim()) ? String(parsed.establishing_scene).trim() : null;
         // The story changed, so the old title IMAGE no longer matches it - clear
         // it (like the panels above) so it regenerates on the next Generate Images.
         // The lock check earlier already refused if it was locked, so this is safe.
@@ -194,10 +197,15 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       }
 
       const insert = await db.prepare(
-        'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, panel_order, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
+      // Approach B: the title image is the FIRST moment (kind='establishing'),
+      // wide + high-prominence with wide-shot scaffolding so it renders as the
+      // session/chapter title image; editable like any panel.
+      var _estMomentPrompt = ('Wide establishing shot of the setting, seen from a distance; any characters appear small and far away, never in close-up. ' + (estScene || '')).trim();
+      insert.run(session.id, dmForkId, 'Title Image', (estScene || ''), null, _estMomentPrompt, null, 'wide', JSON.stringify({ prominence: 5, focal: 'center', crop_safe: true, group_break: false }), 'establishing', 0, now, req.session.userId);
       parsed.moments.forEach(function(m, i) {
-        insert.run(session.id, dmForkId, m.title, m.description, m.type, m.prompt, m.emphasis || null, (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard'), JSON.stringify({ prominence: (Number(m.prominence) >= 1 && Number(m.prominence) <= 5) ? Math.round(Number(m.prominence)) : 3, focal: (['center','top','bottom','left','right'].indexOf(m.focal) >= 0) ? m.focal : 'center', crop_safe: m.crop_safe === false ? false : true, group_break: m.group_break === true }), i, now, req.session.userId);
+        insert.run(session.id, dmForkId, m.title, m.description, m.type, m.prompt, m.emphasis || null, (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard'), JSON.stringify({ prominence: (Number(m.prominence) >= 1 && Number(m.prominence) <= 5) ? Math.round(Number(m.prominence)) : 3, focal: (['center','top','bottom','left','right'].indexOf(m.focal) >= 0) ? m.focal : 'center', crop_safe: m.crop_safe === false ? false : true, group_break: m.group_break === true }), 'normal', i + 1, now, req.session.userId);
       });
 
       // Pass 1 — store the per-gap narrative OUTLINE produced in this same
@@ -209,9 +217,9 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       var outlineObj = parsed.narrative_outline || {};
       var outlineGaps = Array.isArray(outlineObj.gaps) ? outlineObj.gaps : [];
       var outlineMoments = Array.isArray(outlineObj.moments) ? outlineObj.moments : [];
-      var outlineSections = [];
+      var outlineSections = [{ panel_index: 0, before: '', outline: '' }];
       for (var gi = 0; gi < parsed.moments.length; gi++) {
-        outlineSections.push({ panel_index: gi, before: outlineMoments[gi] || '', outline: (gi < parsed.moments.length - 1) ? (outlineGaps[gi] || '') : '' });
+        outlineSections.push({ panel_index: gi + 1, before: outlineMoments[gi] || '', outline: (gi < parsed.moments.length - 1) ? (outlineGaps[gi] || '') : '' });
       }
       var outlineToStore = JSON.stringify({
         intro: outlineObj.intro || '',

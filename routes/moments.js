@@ -31,7 +31,8 @@ router.post('/', requireAuth, verifyCampaignDM, async function(req, res) {
 
 router.delete('/:momentId', requireAuth, verifyCampaignDM, async function(req, res) {
   const db = await getDb();
-  const prev = await db.prepare('SELECT image FROM moments WHERE id=? AND session_id=?').get(req.params.momentId, req.params.sessionId);
+  const prev = await db.prepare('SELECT image, kind FROM moments WHERE id=? AND session_id=?').get(req.params.momentId, req.params.sessionId);
+  if (prev && prev.kind === 'establishing') return res.status(403).json({ error: 'The title image cannot be deleted. Regenerate it from the storyboard instead.' });
   await db.prepare('DELETE FROM moments WHERE id=? AND session_id=?').run(req.params.momentId, req.params.sessionId);
   if (prev && prev.image) await releaseImage(db, prev.image);
   res.json({ success: true });

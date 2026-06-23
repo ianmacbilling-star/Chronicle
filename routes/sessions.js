@@ -921,8 +921,8 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   ).run(sessionId, req.session.userId, now, dmFork.id);
   const newForkId = created.lastInsertRowid;
   await db.prepare(
-    "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, image, panel_order, cast_explicit, created_at, created_by) " +
-    "SELECT session_id, ?, title, description, type, prompt, emphasis, image, panel_order, cast_explicit, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
+    "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, created_at, created_by) " +
+    "SELECT session_id, ?, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
   ).run(newForkId, now, req.session.userId, dmFork.id);
   await db.prepare(
     "INSERT INTO session_characters (session_id, fork_id, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, created_at) " +
