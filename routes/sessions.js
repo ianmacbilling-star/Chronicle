@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -35,6 +35,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   // session that player hasn't versioned, fall back to the DM canonical fork.
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
+  const incMap = await effectiveIncludeMap(db, req.params.campaignId, asUser);
   const result = await Promise.all(sessions.map(async function(s) {
     let forkId = null;
     if (asUser) {
@@ -49,7 +50,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     let firstMomentImg = null;
     for (let mi = 0; mi < moments.length; mi++) { if (moments[mi].image) { firstMomentImg = moments[mi].image; break; } }
     const first_image_url = s.establishing_image || firstMomentImg || null;
-    return Object.assign({}, s, { moments, fork_status: fk ? fk.player_access_status : 'draft', first_image_url: first_image_url });
+    return Object.assign({}, s, { moments, fork_status: fk ? fk.player_access_status : 'draft', first_image_url: first_image_url, novel_include: !!incMap[s.id] });
   }));
   res.json(result);
 });
@@ -75,6 +76,21 @@ router.put('/:id/novel-include', requireAuth, verifyCampaignDM, async function(r
   const db = await getDb();
   const include = !(req.body && (req.body.include === false || req.body.include === 'false' || req.body.include === 0));
   await db.prepare('UPDATE sessions SET novel_include = ? WHERE id = ? AND campaign_id = ?').run(include, req.params.id, req.params.campaignId);
+  res.json({ ok: true, include: include });
+});
+
+// Member curation (Phase 2): a player includes/excludes a session for THEIR OWN
+// published fork. Keyed to the requester; never affects the SM canonical or other
+// members. Absent row = included (members start clean, no SM cascade).
+router.put('/:id/my-novel-include', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const include = !(req.body && (req.body.include === false || req.body.include === 'false' || req.body.include === 0));
+  const sess = await db.prepare('SELECT id FROM sessions WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+  if (!sess) return res.status(404).json({ error: 'Session not found' });
+  await db.prepare(
+    'INSERT INTO session_includes (user_id, session_id, include, edited_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ' +
+    'ON CONFLICT (user_id, session_id) DO UPDATE SET include = EXCLUDED.include, edited_at = CURRENT_TIMESTAMP'
+  ).run(req.session.userId, req.params.id, include);
   res.json({ ok: true, include: include });
 });
 

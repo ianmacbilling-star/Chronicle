@@ -709,6 +709,24 @@ async function migrateForks(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_session ON session_forks(session_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_user ON session_forks(user_id)');
+
+  // Per-member novel curation (Phase 2): each member can include/exclude
+  // sessions for THEIR OWN published fork. A row exists only when a member
+  // deviates from the default (included). The SM's sessions.novel_include is
+  // separate and never cascades to members (members start clean).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS session_includes (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      include BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      edited_at TIMESTAMP,
+      UNIQUE (user_id, session_id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_session_includes_user ON session_includes(user_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_session_includes_session ON session_includes(session_id)');
   // Pass 1 (narrative rework) — per-version narrative planning fields:
   //   narrative_outline    = JSON { intro, sections:[{panel_index,outline}], outro }
   //                          produced FREE during extraction so the Review tab can
@@ -1067,4 +1085,28 @@ async function getViewableForkId(db, sessionId, userId, requestedForkId) {
   return null;
 }
 
-module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId };
+// Per-member novel curation: map of session_id -> boolean (included) for a given
+// book owner in a campaign. ownerUserId null = the SM canonical book (uses
+// sessions.novel_include). For a member, an explicit session_includes row wins;
+// absent = included (members start clean, the SM's choices never cascade).
+async function effectiveIncludeMap(db, campaignId, ownerUserId) {
+  const isOn = function(v) { return !(v === false || v === 0 || v === 'f' || v === 'false'); };
+  const sessions = await db.prepare('SELECT id, novel_include FROM sessions WHERE campaign_id = ?').all(campaignId);
+  const map = {};
+  if (!ownerUserId) {
+    for (let i = 0; i < sessions.length; i++) { map[sessions[i].id] = isOn(sessions[i].novel_include); }
+    return map;
+  }
+  const rows = await db.prepare(
+    'SELECT si.session_id, si.include FROM session_includes si JOIN sessions s ON s.id = si.session_id WHERE si.user_id = ? AND s.campaign_id = ?'
+  ).all(ownerUserId, campaignId);
+  const ov = {};
+  for (let i = 0; i < rows.length; i++) { ov[rows[i].session_id] = isOn(rows[i].include); }
+  for (let i = 0; i < sessions.length; i++) {
+    const id = sessions[i].id;
+    map[id] = (id in ov) ? ov[id] : true;
+  }
+  return map;
+}
+
+module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const path = require('path');
@@ -2308,7 +2308,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? AND (novel_include IS NULL OR novel_include = true) ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   // Sort sessions ascending (oldest first) using a normalized YYYY-MM-DD key.
@@ -2328,7 +2328,8 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   // the player hasn't versioned, fall back to the DM canonical fork.
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   // Load moments and narrative for each session
-  const sessionsWithData = await Promise.all(sessions.map(async function(s) {
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
       const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
@@ -2397,7 +2398,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? AND (novel_include IS NULL OR novel_include = true) ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   function sessionDateKey(s) {
@@ -2409,7 +2410,8 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
-  const sessionsWithData = await Promise.all(sessions.map(async function(s) {
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
       const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
@@ -2693,7 +2695,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
   const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? AND (novel_include IS NULL OR novel_include = true) ORDER BY session_date ASC').all(campaign.id);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare(
     'SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?'
   ).all(campaign.id);
@@ -2705,7 +2707,8 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   }
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
-  const sessionsWithData = await Promise.all(sessions.map(async function(s) {
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
       const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
