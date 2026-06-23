@@ -766,6 +766,11 @@ async function migrateForks(pool) {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_session_establishing_meta_session ON session_establishing_meta(session_id)');
+  // Phase 2: the per-fork title image also carries its style + true pixel dims
+  // (parity with sessions.establishing_*), so rendering uses the right aspect.
+  await pool.query('ALTER TABLE session_establishing_meta ADD COLUMN IF NOT EXISTS establishing_style TEXT');
+  await pool.query('ALTER TABLE session_establishing_meta ADD COLUMN IF NOT EXISTS establishing_img_w INTEGER');
+  await pool.query('ALTER TABLE session_establishing_meta ADD COLUMN IF NOT EXISTS establishing_img_h INTEGER');
   // Pass 1 (narrative rework) — per-version narrative planning fields:
   //   narrative_outline    = JSON { intro, sections:[{panel_index,outline}], outro }
   //                          produced FREE during extraction so the Review tab can
@@ -1166,7 +1171,7 @@ async function effectiveBookMeta(db, campaignId, ownerUserId) {
 async function effectiveEstablishing(db, sessionId, ownerUserId) {
   if (!ownerUserId) return null;
   const row = await db.prepare(
-    'SELECT establishing_image, establishing_prompt, establishing_locked, establishing_shape FROM session_establishing_meta WHERE user_id = ? AND session_id = ?'
+    'SELECT establishing_image, establishing_prompt, establishing_locked, establishing_shape, establishing_style, establishing_img_w, establishing_img_h FROM session_establishing_meta WHERE user_id = ? AND session_id = ?'
   ).get(ownerUserId, sessionId);
   return row || null;
 }

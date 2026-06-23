@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getDmForkId } = require('../database/db');
+const { getDb, getDmForkId, effectiveEstablishing } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
@@ -345,12 +345,20 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
     if (targetType === 'session_establishing') {
       const sess = await db.prepare('SELECT id, establishing_image, establishing_locked FROM sessions WHERE id = ? AND campaign_id = ?').get(req.body.session_id, req.params.campaignId);
       if (!sess) return res.json({ error: 'The session no longer exists.' });
-      if (req.campaignRole !== 'dm') return res.status(403).json({ error: 'Only the DM can replace the session title image.' });
-      if (sess.establishing_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to replace it.' });
+      if (!req.campaignRole) return res.status(403).json({ error: 'Only a campaign member can replace the session title image.' });
+      const isDM = req.campaignRole === 'dm';
+      const _eff = isDM ? null : await effectiveEstablishing(db, sess.id, req.session.userId);
+      const _locked = _eff ? _eff.establishing_locked : sess.establishing_locked;
+      if (_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to replace it.' });
       const freshUrl = await restoreCopy(archive.image_url);
-      const prevImg = sess.establishing_image;
-      await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = NULL, establishing_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
-        .run(freshUrl, archive.art_style || null, now, req.session.userId, sess.id);
+      const prevImg = (_eff && _eff.establishing_image) || sess.establishing_image;
+      if (isDM) {
+        await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = NULL, establishing_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
+          .run(freshUrl, archive.art_style || null, now, req.session.userId, sess.id);
+      } else {
+        await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_image, establishing_style, establishing_img_w, establishing_img_h, edited_at) VALUES (?, ?, ?, ?, NULL, NULL, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_image = EXCLUDED.establishing_image, establishing_style = EXCLUDED.establishing_style, establishing_img_w = NULL, establishing_img_h = NULL, edited_at = EXCLUDED.edited_at')
+          .run(req.session.userId, sess.id, freshUrl, archive.art_style || null, now);
+      }
       if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
       return res.json({ success: true, image_url: freshUrl });
     }

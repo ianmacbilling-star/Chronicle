@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
-const { getDb, getDmForkId } = require('../database/db');
+const { getDb, getDmForkId, effectiveEstablishing } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
@@ -1094,10 +1094,15 @@ router.post('/session-establishing/:sessionId/prompt', requireAuth, async functi
   const sess = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id = ?').get(req.params.sessionId);
   if (!sess) return res.status(404).json({ error: 'Session not found' });
   const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can edit the title image.' });
+  if (!role) return res.status(403).json({ error: 'Only a campaign member can edit the title image.' });
   const prompt = (req.body && typeof req.body.prompt === 'string') ? req.body.prompt : '';
-  await db.prepare('UPDATE sessions SET establishing_prompt = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-    .run(prompt, new Date().toISOString(), req.session.userId, sess.id);
+  if (role === 'dm') {
+    await db.prepare('UPDATE sessions SET establishing_prompt = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(prompt, new Date().toISOString(), req.session.userId, sess.id);
+  } else {
+    await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_prompt, edited_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_prompt = EXCLUDED.establishing_prompt, edited_at = EXCLUDED.edited_at')
+      .run(req.session.userId, sess.id, prompt, new Date().toISOString());
+  }
   res.json({ success: true, establishing_prompt: prompt });
 });
 
@@ -1107,10 +1112,17 @@ router.post('/session-establishing/:sessionId/lock', requireAuth, async function
   const sess = await db.prepare('SELECT id, campaign_id, establishing_locked FROM sessions WHERE id = ?').get(req.params.sessionId);
   if (!sess) return res.status(404).json({ error: 'Session not found' });
   const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can lock the title image.' });
-  const newLocked = sess.establishing_locked ? 0 : 1;
-  await db.prepare('UPDATE sessions SET establishing_locked = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-    .run(newLocked, new Date().toISOString(), req.session.userId, sess.id);
+  if (!role) return res.status(403).json({ error: 'Only a campaign member can lock the title image.' });
+  if (role === 'dm') {
+    const newLocked = sess.establishing_locked ? 0 : 1;
+    await db.prepare('UPDATE sessions SET establishing_locked = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(newLocked, new Date().toISOString(), req.session.userId, sess.id);
+    return res.json({ success: true, locked: newLocked });
+  }
+  const _eff = await effectiveEstablishing(db, sess.id, req.session.userId);
+  const newLocked = (_eff && _eff.establishing_locked) ? 0 : 1;
+  await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_locked, edited_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_locked = EXCLUDED.establishing_locked, edited_at = EXCLUDED.edited_at')
+    .run(req.session.userId, sess.id, newLocked, new Date().toISOString());
   res.json({ success: true, locked: newLocked });
 });
 
@@ -1140,9 +1152,11 @@ router.post('/session-establishing/:sessionId/regenerate', requireAuth, async fu
   const sess = await db.prepare('SELECT id, campaign_id, establishing_prompt, establishing_shape, establishing_locked, establishing_image FROM sessions WHERE id = ?').get(req.params.sessionId);
   if (!sess) return res.status(404).json({ error: 'Session not found' });
   const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can regenerate the title image.' });
-  if (sess.establishing_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to regenerate.' });
-  const estPrompt = (sess.establishing_prompt || '').trim();
+  if (!role) return res.status(403).json({ error: 'Only a campaign member can regenerate the title image.' });
+  const _eff = (role === 'dm') ? null : await effectiveEstablishing(db, sess.id, req.session.userId);
+  const _locked = _eff ? _eff.establishing_locked : sess.establishing_locked;
+  if (_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to regenerate.' });
+  const estPrompt = ((_eff && _eff.establishing_prompt) || sess.establishing_prompt || '').trim();
   if (!estPrompt) return res.json({ error: 'There is no title-image prompt yet. Generate the session images first.' });
   try {
     const style = req.body && req.body.style;
@@ -1159,12 +1173,12 @@ router.post('/session-establishing/:sessionId/regenerate', requireAuth, async fu
     const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, estPrompt);
     const randomSeed = Math.floor(Math.random() * 2147483647);
     const userThinking = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
-    const sub = await submitPanelGen(estPrompt, style, fal_key, estBlock, randomSeed, modelKey, webhookUrl, sess.establishing_shape || 'wide', userThinking);
+    const sub = await submitPanelGen(estPrompt, style, fal_key, estBlock, randomSeed, modelKey, webhookUrl, ((_eff && _eff.establishing_shape) || sess.establishing_shape || 'wide'), userThinking);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, sess.establishing_image || null, nowTs, nowTs);
+    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, ((_eff && _eff.establishing_image) || sess.establishing_image || null), nowTs, nowTs);
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch (e) {
     console.error('establishing regenerate error:', e.message);
@@ -1178,9 +1192,12 @@ router.post('/session-establishing/:sessionId/retouch', requireAuth, async funct
   const sess = await db.prepare('SELECT id, campaign_id, establishing_prompt, establishing_shape, establishing_locked, establishing_image FROM sessions WHERE id = ?').get(req.params.sessionId);
   if (!sess) return res.status(404).json({ error: 'Session not found' });
   const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (role !== 'dm') return res.status(403).json({ error: 'Only the DM can retouch the title image.' });
-  if (sess.establishing_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to retouch.' });
-  if (!sess.establishing_image) return res.json({ error: 'There is no title image to retouch yet.' });
+  if (!role) return res.status(403).json({ error: 'Only a campaign member can retouch the title image.' });
+  const _eff = (role === 'dm') ? null : await effectiveEstablishing(db, sess.id, req.session.userId);
+  const _locked = _eff ? _eff.establishing_locked : sess.establishing_locked;
+  const _prevImg = (_eff && _eff.establishing_image) || sess.establishing_image;
+  if (_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to retouch.' });
+  if (!_prevImg) return res.json({ error: 'There is no title image to retouch yet.' });
   const instruction = (req.body && typeof req.body.instruction === 'string') ? req.body.instruction.trim() : '';
   if (!instruction) return res.json({ error: 'Tell me what to change (for example, make it dusk).' });
   try {
@@ -1195,13 +1212,13 @@ router.post('/session-establishing/:sessionId/retouch', requireAuth, async funct
     const webhookUrl = falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const forkId = await getDmForkId(db, sess.id);
-    const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, (sess.establishing_prompt || '').trim());
-    const sub = await submitRetouch(sess.establishing_image, instruction, style, fal_key, webhookUrl, { refs: estBlock.refs, text: estBlock.text }, sess.establishing_shape || 'wide');
+    const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, ((_eff && _eff.establishing_prompt) || sess.establishing_prompt || '').trim());
+    const sub = await submitRetouch(_prevImg, instruction, style, fal_key, webhookUrl, { refs: estBlock.refs, text: estBlock.text }, ((_eff && _eff.establishing_shape) || sess.establishing_shape || 'wide'));
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, sess.establishing_image || null, nowTs, nowTs);
+    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, ((_eff && _eff.establishing_image) || sess.establishing_image || null), nowTs, nowTs);
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch (e) {
     console.error('establishing retouch error:', e.message);
@@ -1351,8 +1368,14 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           await logImageGeneration(db, job.user_id, 'session_reference', job.character_id, job.fork_id);
         }
         if (job.kind === 'session_establishing' && job.session_id) {
-          await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = ?, establishing_img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-            .run(imageUrl, job.style || null, imgW, imgH, new Date().toISOString(), job.user_id, job.session_id);
+          const _wbRole = await getCampaignRole(job.user_id, job.campaign_id);
+          if (_wbRole === 'dm') {
+            await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = ?, establishing_img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+              .run(imageUrl, job.style || null, imgW, imgH, new Date().toISOString(), job.user_id, job.session_id);
+          } else {
+            await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_image, establishing_style, establishing_img_w, establishing_img_h, edited_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_image = EXCLUDED.establishing_image, establishing_style = EXCLUDED.establishing_style, establishing_img_w = EXCLUDED.establishing_img_w, establishing_img_h = EXCLUDED.establishing_img_h, edited_at = EXCLUDED.edited_at')
+              .run(job.user_id, job.session_id, imageUrl, job.style || null, imgW, imgH, new Date().toISOString());
+          }
           if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
           await logImageGeneration(db, job.user_id, 'session_establishing', job.session_id, job.fork_id);
         }

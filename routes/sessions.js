@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveEstablishing } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -150,6 +150,22 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
+  // Per-fork title image: surface the viewed fork owner's effective establishing
+  // image/prompt/lock/shape (a member's own, else the SM canonical on sessions.*).
+  const _vf = await db.prepare("SELECT user_id, role FROM session_forks WHERE id = ?").get(viewForkId);
+  const _estOwner = (_vf && _vf.role === 'player') ? _vf.user_id : null;
+  const _est = await effectiveEstablishing(db, session.id, _estOwner);
+  if (_est) {
+    if (_est.establishing_image) {
+      session.establishing_image = _est.establishing_image;
+      session.establishing_style = _est.establishing_style;
+      session.establishing_img_w = _est.establishing_img_w;
+      session.establishing_img_h = _est.establishing_img_h;
+    }
+    if (_est.establishing_prompt) session.establishing_prompt = _est.establishing_prompt;
+    session.establishing_locked = _est.establishing_locked;
+    if (_est.establishing_shape) session.establishing_shape = _est.establishing_shape;
+  }
   res.json(Object.assign({}, session, {
     moments,
     fork_id: viewForkId,
