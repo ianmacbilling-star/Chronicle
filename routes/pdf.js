@@ -1472,12 +1472,22 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
 
   // Build panels using selected layout
   var layoutStyle = narrative.layout_style || 'Classic';
-  var panelsHTML = buildLayout(layoutStyle, moments, sections, intro, outro, co);
+  // Approach B: lift the establishing/title-image moment OUT of the panel flow
+  // (it becomes the session title image below, above the intro). Story panels
+  // and their narrative sections are re-keyed so nothing shifts by one.
+  var _estMoment = null, _storyMoments = [], _idxMap = {};
+  for (var _k = 0; _k < moments.length; _k++) {
+    if (moments[_k].kind === 'establishing') { _estMoment = moments[_k]; }
+    else { _idxMap[_k] = _storyMoments.length; _storyMoments.push(moments[_k]); }
+  }
+  var _storySections = (sections || []).filter(function(_s){ return Object.prototype.hasOwnProperty.call(_idxMap, _s.panel_index); }).map(function(_s){ var _c = Object.assign({}, _s); _c.panel_index = _idxMap[_s.panel_index]; return _c; });
+  var panelsHTML = buildLayout(layoutStyle, _storyMoments, _storySections, intro, outro, co);
   // Session title image: the wide establishing shot that sets the scene for the
   // first narrative. Additive block above the session content - does NOT touch
   // buildLayout / renderPaired. (Stage 4.1: Session Preview only.)
-  var _estM = { image: session.establishing_image, title: '', shape: (session.establishing_shape || 'wide'), img_w: session.establishing_img_w || null, img_h: session.establishing_img_h || null };
-  var titleImageHTML = session.establishing_image
+  var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : session.establishing_image;
+  var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (session.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || session.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || session.establishing_img_h || null };
+  var titleImageHTML = _estImg
     ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
     : '';
 

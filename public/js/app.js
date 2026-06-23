@@ -7459,9 +7459,6 @@ function renderStoryboard() {
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
           '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
         '</div>';
-    if (m.kind === 'establishing') {
-      imgHtml = '<div style="font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#c9a84c;margin-bottom:6px;">&#9670; Session Title Image</div>' + imgHtml;
-    }
     var _shapeVal = (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard');
     var _canLock = canEditCurrentStatus();
     var lockBtn = '';
