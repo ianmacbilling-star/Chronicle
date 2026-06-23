@@ -4270,6 +4270,22 @@ function _reflectCharSaveLock(charId, busy){
   if (busy) { btn.disabled = true; btn.title = 'Generating the reference image\u2026 please wait'; }
   else { btn.disabled = false; btn.title = ''; }
 }
+// TF-16: render the character-modal save error next to the Save button. When the
+// error is the per-campaign character cap, include a See plans upgrade button.
+function showCharSaveError(msg, withPlans) {
+  var el = document.getElementById('char-save-error');
+  if (!el) return;
+  el.textContent = '';
+  var span = document.createElement('span'); span.textContent = msg; el.appendChild(span);
+  if (withPlans) {
+    var wrap = document.createElement('div'); wrap.style.marginTop = '10px';
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary btn-sm';
+    b.textContent = 'See plans';
+    b.addEventListener('click', function(){ closeCharModal(); goToPlans(); });
+    wrap.appendChild(b); el.appendChild(wrap);
+  }
+  el.classList.remove('hidden');
+}
 function saveChar() {
   (function(){ var _e = document.getElementById('char-save-error'); if (_e) _e.classList.add('hidden'); })();
   var name = document.getElementById('char-name').value.trim();
@@ -4277,9 +4293,9 @@ function saveChar() {
   var cls = document.getElementById('char-cls').value.trim();
   var desc = document.getElementById('char-desc').value.trim();
   var editId = document.getElementById('char-edit-id').value;
-  if (!name) { showModalError('char-save-error', 'Character name is required.'); return; }
+  if (!name) { showCharSaveError('Character name is required.'); return; }
   if (editId && isCharGenBusy(editId)) {
-    showModalError('char-save-error', 'This character\u2019s reference image is still generating. Please wait for it to finish before saving.');
+    showCharSaveError('This character\u2019s reference image is still generating. Please wait for it to finish before saving.');
     return;
   }
 
@@ -4309,7 +4325,7 @@ function saveChar() {
   fetch(url, {method: editId ? 'PUT' : 'POST', body: formData})
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) { showModalError('char-save-error', data.error); return; }
+      if (data.error) { showCharSaveError(data.error, data.code === 'CHARACTER_LIMIT'); return; }
 
       // If this was a NEW character that has no prompt yet, DON'T close —
       // the "Build character prompt" step is only available once the
@@ -5402,7 +5418,7 @@ function refreshNovelPreview() {
 
 async function publishStory() {
   if (!state.currentCampaign || !state.currentCampaign.id) return;
-  if (state.user && state.user.inFreeTrial) {
+  if (state.user && state.user.tier === 'trial') {
     var _go = await uiConfirm('You need to sign up to publish to the library. Publishing is available once you are on a paid plan.', { okText: 'See plans', cancelText: 'Not now' });
     if (_go) goToPlans();
     return;
