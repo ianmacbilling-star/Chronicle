@@ -7451,7 +7451,7 @@ function renderStoryboard() {
   // True alternating grid — narrative and image panels flow together
   // [Opening] [Panel 1] [Between 1-2] [Panel 2] [Between 2-3] [Panel 3] ...
 
-  function buildPanel(m, i) {
+  function buildPanel(m, i, pNum) {
     var needsWatermark = !!state.inFreeTrial;
     var imgHtml = m.image
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
@@ -7497,13 +7497,13 @@ function renderStoryboard() {
         imgHtml + '<div class="panel-img-actions">' + editPromptBtn + regenBtn + retouchBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
-        '<span class="moment-num">Panel ' + (i+1) + '</span>' +
+        '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
         '<span class="moment-title">' + m.title + '</span>' +
         '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleName(m.style) : 'Unknown') + ', ' + (typeLabel[m.type]||m.type) + ', ' + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
         optsBtn +
       '</div>' +
       '<div class="moment-options" id="moment-options-' + m.id + '" style="display:none;"></div>' +
-      buildNarrative('narrative-moment-' + i, 'Panel ' + (i + 1) + ' moment', 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true) +
+      (m.kind === 'establishing' ? buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box', 'Opening paragraph...', narrative.intro, "regenNarrativeSection('opening')", true) : buildNarrative('narrative-moment-' + i, 'Panel ' + pNum + ' moment', 'narrative-moment-box-' + i, 'Narrate what this panel shows...', msection.before || '', "regenNarrativeSection('moment'," + i + ")", true)) +
     '</div>';
   }
 
@@ -7552,17 +7552,21 @@ function renderStoryboard() {
   var cells = [];
 
   // Opening narrative
-  cells.push(buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box',
+  var _hasEst = state.moments.some(function(m){ return m.kind === 'establishing'; });
+  if (!_hasEst) cells.push(buildNarrative('narrative-opening', 'Opening', 'narrative-intro-box',
     'Opening paragraph...', narrative.intro, 'regenNarrativeSection(\'opening\')', true));
 
   // Alternate panels and between-narratives
+  var _pNum = 0;
   state.moments.forEach(function(m, i) {
-    cells.push(buildPanel(m, i));
+    if (m.kind === 'establishing') { cells.push(buildPanel(m, i, 0)); return; }
+    _pNum++;
+    cells.push(buildPanel(m, i, _pNum));
     if (i < state.moments.length - 1) {
       var section = (narrative.sections||[]).find(function(s){return s.panel_index===i;}) || {};
       cells.push(buildNarrative(
         'narrative-between-' + i,
-        'Panel ' + (i+1) + ' → ' + (i+2),
+        'Panel ' + _pNum + ' → ' + (_pNum + 1),
         'narrative-between-box-' + i,
         'Bridge the story...', section.after || '',
         'regenNarrativeSection(\'between\',' + i + ')', false
