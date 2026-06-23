@@ -4826,33 +4826,6 @@ function regenNarrativeSection(type, panelIndex) {
   });
 }
 
-// Poll the session title (establishing) image job after a batch generate so
-// its thumbnail updates live, without leaving and re-entering the session.
-function pollEstablishingJob(jobId) {
-  if (!jobId) return;
-  var started = Date.now();
-  var MAX_MS = 6 * 60 * 1000;
-  function tick() {
-    fetch('/api/images/jobs/' + jobId)
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        if (d && d.status === 'done' && d.image_url) {
-          if (state.currentSession) {
-            state.currentSession.establishing_image = d.image_url;
-            if (typeof renderSessionEstablishing === 'function') renderSessionEstablishing(state.currentSession);
-          }
-          var emi = document.getElementById('establishing-modal-img'); if (emi) emi.src = d.image_url;
-          if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap');
-          return;
-        }
-        if (d && d.status === 'failed') { if (typeof hideBusyOverlay === 'function') hideBusyOverlay('establishing-img-wrap'); return; }
-        if (Date.now() - started < MAX_MS) setTimeout(tick, 4000);
-      })
-      .catch(function(){ if (Date.now() - started < MAX_MS) setTimeout(tick, 4000); });
-  }
-  setTimeout(tick, 4000);
-}
-
 // Re-fetch the current session from the server and re-render the storyboard
 // in place. Used after image generation so new images appear without a reload.
 function refreshStoryboardImages() {
@@ -4942,7 +4915,6 @@ async function generateAllImages(fromChain) {
     // Async batch: the server queued one job per panel and returned their ids.
     // Poll them to completion, driving the progress bar as each lands. (Falls
     // back to the old synchronous shape if the server returns counts directly.)
-    if (data.establishing && data.establishing.job_id) pollEstablishingJob(data.establishing.job_id);
     if (data.jobs) {
       pollImageBatch(data.jobs, { total: data.total, skipped_locked: data.skipped_locked });
       return;
@@ -8568,7 +8540,6 @@ async function generateAllImages(fromChain) {
     // Async batch: the server queued one job per panel and returned their ids.
     // Poll them to completion, driving the progress bar as each lands. (Falls
     // back to the old synchronous shape if the server returns counts directly.)
-    if (data.establishing && data.establishing.job_id) pollEstablishingJob(data.establishing.job_id);
     if (data.jobs) {
       pollImageBatch(data.jobs, { total: data.total, skipped_locked: data.skipped_locked });
       return;

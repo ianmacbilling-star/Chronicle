@@ -887,19 +887,6 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
   }
 });
 
-// Build a deterministic "establishing shot" prompt for a session's title-card
-// image: a wide, scene-setting view of the setting/mood, NOT a dramatic beat and
-// NOT character-focused. Seeded from the session's opening narrative so it
-// reflects this chapter's setting. Stored on sessions.establishing_prompt and
-// thereafter editable + controllable like a panel image.
-function buildEstablishingPrompt(session) {
-  var src = (session.narrative_intro_summary || session.narrative_intro || session.session_notes || '').toString();
-  src = src.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 600);
-  var base = 'A wide, sweeping establishing shot that sets the scene for this chapter of the story: the location, environment, time of day, and overall atmosphere. This is a scene-setting title card, not a specific dramatic action moment, and it should not focus on any single character or show characters in close-up.';
-  if (src) base += ' Setting and mood to depict: ' + src;
-  return base;
-}
-
 // POST /api/images/generate-all
 router.post('/generate-all', requireAuth, async function(req, res) {
   const { session_id, campaign_id, style } = req.body;
@@ -932,19 +919,6 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   const lockedCount = moments.filter(function(m){ return m.locked; }).length;
   const toGenerate = moments.filter(function(m){ return !m.locked; });
 
-  // Stage 1: the session establishing image rides along with the panel batch.
-  // Skipped when locked (exactly like a locked panel). Fetched here so its cost
-  // is folded into the upfront token gate below.
-  const sidInt = parseInt(session_id, 10);
-  // Defensive: if the Stage 0 schema is not deployed yet, the establishing_*
-  // columns are missing -> this SELECT throws. Swallow it so the panel batch is
-  // never affected (the establishing feature simply no-ops until schema lands).
-  let sessRow = {}, estColsOk = false;
-  try {
-    sessRow = (await db.prepare('SELECT establishing_image, establishing_prompt, establishing_locked, establishing_shape, narrative_intro, narrative_intro_summary, session_notes FROM sessions WHERE id = ?').get(sidInt)) || {};
-    estColsOk = true;
-  } catch (e) { console.error('establishing: session fetch failed (schema not deployed?):', e && e.message); }
-  const estWillGen = false; // Approach B: the title image is now the first moment (kind='establishing'), generated with the panels.
   if (!toGenerate.length) {
     return res.json({ success: true, generated: [], count: 0, total: moments.length, skipped_locked: lockedCount, message: 'All panels are locked — nothing to generate. Unlock a panel to regenerate it.' });
   }
@@ -995,7 +969,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // charged — but the upfront check guarantees they can cover a full run.
   const perImageCost = await getTokenCost(modelKey);
   const userThinkingAll = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
-  const batchCost = perImageCost * toGenerate.length + (estWillGen ? perImageCost : 0);
+  const batchCost = perImageCost * toGenerate.length;
   if (!(await canAfford(req.session.userId, batchCost))) {
     const bal = await getBalance(req.session.userId);
     return res.json({
@@ -1048,183 +1022,13 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     else { submitFailed++; console.error('generate-all submit failed:', submitResults[si].reason && submitResults[si].reason.message); }
   }
 
-  // Stage 1: submit the session establishing image alongside the panels. Routed
-  // through submitPanelGen so it inherits the same IP guard, style, and model.
-  // Non-fatal: a failure here never breaks the panel batch.
-  let establishingJob = null;
-  if (estWillGen) {
-    try {
-      const estShape = sessRow.establishing_shape || 'wide';
-      let estPrompt = (sessRow.establishing_prompt || '').trim();
-      if (!estPrompt) {
-        estPrompt = buildEstablishingPrompt(sessRow);
-        try { await db.prepare('UPDATE sessions SET establishing_prompt = ? WHERE id = ?').run(estPrompt, sidInt); } catch (e) {}
-      }
-      const estSeed = (baseSeed + sessionOffset + 99991) % 2147483647;
-      // Attach references for any character/asset NAMED in the establishing
-      // prompt, so people in the title image resemble the real characters
-      // (mirrors the per-panel block; name-matched, no explicit cast).
-      const estCharList = buildCharacterBlock(chars, estPrompt, 0, null);
-      const estAssetList = buildAssetBlock(assets, estPrompt, null);
-      const estBlock = { text: estCharList.text, textTrimmed: estCharList.textTrimmed, assetText: estAssetList.text, refs: combineRefs(estCharList.refs, estAssetList.refs), castExplicit: false, castNames: [] };
-      const estSub = await submitPanelGen(estPrompt, style, fal_key, estBlock, estSeed, modelKey, webhookUrl, estShape, userThinkingAll);
-      const nowTsE = new Date().toISOString();
-      const estIns = await db.prepare(
-        'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(estSub.request_id, req.session.userId, campaign_id, sidInt, targetForkId, 'session_establishing', 'queued', estSub.model, style || null, perImageCost, sessRow.establishing_image || null, nowTsE, nowTsE);
-      establishingJob = { session_id: sidInt, job_id: estIns.lastInsertRowid };
-    } catch (e) {
-      console.error('generate-all establishing submit failed (non-fatal):', e && e.message);
-    }
-  }
-
   if (myRole === 'player' && jobs.length) {
     try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campaign_id, req.session.userId); } catch (e) {}
   }
 
-  res.status(202).json({ status: 'queued', jobs: jobs, establishing: establishingJob, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
+  res.status(202).json({ status: 'queued', jobs: jobs, total: moments.length, to_generate: toGenerate.length, skipped_locked: lockedCount, submit_failed: submitFailed });
 });
 
-// Session establishing image -- simple (no-generation) actions: edit prompt + lock.
-// DM-only. (Regenerate / Retouch / Archive are handled elsewhere.)
-// POST /api/images/session-establishing/:sessionId/prompt  { prompt }
-router.post('/session-establishing/:sessionId/prompt', requireAuth, async function(req, res) {
-  const db = await getDb();
-  const sess = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id = ?').get(req.params.sessionId);
-  if (!sess) return res.status(404).json({ error: 'Session not found' });
-  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (!role) return res.status(403).json({ error: 'Only a campaign member can edit the title image.' });
-  const prompt = (req.body && typeof req.body.prompt === 'string') ? req.body.prompt : '';
-  if (role === 'dm') {
-    await db.prepare('UPDATE sessions SET establishing_prompt = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(prompt, new Date().toISOString(), req.session.userId, sess.id);
-  } else {
-    await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_prompt, edited_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_prompt = EXCLUDED.establishing_prompt, edited_at = EXCLUDED.edited_at')
-      .run(req.session.userId, sess.id, prompt, new Date().toISOString());
-  }
-  res.json({ success: true, establishing_prompt: prompt });
-});
-
-// POST /api/images/session-establishing/:sessionId/lock  (toggles establishing_locked)
-router.post('/session-establishing/:sessionId/lock', requireAuth, async function(req, res) {
-  const db = await getDb();
-  const sess = await db.prepare('SELECT id, campaign_id, establishing_locked FROM sessions WHERE id = ?').get(req.params.sessionId);
-  if (!sess) return res.status(404).json({ error: 'Session not found' });
-  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (!role) return res.status(403).json({ error: 'Only a campaign member can lock the title image.' });
-  if (role === 'dm') {
-    const newLocked = sess.establishing_locked ? 0 : 1;
-    await db.prepare('UPDATE sessions SET establishing_locked = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(newLocked, new Date().toISOString(), req.session.userId, sess.id);
-    return res.json({ success: true, locked: newLocked });
-  }
-  const _eff = await effectiveEstablishing(db, sess.id, req.session.userId);
-  const newLocked = (_eff && _eff.establishing_locked) ? 0 : 1;
-  await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_locked, edited_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_locked = EXCLUDED.establishing_locked, edited_at = EXCLUDED.edited_at')
-    .run(req.session.userId, sess.id, newLocked, new Date().toISOString());
-  res.json({ success: true, locked: newLocked });
-});
-
-// Build the character + asset reference block for a session title image the
-// same way panels do (name-matched against the establishing prompt) so people
-// in the title image resemble the real characters. Uses the DM canonical fork.
-async function buildEstablishingBlock(db, sessionId, campId, forkId, estPrompt) {
-  const chars = await db.prepare(
-    'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
-    'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
-    'sc.change_note, sc.change_moment_index, sc.change_status ' +
-    'FROM characters ch ' +
-    'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
-    'WHERE ch.campaign_id = ?'
-  ).all(forkId, campId);
-  await attachPriorReferences(db, chars, sessionId, campId);
-  const charList = buildCharacterBlock(chars, estPrompt, 0, null);
-  const assets = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campId);
-  const assetList = buildAssetBlock(assets, estPrompt, null);
-  return { text: charList.text, textTrimmed: charList.textTrimmed, assetText: assetList.text, refs: combineRefs(charList.refs, assetList.refs), castExplicit: false, castNames: [] };
-}
-
-// POST /api/images/session-establishing/:sessionId/regenerate  { style?, fal_key? }
-// DM-only single re-roll of the title image, through the fal queue + webhook.
-router.post('/session-establishing/:sessionId/regenerate', requireAuth, async function(req, res) {
-  const db = await getDb();
-  const sess = await db.prepare('SELECT id, campaign_id, establishing_prompt, establishing_shape, establishing_locked, establishing_image FROM sessions WHERE id = ?').get(req.params.sessionId);
-  if (!sess) return res.status(404).json({ error: 'Session not found' });
-  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (!role) return res.status(403).json({ error: 'Only a campaign member can regenerate the title image.' });
-  const _eff = (role === 'dm') ? null : await effectiveEstablishing(db, sess.id, req.session.userId);
-  const _locked = _eff ? _eff.establishing_locked : sess.establishing_locked;
-  if (_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to regenerate.' });
-  const estPrompt = ((_eff && _eff.establishing_prompt) || sess.establishing_prompt || '').trim();
-  if (!estPrompt) return res.json({ error: 'There is no title-image prompt yet. Generate the session images first.' });
-  try {
-    const style = req.body && req.body.style;
-    const fal_key = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
-    if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
-    const modelKey = await getSelectedModel(db);
-    const cost = await getTokenCost(modelKey);
-    if (!(await canAfford(req.session.userId, cost))) {
-      return res.json({ error: 'INSUFFICIENT_TOKENS', message: "You're out of tokens. Add more to keep generating." });
-    }
-    const webhookUrl = falWebhookUrl();
-    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
-    const forkId = await getDmForkId(db, sess.id);
-    const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, estPrompt);
-    const randomSeed = Math.floor(Math.random() * 2147483647);
-    const userThinking = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
-    const sub = await submitPanelGen(estPrompt, style, fal_key, estBlock, randomSeed, modelKey, webhookUrl, ((_eff && _eff.establishing_shape) || sess.establishing_shape || 'wide'), userThinking);
-    const nowTs = new Date().toISOString();
-    const jobIns = await db.prepare(
-      'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, ((_eff && _eff.establishing_image) || sess.establishing_image || null), nowTs, nowTs);
-    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
-  } catch (e) {
-    console.error('establishing regenerate error:', e.message);
-    res.json({ error: e.message });
-  }
-});
-
-// POST /api/images/session-establishing/:sessionId/retouch  { instruction, style?, fal_key? }
-router.post('/session-establishing/:sessionId/retouch', requireAuth, async function(req, res) {
-  const db = await getDb();
-  const sess = await db.prepare('SELECT id, campaign_id, establishing_prompt, establishing_shape, establishing_locked, establishing_image FROM sessions WHERE id = ?').get(req.params.sessionId);
-  if (!sess) return res.status(404).json({ error: 'Session not found' });
-  const role = await getCampaignRole(req.session.userId, sess.campaign_id);
-  if (!role) return res.status(403).json({ error: 'Only a campaign member can retouch the title image.' });
-  const _eff = (role === 'dm') ? null : await effectiveEstablishing(db, sess.id, req.session.userId);
-  const _locked = _eff ? _eff.establishing_locked : sess.establishing_locked;
-  const _prevImg = (_eff && _eff.establishing_image) || sess.establishing_image;
-  if (_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to retouch.' });
-  if (!_prevImg) return res.json({ error: 'There is no title image to retouch yet.' });
-  const instruction = (req.body && typeof req.body.instruction === 'string') ? req.body.instruction.trim() : '';
-  if (!instruction) return res.json({ error: 'Tell me what to change (for example, make it dusk).' });
-  try {
-    const style = req.body && req.body.style;
-    const fal_key = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
-    if (!fal_key) return res.json({ error: 'Image generation not configured. Please contact support.' });
-    const modelKey = await getSelectedModel(db);
-    const cost = await getTokenCost(modelKey);
-    if (!(await canAfford(req.session.userId, cost))) {
-      return res.json({ error: 'INSUFFICIENT_TOKENS', message: "You're out of tokens. Add more to keep generating." });
-    }
-    const webhookUrl = falWebhookUrl();
-    if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
-    const forkId = await getDmForkId(db, sess.id);
-    const estBlock = await buildEstablishingBlock(db, sess.id, sess.campaign_id, forkId, ((_eff && _eff.establishing_prompt) || sess.establishing_prompt || '').trim());
-    const sub = await submitRetouch(_prevImg, instruction, style, fal_key, webhookUrl, { refs: estBlock.refs, text: estBlock.text }, ((_eff && _eff.establishing_shape) || sess.establishing_shape || 'wide'));
-    const nowTs = new Date().toISOString();
-    const jobIns = await db.prepare(
-      'INSERT INTO image_jobs (request_id, user_id, campaign_id, session_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sub.request_id, req.session.userId, sess.campaign_id, sess.id, forkId, 'session_establishing', 'queued', sub.model, style || null, cost, ((_eff && _eff.establishing_image) || sess.establishing_image || null), nowTs, nowTs);
-    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
-  } catch (e) {
-    console.error('establishing retouch error:', e.message);
-    res.json({ error: e.message });
-  }
-});
 
 // ============================================================
 // ASYNC IMAGE DELIVERY — fal queue webhook + job polling
@@ -1320,16 +1124,6 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (arW > 0 && arH > 0) { imgW = Math.round(arW * 256); imgH = Math.round(arH * 256); }
       } catch (e) { /* leave dims null -> renderer uses the nominal shape aspect */ }
     }
-    // Same dims fallback for the session establishing image (nano-banana returns
-    // null width/height): fall back to the requested establishing shape's aspect.
-    if ((!imgW || !imgH) && job.session_id && job.kind === 'session_establishing') {
-      try {
-        const sShapeRow = await db.prepare('SELECT establishing_shape FROM sessions WHERE id = ?').get(job.session_id);
-        const arPartsE = String(shapeAspectRatio((sShapeRow && sShapeRow.establishing_shape) || 'wide')).split(':');
-        const arWe = Number(arPartsE[0]), arHe = Number(arPartsE[1]);
-        if (arWe > 0 && arHe > 0) { imgW = Math.round(arWe * 256); imgH = Math.round(arHe * 256); }
-      } catch (e) { /* leave dims null */ }
-    }
     if (!falUrl) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
@@ -1367,22 +1161,9 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (job.kind === 'session_ref' && job.character_id) {
           await logImageGeneration(db, job.user_id, 'session_reference', job.character_id, job.fork_id);
         }
-        if (job.kind === 'session_establishing' && job.session_id) {
-          const _wbRole = await getCampaignRole(job.user_id, job.campaign_id);
-          if (_wbRole === 'dm') {
-            await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = ?, establishing_img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
-              .run(imageUrl, job.style || null, imgW, imgH, new Date().toISOString(), job.user_id, job.session_id);
-          } else {
-            await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_image, establishing_style, establishing_img_w, establishing_img_h, edited_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_image = EXCLUDED.establishing_image, establishing_style = EXCLUDED.establishing_style, establishing_img_w = EXCLUDED.establishing_img_w, establishing_img_h = EXCLUDED.establishing_img_h, edited_at = EXCLUDED.edited_at')
-              .run(job.user_id, job.session_id, imageUrl, job.style || null, imgW, imgH, new Date().toISOString());
-          }
-          if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
-          await logImageGeneration(db, job.user_id, 'session_establishing', job.session_id, job.fork_id);
-        }
       if (job.cost && job.cost > 0) {
         const spendSource = (job.kind === 'char_ref') ? 'character_reference'
           : (job.kind === 'session_ref') ? 'amendment_reference'
-          : (job.kind === 'session_establishing') ? 'session_establishing'
           : (job.kind === 'retouch') ? 'panel_retouch'
           : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: spendSource, event_type: 'generation_spend' });
