@@ -5084,7 +5084,7 @@ function loadNovelPeople() {
 function onNovelVersionChange(val) {
   state.novelAsUser = val || null;
   updateNovelPublishGuard();
-  if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
+  if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof prepSyncTitle === 'function') prepSyncTitle(); if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
   // Switch to this member's saved look before rendering their book.
   mpLoadAndApply('novel', function(){
@@ -5371,15 +5371,32 @@ function prepSeedCoverFromCampaignImage() {
   });
 }
 
-function prepPanelSync() {
-  prepLoadBookMeta(function(){
-    var tEl = document.getElementById('prep-title');
-    if (tEl && !tEl.value) {
-      tEl.value = (prepUseMember() && state.bookMeta && state.bookMeta.book_title)
+// Title field tracks the viewed fork; editable only on your own version. The
+// owner's typed title is stashed while peeking at another fork and restored.
+function prepSyncTitle() {
+  var tEl = document.getElementById('prep-title'); if (!tEl) return;
+  var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+  if (own) {
+    tEl.readOnly = false;
+    if (state._prepOwnTitle != null) { tEl.value = state._prepOwnTitle; state._prepOwnTitle = null; }
+    if (!tEl.value) {
+      tEl.value = (state.novelAsUser && state.bookMeta && state.bookMeta.book_title)
         ? state.bookMeta.book_title
         : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
     }
-    if (!prepUseMember()) prepSeedCoverFromCampaignImage();
+  } else {
+    if (state._prepOwnTitle == null) state._prepOwnTitle = tEl.value || '';
+    tEl.value = (state.bookMeta && state.bookMeta.book_title)
+      ? state.bookMeta.book_title
+      : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
+    tEl.readOnly = true;
+  }
+}
+function prepPanelSync() {
+  prepLoadBookMeta(function(){
+    var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+    if (isSM && !state.novelAsUser) prepSeedCoverFromCampaignImage();
+    prepSyncTitle();
     renderPrepThumbs();
   });
   _prepEnsureArchives();
@@ -5390,18 +5407,20 @@ function prepUseMember() {
   var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
   return !isSM && (typeof novelOwnView === 'function' ? novelOwnView() : false);
 }
+function _prepCampaignMeta() {
+  var c = state.currentCampaign || {};
+  return { cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '', title_image_url: c.title_image_url || '', book_title: '' };
+}
+// Load book-meta for the CURRENTLY VIEWED fork. Canonical (null) reads the live
+// campaign in renderPrepThumbs; a fork view fetches that fork's effective meta so
+// the SM and other members see the member's own cover/back/title selections.
 function prepLoadBookMeta(cb) {
   var c = state.currentCampaign;
-  if (!c) { if (cb) cb(); return; }
-  if (prepUseMember()) {
-    fetch('/api/campaigns/' + c.id + '/my-book-meta')
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(m){ state.bookMeta = m || {}; if (cb) cb(); })
-      .catch(function(){ state.bookMeta = {}; if (cb) cb(); });
-  } else {
-    state.bookMeta = { cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '', title_image_url: c.title_image_url || '', book_title: '' };
-    if (cb) cb();
-  }
+  if (!c || !state.novelAsUser) { state.bookMeta = {}; if (cb) cb(); return; }
+  fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(state.novelAsUser))
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(m){ state.bookMeta = m || _prepCampaignMeta(); if (cb) cb(); })
+    .catch(function(){ state.bookMeta = _prepCampaignMeta(); if (cb) cb(); });
 }
 function _prepMemberSetImage(kind, url) {
   var c = state.currentCampaign; if (!c) return;
@@ -5417,7 +5436,7 @@ function renderPrepThumbs() {
   ['cover','back','title'].forEach(function(kind){
     var el = document.getElementById('prep-thumb-' + kind); if (!el) return;
     var _f = PREP_IMG_KINDS[kind].field;
-    var url = (prepUseMember() ? (state.bookMeta && state.bookMeta[_f]) : c[_f]) || '';
+    var url = ((state.novelAsUser ? (state.bookMeta || {}) : c)[_f]) || '';
     if (url) { el.style.backgroundImage = 'url("' + encodeURI(url) + '")'; el.classList.add('has-img'); el.innerHTML = ''; }
     else { el.style.backgroundImage = ''; el.classList.remove('has-img'); el.innerHTML = '<span class="prep-thumb-plus">+</span>'; }
   });
@@ -5436,7 +5455,7 @@ function openPrepImagePicker(kind) {
   _prepEnsureArchives(function(){
     closePrepImagePicker();
     var c = state.currentCampaign;
-    var curUrl = (prepUseMember() ? (state.bookMeta && state.bookMeta[cfg.field]) : c[cfg.field]) || '';
+    var curUrl = ((state.novelAsUser ? (state.bookMeta || {}) : c)[cfg.field]) || '';
     var rows = (state.archives || []).filter(function(a){ return a && a.image_url; });
     var overlay = document.createElement('div');
     overlay.id = 'prep-img-modal'; overlay.className = 'prep-img-modal';

@@ -241,7 +241,8 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
 // campaign values so every book has a cover. Keyed to the requester.
 router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(req.session.userId, req.params.campaignId)) || {};
+  const owner = req.query.as_user ? Number(req.query.as_user) : req.session.userId;
+  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(owner, req.params.campaignId)) || {};
   const camp = await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, name FROM campaigns WHERE id = ?').get(req.params.campaignId);
   res.json({
     cover_image_url: cur.cover_image_url || (camp ? camp.cover_image_url : '') || '',
