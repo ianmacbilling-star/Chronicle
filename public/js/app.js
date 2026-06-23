@@ -71,11 +71,23 @@ function _navRestore(st) {
   showView('campaigns');
 }
 
+// PHASE C - the manifest start_url is the public landing ('/'), so that page
+// is the app's home in both a browser tab and the installed PWA. The leave
+// action steps down to it (history.back) rather than pushing a new entry.
+function _navIsStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || window.navigator.standalone === true;
+}
+
+function _navLeave() {
+  if (window.history.length > 1) { window.history.back(); }
+  else { window.location.href = '/'; }
+}
+
 function _navLeaveGuard() {
-  if (window.confirm('Leave Campaignia and return to the home page?')) {
-    window.location.href = '/';
-    return;
-  }
+  var msg = _navIsStandalone() ? 'Return to the Campaignia home screen?' : 'Leave Campaignia?';
+  if (window.confirm(msg)) { _navLeave(); return; }
+  // Declined: stay in the app and re-seat the root.
   try { history.pushState({ nav: { view: 'campaigns', root: true } }, ''); } catch (e) {}
   _navSilent = true;
   try { showView('campaigns'); } catch (e) {}
