@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveEstablishing } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -45,11 +45,10 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     if (!forkId) forkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
     const fk = await db.prepare('SELECT player_access_status FROM session_forks WHERE id = ?').get(forkId);
-    // Session card thumbnail: prefer the session title (establishing) image,
-    // fall back to the first panel image that exists.
+    // Session card thumbnail: the first panel image (panel 0 is the title image).
     let firstMomentImg = null;
     for (let mi = 0; mi < moments.length; mi++) { if (moments[mi].image) { firstMomentImg = moments[mi].image; break; } }
-    const first_image_url = s.establishing_image || firstMomentImg || null;
+    const first_image_url = firstMomentImg || null;
     return Object.assign({}, s, { moments, fork_status: fk ? fk.player_access_status : 'draft', first_image_url: first_image_url, novel_include: !!incMap[s.id] });
   }));
   res.json(result);
@@ -126,9 +125,8 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
 router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(
-    'SELECT s.*, EXISTS(SELECT 1 FROM campaign_archives ca WHERE ca.session_id = s.id AND ca.image_type = \'session_establishing\' AND ca.source_url = s.establishing_image AND ca.archived_by = ?) AS establishing_archived ' +
-    'FROM sessions s WHERE s.id=? AND s.campaign_id=?'
-  ).get(req.session.userId, req.params.id, req.params.campaignId);
+    'SELECT s.* FROM sessions s WHERE s.id=? AND s.campaign_id=?'
+  ).get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
   // Deploy 4.0 — override the (now-stale) sessions column with the DM
   // fork's status so the frontend keeps reading the same key.
@@ -150,22 +148,6 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
-  // Per-fork title image: surface the viewed fork owner's effective establishing
-  // image/prompt/lock/shape (a member's own, else the SM canonical on sessions.*).
-  const _vf = await db.prepare("SELECT user_id, role FROM session_forks WHERE id = ?").get(viewForkId);
-  const _estOwner = (_vf && _vf.role === 'player') ? _vf.user_id : null;
-  const _est = await effectiveEstablishing(db, session.id, _estOwner);
-  if (_est) {
-    if (_est.establishing_image) {
-      session.establishing_image = _est.establishing_image;
-      session.establishing_style = _est.establishing_style;
-      session.establishing_img_w = _est.establishing_img_w;
-      session.establishing_img_h = _est.establishing_img_h;
-    }
-    if (_est.establishing_prompt) session.establishing_prompt = _est.establishing_prompt;
-    session.establishing_locked = _est.establishing_locked;
-    if (_est.establishing_shape) session.establishing_shape = _est.establishing_shape;
-  }
   res.json(Object.assign({}, session, {
     moments,
     fork_id: viewForkId,

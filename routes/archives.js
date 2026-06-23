@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getDmForkId, effectiveEstablishing } = require('../database/db');
+const { getDb, getDmForkId } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
@@ -92,24 +92,6 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
       return res.json({ success: true, archive: row });
     }
 
-    if (imageType === 'session_establishing') {
-      const sess = await db.prepare(
-        'SELECT id, name, campaign_id, establishing_image, establishing_prompt, establishing_style FROM sessions WHERE id = ?'
-      ).get(req.body.session_id);
-      if (!sess) return res.status(404).json({ error: 'Session not found' });
-      if (String(sess.campaign_id) !== String(req.params.campaignId)) {
-        return res.status(403).json({ error: 'That session is not in this campaign' });
-      }
-      if (!sess.establishing_image) return res.json({ error: 'This session has no title image to archive yet.' });
-      const archivedUrl = await archiveCopy(sess.establishing_image);
-      const now = new Date().toISOString();
-      const result = await db.prepare(
-        'INSERT INTO campaign_archives (campaign_id, session_id, image_type, title, image_url, source_url, image_prompt, art_style, archived_by, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(req.params.campaignId, sess.id, 'session_establishing', (sess.name ? sess.name + ' (title image)' : 'Title image'), archivedUrl, sess.establishing_image, sess.establishing_prompt || null, sess.establishing_style || null, req.session.userId, now);
-      const row2 = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
-      return res.json({ success: true, archive: row2 });
-    }
 
     return res.status(400).json({ error: 'Unsupported image type' });
   } catch (e) {
@@ -154,20 +136,6 @@ router.delete('/', requireAuth, verifyCampaignMember, async function(req, res) {
       return res.json({ success: true, removed: mine.length });
     }
 
-    if (imageType === 'session_establishing') {
-      const sess = await db.prepare('SELECT id, campaign_id, establishing_image FROM sessions WHERE id = ?').get(req.body.session_id);
-      if (!sess) return res.status(404).json({ error: 'Session not found' });
-      if (String(sess.campaign_id) !== String(req.params.campaignId)) {
-        return res.status(403).json({ error: 'That session is not in this campaign' });
-      }
-      const mine = await db.prepare(
-        "SELECT id, image_url FROM campaign_archives WHERE session_id = ? AND image_type = 'session_establishing' AND archived_by = ? AND source_url IS NOT DISTINCT FROM ?"
-      ).all(sess.id, req.session.userId, sess.establishing_image);
-      if (!mine || mine.length === 0) return res.json({ success: true, removed: 0 });
-      for (const a of mine) { await db.prepare('DELETE FROM campaign_archives WHERE id = ?').run(a.id); }
-      for (const a of mine) { try { await releaseImage(db, a.image_url); } catch (e) { console.error('release archive copy:', e.message); } }
-      return res.json({ success: true, removed: mine.length });
-    }
 
     if (imageType === 'character') {
       const characterId = req.body.character_id;
@@ -342,26 +310,6 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       return res.json({ success: true, image_url: freshUrl });
     }
 
-    if (targetType === 'session_establishing') {
-      const sess = await db.prepare('SELECT id, establishing_image, establishing_locked FROM sessions WHERE id = ? AND campaign_id = ?').get(req.body.session_id, req.params.campaignId);
-      if (!sess) return res.json({ error: 'The session no longer exists.' });
-      if (!req.campaignRole) return res.status(403).json({ error: 'Only a campaign member can replace the session title image.' });
-      const isDM = req.campaignRole === 'dm';
-      const _eff = isDM ? null : await effectiveEstablishing(db, sess.id, req.session.userId);
-      const _locked = _eff ? _eff.establishing_locked : sess.establishing_locked;
-      if (_locked) return res.json({ error: 'ESTABLISHING_LOCKED', message: 'The title image is locked. Unlock it to replace it.' });
-      const freshUrl = await restoreCopy(archive.image_url);
-      const prevImg = (_eff && _eff.establishing_image) || sess.establishing_image;
-      if (isDM) {
-        await db.prepare('UPDATE sessions SET establishing_image = ?, establishing_style = ?, establishing_img_w = NULL, establishing_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
-          .run(freshUrl, archive.art_style || null, now, req.session.userId, sess.id);
-      } else {
-        await db.prepare('INSERT INTO session_establishing_meta (user_id, session_id, establishing_image, establishing_style, establishing_img_w, establishing_img_h, edited_at) VALUES (?, ?, ?, ?, NULL, NULL, ?) ON CONFLICT (user_id, session_id) DO UPDATE SET establishing_image = EXCLUDED.establishing_image, establishing_style = EXCLUDED.establishing_style, establishing_img_w = NULL, establishing_img_h = NULL, edited_at = EXCLUDED.edited_at')
-          .run(req.session.userId, sess.id, freshUrl, archive.art_style || null, now);
-      }
-      if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
-      return res.json({ success: true, image_url: freshUrl });
-    }
 
     return res.json({ error: 'Unknown replace target.' });
   } catch (e) {
