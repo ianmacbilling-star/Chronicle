@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getAppSettingInt } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const path = require('path');
@@ -77,6 +77,13 @@ function shapeRatio(shape) {
 function shapeAspect(shape) { var r = shapeRatio(shape); return r[0] / r[1]; }
 // True aspect from the stored image pixels (img_w/img_h) when present; otherwise the
 // nominal shape-tag aspect. Lets panels size to the real image so they barely crop.
+// Count pages in a rendered PDF buffer (pdf-lib). Enforces the global
+// Max Pages Per Print limit across all layouts.
+async function countPdfPages(buffer) {
+  var lib = require('pdf-lib');
+  var doc = await lib.PDFDocument.load(buffer, { updateMetadata: false });
+  return doc.getPageCount();
+}
 function momentAspect(m) {
   var w = m && Number(m.img_w), h = m && Number(m.img_h);
   if (w > 0 && h > 0) return w / h;
@@ -2616,6 +2623,14 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     return res.status(500).json({ error: 'PDF render failed', detail: String(e && e.message ? e.message : e) });
   }
 
+  try {
+    var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
+    var _ppCount = await countPdfPages(pdfBuffer);
+    if (_ppCount > _maxPP) {
+      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, over the ' + _maxPP + '-page print limit. Split it into multiple smaller books and try again.' });
+    }
+  } catch (e) { console.error('[page-limit] count failed:', e && e.message ? e.message : e); }
+
   if (req.query.download) {
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', 'inline; filename="interior-' + campaign.id + '.pdf"');
@@ -2928,6 +2943,14 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     console.error('[publish-story] render failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not render your story PDF. Please try again.' });
   }
+
+  try {
+    var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
+    var _ppCount = await countPdfPages(pdfBuffer);
+    if (_ppCount > _maxPP) {
+      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, over the ' + _maxPP + '-page print limit. Split it into multiple smaller books and try again.' });
+    }
+  } catch (e) { console.error('[page-limit] count failed:', e && e.message ? e.message : e); }
 
   let pdfUrl;
   try {

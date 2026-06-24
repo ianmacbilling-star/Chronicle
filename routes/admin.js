@@ -321,4 +321,27 @@ router.post('/stories/:id/unpublish', requireAuth, requireAdmin, async function 
   }
 });
 
+// Global Max Pages Per Print limit (applies to ALL layouts). Stored in
+// app_settings as max_pages_per_print (default 250).
+router.get('/print-page-limit', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('max_pages_per_print');
+    const n = r && r.value != null ? parseInt(r.value, 10) : NaN;
+    res.json({ maxPagesPerPrint: Number.isFinite(n) && n > 0 ? n : 250 });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.put('/print-page-limit', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    var n = parseInt(req.body && req.body.maxPagesPerPrint, 10);
+    if (!Number.isFinite(n) || n < 1 || n > 10000) return res.status(400).json({ error: 'maxPagesPerPrint must be a whole number between 1 and 10000' });
+    const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get('max_pages_per_print');
+    if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(String(n), 'max_pages_per_print');
+    else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run('max_pages_per_print', String(n));
+    res.json({ ok: true, maxPagesPerPrint: n });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 module.exports = router;

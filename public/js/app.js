@@ -10832,7 +10832,7 @@ function switchSettingsTab(tab) {
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', t === tab);
   });
-  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); }
+  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); }
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
@@ -12230,6 +12230,33 @@ function saveSignupBonus() {
     .then(function (res) {
       if (msg) msg.textContent = res.ok ? 'Saved.' : (res.j && res.j.error ? res.j.error : 'Could not save.');
       if (res.ok && res.j && res.j.signupBonusCot != null) inp.value = res.j.signupBonusCot;
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+// ---- Admin: Max Pages Per Print (dashboard Settings tab) ----
+function loadMaxPagesPerPrint() {
+  var inp = document.getElementById('max-pages-input');
+  if (!inp) return;
+  fetch('/api/admin/print-page-limit')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j && j.maxPagesPerPrint != null) inp.value = j.maxPagesPerPrint; })
+    .catch(function () {});
+}
+
+function saveMaxPagesPerPrint() {
+  var inp = document.getElementById('max-pages-input');
+  var msg = document.getElementById('max-pages-msg');
+  if (!inp) return;
+  var n = parseInt(inp.value, 10);
+  if (!isFinite(n) || n < 1) { if (msg) msg.textContent = 'Enter a whole number of 1 or more.'; return; }
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/print-page-limit', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maxPagesPerPrint: n })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (msg) msg.textContent = res.ok ? 'Saved.' : (res.j && res.j.error ? res.j.error : 'Could not save.');
+      if (res.ok && res.j && res.j.maxPagesPerPrint != null) inp.value = res.j.maxPagesPerPrint;
     })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }

@@ -522,6 +522,12 @@ async function initPostgres() {
     "INSERT INTO app_settings (setting_key, value) VALUES ('image_model', 'nano2') ON CONFLICT (setting_key) DO NOTHING"
   );
 
+  // Global Max Pages Per Print limit (applies to ALL layouts). Default 250;
+  // admin-editable via the dashboard. ON CONFLICT preserves any saved value.
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('max_pages_per_print', '250') ON CONFLICT (setting_key) DO NOTHING"
+  );
+
   // ============================================================
   // TOKEN SYSTEM (Phase 1 — internal ledger; Stripe wired later)
   // ============================================================
@@ -1170,4 +1176,14 @@ async function effectiveBookMeta(db, campaignId, ownerUserId) {
   return row || null;
 }
 
-module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta };
+// Read an integer app_settings value by key, falling back to `def` on miss/error.
+async function getAppSettingInt(key, def) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get(key);
+    const n = r && r.value != null ? parseInt(r.value, 10) : NaN;
+    return Number.isFinite(n) ? n : def;
+  } catch (e) { return def; }
+}
+
+module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getAppSettingInt };

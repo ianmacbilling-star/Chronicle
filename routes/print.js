@@ -229,6 +229,18 @@ router.post('/order', requireSession, async function (req, res) {
   } catch (e) { /* lookup failure -> fall through to the normal flow */ }
   const built = catalog.buildSpec(body.selection, parseInt(body.pageCount, 10));
   if (!built.ok) return res.status(400).json({ error: 'Invalid selection', details: built.errors });
+  // Global Max Pages Per Print limit (applies to all layouts). Block over-limit
+  // orders before they reach the printer.
+  try {
+    const _ppdb = await getDb();
+    const _ppRow = await _ppdb.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('max_pages_per_print');
+    var _ppMax = _ppRow && _ppRow.value != null ? parseInt(_ppRow.value, 10) : 250;
+    if (!Number.isFinite(_ppMax)) _ppMax = 250;
+    var _ppCount = parseInt(body.pageCount, 10);
+    if (Number.isFinite(_ppCount) && _ppCount > _ppMax) {
+      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _ppMax, message: 'This book is ' + _ppCount + ' pages, over the ' + _ppMax + '-page print limit. Split it into multiple smaller books and try again.' });
+    }
+  } catch (e) { /* count lookup failure -> fall through */ }
   if (!body.interiorPdfUrl || !body.coverPdfUrl) {
     return res.status(400).json({ error: 'interiorPdfUrl and coverPdfUrl are required' });
   }

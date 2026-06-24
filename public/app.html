@@ -836,6 +836,19 @@
         </div>
       </div>
 
+      <!-- Print page limit (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Print limits</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Maximum pages allowed for any print, publish, or order &mdash; across all layouts. Books over this are blocked with a prompt to split into multiple books.</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label for="max-pages-input" style="color:var(--gold);font-size:13px;">Max Pages Per Print</label>
+          <input class="form-input" id="max-pages-input" type="number" min="1" step="1" value="250" style="width:110px;">
+          <span style="color:var(--text-muted);">pages</span>
+          <button class="btn btn-primary btn-sm" onclick="saveMaxPagesPerPrint()">Save</button>
+          <span class="settings-section-desc" id="max-pages-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       </div><!-- /settings-pane-general -->
 
       <div class="settings-pane" id="settings-pane-tiers" style="display:none;">
