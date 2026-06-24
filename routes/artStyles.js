@@ -161,22 +161,30 @@ const STYLE_ANALYZE_SYSTEM =
   'medium and technique; line and edge quality; shading and shadow; texture; ' +
   'colour and palette; lighting direction and contrast; and foreground / ' +
   'background composition and negative space. ' +
-  'Be concise -- LESS IS MORE. Lead with the 1 to 3 traits that most define the ' +
-  'look and keep the whole thing to roughly 2 to 4 sentences. A short, abstract ' +
-  'directive outperforms a long descriptive one; do NOT pad it with an ' +
-  'exhaustive catalogue or with any scene description. ' +
+  'WRITE IT AS COMMANDS, NOT DESCRIPTION. This is a directive the image ' +
+  'generator must OBEY, not art criticism. Use imperative verbs (Compose, ' +
+  'Render, Keep, Use only, Push, Flatten) -- write "Keep backgrounds bare with ' +
+  'no detail," NOT "backgrounds dissolve into soft gradients." ' +
+  'BE ABSOLUTE, NOT HEDGED. State the defining traits at their EXTREME, with no ' +
+  'softening -- prefer "stark," "vast," "flat," "only," "no detail," ' +
+  '"pure," "heavy" over "almost," "fairly," "somewhat," "tends to." ' +
+  'Drastic wording renders far more strongly than measured wording. ' +
+  'BE CONCISE -- LESS IS MORE. Lead with the 1 to 3 traits that most define the ' +
+  'look and keep the whole thing to roughly 2 to 4 punchy sentences; every word ' +
+  'should be a directive. Do NOT pad with an exhaustive catalogue or any scene ' +
+  'description. ' +
   '(1) Write ONE paragraph beginning with the literal token "STYLE:". You may ' +
   'name broad artistic traditions, but never instruct imitation of a specific ' +
   'living artist by name without also giving generic descriptors. ' +
   '(2) On a final separate line write "FADE: yes" if the art characteristically ' +
   'fades to a clean pure-white (#ffffff) edge with no frame or border, otherwise ' +
   '"FADE: no". Output ONLY the STYLE paragraph and the FADE line, no preamble. ' +
-  'Example of the abstract, content-free voice wanted (do NOT copy its content): ' +
-  '"STYLE: Stark backlit silhouette illustration. A single dark, near-black ' +
-  'foreground mass reads against a vast, hazy, glowing sky, with backgrounds kept ' +
-  'almost empty and detail-free. Warm dusk palette of amber, orange, magenta, ' +
-  'crimson and cool blue, in a confident painterly-comic medium with smooth ' +
-  'rendering, heavy contrast, and large areas of empty negative space."';
+  'Example of the exact VOICE and FORCE wanted (do NOT copy its content): ' +
+  '"STYLE: Compose every panel as a stark backlit silhouette -- render figures ' +
+  'and foreground as flat, near-black shapes against a vast, empty, glowing sky. ' +
+  'Keep backgrounds almost bare, little to no detail. Use only a warm palette of ' +
+  'amber, orange, magenta, crimson and cool blue. Heavy contrast, deep shadow, ' +
+  'large empty negative space."';
 
 // POST /api/art-styles/custom/analyze (multipart: images[]) -- one Claude vision
 // call writes a house-format STYLE: paragraph + fade flag from 2-4 samples.
