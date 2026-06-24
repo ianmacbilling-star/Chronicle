@@ -90,10 +90,11 @@ function isFadeStyle(s){ return !!FADE_STYLES[s]; }
 
 var IP_GUARD_IMG = ' ORIGINAL CONTENT ONLY: depict ONLY the user\'s own original characters, creatures, locations, and items as described and as shown in any reference images. Do NOT draw, imitate, or incorporate any recognizable copyrighted or trademarked character, creature, mascot, logo, costume, vehicle, or branded design from any other franchise (films, video games, comics, anime, novels, toys, or another game publisher). If a name or description resembles a famous character or property from another franchise, treat it as the user\'s OWN original creation and render an original design \u2014 NEVER that franchise\'s likeness. A thematic motif (for example a bat, spider, or star) may appear ONLY as original armor or decoration; you must NEVER add that franchise\'s identifying marks: no chest emblem, logo, insignia, or symbol associated with a known character, and never copy a known character\'s signature silhouette such as a distinctive cowl, mask, cape, ear shape, or helmet. Keep the design generic-fantasy and original \u2014 evocative is fine, iconic is not.';
 
-function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel) {
+function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
-  var edgeDirective = isFadeStyle(style) ? FADE_WHITE : NO_BORDER;
+  var _fade = (isFadeOverride === true || isFadeOverride === false) ? isFadeOverride : isFadeStyle(style);
+  var edgeDirective = _fade ? FADE_WHITE : NO_BORDER;
   var hint = shapeCompHint(shape) + edgeDirective;
 
   // charBlock is { text, refs } (refs may include assets) from the
@@ -255,9 +256,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
 
 // Synchronous generation (still used by generate-all / retouch until they
 // move to the async queue flow in a later phase).
-async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel) {
+async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
@@ -292,9 +293,9 @@ function applyMomentDirection(basePrompt, dirText) {
   return (basePrompt || '') + '\n\nDIRECTOR STEERING (you MUST follow this): ' + dirText;
 }
 
-async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape, thinkingLevel) {
+async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape, thinkingLevel, isFadeOverride) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model };
 }
@@ -580,6 +581,9 @@ function combineRefs(charRefs, assetRefs) {
 }
 
 function getStylePrefix(style) {
+  // A custom style is resolved at the route into its STYLE: paragraph and
+  // passed through here as-is; presets map by display name.
+  if (typeof style === 'string' && /^STYLE:/i.test(style)) return style;
   var prefixes = {
     'High fantasy illustration': 'STYLE: Epic high fantasy illustration. Painterly, highly detailed, dramatic cinematic lighting, rich colors, in the style of fantasy concept art and book covers. Detailed backgrounds, heroic compositions.',
     'Dark gritty comic book': 'STYLE: Dark gritty comic book art. Heavy ink lines, deep shadows, high contrast black and white with selective color, noir atmosphere, Frank Miller and Mike Mignola inspired. Gritty textures, dramatic angles.',
@@ -592,6 +596,24 @@ function getStylePrefix(style) {
     'Charcoal drawing': 'STYLE: Traditional charcoal drawing on rough white paper. Rich, textured charcoal strokes with deep velvety blacks, soft smudged mid-tones, and subtle blended shading. Hand-drawn edges that feel slightly rough, with visible charcoal grain and the tooth of the paper showing through. Bold, expressive shadows with dramatic high contrast and areas of heavy shading. Minimal highlights, created by leaving the bare white paper exposed rather than adding bright tones. A traditional, tactile, sketch-based monochrome charcoal look, like an artist working with charcoal sticks and blending stumps on rough paper, in the tradition of Old Master charcoal and chalk drawings by Leonardo da Vinci and Michelangelo Buonarroti.'
   };
   return prefixes[style] || prefixes['High fantasy illustration'];
+}
+
+// Resolve a style id for generation. Custom styles arrive as 'custom:<rowId>';
+// look up the OWNER's STYLE: paragraph + fade flag at gen time and never trust
+// the client id (sharing is a later pass, so only the owner can render with it).
+// Unknown/foreign ids fall back to the base style so a panel renders, not breaks.
+async function resolveGenStyle(db, style, userId) {
+  if (typeof style === 'string' && style.indexOf('custom:') === 0) {
+    const rowId = parseInt(style.slice(7), 10);
+    if (rowId) {
+      try {
+        const row = await db.prepare('SELECT style_prompt, is_fade FROM custom_art_styles WHERE id = ? AND owner_id = ?').get(rowId, userId);
+        if (row && row.style_prompt) return { styleForGen: row.style_prompt, isFade: !!row.is_fade };
+      } catch (e) { console.error('custom style resolve error:', e.message); }
+    }
+    return { styleForGen: 'High fantasy illustration', isFade: null };
+  }
+  return { styleForGen: style, isFade: null };
 }
 
 // Log one image generation for usage counting. month_key is 'YYYY-MM'.
@@ -801,7 +823,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
     const userThinking = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
     const momentDirsS = await loadMomentDirections(db, moment.fork_id);
-    const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), style, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking);
+    const _rs = await resolveGenStyle(db, style, req.session.userId);
+    const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -871,7 +894,8 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
     const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
     const refsR = combineRefs(charListR.refs, assetListR.refs);
-    const sub = await submitRetouch(moment.image, instruction, style, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape);
+    const _rs = await resolveGenStyle(db, style, req.session.userId);
+    const sub = await submitRetouch(moment.image, instruction, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -1035,7 +1059,8 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castExplicit: !!m.cast_explicit,
         castNames: castNames
       };
-      const sub = await submitPanelGen(applyMomentDirection(m.prompt, momentDirs[m.id]), style, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll);
+      const _rs = await resolveGenStyle(db, style, req.session.userId);
+      const sub = await submitPanelGen(applyMomentDirection(m.prompt, momentDirs[m.id]), _rs.styleForGen, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll, _rs.isFade);
       const nowTs = new Date().toISOString();
       const jobIns = await db.prepare(
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -1263,6 +1288,35 @@ webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
     if (!job) return res.status(404).json({ error: 'job not found' });
     res.json({ status: job.status, image_url: job.image_url || null, error: job.error || null, moment_id: job.moment_id });
   } catch (e) { res.json({ error: e.message }); }
+});
+
+// POST /api/images/custom-style-preview -- render ONE sample panel in a (possibly
+// unsaved) custom STYLE: paragraph so the builder can preview before saving.
+// Platinum-gated; costs one image token on success.
+router.post('/custom-style-preview', requireAuth, async function(req, res) {
+  try {
+    const own = await getEffectiveTier(req.session.userId, null);
+    if (own !== 'platinum') return res.status(403).json({ error: 'NOT_PLATINUM', message: 'Custom styles are a Platinum feature.' });
+    const stylePrompt = (req.body && req.body.style_prompt || '').trim();
+    if (!stylePrompt) return res.json({ error: 'Add a style description first.' });
+    const isFade = !!(req.body && (req.body.is_fade === true || req.body.is_fade === 1 || req.body.is_fade === '1' || req.body.is_fade === 'true'));
+    const fal_key = process.env.FAL_API_KEY || req.body.fal_key;
+    if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
+    const db = await getDb();
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to preview a style.' });
+    }
+    const SAMPLE_PROMPT = 'A lone armored adventurer stands at the edge of a misty ancient forest at dawn, sword in hand, with crumbling ruins and a distant mountain range behind them.';
+    const seed = crypto.randomInt(1, 2147483647);
+    const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, 'wide', null, isFade);
+    try { await spendTokens(req.session.userId, cost, { source: 'custom_style_preview', event_type: 'generation_spend' }); } catch (e) { console.error('preview spend failed:', e.message); }
+    res.json({ image: url });
+  } catch (e) {
+    console.error('custom style preview error:', e.message);
+    res.json({ error: 'Could not render the preview: ' + e.message });
+  }
 });
 
 module.exports = router;
