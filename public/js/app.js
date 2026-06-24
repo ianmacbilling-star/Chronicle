@@ -6052,6 +6052,9 @@ function loadSettingsForm() {
       var el = document.getElementById('settings-image-model');
       if (el && d.model) el.value = d.model;
     });
+  // Admin general-tab settings must load when the settings view is shown
+  // (and on refresh), not only on a tab-button click via switchSettingsTab.
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint();
 }
 
 function saveImageModel() {
@@ -9288,6 +9291,9 @@ function loadSettingsForm() {
       var el = document.getElementById('settings-image-model');
       if (el && d.model) el.value = d.model;
     });
+  // Admin general-tab settings must load when the settings view is shown
+  // (and on refresh), not only on a tab-button click via switchSettingsTab.
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint();
 }
 
 function saveImageModel() {
