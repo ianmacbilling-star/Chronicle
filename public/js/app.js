@@ -3057,7 +3057,7 @@ function customStylesLoaded() { return !!(state && state._customStylesLoaded); }
 function getCustomStyles() { return (state && state.customStyles) ? state.customStyles : []; }
 function customStyleById(id) {
   var rid = String(id).indexOf('custom:') === 0 ? String(id).slice(7) : String(id);
-  var lists = [ getAvailableStyles(), getCustomStyles() ];
+  var lists = [ getCustomStyles(), getAvailableStyles() ];  // own (full, has style_prompt) first; available (lean) only for members' SM styles
   for (var L = 0; L < lists.length; L++) { var list = lists[L]; for (var i = 0; i < list.length; i++) { if (String(list[i].id) === rid) return list[i]; } }
   return null;
 }
