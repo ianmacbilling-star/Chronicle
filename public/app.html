@@ -1554,7 +1554,7 @@
       </div>
       <button class="btn" id="cstyle-preview-btn" onclick="previewCustomStyle()" style="width:100%;">Preview render (1 token)</button>
       <div id="cstyle-preview-wrap" style="margin-top:10px;display:none;text-align:center;">
-        <img id="cstyle-preview-img" alt="Style preview" style="max-width:100%;border-radius:8px;" />
+        <img id="cstyle-preview-img" alt="Style preview" title="Click to enlarge" style="max-width:100%;border-radius:8px;cursor:zoom-in;" onclick="openLightbox(this.src, this.alt)" />
       </div>
     </div>
     <div id="cstyle-save-error" class="alert alert-error hidden" style="margin:14px 0 0;"></div>
