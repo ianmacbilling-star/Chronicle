@@ -11508,7 +11508,7 @@ function ensureInterior() {
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) {
-        throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the interior file.');
+        throw new Error(res.j && (res.j.message || res.j.error) ? (res.j.message || res.j.error) : 'Could not build the interior file.');
       }
       printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
       return { url: res.j.url, pages: (res.j.pages || 0) };

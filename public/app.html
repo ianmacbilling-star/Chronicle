@@ -322,9 +322,11 @@
             <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
           </div>
 
-          <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
+            <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
+          </div>
           <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(201,168,76,0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>
-          <div id="print-place-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;"></div>
           <div id="print-trial-notice" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);color:rgba(245,232,200,0.9);"></div>
 
           <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(201,168,76,0.4);border-radius:var(--radius);background:rgba(20,12,4,0.5);">
