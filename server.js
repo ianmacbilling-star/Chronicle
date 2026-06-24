@@ -179,6 +179,7 @@ app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/campaigns/:campaignId/characters', require('./routes/characters'));
 app.use('/api/campaigns/:campaignId/assets', require('./routes/assets'));
 app.use('/api/help', require('./routes/help'));
+app.use('/api/art-styles', require('./routes/artStyles'));
 app.use('/api/campaigns/:campaignId/archives', require('./routes/archives'));
 app.use('/api/campaigns/:campaignId/sessions', require('./routes/sessions'));
 app.use('/api/campaigns/:campaignId/sessions/:sessionId/moments', require('./routes/moments'));
