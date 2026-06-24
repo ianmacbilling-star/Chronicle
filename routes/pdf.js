@@ -1579,25 +1579,49 @@ function renderComicMag(moments, sections, intro, outro, opts) {
       ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
       : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   }
-  var html = coDropOrIntro(intro, opts);
+  // A parchment chunk box. box-decoration-break:clone => if it crosses a column or
+  // page break, EACH fragment gets its own full border (closed top + bottom).
+  function chunkBox(t) {
+    return '<div style="' + picBorderCss(co) + 'background:#fbf3cf;padding:0.12in 0.14in;line-height:1.4;margin:0 0 ' + CG_GAP + 'in;-webkit-box-decoration-break:clone;box-decoration-break:clone;">' + buildNarrativeHTML(t, false) + '</div>';
+  }
+  // An image box sized to a given width (in inches). Images never split.
+  function imgBox(m, wIn, hIn, full) {
+    var wCss = full ? 'width:100%;' : ('width:' + wIn.toFixed(2) + 'in;');
+    return '<div style="' + picBorderCss(co) + 'overflow:hidden;position:relative;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;margin:0 0 ' + CG_GAP + 'in;">' + media(m) + picOverlay(co) + coCaptionCover(m, co.caption) + '</div>';
+  }
+
+  var COLW = (CG_W - CG_GAP) / 2;   // 2-column width
+  var out = coDropOrIntro(intro, opts);
+  var buf = [];   // boxes accumulating into the current 2-column block
+  function flush() {
+    if (!buf.length) return;
+    out += '<div style="column-count:2;column-gap:' + CG_GAP + 'in;column-fill:auto;">' + buf.join('') + '</div>';
+    buf = [];
+  }
+
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i], text = secText(i);
-    var asp = momentAspect(m), tier = lmSizeTier(m), wide = asp >= 1.5;
-    if (wide) {
-      var bh = Math.min(CG_W / asp, tier === 'min' ? 3.2 : 5.0);
-      html += '<div style="' + picBorderCss(co) + 'overflow:hidden;position:relative;line-height:0;width:100%;height:' + bh.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + media(m) + picOverlay(co) + coCaptionCover(m, co.caption) + '</div>';
-      if (text) html += '<div style="' + picBorderCss(co) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;margin-bottom:' + CG_GAP + 'in;break-inside:avoid;page-break-inside:avoid;">' + buildNarrativeHTML(text, false) + '</div>';
+    var asp = momentAspect(m), tier = lmSizeTier(m), prom = lmProminence(m);
+    var bigBanner = (asp >= 1.5) || (tier === 'max' && asp >= 1.2);   // stays full-width & large
+    if (bigBanner) {
+      // wide / high-prominence: full-width banner BETWEEN column blocks (stays big)
+      flush();
+      var bh = Math.min(CG_W / asp, prom >= 4 ? 5.0 : 4.2);
+      out += imgBox(m, CG_W, bh, true);
+      // its narration packs in the next column block
+      cgSplitNarr(text).forEach(function (t) { buf.push(chunkBox(t)); });
     } else {
-      var side = (i % 2 === 0) ? 'left' : 'right';
-      var iw = (tier === 'min') ? 2.2 : (tier === 'max' ? 3.0 : 2.6);
-      var ih = iw / asp; if (ih > 6.0) { ih = 6.0; iw = ih * asp; }
-      var mar = (side === 'left') ? '0 0.16in 0.10in 0' : '0 0 0.10in 0.16in';
-      var floatImg = '<div style="' + picBorderCss(co) + 'overflow:hidden;position:relative;line-height:0;float:' + side + ';width:' + iw.toFixed(2) + 'in;height:' + ih.toFixed(2) + 'in;margin:' + mar + ';break-inside:avoid;page-break-inside:avoid;">' + media(m) + picOverlay(co) + coCaptionCover(m, co.caption) + '</div>';
-      html += '<div style="' + picBorderCss(co) + 'background:#fbf3cf;display:flow-root;padding:0.13in 0.15in;line-height:1.4;margin-bottom:' + CG_GAP + 'in;">' + floatImg + buildNarrativeHTML(text, false) + '</div>';
+      // portrait / square / small: a single-column image box + its chunk boxes,
+      // all packed into the 2-column flow (text fills the column beside the image)
+      var iw = COLW, ih = iw / asp;
+      if (ih > 5.5) { ih = 5.5; iw = ih * asp; }
+      buf.push(imgBox(m, iw, ih, false));
+      cgSplitNarr(text).forEach(function (t) { buf.push(chunkBox(t)); });
     }
   }
-  html += buildNarrativeHTML(outro, true);
-  return html;
+  flush();
+  out += buildNarrativeHTML(outro, true);
+  return out;
 }
 
 function renderLayout(opts, moments, sections, intro, outro) {
