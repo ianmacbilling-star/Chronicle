@@ -168,6 +168,9 @@ function planComic(moments, opts) {
     }
   }
 
+  // growth-to-fill: enlarge LONE images into leftover page height, keeping aspect.
+  if (opts.grow !== false) growImages(pages, pageH, opts.growMaxFactor || 2.0);
+
   // summarize
   var maxPages = opts.maxPages || 250;
   return {
@@ -181,6 +184,30 @@ function planComic(moments, opts) {
 }
 
 function range(a, b) { var r = []; for (var i = a; i < b; i++) r.push(i); return r; }
+
+// Enlarge a LONE image (a beside-image with NO text beside it, sitting as the
+// last item on its page) to consume the page's leftover height -- KEEPING ASPECT
+// (no crop). Bounded by content width (6.8in), page height, and a max-growth
+// factor. These are the only images with room to grow outward without cropping;
+// full-width top images are already at max width, so they're left untouched.
+function growImages(pages, pageH, capX) {
+  for (var pi = 0; pi < pages.length; pi++) {
+    var page = pages[pi];
+    if (!page.items.length) continue;
+    var last = page.items[page.items.length - 1];
+    if (last.type !== 'image-beside') continue;
+    if ((last.besideChunks || []).length !== 0) continue;     // text beside -> don't collide
+    var slack = pageH - page.usedIn;
+    if (slack < 0.3) continue;
+    var asp = last.img.aspect || 1, curH = last.img.hIn;
+    var newH = Math.min(curH * capX, curH + slack, COLW[0] / asp);
+    if (newH <= curH + 1e-6) continue;
+    var newW = newH * asp;
+    if (newW > COLW[0]) { newW = COLW[0]; newH = newW / asp; }
+    page.usedIn = round3(page.usedIn + (newH - curH));
+    last.img.hIn = round3(newH); last.img.wIn = round3(newW); last.grown = true;
+  }
+}
 function smallestChunk(chunks, from) {
   var mn = Infinity; for (var i = from; i < chunks.length; i++) if (chunks[i][0] < mn) mn = chunks[i][0];
   return (mn === Infinity) ? 0 : mn;

@@ -1536,9 +1536,14 @@ function renderComicEngine(moments, sections, intro, outro, opts) {
       } else if (it.type === 'image-beside') {
         var chunks = chunksFor(it.moment);
         var bt = (it.besideChunks || []).map(function (c) { return chunks[c]; }).filter(Boolean).join(' ');
-        var imgCell = '<div style="flex:0 0 ' + it.img.wIn.toFixed(2) + 'in;">' + cgImageBox(m, it.img.wIn, it.img.hIn, co, false) + '</div>';
-        var narrCell = '<div style="flex:1 1 0;min-width:0;">' + (bt ? cgNarrBox(bt, co) : '') + '</div>';
-        inner += _engineRow((it.side === 'right') ? (narrCell + imgCell) : (imgCell + narrCell));
+        if (!bt) {
+          // lone image (no text beside) -> center it (this is where growth applies)
+          inner += '<div style="display:flex;justify-content:center;margin-bottom:' + CG_GAP + 'in;break-inside:avoid;page-break-inside:avoid;"><div style="width:' + it.img.wIn.toFixed(2) + 'in;">' + cgImageBox(m, it.img.wIn, it.img.hIn, co, false) + '</div></div>';
+        } else {
+          var imgCell = '<div style="flex:0 0 ' + it.img.wIn.toFixed(2) + 'in;">' + cgImageBox(m, it.img.wIn, it.img.hIn, co, false) + '</div>';
+          var narrCell = '<div style="flex:1 1 0;min-width:0;">' + cgNarrBox(bt, co) + '</div>';
+          inner += _engineRow((it.side === 'right') ? (narrCell + imgCell) : (imgCell + narrCell));
+        }
       } else if (it.type === 'narr') {
         var ch = chunksFor(it.moment);
         if (it.cols <= 1) {
