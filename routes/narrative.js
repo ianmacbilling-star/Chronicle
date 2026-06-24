@@ -71,7 +71,7 @@ const NARRATIVE_STYLES = (function () {
     },
     dialogue: {
       name: 'Comic Dialogue',
-      voice: `Dialogue-driven, like a comic-book script. Carry each scene mainly through what the characters SAY to one another. Put EACH spoken line on its OWN line, beginning with the speaker's name, a colon, and the quoted line. Keep narration to short bridging beats only when the action cannot be carried by speech, each on its own line. Give every character a distinct voice and hit the emotional turns of the exchange. Use PRESENT tense for any narration. You may quote or adapt what was said in the transcript; invent dialogue where the scene needs it; never copy lines from any published source.\nFormat each block like this (one line per speaker, name then colon then the quote):\nGARRICK: "Hold the line \u2014 they break on three."\nVENA: "You said that last time."\nGARRICK: "And were we wrong?"\nSteel scrapes free of leather as the dark rolls in.`,
+      voice: `Comic-book script with a balanced mix of dialogue and narration \u2014 aim for ROUGHLY HALF spoken dialogue and half narrative prose in every block. Narrate what each panel shows in short, vivid prose, and weave the characters' spoken lines through it so the two are about even. Put EACH spoken line on its OWN line, beginning with the speaker's name, a colon, and the quoted line; keep narration on its own lines between them. Give every character a distinct voice and hit the emotional turns of the exchange. Use PRESENT tense for narration. You may quote or adapt what was said in the transcript; invent dialogue where the scene needs it; never copy lines from any published source.\nFormat each block like this (narration prose interleaved with one line per speaker):\nThe hall falls silent as the doors groan open.\nGARRICK: "Hold the line \u2014 they break on three."\nVENA: "You said that last time."\nSteel scrapes free of leather as the dark rolls in.\nGARRICK: "And were we wrong?"`,
       system: DIALOGUE_SYS
     }
   };
@@ -217,9 +217,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
     (isDialogue
-      ? '- Write each block as comic-book script: each spoken line on its OWN line, led by the speaker\'s name and a colon, e.g.  GARRICK: "Hold the line."\n' +
-        '- Put brief stage directions on their own lines, no speaker label; let the dialogue carry the scene\n' +
-        '- A few exchanged lines per block \u2014 punchy, not bloated\n'
+      ? '- Balance each block ROUGHLY 50/50 between character dialogue and narrative prose\n' +
+        '- Narrate what the panel shows in short prose, and weave in the characters\' spoken lines so the two are about even\n' +
+        '- Put each spoken line on its OWN line, led by the speaker\'s name and a colon, e.g.  GARRICK: "Hold the line."\n' +
+        '- Keep narration lines on their own lines between the dialogue\n'
       : '- Roughly 2-4 sentences per block — punchy, not bloated\n'
     ) +
     '- Reference characters by name when relevant\n\n' +
