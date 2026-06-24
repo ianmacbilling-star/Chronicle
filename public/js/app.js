@@ -3134,14 +3134,24 @@ function collectCstyleFiles() {
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ if (slotFiles[k]) out.push(slotFiles[k]); });
   return out;
 }
+function collectCstyleRefs() {
+  var files = []; var urls = [];
+  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){
+    if (slotFiles[k]) { files.push(slotFiles[k]); return; }
+    var pv = document.getElementById('preview-' + k);
+    if (pv && pv.src && /^https?:/i.test(pv.src) && !pv.classList.contains('hidden')) urls.push(pv.src);
+  });
+  return { files: files, urls: urls };
+}
 function analyzeCustomStyle() {
   cstyleErr('');
-  var files = collectCstyleFiles();
-  if (files.length < 2) { cstyleErr('Add at least 2 reference images first.'); return; }
+  var refs = collectCstyleRefs();
+  if ((refs.files.length + refs.urls.length) < 2) { cstyleErr('Add at least 2 reference images first.'); return; }
   var btn = document.getElementById('cstyle-analyze-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
   var fd = new FormData();
-  files.forEach(function(f){ fd.append('images', f); });
+  refs.files.forEach(function(f){ fd.append('images', f); });
+  fd.append('sample_urls', JSON.stringify(refs.urls));
   fetch('/api/art-styles/custom/analyze', { method: 'POST', body: fd })
     .then(function(r){ return r.json(); })
     .then(function(data){

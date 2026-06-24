@@ -183,7 +183,11 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
     if (uploadErr) return res.json({ error: uploadErr.message || 'Could not read your images.' });
     try {
       const files = req.files || [];
-      if (files.length < 2) return res.json({ error: 'Add at least 2 reference images so the style can be read reliably.' });
+      let existingUrls = [];
+      try { existingUrls = JSON.parse((req.body && req.body.sample_urls) || '[]'); } catch (e) { existingUrls = []; }
+      if (!Array.isArray(existingUrls)) existingUrls = [];
+      existingUrls = existingUrls.filter(function(u){ return typeof u === 'string' && /^https?:/i.test(u); }).slice(0, 4);
+      if ((files.length + existingUrls.length) < 2) return res.json({ error: 'Add at least 2 reference images so the style can be read reliably.' });
       const key = process.env.ANTHROPIC_API_KEY;
       if (!key) return res.json({ error: 'Style analysis is not configured. Please contact support.' });
       if (!(await canAfford(req.session.userId, COST_ANALYZE))) {
@@ -198,6 +202,21 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
           const url = await uploadFile(f.buffer, 'style-sample-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext, f.mimetype);
           if (url) sampleUrls.push(url);
         } catch (e) { console.error('sample upload failed:', e.message); }
+      }
+      for (const u of existingUrls) {
+        try {
+          const r = await fetch(u);
+          if (!r.ok) continue;
+          const buf = Buffer.from(await r.arrayBuffer());
+          const mt0 = (r.headers.get('content-type') || '').split(';')[0];
+          const okTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+          const mt = okTypes.indexOf(mt0) >= 0 ? mt0 : 'image/jpeg';
+          content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: buf.toString('base64') } });
+          sampleUrls.push(u);
+        } catch (e) { console.error('existing sample fetch failed:', e.message); }
+      }
+      if (content.filter(function(c){ return c.type === 'image'; }).length < 2) {
+        return res.json({ error: 'Could not read enough reference images. Try re-uploading them.' });
       }
       content.push({ type: 'text', text: 'Analyze these reference images and define their shared art style.' });
 
