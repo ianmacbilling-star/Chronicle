@@ -3149,6 +3149,7 @@ function analyzeCustomStyle() {
       var pr = document.getElementById('cstyle-prompt'); if (pr) pr.value = data.style_prompt || '';
       var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!data.is_fade;
       cstyleSamples = Array.isArray(data.sample_urls) ? data.sample_urls : [];
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function(e){ cstyleErr('Could not analyze the style: ' + e.message); })
     .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Analyze style (1 token)'; } });
@@ -3172,6 +3173,7 @@ function previewCustomStyle() {
       var img = document.getElementById('cstyle-preview-img');
       if (img) img.src = data.image || '';
       if (wrap) wrap.style.display = data.image ? 'block' : 'none';
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function(e){ cstyleErr('Could not render the preview: ' + e.message); })
     .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Preview render (1 token)'; } });

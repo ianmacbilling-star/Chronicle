@@ -146,19 +146,35 @@ const sampleUpload = multer({
 const COST_ANALYZE = 1;
 
 const STYLE_ANALYZE_SYSTEM =
-  'You are an art director analyzing reference images to define a reusable ' +
-  'illustration style for a graphic-novel image generator. Look ONLY at HOW the ' +
-  'images are rendered, never at WHAT they depict. Output exactly two things and ' +
-  'nothing else. (1) A single paragraph that begins with the literal token ' +
-  '"STYLE:" and names the medium, linework, colour treatment, shading and ' +
-  'lighting, texture, and any era or broad tradition it evokes. Describe the ' +
-  'rendering style only, never the subjects, characters, or scenes shown. You may ' +
-  'reference broad artistic traditions, but do not instruct imitation of a ' +
-  'specific living artist by name without also giving generic descriptors. (2) On ' +
-  'a final separate line, write "FADE: yes" if the art characteristically fades ' +
-  'to a clean pure-white (#ffffff) edge with no frame or border, or "FADE: no" ' +
-  'if it fills the frame edge to edge. Output only the STYLE paragraph and the ' +
-  'FADE line, with no preamble.';
+  'You are an art director writing a single reusable STYLE directive for an ' +
+  'image generator, by studying HOW a set of reference images is rendered -- ' +
+  'not the specific characters, objects, or scenes they depict. ' +
+  'FIRST, silently decide the 2 to 4 traits that MOST define this look and make ' +
+  'it instantly recognizable. Those dominant traits may be ANY of: medium and ' +
+  'technique (watercolour, charcoal, cel-shaded ink, oil impasto); colour and ' +
+  'palette; lighting (hard backlight, rim-light, flat ambient); or COMPOSITION ' +
+  'as a rendering signature (deep silhouette, figures as dark shapes, vast empty ' +
+  'negative space, sparse detail-free backgrounds, distinctive framing). ' +
+  'Composition and lighting patterns ARE part of the style and MUST be captured ' +
+  'when they dominate -- they are HOW the images read, not WHAT they depict. ' +
+  'THEN write the directive. (1) One paragraph beginning with the literal token ' +
+  '"STYLE:". LEAD with the dominant traits in strong, concrete, imperative ' +
+  'language and let them take most of the words; add only brief supporting ' +
+  'detail for everything else. Do NOT write an even, encyclopedic catalogue that ' +
+  'gives equal weight to medium, line, colour, shading, texture, and era -- a ' +
+  'flat balanced list dilutes the signature. Be vivid and specific about what ' +
+  'makes THIS look distinct. You may name broad artistic traditions, but never ' +
+  'instruct imitation of a specific living artist by name without also giving ' +
+  'generic descriptors. (2) On a final separate line write "FADE: yes" if the ' +
+  'art characteristically fades to a clean pure-white (#ffffff) edge with no ' +
+  'frame or border, otherwise "FADE: no". Output ONLY the STYLE paragraph and ' +
+  'the FADE line, with no preamble. Example of the VOICE and CONCENTRATION ' +
+  'wanted (do NOT copy its content): "STYLE: Stark backlit silhouette ' +
+  'illustration. Figures read as near-black shapes against a vast, hazy, glowing ' +
+  'sky; backgrounds kept sparse and almost detail-free. Intense rim-lit dusk ' +
+  'palette of magenta, orange, crimson and cool blue, painted in a clean ' +
+  'comic-cover medium with confident edges and smooth rendering. High contrast, ' +
+  'heavy shadow, dramatic negative space."';
 
 // POST /api/art-styles/custom/analyze (multipart: images[]) -- one Claude vision
 // call writes a house-format STYLE: paragraph + fade flag from 2-4 samples.
