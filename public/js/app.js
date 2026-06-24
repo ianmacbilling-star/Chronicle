@@ -1367,7 +1367,7 @@ function setBreadcrumb(items) {
 // ============================================================
 function showView(view) {
   if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -3080,13 +3080,22 @@ function resetCustomStyleForm() {
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ clearSlot(k); slotFiles[k + '_clear'] = false; });
   cstyleErr(''); cstyleSaveErr('');
 }
+function openCustomStylesView() {
+  if (!(state && state.user && state.user.tier === 'platinum')) {
+    showAlert('Custom Art Styles are a Platinum feature. Upgrade to Platinum to build and use your own art styles.');
+    return;
+  }
+  showView('custom-styles');
+  var _csn = document.getElementById('campaign-subnav'); if (_csn) _csn.style.display = 'none';
+  setBreadcrumb([{ label: 'My Campaigns', action: "showView('campaigns')" }, { label: 'Custom Art Styles' }]);
+  loadCustomStyles(renderCustomStyleCards);
+}
 function openCustomStyles() {
   if (!(state && state.user && state.user.tier === 'platinum')) {
     showAlert('Custom Art Styles are a Platinum feature. Upgrade to Platinum to build and use your own art styles.');
     return;
   }
   resetCustomStyleForm();
-  loadCustomStyles(renderCustomStyleList);
   var m = document.getElementById('cstyle-modal');
   if (m) m.classList.remove('hidden');
 }
@@ -3095,19 +3104,30 @@ function closeCustomStyles() {
   if (m) m.classList.add('hidden');
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ slotFiles[k] = null; slotFiles[k + '_clear'] = false; });
 }
-function renderCustomStyleList() {
-  var box = document.getElementById('cstyle-list');
-  if (!box) return;
+function renderCustomStyleCards() {
+  var grid = document.getElementById('cstyle-grid');
+  if (!grid) return;
   var list = getCustomStyles();
-  if (!list.length) { box.innerHTML = '<div class="form-hint" style="margin:0;">No custom styles yet. Build one below.</div>'; return; }
-  box.innerHTML = list.map(function(s){
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(201,168,76,0.18);border-radius:8px;">' +
-      '<div style="min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(s.name || 'Untitled') + (s.is_fade ? ' <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(soft edges)</span>' : '') + '</div></div>' +
-      '<div style="display:flex;gap:6px;flex:0 0 auto;">' +
-      '<button class="btn btn-sm" onclick="editCustomStyle(\'' + s.id + '\')">Edit</button>' +
-      '<button class="btn btn-sm" onclick="deleteCustomStyle(\'' + s.id + '\')">Delete</button>' +
-      '</div></div>';
+  var colors = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
+  var html = list.map(function(s, i) {
+    var bg = colors[i % colors.length];
+    var thumb = (Array.isArray(s.sample_urls) && s.sample_urls[0])
+      ? '<img src="' + s.sample_urls[0] + '" style="width:100%;height:100%;object-fit:cover;" alt="' + escapeHtml(s.name || '') + '" />'
+      : '<span style="font-size:22px;">&#127912;</span>';
+    return '<div class="char-card" style="cursor:pointer;" onclick="editCustomStyle(\'' + s.id + '\')">' +
+      '<div class="char-card-header">' +
+        '<div class="char-avatar" style="background:' + bg + ';">' + thumb + '</div>' +
+        '<div class="char-actions">' +
+          '<button class="char-btn char-btn-delete" onclick="event.stopPropagation();deleteCustomStyle(\'' + s.id + '\')">Delete</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="char-name">' + escapeHtml(s.name || 'Untitled') + '</div>' +
+      '<div class="char-desc">' + (s.is_fade ? 'Soft, faded edges.' : 'Your custom art style.') + '</div>' +
+      (s.is_fade ? '<span class="char-badge">Soft edges</span>' : '') +
+    '</div>';
   }).join('');
+  html += '<div class="add-char-card" onclick="openCustomStyles()"><div class="plus">+</div><span>New style</span></div>';
+  grid.innerHTML = html;
 }
 function collectCstyleFiles() {
   var out = [];
@@ -3175,8 +3195,8 @@ function saveCustomStyle() {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data.error) { cstyleSaveErr(data.message || data.error); return; }
-      resetCustomStyleForm();
-      loadCustomStyles(function(){ renderCustomStyleList(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
+      closeCustomStyles();
+      loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
     })
     .catch(function(e){ cstyleSaveErr('Could not save: ' + e.message); })
     .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Save style'; } });
@@ -3202,6 +3222,7 @@ function editCustomStyle(id) {
   var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Edit style';
   cstyleSamples = Array.isArray(sObj.sample_urls) ? sObj.sample_urls : [];
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k, i){ if (cstyleSamples[i]) paintSlotUrl(k, cstyleSamples[i]); });
+  var m = document.getElementById('cstyle-modal'); if (m) m.classList.remove('hidden');
 }
 function deleteCustomStyle(id) {
   var sObj = customStyleById(id);
@@ -3210,7 +3231,7 @@ function deleteCustomStyle(id) {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.error) { cstyleErr(data.error); return; }
-      loadCustomStyles(function(){ renderCustomStyleList(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
+      loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
     })
     .catch(function(e){ cstyleErr('Could not delete: ' + e.message); });
 }
@@ -7757,7 +7778,7 @@ function setBreadcrumb(items) {
 // ============================================================
 function showView(view) {
   if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
