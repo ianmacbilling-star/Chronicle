@@ -2555,7 +2555,7 @@ function renderReview(data) {
       var rm = canEditNarr
         ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + mid + ', ' + c.id + ')">\u00d7</button>'
         : '';
-      return '<span class="review-chip">' + escapeHtmlReview(c.name) + rm + '</span>';
+      return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
     }).join('');
     if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
 
@@ -2573,7 +2573,7 @@ function renderReview(data) {
     if (canEditNarr) {
       var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
       var optsC = (state.reviewData.all_characters || []).filter(function(c){ return !haveC[String(c.id)]; })
-        .map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(c.name) + '</option>'; }).join('');
+        .map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(charDisplayName(c.name)) + '</option>'; }).join('');
       addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + mid + ')">+ Add character</button>';
       var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
       var optsA = (state.reviewData.all_assets || []).filter(function(a){ return !haveA[String(a.id)]; })
@@ -2654,7 +2654,7 @@ function castAddCharacter(momentId, sel) {
   var id = parseInt(sel.value, 10); if (!id) return;
   var p = _reviewPanel(momentId); if (!p) return;
   var name = '';
-  (state.reviewData.all_characters || []).some(function(c){ if (String(c.id) === String(id)) { name = c.name; return true; } return false; });
+  (state.reviewData.all_characters || []).some(function(c){ if (String(c.id) === String(id)) { name = charDisplayName(c.name); return true; } return false; });
   p.characters = p.characters || [];
   if (!p.characters.some(function(c){ return String(c.id) === String(id); })) p.characters.push({ id: id, name: name });
   p.cast_explicit = true;
@@ -4473,11 +4473,22 @@ function saveCharPrompt(charId) {
     .catch(function() { ta.disabled = false; alert('Could not save.'); });
 }
 
+// Character Name may hold slash-separated aliases ("Superman / Clark Kent /
+// Clark"). First token is the canonical display name; the rest are a.k.a. names
+// the AI matches in prose. Mirrors the asset alias convention.
+function charDisplayName(name) {
+  var parts = String(name == null ? '' : name).split('/').map(function(t){ return t.trim(); }).filter(function(t){ return t.length; });
+  return parts.length ? parts[0] : String(name == null ? '' : name).trim();
+}
+function charAkaNames(name) {
+  return String(name == null ? '' : name).split('/').map(function(t){ return t.trim(); }).filter(function(t){ return t.length; }).slice(1);
+}
+
 function renderCharacters() {
   var colors = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
   var fgs = ['#534AB7','#0F6E56','#993C1D','#185FA5','#854F0B'];
   var html = state.characters.map(function(c, i) {
-    var initials = c.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+    var initials = charDisplayName(c.name).split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
     // Canonical reference image is the preferred thumbnail (Stage 3 Piece 2).
@@ -4485,7 +4496,7 @@ function renderCharacters() {
     var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
@@ -4527,7 +4538,8 @@ function renderCharacters() {
           })() +
         '</div>' +
       '</div>' +
-      '<div class="char-name">' + c.name + '</div>' +
+      '<div class="char-name">' + escapeHtml(charDisplayName(c.name)) + '</div>' +
+      (charAkaNames(c.name).length ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">a.k.a. ' + escapeHtml(charAkaNames(c.name).join(', ')) + '</div>' : '') +
       ownerBadge +
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
@@ -8324,7 +8336,7 @@ function renderCharacters() {
   var colors = ['#EEEDFE','#E1F5EE','#FAECE7','#E6F1FB','#FAEEDA'];
   var fgs = ['#534AB7','#0F6E56','#993C1D','#185FA5','#854F0B'];
   var html = state.characters.map(function(c, i) {
-    var initials = c.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+    var initials = charDisplayName(c.name).split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
     var bg = colors[i % colors.length];
     var fg = fgs[i % fgs.length];
     // Canonical reference image is the preferred thumbnail (Stage 3 Piece 2).
@@ -8332,7 +8344,7 @@ function renderCharacters() {
     var primaryImg = refImg || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
     var imgPos = refImg ? 'center top' : 'center center';
     var portrait = primaryImg
-      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + c.name + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
+      ? '<img src="' + primaryImg + '" style="width:100%;height:100%;object-fit:cover;object-position:' + imgPos + ';cursor:zoom-in;" alt="' + charDisplayName(c.name) + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />'
       : '<span style="font-size:15px;font-weight:600;color:' + fg + ';">' + initials + '</span>';
     // Just show portrait on card - clean and simple
     var imgGridHtml = '';
@@ -8374,7 +8386,8 @@ function renderCharacters() {
           })() +
         '</div>' +
       '</div>' +
-      '<div class="char-name">' + c.name + '</div>' +
+      '<div class="char-name">' + escapeHtml(charDisplayName(c.name)) + '</div>' +
+      (charAkaNames(c.name).length ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">a.k.a. ' + escapeHtml(charAkaNames(c.name).join(', ')) + '</div>' : '') +
       ownerBadge +
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
       '<div class="char-desc">' + (c.description || '') + '</div>' +
@@ -12355,7 +12368,7 @@ function renderMomentOptions(momentId) {
   } else {
     var charChips = (p.characters || []).map(function(c){
       var rm = canEdit ? '<button class="review-chip-x" title="Remove" onclick="castRemoveCharacter(' + momentId + ', ' + c.id + ')">&#215;</button>' : '';
-      return '<span class="review-chip">' + escapeHtmlReview(c.name) + rm + '</span>';
+      return '<span class="review-chip">' + escapeHtmlReview(charDisplayName(c.name)) + rm + '</span>';
     }).join();
     if (!(p.characters || []).length) charChips = '<span class="review-none">none</span>';
     var assetChips = (p.assets || []).map(function(a){
@@ -12366,7 +12379,7 @@ function renderMomentOptions(momentId) {
     var addChar = '', addAsset = '';
     if (canEdit) {
       var haveC = {}; (p.characters || []).forEach(function(c){ haveC[String(c.id)] = true; });
-      var optsC = ((state.reviewData && state.reviewData.all_characters) || []).filter(function(c){ return !haveC[String(c.id)]; }).map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(c.name) + '</option>'; }).join('');
+      var optsC = ((state.reviewData && state.reviewData.all_characters) || []).filter(function(c){ return !haveC[String(c.id)]; }).map(function(c){ return '<option value="' + c.id + '">' + escapeHtmlReview(charDisplayName(c.name)) + '</option>'; }).join('');
       addChar = '<button class="review-add-btn" onclick="openCastPicker(\'character\', ' + momentId + ')">+ Add character</button>';
       var haveA = {}; (p.assets || []).forEach(function(a){ haveA[String(a.id)] = true; });
       var optsA = ((state.reviewData && state.reviewData.all_assets) || []).filter(function(a){ return !haveA[String(a.id)]; }).map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + '</option>'; }).join('');
@@ -12674,7 +12687,7 @@ function castPickCharacter(momentId, id) {
   id = parseInt(id, 10); if (!id) return;
   var p = _reviewPanel(momentId); if (!p) return;
   var name = '';
-  ((state.reviewData && state.reviewData.all_characters) || []).some(function(c){ if (String(c.id) === String(id)) { name = c.name; return true; } return false; });
+  ((state.reviewData && state.reviewData.all_characters) || []).some(function(c){ if (String(c.id) === String(id)) { name = charDisplayName(c.name); return true; } return false; });
   p.characters = p.characters || [];
   if (!p.characters.some(function(c){ return String(c.id) === String(id); })) p.characters.push({ id: id, name: name });
   p.cast_explicit = true;

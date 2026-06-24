@@ -430,6 +430,33 @@ async function attachPriorReferences(db, chars, sessionId, campaignId) {
 // with an accepted change at change_moment_index shows their OLD look
 // (prior text + prior reference) for panels BEFORE that index, and the
 // amended look from that index onward.
+// A character's Name field may hold slash-separated aliases, e.g.
+// "Superman / Clark Kent / Clark". The FIRST alias is canonical -- the only
+// name shown to the image model and used as the cast label. ANY alias found in
+// the panel prose marks the character present. The canonical keeps the original
+// match behavior (full name, or first word > 2 chars) so existing single-name
+// characters are unchanged; extra aliases need >= 3 chars to avoid short,
+// common substrings. Mirrors the asset alias convention.
+function characterTokens(name) {
+  return String(name || '').split('/').map(function(t){ return t.trim(); }).filter(function(t){ return t.length > 0; });
+}
+function characterCanonicalName(name) {
+  var t = characterTokens(name);
+  return t.length ? t[0] : String(name || '').trim();
+}
+function characterNameMatches(name, lowerText) {
+  var t = characterTokens(name);
+  if (!t.length) return false;
+  var canon = t[0].toLowerCase();
+  var canonFirst = canon.split(/\s+/)[0];
+  if (lowerText.indexOf(canon) !== -1) return true;
+  if (canonFirst.length > 2 && lowerText.indexOf(canonFirst) !== -1) return true;
+  for (var i = 1; i < t.length; i++) {
+    var a = t[i].toLowerCase();
+    if (a.length >= 3 && lowerText.indexOf(a) !== -1) return true;
+  }
+  return false;
+}
 function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
   if (!chars || !chars.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
@@ -449,9 +476,7 @@ function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
   } else {
     present = chars.filter(function(c) {
       if (!c.name) return false;
-      var full = c.name.toLowerCase();
-      var first = full.split(/\s+/)[0];
-      return text.indexOf(full) !== -1 || (first.length > 2 && text.indexOf(first) !== -1);
+      return characterNameMatches(c.name, text);
     });
   }
 
@@ -474,7 +499,7 @@ function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
     // "Before the change" = accepted change exists AND this panel is earlier.
     var beforeChange = hasChange && (pIdx < changeIdx);
 
-    var nameLine = c.name + (c.cls ? ' (' + c.cls + ')' : '');
+    var nameLine = characterCanonicalName(c.name) + (c.cls ? ' (' + c.cls + ')' : '');
     var desc, refUrl;
     if (beforeChange) {
       // Pre-change panel: snapshot prompt with the change text stripped off,
@@ -491,7 +516,7 @@ function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
       refUrl = c.snapshot_reference_url || c.canonical_reference_url || null;
     }
     var hasRef = !!(refUrl && /^https?:\/\//.test(refUrl));
-    if (hasRef) refs.push({ name: c.name, url: refUrl });
+    if (hasRef) refs.push({ name: characterCanonicalName(c.name), url: refUrl });
 
     // Full block: name + class + physical description (text-only model paths).
     lines.push(desc ? (nameLine + ' — ' + desc) : nameLine);

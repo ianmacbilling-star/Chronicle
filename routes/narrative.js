@@ -141,7 +141,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(session.campaign_id);
 
   const charList = characters.map(function(c) {
-    return c.name + (c.player_name ? ' (played by ' + c.player_name + ')' : '') + ' — ' + (c.cls || '') + ': ' + (c.description || '');
+    var _toks = String(c.name || '').split('/').map(function(t){ return t.trim(); }).filter(function(t){ return t.length; });
+    var _canon = _toks.length ? _toks[0] : String(c.name || '').trim();
+    var _aka = _toks.slice(1);
+    return _canon + (_aka.length ? ' (also known as: ' + _aka.join(', ') + ')' : '') + (c.player_name ? ' (played by ' + c.player_name + ')' : '') + ' — ' + (c.cls || '') + ': ' + (c.description || '');
   }).join('\n');
 
   // Build the panel sequence with EXPLICIT per-gap anchoring. The
