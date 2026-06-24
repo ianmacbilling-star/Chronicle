@@ -1076,6 +1076,17 @@ function cgSplitNarr(text){
   if (buf.trim()) chunks.push(buf.trim());
   return chunks;
 }
+// Full-width narrative box under the comic grid. Long narrative is laid out in
+// 2-3 balanced text columns (renderer-chosen by length) so the block is compact
+// under a full-width image and far less likely to strand whitespace by bumping
+// whole to the next page. Short narrative stays a single column, unchanged.
+// Same column technique the Table of Contents uses.
+function cgFullWidthNarr(text, opts) {
+  var n = (text || '').length;
+  var cols = (n >= 640) ? 3 : ((n >= 300) ? 2 : 1);
+  var colCss = (cols > 1) ? ('column-count:' + cols + ';column-gap:0.28in;') : '';
+  return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;' + colCss + '">' + buildNarrativeHTML(text, false) + '</div>';
+}
 function renderComicPage(moments, sections, intro, outro, opts) {
   // Comic = a tic-tac-toe LATTICE (v4). Two-column base grid of bold-framed cells.
   // ORIENTATION IS KEYED OFF THE IMAGE ASPECT: wide/panoramic art spans BOTH columns
@@ -1148,7 +1159,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       if (sec.after) _fParts = _fParts.concat(cgSplitNarr(sec.after));
       var _fTxt = _fParts.join(' ');
       if (_fTxt) {
-        cells.push({ slots: 2, html: '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(_fTxt, false) + '</div>' });
+        cells.push({ slots: 2, html: cgFullWidthNarr(_fTxt, opts) });
       }
       continue;
     }
@@ -1189,8 +1200,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
         'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:' + imgH.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' + bspan + '">' + buildNarrativeHTML(besideTxt, false) + '</div>' });
     }
     if (restTxt) {
-      cells.push({ slots: 2, html: '<div style="' + picBorderCss(opts) +
-        'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(restTxt, false) + '</div>' });
+      cells.push({ slots: 2, html: cgFullWidthNarr(restTxt, opts) });
     }
   }
 
