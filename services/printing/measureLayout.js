@@ -60,6 +60,7 @@ async function measureDocument(html, options) {
           id: n.getAttribute('data-mblk'),
           kind: n.getAttribute('data-mkind') || '',
           moment: n.getAttribute('data-mmoment'),
+          split: n.getAttribute('data-msplit') === '1',
           topIn: round3(r.top / PX),
           widthIn: round3(r.width / PX),
           heightIn: round3(r.height / PX)

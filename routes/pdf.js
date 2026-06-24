@@ -7,6 +7,7 @@ const path = require('path');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
+const { packComic } = require('../services/printing/packComic');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 
@@ -1153,6 +1154,9 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       spanCss + sizeCss + '">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   }
 
+  var _MT = !!(opts && opts.measureTag);
+  function _mKindH(h) { if (h.indexOf('<img ') !== -1) return 'image'; if (h.indexOf('#fbf3cf') !== -1) return 'narr'; return 'cell'; }
+  function _itag(h, kind, mom, split) { if (!_MT) return h; return h.replace('<div ', '<div data-mblk="' + mom + kind.charAt(0) + '" data-mkind="' + kind + '" data-mmoment="' + mom + '"' + (split ? ' data-msplit="1"' : '') + ' '); }
   var cells = [];
   var towerN = 0;
   for (var i = 0; i < moments.length; i++) {
@@ -1173,7 +1177,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
       var twText = '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;flex:1 1 auto;min-width:0;padding:0.16in 0.18in;line-height:1.4;overflow:hidden;">' + twNarr + '</div>';
       var twLeft = (towerN % 2 === 0); towerN += 1;
-      cells.push({ kind: 'block', slots: 2, html: '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
+      cells.push({ kind: 'block', slots: 2, moment: i, mkind: 'image', html: '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
       continue;
     }
     // Maximize (prominence 4-5): break the grid and run a full-width SPLASH that
@@ -1205,8 +1209,11 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       // narrative cell to the next page, stranding the picture alone above a
       // big gap. Wrapping both in a single break-inside:avoid cell forbids that
       // break; dense flow can still backfill any gap left when the unit moves.
-      var _fNarrHtml = _fTxt ? ('<div style="margin-top:' + CG_GAP + 'in;">' + cgFullWidthNarr(_fTxt, opts) + '</div>') : '';
-      cells.push({ kind: 'block', slots: 2, html: '<div style="break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + _fImgBox + _fNarrHtml + '</div>' });
+      var _fNarr = _fTxt ? cgFullWidthNarr(_fTxt, opts) : '';
+      var _fImgT = _itag(_fImgBox, 'image', i, false);
+      if (_fNarr) _fNarr = _itag(_fNarr, 'narr', i, true);
+      var _fNarrHtml = _fNarr ? ('<div style="margin-top:' + CG_GAP + 'in;">' + _fNarr + '</div>') : '';
+      cells.push({ kind: 'block', innerTagged: true, slots: 2, html: '<div style="break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + _fImgT + _fNarrHtml + '</div>' });
       continue;
     }
     var ta = momentAspect(m);
@@ -1228,11 +1235,14 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       if (sec.before) _wParts = _wParts.concat(cgSplitNarr(sec.before));
       if (sec.after) _wParts = _wParts.concat(cgSplitNarr(sec.after));
       var _wTxt = _wParts.join(' ');
-      var _wNarrHtml = _wTxt ? ('<div style="margin-top:' + CG_GAP + 'in;">' + cgFullWidthNarr(_wTxt, opts) + '</div>') : '';
-      cells.push({ kind: 'block', slots: 2, html: '<div style="break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + comicArt(m, 'wide', imgH, null) + _wNarrHtml + '</div>' });
+      var _wNarr = _wTxt ? cgFullWidthNarr(_wTxt, opts) : '';
+      var _wImgT = _itag(comicArt(m, 'wide', imgH, null), 'image', i, false);
+      if (_wNarr) _wNarr = _itag(_wNarr, 'narr', i, true);
+      var _wNarrHtml = _wNarr ? ('<div style="margin-top:' + CG_GAP + 'in;">' + _wNarr + '</div>') : '';
+      cells.push({ kind: 'block', innerTagged: true, slots: 2, html: '<div style="break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + _wImgT + _wNarrHtml + '</div>' });
       continue;
     }
-    cells.push({ slots: tall ? 2 : 1, html: comicArt(m, span, imgH, boxW) });
+    cells.push({ slots: tall ? 2 : 1, moment: i, mkind: 'image', html: comicArt(m, span, imgH, boxW) });
     var nchunks = [];
     if (sec.before) nchunks = nchunks.concat(cgSplitNarr(sec.before));
     if (sec.after) nchunks = nchunks.concat(cgSplitNarr(sec.after));
@@ -1255,11 +1265,11 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     for (; qi < nchunks.length; qi++) restTxt += (restTxt ? ' ' : '') + nchunks[qi];
     if (besideTxt) {
       var bspan = (besideRows > 1) ? ('grid-row:span ' + besideRows + ';') : '';
-      cells.push({ slots: besideRows, html: '<div style="' + picBorderCss(opts) +
+      cells.push({ slots: besideRows, moment: i, mkind: 'narr', split: true, html: '<div style="' + picBorderCss(opts) +
         'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:' + imgH.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' + bspan + '">' + buildNarrativeHTML(besideTxt, false) + '</div>' });
     }
     if (restTxt) {
-      cells.push({ slots: 2, html: cgFullWidthNarr(restTxt, opts) });
+      cells.push({ slots: 2, moment: i, mkind: 'narr', split: true, html: cgFullWidthNarr(restTxt, opts) });
     }
   }
 
@@ -1269,24 +1279,20 @@ function renderComicPage(moments, sections, intro, outro, opts) {
   // print fragmentation, but block-level elements honor it -- so pulling full-width
   // units out of the grid is what actually keeps each picture with its text.
   var _segOpen = '<div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:' + CG_GAP + 'in;grid-auto-flow:row dense;align-items:start;margin-bottom:' + CG_GAP + 'in;">';
-  // Stage 1 measurement: when opts.measureTag is set, stamp a data-mblk id + a
-  // coarse kind onto each block's outer <div> so the text-only measurement pass
-  // can read its real height. NORMAL output (no measureTag) is byte-identical.
-  var _mt = !!(opts && opts.measureTag);
-  function _mKind(h) {
-    if (h.indexOf('<img ') !== -1) return 'image';
-    if (h.indexOf('#fbf3cf') !== -1) return 'narr';
-    return 'cell';
-  }
-  function _mTag(h, seq, full) {
-    if (!_mt) return h;
-    var kind = (full ? 'full-' : '') + _mKind(h);
-    return h.replace('<div ', '<div data-mblk="' + seq + '" data-mkind="' + kind + '" ');
+  // Measurement tagging (opts.measureTag): stamp data-mblk/mkind/mmoment/msplit
+  // onto each measurable block so the text-only pass can read real geometry and
+  // the packer can group rows + know what may split. Full-width units are tagged
+  // INNER (image vs narration) at build time. NORMAL output is byte-identical.
+  function _cellTag(cell, seq) {
+    if (!_MT || cell.innerTagged) return cell.html;
+    var kind = cell.mkind || _mKindH(cell.html);
+    var attrs = ' data-mblk="' + seq + '" data-mkind="' + kind + '" data-mmoment="' + (cell.moment == null ? '' : cell.moment) + '"' + (cell.split ? ' data-msplit="1"' : '');
+    return cell.html.replace('<div ', '<div' + attrs + ' ');
   }
   var cellHtml = '', _gridBuf = '', _seq = 0;
   function _flushGrid() { if (_gridBuf) { cellHtml += _segOpen + _gridBuf + '</div>'; _gridBuf = ''; } }
   for (var _ci = 0; _ci < cells.length; _ci++) {
-    var _h = _mTag(cells[_ci].html, _seq++, cells[_ci].kind === 'block');
+    var _h = _cellTag(cells[_ci], _seq++);
     if (cells[_ci].kind === 'block') { _flushGrid(); cellHtml += _h; }
     else _gridBuf += _h;
   }
@@ -2419,6 +2425,10 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       _mco.measureTag = true;
       var _mhtml = buildSessionHTML(session, moments, campaign, characters, narrative, _mco, { noCover: true });
       var _measured = await measureDocument(_mhtml, {});
+      try {
+        var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
+        _measured.plan = packComic(_measured.blocks, { pageHeightIn: 9.7, gapIn: 0.12, maxPages: _maxPP });
+      } catch (e) { _measured.planError = String(e && e.message ? e.message : e); }
       _measured.layout = 'comicpage';
       _measured.sessionId = String(req.params.sessionId);
       return res.json(_measured);
