@@ -11060,7 +11060,7 @@ function saveCustomLayoutPrefs(){
 })();
 var CL_SELECTS = ['arrange','border','caption','paper','narr','font'];
 var CL_TOGGLES = ['dropcap','header','markers','cover','cast','toc','hidelogo'];
-var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine' };
+var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';

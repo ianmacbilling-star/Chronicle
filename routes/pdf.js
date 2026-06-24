@@ -988,6 +988,18 @@ function cgImgMedia(m, opts) {
 }
 
 // A floated image with the panel's full narrative flowing around and below it.
+// Gazette enclosure helpers. When opts.enclose is set (Gazette), a beat is wrapped
+// as a parchment panel (border + parchment bg + padding); box-decoration-break:clone
+// gives each fragment a clean closed border when a tall panel crosses a page break.
+// No-op for Magazine (enclose falsy) -> those code paths stay byte-identical.
+function gzPanelCss(opts) {
+  return (opts && opts.enclose) ? (picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;-webkit-box-decoration-break:clone;box-decoration-break:clone;') : '';
+}
+function gzNarrBox(narrHtml, opts) {
+  if (!narrHtml) return '';
+  if (!(opts && opts.enclose)) return narrHtml;
+  return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;margin-bottom:0.10in;-webkit-box-decoration-break:clone;box-decoration-break:clone;">' + narrHtml + '</div>';
+}
 function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
   var asp = Math.max(0.3, momentAspect(m));
   var imgH = small ? ((asp < 0.85) ? 2.2 : 1.7) : ((asp < 0.85) ? 3.5 : 2.7);
@@ -998,7 +1010,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
     'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-  return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + (narrHtml || '') + '</div>';
+  return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
 }
 
 function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
@@ -1014,12 +1026,12 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
     'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   var col = '<div style="display:flow-root;">' + (narrHtml || '') + (besideHtml || '') + '</div>';
-  return '<div style="display:flow-root;margin-bottom:0.10in;">' + box + col + '</div>';
+  return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + col + '</div>';
 }
 function cgBesidePanel(m, opts, narrHtml) {
   // A small panel rendered to STACK in the column beside a full-height tower (NOT floated).
   var box = '<div style="' + cgBorder(opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:transparent;line-height:0;margin-bottom:0.06in;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-  return '<div style="margin-bottom:0.12in;">' + box + (narrHtml || '') + '</div>';
+  return '<div style="margin-bottom:0.12in;">' + box + gzNarrBox(narrHtml, opts) + '</div>';
 }
 
 // A wide/panoramic image breaks the column full width; prose flows after it.
@@ -1033,7 +1045,7 @@ function cgFlowWide(m, opts, narrHtml) {
   var box = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
     media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-  return box + (narrHtml || '');
+  return box + gzNarrBox(narrHtml, opts);
 }
 
 // Two images side by side (used when a panel has no narrative of its own).
@@ -1047,7 +1059,7 @@ function cgFlowPair(a, b, opts, narrHtml) {
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
-  return row + (narrHtml || '');
+  return row + gzNarrBox(narrHtml, opts);
 }
 
 // A featured (peak-prominence) image. A wide shot fills the width at half-page
@@ -1063,7 +1075,7 @@ function cgFlowFeature(m, opts, narrHtml) {
     var wbox = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
       media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-    return wbox + (narrHtml || '');
+    return wbox + gzNarrBox(narrHtml, opts);
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
   // fills via focal cover, so there is no void either.
@@ -1076,7 +1088,7 @@ function cgFlowFeature(m, opts, narrHtml) {
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
     img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-  return box + (narrHtml || '');
+  return box + gzNarrBox(narrHtml, opts);
 }
 
 // Comic will be rebuilt off the magazine flow later; for now it mirrors Magazine.
@@ -1565,63 +1577,15 @@ function renderComicEngine(moments, sections, intro, outro, opts) {
   return html;
 }
 
-// PROTOTYPE (gated, ?mag=1): hybrid "boxed magazine". Keeps the comic boxed look
-// but borrows the magazine mechanic -- a parchment box (display:flow-root) with a
-// floated bordered image inside, text WRAPPING around it -- so prose fills the
-// L-shaped space and the browser paginates naturally (no measure/plan). Wide and
-// high-prominence images stay full-width and big; portraits/squares float and wrap.
-function renderComicMag(moments, sections, intro, outro, opts) {
-  var co = _twoPassChildOpts(opts);
-  sections = sections || [];
-  function secText(i) { var x = sections.find(function (s) { return s.panel_index === i; }) || {}; return [x.before, x.after].filter(Boolean).join(' '); }
-  function media(m) {
-    return m.image
-      ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
-      : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
-  }
-  // A parchment chunk box. box-decoration-break:clone => if it crosses a column or
-  // page break, EACH fragment gets its own full border (closed top + bottom).
-  function chunkBox(t) {
-    return '<div style="' + picBorderCss(co) + 'background:#fbf3cf;padding:0.12in 0.14in;line-height:1.4;margin:0 0 ' + CG_GAP + 'in;-webkit-box-decoration-break:clone;box-decoration-break:clone;">' + buildNarrativeHTML(t, false) + '</div>';
-  }
-  // An image box sized to a given width (in inches). Images never split.
-  function imgBox(m, wIn, hIn, full) {
-    var wCss = full ? 'width:100%;' : ('width:' + wIn.toFixed(2) + 'in;');
-    return '<div style="' + picBorderCss(co) + 'overflow:hidden;position:relative;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;margin:0 0 ' + CG_GAP + 'in;">' + media(m) + picOverlay(co) + coCaptionCover(m, co.caption) + '</div>';
-  }
-
-  var COLW = (CG_W - CG_GAP) / 2;   // 2-column width
-  var out = coDropOrIntro(intro, opts);
-  var buf = [];   // boxes accumulating into the current 2-column block
-  function flush() {
-    if (!buf.length) return;
-    out += '<div style="column-count:2;column-gap:' + CG_GAP + 'in;column-fill:auto;">' + buf.join('') + '</div>';
-    buf = [];
-  }
-
-  for (var i = 0; i < moments.length; i++) {
-    var m = moments[i], text = secText(i);
-    var asp = momentAspect(m), tier = lmSizeTier(m), prom = lmProminence(m);
-    var bigBanner = (asp >= 1.5) || (tier === 'max' && asp >= 1.2);   // stays full-width & large
-    if (bigBanner) {
-      // wide / high-prominence: full-width banner BETWEEN column blocks (stays big)
-      flush();
-      var bh = Math.min(CG_W / asp, prom >= 4 ? 5.0 : 4.2);
-      out += imgBox(m, CG_W, bh, true);
-      // its narration packs in the next column block
-      cgSplitNarr(text).forEach(function (t) { buf.push(chunkBox(t)); });
-    } else {
-      // portrait / square / small: a single-column image box + its chunk boxes,
-      // all packed into the 2-column flow (text fills the column beside the image)
-      var iw = COLW, ih = iw / asp;
-      if (ih > 5.5) { ih = 5.5; iw = ih * asp; }
-      buf.push(imgBox(m, iw, ih, false));
-      cgSplitNarr(text).forEach(function (t) { buf.push(chunkBox(t)); });
-    }
-  }
-  flush();
-  out += buildNarrativeHTML(outro, true);
-  return out;
+// Gazette: the Magazine flow, ENCLOSED. Each beat is wrapped in a parchment panel
+// (image bordered + floated inside, text wrapping within the box). Inherits
+// Magazine's prominence-aware flow (towers, wide bands, feature blow-ups) so big
+// images stay big -- it just adds the panel enclosure via opts.enclose.
+function renderGazette(moments, sections, intro, outro, opts) {
+  var gopts = {};
+  for (var k in opts) { if (Object.prototype.hasOwnProperty.call(opts, k)) gopts[k] = opts[k]; }
+  gopts.enclose = true;
+  return renderMagazine(moments, sections, intro, outro, gopts);
 }
 
 function renderLayout(opts, moments, sections, intro, outro) {
@@ -1631,8 +1595,9 @@ function renderLayout(opts, moments, sections, intro, outro) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
     case 'paired': return renderPaired(moments, sections, intro, outro, opts);
-    case 'comicpage': return (opts && opts.mag) ? renderComicMag(moments, sections, intro, outro, opts) : ((opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.engine && opts._enginePlan) ? renderComicEngine(moments, sections, intro, outro, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts))));
+    case 'comicpage': return (opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.engine && opts._enginePlan) ? renderComicEngine(moments, sections, intro, outro, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts)));
     case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
+    case 'gazette': return renderGazette(moments, sections, intro, outro, opts);
     case 'grid':
     default:       return renderGrid(moments, sections, intro, outro, opts);
   }
@@ -2682,17 +2647,6 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       _m2.layout = 'comicpage-chunks';
       _m2.sessionId = String(req.params.sessionId);
       return res.json(_m2);
-    }
-    // PROTOTYPE magazine render (gated, ?mag=1): flowing boxed sections, browser paginates.
-    if (req.query.mag === '1' || req.query.mag === 'true') {
-      var _gco = co || {}; _gco.arrange = 'comicpage'; _gco.mag = true;
-      _gco.engine = false; _gco.twoPass = false; _gco.measureChunks = false;
-      var _ghtml = buildSessionHTML(session, moments, campaign, characters, narrative, _gco, { noCover: true });
-      if (await userInFreeTrial(db, req.session.userId)) _ghtml = injectTrialWatermark(_ghtml);
-      if (req.query.format === 'pdf') {
-        return await sendHtmlAsPdf(res, _ghtml, pdfFileName([campaign.name, session.name, 'mag']));
-      }
-      return res.send(_ghtml);
     }
     // ONE-ENGINE paginated Comic render (gated). Exact chunk measure -> comicEngine
     // plan -> draw exactly the plan. ?twopass=1 (kept name) routes here.
