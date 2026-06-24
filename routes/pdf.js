@@ -1000,11 +1000,28 @@ function gzNarrBox(narrHtml, opts) {
   if (!(opts && opts.enclose)) return narrHtml;
   return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;margin-bottom:0.10in;-webkit-box-decoration-break:clone;box-decoration-break:clone;">' + narrHtml + '</div>';
 }
+
+// Gazette shared builder: an image floated INSIDE a parchment panel at an explicit
+// size, narrative wrapping beside/below it. Used to pull wide & feature images into
+// their text panel (shrunk just enough to leave a wrap column).
+function gzFloatPanel(m, opts, narrHtml, iw, ih, sideLeft) {
+  var fl = sideLeft ? 'float:left;margin:0.02in 0.22in 0.10in 0;' : 'float:right;margin:0.02in 0 0.10in 0.22in;';
+  var box = '<div style="' + fl + cgBorder(opts) + 'width:' + iw.toFixed(2) + 'in;height:' + ih.toFixed(2) +
+    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
+}
 function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
   var asp = Math.max(0.3, momentAspect(m));
-  var imgH = small ? ((asp < 0.85) ? 2.2 : 1.7) : ((asp < 0.85) ? 3.5 : 2.7);
+  var imgH, capW;
+  if (opts && opts.enclose) {
+    // Gazette: pictures are the show -> noticeably bigger floated images.
+    imgH = small ? ((asp < 0.85) ? 3.6 : 2.7) : ((asp < 0.85) ? 4.6 : 3.4);
+    capW = small ? 3.3 : 4.2;
+  } else {
+    imgH = small ? ((asp < 0.85) ? 2.2 : 1.7) : ((asp < 0.85) ? 3.5 : 2.7);
+    capW = small ? 2.1 : 3.3;
+  }
   var imgW = imgH * asp;
-  var capW = small ? 2.1 : 3.3;
   if (imgW > capW) { imgW = capW; imgH = imgW / asp; }
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
@@ -1035,7 +1052,14 @@ function cgBesidePanel(m, opts, narrHtml) {
 }
 
 // A wide/panoramic image breaks the column full width; prose flows after it.
-function cgFlowWide(m, opts, narrHtml) {
+function cgFlowWide(m, opts, narrHtml, sideLeft) {
+  if (opts && opts.enclose) {
+    // Gazette: wide image floated INSIDE its parchment panel (shrunk a little so the
+    // narrative wraps beside it) -- the picture is the show, just enclosed.
+    var aspW = Math.max(0.3, momentAspect(m));
+    var iwW = 4.4, ihW = iwW / aspW;
+    return gzFloatPanel(m, opts, narrHtml, iwW, ihW, sideLeft);
+  }
   // Full-width wide image at its NATURAL height -- no fixed-height box, no contain,
   // no #000 fill -- so the frame wraps the art exactly and a black void is impossible
   // even when the stored aspect and the real image disagree.
@@ -1059,13 +1083,21 @@ function cgFlowPair(a, b, opts, narrHtml) {
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
+  if (opts && opts.enclose) return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + row + (narrHtml || '') + '</div>';
   return row + gzNarrBox(narrHtml, opts);
 }
 
 // A featured (peak-prominence) image. A wide shot fills the width at half-page
 // height (cover-cropped via focal); anything else blows up toward full page.
-function cgFlowFeature(m, opts, narrHtml) {
+function cgFlowFeature(m, opts, narrHtml, sideLeft) {
   var asp = Math.max(0.3, momentAspect(m));
+  if (opts && opts.enclose) {
+    // Gazette: feature (peak) image floated inside its panel, kept large; text wraps.
+    var iwF, ihF;
+    if (asp >= 1.5) { iwF = 4.8; ihF = iwF / asp; }
+    else { ihF = Math.min(5.0, 3.8 / asp); iwF = ihF * asp; if (iwF > 4.4) { iwF = 4.4; ihF = iwF / asp; } }
+    return gzFloatPanel(m, opts, narrHtml, iwF, ihF, sideLeft);
+  }
   if (asp >= 1.5) {
     // Wide feature: full-width at its NATURAL height -- container = image size, so
     // no fixed box, no contain, no #000 void (same fix as cgFlowWide).
@@ -1431,11 +1463,11 @@ function renderMagazine(moments, sections, intro, outro, opts) {
       }
       html += cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
-      html += cgFlowFeature(p.m, opts, p.narr); i += 1;
+      html += cgFlowFeature(p.m, opts, p.narr, sideLeft); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
       html += cgFlowFloat(p.m, opts, p.narr, sideLeft, true); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
-      html += cgFlowWide(p.m, opts, p.narr); i += 1;
+      html += cgFlowWide(p.m, opts, p.narr, sideLeft); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5 && normShape(panels[i + 1].m) !== 'tower') {
       html += cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr); i += 2;
     } else {
