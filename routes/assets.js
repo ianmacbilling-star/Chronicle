@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
+const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignAssetCreator } = require('../middleware/auth');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
 const { uploadFile, deleteFile, restoreCopy } = require('../storage/storage');
 const multer = require('multer');
@@ -70,7 +70,7 @@ async function assetCapBlock(db, userId, campaignId) {
 }
 
 // POST create a new asset (with image upload).
-router.post('/', requireAuth, verifyCampaignDM, uploadSingle, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignAssetCreator, uploadSingle, async function(req, res) {
   const name = (req.body && req.body.name || '').trim();
   const category = cleanCategory(req.body && req.body.category);
   if (!name) return res.json({ error: 'Asset name is required' });
@@ -97,7 +97,7 @@ router.post('/', requireAuth, verifyCampaignDM, uploadSingle, async function(req
 // POST create an asset FROM an existing archived image. The image is copied to
 // a fresh R2 object so the asset owns its bytes independently -- asset deletion
 // hard-deletes its image, so it must never share the archive's object.
-router.post('/from-archive', requireAuth, verifyCampaignDM, async function(req, res) {
+router.post('/from-archive', requireAuth, verifyCampaignAssetCreator, async function(req, res) {
   try {
     const db = await getDb();
     const capMsg = await assetCapBlock(db, req.session.userId, req.params.campaignId);

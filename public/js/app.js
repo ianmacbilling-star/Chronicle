@@ -3629,10 +3629,14 @@ function renderAssets() {
       '</div>' +
     '</div>';
   }).join('');
-  grid.innerHTML =
-    '<div class="add-char-card" onclick="openAssetModal()">' +
-      '<div class="plus">+</div><span>Add asset</span>' +
-    '</div>' + cards;
+  var _cur = state.currentCampaign;
+  var _role = _cur ? _cur.my_role : null;
+  var _allowAssets = _cur && (_cur.allow_member_assets === true || _cur.allow_member_assets === 1 || _cur.allow_member_assets === 't' || _cur.allow_member_assets === 'true');
+  var _canAddAsset = (_role === 'dm') || _allowAssets;
+  var _addCard = _canAddAsset
+    ? '<div class="add-char-card" onclick="openAssetModal()"><div class="plus">+</div><span>Add asset</span></div>'
+    : '';
+  grid.innerHTML = _addCard + cards;
 }
 
 function openAssetModal(assetId) {
@@ -10942,6 +10946,11 @@ function openCampaignSettings(id, ev) {
     var v = c && c.allow_player_novel_access;
     cb.checked = (v === true || v === 1 || v === 't' || v === 'true');
   }
+  var cba = document.getElementById('cs-allow-assets');
+  if (cba) {
+    var va = c && c.allow_member_assets;
+    cba.checked = (va === true || va === 1 || va === 't' || va === 'true');
+  }
   var err = document.getElementById('campaign-settings-error');
   if (err) err.classList.add('hidden');
   var modal = document.getElementById('campaign-settings-modal');
@@ -10959,13 +10968,15 @@ function saveCampaignSettings() {
   if (!_csCampaignId) { closeCampaignSettings(); return; }
   var cb = document.getElementById('cs-allow-novel');
   var allow = !!(cb && cb.checked);
+  var cba = document.getElementById('cs-allow-assets');
+  var allowAssets = !!(cba && cba.checked);
   var btn = document.getElementById('cs-save-btn');
   var err = document.getElementById('campaign-settings-error');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   fetch('/api/campaigns/' + _csCampaignId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allow_player_novel_access: allow })
+    body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets })
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -10975,8 +10986,8 @@ function saveCampaignSettings() {
         return;
       }
       var saveId = _csCampaignId;
-      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) x.allow_player_novel_access = allow; });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) state.currentCampaign.allow_player_novel_access = allow;
+      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; } });
+      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; }
       closeCampaignSettings();
     })
     .catch(function (e) {

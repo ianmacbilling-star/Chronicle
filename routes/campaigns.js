@@ -68,7 +68,10 @@ router.put('/:id', requireAuth, async function(req, res) {
   var _allowNovel = (req.body.allow_player_novel_access !== undefined)
     ? (req.body.allow_player_novel_access === true || req.body.allow_player_novel_access === 'true' || req.body.allow_player_novel_access === 1)
     : campaign.allow_player_novel_access;
-  await db.prepare('UPDATE campaigns SET name=?, description=?, cover_image_url=?, back_cover_image_url=?, title_image_url=?, campaign_image_url=?, allow_player_novel_access=?, edited_at=?, edited_by=? WHERE id=?')
+  var _allowAssets = (req.body.allow_member_assets !== undefined)
+    ? (req.body.allow_member_assets === true || req.body.allow_member_assets === 'true' || req.body.allow_member_assets === 1)
+    : campaign.allow_member_assets;
+  await db.prepare('UPDATE campaigns SET name=?, description=?, cover_image_url=?, back_cover_image_url=?, title_image_url=?, campaign_image_url=?, allow_player_novel_access=?, allow_member_assets=?, edited_at=?, edited_by=? WHERE id=?')
     .run(
       req.body.name || campaign.name,
       req.body.description !== undefined ? req.body.description : campaign.description,
@@ -77,6 +80,7 @@ router.put('/:id', requireAuth, async function(req, res) {
       req.body.title_image_url !== undefined ? req.body.title_image_url : campaign.title_image_url,
       req.body.campaign_image_url !== undefined ? req.body.campaign_image_url : campaign.campaign_image_url,
       _allowNovel,
+      _allowAssets,
       now, req.session.userId, campaign.id
     );
   const updated = await db.prepare('SELECT * FROM campaigns WHERE id=?').get(campaign.id);

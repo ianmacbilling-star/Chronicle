@@ -63,6 +63,23 @@ async function verifyCampaignDM(req, res, next) {
   next();
 }
 
+// Asset creation: the DM always; a player only when the campaign's
+// allow_member_assets flag is on. Per-tier asset COUNT caps are still
+// enforced in the route (assetCapBlock) regardless of this gate.
+async function verifyCampaignAssetCreator(req, res, next) {
+  const campaignId = req.params.campaignId;
+  const role = await getCampaignRole(req.session.userId, campaignId);
+  if (!role) return res.status(403).json({ error: 'Access denied' });
+  req.campaignRole = role;
+  const db = await getDb();
+  req.campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  const allowMembers = req.campaign && (req.campaign.allow_member_assets === true || req.campaign.allow_member_assets === 1 || req.campaign.allow_member_assets === 't' || req.campaign.allow_member_assets === 'true');
+  if (role !== 'dm' && !allowMembers) {
+    return res.status(403).json({ error: 'The Story Master has not enabled members to add assets in this campaign.' });
+  }
+  next();
+}
+
 // Convenience: SQL subquery fragments for inline membership checks. Use
 // in routes where the campaign is reached via JOIN and full middleware
 // wrapping is awkward (e.g. when only session_id is in the URL params
@@ -176,6 +193,7 @@ module.exports = {
   getCampaignRole,
   verifyCampaignMember,
   verifyCampaignDM,
+  verifyCampaignAssetCreator,
   verifyCampaignDmOrCharacterOwner,
   verifyForkOwnerOrDm,
   isCampaignLocked,
