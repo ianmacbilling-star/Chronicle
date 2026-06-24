@@ -1139,6 +1139,42 @@ function cgFullWidthNarr(text, opts) {
   }).join('');
   return '<div style="grid-column:span 2;display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + boxes + '</div>';
 }
+// Shared parchment narration box used by BOTH the exact-measure pass and the
+// one-engine two-pass renderer, so a measured box height EQUALS its rendered
+// height (this is what makes spill impossible). Width is set by the parent cell;
+// the box fills it. No min-height / flex / grid here -- that is layout context.
+function cgNarrBox(text, opts) {
+  return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;break-inside:avoid;page-break-inside:avoid;">' + buildNarrativeHTML(text, false) + '</div>';
+}
+
+// Column widths the renderer can choose from (inches): 1-col full, 2-col half,
+// 3-col third. Beside-a-small-image narration also uses the half (2-col) width.
+function cgColWidths() {
+  return [CG_W, (CG_W - CG_GAP) / 2, (CG_W - 2 * CG_GAP) / 3];
+}
+
+// Exact-measure scaffold: render EVERY narration chunk of EVERY moment at EACH
+// candidate column width, individually tagged, so measureDocument returns the
+// real height of each chunk at each width. The packer then knows exactly how
+// tall any narration will be in any column layout -> no estimation, no spill.
+function buildChunkMeasureBody(moments, sections, opts) {
+  var widths = cgColWidths();
+  var out = '';
+  for (var i = 0; i < moments.length; i++) {
+    var sec = (sections || []).find(function (s) { return s.panel_index === i; }) || {};
+    var text = [sec.before, sec.after].filter(Boolean).join(' ');
+    var chunks = cgSplitNarr(text);
+    for (var c = 0; c < chunks.length; c++) {
+      for (var wi = 0; wi < widths.length; wi++) {
+        var box = cgNarrBox(chunks[c], opts);
+        var tagged = box.replace('<div ', '<div data-mblk="m' + i + '_c' + c + '_w' + wi + '" data-mmoment="' + i + '" data-mchunk="' + c + '" data-mwidth="' + wi + '" data-mchars="' + chunks[c].length + '" ');
+        out += '<div style="width:' + widths[wi].toFixed(3) + 'in;margin-bottom:0.1in;">' + tagged + '</div>';
+      }
+    }
+  }
+  return out;
+}
+
 function renderComicPage(moments, sections, intro, outro, opts) {
   // Comic = a tic-tac-toe LATTICE (v4). Two-column base grid of bold-framed cells.
   // ORIENTATION IS KEYED OFF THE IMAGE ASPECT: wide/panoramic art spans BOTH columns
@@ -1466,7 +1502,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
     case 'paired': return renderPaired(moments, sections, intro, outro, opts);
-    case 'comicpage': return (opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts);
+    case 'comicpage': return (opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts));
     case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
     case 'grid':
     default:       return renderGrid(moments, sections, intro, outro, opts);
@@ -2502,6 +2538,21 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       _measured.layout = 'comicpage';
       _measured.sessionId = String(req.params.sessionId);
       return res.json(_measured);
+    }
+    // Exact chunk measurement (one-engine foundation): every narration chunk at
+    // every column width, plus per-moment image aspect/prominence. Build data.
+    if (req.query.measure2 === '1' || req.query.measure2 === 'true') {
+      var _c2 = co || {}; _c2.arrange = 'comicpage'; _c2.measureChunks = true; _c2.twoPass = false; _c2.measureTag = false;
+      var _h2 = buildSessionHTML(session, moments, campaign, characters, narrative, _c2, { noCover: true });
+      var _m2 = await measureDocument(_h2, {});
+      var _imgInfo = moments.map(function (m, idx) {
+        return { moment: idx, aspect: Math.round(momentAspect(m) * 1000) / 1000, prominence: lmProminence(m), tier: lmSizeTier(m), hasImage: !!m.image };
+      });
+      _m2.imageInfo = _imgInfo;
+      _m2.colWidths = cgColWidths().map(function (w) { return Math.round(w * 1000) / 1000; });
+      _m2.layout = 'comicpage-chunks';
+      _m2.sessionId = String(req.params.sessionId);
+      return res.json(_m2);
     }
     // Two-pass paginated Comic render (Stage 4, gated). Measure -> pack -> paginate.
     if (req.query.twopass === '1' || req.query.twopass === 'true') {
