@@ -872,6 +872,14 @@ function coDropOrIntro(intro, opts) {
 var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
 var CG_GAP = 0.12;  // gutter between panels (inches)
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
+// Two-pass / measure cap: in the paginated path NO single image may exceed the
+// printable page height, or it overflows its page container (and the measure pass
+// would mis-budget it). Normal single-pass render is untouched (returns h as-is).
+function _coCapH(h, opts) {
+  if (!(opts && (opts.twoPass || opts.measureTag))) return h;
+  var cap = ((opts.pageHeightIn || 9.7)) - 0.5;
+  return (h > cap) ? cap : h;
+}
 var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
 var CG_FRAME  = 'border:12px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
 function picBorderCss(opts){
@@ -1192,10 +1200,10 @@ function renderComicPage(moments, sections, intro, outro, opts) {
         : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
       var _fImgBox;
       if (_fAsp >= 1.5) {
-        var _fH = CG_W / _fAsp;
+        var _fH = _coCapH(CG_W / _fAsp, opts);
         _fImgBox = '<div style="' + cgBorder(opts) + 'width:100%;height:' + _fH.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + _fMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
       } else {
-        var _fH2 = Math.min(8.4, CG_W / _fAsp);
+        var _fH2 = _coCapH(Math.min(8.4, CG_W / _fAsp), opts);
         var _fW2 = Math.min(CG_W, _fH2 * _fAsp);
         var _fCtr = (_fW2 < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
         _fImgBox = '<div style="' + cgBorder(opts) + 'width:' + _fW2.toFixed(2) + 'in;height:' + _fH2.toFixed(2) + 'in;' + _fCtr + 'position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + _fMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
@@ -1223,6 +1231,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var colW = (CG_W - CG_GAP) / 2;
     var span = tall ? 'tall' : (wide ? 'wide' : '');
     var imgH = wide ? (CG_W / asp) : Math.min(7.0, colW / asp);
+    imgH = _coCapH(imgH, opts);
     // For tall/tower, hug the image's true width at this height so a 1:4 tower isn't cropped.
     var boxW = tall ? Math.min(colW, imgH * ta) : null;
     if (_tier === 'min') { tall = false; wide = false; span = ''; imgH = Math.min(2.6, colW / asp); boxW = null; }

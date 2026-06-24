@@ -71,7 +71,11 @@ function packComic(blocks, opts) {
   for (var r = 0; r < rows.length; r++) {
     var row = rows[r];
     var next = rows[r + 1];
-    var keepNext = !!(row.hasImage && next && next.splittable && next.moment === row.moment);
+    // Keep an image with the START of its narration -- UNLESS the image is so tall
+    // it would only leave a sliver, which renders as an empty stretched box. Such a
+    // tall image stands alone and its narration flows onto the next page.
+    var tallSoloIn = (opts.tallImageSoloIn != null) ? opts.tallImageSoloIn : 6.5;
+    var keepNext = !!(row.hasImage && next && next.splittable && next.moment === row.moment && row.heightIn < tallSoloIn);
     // Keep the image with the start of its text: an image row needs room for
     // itself PLUS a minimum first narration chunk, or it moves to the next page.
     var need = row.heightIn + (keepNext ? (gap + minChunkIn) : 0);
@@ -84,7 +88,13 @@ function packComic(blocks, opts) {
     if (row.splittable) {
       var left = row.heightIn;
       var firstFit = remaining - gap;
-      if (firstFit >= minChunkIn) {
+      // Don't fill a sub-meaningful narration SLIVER after an image -- that is what
+      // renders as a near-empty box stretched beside a tall panel. If the leftover
+      // beneath an image is too small to be worth it, start the narration fresh on
+      // the next page instead. (Plain narration-only pages still chunk normally.)
+      var headMin = (opts.headMinIn != null) ? opts.headMinIn : 1.6;
+      var sliverAfterImage = cur2().hasImage && firstFit < headMin;
+      if (firstFit >= minChunkIn && !sliverAfterImage) {
         placeRow({ moment: row.moment, hasImage: false }, firstFit, true, 'head');
         cur2().splits.push({ moment: row.moment, heightIn: round3(firstFit), part: 'head' });
         left = round3(left - firstFit);
@@ -100,8 +110,9 @@ function packComic(blocks, opts) {
       continue;
     }
 
-    // doesn't fit and can't split -> next page
-    newPage();
+    // doesn't fit and can't split -> its own page (reuse current page if it is
+    // already empty, so an over-tall image never strands a blank page before it).
+    if (cur2().usedIn > 1e-6) newPage();
     placeRow(row, row.heightIn, false);
     if (row.heightIn > pageH) cur2().overflow = true;   // taller than a whole page
   }
