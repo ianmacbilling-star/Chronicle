@@ -3866,6 +3866,7 @@ function renderCharModalPrompt(char) {
           '<div class="panel-img-actions">' +
             '<button class="panel-pill" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">Regenerate</button>' +
             '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing">Retouch</button>' +
+            (char.revert_reference_url ? '<button class="panel-pill" onclick="revertCharRef(' + char.id + ')" title="Undo the last retouch or regenerate - restore the previous reference">Revert</button>' : '') +
             '<button class="panel-pill" onclick="openReplacePicker(\'canonical\', ' + char.id + ')" title="Replace with an image from the Archive">Replace</button>' +
             '<button class="panel-pill' + (_carched ? ' is-on' : '') + '" id="char-archive-' + char.id + '" onclick="toggleArchiveCharCanonical(' + char.id + ')" title="' + (_carched ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + (_carched ? 'Archived' : 'Archive') + '</button>' +
           '</div>' +
@@ -7321,6 +7322,9 @@ function renderStoryboard() {
     var retouchBtn = m.locked
       ? '<button class="panel-pill dm-only" disabled title="Unlock to retouch">Retouch</button>'
       : '<button class="panel-pill dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>';
+    var revertBtn = (m.revert_image && !m.locked)
+      ? '<button class="panel-pill dm-only" onclick="revertMoment(' + m.id + ')" title="Undo the last retouch or regenerate - restore the previous image">Revert</button>'
+      : '';
     var replaceBtn = m.locked
       ? '<button class="panel-pill dm-only" disabled title="Unlock to replace">Replace</button>'
       : '<button class="panel-pill dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">Replace</button>';
@@ -7336,7 +7340,7 @@ function renderStoryboard() {
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
     return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + '<div class="panel-img-actions">' + editPromptBtn + regenBtn + retouchBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
+        imgHtml + '<div class="panel-img-actions">' + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
@@ -10371,6 +10375,34 @@ function saveForkNotes(value) {
     if (saved) { saved.textContent = 'Notes saved'; saved.classList.remove('hidden'); setTimeout(function() { saved.classList.add('hidden'); }, 1800); }
   })
   .catch(function() {});
+}
+
+function revertMoment(id) {
+  if (!state.currentCampaign || !state.currentSession) return;
+  fetch('/api/images/revert-moment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ moment_id: id })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not revert.'); return; }
+      if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+    })
+    .catch(function(e){ alert('Could not revert: ' + e.message); });
+}
+
+function revertCharRef(charId) {
+  if (!state.currentCampaign) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + charId + '/revert-reference', {
+    method: 'POST'
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not revert.'); return; }
+      if (typeof loadCharacters === 'function') loadCharacters();
+    })
+    .catch(function(e){ alert('Could not revert: ' + e.message); });
 }
 
 function reloadSessionForFork() {

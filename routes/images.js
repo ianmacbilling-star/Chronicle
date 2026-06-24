@@ -887,6 +887,36 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
   }
 });
 
+// POST /api/images/revert-moment
+// One-deep undo of the last retouch/regenerate: restore the retained prior image
+// and release the current one. Free (no token spend). Owner-only, blocked when locked.
+router.post('/revert-moment', requireAuth, async function(req, res) {
+  const { moment_id } = req.body;
+  const db = await getDb();
+  const moment = await db.prepare(
+    'SELECT m.*, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+    'FROM moments m JOIN sessions s ON m.session_id = s.id JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ?'
+  ).get(moment_id);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  const myRole = await getCampaignRole(req.session.userId, moment.campaign_id);
+  if (!myRole) return res.status(403).json({ error: 'Access denied' });
+  if (String(moment.fork_owner) !== String(req.session.userId))
+    return res.status(403).json({ error: 'You can only revert your own version' });
+  if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to revert.' });
+  if (!moment.revert_image) return res.json({ error: 'There is no previous image to revert to.' });
+  try {
+    const current = moment.image;
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, now, req.session.userId, moment.id);
+    if (current && current !== moment.revert_image) await releaseImage(db, current);
+    res.json({ success: true, image: moment.revert_image });
+  } catch (e) {
+    console.error('revert-moment error:', e.message);
+    res.json({ error: 'Could not revert: ' + e.message });
+  }
+});
+
 // POST /api/images/generate-all
 router.post('/generate-all', requireAuth, async function(req, res) {
   const { session_id, campaign_id, style } = req.body;
@@ -1142,6 +1172,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       const imageUrl = await persistToR2(falUrl);
       if (job.moment_id && (job.kind === 'moment' || job.kind === 'batch' || job.kind === 'retouch')) {
         const now = new Date().toISOString();
+        const _priorM = await db.prepare('SELECT image, img_w, img_h, revert_image FROM moments WHERE id = ?').get(job.moment_id);
         if (job.kind === 'retouch') {
           await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, imgW, imgH, now, job.user_id, job.moment_id);
@@ -1149,13 +1180,42 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, job.style || null, imgW, imgH, now, job.user_id, job.moment_id);
         }
-        if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
+        // Revert undo-slot (one-deep): retouch + single regenerate retain the prior
+        // image so the user can undo. Bulk 'batch' does not arm; it clears any stale
+        // slot. Superseded slot images are released; the retained one is NOT.
+        if (job.kind === 'retouch' || job.kind === 'moment') {
+          if (_priorM && _priorM.revert_image && _priorM.revert_image !== job.prev_image && _priorM.revert_image !== imageUrl) {
+            await releaseImage(db, _priorM.revert_image);
+          }
+          if (job.prev_image && job.prev_image !== imageUrl) {
+            var _rw = (_priorM && _priorM.image === job.prev_image) ? _priorM.img_w : null;
+            var _rh = (_priorM && _priorM.image === job.prev_image) ? _priorM.img_h : null;
+            await db.prepare('UPDATE moments SET revert_image = ?, revert_img_w = ?, revert_img_h = ? WHERE id = ?').run(job.prev_image, _rw || null, _rh || null, job.moment_id);
+          } else {
+            await db.prepare('UPDATE moments SET revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL WHERE id = ?').run(job.moment_id);
+          }
+        } else {
+          if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
+          if (_priorM && _priorM.revert_image && _priorM.revert_image !== imageUrl) {
+            await releaseImage(db, _priorM.revert_image);
+            await db.prepare('UPDATE moments SET revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL WHERE id = ?').run(job.moment_id);
+          }
+        }
         await logImageGeneration(db, job.user_id, job.kind === 'retouch' ? 'retouch' : 'moment', job.moment_id, job.fork_id);
       }
         if (job.kind === 'char_ref' && job.character_id) {
           await db.prepare('UPDATE characters SET canonical_reference_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, new Date().toISOString(), job.user_id, job.character_id);
-          if (job.prev_image && job.prev_image !== imageUrl) await releaseImage(db, job.prev_image);
+          // Revert undo-slot (one-deep) for the canonical reference.
+          const _priorC = await db.prepare('SELECT revert_reference_url FROM characters WHERE id = ?').get(job.character_id);
+          if (_priorC && _priorC.revert_reference_url && _priorC.revert_reference_url !== job.prev_image && _priorC.revert_reference_url !== imageUrl) {
+            await releaseImage(db, _priorC.revert_reference_url);
+          }
+          if (job.prev_image && job.prev_image !== imageUrl) {
+            await db.prepare('UPDATE characters SET revert_reference_url = ? WHERE id = ?').run(job.prev_image, job.character_id);
+          } else {
+            await db.prepare('UPDATE characters SET revert_reference_url = NULL WHERE id = ?').run(job.character_id);
+          }
           await logImageGeneration(db, job.user_id, 'character_reference', job.character_id);
         }
         if (job.kind === 'session_ref' && job.character_id) {

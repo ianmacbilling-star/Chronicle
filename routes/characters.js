@@ -172,7 +172,7 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
     await db.prepare('DELETE FROM characters WHERE id = ?').run(char.id);
     // Release this character's images (refcounted — a generated reference
     // still used by a session snapshot in another fork is spared).
-    for (const field of ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'canonical_reference_url']) {
+    for (const field of ['image', 'image_portrait', 'image_fullbody', 'image_action', 'image_other', 'canonical_reference_url', 'revert_reference_url']) {
       await releaseImage(db, char[field]);
     }
     res.json({ success: true });
@@ -397,6 +397,30 @@ router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOw
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Retouch reference error:', e.message);
+    res.json({ error: e.message });
+  }
+});
+
+// POST /:id/revert-reference -- one-deep undo of the last canonical retouch/
+// regenerate: restore the retained prior reference and release the current one.
+// Free (no token spend). DM or character owner; player blocked once Ready.
+router.post('/:id/revert-reference', requireAuth, verifyCampaignDmOrCharacterOwner, async function(req, res) {
+  try {
+    const db = await getDb();
+    const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+    if (req.campaignRole === 'player' && await isCampaignLocked(req.params.campaignId)) {
+      return res.status(423).json({ error: 'This campaign has a Ready session -- character editing is locked. Forking support coming soon.' });
+    }
+    if (!char.revert_reference_url) return res.json({ error: 'There is no previous reference image to revert to.' });
+    const current = char.canonical_reference_url;
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE characters SET canonical_reference_url = ?, revert_reference_url = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(char.revert_reference_url, now, req.session.userId, char.id);
+    if (current && current !== char.revert_reference_url) await releaseImage(db, current);
+    res.json({ success: true, canonical_reference_url: char.revert_reference_url });
+  } catch(e) {
+    console.error('Revert reference error:', e.message);
     res.json({ error: e.message });
   }
 });
