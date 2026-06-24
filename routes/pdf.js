@@ -1928,7 +1928,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // a large cast never spills past one page: portraits shrink + columns grow,
   // then a very large cast falls back to a names-only list. A hard print height
   // cap (see CSS) is the final backstop against any overflow.
-  var _castN = characters.length;
+  var _isNpc = function (c) { return c.is_npc === true || c.is_npc === 1 || c.is_npc === '1' || c.is_npc === 'true'; };
+  // The Company page lists player characters only -- NPCs still appear in panels.
+  var castChars = characters.filter(function (c) { return !_isNpc(c); });
+  var _castN = castChars.length;
   var _castCols, _castPort, _castGap, _castFields;
   if (_castN <= 12)      { _castCols = 3; _castPort = 1.1;  _castGap = 0.25; _castFields = 'full'; }
   else if (_castN <= 30) { _castCols = 4; _castPort = 0.85; _castGap = 0.16; _castFields = 'mid';  }
@@ -1936,14 +1939,14 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   else                   { _castCols = 0; _castPort = 0;    _castGap = 0;    _castFields = 'list'; }
   var castBlockHTML;
   if (_castFields === 'list') {
-    castBlockHTML = '<div class="cast-names">' + characters.map(function(c){
+    castBlockHTML = '<div class="cast-names">' + castChars.map(function(c){
       return '<div class="cast-name-item">' + _fmEsc(c.name) +
         (_pubName(c.player_name, c.player_pen_name) ? ' <span class="cast-name-player">(' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + ')</span>' : '') +
       '</div>';
     }).join('') + '</div>';
   } else {
     var _noImgFont = Math.max(9, Math.round(_castPort * 21));
-    var _members = characters.map(function(c) {
+    var _members = castChars.map(function(c) {
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
       var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
       // Frame scale follows the portrait size, tuned so a portrait's frame is the
