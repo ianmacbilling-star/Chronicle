@@ -10392,6 +10392,9 @@ function reloadSessionForFork() {
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       if (typeof renderStoryboard === 'function') renderStoryboard();
+      // Title-image thumbnail must follow the viewed fork (member's own vs canonical),
+      // otherwise it keeps the SM image painted by the initial no-fork load.
+      if (typeof renderSessionEstablishing === 'function') renderSessionEstablishing(data);
       if (typeof initAccessStatusUI === 'function') initAccessStatusUI(data.fork_status || data.player_access_status || 'draft');
       if (typeof updateNotesBox === 'function') updateNotesBox(data);
       // Refresh the session-character list so amendment controls reflect
