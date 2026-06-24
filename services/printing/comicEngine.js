@@ -81,23 +81,26 @@ function fitAllCols(chunks, H) {
   return null;
 }
 
-// Fill a page of height H with as many leading chunks as possible using K columns
-// (reading order: column 1 = first chunks). Returns {used, rowH} where used =
-// number of chunks placed (>=1 always, to guarantee progress).
+// Fill a page of height H with leading chunks (reading order). Uses the MOST
+// columns (up to K) whose first chunk still fits H -- so when space is tight it
+// drops to 1 column (where chunks are shortest) instead of forcing an oversized
+// 2-column chunk that would overflow. Returns {used:0} when nothing fits at all,
+// so the caller can start a fresh page.
 function fillPartial(chunks, H, K) {
-  var hs = chunks.map(function (c) { return c[K - 1]; });
-  // Build the column assignment DIRECTLY as we fill, then derive rowH from that
-  // exact assignment -- so the height can never exceed what we budgeted.
-  var cols = []; for (var k = 0; k < K; k++) cols.push([]);
+  var eff = 0;
+  for (var k = 1; k <= K; k++) { if (chunks[0][k - 1] <= H + 1e-6) eff = k; }
+  if (eff === 0) return { used: 0, cols: K, layout: [[]], rowH: 0 };   // not even one chunk fits
+  var hs = chunks.map(function (c) { return c[eff - 1]; });
+  var cols = []; for (var c0 = 0; c0 < eff; c0++) cols.push([]);
   var ci = 0, colSum = 0, used = 0;
   for (var i = 0; i < hs.length; i++) {
     if (colSum + hs[i] <= H + 1e-6) { cols[ci].push(i); colSum += hs[i]; used++; }
-    else if (ci < K - 1 && hs[i] <= H + 1e-6) { ci++; colSum = hs[i]; cols[ci].push(i); used++; }
+    else if (ci < eff - 1 && hs[i] <= H + 1e-6) { ci++; colSum = hs[i]; cols[ci].push(i); used++; }
     else break;                                                          // chunk won't fit -> flows on
   }
-  if (used === 0) { cols[0].push(0); used = 1; }                        // never stall
-  var rowH = colsHeight(hs, cols);                                     // from the SAME assignment
-  return { used: used, cols: K, layout: cols, rowH: round3(rowH) };
+  if (used === 0) { cols[0].push(0); used = 1; }                        // eff>=1 guarantees chunk0 fits H
+  var rowH = colsHeight(hs, cols);
+  return { used: used, cols: eff, layout: cols, rowH: round3(rowH) };
 }
 
 // ---- main: pack moments onto pages --------------------------------------
@@ -137,9 +140,11 @@ function planComic(moments, opts) {
         if (!img.shrunk && avail() < img.hIn - 1e-6) {
           if (slk >= aboveMin && idx < chunks.length) {
             var pa = fillPartial(chunks.slice(idx), slk, overflowCols);
-            add({ type: 'narr', moment: mi, cols: pa.cols, rowH: pa.rowH,
-                  colChunks: pa.layout.map(function (col) { return col.map(function (li) { return idx + li; }); }) }, pa.rowH);
-            idx += pa.used;
+            if (pa.used > 0) {
+              add({ type: 'narr', moment: mi, cols: pa.cols, rowH: pa.rowH,
+                    colChunks: pa.layout.map(function (col) { return col.map(function (li) { return idx + li; }); }) }, pa.rowH);
+              idx += pa.used;
+            }
           }
           newPage();
         }
@@ -179,6 +184,7 @@ function planComic(moments, opts) {
         idx += rest.length;
       } else {
         var part = fillPartial(rest, H, overflowCols);
+        if (part.used === 0) { newPage(); continue; }      // nothing fit here -> fresh page
         add({ type: 'narr', moment: mi, cols: part.cols, rowH: part.rowH,
               colChunks: part.layout.map(function (col) { return col.map(function (li) { return idx + li; }); }) }, part.rowH);
         idx += part.used;
