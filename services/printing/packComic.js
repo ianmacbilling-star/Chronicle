@@ -47,12 +47,22 @@ function packComic(blocks, opts) {
 
   // 2) pack rows onto pages
   var pages = [];
-  function newPage() { pages.push({ index: pages.length, usedIn: 0, hasImage: false, rows: [], splits: [] }); return pages[pages.length - 1]; }
+  function newPage() { pages.push({ index: pages.length, usedIn: 0, hasImage: false, rows: [], splits: [], placements: [] }); return pages[pages.length - 1]; }
   function cur2() { return pages[pages.length - 1] || newPage(); }
-  function placeRow(row, h, isSplitPart) {
+  function placeRow(row, h, isSplitPart, partLabel) {
     var p = cur2();
     var img = !!(row.hasImage && !isSplitPart);
     p.rows.push({ moment: row.moment, heightIn: round3(h), hasImage: img, split: !!isSplitPart });
+    if (isSplitPart) {
+      p.placements.push({ moment: row.moment, kind: 'narr', heightIn: round3(h), split: true, part: partLabel || 'mid' });
+    } else if (row.blocks) {
+      for (var bi = 0; bi < row.blocks.length; bi++) {
+        var blk = row.blocks[bi];
+        p.placements.push({ moment: blk.moment, kind: isImage(blk) ? 'image' : 'narr', heightIn: round3(blk.heightIn || 0), split: false, part: 'whole' });
+      }
+    } else {
+      p.placements.push({ moment: row.moment, kind: img ? 'image' : 'narr', heightIn: round3(h), split: false, part: 'whole' });
+    }
     p.usedIn = round3(p.usedIn + h + gap);
     if (img) p.hasImage = true;
   }
@@ -75,7 +85,7 @@ function packComic(blocks, opts) {
       var left = row.heightIn;
       var firstFit = remaining - gap;
       if (firstFit >= minChunkIn) {
-        placeRow({ moment: row.moment, hasImage: false }, firstFit, true);
+        placeRow({ moment: row.moment, hasImage: false }, firstFit, true, 'head');
         cur2().splits.push({ moment: row.moment, heightIn: round3(firstFit), part: 'head' });
         left = round3(left - firstFit);
       }
@@ -83,7 +93,7 @@ function packComic(blocks, opts) {
         newPage();
         var chunk = Math.min(left, pageH - gap);
         var part = (left <= pageH - gap + 1e-6) ? 'tail' : 'mid';
-        placeRow({ moment: row.moment, hasImage: false }, chunk, true);
+        placeRow({ moment: row.moment, hasImage: false }, chunk, true, part);
         cur2().splits.push({ moment: row.moment, heightIn: round3(chunk), part: part });
         left = round3(left - chunk);
       }

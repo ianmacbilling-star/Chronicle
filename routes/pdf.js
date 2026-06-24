@@ -1389,6 +1389,67 @@ function renderMagazine(moments, sections, intro, outro, opts) {
   return html;
 }
 
+function _twoPassChildOpts(opts) {
+  var o = {};
+  for (var k in opts) { if (Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k]; }
+  o.measureTag = false; o.twoPass = false; o._twoPassMeasured = null;
+  return o;
+}
+
+// Two-pass Comic render (Stage 4). Uses the measured packComic plan to lay the
+// comic out into explicit print pages: each page re-renders its STARTING moments
+// (image lands here) through the real renderComicPage grid with narration trimmed
+// to this page's portion, and prints CONTINUATION narration (overflow from a moment
+// whose image was on an earlier page) as a full-width box above them. Gated: only
+// reached when opts.twoPass + opts._twoPassMeasured are set.
+function renderComicTwoPass(moments, sections, intro, outro, opts) {
+  var measured = opts && opts._twoPassMeasured;
+  if (!measured || !measured.plan || !measured.plan.pages || !measured.plan.pages.length) {
+    return renderComicPage(moments, sections, intro, outro, _twoPassChildOpts(opts));
+  }
+  var p2p = require('../services/printing/planToPages');
+  var blocks = measured.blocks || [];
+  var plan = measured.plan;
+  var childOpts = _twoPassChildOpts(opts);
+  sections = sections || [];
+
+  function secFor(i) { return sections.find(function (s) { return s.panel_index === i; }) || {}; }
+  function narrTextFor(i) { var s = secFor(i); return [s.before, s.after].filter(Boolean).join(' '); }
+
+  var narrH = {};
+  for (var bi = 0; bi < blocks.length; bi++) {
+    var b = blocks[bi];
+    if (b && typeof b.kind === 'string' && b.kind.indexOf('image') === -1) {
+      narrH[b.moment] = (narrH[b.moment] || 0) + (b.heightIn || 0);
+    }
+  }
+  var perMoment = {};
+  for (var i = 0; i < moments.length; i++) {
+    perMoment[i] = { narrText: narrTextFor(i), narrHeightIn: narrH[i] || 0 };
+  }
+
+  var pageContent = p2p.planToPageContent(plan, perMoment);
+  var PAGE_H = (opts && opts.pageHeightIn) ? opts.pageHeightIn : 9.7;
+
+  var html = coDropOrIntro(intro, opts);
+  for (var pgi = 0; pgi < pageContent.length; pgi++) {
+    var pc = pageContent[pgi];
+    var inner = '';
+    for (var ci = 0; ci < pc.continuations.length; ci++) {
+      if (pc.continuations[ci].text) inner += cgFullWidthNarr(pc.continuations[ci].text, childOpts);
+    }
+    if (pc.starts.length) {
+      var subMoments = pc.starts.map(function (st) { return moments[st.moment]; });
+      var subSections = pc.starts.map(function (st, idx) { return { panel_index: idx, before: '', after: st.text }; });
+      inner += renderComicPage(subMoments, subSections, '', '', childOpts);
+    }
+    var brk = (pgi === pageContent.length - 1) ? '' : 'page-break-after:always;break-after:page;';
+    html += '<div style="min-height:' + PAGE_H.toFixed(2) + 'in;' + brk + '">' + inner + '</div>';
+  }
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
 function renderLayout(opts, moments, sections, intro, outro) {
   if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet - generate your storyboard first.</p>';
   sections = sections || []; intro = intro || ''; outro = outro || '';
@@ -1396,7 +1457,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
     case 'paired': return renderPaired(moments, sections, intro, outro, opts);
-    case 'comicpage': return renderComicPage(moments, sections, intro, outro, opts);
+    case 'comicpage': return (opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts);
     case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
     case 'grid':
     default:       return renderGrid(moments, sections, intro, outro, opts);
@@ -2432,6 +2493,24 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       _measured.layout = 'comicpage';
       _measured.sessionId = String(req.params.sessionId);
       return res.json(_measured);
+    }
+    // Two-pass paginated Comic render (Stage 4, gated). Measure -> pack -> paginate.
+    if (req.query.twopass === '1' || req.query.twopass === 'true') {
+      var _tco = co || {};
+      _tco.arrange = 'comicpage';
+      var _tmco = {}; for (var _tk in _tco) { if (Object.prototype.hasOwnProperty.call(_tco, _tk)) _tmco[_tk] = _tco[_tk]; }
+      _tmco.measureTag = true; _tmco.twoPass = false;
+      var _tmhtml = buildSessionHTML(session, moments, campaign, characters, narrative, _tmco, { noCover: true });
+      var _tmeasured = await measureDocument(_tmhtml, {});
+      var _tmaxPP = await getAppSettingInt('max_pages_per_print', 250);
+      _tmeasured.plan = packComic(_tmeasured.blocks, { pageHeightIn: 9.7, gapIn: 0.12, maxPages: _tmaxPP });
+      _tco.measureTag = false; _tco.twoPass = true; _tco._twoPassMeasured = _tmeasured;
+      var _thtml = buildSessionHTML(session, moments, campaign, characters, narrative, _tco, { noCover: true });
+      if (await userInFreeTrial(db, req.session.userId)) _thtml = injectTrialWatermark(_thtml);
+      if (req.query.format === 'pdf') {
+        return await sendHtmlAsPdf(res, _thtml, pdfFileName([campaign.name, session.name, 'twopass']));
+      }
+      return res.send(_thtml);
     }
     if (req.query.format === 'pdf') {
       var sfo = await db.prepare("SELECT u.name AS uname, sf.role AS srole FROM session_forks sf JOIN users u ON u.id = sf.user_id WHERE sf.id = ?").get(viewForkId);
