@@ -2634,7 +2634,12 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
         var mi = +mm[1], ci = +mm[2], wi = +mm[3];
         _byM[mi] = _byM[mi] || []; _byM[mi][ci] = _byM[mi][ci] || []; _byM[mi][ci][wi] = b.heightIn;
       });
-      var _engMoments = moments.map(function (mo, idx) {
+      // Align with the renderer: buildSessionHTML lifts the establishing/title moment
+      // OUT of the panel flow and reindexes the rest into _storyMoments. The chunk
+      // measurement and renderComicEngine both operate on that stripped+reindexed list,
+      // so the plan must be built over the SAME list or indices drift by one.
+      var _storyM = moments.filter(function (mm) { return mm.kind !== 'establishing'; });
+      var _engMoments = _storyM.map(function (mo, idx) {
         return { image: { aspect: momentAspect(mo), prominence: lmProminence(mo), tier: lmSizeTier(mo), hasImage: !!mo.image }, chunks: _byM[idx] || [] };
       });
       var _emax = await getAppSettingInt('max_pages_per_print', 250);
