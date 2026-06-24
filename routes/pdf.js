@@ -1076,16 +1076,51 @@ function cgSplitNarr(text){
   if (buf.trim()) chunks.push(buf.trim());
   return chunks;
 }
-// Full-width narrative box under the comic grid. Long narrative is laid out in
-// 2-3 balanced text columns (renderer-chosen by length) so the block is compact
-// under a full-width image and far less likely to strand whitespace by bumping
-// whole to the next page. Short narrative stays a single column, unchanged.
-// Same column technique the Table of Contents uses.
+// Split narrative into `cols` roughly-equal parts, PRESERVING reading order
+// (col 1 = first sentences, col 2 = next, ...). Uses the existing sentence
+// chunker; falls back to a word split if there aren't enough sentence chunks.
+function cgBalanceCols(text, cols) {
+  var chunks = cgSplitNarr(text);
+  if (chunks.length < cols) {
+    var words = String(text || '').split(/\s+/).filter(function(w){ return w.length; });
+    chunks = [];
+    var per = Math.max(1, Math.ceil(words.length / cols));
+    for (var w = 0; w < words.length; w += per) chunks.push(words.slice(w, w + per).join(' '));
+  }
+  var total = 0;
+  for (var c = 0; c < chunks.length; c++) total += chunks[c].length;
+  var target = total / cols;
+  var buckets = [], cur = '', curLen = 0, made = 0;
+  for (var i = 0; i < chunks.length; i++) {
+    cur += (cur ? ' ' : '') + chunks[i];
+    curLen += chunks[i].length;
+    var remainingChunks = chunks.length - 1 - i;
+    var remainingCols = cols - made - 1;
+    if (made < cols - 1 && curLen >= target && remainingChunks >= remainingCols) {
+      buckets.push(cur); cur = ''; curLen = 0; made++;
+    }
+  }
+  if (cur) buckets.push(cur);
+  return buckets;
+}
+// Full-width narrative under the comic grid. Long narrative becomes a ROW of
+// SEPARATE bordered parchment boxes (2-3, renderer-chosen by length), each its
+// own comic panel, balanced by length and in reading order -- compact under a
+// full-width image with far less stranded whitespace. Short narrative stays a
+// single full-width box, unchanged.
 function cgFullWidthNarr(text, opts) {
   var n = (text || '').length;
   var cols = (n >= 640) ? 3 : ((n >= 300) ? 2 : 1);
-  var colCss = (cols > 1) ? ('column-count:' + cols + ';column-gap:0.28in;') : '';
-  return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;' + colCss + '">' + buildNarrativeHTML(text, false) + '</div>';
+  var oneBox = function () {
+    return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(text, false) + '</div>';
+  };
+  if (cols <= 1) return oneBox();
+  var parts = cgBalanceCols(text, cols);
+  if (parts.length <= 1) return oneBox();
+  var boxes = parts.map(function (pt) {
+    return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;flex:1 1 0;min-width:0;">' + buildNarrativeHTML(pt, false) + '</div>';
+  }).join('');
+  return '<div style="grid-column:span 2;display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + boxes + '</div>';
 }
 function renderComicPage(moments, sections, intro, outro, opts) {
   // Comic = a tic-tac-toe LATTICE (v4). Two-column base grid of bold-framed cells.
