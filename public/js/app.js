@@ -3056,15 +3056,29 @@ function customStylesLoaded() { return !!(state && state._customStylesLoaded); }
 function getCustomStyles() { return (state && state.customStyles) ? state.customStyles : []; }
 function customStyleById(id) {
   var rid = String(id).indexOf('custom:') === 0 ? String(id).slice(7) : String(id);
-  var list = getCustomStyles();
-  for (var i = 0; i < list.length; i++) { if (String(list[i].id) === rid) return list[i]; }
+  var lists = [ getAvailableStyles(), getCustomStyles() ];
+  for (var L = 0; L < lists.length; L++) { var list = lists[L]; for (var i = 0; i < list.length; i++) { if (String(list[i].id) === rid) return list[i]; } }
   return null;
 }
 function loadCustomStyles(cb) {
   fetch('/api/art-styles/custom', { headers: { 'Accept': 'application/json' } })
     .then(function(r){ return r.json(); })
-    .then(function(data){ if (state) { state.customStyles = Array.isArray(data) ? data : []; state._customStylesLoaded = true; } })
-    .catch(function(){ if (state) { state.customStyles = state.customStyles || []; state._customStylesLoaded = true; } })
+    .then(function(data){ if (state) { state.customStyles = Array.isArray(data) ? data : []; state._customStylesLoaded = true; state._availableStylesLoaded = false; } })
+    .catch(function(){ if (state) { state.customStyles = state.customStyles || []; state._customStylesLoaded = true; state._availableStylesLoaded = false; } })
+    .then(function(){ if (typeof cb === 'function') cb(); });
+}
+// Styles the caller may USE in the current campaign: own (if Platinum) + the
+// campaign SM's (if the SM is Platinum and the caller is a member). Used by the
+// art picker and by custom-name resolution for SM-shared styles. Falls back to
+// own styles when no campaign is in context.
+function availableStylesLoaded() { return !!(state && state._availableStylesLoaded); }
+function getAvailableStyles() { return (state && state.availableStyles) ? state.availableStyles : []; }
+function loadAvailableStyles(campaignId, cb) {
+  var url = campaignId ? ('/api/art-styles/custom/available/' + campaignId) : '/api/art-styles/custom';
+  fetch(url, { headers: { 'Accept': 'application/json' } })
+    .then(function(r){ return r.json(); })
+    .then(function(data){ if (state) { state.availableStyles = Array.isArray(data) ? data : []; state._availableStylesLoaded = true; } })
+    .catch(function(){ if (state) { state.availableStyles = state.availableStyles || []; state._availableStylesLoaded = true; } })
     .then(function(){ if (typeof cb === 'function') cb(); });
 }
 function cstyleErr(msg) { var e = document.getElementById('cstyle-error'); if (!e) return; if (msg) { e.textContent = msg; e.classList.remove('hidden'); } else { e.textContent = ''; e.classList.add('hidden'); } }
@@ -3268,7 +3282,7 @@ function openStylePicker(kind) {
     if (titleEl) titleEl.textContent = 'Choose an art style';
     cur = state.artStyle ? state.artStyle : 'High fantasy illustration';
     meta = ART_STYLE_META;
-    if (!customStylesLoaded()) { loadCustomStyles(function(){ openStylePicker('art'); }); return; }
+    if (!availableStylesLoaded()) { loadAvailableStyles(state.currentCampaign && state.currentCampaign.id, function(){ openStylePicker('art'); }); return; }
   } else if (STYLE_PICKER_KIND === 'layout') {
     if (titleEl) titleEl.textContent = 'Choose a layout';
     cur = normalizeLayoutId(state.layoutStyle || 'Classic');
@@ -3302,20 +3316,26 @@ function openStylePicker(kind) {
       '</div>';
   }).join('');
   if (STYLE_PICKER_KIND === 'art') {
-    var _cs = getCustomStyles();
-    if (_cs.length) {
-      var _csh = '<div class="style-custom-head" style="grid-column:1 / -1;margin:8px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim);">My Custom Styles</div>';
-      _csh += _cs.map(function(s) {
+    var _av = getAvailableStyles();
+    var _mine = _av.filter(function(s){ return !s.shared_by_sm; });
+    var _sm = _av.filter(function(s){ return s.shared_by_sm; });
+    var _renderCustGroup = function(title, arr) {
+      if (!arr.length) return '';
+      var h = '<div class="style-custom-head" style="grid-column:1 / -1;margin:8px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim);">' + escapeHtml(title) + '</div>';
+      h += arr.map(function(s) {
         var cid = 'custom:' + s.id;
         var on2 = (cid === cur) ? ' is-selected' : '';
         var badge2 = (cid === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
+        var _d = s.is_fade ? 'Soft, faded edges.' : (s.shared_by_sm ? "Shared by your campaign's SM." : 'Your custom art style.');
         return '<div class="style-card' + on2 + '" onclick="selectStyleCard(\'art\',\'' + cid + '\')">' +
           '<div class="style-card-name">' + escapeHtml(s.name || 'Untitled') + badge2 + '</div>' +
-          '<div class="style-card-desc">' + (s.is_fade ? 'Soft, faded edges.' : 'Your custom art style.') + '</div>' +
+          '<div class="style-card-desc">' + _d + '</div>' +
           '</div>';
       }).join('');
-      grid.innerHTML += _csh;
-    }
+      return h;
+    };
+    grid.innerHTML += _renderCustGroup('My Custom Styles', _mine);
+    grid.innerHTML += _renderCustGroup('Campaign Styles (SM)', _sm);
   }
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.remove('hidden');
@@ -3431,6 +3451,12 @@ function loadLastArtStyle(artStyle, layoutStyle) {
   if (layoutStyle && !state.layoutStyle) state.layoutStyle = layoutStyle;
   refreshArtStyleButtons();
   refreshLayoutStyleButtons();
+  // If this version's art style is a custom one, load the campaign-available
+  // styles so the button label resolves to 'Custom: <name>' (covers members
+  // using the SM's style before they've opened the picker).
+  if (typeof state.artStyle === 'string' && state.artStyle.indexOf('custom:') === 0 && !availableStylesLoaded()) {
+    loadAvailableStyles(state.currentCampaign && state.currentCampaign.id, function(){ refreshArtStyleButtons(); });
+  }
 }
 
 // ============================================================

@@ -598,17 +598,41 @@ function getStylePrefix(style) {
   return prefixes[style] || prefixes['High fantasy illustration'];
 }
 
-// Resolve a style id for generation. Custom styles arrive as 'custom:<rowId>';
-// look up the OWNER's STYLE: paragraph + fade flag at gen time and never trust
-// the client id (sharing is a later pass, so only the owner can render with it).
-// Unknown/foreign ids fall back to the base style so a panel renders, not breaks.
-async function resolveGenStyle(db, style, userId) {
+// Resolve a style id for generation. Custom styles arrive as 'custom:<rowId>'.
+// Access (v2.2 campaign-sharing): a custom style is usable by its OWNER in any
+// campaign they're in, OR by a MEMBER of a campaign whose SM (the 'dm' member)
+// owns it -- members may render with the SM's styles to contribute to the
+// canonical story, but never with a peer member's styles.
+// Tier (lapse): usable only while the OWNING party is currently true Platinum
+// (own use: the owner; member use: the SM). A recognized + accessible but lapsed
+// style returns { locked:true } so the caller can surface STYLE_LOCKED. A
+// foreign/unknown id still falls back silently to the base style (defensive:
+// that should only ever arrive from a tampered client).
+async function resolveGenStyle(db, style, userId, campaignId) {
   if (typeof style === 'string' && style.indexOf('custom:') === 0) {
     const rowId = parseInt(style.slice(7), 10);
     if (rowId) {
       try {
-        const row = await db.prepare('SELECT style_prompt, is_fade FROM custom_art_styles WHERE id = ? AND owner_id = ?').get(rowId, userId);
-        if (row && row.style_prompt) { var _sp = /^STYLE:/i.test(row.style_prompt) ? row.style_prompt : ('STYLE: ' + row.style_prompt); return { styleForGen: _sp, isFade: !!row.is_fade }; }
+        const row = await db.prepare('SELECT id, owner_id, name, style_prompt, is_fade FROM custom_art_styles WHERE id = ?').get(rowId);
+        if (row && row.style_prompt) {
+          let allowed = (String(row.owner_id) === String(userId));
+          if (!allowed && campaignId) {
+            // Member use: the style's owner must be THIS campaign's SM (dm), and
+            // the caller must be a member of the campaign.
+            const myRole = await getCampaignRole(userId, campaignId);
+            if (myRole) {
+              const dm = await db.prepare("SELECT user_id FROM campaign_members WHERE campaign_id = ? AND role = 'dm'").get(campaignId);
+              if (dm && String(dm.user_id) === String(row.owner_id)) allowed = true;
+            }
+          }
+          if (allowed) {
+            // Lapse gate: the OWNING party must currently be true Platinum.
+            const ownerTier = await getEffectiveTier(row.owner_id, null);
+            if (ownerTier !== 'platinum') return { locked: true };
+            var _sp = /^STYLE:/i.test(row.style_prompt) ? row.style_prompt : ('STYLE: ' + row.style_prompt);
+            return { styleForGen: _sp, isFade: !!row.is_fade, name: row.name || null };
+          }
+        }
       } catch (e) { console.error('custom style resolve error:', e.message); }
     }
     return { styleForGen: 'High fantasy illustration', isFade: null };
@@ -823,7 +847,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
     const userThinking = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
     const momentDirsS = await loadMomentDirections(db, moment.fork_id);
-    const _rs = await resolveGenStyle(db, style, req.session.userId);
+    const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
     const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
@@ -894,7 +919,8 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
     const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
     const refsR = combineRefs(charListR.refs, assetListR.refs);
-    const _rs = await resolveGenStyle(db, style, req.session.userId);
+    const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
     const sub = await submitRetouch(moment.image, instruction, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
@@ -1041,6 +1067,10 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
 
   const momentDirs = await loadMomentDirections(db, targetForkId);
+  // Whole batch shares one art style: resolve + lapse-check once, before the
+  // concurrent map (a return inside the map would not abort the batch).
+  const _rsAll = await resolveGenStyle(db, style, req.session.userId, campaign_id);
+  if (_rsAll.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
   const submitResults = await Promise.allSettled(
     toGenerate.map(async function(m) {
       const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
@@ -1059,7 +1089,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castExplicit: !!m.cast_explicit,
         castNames: castNames
       };
-      const _rs = await resolveGenStyle(db, style, req.session.userId);
+      const _rs = _rsAll;
       const sub = await submitPanelGen(applyMomentDirection(m.prompt, momentDirs[m.id]), _rs.styleForGen, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll, _rs.isFade);
       const nowTs = new Date().toISOString();
       const jobIns = await db.prepare(

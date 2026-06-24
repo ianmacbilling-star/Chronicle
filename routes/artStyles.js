@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier } = require('../middleware/tiers');
 const { canAfford, spendTokens } = require('./tokens');
 const { uploadFile } = require('../storage/storage');
@@ -61,6 +61,62 @@ router.get('/custom', requireAuth, async function(req, res) {
   } catch (e) {
     console.error('list custom styles error:', e.message);
     res.json({ error: 'Could not load your custom styles.' });
+  }
+});
+
+// GET /api/art-styles/custom/available/:campaignId -- styles the caller may USE
+// for generation in this campaign: their OWN styles (only while the caller is
+// currently true Platinum) PLUS the campaign SM's styles (only while the SM is
+// currently true Platinum and the caller is a member). Never peer members'
+// styles. Lean output (no style_prompt) so the SM's directive text isn't exposed
+// to members; the picker only needs id/name/thumbnail. shared_by_sm flags the
+// SM group in the UI.
+function pickRowOut(r, sharedBySm) {
+  if (!r) return r;
+  return { id: r.id, name: r.name, is_fade: r.is_fade ? 1 : 0, sample_urls: parseSamples(r.sample_urls), shared_by_sm: sharedBySm ? 1 : 0 };
+}
+
+router.get('/custom/available/:campaignId', requireAuth, async function(req, res) {
+  try {
+    const db = await getDb();
+    const campaignId = req.params.campaignId;
+    const out = [];
+    const seen = {};
+
+    // Caller's own styles -- only if the caller is currently true Platinum.
+    const ownTier = await getEffectiveTier(req.session.userId, null);
+    if (ownTier === 'platinum') {
+      const mine = await db.prepare(
+        'SELECT * FROM custom_art_styles WHERE owner_id = ? ORDER BY created_at ASC'
+      ).all(req.session.userId);
+      for (const r of (mine || [])) { if (!seen[r.id]) { seen[r.id] = 1; out.push(pickRowOut(r, false)); } }
+    }
+
+    // The campaign SM's styles -- only if the caller is a member and the SM is
+    // currently true Platinum. (If the caller IS the SM, their styles already
+    // appeared above and are deduped here.)
+    if (campaignId) {
+      const role = await getCampaignRole(req.session.userId, campaignId);
+      if (role) {
+        const dm = await db.prepare(
+          "SELECT user_id FROM campaign_members WHERE campaign_id = ? AND role = 'dm'"
+        ).get(campaignId);
+        if (dm && String(dm.user_id) !== String(req.session.userId)) {
+          const dmTier = await getEffectiveTier(dm.user_id, null);
+          if (dmTier === 'platinum') {
+            const smStyles = await db.prepare(
+              'SELECT * FROM custom_art_styles WHERE owner_id = ? ORDER BY created_at ASC'
+            ).all(dm.user_id);
+            for (const r of (smStyles || [])) { if (!seen[r.id]) { seen[r.id] = 1; out.push(pickRowOut(r, true)); } }
+          }
+        }
+      }
+    }
+
+    res.json(out);
+  } catch (e) {
+    console.error('available custom styles error:', e.message);
+    res.json([]);
   }
 });
 
