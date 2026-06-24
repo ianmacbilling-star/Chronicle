@@ -879,6 +879,10 @@ async function migrateArchives(pool) {
   // lives in image_url). Lets the chest reflect whether THIS image is saved.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS source_url TEXT');
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS art_style TEXT');
+  // art_style_name = resolved DISPLAY name of a custom art style, stamped at
+  // archive time so the label ("Custom: <name>") is identical for every viewer
+  // and survives later renames, deletes, or tier lapses. Null for presets.
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS art_style_name TEXT');
   // public = owner opted this archived image into the anonymous Public Library.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS public BOOLEAN DEFAULT FALSE');
   await pool.query("CREATE INDEX IF NOT EXISTS idx_archives_public ON campaign_archives(created_at DESC, id DESC) WHERE public = TRUE");

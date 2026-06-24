@@ -3400,9 +3400,22 @@ function artStyleName(v) {
   return v || 'High fantasy';
 }
 
+// Display label for an art style. Presets show their plain name; custom styles
+// show "Custom: <name>" so members know it's custom (and to nudge upgrades).
+// stampedName: a server-resolved name (archives carry art_style_name) so the
+// label is identical for every viewer and survives renames/deletes/lapses.
+function artStyleLabel(v, stampedName) {
+  if (typeof v === 'string' && v.indexOf('custom:') === 0) {
+    var nm = stampedName;
+    if (!nm) { var r = artStyleName(v); if (r && r !== 'Custom style') nm = r; }
+    return nm ? ('Custom: ' + nm) : 'Custom style';
+  }
+  return artStyleName(v);
+}
+
 function refreshArtStyleButtons() {
   var v = state.artStyle ? state.artStyle : 'High fantasy illustration';
-  var label = 'Art: ' + artStyleName(v);
+  var label = 'Art: ' + artStyleLabel(v);
   ['review-art-style-btn', 'sb-art-style-btn'].forEach(function (bid) {
     var b = document.getElementById(bid);
     if (b) b.textContent = label;
@@ -6688,7 +6701,7 @@ function renderArchiveFilters() {
     if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
     if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
     if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
-    if (a.art_style) styles[a.art_style] = a.art_style;
+    if (a.art_style) styles[a.art_style] = artStyleLabel(a.art_style, a.art_style_name);
     if (a.fork_id) versions[a.fork_id] = (a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
     if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
   });
@@ -6734,7 +6747,7 @@ function archiveFilterBarHTML(f, onchange) {
     if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
     if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
     if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
-    if (a.art_style) styles[a.art_style] = a.art_style;
+    if (a.art_style) styles[a.art_style] = artStyleLabel(a.art_style, a.art_style_name);
     if (a.fork_id) versions[a.fork_id] = (a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
     if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
   });
@@ -6976,7 +6989,7 @@ function renderPicker() {
     if (a.session_title) cap += '<br>' + escapeHtml(a.session_title);
     var ver = (!a.fork_id || a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
     cap += '<br>' + escapeHtml(ver);
-    if (a.art_style) cap += '<br>' + escapeHtml(a.art_style);
+    if (a.art_style) cap += '<br>' + escapeHtml(artStyleLabel(a.art_style, a.art_style_name));
     return '<div class="archive-pick-item">' +
       '<img src="' + escapeHtml(a.image_url) + '" loading="lazy" onclick="applyArchiveToTarget(' + a.id + ')">' +
       '<div class="archive-pick-cap">' + cap + '</div>' +
@@ -7064,7 +7077,7 @@ function renderArchives() {
     if (a.session_title) meta += '<div class="archive-row"><span>Session</span><b>' + escapeHtml(a.session_title) + '</b></div>';
     if (ver) meta += '<div class="archive-row"><span>Version</span><b>' + escapeHtml(ver) + '</b></div>';
     if (mom) meta += '<div class="archive-row"><span>Moment</span><b>' + escapeHtml(mom) + '</b></div>';
-    if (a.art_style) meta += '<div class="archive-row"><span>Style</span><b>' + escapeHtml(a.art_style) + '</b></div>';
+    if (a.art_style) meta += '<div class="archive-row"><span>Style</span><b>' + escapeHtml(artStyleLabel(a.art_style, a.art_style_name)) + '</b></div>';
     if (a.character_name) meta += '<div class="archive-row"><span>Character</span><b>' + escapeHtml(a.character_name) + '</b></div>';
     meta += '<div class="archive-row"><span>Archived by</span><b>' + escapeHtml(a.archived_by_name || 'someone') + (when ? ' &middot; ' + when : '') + '</b></div>';
     var promptBtn = a.image_prompt ? '<button class="archive-prompt-btn" onclick="viewArchivePrompt(' + a.id + ')" title="View the prompt for this image">&#128196; View Prompt</button>' : '';
@@ -7579,7 +7592,7 @@ function renderStoryboard() {
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
         '<span class="moment-title">' + m.title + '</span>' +
-        '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleName(m.style) : 'Unknown') + ', ' + (typeLabel[m.type]||m.type) + ', ' + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
+        '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : 'Unknown') + ', ' + (typeLabel[m.type]||m.type) + ', ' + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
         optsBtn +
       '</div>' +
       '<div class="moment-options" id="moment-options-' + m.id + '" style="display:none;"></div>' +

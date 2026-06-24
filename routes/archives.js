@@ -46,13 +46,27 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
       if (!moment.image) return res.json({ error: 'This panel has no image to archive yet.' });
 
       const artStyle = moment.style || null;
+      // Stamp the resolved display name for a custom style so the archive label
+      // is identical for every viewer and survives later rename/delete/lapse.
+      // Trusted server-side lookup by id only (no owner constraint) — this is a
+      // read for labeling, not a use grant.
+      let artStyleName = null;
+      if (artStyle && /^custom:/i.test(artStyle)) {
+        const _csId = parseInt(String(artStyle).slice(7), 10);
+        if (_csId) {
+          try {
+            const _cs = await db.prepare('SELECT name FROM custom_art_styles WHERE id = ?').get(_csId);
+            if (_cs && _cs.name) artStyleName = _cs.name;
+          } catch (e) { console.error('archive style-name resolve error:', e.message); }
+        }
+      }
       const archivedUrl = await archiveCopy(moment.image);
       const now = new Date().toISOString();
       const result = await db.prepare(
-        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, art_style, archived_by, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, archived_by, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(req.params.campaignId, moment.session_id, moment.fork_id, moment.id, 'moment',
-            moment.title || null, archivedUrl, moment.image, moment.prompt || null, artStyle, req.session.userId, now);
+            moment.title || null, archivedUrl, moment.image, moment.prompt || null, artStyle, artStyleName, req.session.userId, now);
       const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
       return res.json({ success: true, archive: row });
     }
