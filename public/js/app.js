@@ -2900,7 +2900,16 @@ function loadTierInfo(campaignId) {
 // Apply a finished regenerated image to its panel and refresh the views.
 function applyRegenResult(momentId, imageUrl) {
   var moment = state.moments.find(function(m) { return m.id === momentId; });
-  if (moment) { moment.image = imageUrl; moment.archived = false; }
+  if (moment) {
+    // One-deep Revert: mirror the server's armed slot locally (the prior image is
+    // the panel's current image, before we overwrite) so the Revert pill shows now.
+    if (moment.image && moment.image !== imageUrl) {
+      moment.revert_image = moment.image;
+      moment.revert_img_w = moment.img_w || null;
+      moment.revert_img_h = moment.img_h || null;
+    }
+    moment.image = imageUrl; moment.archived = false;
+  }
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
   renderStoryboard();
   renderNovelWithImages();
@@ -3025,7 +3034,10 @@ function pollRefJob(jobId, onDone, onFail) {
 function applyCanonicalRef(charId, url) {
   clearCharGenBusy(charId);   // TF-09: generation finished
   var ch = (state.characters || []).find(function(c) { return c.id === charId; });
-  if (ch) { ch.canonical_reference_url = url; ch.archived = false; renderCharModalPrompt(ch); }
+  if (ch) {
+    if (ch.canonical_reference_url && ch.canonical_reference_url !== url) ch.revert_reference_url = ch.canonical_reference_url;
+    ch.canonical_reference_url = url; ch.archived = false; renderCharModalPrompt(ch);
+  }
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 }
 
