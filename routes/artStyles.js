@@ -3,6 +3,10 @@ const router = express.Router();
 const { getDb } = require('../database/db');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier } = require('../middleware/tiers');
+const { canAfford, spendTokens } = require('./tokens');
+const { uploadFile } = require('../storage/storage');
+const multer = require('multer');
+const path = require('path');
 
 // Custom Art Styles are account-wide and owned by the user. CREATE / manage is
 // gated on the owner's TRUE account tier being Platinum (their own users.tier),
@@ -123,6 +127,94 @@ router.delete('/custom/:id', requireAuth, async function(req, res) {
     console.error('delete custom style error:', e.message);
     res.json({ error: 'Could not delete your custom style.' });
   }
+});
+
+// ---- Sample upload + the analyze vision call (Platinum-gated) ----
+const sampleUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: function(req, file, cb) {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Images only'));
+  }
+}).array('images', 4);
+
+// One token covers the analyze vision call (a cheap Claude text call); the style
+// is then free on every later panel since it is just text in system_prompt.
+const COST_ANALYZE = 1;
+
+const STYLE_ANALYZE_SYSTEM =
+  'You are an art director analyzing reference images to define a reusable ' +
+  'illustration style for a graphic-novel image generator. Look ONLY at HOW the ' +
+  'images are rendered, never at WHAT they depict. Output exactly two things and ' +
+  'nothing else. (1) A single paragraph that begins with the literal token ' +
+  '"STYLE:" and names the medium, linework, colour treatment, shading and ' +
+  'lighting, texture, and any era or broad tradition it evokes. Describe the ' +
+  'rendering style only, never the subjects, characters, or scenes shown. You may ' +
+  'reference broad artistic traditions, but do not instruct imitation of a ' +
+  'specific living artist by name without also giving generic descriptors. (2) On ' +
+  'a final separate line, write "FADE: yes" if the art characteristically fades ' +
+  'to a clean pure-white (#ffffff) edge with no frame or border, or "FADE: no" ' +
+  'if it fills the frame edge to edge. Output only the STYLE paragraph and the ' +
+  'FADE line, with no preamble.';
+
+// POST /api/art-styles/custom/analyze (multipart: images[]) -- one Claude vision
+// call writes a house-format STYLE: paragraph + fade flag from 2-4 samples.
+router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, res) {
+  sampleUpload(req, res, async function(uploadErr) {
+    if (uploadErr) return res.json({ error: uploadErr.message || 'Could not read your images.' });
+    try {
+      const files = req.files || [];
+      if (files.length < 2) return res.json({ error: 'Add at least 2 reference images so the style can be read reliably.' });
+      const key = process.env.ANTHROPIC_API_KEY;
+      if (!key) return res.json({ error: 'Style analysis is not configured. Please contact support.' });
+      if (!(await canAfford(req.session.userId, COST_ANALYZE))) {
+        return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to analyze a style.' });
+      }
+      const content = [];
+      const sampleUrls = [];
+      for (const f of files) {
+        content.push({ type: 'image', source: { type: 'base64', media_type: f.mimetype, data: f.buffer.toString('base64') } });
+        try {
+          const ext = path.extname(f.originalname) || '.jpg';
+          const url = await uploadFile(f.buffer, 'style-sample-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext, f.mimetype);
+          if (url) sampleUrls.push(url);
+        } catch (e) { console.error('sample upload failed:', e.message); }
+      }
+      content.push({ type: 'text', text: 'Analyze these reference images and define their shared art style.' });
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          system: STYLE_ANALYZE_SYSTEM,
+          messages: [{ role: 'user', content: content }]
+        })
+      });
+      const data = await response.json();
+      if (data.error) return res.json({ error: (data.error.message || 'Style analysis failed.') });
+      const raw = (data.content || []).map(function(b) { return b.text || ''; }).join('').trim();
+      if (!raw) return res.json({ error: 'The analysis came back empty. Try clearer style samples.' });
+
+      let isFade = 0;
+      let stylePrompt = raw;
+      const fadeMatch = raw.match(/FADE:\s*(yes|no)/i);
+      if (fadeMatch) {
+        isFade = /yes/i.test(fadeMatch[1]) ? 1 : 0;
+        stylePrompt = raw.slice(0, fadeMatch.index).trim();
+      }
+      if (!/^STYLE:/i.test(stylePrompt)) stylePrompt = 'STYLE: ' + stylePrompt;
+
+      try { await spendTokens(req.session.userId, COST_ANALYZE, { source: 'custom_style_analyze', event_type: 'generation_spend' }); } catch (e) { console.error('analyze spend failed:', e.message); }
+
+      res.json({ style_prompt: stylePrompt, is_fade: isFade, sample_urls: sampleUrls });
+    } catch (e) {
+      console.error('analyze custom style error:', e.message);
+      res.json({ error: 'Could not analyze the style: ' + e.message });
+    }
+  });
 });
 
 module.exports = router;
