@@ -8,6 +8,7 @@ const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packComic } = require('../services/printing/packComic');
+const { planComic } = require('../services/printing/comicEngine');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 
@@ -1495,6 +1496,70 @@ function renderComicTwoPass(moments, sections, intro, outro, opts) {
   return html;
 }
 
+// Module-scope image box for the one-engine renderer: a bordered panel drawn at
+// an EXACT width x height the planner chose. fullWidth => width:100% (top band).
+function cgImageBox(m, wIn, hIn, opts, fullWidth) {
+  var media = m.image
+    ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+  var wCss = fullWidth ? 'width:100%;' : ('width:' + wIn.toFixed(2) + 'in;');
+  return '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+}
+function _engineRow(cellsHtml) {
+  return '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:flex-start;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + cellsHtml + '</div>';
+}
+
+// ONE-ENGINE renderer: draws exactly the plan from comicEngine.planComic. Because
+// the planner used the SAME measured boxes (cgNarrBox) at the SAME column widths,
+// rendered height == planned height -> nothing spills. Image rows carry their text
+// (beside, alternating sides; or full-width on top); narration uses the planned
+// column count. Gated behind opts.engine + opts._enginePlan.
+function renderComicEngine(moments, sections, intro, outro, opts) {
+  var plan = opts && opts._enginePlan;
+  if (!plan || !plan.pages) return renderComicPage(moments, sections, intro, outro, _twoPassChildOpts(opts));
+  var co = _twoPassChildOpts(opts);
+  sections = sections || [];
+  function chunksFor(i) {
+    var sec = sections.find(function (s) { return s.panel_index === i; }) || {};
+    return cgSplitNarr([sec.before, sec.after].filter(Boolean).join(' '));
+  }
+  var pageH = (opts && opts.pageHeightIn) ? opts.pageHeightIn : 9.7;
+  var html = coDropOrIntro(intro, opts);
+  for (var pi = 0; pi < plan.pages.length; pi++) {
+    var page = plan.pages[pi];
+    var inner = '';
+    for (var ii = 0; ii < page.items.length; ii++) {
+      var it = page.items[ii];
+      var m = moments[it.moment];
+      if (it.type === 'image-top') {
+        inner += '<div style="margin-bottom:' + CG_GAP + 'in;">' + cgImageBox(m, it.img.wIn, it.img.hIn, co, true) + '</div>';
+      } else if (it.type === 'image-beside') {
+        var chunks = chunksFor(it.moment);
+        var bt = (it.besideChunks || []).map(function (c) { return chunks[c]; }).filter(Boolean).join(' ');
+        var imgCell = '<div style="flex:0 0 ' + it.img.wIn.toFixed(2) + 'in;">' + cgImageBox(m, it.img.wIn, it.img.hIn, co, false) + '</div>';
+        var narrCell = '<div style="flex:1 1 0;min-width:0;">' + (bt ? cgNarrBox(bt, co) : '') + '</div>';
+        inner += _engineRow((it.side === 'right') ? (narrCell + imgCell) : (imgCell + narrCell));
+      } else if (it.type === 'narr') {
+        var ch = chunksFor(it.moment);
+        if (it.cols <= 1) {
+          var t = it.colChunks[0].map(function (c) { return ch[c]; }).filter(Boolean).join(' ');
+          inner += '<div style="margin-bottom:' + CG_GAP + 'in;">' + cgNarrBox(t, co) + '</div>';
+        } else {
+          var boxes = it.colChunks.map(function (col) {
+            var tt = col.map(function (c) { return ch[c]; }).filter(Boolean).join(' ');
+            return '<div style="flex:1 1 0;min-width:0;">' + (tt ? cgNarrBox(tt, co) : '') + '</div>';
+          }).join('');
+          inner += _engineRow(boxes);
+        }
+      }
+    }
+    var brk = (pi === plan.pages.length - 1) ? '' : 'page-break-after:always;break-after:page;';
+    html += '<div style="min-height:' + pageH.toFixed(2) + 'in;' + brk + '">' + inner + '</div>';
+  }
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
 function renderLayout(opts, moments, sections, intro, outro) {
   if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet - generate your storyboard first.</p>';
   sections = sections || []; intro = intro || ''; outro = outro || '';
@@ -1502,7 +1567,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
     case 'paired': return renderPaired(moments, sections, intro, outro, opts);
-    case 'comicpage': return (opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts));
+    case 'comicpage': return (opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.engine && opts._enginePlan) ? renderComicEngine(moments, sections, intro, outro, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts)));
     case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
     case 'grid':
     default:       return renderGrid(moments, sections, intro, outro, opts);
@@ -2554,23 +2619,33 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       _m2.sessionId = String(req.params.sessionId);
       return res.json(_m2);
     }
-    // Two-pass paginated Comic render (Stage 4, gated). Measure -> pack -> paginate.
+    // ONE-ENGINE paginated Comic render (gated). Exact chunk measure -> comicEngine
+    // plan -> draw exactly the plan. ?twopass=1 (kept name) routes here.
     if (req.query.twopass === '1' || req.query.twopass === 'true') {
-      var _tco = co || {};
-      _tco.arrange = 'comicpage';
-      var _tmco = {}; for (var _tk in _tco) { if (Object.prototype.hasOwnProperty.call(_tco, _tk)) _tmco[_tk] = _tco[_tk]; }
-      _tmco.measureTag = true; _tmco.twoPass = false;
-      var _tmhtml = buildSessionHTML(session, moments, campaign, characters, narrative, _tmco, { noCover: true });
-      var _tmeasured = await measureDocument(_tmhtml, {});
-      var _tmaxPP = await getAppSettingInt('max_pages_per_print', 250);
-      _tmeasured.plan = packComic(_tmeasured.blocks, { pageHeightIn: 9.7, gapIn: 0.12, maxPages: _tmaxPP });
-      _tco.measureTag = false; _tco.twoPass = true; _tco._twoPassMeasured = _tmeasured;
-      var _thtml = buildSessionHTML(session, moments, campaign, characters, narrative, _tco, { noCover: true });
-      if (await userInFreeTrial(db, req.session.userId)) _thtml = injectTrialWatermark(_thtml);
+      var _eco = co || {}; _eco.arrange = 'comicpage';
+      var _emco = {}; for (var _ek in _eco) { if (Object.prototype.hasOwnProperty.call(_eco, _ek)) _emco[_ek] = _eco[_ek]; }
+      _emco.measureChunks = true; _emco.engine = false; _emco.twoPass = false; _emco.measureTag = false;
+      var _emhtml = buildSessionHTML(session, moments, campaign, characters, narrative, _emco, { noCover: true });
+      var _em = await measureDocument(_emhtml, {});
+      var _byM = {};
+      (_em.blocks || []).forEach(function (b) {
+        var mm = /^m(\d+)_c(\d+)_w(\d+)$/.exec(b.id || '');
+        if (!mm) return;
+        var mi = +mm[1], ci = +mm[2], wi = +mm[3];
+        _byM[mi] = _byM[mi] || []; _byM[mi][ci] = _byM[mi][ci] || []; _byM[mi][ci][wi] = b.heightIn;
+      });
+      var _engMoments = moments.map(function (mo, idx) {
+        return { image: { aspect: momentAspect(mo), prominence: lmProminence(mo), tier: lmSizeTier(mo), hasImage: !!mo.image }, chunks: _byM[idx] || [] };
+      });
+      var _emax = await getAppSettingInt('max_pages_per_print', 250);
+      var _eplan = planComic(_engMoments, { pageHeightIn: 9.7, overflowCols: 2, maxPages: _emax });
+      _eco.measureChunks = false; _eco.engine = true; _eco._enginePlan = _eplan;
+      var _ehtml = buildSessionHTML(session, moments, campaign, characters, narrative, _eco, { noCover: true });
+      if (await userInFreeTrial(db, req.session.userId)) _ehtml = injectTrialWatermark(_ehtml);
       if (req.query.format === 'pdf') {
-        return await sendHtmlAsPdf(res, _thtml, pdfFileName([campaign.name, session.name, 'twopass']));
+        return await sendHtmlAsPdf(res, _ehtml, pdfFileName([campaign.name, session.name, 'comic']));
       }
-      return res.send(_thtml);
+      return res.send(_ehtml);
     }
     if (req.query.format === 'pdf') {
       var sfo = await db.prepare("SELECT u.name AS uname, sf.role AS srole FROM session_forks sf JOIN users u ON u.id = sf.user_id WHERE sf.id = ?").get(viewForkId);

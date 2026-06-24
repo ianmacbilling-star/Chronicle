@@ -1,0 +1,189 @@
+'use strict';
+
+// ============================================================
+// comicEngine.js  -  ONE-ENGINE two-pass Comic planner (pure, testable).
+// ------------------------------------------------------------
+// Consumes EXACT measured geometry (per-chunk narration heights at 1/2/3-col
+// widths + per-moment image aspect/prominence) and produces a page plan whose
+// rendered height it knows precisely -- so the renderer can draw exactly this
+// and NOTHING spills. Honors: image stays with the start of its text; small
+// images alternate sides; fewest columns that fit; tier-max images never shrink.
+//
+// Input moments: [{ image:{aspect,prominence,tier,hasImage}, chunks:[[h0,h1,h2],...] }]
+//   h0 = height at full width, h1 = half (2-col), h2 = third (3-col).
+// ============================================================
+
+var PAGE_H = 9.7;
+var GAP = 0.12;
+var COLW = [6.8, 3.34, 2.187];   // 1-col, 2-col, 3-col widths (inches)
+
+function round3(x) { return Math.round(x * 1000) / 1000; }
+
+// ---- image box from aspect + size tier ----------------------------------
+function imagePlan(info) {
+  var asp = (info && info.aspect) || 1;
+  var tier = (info && info.tier) || 'def';
+  var wide = asp >= 1.5;
+  var box;
+  if (wide) {
+    // Landscape -> full-width band on top of its narration.
+    box = { layout: 'top', wIn: COLW[0], hIn: COLW[0] / asp };
+  } else {
+    // Portrait/square -> sits beside its narration in one column.
+    var w = COLW[1], h = w / asp;
+    box = { layout: 'beside', wIn: w, hIn: h };
+  }
+  // Tier sizing: min stays small; max may run taller; never below natural for max.
+  var capH = PAGE_H - 0.5;
+  if (tier === 'min' && box.hIn > 3.2) { box.hIn = 3.2; box.wIn = box.hIn * asp; }
+  if (box.hIn > capH) { box.hIn = capH; box.wIn = box.hIn * asp; }   // never exceed page
+  if (box.wIn > COLW[0]) { box.wIn = COLW[0]; box.hIn = box.wIn / asp; }
+  box.hIn = round3(box.hIn); box.wIn = round3(box.wIn);
+  box.tier = tier; box.prominence = (info && info.prominence) || 3; box.aspect = asp;
+  return box;
+}
+
+// ---- partition an ORDERED chunk list into K contiguous columns, balanced ----
+function balanceCols(heights, K) {
+  if (K <= 1) return [heights.map(function (_, i) { return i; })];
+  var total = 0; for (var t = 0; t < heights.length; t++) total += heights[t];
+  var target = total / K;
+  var cols = [], cur = [], curSum = 0, made = 0;
+  for (var i = 0; i < heights.length; i++) {
+    cur.push(i); curSum += heights[i];
+    var remaining = heights.length - 1 - i, needCols = K - made - 1;
+    if (made < K - 1 && curSum >= target && remaining >= needCols) {
+      cols.push(cur); cur = []; curSum = 0; made++;
+    }
+  }
+  if (cur.length) cols.push(cur);
+  while (cols.length < K) cols.push([]);
+  return cols;
+}
+function colsHeight(heights, cols) {
+  var mx = 0;
+  for (var c = 0; c < cols.length; c++) {
+    var s = 0; for (var j = 0; j < cols[c].length; j++) s += heights[cols[c][j]];
+    if (s > mx) mx = s;
+  }
+  return mx;
+}
+
+// Choose the FEWEST columns in which ALL `chunks` (each [h0,h1,h2]) fit within H.
+// Returns {cols, rowH} or null if even 3 columns can't fit them all.
+function fitAllCols(chunks, H) {
+  for (var K = 1; K <= 3; K++) {
+    var hs = chunks.map(function (c) { return c[K - 1]; });
+    var cols = balanceCols(hs, K);
+    var rowH = colsHeight(hs, cols);
+    if (rowH <= H + 1e-6) return { cols: K, layout: cols, rowH: round3(rowH) };
+  }
+  return null;
+}
+
+// Fill a page of height H with as many leading chunks as possible using K columns
+// (reading order: column 1 = first chunks). Returns {used, rowH} where used =
+// number of chunks placed (>=1 always, to guarantee progress).
+function fillPartial(chunks, H, K) {
+  var hs = chunks.map(function (c) { return c[K - 1]; });
+  // Build the column assignment DIRECTLY as we fill, then derive rowH from that
+  // exact assignment -- so the height can never exceed what we budgeted.
+  var cols = []; for (var k = 0; k < K; k++) cols.push([]);
+  var ci = 0, colSum = 0, used = 0;
+  for (var i = 0; i < hs.length; i++) {
+    if (colSum + hs[i] <= H + 1e-6) { cols[ci].push(i); colSum += hs[i]; used++; }
+    else if (ci < K - 1 && hs[i] <= H + 1e-6) { ci++; colSum = hs[i]; cols[ci].push(i); used++; }
+    else break;                                                          // chunk won't fit -> flows on
+  }
+  if (used === 0) { cols[0].push(0); used = 1; }                        // never stall
+  var rowH = colsHeight(hs, cols);                                     // from the SAME assignment
+  return { used: used, cols: K, layout: cols, rowH: round3(rowH) };
+}
+
+// ---- main: pack moments onto pages --------------------------------------
+function planComic(moments, opts) {
+  opts = opts || {};
+  var pageH = opts.pageHeightIn || PAGE_H;
+  var overflowCols = opts.overflowCols || 2;   // columns to use when narration spills
+  var pages = [];
+  var cur = null;
+  function newPage() { cur = { index: pages.length, usedIn: 0, items: [] }; pages.push(cur); return cur; }
+  function avail() { return pageH - cur.usedIn; }
+  function add(item, h) { cur.items.push(item); cur.usedIn = round3(cur.usedIn + h + (cur.items.length > 1 ? GAP : 0)); }
+  newPage();
+  var sideLeft = true;
+
+  for (var mi = 0; mi < moments.length; mi++) {
+    var m = moments[mi];
+    var img = (m.image && m.image.hasImage) ? imagePlan(m.image) : null;
+    var chunks = m.chunks || [];
+
+    // ---------- IMAGE ROW + (for beside) narration beside it ----------
+    var besideUsed = 0, imageRowH = 0, imageItem = null;
+    if (img && img.layout === 'beside') {
+      // stack leading chunks beside the image (half width) up to image height
+      var bsum = 0;
+      for (var bi = 0; bi < chunks.length; bi++) {
+        var bh = chunks[bi][1];
+        if (bsum + bh <= img.hIn + 1e-6) { bsum += bh; besideUsed++; } else break;
+      }
+      imageRowH = img.hIn;
+      var side = sideLeft ? 'left' : 'right'; sideLeft = !sideLeft;
+      imageItem = { type: 'image-beside', moment: mi, img: img, side: side,
+                    besideChunks: range(0, besideUsed), besideH: round3(bsum) };
+    } else if (img && img.layout === 'top') {
+      imageRowH = img.hIn;
+      imageItem = { type: 'image-top', moment: mi, img: img };
+    }
+
+    // Does the image row need a fresh page? It needs room for itself plus at least
+    // a little narration (or, if no narration, just itself).
+    if (imageItem) {
+      var needFirst = imageRowH + (chunks.length > besideUsed ? GAP + smallestChunk(chunks, besideUsed) : 0);
+      if (avail() < needFirst - 1e-6 && cur.usedIn > 1e-6) newPage();
+      add(imageItem, imageRowH);
+    }
+
+    // ---------- REST NARRATION (after beside) flows below / onward ----------
+    var idx = besideUsed;
+    while (idx < chunks.length) {
+      var rest = chunks.slice(idx);
+      var H = avail() - (cur.items.length > 0 ? GAP : 0);
+      // If even the next chunk at its SHORTEST (full-width) form can't fit the
+      // remaining space, start a fresh page -- never force an overflowing chunk.
+      var minNext = rest[0][0];
+      if (H < Math.max(0.6, minNext) - 1e-6) { newPage(); H = avail(); }
+      var all = fitAllCols(rest, H);
+      if (all) {
+        add({ type: 'narr', moment: mi, cols: all.cols, rowH: all.rowH,
+              colChunks: all.layout.map(function (col) { return col.map(function (li) { return idx + li; }); }) }, all.rowH);
+        idx += rest.length;
+      } else {
+        var part = fillPartial(rest, H, overflowCols);
+        add({ type: 'narr', moment: mi, cols: part.cols, rowH: part.rowH,
+              colChunks: part.layout.map(function (col) { return col.map(function (li) { return idx + li; }); }) }, part.rowH);
+        idx += part.used;
+        if (idx < chunks.length) newPage();
+      }
+    }
+  }
+
+  // summarize
+  var maxPages = opts.maxPages || 250;
+  return {
+    pageCount: pages.length,
+    overLimit: pages.length > maxPages,
+    pages: pages.map(function (p) {
+      return { index: p.index, usedIn: round3(p.usedIn), overflow: p.usedIn > pageH + 1e-6,
+               items: p.items };
+    })
+  };
+}
+
+function range(a, b) { var r = []; for (var i = a; i < b; i++) r.push(i); return r; }
+function smallestChunk(chunks, from) {
+  var mn = Infinity; for (var i = from; i < chunks.length; i++) if (chunks[i][0] < mn) mn = chunks[i][0];
+  return (mn === Infinity) ? 0 : mn;
+}
+
+module.exports = { planComic: planComic, imagePlan: imagePlan, fitAllCols: fitAllCols, balanceCols: balanceCols };
