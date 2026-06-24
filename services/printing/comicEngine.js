@@ -117,41 +117,59 @@ function planComic(moments, opts) {
     var m = moments[mi];
     var img = (m.image && m.image.hasImage) ? imagePlan(m.image) : null;
     var chunks = m.chunks || [];
+    var idx = 0;   // chunk pointer; may advance via narration-above before the image
 
-    // ---------- IMAGE ROW + (for beside) narration beside it ----------
-    var besideUsed = 0, imageRowH = 0, imageItem = null;
-    if (img && img.layout === 'beside') {
-      // stack leading chunks beside the image (half width) up to image height
-      var bsum = 0;
-      for (var bi = 0; bi < chunks.length; bi++) {
-        var bh = chunks[bi][1];
-        if (bsum + bh <= img.hIn + 1e-6) { bsum += bh; besideUsed++; } else break;
+    if (img) {
+      var minShrink = opts.minShrinkIn || 1.5;
+      var aboveMin = opts.narrAboveMinIn || 1.5;
+      var canSlide = (cur.usedIn <= 1e-6) || (avail() >= img.hIn - 1e-6);
+      if (!canSlide) {
+        var lowProm = (img.tier === 'min');
+        var slk = avail() - (cur.items.length > 0 ? GAP : 0);
+        // 2a: shrink a LOW-prominence image (keep aspect) to backfill the slack.
+        if (lowProm && slk >= minShrink) {
+          var sh = Math.min(img.hIn, slk), sw = sh * img.aspect;
+          if (sw > COLW[0]) { sw = COLW[0]; sh = sw / img.aspect; }
+          if (sh >= minShrink) { img.hIn = round3(sh); img.wIn = round3(sw); img.shrunk = true; }
+        }
+        // 2b: otherwise fill the current page with this moment's leading narration
+        // ABOVE the image, then start the image on a fresh page (image stays big).
+        if (!img.shrunk && avail() < img.hIn - 1e-6) {
+          if (slk >= aboveMin && idx < chunks.length) {
+            var pa = fillPartial(chunks.slice(idx), slk, overflowCols);
+            add({ type: 'narr', moment: mi, cols: pa.cols, rowH: pa.rowH,
+                  colChunks: pa.layout.map(function (col) { return col.map(function (li) { return idx + li; }); }) }, pa.rowH);
+            idx += pa.used;
+          }
+          newPage();
+        }
       }
-      imageRowH = img.hIn;
-      var side = sideLeft ? 'left' : 'right'; sideLeft = !sideLeft;
-      imageItem = { type: 'image-beside', moment: mi, img: img, side: side,
-                    besideChunks: range(0, besideUsed), besideH: round3(bsum) };
-    } else if (img && img.layout === 'top') {
-      imageRowH = img.hIn;
-      imageItem = { type: 'image-top', moment: mi, img: img };
+
+      // beside narration (recompute on the chunks REMAINING after any narration-above)
+      var besideUsed = 0;
+      if (img.layout === 'beside' && !img.shrunk) {
+        var bsum = 0;
+        for (var bi = idx; bi < chunks.length; bi++) {
+          var bh = chunks[bi][1];
+          if (bsum + bh <= img.hIn + 1e-6) { bsum += bh; besideUsed++; } else break;
+        }
+      }
+      var imageItem;
+      if (img.layout === 'beside') {
+        var side = sideLeft ? 'left' : 'right'; sideLeft = !sideLeft;
+        imageItem = { type: 'image-beside', moment: mi, img: img, side: side, besideChunks: range(idx, idx + besideUsed) };
+      } else {
+        imageItem = { type: 'image-top', moment: mi, img: img };
+      }
+      if (avail() < img.hIn - 1e-6 && cur.usedIn > 1e-6) newPage();
+      add(imageItem, img.hIn);
+      idx += besideUsed;
     }
 
-    // Does the image row need a fresh page? It needs room for itself plus at least
-    // Slide up: the image only needs room for ITSELF on the current page. Its
-    // narration flows below (same page if it fits) or onto the next page -- still
-    // adjacent, never a blank page between. This backfills under-filled tail pages.
-    if (imageItem) {
-      if (avail() < imageRowH - 1e-6 && cur.usedIn > 1e-6) newPage();
-      add(imageItem, imageRowH);
-    }
-
-    // ---------- REST NARRATION (after beside) flows below / onward ----------
-    var idx = besideUsed;
+    // ---------- REST NARRATION flows below / onward ----------
     while (idx < chunks.length) {
       var rest = chunks.slice(idx);
       var H = avail() - (cur.items.length > 0 ? GAP : 0);
-      // If even the next chunk at its SHORTEST (full-width) form can't fit the
-      // remaining space, start a fresh page -- never force an overflowing chunk.
       var minNext = rest[0][0];
       if (H < Math.max(0.6, minNext) - 1e-6) { newPage(); H = avail(); }
       var all = fitAllCols(rest, H);
@@ -197,6 +215,7 @@ function growImages(pages, pageH, capX) {
     if (!page.items.length) continue;
     var last = page.items[page.items.length - 1];
     if (last.type !== 'image-beside') continue;
+    if (last.img && last.img.shrunk) continue;                // don't re-expand a backfill shrink
     if ((last.besideChunks || []).length !== 0) continue;     // text beside -> don't collide
     var slack = pageH - page.usedIn;
     if (slack < 0.3) continue;
