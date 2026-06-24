@@ -1004,10 +1004,22 @@ function gzNarrBox(narrHtml, opts) {
 // Gazette shared builder: an image floated INSIDE a parchment panel at an explicit
 // size, narrative wrapping beside/below it. Used to pull wide & feature images into
 // their text panel (shrunk just enough to leave a wrap column).
+// Gazette image box. Crop-safe images fill a fixed w x h box (cover). Images that
+// are NOT crop-safe would otherwise be letterboxed inside a fixed box sized from the
+// stored aspect -- leaving a thin parchment strip when the stored aspect is slightly
+// off (the "border bigger than the picture"). For those, the frame HUGS the image's
+// true height (width fixed, height:auto) so the border can never exceed the picture.
+function gzImgBox(m, opts, fl, w, h) {
+  if ((opts && opts.enclose) && !lmCropSafe(m) && m.image) {
+    return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;">' +
+      '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  }
+  return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;height:' + h.toFixed(2) +
+    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+}
 function gzFloatPanel(m, opts, narrHtml, iw, ih, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0.02in 0.22in 0.10in 0;' : 'float:right;margin:0.02in 0 0.10in 0.22in;';
-  var box = '<div style="' + fl + cgBorder(opts) + 'width:' + iw.toFixed(2) + 'in;height:' + ih.toFixed(2) +
-    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  var box = gzImgBox(m, opts, fl, iw, ih);
   return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
 }
 function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
@@ -1025,8 +1037,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
   if (imgW > capW) { imgW = capW; imgH = imgW / asp; }
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
-  var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  var box = gzImgBox(m, opts, fl, imgW, imgH);
   return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
 }
 
