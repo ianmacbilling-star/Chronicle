@@ -1565,6 +1565,41 @@ function renderComicEngine(moments, sections, intro, outro, opts) {
   return html;
 }
 
+// PROTOTYPE (gated, ?mag=1): hybrid "boxed magazine". Keeps the comic boxed look
+// but borrows the magazine mechanic -- a parchment box (display:flow-root) with a
+// floated bordered image inside, text WRAPPING around it -- so prose fills the
+// L-shaped space and the browser paginates naturally (no measure/plan). Wide and
+// high-prominence images stay full-width and big; portraits/squares float and wrap.
+function renderComicMag(moments, sections, intro, outro, opts) {
+  var co = _twoPassChildOpts(opts);
+  sections = sections || [];
+  function secText(i) { var x = sections.find(function (s) { return s.panel_index === i; }) || {}; return [x.before, x.after].filter(Boolean).join(' '); }
+  function media(m) {
+    return m.image
+      ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+      : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+  }
+  var html = coDropOrIntro(intro, opts);
+  for (var i = 0; i < moments.length; i++) {
+    var m = moments[i], text = secText(i);
+    var asp = momentAspect(m), tier = lmSizeTier(m), wide = asp >= 1.5;
+    if (wide) {
+      var bh = Math.min(CG_W / asp, tier === 'min' ? 3.2 : 5.0);
+      html += '<div style="' + picBorderCss(co) + 'overflow:hidden;position:relative;line-height:0;width:100%;height:' + bh.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + media(m) + picOverlay(co) + coCaptionCover(m, co.caption) + '</div>';
+      if (text) html += '<div style="' + picBorderCss(co) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;margin-bottom:' + CG_GAP + 'in;break-inside:avoid;page-break-inside:avoid;">' + buildNarrativeHTML(text, false) + '</div>';
+    } else {
+      var side = (i % 2 === 0) ? 'left' : 'right';
+      var iw = (tier === 'min') ? 2.2 : (tier === 'max' ? 3.0 : 2.6);
+      var ih = iw / asp; if (ih > 6.0) { ih = 6.0; iw = ih * asp; }
+      var mar = (side === 'left') ? '0 0.16in 0.10in 0' : '0 0 0.10in 0.16in';
+      var floatImg = '<div style="' + picBorderCss(co) + 'overflow:hidden;position:relative;line-height:0;float:' + side + ';width:' + iw.toFixed(2) + 'in;height:' + ih.toFixed(2) + 'in;margin:' + mar + ';break-inside:avoid;page-break-inside:avoid;">' + media(m) + picOverlay(co) + coCaptionCover(m, co.caption) + '</div>';
+      html += '<div style="' + picBorderCss(co) + 'background:#fbf3cf;display:flow-root;padding:0.13in 0.15in;line-height:1.4;margin-bottom:' + CG_GAP + 'in;">' + floatImg + buildNarrativeHTML(text, false) + '</div>';
+    }
+  }
+  html += buildNarrativeHTML(outro, true);
+  return html;
+}
+
 function renderLayout(opts, moments, sections, intro, outro) {
   if (!moments || !moments.length) return '<p style="color:#6b5f55;font-style:italic;text-align:center;padding:1in;">No panels yet - generate your storyboard first.</p>';
   sections = sections || []; intro = intro || ''; outro = outro || '';
@@ -1572,7 +1607,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
     case 'paired': return renderPaired(moments, sections, intro, outro, opts);
-    case 'comicpage': return (opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.engine && opts._enginePlan) ? renderComicEngine(moments, sections, intro, outro, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts)));
+    case 'comicpage': return (opts && opts.mag) ? renderComicMag(moments, sections, intro, outro, opts) : ((opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.engine && opts._enginePlan) ? renderComicEngine(moments, sections, intro, outro, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts))));
     case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
     case 'grid':
     default:       return renderGrid(moments, sections, intro, outro, opts);
@@ -2623,6 +2658,17 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       _m2.layout = 'comicpage-chunks';
       _m2.sessionId = String(req.params.sessionId);
       return res.json(_m2);
+    }
+    // PROTOTYPE magazine render (gated, ?mag=1): flowing boxed sections, browser paginates.
+    if (req.query.mag === '1' || req.query.mag === 'true') {
+      var _gco = co || {}; _gco.arrange = 'comicpage'; _gco.mag = true;
+      _gco.engine = false; _gco.twoPass = false; _gco.measureChunks = false;
+      var _ghtml = buildSessionHTML(session, moments, campaign, characters, narrative, _gco, { noCover: true });
+      if (await userInFreeTrial(db, req.session.userId)) _ghtml = injectTrialWatermark(_ghtml);
+      if (req.query.format === 'pdf') {
+        return await sendHtmlAsPdf(res, _ghtml, pdfFileName([campaign.name, session.name, 'mag']));
+      }
+      return res.send(_ghtml);
     }
     // ONE-ENGINE paginated Comic render (gated). Exact chunk measure -> comicEngine
     // plan -> draw exactly the plan. ?twopass=1 (kept name) routes here.
