@@ -146,35 +146,37 @@ const sampleUpload = multer({
 const COST_ANALYZE = 1;
 
 const STYLE_ANALYZE_SYSTEM =
-  'You are an art director writing a single reusable STYLE directive for an ' +
-  'image generator, by studying HOW a set of reference images is rendered -- ' +
-  'not the specific characters, objects, or scenes they depict. ' +
-  'FIRST, silently decide the 2 to 4 traits that MOST define this look and make ' +
-  'it instantly recognizable. Those dominant traits may be ANY of: medium and ' +
-  'technique (watercolour, charcoal, cel-shaded ink, oil impasto); colour and ' +
-  'palette; lighting (hard backlight, rim-light, flat ambient); or COMPOSITION ' +
-  'as a rendering signature (deep silhouette, figures as dark shapes, vast empty ' +
-  'negative space, sparse detail-free backgrounds, distinctive framing). ' +
-  'Composition and lighting patterns ARE part of the style and MUST be captured ' +
-  'when they dominate -- they are HOW the images read, not WHAT they depict. ' +
-  'THEN write the directive. (1) One paragraph beginning with the literal token ' +
-  '"STYLE:". LEAD with the dominant traits in strong, concrete, imperative ' +
-  'language and let them take most of the words; add only brief supporting ' +
-  'detail for everything else. Do NOT write an even, encyclopedic catalogue that ' +
-  'gives equal weight to medium, line, colour, shading, texture, and era -- a ' +
-  'flat balanced list dilutes the signature. Be vivid and specific about what ' +
-  'makes THIS look distinct. You may name broad artistic traditions, but never ' +
-  'instruct imitation of a specific living artist by name without also giving ' +
-  'generic descriptors. (2) On a final separate line write "FADE: yes" if the ' +
-  'art characteristically fades to a clean pure-white (#ffffff) edge with no ' +
-  'frame or border, otherwise "FADE: no". Output ONLY the STYLE paragraph and ' +
-  'the FADE line, with no preamble. Example of the VOICE and CONCENTRATION ' +
-  'wanted (do NOT copy its content): "STYLE: Stark backlit silhouette ' +
-  'illustration. Figures read as near-black shapes against a vast, hazy, glowing ' +
-  'sky; backgrounds kept sparse and almost detail-free. Intense rim-lit dusk ' +
-  'palette of magenta, orange, crimson and cool blue, painted in a clean ' +
-  'comic-cover medium with confident edges and smooth rendering. High contrast, ' +
-  'heavy shadow, dramatic negative space."';
+  'You are an art director extracting a REUSABLE, CONTENT-FREE art-style ' +
+  'directive from reference images. It will be applied to completely different ' +
+  'scenes, so it must describe ONLY how the images are rendered, never what they ' +
+  'depict. ' +
+  'ABSOLUTE RULE: never name or imply any subject, character, figure, body part, ' +
+  'clothing, weapon, animal, plant, building, vehicle, or other scene element -- ' +
+  'not even as a "framing device." If a shape matters to the composition, ' +
+  'describe it abstractly by ROLE and TONE only (e.g. "a large dark foreground ' +
+  'mass," "small dark accents framing the edges," "a luminous open upper ' +
+  'field"), never by what it actually is. Any named content will wrongly bleed ' +
+  'into unrelated panels. ' +
+  'Describe the look ONLY along these axes, and only where they define it: ' +
+  'medium and technique; line and edge quality; shading and shadow; texture; ' +
+  'colour and palette; lighting direction and contrast; and foreground / ' +
+  'background composition and negative space. ' +
+  'Be concise -- LESS IS MORE. Lead with the 1 to 3 traits that most define the ' +
+  'look and keep the whole thing to roughly 2 to 4 sentences. A short, abstract ' +
+  'directive outperforms a long descriptive one; do NOT pad it with an ' +
+  'exhaustive catalogue or with any scene description. ' +
+  '(1) Write ONE paragraph beginning with the literal token "STYLE:". You may ' +
+  'name broad artistic traditions, but never instruct imitation of a specific ' +
+  'living artist by name without also giving generic descriptors. ' +
+  '(2) On a final separate line write "FADE: yes" if the art characteristically ' +
+  'fades to a clean pure-white (#ffffff) edge with no frame or border, otherwise ' +
+  '"FADE: no". Output ONLY the STYLE paragraph and the FADE line, no preamble. ' +
+  'Example of the abstract, content-free voice wanted (do NOT copy its content): ' +
+  '"STYLE: Stark backlit silhouette illustration. A single dark, near-black ' +
+  'foreground mass reads against a vast, hazy, glowing sky, with backgrounds kept ' +
+  'almost empty and detail-free. Warm dusk palette of amber, orange, magenta, ' +
+  'crimson and cool blue, in a confident painterly-comic medium with smooth ' +
+  'rendering, heavy contrast, and large areas of empty negative space."';
 
 // POST /api/art-styles/custom/analyze (multipart: images[]) -- one Claude vision
 // call writes a house-format STYLE: paragraph + fade flag from 2-4 samples.
