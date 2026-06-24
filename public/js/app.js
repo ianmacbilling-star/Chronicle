@@ -10391,6 +10391,9 @@ function reloadSessionForFork() {
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
+      // Art style is per-fork too: re-apply from the viewed fork's data so a member
+      // sees their own art style, not the SM's set by the initial no-fork load.
+      if (typeof loadLastArtStyle === 'function') loadLastArtStyle(data.art_style_override || data.art_style, data.layout_style);
       if (typeof renderStoryboard === 'function') renderStoryboard();
       // Title-image thumbnail must follow the viewed fork (member's own vs canonical),
       // otherwise it keeps the SM image painted by the initial no-fork load.
