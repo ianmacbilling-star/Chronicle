@@ -1165,7 +1165,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
       var twText = '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;flex:1 1 auto;min-width:0;padding:0.16in 0.18in;line-height:1.4;overflow:hidden;">' + twNarr + '</div>';
       var twLeft = (towerN % 2 === 0); towerN += 1;
-      cells.push({ slots: 2, html: '<div style="grid-column:span 2;display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
+      cells.push({ kind: 'block', slots: 2, html: '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
       continue;
     }
     // Maximize (prominence 4-5): break the grid and run a full-width SPLASH that
@@ -1198,7 +1198,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       // big gap. Wrapping both in a single break-inside:avoid cell forbids that
       // break; dense flow can still backfill any gap left when the unit moves.
       var _fNarrHtml = _fTxt ? ('<div style="margin-top:' + CG_GAP + 'in;">' + cgFullWidthNarr(_fTxt, opts) + '</div>') : '';
-      cells.push({ slots: 2, html: '<div style="grid-column:span 2;break-inside:avoid;page-break-inside:avoid;">' + _fImgBox + _fNarrHtml + '</div>' });
+      cells.push({ kind: 'block', slots: 2, html: '<div style="break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + _fImgBox + _fNarrHtml + '</div>' });
       continue;
     }
     var ta = momentAspect(m);
@@ -1211,6 +1211,19 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     // For tall/tower, hug the image's true width at this height so a 1:4 tower isn't cropped.
     var boxW = tall ? Math.min(colW, imgH * ta) : null;
     if (_tier === 'min') { tall = false; wide = false; span = ''; imgH = Math.min(2.6, colW / asp); boxW = null; }
+    if (wide) {
+      // Full-width image: bind it with its full-width narrative as ONE standalone
+      // block (OUTSIDE the grid) so Chromium keeps them on the same page instead of
+      // stranding the picture above a blank gap. Grid items ignore break-inside under
+      // print fragmentation; block-level elements honor it. Same as the splash branch.
+      var _wParts = [];
+      if (sec.before) _wParts = _wParts.concat(cgSplitNarr(sec.before));
+      if (sec.after) _wParts = _wParts.concat(cgSplitNarr(sec.after));
+      var _wTxt = _wParts.join(' ');
+      var _wNarrHtml = _wTxt ? ('<div style="margin-top:' + CG_GAP + 'in;">' + cgFullWidthNarr(_wTxt, opts) + '</div>') : '';
+      cells.push({ kind: 'block', slots: 2, html: '<div style="break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + comicArt(m, 'wide', imgH, null) + _wNarrHtml + '</div>' });
+      continue;
+    }
     cells.push({ slots: tall ? 2 : 1, html: comicArt(m, span, imgH, boxW) });
     var nchunks = [];
     if (sec.before) nchunks = nchunks.concat(cgSplitNarr(sec.before));
@@ -1242,10 +1255,20 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     }
   }
 
-  var cellHtml = cells.map(function (x) { return x.html; }).join('');
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:' +
-    CG_GAP + 'in;grid-auto-flow:row dense;align-items:start;">' +
-    cellHtml + '</div>';
+  // Assemble in segments: runs of normal cells form a 2-column dense grid; any
+  // full-width 'block' cell (tower, splash, wide image + its narrative) is emitted
+  // STANDALONE between grids. Grid items ignore break-inside:avoid under Chromium's
+  // print fragmentation, but block-level elements honor it -- so pulling full-width
+  // units out of the grid is what actually keeps each picture with its text.
+  var _segOpen = '<div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:' + CG_GAP + 'in;grid-auto-flow:row dense;align-items:start;margin-bottom:' + CG_GAP + 'in;">';
+  var cellHtml = '', _gridBuf = '';
+  function _flushGrid() { if (_gridBuf) { cellHtml += _segOpen + _gridBuf + '</div>'; _gridBuf = ''; } }
+  for (var _ci = 0; _ci < cells.length; _ci++) {
+    if (cells[_ci].kind === 'block') { _flushGrid(); cellHtml += cells[_ci].html; }
+    else _gridBuf += cells[_ci].html;
+  }
+  _flushGrid();
+  html += cellHtml;
 
   html += buildNarrativeHTML(outro, true);
   return html;
