@@ -3050,6 +3050,160 @@ function applySessionRefDraft(charId, url, wrapId, msg) {
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
 }
 
+// ===== Custom Art Styles (Platinum) =====
+var cstyleSamples = []; // sample_urls from the latest analyze, carried into save
+function customStylesLoaded() { return !!(state && state._customStylesLoaded); }
+function getCustomStyles() { return (state && state.customStyles) ? state.customStyles : []; }
+function customStyleById(id) {
+  var rid = String(id).indexOf('custom:') === 0 ? String(id).slice(7) : String(id);
+  var list = getCustomStyles();
+  for (var i = 0; i < list.length; i++) { if (String(list[i].id) === rid) return list[i]; }
+  return null;
+}
+function loadCustomStyles(cb) {
+  fetch('/api/art-styles/custom', { headers: { 'Accept': 'application/json' } })
+    .then(function(r){ return r.json(); })
+    .then(function(data){ if (state) { state.customStyles = Array.isArray(data) ? data : []; state._customStylesLoaded = true; } })
+    .catch(function(){ if (state) { state.customStyles = state.customStyles || []; state._customStylesLoaded = true; } })
+    .then(function(){ if (typeof cb === 'function') cb(); });
+}
+function cstyleErr(msg) { var e = document.getElementById('cstyle-error'); if (!e) return; if (msg) { e.textContent = msg; e.classList.remove('hidden'); } else { e.textContent = ''; e.classList.add('hidden'); } }
+function cstyleSaveErr(msg) { var e = document.getElementById('cstyle-save-error'); if (!e) return; if (msg) { e.textContent = msg; e.classList.remove('hidden'); } else { e.textContent = ''; e.classList.add('hidden'); } }
+function resetCustomStyleForm() {
+  cstyleSamples = [];
+  var vals = { 'cstyle-edit-id':'', 'cstyle-name':'', 'cstyle-prompt':'' };
+  Object.keys(vals).forEach(function(k){ var el = document.getElementById(k); if (el) el.value = vals[k]; });
+  var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = false;
+  var pw = document.getElementById('cstyle-preview-wrap'); if (pw) pw.style.display = 'none';
+  var pi = document.getElementById('cstyle-preview-img'); if (pi) pi.src = '';
+  var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Create a new style';
+  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ clearSlot(k); slotFiles[k + '_clear'] = false; });
+  cstyleErr(''); cstyleSaveErr('');
+}
+function openCustomStyles() {
+  if (!(state && state.user && state.user.tier === 'platinum')) {
+    showAlert('Custom Art Styles are a Platinum feature. Upgrade to Platinum to build and use your own art styles.');
+    return;
+  }
+  resetCustomStyleForm();
+  loadCustomStyles(renderCustomStyleList);
+  var m = document.getElementById('cstyle-modal');
+  if (m) m.classList.remove('hidden');
+}
+function closeCustomStyles() {
+  var m = document.getElementById('cstyle-modal');
+  if (m) m.classList.add('hidden');
+  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ slotFiles[k] = null; slotFiles[k + '_clear'] = false; });
+}
+function renderCustomStyleList() {
+  var box = document.getElementById('cstyle-list');
+  if (!box) return;
+  var list = getCustomStyles();
+  if (!list.length) { box.innerHTML = '<div class="form-hint" style="margin:0;">No custom styles yet. Build one below.</div>'; return; }
+  box.innerHTML = list.map(function(s){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(201,168,76,0.18);border-radius:8px;">' +
+      '<div style="min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(s.name || 'Untitled') + (s.is_fade ? ' <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(soft edges)</span>' : '') + '</div></div>' +
+      '<div style="display:flex;gap:6px;flex:0 0 auto;">' +
+      '<button class="btn btn-sm" onclick="editCustomStyle(\'' + s.id + '\')">Edit</button>' +
+      '<button class="btn btn-sm" onclick="deleteCustomStyle(\'' + s.id + '\')">Delete</button>' +
+      '</div></div>';
+  }).join('');
+}
+function collectCstyleFiles() {
+  var out = [];
+  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k){ if (slotFiles[k]) out.push(slotFiles[k]); });
+  return out;
+}
+function analyzeCustomStyle() {
+  cstyleErr('');
+  var files = collectCstyleFiles();
+  if (files.length < 2) { cstyleErr('Add at least 2 reference images first.'); return; }
+  var btn = document.getElementById('cstyle-analyze-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  var fd = new FormData();
+  files.forEach(function(f){ fd.append('images', f); });
+  fetch('/api/art-styles/custom/analyze', { method: 'POST', body: fd })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error) { cstyleErr(data.message || data.error); return; }
+      var pr = document.getElementById('cstyle-prompt'); if (pr) pr.value = data.style_prompt || '';
+      var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!data.is_fade;
+      cstyleSamples = Array.isArray(data.sample_urls) ? data.sample_urls : [];
+    })
+    .catch(function(e){ cstyleErr('Could not analyze the style: ' + e.message); })
+    .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Analyze style (1 token)'; } });
+}
+function previewCustomStyle() {
+  cstyleErr('');
+  var pr = document.getElementById('cstyle-prompt');
+  var txt = pr ? pr.value.trim() : '';
+  if (!txt) { cstyleErr('Add a style description first (analyze or type one).'); return; }
+  var fade = document.getElementById('cstyle-fade');
+  var btn = document.getElementById('cstyle-preview-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Rendering...'; }
+  fetch('/api/images/custom-style-preview', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ style_prompt: txt, is_fade: !!(fade && fade.checked) })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error) { cstyleErr(data.message || data.error); return; }
+      var wrap = document.getElementById('cstyle-preview-wrap');
+      var img = document.getElementById('cstyle-preview-img');
+      if (img) img.src = data.image || '';
+      if (wrap) wrap.style.display = data.image ? 'block' : 'none';
+    })
+    .catch(function(e){ cstyleErr('Could not render the preview: ' + e.message); })
+    .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Preview render (1 token)'; } });
+}
+function saveCustomStyle() {
+  cstyleSaveErr('');
+  var name = (document.getElementById('cstyle-name') || {}).value;
+  var prompt = (document.getElementById('cstyle-prompt') || {}).value;
+  name = (name || '').trim(); prompt = (prompt || '').trim();
+  if (!name) { cstyleSaveErr('Please name your style.'); return; }
+  if (!prompt) { cstyleSaveErr('The style description is empty. Analyze your samples or write one first.'); return; }
+  var editId = (document.getElementById('cstyle-edit-id') || {}).value;
+  var fade = document.getElementById('cstyle-fade');
+  var isFade = !!(fade && fade.checked);
+  var btn = document.getElementById('cstyle-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  var url = editId ? ('/api/art-styles/custom/' + editId) : '/api/art-styles/custom';
+  var method = editId ? 'PUT' : 'POST';
+  var body = editId ? { name: name, style_prompt: prompt, is_fade: isFade } : { name: name, style_prompt: prompt, is_fade: isFade, sample_urls: cstyleSamples };
+  fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error) { cstyleSaveErr(data.message || data.error); return; }
+      resetCustomStyleForm();
+      loadCustomStyles(function(){ renderCustomStyleList(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
+    })
+    .catch(function(e){ cstyleSaveErr('Could not save: ' + e.message); })
+    .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Save style'; } });
+}
+function editCustomStyle(id) {
+  var sObj = customStyleById(id);
+  if (!sObj) return;
+  resetCustomStyleForm();
+  var eid = document.getElementById('cstyle-edit-id'); if (eid) eid.value = sObj.id;
+  var nm = document.getElementById('cstyle-name'); if (nm) nm.value = sObj.name || '';
+  var pr = document.getElementById('cstyle-prompt'); if (pr) pr.value = sObj.style_prompt || '';
+  var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!sObj.is_fade;
+  var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Edit style';
+  cstyleSamples = Array.isArray(sObj.sample_urls) ? sObj.sample_urls : [];
+}
+function deleteCustomStyle(id) {
+  var sObj = customStyleById(id);
+  if (!confirm('Delete the custom style "' + ((sObj && sObj.name) || 'this style') + '"? This cannot be undone.')) return;
+  fetch('/api/art-styles/custom/' + id, { method: 'DELETE' })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.error) { cstyleErr(data.error); return; }
+      loadCustomStyles(function(){ renderCustomStyleList(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
+    })
+    .catch(function(e){ cstyleErr('Could not delete: ' + e.message); });
+}
+
 function openStylePicker(kind) {
   STYLE_PICKER_KIND = kind || 'narrative';
   var titleEl = document.getElementById('style-picker-title');
@@ -3064,6 +3218,7 @@ function openStylePicker(kind) {
     if (titleEl) titleEl.textContent = 'Choose an art style';
     cur = state.artStyle ? state.artStyle : 'High fantasy illustration';
     meta = ART_STYLE_META;
+    if (!customStylesLoaded()) { loadCustomStyles(function(){ openStylePicker('art'); }); return; }
   } else if (STYLE_PICKER_KIND === 'layout') {
     if (titleEl) titleEl.textContent = 'Choose a layout';
     cur = normalizeLayoutId(state.layoutStyle || 'Classic');
@@ -3096,6 +3251,22 @@ function openStylePicker(kind) {
       eg +
       '</div>';
   }).join('');
+  if (STYLE_PICKER_KIND === 'art') {
+    var _cs = getCustomStyles();
+    if (_cs.length) {
+      var _csh = '<div class="style-custom-head" style="grid-column:1 / -1;margin:8px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim);">My Custom Styles</div>';
+      _csh += _cs.map(function(s) {
+        var cid = 'custom:' + s.id;
+        var on2 = (cid === cur) ? ' is-selected' : '';
+        var badge2 = (cid === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
+        return '<div class="style-card' + on2 + '" onclick="selectStyleCard(\'art\',\'' + cid + '\')">' +
+          '<div class="style-card-name">' + escapeHtml(s.name || 'Untitled') + badge2 + '</div>' +
+          '<div class="style-card-desc">' + (s.is_fade ? 'Soft, faded edges.' : 'Your custom art style.') + '</div>' +
+          '</div>';
+      }).join('');
+      grid.innerHTML += _csh;
+    }
+  }
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.remove('hidden');
 }
@@ -3174,6 +3345,7 @@ var ART_STYLE_META = [
 ];
 
 function artStyleName(v) {
+  if (typeof v === 'string' && v.indexOf('custom:') === 0) { var _cs = customStyleById(v); return _cs ? (_cs.name || 'Custom style') : 'Custom style'; }
   for (var i = 0; i < ART_STYLE_META.length; i++) { if (ART_STYLE_META[i].id === v) return ART_STYLE_META[i].name; }
   return v || 'High fantasy';
 }

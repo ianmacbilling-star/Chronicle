@@ -37,6 +37,7 @@
         <div class="user-menu-item" onclick="showView('account');closeUserMenu()">&#9733; My Account</div>
         <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">&#9670; My Orders</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">&#9672; Buy Tokens</div>
+        <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStyles();closeUserMenu()">&#127912; Custom Art Styles</div>
         <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">&#9881; Dashboard</div>
         <div class="user-menu-divider"></div>
         <div class="user-menu-item" id="nav-install-item" style="display:none;" onclick="installApp();closeUserMenu()">&#10515; Install app</div>
@@ -1447,6 +1448,123 @@
     </div>
   </div>
 </div>
+<!-- CUSTOM ART STYLE BUILDER MODAL -->
+<div class="modal-overlay hidden" id="cstyle-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Custom Art Styles</div>
+      <button class="modal-close" onclick="closeCustomStyles()">&times;</button>
+    </div>
+    <div id="cstyle-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">Your styles</label>
+      <div id="cstyle-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    <div style="margin-top:6px;padding-top:14px;border-top:1px solid rgba(201,168,76,0.15);">
+      <div class="modal-title" id="cstyle-form-title" style="font-size:15px;margin-bottom:10px;">Create a new style</div>
+      <input type="hidden" id="cstyle-edit-id" />
+      <div class="form-group">
+        <label class="form-label">Style name</label>
+        <input class="form-input" id="cstyle-name" placeholder="e.g. Moody Ink Wash" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reference images <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; 2 to 4 images sharing the look you want (style, not subject)</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 1</div>
+          <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_1"
+            onclick="document.getElementById('input-cstyle_1').click()"
+            ondragover="handleSlotDragOver(event,'cstyle_1')"
+            ondragleave="handleSlotDragLeave(event,'cstyle_1')"
+            ondrop="handleSlotDrop(event,'cstyle_1')"
+            style="padding:10px;">
+            <img id="preview-cstyle_1" class="slot-preview slot-action hidden" alt="Reference 1" />
+            <div class="slot-placeholder" id="placeholder-cstyle_1">
+              <div style="font-size:20px;">&#127912;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-cstyle_1" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_1')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_1" onclick="clearSlot('cstyle_1')">&#10005; Remove</button>
+        </div>
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 2</div>
+          <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_2"
+            onclick="document.getElementById('input-cstyle_2').click()"
+            ondragover="handleSlotDragOver(event,'cstyle_2')"
+            ondragleave="handleSlotDragLeave(event,'cstyle_2')"
+            ondrop="handleSlotDrop(event,'cstyle_2')"
+            style="padding:10px;">
+            <img id="preview-cstyle_2" class="slot-preview slot-action hidden" alt="Reference 2" />
+            <div class="slot-placeholder" id="placeholder-cstyle_2">
+              <div style="font-size:20px;">&#127912;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-cstyle_2" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_2')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_2" onclick="clearSlot('cstyle_2')">&#10005; Remove</button>
+        </div>
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 3</div>
+          <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_3"
+            onclick="document.getElementById('input-cstyle_3').click()"
+            ondragover="handleSlotDragOver(event,'cstyle_3')"
+            ondragleave="handleSlotDragLeave(event,'cstyle_3')"
+            ondrop="handleSlotDrop(event,'cstyle_3')"
+            style="padding:10px;">
+            <img id="preview-cstyle_3" class="slot-preview slot-action hidden" alt="Reference 3" />
+            <div class="slot-placeholder" id="placeholder-cstyle_3">
+              <div style="font-size:20px;">&#127912;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-cstyle_3" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_3')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_3" onclick="clearSlot('cstyle_3')">&#10005; Remove</button>
+        </div>
+        <div>
+          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Reference 4</div>
+          <div class="image-upload-area image-slot slot-tall" id="drop-cstyle_4"
+            onclick="document.getElementById('input-cstyle_4').click()"
+            ondragover="handleSlotDragOver(event,'cstyle_4')"
+            ondragleave="handleSlotDragLeave(event,'cstyle_4')"
+            ondrop="handleSlotDrop(event,'cstyle_4')"
+            style="padding:10px;">
+            <img id="preview-cstyle_4" class="slot-preview slot-action hidden" alt="Reference 4" />
+            <div class="slot-placeholder" id="placeholder-cstyle_4">
+              <div style="font-size:20px;">&#127912;</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+            </div>
+          </div>
+          <input type="file" id="input-cstyle_4" accept="image/*" style="display:none;" onchange="handleSlotFileSelect(event,'cstyle_4')" />
+          <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
+        </div>
+        </div>
+        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. Only upload images you own or have the rights to use &mdash; no copyrighted characters or artwork without permission.</div>
+      </div>
+      <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style (1 token)</button>
+      <div class="form-group" style="margin-top:14px;">
+        <label class="form-label">Style description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; editable; this is what steers every panel</span></label>
+        <textarea class="form-textarea" id="cstyle-prompt" style="min-height:120px;" placeholder="Analyze your reference images to generate this, or write your own STYLE: description..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-checkbox-row">
+          <input type="checkbox" id="cstyle-fade" />
+          <span>Soft / faded edges <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; art thins to white at the panel edges instead of filling the frame</span></span>
+        </label>
+      </div>
+      <button class="btn" id="cstyle-preview-btn" onclick="previewCustomStyle()" style="width:100%;">Preview render (1 token)</button>
+      <div id="cstyle-preview-wrap" style="margin-top:10px;display:none;text-align:center;">
+        <img id="cstyle-preview-img" alt="Style preview" style="max-width:100%;border-radius:8px;" />
+      </div>
+    </div>
+    <div id="cstyle-save-error" class="alert alert-error hidden" style="margin:14px 0 0;"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCustomStyles()">Close</button>
+      <button class="btn btn-primary" id="cstyle-save-btn" onclick="saveCustomStyle()">Save style</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="style-picker-modal">
   <div class="modal archive-picker" style="max-width:680px;">
     <div class="modal-header">
