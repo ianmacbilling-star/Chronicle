@@ -34,14 +34,14 @@
       </div>
       <div class="user-menu-dropdown" id="user-menu">
         <div class="user-menu-header" id="user-menu-email"></div>
-        <div class="user-menu-item" onclick="showView('account');closeUserMenu()">&#9733; My Account</div>
-        <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">&#9670; My Orders</div>
-        <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">&#9672; Buy Tokens</div>
-        <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">&#127912; Custom Art Styles</div>
-        <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">&#9881; Dashboard</div>
+        <div class="user-menu-item" onclick="showView('account');closeUserMenu()">My Account</div>
+        <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Orders</div>
+        <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
+        <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">Custom Art Styles</div>
+        <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">Dashboard</div>
         <div class="user-menu-divider"></div>
-        <div class="user-menu-item" id="nav-install-item" style="display:none;" onclick="installApp();closeUserMenu()">&#10515; Install app</div>
-        <div class="user-menu-item danger" onclick="logout()">&#8594; Sign out</div>
+        <div class="user-menu-item" id="nav-install-item" style="display:none;" onclick="installApp();closeUserMenu()">Install app</div>
+        <div class="user-menu-item danger" onclick="logout()">Sign out</div>
       </div>
     </div>
   </div>
@@ -1548,7 +1548,7 @@
           <button class="btn btn-sm" style="margin-top:4px;font-size:10px;display:none;" id="clear-cstyle_4" onclick="clearSlot('cstyle_4')">&#10005; Remove</button>
         </div>
         </div>
-        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. Only upload images you own or have the rights to use &mdash; no copyrighted characters or artwork without permission.</div>
+        <div class="form-hint" style="margin-top:8px;">The AI reads the rendering style across your samples. The image models that render your panels have their own built-in style tendencies, so a custom style can produce mixed results and may come through more strongly on some panels than others. Only upload images you own or have the rights to use &mdash; no copyrighted characters or artwork without permission.</div>
       </div>
       <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style (1 token)</button>
       <div class="form-group" style="margin-top:14px;">

@@ -3150,6 +3150,8 @@ function analyzeCustomStyle() {
       var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!data.is_fade;
       cstyleSamples = Array.isArray(data.sample_urls) ? data.sample_urls : [];
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+      var _nm = document.getElementById('cstyle-name'); if (_nm && !_nm.value.trim()) _nm.value = 'Untitled Style';
+      saveCustomStyle({ keepOpen: true });
     })
     .catch(function(e){ cstyleErr('Could not analyze the style: ' + e.message); })
     .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Analyze style (1 token)'; } });
@@ -3178,18 +3180,21 @@ function previewCustomStyle() {
     .catch(function(e){ cstyleErr('Could not render the preview: ' + e.message); })
     .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Preview render (1 token)'; } });
 }
-function saveCustomStyle() {
+function saveCustomStyle(opts) {
+  opts = opts || {};
+  var keepOpen = !!opts.keepOpen;
   cstyleSaveErr('');
   var name = (document.getElementById('cstyle-name') || {}).value;
   var prompt = (document.getElementById('cstyle-prompt') || {}).value;
   name = (name || '').trim(); prompt = (prompt || '').trim();
   if (!name) { cstyleSaveErr('Please name your style.'); return; }
   if (!prompt) { cstyleSaveErr('The style description is empty. Analyze your samples or write one first.'); return; }
-  var editId = (document.getElementById('cstyle-edit-id') || {}).value;
+  var editEl = document.getElementById('cstyle-edit-id');
+  var editId = (editEl || {}).value;
   var fade = document.getElementById('cstyle-fade');
   var isFade = !!(fade && fade.checked);
   var btn = document.getElementById('cstyle-save-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  if (btn && !keepOpen) { btn.disabled = true; btn.textContent = 'Saving...'; }
   var url = editId ? ('/api/art-styles/custom/' + editId) : '/api/art-styles/custom';
   var method = editId ? 'PUT' : 'POST';
   var body = editId ? { name: name, style_prompt: prompt, is_fade: isFade } : { name: name, style_prompt: prompt, is_fade: isFade, sample_urls: cstyleSamples };
@@ -3197,11 +3202,12 @@ function saveCustomStyle() {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data.error) { cstyleSaveErr(data.message || data.error); return; }
-      closeCustomStyles();
+      if (!editId && data && data.id && editEl) { editEl.value = data.id; var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Edit style'; }
+      if (!keepOpen) closeCustomStyles();
       loadCustomStyles(function(){ renderCustomStyleCards(); if (typeof refreshArtStyleButtons === 'function') refreshArtStyleButtons(); });
     })
     .catch(function(e){ cstyleSaveErr('Could not save: ' + e.message); })
-    .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Save style'; } });
+    .then(function(){ if (btn && !keepOpen) { btn.disabled = false; btn.textContent = 'Save style'; } });
 }
 function paintSlotUrl(slot, url) {
   var preview = document.getElementById('preview-' + slot);
