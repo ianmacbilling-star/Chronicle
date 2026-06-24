@@ -238,7 +238,7 @@ router.post('/order', requireSession, async function (req, res) {
     if (!Number.isFinite(_ppMax)) _ppMax = 250;
     var _ppCount = parseInt(body.pageCount, 10);
     if (Number.isFinite(_ppCount) && _ppCount > _ppMax) {
-      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _ppMax, message: 'This book is ' + _ppCount + ' pages, over the ' + _ppMax + '-page print limit. Split it into multiple smaller books and try again.' });
+      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _ppMax, message: 'This book is ' + _ppCount + ' pages, which is over the current ' + _ppMax + '-page limit for a single book. To make it fit, open your Sessions list and uncheck some sessions using the "Include in Print" checkbox, then try again, or split it into multiple smaller books.' });
     }
   } catch (e) { /* count lookup failure -> fall through */ }
   if (!body.interiorPdfUrl || !body.coverPdfUrl) {

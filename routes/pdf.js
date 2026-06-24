@@ -2627,7 +2627,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
     var _ppCount = await countPdfPages(pdfBuffer);
     if (_ppCount > _maxPP) {
-      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, over the ' + _maxPP + '-page print limit. Split it into multiple smaller books and try again.' });
+      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, which is over the current ' + _maxPP + '-page limit for a single book. To make it fit, open your Sessions list and uncheck some sessions using the "Include in Print" checkbox, then try again, or split it into multiple smaller books.' });
     }
   } catch (e) { console.error('[page-limit] count failed:', e && e.message ? e.message : e); }
 
@@ -2948,7 +2948,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
     var _ppCount = await countPdfPages(pdfBuffer);
     if (_ppCount > _maxPP) {
-      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, over the ' + _maxPP + '-page print limit. Split it into multiple smaller books and try again.' });
+      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, which is over the current ' + _maxPP + '-page limit for a single book. To make it fit, open your Sessions list and uncheck some sessions using the "Include in Print" checkbox, then try again, or split it into multiple smaller books.' });
     }
   } catch (e) { console.error('[page-limit] count failed:', e && e.message ? e.message : e); }
 

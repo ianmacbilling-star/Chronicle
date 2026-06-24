@@ -5867,7 +5867,7 @@ async function publishStory() {
         if (st) st.style.display = 'none';
         uiConfirm('Publishing to the Library requires a paid plan, or playing in a campaign run by a subscriber.', { okText: 'See plans', cancelText: 'Not now' }).then(function(go){ if (go) goToPlans(); });
       } else {
-        if (st) st.textContent = (d && d.error) ? d.error : 'Could not publish. Please try again.';
+        if (st) st.textContent = (d && (d.message || d.error)) ? (d.message || d.error) : 'Could not publish. Please try again.';
         if (btn) btn.textContent = 'Publish to Library';
       }
     })
@@ -11953,7 +11953,7 @@ function submitPrintOrder() {
       if (res.ok && res.j && res.j.url) { window.location = res.j.url; return; }
       if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; }
       if (res.status === 503) { showPrintBtnMsg('Payments are being set up and will be available shortly.', null); return; }
-      showPrintBtnMsg(res.j && res.j.error ? res.j.error : 'Could not start payment.', null);
+      showPrintBtnMsg((res.j && (res.j.message || res.j.error)) ? (res.j.message || res.j.error) : 'Could not start payment.', null);
     })
     .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Continue to secure payment'; } showPrintBtnMsg('Could not reach the payment service. Please try again.', null); });
 }
