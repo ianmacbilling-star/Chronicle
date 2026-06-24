@@ -608,7 +608,7 @@ async function resolveGenStyle(db, style, userId) {
     if (rowId) {
       try {
         const row = await db.prepare('SELECT style_prompt, is_fade FROM custom_art_styles WHERE id = ? AND owner_id = ?').get(rowId, userId);
-        if (row && row.style_prompt) return { styleForGen: row.style_prompt, isFade: !!row.is_fade };
+        if (row && row.style_prompt) { var _sp = /^STYLE:/i.test(row.style_prompt) ? row.style_prompt : ('STYLE: ' + row.style_prompt); return { styleForGen: _sp, isFade: !!row.is_fade }; }
       } catch (e) { console.error('custom style resolve error:', e.message); }
     }
     return { styleForGen: 'High fantasy illustration', isFade: null };
@@ -1297,8 +1297,9 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
   try {
     const own = await getEffectiveTier(req.session.userId, null);
     if (own !== 'platinum') return res.status(403).json({ error: 'NOT_PLATINUM', message: 'Custom styles are a Platinum feature.' });
-    const stylePrompt = (req.body && req.body.style_prompt || '').trim();
+    let stylePrompt = (req.body && req.body.style_prompt || '').trim();
     if (!stylePrompt) return res.json({ error: 'Add a style description first.' });
+    if (!/^STYLE:/i.test(stylePrompt)) stylePrompt = 'STYLE: ' + stylePrompt;
     const isFade = !!(req.body && (req.body.is_fade === true || req.body.is_fade === 1 || req.body.is_fade === '1' || req.body.is_fade === 'true'));
     const fal_key = process.env.FAL_API_KEY || req.body.fal_key;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });

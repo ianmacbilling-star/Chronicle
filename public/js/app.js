@@ -3181,6 +3181,16 @@ function saveCustomStyle() {
     .catch(function(e){ cstyleSaveErr('Could not save: ' + e.message); })
     .then(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Save style'; } });
 }
+function paintSlotUrl(slot, url) {
+  var preview = document.getElementById('preview-' + slot);
+  var placeholder = document.getElementById('placeholder-' + slot);
+  var clearBtn = document.getElementById('clear-' + slot);
+  if (!preview) return;
+  preview.src = url;
+  preview.classList.remove('hidden');
+  if (placeholder) placeholder.style.display = 'none';
+  if (clearBtn) clearBtn.style.display = 'inline-flex';
+}
 function editCustomStyle(id) {
   var sObj = customStyleById(id);
   if (!sObj) return;
@@ -3191,6 +3201,7 @@ function editCustomStyle(id) {
   var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = !!sObj.is_fade;
   var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Edit style';
   cstyleSamples = Array.isArray(sObj.sample_urls) ? sObj.sample_urls : [];
+  ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k, i){ if (cstyleSamples[i]) paintSlotUrl(k, cstyleSamples[i]); });
 }
 function deleteCustomStyle(id) {
   var sObj = customStyleById(id);

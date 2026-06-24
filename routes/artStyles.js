@@ -73,12 +73,13 @@ router.post('/custom', requireAuth, requireTruePlatinum, async function(req, res
     const sampleUrls = (req.body && Array.isArray(req.body.sample_urls)) ? req.body.sample_urls : [];
     if (!name) return res.json({ error: 'Please name your style.' });
     if (!stylePrompt) return res.json({ error: 'The style description is empty. Analyze your samples or write one first.' });
+    const stylePromptN = /^STYLE:/i.test(stylePrompt) ? stylePrompt : ('STYLE: ' + stylePrompt);
     const db = await getDb();
     const now = new Date().toISOString();
     const result = await db.prepare(
       'INSERT INTO custom_art_styles (owner_id, name, style_prompt, is_fade, sample_urls, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.session.userId, name, stylePrompt, isFade, JSON.stringify(sampleUrls), now, now);
+    ).run(req.session.userId, name, stylePromptN, isFade, JSON.stringify(sampleUrls), now, now);
     const row = await db.prepare('SELECT * FROM custom_art_styles WHERE id = ?').get(result.lastInsertRowid);
     res.json(rowOut(row));
   } catch (e) {
@@ -100,10 +101,11 @@ router.put('/custom/:id', requireAuth, requireTruePlatinum, async function(req, 
     const isFade = fadeFromBody(req.body && req.body.is_fade, row.is_fade ? 1 : 0);
     if (!name) return res.json({ error: 'Please name your style.' });
     if (!stylePrompt) return res.json({ error: 'The style description is empty.' });
+    const stylePromptN = /^STYLE:/i.test(stylePrompt) ? stylePrompt : ('STYLE: ' + stylePrompt);
     const now = new Date().toISOString();
     await db.prepare(
       'UPDATE custom_art_styles SET name = ?, style_prompt = ?, is_fade = ?, updated_at = ? WHERE id = ? AND owner_id = ?'
-    ).run(name, stylePrompt, isFade, now, row.id, req.session.userId);
+    ).run(name, stylePromptN, isFade, now, row.id, req.session.userId);
     const updated = await db.prepare('SELECT * FROM custom_art_styles WHERE id = ?').get(row.id);
     res.json(rowOut(updated));
   } catch (e) {
