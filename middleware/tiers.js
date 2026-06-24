@@ -495,6 +495,7 @@ const NARRATIVE_STYLE_MIN_RANK = {
   epic: 3,         // Gold
   journal: 3,      // Gold
   cinematic: 3,    // Gold
+  dialogue: 3,     // Gold (Comic Dialogue)
   lorekeeper: 4,   // Platinum
   noir: 4,         // Platinum
   grim: 4,         // Platinum

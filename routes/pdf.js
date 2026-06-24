@@ -156,9 +156,26 @@ function panelCaption(m, i) {
 
 function buildNarrativeHTML(text, isIntro) {
   if (!text) return '';
+  // Script-formatted narrative (Comic Dialogue) arrives as newline-separated speaker
+  // lines (NAME: "..."). HTML collapses newlines, so detect that shape and convert the
+  // breaks to <br> with no first-line indent. Flowing prose (no NAME: speaker lines) is
+  // returned unchanged, byte-for-byte.
+  var isScript = false;
+  var inner = text;
+  if (text.indexOf('\n') >= 0) {
+    var _lines = text.split('\n');
+    var _hits = 0;
+    for (var _i = 0; _i < _lines.length; _i++) {
+      if (/^\s*[A-Za-z][A-Za-z0-9 ._'\-]{0,24}:\s+["\u201c\u2018']/.test(_lines[_i])) _hits++;
+    }
+    if (_hits >= 1) {
+      isScript = true;
+      inner = _lines.map(function (l) { return l.trim(); }).filter(function (l) { return l.length; }).join('<br>');
+    }
+  }
   return '<p style="font-family:Crimson Text,Georgia,serif;font-size:12pt;line-height:1.8;color:#2a1a0e;' +
     (isIntro ? 'font-style:italic;font-size:13pt;' : '') +
-    'margin:0.15in 0;text-indent:' + (isIntro ? '0' : '0.3in') + ';">' + text + '</p>';
+    'margin:0.15in 0;text-indent:' + (isScript ? '0' : (isIntro ? '0' : '0.3in')) + ';">' + inner + '</p>';
 }
 
 function buildClassicTextPanel(text) {

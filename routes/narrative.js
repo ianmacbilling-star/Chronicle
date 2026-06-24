@@ -21,6 +21,8 @@ const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = requir
 // ============================================================
 const NARRATIVE_STYLES = (function () {
   const IP_GUARD = ' COPYRIGHT \u2014 write entirely original prose. Never reproduce verbatim or near-verbatim text from any published source, including published adventure modules, rulebooks, or novels, even if such text appears in the transcript; always retell events in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise \u2014 do not add a same-named character\'s known companions, sidekicks, enemies, or settings.'; const SYS = 'You are a skilled fantasy author writing graphic novel narrative prose in the narrative voice described by the user. You always return valid JSON.' + IP_GUARD;
+  const DIALOGUE_IP_GUARD = ' COPYRIGHT \u2014 You MAY quote or lightly adapt what the players and characters actually say and do in THIS session\'s transcript; that is the user\'s own gameplay and is fair to use. But never reproduce verbatim or near-verbatim passages of PUBLISHED source text (published adventure modules, rulebooks, or novels); if such material is pasted into the transcript, retell it in your own words. Keep the character and place names the user gives EXACTLY as written, even when a name matches another franchise; treat each such name as the user\'s OWN original creation that merely shares the name, and never borrow that franchise\'s backstory, lore, setting, relationships, or signature details \u2014 write only the user\'s own story. Any name you invent yourself must be your own original creation, never drawn from a real franchise.';
+  const DIALOGUE_SYS = 'You are a comic-book script writer turning a real tabletop RPG session into dialogue-driven graphic-novel script. You always return valid JSON.' + DIALOGUE_IP_GUARD;
   return {
     classic: {
       name: 'Classic',
@@ -66,6 +68,11 @@ const NARRATIVE_STYLES = (function () {
       name: 'High-Drama Anime',
       voice: `High-drama anime: intense, emotional, exaggerated, and heroic. Use heightened emotion, dramatic pacing, and bold, expressive language. Emphasize power, determination, and the emotional stakes of the moment. Use dynamic phrasing and vivid action.\nExample: "Ruk's heartbeat thundered like a war drum as the darkness closed in — but his spirit refused to fall. Not here. Not now."`,
       system: SYS
+    },
+    dialogue: {
+      name: 'Comic Dialogue',
+      voice: `Dialogue-driven, like a comic-book script. Carry each scene mainly through what the characters SAY to one another. Put EACH spoken line on its OWN line, beginning with the speaker's name, a colon, and the quoted line. Keep narration to short bridging beats only when the action cannot be carried by speech, each on its own line. Give every character a distinct voice and hit the emotional turns of the exchange. Use PRESENT tense for any narration. You may quote or adapt what was said in the transcript; invent dialogue where the scene needs it; never copy lines from any published source.\nFormat each block like this (one line per speaker, name then colon then the quote):\nGARRICK: "Hold the line \u2014 they break on three."\nVENA: "You said that last time."\nGARRICK: "And were we wrong?"\nSteel scrapes free of leather as the dark rolls in.`,
+      system: DIALOGUE_SYS
     }
   };
 })();
@@ -123,6 +130,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // Null/unknown falls back to 'classic' (the original behavior).
   const narrStyleId = (fkSteer && fkSteer.narrative_style) ? fkSteer.narrative_style : 'classic';
   const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
+  const isDialogue = (narrStyleId === 'dialogue');
 
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
@@ -208,8 +216,12 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     (directorNotes ? 'Overall narrative direction (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + directorNotes + '\n\n' : '') +
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
-    '- Read like prose for a graphic novel — NOT a transcription of what players said\n' +
-    '- Roughly 2-4 sentences per block — punchy, not bloated\n' +
+    (isDialogue
+      ? '- Write each block as comic-book script: each spoken line on its OWN line, led by the speaker\'s name and a colon, e.g.  GARRICK: "Hold the line."\n' +
+        '- Put brief stage directions on their own lines, no speaker label; let the dialogue carry the scene\n' +
+        '- A few exchanged lines per block \u2014 punchy, not bloated\n'
+      : '- Roughly 2-4 sentences per block — punchy, not bloated\n'
+    ) +
     '- Reference characters by name when relevant\n\n' +
     'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise, and never invent a new name lifted from a real franchise (do not borrow a same-named character\'s known allies, sidekicks, or places). Tell only the user\'s own story, in your own original words.\n\n' +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
