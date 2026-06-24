@@ -6,6 +6,7 @@ const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tier
 const path = require('path');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
+const { measureDocument } = require('../services/printing/measureLayout');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
 
@@ -1261,11 +1262,26 @@ function renderComicPage(moments, sections, intro, outro, opts) {
   // print fragmentation, but block-level elements honor it -- so pulling full-width
   // units out of the grid is what actually keeps each picture with its text.
   var _segOpen = '<div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:auto;gap:' + CG_GAP + 'in;grid-auto-flow:row dense;align-items:start;margin-bottom:' + CG_GAP + 'in;">';
-  var cellHtml = '', _gridBuf = '';
+  // Stage 1 measurement: when opts.measureTag is set, stamp a data-mblk id + a
+  // coarse kind onto each block's outer <div> so the text-only measurement pass
+  // can read its real height. NORMAL output (no measureTag) is byte-identical.
+  var _mt = !!(opts && opts.measureTag);
+  function _mKind(h) {
+    if (h.indexOf('<img ') !== -1) return 'image';
+    if (h.indexOf('#fbf3cf') !== -1) return 'narr';
+    return 'cell';
+  }
+  function _mTag(h, seq, full) {
+    if (!_mt) return h;
+    var kind = (full ? 'full-' : '') + _mKind(h);
+    return h.replace('<div ', '<div data-mblk="' + seq + '" data-mkind="' + kind + '" ');
+  }
+  var cellHtml = '', _gridBuf = '', _seq = 0;
   function _flushGrid() { if (_gridBuf) { cellHtml += _segOpen + _gridBuf + '</div>'; _gridBuf = ''; } }
   for (var _ci = 0; _ci < cells.length; _ci++) {
-    if (cells[_ci].kind === 'block') { _flushGrid(); cellHtml += cells[_ci].html; }
-    else _gridBuf += cells[_ci].html;
+    var _h = _mTag(cells[_ci].html, _seq++, cells[_ci].kind === 'block');
+    if (cells[_ci].kind === 'block') { _flushGrid(); cellHtml += _h; }
+    else _gridBuf += _h;
   }
   _flushGrid();
   html += cellHtml;
@@ -2388,6 +2404,18 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
     let html = buildSessionHTML(session, moments, campaign, characters, narrative, co, { noCover: true });
     if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
+    // Stage 1 verification: ?measure=1 returns the text-only measured block
+    // geometry for the COMIC layout (images blocked) instead of the PDF/HTML.
+    if (req.query.measure === '1' || req.query.measure === 'true') {
+      var _mco = co || {};
+      _mco.arrange = 'comicpage';
+      _mco.measureTag = true;
+      var _mhtml = buildSessionHTML(session, moments, campaign, characters, narrative, _mco, { noCover: true });
+      var _measured = await measureDocument(_mhtml, {});
+      _measured.layout = 'comicpage';
+      _measured.sessionId = String(req.params.sessionId);
+      return res.json(_measured);
+    }
     if (req.query.format === 'pdf') {
       var sfo = await db.prepare("SELECT u.name AS uname, sf.role AS srole FROM session_forks sf JOIN users u ON u.id = sf.user_id WHERE sf.id = ?").get(viewForkId);
       var sMember = (sfo && sfo.srole === 'player' && sfo.uname) ? sfo.uname : '';
