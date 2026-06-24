@@ -137,10 +137,11 @@ function planComic(moments, opts) {
     }
 
     // Does the image row need a fresh page? It needs room for itself plus at least
-    // a little narration (or, if no narration, just itself).
+    // Slide up: the image only needs room for ITSELF on the current page. Its
+    // narration flows below (same page if it fits) or onto the next page -- still
+    // adjacent, never a blank page between. This backfills under-filled tail pages.
     if (imageItem) {
-      var needFirst = imageRowH + (chunks.length > besideUsed ? GAP + smallestChunk(chunks, besideUsed) : 0);
-      if (avail() < needFirst - 1e-6 && cur.usedIn > 1e-6) newPage();
+      if (avail() < imageRowH - 1e-6 && cur.usedIn > 1e-6) newPage();
       add(imageItem, imageRowH);
     }
 
