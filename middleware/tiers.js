@@ -480,14 +480,14 @@ async function getEffectiveTierFeatures(userId, campaignId) {
 // ============================================================
 const ART_STYLE_MIN_RANK = {
   'High fantasy illustration': 1,   // base / floor
-  'Dark gritty comic book': 3,      // Gold
-  'Classic pen and ink': 3,         // Gold
+  'Dark gritty comic book': 2,      // Silver   (was Gold)
+  'Classic pen and ink': 2,         // Silver   (was Gold)
   'Charcoal drawing': 3,            // Gold
-  'Watercolor painterly': 4,        // Platinum
-  'Anime manga style': 4,           // Platinum
-  'Fantasy oil painting': 4,        // Platinum
-  'Comic book cel-shaded': 4,       // Platinum
-  'Fantasy pastel': 4               // Platinum
+  'Watercolor painterly': 3,        // Gold     (was Platinum)
+  'Anime manga style': 2,           // Silver   (was Platinum)
+  'Fantasy oil painting': 3,        // Gold     (was Platinum)
+  'Comic book cel-shaded': 3,       // Gold     (was Platinum)
+  'Fantasy pastel': 3               // Gold     (was Platinum)
 };
 
 const NARRATIVE_STYLE_MIN_RANK = {
