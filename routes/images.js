@@ -7,6 +7,7 @@ const { releaseImage, persistToR2 } = require('../storage/storage');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
 const crypto = require('crypto');
+const { logDebug } = require('./debug');
 
 // Async image generation (fal queue + webhook). PUBLIC_BASE_URL is the app's
 // public origin for THIS environment (set in Railway), e.g. https://campaignia.com
@@ -306,7 +307,7 @@ async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, 
   fal.config({ credentials: falKey });
   const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
-  return { request_id: submitted.request_id, model: built.model };
+  return { request_id: submitted.request_id, model: built.model, prompt: built.input.prompt, system_prompt: built.input.system_prompt || '' };
 }
 
 // retouchImage: in-context edit. Feed the CURRENT panel image back in as the
@@ -896,6 +897,23 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
       } catch (_e) {}
     }
     const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade);
+
+    await logDebug(req.session.userId, {
+      level: 'info', source: 'generation', page: 'Storyboard / moment image', fn: 'POST /generate-moment',
+      message: 'Submitted moment image generation (request ' + sub.request_id + ')',
+      detail: {
+        moment_id: moment_id,
+        model: sub.model,
+        style: style || null,
+        cast_explicit: !!moment.cast_explicit,
+        castNames: castNames,
+        matchedRefs: (panelBlock.refs || []).map(function(r){ return r.name; }),
+        momentDirection: momentDirsS[moment.id] || null,
+        bodyPrompt: applyMomentDirection(prompt, momentDirsS[moment.id]),
+        finalPrompt: sub.prompt || '',
+        systemPrompt: sub.system_prompt || ''
+      }
+    });
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
@@ -909,6 +927,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Image generation error:', e.message);
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Storyboard / moment image', fn: 'POST /generate-moment', message: 'Image generation failed: ' + (e && e.message), detail: { moment_id: (req.body && req.body.moment_id) || null, stack: (e && e.stack) || '' } }); } catch (_le) {}
     res.json({ error: e.message });
   }
 });
