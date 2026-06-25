@@ -12798,3 +12798,120 @@ function _doDeleteCampaign(id) {
     })
     .catch(function(){ if (btn) btn.disabled = false; if (msg) { msg.style.color = '#e57373'; msg.textContent = 'Could not delete this campaign.'; } });
 }
+
+// ============================================================
+// DEVELOPER / DEBUG MODE (per-user, opt-in) -- easter-egg reveal
+// Tapping the version label on the Account page 7x reveals the panel.
+// ============================================================
+var _cmpVerTaps = 0;
+var _cmpVerTapTimer = null;
+var _cmpDebugCache = [];
+
+function cmpVersionTap() {
+  _cmpVerTaps++;
+  if (_cmpVerTapTimer) clearTimeout(_cmpVerTapTimer);
+  _cmpVerTapTimer = setTimeout(function(){ _cmpVerTaps = 0; }, 2000);
+  if (_cmpVerTaps >= 7) {
+    _cmpVerTaps = 0;
+    var p = document.getElementById('dev-debug-panel');
+    if (p) { p.style.display = 'block'; cmpInitDebugPanel(); p.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }
+}
+
+function cmpInitDebugPanel() {
+  fetch('/api/debug/status', { headers: { 'Accept': 'application/json' } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var on = !!(d && d.debug_mode);
+      var t = document.getElementById('debug-mode-toggle'); if (t) t.checked = on;
+      cmpSetRecDot(on);
+      cmpRefreshDebugLog();
+    })
+    .catch(function(){});
+}
+
+function cmpSetRecDot(on) {
+  var dot = document.getElementById('debug-rec-dot');
+  if (dot) dot.style.display = on ? 'inline-block' : 'none';
+}
+
+function cmpDebugMsg(text, ok) {
+  var m = document.getElementById('debug-log-msg');
+  if (!m) return;
+  m.style.display = 'block';
+  m.style.color = ok ? '#7bbf6a' : '#e57373';
+  m.textContent = text;
+}
+
+function cmpToggleDebug(on) {
+  fetch('/api/debug/toggle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ on: !!on })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var state = !!(d && d.debug_mode);
+      cmpSetRecDot(state);
+      cmpDebugMsg(state ? 'Debug Mode is ON. Reproduce the problem, then copy or send the log.' : 'Debug Mode is OFF.', true);
+      cmpRefreshDebugLog();
+    })
+    .catch(function(){ cmpDebugMsg('Could not update Debug Mode.', false); });
+}
+
+function cmpFormatDebugLog(entries) {
+  if (!entries || !entries.length) return 'No debug entries yet. Turn Debug Mode ON and reproduce the problem.';
+  var out = [];
+  out.push('Campaignia debug log -- ' + entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies'));
+  out.push('========================================');
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    out.push('');
+    out.push('[' + (e.created_at || '') + '] ' + String(e.level || 'info').toUpperCase() + ' / ' + (e.source || ''));
+    out.push('  page: ' + (e.page || '-'));
+    out.push('  fn:   ' + (e.fn || '-'));
+    out.push('  msg:  ' + (e.message || '-'));
+    if (e.detail) { out.push('  detail:'); out.push(String(e.detail).replace(/^/gm, '    ')); }
+  }
+  return out.join('\n');
+}
+
+function cmpRefreshDebugLog() {
+  fetch('/api/debug/logs', { headers: { 'Accept': 'application/json' } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      _cmpDebugCache = (d && d.entries) || [];
+      var view = document.getElementById('debug-log-view');
+      if (view) view.textContent = cmpFormatDebugLog(_cmpDebugCache);
+    })
+    .catch(function(){ var view = document.getElementById('debug-log-view'); if (view) view.textContent = 'Could not load the debug log.'; });
+}
+
+function cmpCopyDebugLog() {
+  var text = cmpFormatDebugLog(_cmpDebugCache);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(function(){ cmpDebugMsg('Log copied to your clipboard.', true); })
+      .catch(function(){ cmpDebugMsg('Could not copy automatically -- select the text and copy.', false); });
+  } else {
+    cmpDebugMsg('Clipboard not available -- select the text and copy.', false);
+  }
+}
+
+function cmpSendDebugLog() {
+  cmpDebugMsg('Sending log to support...', true);
+  fetch('/api/debug/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.success) cmpDebugMsg('Sent to support. Thank you -- we will take a look.', true);
+      else cmpDebugMsg((d && d.error) || 'Could not send the log.', false);
+    })
+    .catch(function(){ cmpDebugMsg('Could not send the log.', false); });
+}
+
+function cmpClearDebugLog() {
+  fetch('/api/debug/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+    .then(function(r){ return r.json(); })
+    .then(function(){ cmpRefreshDebugLog(); cmpDebugMsg('Log cleared.', true); })
+    .catch(function(){ cmpDebugMsg('Could not clear the log.', false); });
+}
