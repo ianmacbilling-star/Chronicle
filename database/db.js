@@ -290,8 +290,27 @@ async function initPostgres() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_custom_art_styles_owner ON custom_art_styles(owner_id)');
 
+  // Debug Mode (per-user, opt-in) capture log. Bounded per user by the retention
+  // prune in routes/debug.js (30 days / 5000 rows). detail holds a JSON blob so an
+  // entry is both human-readable and machine-parseable.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS debug_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      level TEXT,
+      source TEXT,
+      page TEXT,
+      fn TEXT,
+      message TEXT,
+      detail TEXT
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_debug_logs_user ON debug_logs(user_id, id)');
+
   // ALTER TABLE migrations for existing databases
   const alterations = [
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS debug_mode BOOLEAN DEFAULT false',
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',

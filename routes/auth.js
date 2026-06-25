@@ -282,7 +282,15 @@ router.get('/me', async function(req, res) {
   }
 });
 
-router.post('/logout', function(req, res) {
+router.post('/logout', async function(req, res) {
+  // Debug Mode is intentionally ephemeral: always reset it to OFF on logout so it
+  // can never silently persist into the next session. Best-effort; never block logout.
+  try {
+    if (req.session && req.session.userId) {
+      const db = await getDb();
+      await db.prepare('UPDATE users SET debug_mode = false WHERE id = ?').run(req.session.userId);
+    }
+  } catch (e) { try { console.warn('[logout] debug_mode reset failed: ' + (e && e.message)); } catch (_e) {} }
   req.session.destroy();
   res.json({ success: true });
 });

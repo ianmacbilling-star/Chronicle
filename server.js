@@ -196,6 +196,7 @@ app.use('/api/print', require('./routes/print'));
 // both /api/campaigns/:campaignId/invites and /api/invites/:token.
 app.use('/api', require('./routes/invites'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/debug', require('./routes/debug'));
 
 // Public, unauthenticated: landing-page pricing (reads live tier config).
 app.use('/api/public', require('./routes/public'));
