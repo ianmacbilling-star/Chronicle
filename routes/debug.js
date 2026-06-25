@@ -53,7 +53,9 @@ router.get('/status', async function(req, res) {
   try {
     const db = await getDb();
     const u = await db.prepare('SELECT debug_mode FROM users WHERE id = ?').get(req.session.userId);
-    res.json({ debug_mode: !!(u && u.debug_mode) });
+    var on = !!(u && u.debug_mode);
+    if (req.session) req.session.debugMode = on;
+    res.json({ debug_mode: on });
   } catch (e) {
     res.status(500).json({ error: 'Could not read debug status.' });
   }
@@ -66,6 +68,7 @@ router.post('/toggle', async function(req, res) {
     const on = !!(req.body && req.body.on);
     const db = await getDb();
     await db.prepare('UPDATE users SET debug_mode = ? WHERE id = ?').run(on, req.session.userId);
+    if (req.session) req.session.debugMode = on;
     if (on) {
       await logDebug(req.session.userId, {
         level: 'info', source: 'server', page: 'Account', fn: 'POST /api/debug/toggle',
@@ -146,5 +149,72 @@ router.post('/send', async function(req, res) {
   }
 });
 
+// ---- Layer 1: automatic capture of every state-changing API request ----
+// Mounted on /api in server.js. For a user with Debug Mode on (session-cached
+// flag, synced from the DB on /status + /toggle), it records every mutating
+// request (POST/PUT/PATCH/DELETE) after the response finishes: method, path,
+// status, duration, and a SANITIZED snapshot of params/query/body. Reads (GET)
+// are deliberately NOT captured -- they would bury the signal. Sensitive fields
+// are redacted and long values truncated so secrets and huge blobs never land in
+// the log. The /api/debug/* routes are excluded to avoid self-logging.
+var SENSITIVE_KEYS = ['password','currentpassword','current_password','newpassword','new_password','confirmpassword','confirm_password','oldpassword','old_password','token','reset_token','api_key','apikey','fal_key','falkey','secret','cvc','card','cardnumber','card_number','authorization'];
+
+function sanitizeVal(v) {
+  if (v == null) return v;
+  if (typeof v === 'string') {
+    if (v.length > 600) return v.slice(0, 300) + '...[truncated ' + (v.length - 300) + ' chars]';
+    return v;
+  }
+  if (typeof v === 'object') return sanitizeObj(v);
+  return v;
+}
+
+function sanitizeObj(o) {
+  if (!o || typeof o !== 'object') return o;
+  if (Array.isArray(o)) return o.slice(0, 50).map(sanitizeVal);
+  var out = {};
+  var keys = Object.keys(o).slice(0, 60);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (SENSITIVE_KEYS.indexOf(String(k).toLowerCase()) !== -1) { out[k] = '[redacted]'; continue; }
+    out[k] = sanitizeVal(o[k]);
+  }
+  return out;
+}
+
+function captureMiddleware(req, res, next) {
+  try {
+    var m = req.method;
+    var path = req.originalUrl || req.url || '';
+    var isMutation = (m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE');
+    if (isMutation && req.session && req.session.debugMode && req.session.userId && path.indexOf('/api/debug') !== 0) {
+      var uid = req.session.userId;
+      var started = Date.now();
+      var cleanPath = path.split('?')[0];
+      res.on('finish', function() {
+        try {
+          var status = res.statusCode;
+          logDebug(uid, {
+            level: status >= 400 ? 'error' : 'info',
+            source: 'api',
+            page: cleanPath,
+            fn: m,
+            message: m + ' ' + cleanPath + ' -> ' + status + ' (' + (Date.now() - started) + 'ms)',
+            detail: {
+              status: status,
+              ms: Date.now() - started,
+              params: sanitizeObj(req.params || {}),
+              query: sanitizeObj(req.query || {}),
+              body: sanitizeObj(req.body || {})
+            }
+          });
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
+  next();
+}
+
 module.exports = router;
 module.exports.logDebug = logDebug;
+module.exports.captureMiddleware = captureMiddleware;

@@ -171,6 +171,7 @@ app.use('/api', apiLimiter);
 // (floods are rejected before the DB read) and AFTER the Stripe webhook above
 // (which has no session and must never be gated).
 app.use('/api', require('./middleware/tiers').attachTier);
+app.use('/api', require('./routes/debug').captureMiddleware);
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/email', require('./routes/email').router);
