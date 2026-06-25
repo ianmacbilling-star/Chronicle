@@ -131,7 +131,7 @@ router.post('/send', async function(req, res) {
     const who = u ? (u.name + ' <' + u.email + '>') : ('user ' + req.session.userId);
     const html = '<p style="font:14px/1.5 sans-serif;">Debug log attached from ' + escapeHtml(who) + '.</p>' +
       '<p style="font:14px/1.5 sans-serif;">Entries: ' + (rows ? rows.length : 0) + '</p>';
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
     const fileName = 'campaignia-debug-' + (u ? u.id : req.session.userId) + '-' + stamp + '.txt';
     const { Resend } = require('resend');
     const resend = new Resend(apiKey);
