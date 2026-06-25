@@ -130,7 +130,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
       rosterDirective = 'CAST (AUTHORITATIVE \u2014 overrides the scene text below): the ONLY characters present in this panel are: ' +
         presentPeople.join(', ') + '. Depict exactly these people and no others. The scene text may mention other names \u2014 IGNORE anyone not in this list and do not draw them. Use the scene text only for setting, action, and mood.\n\n';
     } else {
-      rosterDirective = 'CAST (AUTHORITATIVE \u2014 overrides the scene text below): this panel has NO characters. Depict the scene with no people in it, ignoring any character names mentioned in the scene text.\n\n';
+      rosterDirective = 'CAST (AUTHORITATIVE \u2014 overrides the scene text below): NONE of the campaign\u2019s named characters appear in this panel \u2014 do not draw any of them, and ignore any specific character names mentioned in the scene text. You MAY still include generic, unnamed people that the scene itself describes (background crowds, extras, a band, passers-by); if the scene describes no people, depict it empty.\n\n';
     }
   }
 
