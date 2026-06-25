@@ -1266,6 +1266,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     // size to the true aspect (kills most cropping). Null if fal omits it.
     let imgW = (falImg && Number(falImg.width)) || null;
     let imgH = (falImg && Number(falImg.height)) || null;
+    let dimsSource = (imgW && imgH) ? 'real' : 'synthetic';
     // nano-banana-2 returns width/height as NULL in its webhook payload, so the real pixel
     // size is unknown. Fall back to the aspect ratio we REQUESTED for this moment's shape:
     // without it a tower's true 1:4 shape is lost and every layout collapses it to the
@@ -1299,7 +1300,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       const imageUrl = await persistToR2(falUrl);
       if (job.moment_id && (job.kind === 'moment' || job.kind === 'batch' || job.kind === 'retouch')) {
         const now = new Date().toISOString();
-        const _priorM = await db.prepare('SELECT image, img_w, img_h, revert_image FROM moments WHERE id = ?').get(job.moment_id);
+        const _priorM = await db.prepare('SELECT image, img_w, img_h, revert_image, shape FROM moments WHERE id = ?').get(job.moment_id);
         if (job.kind === 'retouch') {
           await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, imgW, imgH, now, job.user_id, job.moment_id);
@@ -1307,7 +1308,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, job.style || null, imgW, imgH, now, job.user_id, job.moment_id);
         }
-        try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image ready for moment ' + job.moment_id + ' (' + job.kind + ')', detail: { moment_id: job.moment_id, kind: job.kind, img_w: imgW, img_h: imgH, style: job.style || null } }); } catch (_le) {}
+        try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image ready for moment ' + job.moment_id + ' (' + job.kind + ')', detail: { moment_id: job.moment_id, kind: job.kind, shape: _priorM ? (_priorM.shape || null) : null, img_w: imgW, img_h: imgH, dims: dimsSource, file_size: (falImg && falImg.file_size) || null, nsfw: (payload && payload.has_nsfw_concepts) || null, style: job.style || null } }); } catch (_le) {}
         // Revert undo-slot (one-deep): retouch + single regenerate retain the prior
         // image so the user can undo. Bulk 'batch' does not arm; it clears any stale
         // slot. Superseded slot images are released; the retained one is NOT.
