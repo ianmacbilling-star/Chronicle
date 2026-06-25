@@ -12498,6 +12498,22 @@ function _tourStepsFor(viewId) {
   return (t && Array.isArray(t.steps)) ? t.steps : [];
 }
 
+var VOCAB_MAP = {
+  ttrpg: { campaign: 'campaign', campaigns: 'campaigns', session: 'session', sessions: 'sessions' },
+  story: { campaign: 'story', campaigns: 'stories', session: 'chapter', sessions: 'chapters' }
+};
+function applyVocab(s) {
+  if (!s) return s;
+  var v = (typeof state !== 'undefined' && state.user && state.user.vocab) || 'ttrpg';
+  var m = VOCAB_MAP[v] || VOCAB_MAP.ttrpg;
+  return String(s).replace(/\{(Campaigns?|Sessions?|campaigns?|sessions?)\}/g, function(full, tok) {
+    var lower = tok.toLowerCase();
+    var word = m[lower] || lower;
+    if (tok.charAt(0) !== tok.charAt(0).toLowerCase()) word = word.charAt(0).toUpperCase() + word.slice(1);
+    return word;
+  });
+}
+
 function maybeStartTour(viewId) {
   if (_tourActive || !viewId) return;
   _tourEnsureData(function(){
@@ -12544,8 +12560,8 @@ function _tourRenderStep() {
   var textEl = document.getElementById('tour-tip-text');
   var countEl = document.getElementById('tour-tip-count');
   var nextEl = document.getElementById('tour-btn-next');
-  if (titleEl) titleEl.textContent = step.title || '';
-  if (textEl) textEl.textContent = step.text || '';
+  if (titleEl) titleEl.textContent = applyVocab(step.title || '');
+  if (textEl) textEl.textContent = applyVocab(step.text || '');
   if (countEl) countEl.textContent = 'Step ' + (_tourIdx + 1) + ' of ' + _tourSteps.length;
   if (nextEl) nextEl.textContent = (_tourIdx === _tourSteps.length - 1) ? 'Done' : 'Next';
   _tourFindTarget(step.selector, 8, function(el){ _tourPlace(el, step); });

@@ -66,15 +66,16 @@ router.post('/ask', requireAuth, async function(req, res) {
 
   // Enrich context authoritatively from the DB -- never trust client-sent values.
   let ctx = { name: 'there', tier: 'unknown', subscription_status: 'unknown', in_free_trial: false,
-              utlt: 0, cot: 0, total: 0, role: null };
+              utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, tier, subscription_status FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, tier, subscription_status, vocab FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
       ctx.tier = u.tier || 'unknown';
       ctx.subscription_status = u.subscription_status || 'unknown';
       ctx.in_free_trial = (u.subscription_status === 'trialing');
+      ctx.vocab = u.vocab || 'ttrpg';
     }
   } catch (e) {}
   try { const b = await getBalance(userId); if (b) { ctx.utlt = b.utlt; ctx.cot = b.cot; ctx.total = b.total; } } catch (e) {}
@@ -94,6 +95,8 @@ router.post('/ask', requireAuth, async function(req, res) {
     '- Plan/tier: ' + ctx.tier + (ctx.in_free_trial ? ' (in the free trial)' : '') + '; subscription: ' + ctx.subscription_status,
     '- Tokens: ' + ctx.utlt + ' monthly (use-it-or-lose-it) plus ' + ctx.cot + ' carry-over, ' + ctx.total + ' total',
     '- Current screen: ' + viewName + (ctx.role ? '. Role in the current campaign: ' + ctx.role : ''),
+    '',
+    'VOCABULARY: address the user in their own terms -- they call campaigns "' + (ctx.vocab === 'story' ? 'Stories' : 'Campaigns') + '" and sessions "' + (ctx.vocab === 'story' ? 'Chapters' : 'Sessions') + '". Use those words in your replies regardless of how the steps below are phrased.',
     '',
     'WHAT CAMPAIGNIA CAN DO (use these concrete steps when answering):',
     '- Create a campaign on the home screen; open it to add characters and sessions.',

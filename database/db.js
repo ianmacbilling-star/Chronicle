@@ -311,6 +311,7 @@ async function initPostgres() {
   // ALTER TABLE migrations for existing databases
   const alterations = [
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS debug_mode BOOLEAN DEFAULT false',
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS vocab TEXT DEFAULT 'ttrpg'",
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
