@@ -158,6 +158,9 @@ router.post('/send', async function(req, res) {
 // are redacted and long values truncated so secrets and huge blobs never land in
 // the log. The /api/debug/* routes are excluded to avoid self-logging.
 var SENSITIVE_KEYS = ['password','currentpassword','current_password','newpassword','new_password','confirmpassword','confirm_password','oldpassword','old_password','token','reset_token','api_key','apikey','fal_key','falkey','secret','cvc','card','cardnumber','card_number','authorization'];
+// GET render endpoints worth capturing (Quick/True View, Preview, Layout, Print Prep).
+// All other GET reads stay uncaptured. Quick-vs-True/layout shows up in the query.
+var RENDER_PREFIXES = ['/api/pdf/session', '/api/pdf/novel', '/api/pdf/print-interior', '/api/pdf/print-cover'];
 
 function sanitizeVal(v) {
   if (v == null) return v;
@@ -186,17 +189,18 @@ function captureMiddleware(req, res, next) {
   try {
     var m = req.method;
     var path = req.originalUrl || req.url || '';
+    var cleanPath = path.split('?')[0];
     var isMutation = (m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE');
-    if (isMutation && req.session && req.session.debugMode && req.session.userId && path.indexOf('/api/debug') !== 0) {
+    var isRender = (m === 'GET') && RENDER_PREFIXES.some(function(pfx){ return cleanPath.indexOf(pfx) === 0; });
+    if ((isMutation || isRender) && req.session && req.session.debugMode && req.session.userId && path.indexOf('/api/debug') !== 0) {
       var uid = req.session.userId;
       var started = Date.now();
-      var cleanPath = path.split('?')[0];
       res.on('finish', function() {
         try {
           var status = res.statusCode;
           logDebug(uid, {
             level: status >= 400 ? 'error' : 'info',
-            source: 'api',
+            source: isRender ? 'render' : 'api',
             page: cleanPath,
             fn: m,
             message: m + ' ' + cleanPath + ' -> ' + status + ' (' + (Date.now() - started) + 'ms)',
