@@ -11,6 +11,7 @@ const { packComic } = require('../services/printing/packComic');
 const { planComic } = require('../services/printing/comicEngine');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
+const { logDebug } = require('./debug');
 
 // Count pages in a rendered PDF buffer. Prefers pdf-lib (exact); if that module
 // is unavailable or throws, falls back to a structural scan of the PDF bytes
@@ -3276,7 +3277,9 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   try {
     var meRow = await db.prepare('SELECT pen_name FROM users WHERE id = ?').get(req.session.userId);
     authorName = (meRow && meRow.pen_name) ? meRow.pen_name : '';
-  } catch (e) {}
+  } catch (e) {
+    try { await logDebug(req.session.userId, { level: 'error', source: 'api', page: 'Publish to library', fn: 'POST /publish-story', message: 'Publish pen_name lookup failed (author blank): ' + (e && e.message), detail: { campaign_id: campaign.id } }); } catch (_le) {}
+  }
 
   try {
     var nowIso = new Date().toISOString();
@@ -3312,9 +3315,11 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
       var _urls = Object.keys(_imgSet);
       await db.prepare('DELETE FROM public_story_images WHERE story_id = ?').run(_storyId);
       for (var _ux = 0; _ux < _urls.length; _ux++) { await db.prepare('INSERT INTO public_story_images (story_id, image_url) VALUES (?, ?)').run(_storyId, _urls[_ux]); }
+      try { await logDebug(req.session.userId, { level: 'info', source: 'api', page: 'Publish to library', fn: 'POST /publish-story', message: 'Published story ' + _storyId + ': indexed ' + _urls.length + ' images', detail: { story_id: _storyId, campaign_id: campaign.id, images: _urls.length, has_cover: !!coverUrl } }); } catch (_le) {}
     }
   } catch (e) {
     console.error('[publish-story] image-index rebuild failed (non-fatal):', e && e.message ? e.message : e);
+    try { await logDebug(req.session.userId, { level: 'error', source: 'api', page: 'Publish to library', fn: 'POST /publish-story', message: 'Publish image-index rebuild failed (non-fatal): ' + (e && e.message), detail: { campaign_id: campaign.id, note: 'story published but public page may be missing panel images' } }); } catch (_le) {}
   }
 
   return res.json({ success: true, url: pdfUrl, author: authorName });
