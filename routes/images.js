@@ -992,12 +992,14 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sub.request_id, req.session.userId, moment.campaign_id, moment.id, moment.fork_id, 'retouch', 'queued', sub.model, style || null, cost, moment.image || null, nowTs, nowTs);
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Submitted retouch for moment ' + moment.id + ' (request ' + sub.request_id + ')', detail: { moment_id: moment.id, model: sub.model, style: style || null, instruction: (req.body && req.body.instruction) || null, refs: (refsR || []).map(function(r){ return r && r.name; }) } }); } catch (_le) {}
     if (myRole === 'player') {
       try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(moment.campaign_id, req.session.userId); } catch (e) {}
     }
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch (e) {
     console.error('retouch error:', e.message);
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Retouch failed: ' + (e && e.message), detail: { moment_id: (req.body && req.body.moment_id) || null, stack: (e && e.stack) || '' } }); } catch (_le) {}
     res.json({ error: e.message });
   }
 });
@@ -1161,6 +1163,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +
         'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(sub.request_id, req.session.userId, campaign_id, m.id, targetForkId, 'batch', 'queued', sub.model, style || null, perImageCost, m.image || null, nowTs, nowTs);
+      try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate Story (all panels)', fn: 'POST /generate-all', message: 'Submitted panel ' + m.id + ' (request ' + sub.request_id + ')', detail: { moment_id: m.id, model: sub.model, style: style || null, cast_explicit: !!m.cast_explicit, castNames: castNames, matchedRefs: (panelBlock.refs || []).map(function(r){ return r && r.name; }), momentDirection: momentDirs[m.id] || null, finalPrompt: sub.prompt || '', systemPrompt: sub.system_prompt || '' } }); } catch (_le) {}
       return { moment_id: m.id, job_id: jobIns.lastInsertRowid };
     })
   );
@@ -1172,6 +1175,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     else { submitFailed++; console.error('generate-all submit failed:', submitResults[si].reason && submitResults[si].reason.message); }
   }
 
+  try { await logDebug(req.session.userId, { level: submitFailed ? 'error' : 'info', source: 'generation', page: 'Generate Story (all panels)', fn: 'POST /generate-all', message: 'Generate Story submitted: ' + jobs.length + ' queued, ' + submitFailed + ' failed', detail: { queued: jobs.length, failed: submitFailed, campaign_id: campaign_id } }); } catch (_le) {}
   if (myRole === 'player' && jobs.length) {
     try { await db.prepare('UPDATE users SET last_active_campaign_id = ? WHERE id = ?').run(campaign_id, req.session.userId); } catch (e) {}
   }
@@ -1251,6 +1255,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       const errMsg = (body.error && (body.error.message || JSON.stringify(body.error))) || 'generation failed';
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', String(errMsg).slice(0, 500), new Date().toISOString(), job.id);
+      try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Generation failed: ' + String(errMsg).slice(0, 200), detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
     const payload = body.payload || body;
@@ -1277,11 +1282,13 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     if (!falUrl) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
+      try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Generation returned no image', detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
     if (payload.has_nsfw_concepts && payload.has_nsfw_concepts[0] === true) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
         .run('failed', 'image was flagged by the safety filter (returned blank)', new Date().toISOString(), job.id);
+      try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image flagged by safety filter (returned blank)', detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
     // Atomic claim: only the first delivery flips queued -> processing.
@@ -1300,6 +1307,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, job.style || null, imgW, imgH, now, job.user_id, job.moment_id);
         }
+        try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image ready for moment ' + job.moment_id + ' (' + job.kind + ')', detail: { moment_id: job.moment_id, kind: job.kind, img_w: imgW, img_h: imgH, style: job.style || null } }); } catch (_le) {}
         // Revert undo-slot (one-deep): retouch + single regenerate retain the prior
         // image so the user can undo. Bulk 'batch' does not arm; it clears any stale
         // slot. Superseded slot images are released; the retained one is NOT.

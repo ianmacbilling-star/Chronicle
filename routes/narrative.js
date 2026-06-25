@@ -3,6 +3,7 @@ const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
+const { logDebug } = require('./debug');
 
 // ============================================================
 // NARRATIVE STYLES — the prose analog of art styles.
@@ -310,6 +311,8 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       narrStyleId, now, req.session.userId, targetForkId
     );
 
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generated (' + narrStyleId + ', ' + ((parsed.sections || []).length) + ' sections)', detail: { style: narrStyleId, sections: (parsed.sections || []).length, moments: moments.length, campaign_id: req.params.campaignId, session_id: req.params.sessionId } }); } catch (_le) {}
+
     res.json({
       success: true,
       intro: parsed.intro || '',
@@ -319,6 +322,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
   } catch(e) {
     console.error('Narrative generation error:', e.message);
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generation failed: ' + (e && e.message), detail: { campaign_id: req.params.campaignId, session_id: req.params.sessionId, stack: (e && e.stack) || '' } }); } catch (_le) {}
     res.json({ error: e.message });
   }
 });
