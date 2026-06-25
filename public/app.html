@@ -715,21 +715,25 @@
       <div id="dev-debug-panel" class="settings-section" style="display:none;margin-top:16px;border:1px solid rgba(201,168,76,0.35);">
         <div class="settings-section-title" style="display:flex;align-items:center;gap:8px;">
           <span>Developer &middot; Debug Mode</span>
-          <span id="debug-rec-dot" style="display:none;width:9px;height:9px;border-radius:50%;background:#e53935;box-shadow:0 0 6px #e53935;"></span>
+          <span id="debug-rec-dot" onclick="cmpRecDotTap()" title="Recording" style="display:none;width:9px;height:9px;border-radius:50%;background:#e53935;box-shadow:0 0 6px #e53935;cursor:pointer;"></span>
         </div>
         <div class="settings-section-desc">When ON, Campaignia records diagnostic details from your own activity (the page, the function, any error, and the data it used) so support can see exactly what happened. It turns itself OFF when you log out, and records only your own activity.</div>
         <label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer;font-size:14px;">
           <input type="checkbox" id="debug-mode-toggle" onchange="cmpToggleDebug(this.checked)" />
           <span>Debug Mode</span>
         </label>
-        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-sm" onclick="cmpRefreshDebugLog()">Refresh</button>
-          <button class="btn btn-sm" onclick="cmpCopyDebugLog()">Copy log</button>
+        <div style="margin-top:14px;">
           <button class="btn btn-sm" onclick="cmpSendDebugLog()">Send to support</button>
-          <button class="btn btn-sm" onclick="cmpClearDebugLog()" style="margin-left:auto;">Clear log</button>
         </div>
         <div id="debug-log-msg" style="display:none;margin-top:10px;font-size:12px;"></div>
-        <pre id="debug-log-view" style="margin-top:12px;max-height:320px;overflow:auto;background:#0d0a06;border:1px solid rgba(201,168,76,0.2);border-radius:8px;padding:12px;font-size:11px;line-height:1.5;color:#d8cba0;white-space:pre-wrap;word-break:break-word;"></pre>
+        <div id="debug-log-section" style="display:none;">
+          <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="cmpRefreshDebugLog()">Refresh</button>
+            <button class="btn btn-sm" onclick="cmpCopyDebugLog()">Copy log</button>
+            <button class="btn btn-sm" onclick="cmpClearDebugLog()" style="margin-left:auto;">Clear log</button>
+          </div>
+          <pre id="debug-log-view" style="margin-top:12px;max-height:320px;overflow:auto;background:#0d0a06;border:1px solid rgba(201,168,76,0.2);border-radius:8px;padding:12px;font-size:11px;line-height:1.5;color:#d8cba0;white-space:pre-wrap;word-break:break-word;"></pre>
+        </div>
       </div>
 
 

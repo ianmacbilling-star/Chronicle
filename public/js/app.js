@@ -12806,6 +12806,9 @@ function _doDeleteCampaign(id) {
 var _cmpVerTaps = 0;
 var _cmpVerTapTimer = null;
 var _cmpDebugCache = [];
+var _cmpDotTaps = 0;
+var _cmpDotTapTimer = null;
+var _cmpLogUnlocked = false;
 
 function cmpVersionTap() {
   _cmpVerTaps++;
@@ -12819,13 +12822,15 @@ function cmpVersionTap() {
 }
 
 function cmpInitDebugPanel() {
+  var isAdmin = !!(typeof state !== "undefined" && state.user && state.user.is_admin);
+  cmpShowLogSection(isAdmin || _cmpLogUnlocked);
   fetch('/api/debug/status', { headers: { 'Accept': 'application/json' } })
     .then(function(r){ return r.json(); })
     .then(function(d){
       var on = !!(d && d.debug_mode);
       var t = document.getElementById('debug-mode-toggle'); if (t) t.checked = on;
       cmpSetRecDot(on);
-      cmpRefreshDebugLog();
+      if (isAdmin || _cmpLogUnlocked) cmpRefreshDebugLog();
     })
     .catch(function(){});
 }
@@ -12833,6 +12838,25 @@ function cmpInitDebugPanel() {
 function cmpSetRecDot(on) {
   var dot = document.getElementById('debug-rec-dot');
   if (dot) dot.style.display = on ? 'inline-block' : 'none';
+}
+
+function cmpShowLogSection(show) {
+  var sec = document.getElementById('debug-log-section');
+  if (sec) sec.style.display = show ? 'block' : 'none';
+}
+
+function cmpRecDotTap() {
+  if (_cmpLogUnlocked) return;
+  _cmpDotTaps++;
+  if (_cmpDotTapTimer) clearTimeout(_cmpDotTapTimer);
+  _cmpDotTapTimer = setTimeout(function(){ _cmpDotTaps = 0; }, 2000);
+  if (_cmpDotTaps >= 7) {
+    _cmpDotTaps = 0;
+    _cmpLogUnlocked = true;
+    cmpShowLogSection(true);
+    cmpRefreshDebugLog();
+    cmpDebugMsg('Debug log unlocked.', true);
+  }
 }
 
 function cmpDebugMsg(text, ok) {

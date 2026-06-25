@@ -125,14 +125,19 @@ router.post('/send', async function(req, res) {
       'User: ' + (u ? (u.name + ' <' + u.email + '> (id ' + u.id + ')') : ('id ' + req.session.userId)) +
       '\nEntries: ' + (rows ? rows.length : 0) +
       '\n\n' + (blocks.length ? blocks.join('\n\n') : '(no entries)');
-    const html = '<pre style="font:12px/1.5 monospace;white-space:pre-wrap;">' + escapeHtml(bodyText) + '</pre>';
+    const who = u ? (u.name + ' <' + u.email + '>') : ('user ' + req.session.userId);
+    const html = '<p style="font:14px/1.5 sans-serif;">Debug log attached from ' + escapeHtml(who) + '.</p>' +
+      '<p style="font:14px/1.5 sans-serif;">Entries: ' + (rows ? rows.length : 0) + '</p>';
+    const stamp = new Date().toISOString().slice(0, 10);
+    const fileName = 'campaignia-debug-' + (u ? u.id : req.session.userId) + '-' + stamp + '.txt';
     const { Resend } = require('resend');
     const resend = new Resend(apiKey);
     const { error } = await resend.emails.send({
       from: 'Campaignia Debug <' + fromEmail + '>',
       to: SUPPORT_EMAIL,
       subject: 'Debug log from ' + (u ? u.email : ('user ' + req.session.userId)),
-      html: html
+      html: html,
+      attachments: [{ filename: fileName, content: Buffer.from(bodyText, 'utf8').toString('base64') }]
     });
     if (error) return res.status(502).json({ error: 'Could not send the log.' });
     res.json({ success: true });
