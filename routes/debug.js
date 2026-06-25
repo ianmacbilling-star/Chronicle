@@ -12,6 +12,11 @@ const { requireAuth } = require('../middleware/auth');
 const RETENTION_DAYS = 30;
 const RETENTION_ROWS = 5000;
 const DISPLAY_LIMIT = 500;   // most recent N entries returned to the panel
+const SUPPORT_EMAIL = 'support@campaignia.com';
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 // Record one debug entry for a user, but ONLY when that user currently has Debug
 // Mode on. Fully best-effort: any failure is swallowed so instrumentation can never
@@ -55,11 +60,19 @@ router.get('/status', async function(req, res) {
 });
 
 // POST /api/debug/toggle  body { on: true|false } -- set the current user's flag.
+// Turning it ON writes a first entry so the panel immediately shows activity.
 router.post('/toggle', async function(req, res) {
   try {
     const on = !!(req.body && req.body.on);
     const db = await getDb();
     await db.prepare('UPDATE users SET debug_mode = ? WHERE id = ?').run(on, req.session.userId);
+    if (on) {
+      await logDebug(req.session.userId, {
+        level: 'info', source: 'server', page: 'Account', fn: 'POST /api/debug/toggle',
+        message: 'Debug Mode enabled',
+        detail: { userAgent: req.headers['user-agent'] || '', at: new Date().toISOString() }
+      });
+    }
     res.json({ debug_mode: on });
   } catch (e) {
     res.status(500).json({ error: 'Could not update debug mode.' });
@@ -87,6 +100,44 @@ router.post('/clear', async function(req, res) {
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Could not clear debug log.' });
+  }
+});
+
+// POST /api/debug/send -- email the current user's captured log to support.
+router.post('/send', async function(req, res) {
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.session.userId);
+    const rows = await db.prepare(
+      'SELECT id, created_at, level, source, page, fn, message, detail FROM debug_logs WHERE user_id = ? ORDER BY id DESC LIMIT ?'
+    ).all(req.session.userId, DISPLAY_LIMIT);
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'Email is not configured.' });
+    const fromEmail = process.env.FROM_EMAIL || 'noreply@campaignia.com';
+    const blocks = (rows || []).map(function(e) {
+      return '[' + (e.created_at || '') + '] ' + String(e.level || 'info').toUpperCase() + ' / ' + (e.source || '') +
+        '\n  page: ' + (e.page || '-') +
+        '\n  fn:   ' + (e.fn || '-') +
+        '\n  msg:  ' + (e.message || '-') +
+        (e.detail ? ('\n  detail:\n' + String(e.detail).replace(/^/gm, '    ')) : '');
+    });
+    const bodyText =
+      'User: ' + (u ? (u.name + ' <' + u.email + '> (id ' + u.id + ')') : ('id ' + req.session.userId)) +
+      '\nEntries: ' + (rows ? rows.length : 0) +
+      '\n\n' + (blocks.length ? blocks.join('\n\n') : '(no entries)');
+    const html = '<pre style="font:12px/1.5 monospace;white-space:pre-wrap;">' + escapeHtml(bodyText) + '</pre>';
+    const { Resend } = require('resend');
+    const resend = new Resend(apiKey);
+    const { error } = await resend.emails.send({
+      from: 'Campaignia Debug <' + fromEmail + '>',
+      to: SUPPORT_EMAIL,
+      subject: 'Debug log from ' + (u ? u.email : ('user ' + req.session.userId)),
+      html: html
+    });
+    if (error) return res.status(502).json({ error: 'Could not send the log.' });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not send the log.' });
   }
 });
 
