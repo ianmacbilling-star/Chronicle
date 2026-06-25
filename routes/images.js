@@ -251,6 +251,15 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     if (_tl) input.thinking_level = _tl;
   }
 
+  if (process.env.DEBUG_PROMPT) {
+    try {
+      console.log('[DEBUG_PROMPT] buildPanelInput model=' + model +
+        ' castExplicit=' + castExplicit +
+        ' rosterDirective=' + (rosterDirective ? JSON.stringify(rosterDirective.slice(0, 90)) : 'none'));
+      console.log('[DEBUG_PROMPT] FINAL fal prompt sent:\n' + input.prompt);
+    } catch (_e) {}
+  }
+
   return { model: model, input: input };
 }
 
@@ -874,6 +883,18 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const momentDirsS = await loadMomentDirections(db, moment.fork_id);
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
     if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
+    if (process.env.DEBUG_PROMPT) {
+      try {
+        var _md = momentDirsS[moment.id];
+        console.log('[DEBUG_PROMPT] generate-moment moment_id=' + moment_id +
+          ' bodyPromptChars=' + (prompt || '').length +
+          ' cast_explicit=' + (!!moment.cast_explicit) +
+          ' castNames=' + JSON.stringify(castNames || []) +
+          ' matchedRefs=' + JSON.stringify((panelBlock.refs || []).map(function(r){ return r.name; })) +
+          ' momentDirection=' + (_md ? JSON.stringify(_md) : 'none'));
+        console.log('[DEBUG_PROMPT] body prompt (first 160): ' + (prompt || '').slice(0, 160));
+      } catch (_e) {}
+    }
     const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade);
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(

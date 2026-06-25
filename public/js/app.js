@@ -3328,7 +3328,12 @@ function openStylePicker(kind) {
         var on2 = (cid === cur) ? ' is-selected' : '';
         var badge2 = (cid === cur) ? ' <span class="style-card-current">\u2713 current</span>' : '';
         var _d = s.is_fade ? 'Soft, faded edges.' : (s.shared_by_sm ? "Shared by your campaign's SM." : 'Your custom art style.');
+        var _samp = (Array.isArray(s.sample_urls) && s.sample_urls[0]) ? s.sample_urls[0] : '';
+        var _thumb = _samp
+          ? '<div class="style-card-thumb" style="width:100%;height:84px;border-radius:8px;overflow:hidden;margin-bottom:6px;background:#000;"><img src="' + _samp + '" alt="' + escapeHtml(s.name || '') + '" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>'
+          : '';
         return '<div class="style-card' + on2 + '" onclick="selectStyleCard(\'art\',\'' + cid + '\')">' +
+          _thumb +
           '<div class="style-card-name">' + escapeHtml(s.name || 'Untitled') + badge2 + '</div>' +
           '<div class="style-card-desc">' + _d + '</div>' +
           '</div>';
