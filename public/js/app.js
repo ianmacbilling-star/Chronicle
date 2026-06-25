@@ -12877,7 +12877,7 @@ function cmpToggleDebug(on) {
     .then(function(d){
       var state = !!(d && d.debug_mode);
       cmpSetRecDot(state);
-      cmpDebugMsg(state ? 'Debug Mode is ON. Reproduce the problem, then copy or send the log.' : 'Debug Mode is OFF.', true);
+      cmpDebugMsg(state ? 'Debug Mode is ON. Reproduce the problem, then send the log.' : 'Debug Mode is OFF.', true);
       cmpRefreshDebugLog();
     })
     .catch(function(){ cmpDebugMsg('Could not update Debug Mode.', false); });
