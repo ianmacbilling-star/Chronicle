@@ -52,6 +52,12 @@
           "placement": "auto"
         },
         {
+          "selector": "#camp-nav-members",
+          "title": "Invite members",
+          "text": "Invite others to join your {campaign} \u2014 give them a character to manage, or simply let them follow along. Each member can even build their own version of the story.",
+          "placement": "bottom"
+        },
+        {
           "selector": "#camp-nav-characters",
           "title": "Your cast",
           "text": "Add the characters in your {campaign} here, with reference images so their likeness stays consistent across every panel.",
@@ -62,12 +68,6 @@
           "title": "Add a {session}",
           "text": "Start a new {session} and paste your story, transcript, notes, whatever you have \u2014 Campaignia turns it into an illustrated storyboard, ready to publish.",
           "placement": "auto"
-        },
-        {
-          "selector": "#camp-nav-members",
-          "title": "Invite members",
-          "text": "Invite others to join your {campaign} \u2014 give them a character to manage, or simply let them follow along. Each member can even build their own version of the story.",
-          "placement": "bottom"
         },
         {
           "selector": "#camp-nav-assets",
@@ -401,7 +401,7 @@
         {
           "selector": ".storyboard-panel:not(.is-opening) .moment-opts-btn",
           "title": "Cast for this Moment",
-          "text": "Open these options to add or remove characters and assets for this Moment \u2014 just like the Review tab.",
+          "text": "Open these options to add or remove characters and assets for this Moment \u2014 just like the Review tab. Make your changes, then Regenerate.",
           "placement": "auto",
           "click": ".storyboard-panel:not(.is-opening) .moment-opts-btn"
         },
@@ -421,7 +421,6 @@
     },
     "sess-export": {
       "title": "Preview & Export",
-      "requires": ".storyboard-panel",
       "steps": [
         {
           "selector": "#session-custom-btn",
