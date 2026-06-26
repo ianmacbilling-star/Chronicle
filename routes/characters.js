@@ -388,7 +388,7 @@ router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOw
     const prevUrl = char.canonical_reference_url;
     const webhookUrl = imageHelpers.falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
-    const sub = await imageHelpers.submitRetouch(prevUrl, String(instruction).trim(), '', falKey, webhookUrl);
+    const sub = await imageHelpers.submitRetouch(prevUrl, String(instruction).trim(), '', falKey, webhookUrl, null, 'reference');
     const nowTs = new Date().toISOString();
     const jobIns = await db.prepare(
       'INSERT INTO image_jobs (request_id, user_id, campaign_id, character_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +

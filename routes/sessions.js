@@ -475,7 +475,7 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     // Empty style => no style prefix; submitRetouch keeps the existing look and
     // changes only the instruction. A failure throws to the catch -> no spend.
-    const sub = await imageHelpers.submitRetouch(baseImage, instruction.trim(), '', falKey, webhookUrl);
+    const sub = await imageHelpers.submitRetouch(baseImage, instruction.trim(), '', falKey, webhookUrl, null, 'reference');
     const nowTs = new Date().toISOString();
     // Draft job: the webhook persists + spends + logs, but does NOT write
     // session_characters - the image stays a draft until the user Approves.

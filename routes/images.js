@@ -56,6 +56,7 @@ function shapeAspectRatio(shape) {
   if (shape === 'square') return '1:1';
   if (shape === 'panoramic') return '21:9';
   if (shape === 'tower') return '1:4';  // nano-banana-2 has no '2:5' aspect; '1:4' is the closest valid tall ratio (the PDF layout displays towers in a 2:5 box via object-fit:cover)
+  if (shape === 'reference') return '3:4';  // char reference retouch keeps its native 3:4 portrait
   if (shape === 'fullpage') return '3:4';
   return '4:3';
 }
@@ -375,11 +376,14 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       'do not duplicate them. Re-render any added element in the existing art style of Image 1, ' +
       'matching its medium, lighting, and color.';
   }
+  var refFraming = (shape === 'reference');
   const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
-    'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
-    'same composition, framing, background, the characters already present and their faces and ' +
-    'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
-    'everything else untouched:\n\n' + instruction + refSection;
+    (refFraming
+      ? 'You are editing an EXISTING single-character reference image, provided as Image 1. It shows ONE character on a plain background. Keep that SAME single figure: identical face, body type, species, hair, distinctive features, outfit, colors, and pose, and change ONLY the following, leaving everything else untouched. Output exactly ONE figure: do NOT create a model sheet, turnaround, or multiple side-by-side copies, and do not add any other characters, creatures, or objects.\n\n'
+      : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
+        'same composition, framing, background, the characters already present and their faces and ' +
+        'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
+        'everything else untouched:\n\n') + instruction + refSection;
   const submitted = await fal.queue.submit('fal-ai/nano-banana-2/edit', {
     input: {
       prompt: editPrompt,
