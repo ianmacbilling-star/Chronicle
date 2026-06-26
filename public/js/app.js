@@ -10038,6 +10038,8 @@ function openInviteModal() {
   document.getElementById('invite-newchar-class').value = '';
   document.getElementById('invite-character-select').value = '__new__';
   document.getElementById('invite-newchar-fields').style.display = '';
+  document.getElementById('invite-no-character').checked = false;
+  document.getElementById('invite-character-group').style.display = '';
 
   // Populate the character dropdown with PCs not yet owned (is_npc=false
   // AND owner_user_id IS NULL). We pull from the existing characters
@@ -10072,6 +10074,19 @@ function closeInviteModal() {
   document.getElementById('invite-modal').classList.add('hidden');
 }
 
+// No-character invite: collapse the character picker when the DM just wants
+// to add someone to the campaign (no PC claimed).
+function toggleInviteNoCharacter() {
+  var no = document.getElementById('invite-no-character').checked;
+  document.getElementById('invite-character-group').style.display = no ? 'none' : '';
+  if (no) {
+    document.getElementById('invite-newchar-fields').style.display = 'none';
+  } else {
+    var sel = document.getElementById('invite-character-select');
+    document.getElementById('invite-newchar-fields').style.display = (sel.value === '__new__') ? '' : 'none';
+  }
+}
+
 function submitInvite() {
   var cur = state.currentCampaign;
   if (!cur) return;
@@ -10084,23 +10099,27 @@ function submitInvite() {
 
   var email = (emailEl.value || '').trim();
   if (!email) {
-    errEl.textContent = 'Please enter the player\'s email.';
+    errEl.textContent = 'Please enter the member\'s email.';
     errEl.classList.remove('hidden');
     return;
   }
 
   var body = { email: email };
-  if (sel.value === '__new__') {
-    var name = (nameEl.value || '').trim();
-    if (!name) {
-      errEl.textContent = 'Please enter a name for the new character.';
-      errEl.classList.remove('hidden');
-      return;
+  var noCharEl = document.getElementById('invite-no-character');
+  var noCharacter = !!(noCharEl && noCharEl.checked);
+  if (!noCharacter) {
+    if (sel.value === '__new__') {
+      var name = (nameEl.value || '').trim();
+      if (!name) {
+        errEl.textContent = 'Please enter a name for the new character.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      body.character_name = name;
+      body.character_class = (classEl.value || '').trim();
+    } else {
+      body.character_id = parseInt(sel.value, 10);
     }
-    body.character_name = name;
-    body.character_class = (classEl.value || '').trim();
-  } else {
-    body.character_id = parseInt(sel.value, 10);
   }
 
   fetch('/api/campaigns/' + cur.id + '/invites', {

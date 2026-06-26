@@ -357,7 +357,7 @@
       <div style="margin-top:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;">Current members</div>
-          <button class="btn btn-primary btn-sm dm-only" onclick="openInviteModal()">&#9993; Invite player</button>
+          <button class="btn btn-primary btn-sm dm-only" onclick="openInviteModal()">&#9993; Invite member</button>
         </div>
         <div id="members-list" style="display:flex;flex-direction:column;gap:8px;">
           <div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading members…</div>
@@ -1396,19 +1396,25 @@
 <div class="modal-overlay hidden" id="invite-modal" onclick="if(event.target===this)closeInviteModal()">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">Invite a Player</div>
+      <div class="modal-title">Invite a Member</div>
       <button class="modal-close" onclick="closeInviteModal()">&times;</button>
     </div>
     <div id="invite-modal-error" class="alert alert-error hidden"></div>
     <div id="invite-modal-step1">
       <div class="form-group">
-        <label class="form-label">Player's email</label>
-        <input class="form-input" id="invite-email" type="email" placeholder="player@example.com" />
+        <label class="form-label">Member's email</label>
+        <input class="form-input" id="invite-email" type="email" placeholder="member@example.com" />
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
           Used to pre-fill their sign-up. They can use a forwarded link with a different email — that's fine.
         </div>
       </div>
       <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;font-size:13px;">
+          <input type="checkbox" id="invite-no-character" onchange="toggleInviteNoCharacter()" />
+          <span>Add them to the campaign without a character</span>
+        </label>
+      </div>
+      <div class="form-group" id="invite-character-group">
         <label class="form-label">Character</label>
         <select class="form-input" id="invite-character-select">
           <option value="__new__">+ Create a new character for them</option>
@@ -1427,7 +1433,7 @@
     </div>
     <div id="invite-modal-step2" style="display:none;">
       <p style="color:var(--text);margin-bottom:14px;" id="invite-modal-step2-status">
-        Invite created. Copy this link and send it to your player however you like (Discord, text, email, etc.).
+        Invite created. Copy this link and send it to your member however you like (Discord, text, email, etc.).
       </p>
       <div style="background:rgba(0,0,0,0.06);border:1px solid rgba(0,0,0,0.18);border-radius:6px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;color:var(--text);" id="invite-link-display"></div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">

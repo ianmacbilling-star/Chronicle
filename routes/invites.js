@@ -35,8 +35,8 @@ function inviteExpiresAt() {
 
 // POST /api/campaigns/:campaignId/invites
 // DM-only. Body: { email, character_id?, character_name?, character_class? }
-// Either character_id (existing unclaimed PC) OR character_name (creates
-// a stub PC) is required.
+// Character is OPTIONAL: character_id (existing unclaimed PC), character_name
+// (creates a stub PC), or neither (campaign access only, no character).
 router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, async function(req, res) {
   // Inviting players is a paid feature -- Free Trial campaigns are single-player.
   // Enforced server-side so the client intercept can't be bypassed.
@@ -50,9 +50,6 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
   const { email, character_id, character_name, character_class } = req.body || {};
   if (!email || typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email is required' });
-  }
-  if (!character_id && !character_name) {
-    return res.status(400).json({ error: 'Pick an existing character or provide a name for a new one' });
   }
   const campaignId = parseInt(req.params.campaignId, 10);
   const normalizedEmail = email.trim().toLowerCase();
@@ -76,7 +73,7 @@ router.post('/campaigns/:campaignId/invites', requireAuth, verifyCampaignDM, asy
     if (ch.owner_user_id) {
       return res.status(400).json({ error: 'That character already has a player' });
     }
-  } else {
+  } else if (character_name && character_name.trim()) {
     // Create a stub PC awaiting claim. Marked is_claimed=false so the
     // Characters tab can show it as "awaiting invitee" in Deploy 2.
     // Note: the characters table column for character class is 'cls'

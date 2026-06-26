@@ -212,6 +212,10 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
   const charLine = character_name
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'your character';
+  const charBlock = character_name
+    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Playing as</div>
+        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>`
+    : '';
   const expiresDate = expires_at ? new Date(expires_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '';
   // Inline styles: strict mail clients strip <head><style>, so style every element directly.
   return `
@@ -231,8 +235,7 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
       <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Campaign</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Playing as</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>
+        ${charBlock}
         ${expiresDate ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Invitation expires</div><div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${expiresDate}</div>` : ''}
       </div>
       <div style="text-align:center;margin:28px 0;">
@@ -253,6 +256,10 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
   const charLine = character_name
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'a character';
+  const charBlock = character_name
+    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Now playing</div>
+        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>`
+    : '';
   const bonusBlock = (bonus_tokens && bonus_tokens > 0)
     ? `<div style="background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.4);border-radius:8px;padding:18px;margin:16px 0;text-align:center;">
         <div style="font-size:18px;color:#c9a84c;font-weight:700;">You earned ${bonus_tokens} free tokens!</div>
@@ -281,8 +288,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
       <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Player</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${player_name} <span style="color:rgba(201,168,76,0.6);font-size:13px;">&nbsp;${player_email}</span></div>
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Now playing</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>
+        ${charBlock}
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">In campaign</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
       </div>
@@ -302,6 +308,10 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
   const charLine = character_name
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'your character';
+  const charBlock = character_name
+    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Your character</div>
+        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>`
+    : '';
   // Inline styles: strict mail clients strip <head><style>, so style every element directly.
   return `
 <!DOCTYPE html>
@@ -321,8 +331,7 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
       <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Campaign</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Your character</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>
+        ${charBlock}
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Run by</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${dm_name}</div>
       </div>
