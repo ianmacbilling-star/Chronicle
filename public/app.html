@@ -38,6 +38,7 @@
         <div class="user-menu-item" onclick="showView('orders');closeUserMenu()">My Orders</div>
         <div class="user-menu-item" onclick="openTokensModal();closeUserMenu()">Buy Tokens</div>
         <div class="user-menu-item" id="nav-custom-styles-item" onclick="openCustomStylesView();closeUserMenu()">Custom Art Styles</div>
+        <div class="user-menu-item" onclick="showView('feedback');closeUserMenu()">Feedback</div>
         <div class="user-menu-item" id="nav-settings-item" style="display:none;" onclick="showView('settings');closeUserMenu()">Dashboard</div>
         <div class="user-menu-divider"></div>
         <div class="user-menu-item" id="nav-install-item" style="display:none;" onclick="installApp();closeUserMenu()">Install app</div>
@@ -591,6 +592,40 @@
       </div>
     </div>
 
+    <div id="view-feedback" class="view" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Feedback</div>
+          <div class="page-subtitle">Suggestions, bug reports, and questions</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Tell us what is on your mind</div>
+        <div class="settings-section-desc">Found a bug, have an idea, or just want to share your thoughts? We read every message.</div>
+        <div id="feedback-error" class="alert alert-error hidden" style="margin:14px 0 0;"></div>
+        <div id="feedback-success" class="alert alert-success hidden" style="margin:14px 0 0;"></div>
+        <div class="form-group" style="margin-top:16px;">
+          <label class="form-label" for="feedback-category">Type</label>
+          <select id="feedback-category" class="form-input">
+            <option value="Suggestion">Suggestion</option>
+            <option value="Bug report">Bug report</option>
+            <option value="Question">Question</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="feedback-subject">Subject <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <input type="text" id="feedback-subject" class="form-input" maxlength="160" placeholder="A short summary" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="feedback-message">Message</label>
+          <textarea id="feedback-message" class="form-input" rows="7" maxlength="5000" placeholder="Share as much detail as you like..."></textarea>
+        </div>
+        <button class="btn btn-primary" id="feedback-submit-btn" style="margin-top:8px;" onclick="submitFeedback()">Send feedback</button>
+      </div>
+    </div>
+
     <div id="view-orders" class="view" style="display:none;">
       <div class="page-header">
         <div>
@@ -655,6 +690,27 @@
 
 
       <!-- Account actions (Sign out relocated here from the Settings screen) -->
+      <div class="settings-section" id="account-prefs-section">
+        <div class="settings-section-title">Notifications</div>
+        <div class="settings-section-desc">Choose which emails you would like to receive from us. We will always send important account, billing, and order emails.</div>
+        <div style="display:flex;flex-direction:column;gap:14px;margin-top:14px;">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-promo" style="margin-top:3px;flex:0 0 auto;" />
+            <span><span style="font-weight:600;">Promotions &amp; offers</span><br/><span style="font-size:12px;color:var(--text-muted);">Discounts, seasonal promos, and special offers.</span></span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-features" style="margin-top:3px;flex:0 0 auto;" />
+            <span><span style="font-weight:600;">New features &amp; product updates</span><br/><span style="font-size:12px;color:var(--text-muted);">Announcements when we ship something new.</span></span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-activity" style="margin-top:3px;flex:0 0 auto;" />
+            <span><span style="font-weight:600;">Campaign activity</span><br/><span style="font-size:12px;color:var(--text-muted);">Get an email when a player joins one of your campaigns.</span></span>
+          </label>
+        </div>
+        <div id="prefs-msg" style="display:none;margin-top:12px;font-size:12px;"></div>
+        <button class="btn btn-primary btn-sm" style="margin-top:16px;" onclick="savePreferences()">Save preferences</button>
+      </div>
+
       <div class="settings-section" style="border-color:#f09595;">
         <div class="settings-section-title" style="color:var(--error);">Account</div>
         <div class="settings-section-desc">Sign out, or suspend your account.</div>

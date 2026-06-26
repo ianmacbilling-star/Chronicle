@@ -1161,12 +1161,71 @@ function loadAccount() {
       var _ppn = document.getElementById('settings-penname'); if (_ppn) _ppn.value = me.penName || '';
       var _tt = document.getElementById('dev-trial-toggle'); if (_tt) _tt.checked = (me.tier === 'trial');
       var _td = document.getElementById('dev-trial-date'); if (_td && me.trialStartedAt) _td.value = String(me.trialStartedAt).slice(0,10);
+      var _np=document.getElementById('pref-promo'); if(_np)_np.checked = me.notifyPromo !== false;
+      var _nf=document.getElementById('pref-features'); if(_nf)_nf.checked = me.notifyFeatures !== false;
+      var _na=document.getElementById('pref-activity'); if(_na)_na.checked = me.notifyActivity !== false;
       return fetch('/api/auth/usage').then(function(r) { return r.json(); });
     })
     .then(function(usage) {
       if (usage) renderAccountUsage(usage);
     })
     .catch(function(){});
+}
+
+function savePreferences() {
+  var msg = document.getElementById('prefs-msg');
+  var body = {
+    notify_promo: !!(document.getElementById('pref-promo') || {}).checked,
+    notify_features: !!(document.getElementById('pref-features') || {}).checked,
+    notify_activity: !!(document.getElementById('pref-activity') || {}).checked
+  };
+  fetch('/api/auth/preferences', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!msg) return;
+      msg.style.display = 'block';
+      if (d && d.success) { msg.style.color = '#0a4a38'; msg.textContent = 'Preferences saved.'; }
+      else { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) || 'Could not save preferences.'; }
+      setTimeout(function(){ if (msg) msg.style.display = 'none'; }, 4000);
+    })
+    .catch(function(){ if (msg) { msg.style.display='block'; msg.style.color='var(--error)'; msg.textContent='Could not save preferences.'; } });
+}
+
+function resetFeedbackForm() {
+  var c = document.getElementById('feedback-category'); if (c) c.value = 'Suggestion';
+  var sub = document.getElementById('feedback-subject'); if (sub) sub.value = '';
+  var m = document.getElementById('feedback-message'); if (m) m.value = '';
+  var er = document.getElementById('feedback-error'); if (er) er.classList.add('hidden');
+  var ok = document.getElementById('feedback-success'); if (ok) ok.classList.add('hidden');
+  var btn = document.getElementById('feedback-submit-btn'); if (btn) { btn.disabled = false; btn.textContent = 'Send feedback'; }
+}
+
+function submitFeedback() {
+  var er = document.getElementById('feedback-error');
+  var ok = document.getElementById('feedback-success');
+  var btn = document.getElementById('feedback-submit-btn');
+  var msgEl = document.getElementById('feedback-message');
+  if (er) er.classList.add('hidden');
+  if (ok) ok.classList.add('hidden');
+  var message = msgEl ? msgEl.value.trim() : '';
+  if (!message) { if (er) { er.textContent = 'Please enter a message before sending.'; er.classList.remove('hidden'); } return; }
+  var body = {
+    category: (document.getElementById('feedback-category') || {}).value || 'Other',
+    subject: (document.getElementById('feedback-subject') || {}).value || '',
+    message: message
+  };
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.success) {
+        if (msgEl) msgEl.value = '';
+        var sub = document.getElementById('feedback-subject'); if (sub) sub.value = '';
+        if (ok) { ok.textContent = 'Thanks for the feedback. We have received your message.'; ok.classList.remove('hidden'); }
+      } else { if (er) { er.textContent = (d && d.error) || 'Could not send your feedback.'; er.classList.remove('hidden'); } }
+      if (btn) { btn.disabled = false; btn.textContent = 'Send feedback'; }
+    })
+    .catch(function(){ if (er) { er.textContent = 'Could not send your feedback. Please try again.'; er.classList.remove('hidden'); } if (btn) { btn.disabled = false; btn.textContent = 'Send feedback'; } });
 }
 
 // TESTING ONLY: switch the signed-in account's tier so we can exercise
@@ -1367,7 +1426,7 @@ function setBreadcrumb(items) {
 // ============================================================
 function showView(view) {
   if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -1396,6 +1455,13 @@ function showView(view) {
       {label:'My Account'}
     ]);
     loadAccount();
+  } else if (view === 'feedback') {
+    var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
+    setBreadcrumb([
+      {label:'My Campaigns', action:"showView('campaigns')"},
+      {label:'Feedback'}
+    ]);
+    if (typeof resetFeedbackForm === 'function') resetFeedbackForm();
   } else if (view === 'orders') {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([
@@ -7890,7 +7956,7 @@ function setBreadcrumb(items) {
 // ============================================================
 function showView(view) {
   if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
-  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles'];
+  var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
     if (el) el.style.display = 'none';
@@ -7919,6 +7985,13 @@ function showView(view) {
       {label:'My Account'}
     ]);
     loadAccount();
+  } else if (view === 'feedback') {
+    var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
+    setBreadcrumb([
+      {label:'My Campaigns', action:"showView('campaigns')"},
+      {label:'Feedback'}
+    ]);
+    if (typeof resetFeedbackForm === 'function') resetFeedbackForm();
   } else if (view === 'orders') {
     var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='none';
     setBreadcrumb([

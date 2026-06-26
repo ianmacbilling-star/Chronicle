@@ -225,7 +225,7 @@ router.get('/me', async function(req, res) {
   if (!req.session || !req.session.userId) return res.json({ authenticated: false });
   try {
     const db = await getDb();
-    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab FROM users WHERE id = ?').get(req.session.userId);
+    const user = await db.prepare('SELECT id, name, email, tier, trial_started_at, subscription_status, current_period_end, stripe_customer_id, stripe_subscription_id, render_thinking, pen_name, vocab, notify_promo, notify_features, notify_activity FROM users WHERE id = ?').get(req.session.userId);
     if (!user) return res.json({ authenticated: false });
 
     await lapseTrialIfExpired(user, db);
@@ -275,6 +275,9 @@ router.get('/me', async function(req, res) {
       inFreeTrial: inFreeTrial,
       trialStartedAt: user.trial_started_at || null,
       vocab: user.vocab || 'ttrpg',
+      notifyPromo: user.notify_promo !== false,
+      notifyFeatures: user.notify_features !== false,
+      notifyActivity: user.notify_activity !== false,
       is_admin: isAdmin,
       allTiers: TIERS
     });
@@ -629,6 +632,24 @@ router.patch('/tour-complete', async function(req, res) {
 });
 
 // POST /api/auth/tour-reset -> clears the current user's tour history (testing).
+router.put('/preferences', async function(req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    var b = req.body || {};
+    var promo = b.notify_promo !== false;
+    var features = b.notify_features !== false;
+    var activity = b.notify_activity !== false;
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE users SET notify_promo=?, notify_features=?, notify_activity=?, edited_at=?, edited_by=? WHERE id=?')
+      .run(promo, features, activity, now, req.session.userId, req.session.userId);
+    res.json({ success: true, notifyPromo: promo, notifyFeatures: features, notifyActivity: activity });
+  } catch (e) {
+    console.error('Save preferences error:', e.message);
+    res.json({ error: 'Could not save your preferences right now.' });
+  }
+});
+
 router.post('/tour-reset', requireAdmin, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {

@@ -312,6 +312,9 @@ async function initPostgres() {
   const alterations = [
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS debug_mode BOOLEAN DEFAULT false',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS vocab TEXT DEFAULT 'ttrpg'",
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_promo BOOLEAN DEFAULT true',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_features BOOLEAN DEFAULT true',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_activity BOOLEAN DEFAULT true',
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',

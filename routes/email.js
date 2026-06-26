@@ -26,6 +26,7 @@ async function sendEmail(to, subject, html, opts) {
     html: html
   };
   if (opts && opts.bcc) payload.bcc = opts.bcc;
+  if (opts && opts.replyTo) payload.reply_to = opts.replyTo;
   const { data, error } = await resend.emails.send(payload);
 
   if (error) throw new Error(error.message);
@@ -608,4 +609,22 @@ async function sendOrderProblemEmail(opts) {
   }
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail };
+function feedbackHTML(opts) {
+  function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  return '<div style="font-family:Arial,sans-serif;max-width:600px;color:#222;">' +
+    '<h2 style="color:#2d6a4f;margin:0 0 12px;">New Campaignia feedback</h2>' +
+    '<p style="margin:4px 0;"><strong>Category:</strong> ' + esc(opts.category || 'Other') + '</p>' +
+    (opts.subject ? '<p style="margin:4px 0;"><strong>Subject:</strong> ' + esc(opts.subject) + '</p>' : '') +
+    '<p style="margin:4px 0;"><strong>From:</strong> ' + esc(opts.from_name || '') + ' (' + esc(opts.from_email || '') + ')</p>' +
+    '<p style="margin:4px 0;"><strong>Plan:</strong> ' + esc(opts.tier || '') + '</p>' +
+    '<hr style="border:none;border-top:1px solid #ddd;margin:14px 0;"/>' +
+    '<p style="white-space:pre-wrap;line-height:1.5;">' + esc(opts.message || '') + '</p>' +
+  '</div>';
+}
+
+async function sendFeedbackEmail(opts) {
+  const subject = '[Campaignia Feedback] ' + (opts.category || 'Other') + (opts.subject ? ' - ' + opts.subject : '');
+  await sendEmail('support@campaignia.com', subject, feedbackHTML(opts), { replyTo: opts.from_email });
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail };
