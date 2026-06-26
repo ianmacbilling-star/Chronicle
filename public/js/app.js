@@ -10037,9 +10037,9 @@ function openInviteModal() {
   document.getElementById('invite-newchar-name').value = '';
   document.getElementById('invite-newchar-class').value = '';
   document.getElementById('invite-character-select').value = '__new__';
-  document.getElementById('invite-newchar-fields').style.display = '';
-  document.getElementById('invite-no-character').checked = false;
-  document.getElementById('invite-character-group').style.display = '';
+  document.getElementById('invite-newchar-fields').style.display = 'none';
+  document.getElementById('invite-assign-character').checked = false;
+  document.getElementById('invite-character-group').style.display = 'none';
 
   // Populate the character dropdown with PCs not yet owned (is_npc=false
   // AND owner_user_id IS NULL). We pull from the existing characters
@@ -10074,16 +10074,16 @@ function closeInviteModal() {
   document.getElementById('invite-modal').classList.add('hidden');
 }
 
-// No-character invite: collapse the character picker when the DM just wants
-// to add someone to the campaign (no PC claimed).
-function toggleInviteNoCharacter() {
-  var no = document.getElementById('invite-no-character').checked;
-  document.getElementById('invite-character-group').style.display = no ? 'none' : '';
-  if (no) {
-    document.getElementById('invite-newchar-fields').style.display = 'none';
-  } else {
+// Optional character: the picker stays collapsed until the DM checks "assign a
+// character" -- default is campaign access only (no PC claimed).
+function toggleInviteAssignCharacter() {
+  var assign = document.getElementById('invite-assign-character').checked;
+  document.getElementById('invite-character-group').style.display = assign ? '' : 'none';
+  if (assign) {
     var sel = document.getElementById('invite-character-select');
     document.getElementById('invite-newchar-fields').style.display = (sel.value === '__new__') ? '' : 'none';
+  } else {
+    document.getElementById('invite-newchar-fields').style.display = 'none';
   }
 }
 
@@ -10105,9 +10105,9 @@ function submitInvite() {
   }
 
   var body = { email: email };
-  var noCharEl = document.getElementById('invite-no-character');
-  var noCharacter = !!(noCharEl && noCharEl.checked);
-  if (!noCharacter) {
+  var assignEl = document.getElementById('invite-assign-character');
+  var assignCharacter = !!(assignEl && assignEl.checked);
+  if (assignCharacter) {
     if (sel.value === '__new__') {
       var name = (nameEl.value || '').trim();
       if (!name) {
