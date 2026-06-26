@@ -4581,7 +4581,7 @@ function openCharModal(editId) {
   document.getElementById('char-modal-error').classList.add('hidden');
   (function(){ var _cse = document.getElementById('char-save-error'); if (_cse) _cse.classList.add('hidden'); })();
   document.getElementById('char-modal').classList.remove('hidden');
-  if (!editId) { try { maybeStartTour('characters'); } catch (e) {} }
+  try { maybeStartTour('characters'); } catch (e) {}
 }
 
 function closeCharModal() { document.getElementById('char-modal').classList.add('hidden'); }
@@ -12605,6 +12605,7 @@ function _tourRenderStep() {
     _tourFindTarget(step.selector, 8, function(el){
       if (step.selector && !_tourVisible(el)) { _tourIdx++; _tourRenderStep(); return; }
       _tourPlace(el, step);
+      _tourScheduleSettle();
     });
   };
   if (step.click) {
@@ -12672,6 +12673,13 @@ function _tourPlace(el, step) {
 function _tourReposition() {
   if (!_tourActive) return;
   _tourPlace(_tourCurEl, _tourCurStep || {});
+}
+
+function _tourScheduleSettle() {
+  // Re-position after layout settles (title/images/fonts can reflow and move the target).
+  if (window.requestAnimationFrame) { requestAnimationFrame(function(){ _tourReposition(); }); }
+  setTimeout(function(){ _tourReposition(); }, 180);
+  setTimeout(function(){ _tourReposition(); }, 450);
 }
 
 function tourNext() {
