@@ -1660,11 +1660,11 @@ function renderSessions() {
     return 0;
   });
 
-  list.innerHTML = ordered.map(function(s) {
-    var thumbSrc = s.establishing_image || s.first_image_url;
+  list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
+    var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     var thumb = thumbSrc
-      ? '<img class="session-thumb" src="' + thumbSrc + '" alt="" loading="lazy" />'
-      : '';
+      ? '<img class="session-card-img" src="' + thumbSrc + '" alt="" loading="lazy" />'
+      : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
       : '<span class="session-badge session-badge-draft">Draft</span>';
@@ -1677,21 +1677,19 @@ function renderSessions() {
           '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
         '</div>' +
       '</div>';
-    return '<div class="session-item" onclick="selectSession(' + s.id + ')">' +
-      '<div class="session-item-left">' +
-        thumb +
-        '<div>' +
-          '<div class="session-name">' + s.name + '</div>' +
-          '<div class="session-date">' + formatSessionDate(s.session_date) + '</div>' +
+    return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+      thumb +
+      '<div class="session-card-body">' +
+        '<div class="session-card-title">' + s.name + '</div>' +
+        '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
+        '<div class="session-card-meta">' +
+          readyChip +
+          transcriptChip +
+          deleteMenu +
         '</div>' +
       '</div>' +
-      '<div class="flex gap-1 items-center">' +
-        readyChip +
-        transcriptChip +
-        deleteMenu +
-      '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + '</div>';
 }
 
 function openSessionModal() {
@@ -6057,36 +6055,34 @@ function renderNovelSummary(sessions) {
   }
 
   var totalMoments = 0;
-  var html = sessions.map(function(s, i) {
+  var html = '<div class="session-card-grid">' + sessions.map(function(s, i) {
     var moments = s.moments || [];
     totalMoments += moments.length;
-    var momentsHtml = moments.length
-      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;padding:10px 14px;">' +
-        moments.map(function(m, j) {
-          return '<div style="position:relative;border-radius:6px;overflow:hidden;background:rgba(15,10,5,0.6);border:1px solid rgba(201,168,76,0.1);">' +
-            (m.image
-              ? '<img src="' + m.image + '" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" alt="' + m.title + '" />'
-              : '<div style="width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:20px;opacity:0.2;">&#128444;</div>') +
-            '<div style="padding:5px 7px;">' +
-              '<div style="font-size:9px;color:rgba(201,168,76,0.4);">Panel ' + (j+1) + '</div>' +
-              '<div style="font-size:10px;color:var(--gold-light);font-weight:600;line-height:1.3;">' + m.title + '</div>' +
-            '</div>' +
-          '</div>';
-        }).join('') + '</div>'
-      : '<div class="novel-empty">No moments extracted yet — open this session to generate storyboard panels</div>';
-
-    return '<div class="novel-session-block">' +
-      '<div class="novel-session-header">' +
-        '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
-        '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
-          '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
+    var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
+    var thumb = thumbSrc
+      ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
+      : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
+    var forkLabel = s.is_canonical
+      ? "Story Master's Version"
+      : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version");
+    var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
+    return '<div class="session-card session-card-publish">' +
+      thumb +
+      '<div class="session-card-body">' +
+        '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
+        '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
+        '<div class="session-card-fork">' + forkLabel + '</div>' +
+        '<div class="session-card-pills">' +
+          '<span class="session-badge' + (moments.length ? '' : ' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
-        '</span>' +
+        '</div>' +
+        '<div class="session-card-actions">' +
+          includeChk +
+          '<a onclick="goToSessionPage(' + s.id + ')" class="session-card-open">Open</a>' +
+        '</div>' +
       '</div>' +
-      '<div class="novel-session-moments">' + momentsHtml + '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + '</div>';
 
   container.innerHTML = '<div style="font-size:12px;color:rgba(201,168,76,0.5);margin-bottom:14px;">' +
     sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;
@@ -8190,11 +8186,11 @@ function renderSessions() {
     return 0;
   });
 
-  list.innerHTML = ordered.map(function(s) {
-    var thumbSrc = s.establishing_image || s.first_image_url;
+  list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
+    var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     var thumb = thumbSrc
-      ? '<img class="session-thumb" src="' + thumbSrc + '" alt="" loading="lazy" />'
-      : '';
+      ? '<img class="session-card-img" src="' + thumbSrc + '" alt="" loading="lazy" />'
+      : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
       : '<span class="session-badge session-badge-draft">Draft</span>';
@@ -8207,21 +8203,19 @@ function renderSessions() {
           '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
         '</div>' +
       '</div>';
-    return '<div class="session-item" onclick="selectSession(' + s.id + ')">' +
-      '<div class="session-item-left">' +
-        thumb +
-        '<div>' +
-          '<div class="session-name">' + s.name + '</div>' +
-          '<div class="session-date">' + formatSessionDate(s.session_date) + '</div>' +
+    return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+      thumb +
+      '<div class="session-card-body">' +
+        '<div class="session-card-title">' + s.name + '</div>' +
+        '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
+        '<div class="session-card-meta">' +
+          readyChip +
+          transcriptChip +
+          deleteMenu +
         '</div>' +
       '</div>' +
-      '<div class="flex gap-1 items-center">' +
-        readyChip +
-        transcriptChip +
-        deleteMenu +
-      '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + '</div>';
 }
 
 function openSessionModal() {
@@ -9308,36 +9302,34 @@ function renderNovelSummary(sessions) {
   }
 
   var totalMoments = 0;
-  var html = sessions.map(function(s, i) {
+  var html = '<div class="session-card-grid">' + sessions.map(function(s, i) {
     var moments = s.moments || [];
     totalMoments += moments.length;
-    var momentsHtml = moments.length
-      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;padding:10px 14px;">' +
-        moments.map(function(m, j) {
-          return '<div style="position:relative;border-radius:6px;overflow:hidden;background:rgba(15,10,5,0.6);border:1px solid rgba(201,168,76,0.1);">' +
-            (m.image
-              ? '<img src="' + m.image + '" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;cursor:zoom-in;" onclick="openLightbox(this.src,this.alt)" alt="' + m.title + '" />'
-              : '<div style="width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:20px;opacity:0.2;">&#128444;</div>') +
-            '<div style="padding:5px 7px;">' +
-              '<div style="font-size:9px;color:rgba(201,168,76,0.4);">Panel ' + (j+1) + '</div>' +
-              '<div style="font-size:10px;color:var(--gold-light);font-weight:600;line-height:1.3;">' + m.title + '</div>' +
-            '</div>' +
-          '</div>';
-        }).join('') + '</div>'
-      : '<div class="novel-empty">No moments extracted yet — open this session to generate storyboard panels</div>';
-
-    return '<div class="novel-session-block">' +
-      '<div class="novel-session-header">' +
-        '<div><div class="novel-session-title">Session ' + (i+1) + ' &mdash; ' + s.name + '</div>' +
-        '<div class="novel-session-date">' + formatSessionDate(s.session_date) + '</div></div>' +
-        '<span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' + '<label style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>' + '<a onclick="goToSessionPage(' + s.id + ')" style="font-size:11px;color:#2f5a86;cursor:pointer;text-decoration:underline;">Open</a>' +
-          '<span class="session-badge' + (moments.length?'':' empty') + '">' + moments.length + ' panels</span>' +
+    var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
+    var thumb = thumbSrc
+      ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
+      : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
+    var forkLabel = s.is_canonical
+      ? "Story Master's Version"
+      : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version");
+    var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
+    return '<div class="session-card session-card-publish">' +
+      thumb +
+      '<div class="session-card-body">' +
+        '<div class="session-card-title">Session ' + (i+1) + ' — ' + s.name + '</div>' +
+        '<div class="session-card-date">' + formatSessionDate(s.session_date) + '</div>' +
+        '<div class="session-card-fork">' + forkLabel + '</div>' +
+        '<div class="session-card-pills">' +
+          '<span class="session-badge' + (moments.length ? '' : ' empty') + '">' + moments.length + ' panels</span>' +
           '<span class="session-badge' + (s.fork_status === 'ready' ? '' : ' session-badge-draft') + '">' + (s.fork_status === 'ready' ? 'Ready' : 'Draft') + '</span>' +
-        '</span>' +
+        '</div>' +
+        '<div class="session-card-actions">' +
+          includeChk +
+          '<a onclick="goToSessionPage(' + s.id + ')" class="session-card-open">Open</a>' +
+        '</div>' +
       '</div>' +
-      '<div class="novel-session-moments">' + momentsHtml + '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + '</div>';
 
   container.innerHTML = '<div style="font-size:12px;color:rgba(201,168,76,0.5);margin-bottom:14px;">' +
     sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;

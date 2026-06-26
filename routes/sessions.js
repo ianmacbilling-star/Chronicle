@@ -36,20 +36,37 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   const incMap = await effectiveIncludeMap(db, req.params.campaignId, asUser);
+  const asUserRow = asUser ? await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser) : null;
+  const asUserName = asUserRow ? asUserRow.name : null;
   const result = await Promise.all(sessions.map(async function(s) {
-    let forkId = null;
+    let forkId = null, usedPlayerFork = false;
     if (asUser) {
       const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
-      if (pf) forkId = pf.id;
+      if (pf) { forkId = pf.id; usedPlayerFork = true; }
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
     const fk = await db.prepare('SELECT player_access_status FROM session_forks WHERE id = ?').get(forkId);
-    // Session card thumbnail: the first panel image (panel 0 is the title image).
-    let firstMomentImg = null;
-    for (let mi = 0; mi < moments.length; mi++) { if (moments[mi].image) { firstMomentImg = moments[mi].image; break; } }
+    // Card thumbnail: the fork's establishing (title) image, else first panel,
+    // else the session-level establishing image. Only ONE image per card.
+    let firstMomentImg = null, estImg = null;
+    for (let mi = 0; mi < moments.length; mi++) {
+      if (moments[mi].image) {
+        if (!firstMomentImg) firstMomentImg = moments[mi].image;
+        if (moments[mi].kind === 'establishing' && !estImg) estImg = moments[mi].image;
+      }
+    }
     const first_image_url = firstMomentImg || null;
-    return Object.assign({}, s, { moments, fork_status: fk ? fk.player_access_status : 'draft', first_image_url: first_image_url, novel_include: !!incMap[s.id] });
+    const title_image = estImg || s.establishing_image || first_image_url || null;
+    return Object.assign({}, s, {
+      moments,
+      fork_status: fk ? fk.player_access_status : 'draft',
+      first_image_url: first_image_url,
+      title_image: title_image,
+      fork_owner_name: usedPlayerFork ? asUserName : null,
+      is_canonical: !usedPlayerFork,
+      novel_include: !!incMap[s.id]
+    });
   }));
   res.json(result);
 });
@@ -102,7 +119,7 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   // Players do not see the DM's Draft sessions unless they have already
   // made their own version of that session. The DM sees everything.
   var visFilter = '';
-  var listParams = [req.params.campaignId];
+  var listParams = [req.session.userId, req.session.userId, req.params.campaignId];
   if (req.campaignRole !== 'dm') {
     visFilter = " AND ( (SELECT f.player_access_status FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm' LIMIT 1) = 'ready'" +
       " OR EXISTS (SELECT 1 FROM session_forks fo WHERE fo.session_id = s.id AND fo.user_id = ? AND fo.role = 'player') )";
@@ -110,6 +127,10 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   }
   const sessions = await db.prepare(
     'SELECT s.*, ' +
+    "COALESCE(" +
+    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.kind = 'establishing' AND m.image IS NOT NULL AND m.image <> '' LIMIT 1), " +
+    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.image IS NOT NULL AND m.image <> '' ORDER BY m.panel_order ASC LIMIT 1), " +
+    "s.establishing_image) AS title_image_url, " +
     '(SELECT m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = s.id AND f.role = \'dm\' AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
     // Deploy 4.0 — player_access_status now lives on the DM fork. This
     // aliased column comes AFTER s.* so it wins in the row object,
