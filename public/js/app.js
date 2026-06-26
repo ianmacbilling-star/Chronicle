@@ -1643,6 +1643,13 @@ function renderSessions() {
   renderCampaignHeaderDisplay();
 
   if (!state.sessions.length) {
+    var _isDM = state.currentCampaign && state.currentCampaign.my_role === 'dm';
+    if (!_isDM) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
+        '<h3>No sessions ready yet</h3>' +
+        '<p>Waiting on the Story Master to ready a session for viewing.</p></div>';
+      return;
+    }
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
@@ -8169,6 +8176,13 @@ function renderSessions() {
   renderCampaignHeaderDisplay();
 
   if (!state.sessions.length) {
+    var _isDM = state.currentCampaign && state.currentCampaign.my_role === 'dm';
+    if (!_isDM) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
+        '<h3>No sessions ready yet</h3>' +
+        '<p>Waiting on the Story Master to ready a session for viewing.</p></div>';
+      return;
+    }
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
