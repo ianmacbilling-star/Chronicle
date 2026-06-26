@@ -1454,6 +1454,8 @@ function showCampaignSection(section) {
 
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).
   applyRoleVisibility();
+  // Fire the per-section guided tour (characters fires from its create modal instead).
+  if (section !== 'characters') { try { maybeStartTour(section); } catch (e) {} }
 }
 
 // ============================================================
@@ -1986,7 +1988,7 @@ function renderSessionCharacters(rows) {
       // description editor and the appearance-change section. When a change has
       // already been applied, the button label shows it (no separate badge row).
       var editLabel = acceptedChange ? '&#10003; Change applied — Edit' : '&#9998; Edit';
-      editBtn = '<button class="btn btn-sm" onclick="openChangeReview(' + r.character_id + ')">' + editLabel + '</button>';
+      editBtn = '<button class="btn btn-sm sc-edit-btn" onclick="openChangeReview(' + r.character_id + ')">' + editLabel + '</button>';
     }
 
     return '<div class="sc-card" id="sc-card-' + r.character_id + '">' +
@@ -2138,7 +2140,7 @@ function openChangeReview(charId) {
       '</div>' +
       '<div class="sc-review-msg" id="sc-review-msg-' + charId + '"></div>' +
       '<div class="char-prompt-actions">' +
-        '<button class="btn btn-sm btn-primary" id="sc-approve-' + charId + '" ' +
+        '<button class="btn btn-sm btn-primary sc-approve-btn" id="sc-approve-' + charId + '" ' +
           'onclick="approveChange(' + charId + ')" ' +
           'title="Lock in this amended appearance from the chosen Moment Panel onward, and carry it into later sessions">&#10003; ' +
           (isAccepted ? 'Save changes' : 'Approve change') + '</button>' +
@@ -3862,6 +3864,7 @@ function switchSessionTab(tab) {
   if (tab === 'review') {
     loadReview();
   }
+  try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
 // ============================================================
@@ -3950,6 +3953,7 @@ function openAssetModal(assetId) {
     setAssetPreview(null);
   }
   if (modal) modal.classList.remove('hidden');
+  if (!assetId) { try { maybeStartTour('asset-modal'); } catch (e) {} }
 }
 
 // Show an image in the drop zone (existing URL or a freshly picked file),
@@ -4575,6 +4579,7 @@ function openCharModal(editId) {
   document.getElementById('char-modal-error').classList.add('hidden');
   (function(){ var _cse = document.getElementById('char-save-error'); if (_cse) _cse.classList.add('hidden'); })();
   document.getElementById('char-modal').classList.remove('hidden');
+  if (!editId) { try { maybeStartTour('characters'); } catch (e) {} }
 }
 
 function closeCharModal() { document.getElementById('char-modal').classList.add('hidden'); }
@@ -7603,36 +7608,36 @@ function renderStoryboard() {
     var _canLock = canEditCurrentStatus();
     var lockBtn = '';
     if (m.image && _canLock) {
-      lockBtn = '<button class="panel-pill' + (m.locked ? ' is-on' : '') + '" onclick="toggleMomentLock(' + m.id + ')" title="' + (m.locked ? 'Locked - click to unlock (Regenerate All skips it)' : 'Lock this image (Regenerate All skips it)') + '">' + (m.locked ? 'Unlock' : 'Lock') + '</button>';
+      lockBtn = '<button class="panel-pill pp-lock' + (m.locked ? ' is-on' : '') + '" onclick="toggleMomentLock(' + m.id + ')" title="' + (m.locked ? 'Locked - click to unlock (Regenerate All skips it)' : 'Lock this image (Regenerate All skips it)') + '">' + (m.locked ? 'Unlock' : 'Lock') + '</button>';
     } else if (m.locked) {
-      lockBtn = '<span class="panel-pill is-on is-static" title="Locked by the version owner">Locked</span>';
+      lockBtn = '<span class="panel-pill pp-lock is-on is-static" title="Locked by the version owner">Locked</span>';
     }
     var regenBtn = m.locked
-      ? '<button class="panel-pill dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
-      : '<button class="panel-pill dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
+      ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
+      : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
     var editPromptBtn = m.locked
-      ? '<button class="panel-pill dm-only" disabled title="Unlock to edit the prompt">Edit prompt</button>'
-      : '<button class="panel-pill dm-only" onclick="openImagePrompt(' + m.id + ')" title="Edit the image prompt, then Regenerate to apply">Edit prompt</button>';
+      ? '<button class="panel-pill pp-edit dm-only" disabled title="Unlock to edit the prompt">Edit prompt</button>'
+      : '<button class="panel-pill pp-edit dm-only" onclick="openImagePrompt(' + m.id + ')" title="Edit the image prompt, then Regenerate to apply">Edit prompt</button>';
     var retouchBtn = m.locked
-      ? '<button class="panel-pill dm-only" disabled title="Unlock to retouch">Retouch</button>'
-      : '<button class="panel-pill dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>';
+      ? '<button class="panel-pill pp-retouch dm-only" disabled title="Unlock to retouch">Retouch</button>'
+      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>';
     var revertBtn = (m.revert_image && !m.locked)
       ? '<button class="panel-pill dm-only" onclick="revertMoment(' + m.id + ')" title="Undo the last retouch or regenerate - restore the previous image">Revert</button>'
       : '';
     var replaceBtn = m.locked
-      ? '<button class="panel-pill dm-only" disabled title="Unlock to replace">Replace</button>'
-      : '<button class="panel-pill dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">Replace</button>';
+      ? '<button class="panel-pill pp-replace dm-only" disabled title="Unlock to replace">Replace</button>'
+      : '<button class="panel-pill pp-replace dm-only" onclick="openReplacePicker(\'moment\', ' + m.id + ')" title="Replace with an image from the Archive">Replace</button>';
     var archiveBtn = '';
     if (m.image) {
       var _arched = isMomentArchived(m);
-      archiveBtn = '<button class="panel-pill' + (_arched ? ' is-on' : '') +
+      archiveBtn = '<button class="panel-pill pp-archive' + (_arched ? ' is-on' : '') +
         '" onclick="toggleArchiveMoment(' + m.id + ')" title="' +
         (_arched ? 'In your Archive - click to remove' : 'Save this image to your Archive') +
         '">' + (_arched ? 'Archived' : 'Archive') + '</button>';
     }
     var optsBtn = '<button class="moment-opts-btn" onclick="toggleMomentOptions(' + m.id + ')" title="Cast &amp; prominence for this panel">&#8230;</button>';
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
-    return '<div class="storyboard-panel" id="moment-card-' + m.id + '">' +
+    return '<div class="storyboard-panel' + (m.kind === 'establishing' ? ' is-opening' : '') + '" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
         imgHtml + '<div class="panel-img-actions">' + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
@@ -7943,6 +7948,8 @@ function showCampaignSection(section) {
 
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).
   applyRoleVisibility();
+  // Fire the per-section guided tour (characters fires from its create modal instead).
+  if (section !== 'characters') { try { maybeStartTour(section); } catch (e) {} }
 }
 
 // ============================================================
@@ -8326,6 +8333,7 @@ function switchSessionTab(tab) {
   if (tab === 'review') {
     loadReview();
   }
+  try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
 // ============================================================
@@ -12517,11 +12525,20 @@ function applyVocab(s) {
 function maybeStartTour(viewId) {
   if (_tourActive || !viewId) return;
   _tourEnsureData(function(){
-    if (_tourStepsFor(viewId).length === 0) return;
-    _tourEnsureProgress(function(){
-      if (_tourProgress[viewId]) return;
-      startTour(viewId, false);
-    });
+    var _t = _toursData && _toursData[viewId];
+    if (!_t || !Array.isArray(_t.steps) || _t.steps.length === 0) return;
+    var _go = function() {
+      _tourEnsureProgress(function(){
+        if (_tourProgress[viewId]) return;
+        startTour(viewId, false);
+      });
+    };
+    if (_t.requires) {
+      // Data gate: wait (retry) for the required element; if it never appears, defer silently (do NOT mark seen).
+      _tourFindTarget(_t.requires, 8, function(rq){ if (_tourVisible(rq)) _go(); });
+    } else {
+      _go();
+    }
   });
 }
 
@@ -12564,7 +12581,26 @@ function _tourRenderStep() {
   if (textEl) textEl.textContent = applyVocab(step.text || '');
   if (countEl) countEl.textContent = 'Step ' + (_tourIdx + 1) + ' of ' + _tourSteps.length;
   if (nextEl) nextEl.textContent = (_tourIdx === _tourSteps.length - 1) ? 'Done' : 'Next';
-  _tourFindTarget(step.selector, 8, function(el){ _tourPlace(el, step); });
+  var _find = function() {
+    _tourFindTarget(step.selector, 8, function(el){
+      if (step.selector && !_tourVisible(el)) { _tourIdx++; _tourRenderStep(); return; }
+      _tourPlace(el, step);
+    });
+  };
+  if (step.click) {
+    try { var _ce = document.querySelector(step.click); if (_ce) _ce.click(); } catch (e) {}
+    setTimeout(_find, 160);
+  } else {
+    _find();
+  }
+}
+
+function _tourVisible(el) {
+  if (!el) return false;
+  if (el.getClientRects().length === 0) return false;
+  var cs = window.getComputedStyle(el);
+  if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
+  return true;
 }
 
 function _tourFindTarget(selector, tries, cb) {

@@ -1,20 +1,32 @@
 {
-  "version": 1,
+  "version": 2,
   "tours": {
     "campaigns": {
-      "title": "Your campaigns",
+      "title": "Welcome to Campaignia",
       "steps": [
         {
           "selector": "#campaigns-grid",
-          "title": "Welcome to Campaignia",
-          "text": "This is your campaigns home. Each card is one campaign \u2014 the world your sessions and graphic novel live inside.",
+          "title": "Welcome \u2014 and thank you!",
+          "text": "Thanks for signing up for Campaignia. This is your home base; here is a quick tour of the essentials.",
           "placement": "auto"
         },
         {
           "selector": ".add-campaign-card",
-          "title": "Start a campaign",
-          "text": "Click here to create your first campaign. You can name it, describe it, and give it a cover image later.",
+          "title": "Start a {campaign}",
+          "text": "Click here to create your first {campaign} \u2014 the world your {sessions} and graphic novel live inside.",
           "placement": "auto"
+        },
+        {
+          "selector": "#token-balance-label",
+          "title": "Your tokens",
+          "text": "This is your token balance. Generating images spends tokens; click here anytime to top up.",
+          "placement": "bottom"
+        },
+        {
+          "selector": "#user-avatar",
+          "title": "Your profile",
+          "text": "Open this for your account details, plan and tokens \u2014 and to sign out.",
+          "placement": "bottom"
         },
         {
           "selector": "#help-fab",
@@ -24,11 +36,377 @@
         }
       ]
     },
-    "sessions": { "title": "Sessions", "steps": [] },
-    "characters": { "title": "Characters", "steps": [] },
-    "assets": { "title": "Asset Library", "steps": [] },
-    "archives": { "title": "Archives", "steps": [] },
-    "novel": { "title": "Publish", "steps": [] },
-    "session-detail": { "title": "Storyboard", "steps": [] }
+    "sessions": {
+      "title": "Your {campaign}",
+      "steps": [
+        {
+          "selector": "#camp-edit-btn",
+          "title": "Edit your {campaign}",
+          "text": "Click the pencil to rename your {campaign} or update its description anytime.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#camp-nav-characters",
+          "title": "Your cast",
+          "text": "Add the characters in your {campaign} here, with reference images so their faces stay consistent across every panel.",
+          "placement": "bottom"
+        },
+        {
+          "selector": "#btn-new-session",
+          "title": "Add a {session}",
+          "text": "Start a new {session} and paste your story, transcript, notes, whatever you have \u2014 Campaignia turns it into an illustrated storyboard, ready to publish.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#camp-nav-members",
+          "title": "Invite members",
+          "text": "Invite others to join your {campaign} \u2014 give them a character to manage, or simply let them follow along. Each member can even build their own version of the story.",
+          "placement": "bottom"
+        },
+        {
+          "selector": "#camp-nav-assets",
+          "title": "Asset Library",
+          "text": "Upload maps, locations, items, or artwork for Campaignia to use as references across your {sessions} \u2014 it helps lock in the look you want and keep your images consistent.",
+          "placement": "bottom"
+        },
+        {
+          "selector": "#camp-nav-archives",
+          "title": "Archives",
+          "text": "Images you save are kept here to reuse later \u2014 swap them into any panel, or publish one to the public Library to show off a little.",
+          "placement": "bottom"
+        },
+        {
+          "selector": "#camp-nav-publish",
+          "title": "Publish your story",
+          "text": "When your {sessions} are ready, turn your work into a shareable graphic novel \u2014 or order a printed book.",
+          "placement": "bottom"
+        }
+      ]
+    },
+    "characters": {
+      "title": "Add a character",
+      "steps": [
+        {
+          "selector": "#char-name",
+          "title": "Name your character",
+          "text": "Give your character a name \u2014 add a nickname after a slash (like 'Theron / Ash') and Campaignia will recognize both.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#char-player",
+          "title": "Player name",
+          "text": "Working from a transcript? Add the player's real name so Campaignia can tell who's speaking in the log.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#char-desc",
+          "title": "Visual & personality traits",
+          "text": "Describe how they look and act \u2014 appearance, clothing, temperament, mannerisms. The more you give here, the better Campaignia captures them.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#char-ref-images",
+          "title": "Reference images",
+          "text": "Have pictures, drawings, or renderings of your character? Add them here. No images? No problem \u2014 Campaignia will create one for you.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#char-save-btn",
+          "title": "Save your character",
+          "text": "Save, and Campaignia builds a reference image and prompt you can review and tweak until they're just right. These references stay style-neutral on purpose, so your character looks right in any art style.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "assets": {
+      "title": "Asset Library",
+      "steps": [
+        {
+          "selector": "#asset-grid",
+          "title": "Your asset library",
+          "text": "Just like characters, assets give Campaignia visual references \u2014 locations, NPCs (people), and items it can pull into your panels to keep your world consistent.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#asset-grid .add-char-card",
+          "title": "Add an asset",
+          "text": "Add a location, NPC, or item here that you want to appear consistently across your story.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "asset-modal": {
+      "title": "New asset",
+      "steps": [
+        {
+          "selector": "#asset-name",
+          "title": "Name & keywords",
+          "text": "Name your asset \u2014 it can have several. Separate them with a slash and Campaignia will match any of them when they come up in your story.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#asset-category",
+          "title": "Category",
+          "text": "Tag it as a Location, NPC, or Item. Locations double as references for your scene backgrounds.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "archives": {
+      "title": "Archives",
+      "steps": [
+        {
+          "selector": "#archives-grid",
+          "title": "Your archive",
+          "text": "Any image you generate in Campaignia can be archived. This is where you find them all \u2014 reuse them in your story, or publish one to the public Library to share with the world.",
+          "placement": "auto"
+        }
+      ],
+      "requires": "#archives-grid .archive-card"
+    },
+    "novel": {
+      "title": "Publish",
+      "requires": "#novel-summary-list .novel-session-block",
+      "steps": [
+        {
+          "selector": "#ntab-sessions",
+          "click": "#ntab-sessions",
+          "title": "Publish your story",
+          "text": "When your story is ready, this is where you publish it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#novel-tab-sessions",
+          "title": "Choose your sessions",
+          "text": "Check which {sessions} to include in this book \u2014 one, some, or all of them.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#ntab-preview",
+          "click": "#ntab-preview",
+          "title": "Preview & Export",
+          "text": "Switch here to set up and preview your book before you publish.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#prep-title",
+          "title": "Title",
+          "text": "Give your book a title.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#prep-thumb-cover",
+          "title": "Cover",
+          "text": "Set your cover, back, and title images from your Archive.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#novel-layout-btn",
+          "title": "Layout",
+          "text": "Choose how your story is laid out \u2014 comic, picture book, or magazine.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#novel-preview-mode-btn",
+          "title": "Quick View vs True View",
+          "text": "Use Quick View to test and tweak quickly; switch to True View for an exact final look before publishing.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#novel-publish-btn",
+          "title": "Publish to the Library",
+          "text": "When it looks right, publish your story to the public Library as a shareable web page.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#novel-tab-order",
+          "click": "#ntab-order",
+          "title": "Order a printed copy",
+          "text": "Or order a printed copy of your book here. Options can vary with your page count.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "sess-notes": {
+      "title": "The Session",
+      "steps": [
+        {
+          "selector": "#stab-notes",
+          "title": "Where your story lives",
+          "text": "This is where your story lives \u2014 the heart of a session.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#transcript-input",
+          "title": "Your story",
+          "text": "This is your story. Whatever you have \u2014 an actual story, a transcript, journal entries, session notes \u2014 we'll take it and use it.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-notes-input",
+          "title": "Notes & instructions",
+          "text": "This is where you tell Campaignia how to create your story \u2014 anything it should know or do.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#extract-btn",
+          "title": "Generate Story",
+          "text": "Campaignia reads your story and your notes, then compiles the Moments that should be turned into images.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "sess-characters": {
+      "title": "Characters",
+      "requires": "#session-tab-characters .sc-card",
+      "steps": [
+        {
+          "selector": ".sc-card",
+          "title": "Your cast",
+          "text": "These are the characters in this session.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".sc-review",
+          "title": "Edit a character",
+          "text": "You can edit how a character looks going forward \u2014 give instructions and retouch the character.",
+          "placement": "auto",
+          "click": ".sc-edit-btn"
+        },
+        {
+          "selector": ".sc-review-moment",
+          "title": "Pick the Moment",
+          "text": "Select which Moment this visual change takes place. The character looks normal before it, and changed from it onward.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".sc-approve-btn",
+          "title": "Approve the change",
+          "text": "Approve the change to lock in the new look from the chosen Moment onward.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "sess-review": {
+      "title": "Review",
+      "requires": "#review-list .review-row",
+      "steps": [
+        {
+          "selector": "#review-list",
+          "title": "Review before you generate",
+          "text": "This is where you can see what Campaignia came up with before it has generated anything. If needed, set narrative and image direction, and add characters and assets to different Moments.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#review-generate-btn",
+          "title": "Generate Narrative & Images",
+          "text": "This turns the outline below into your Story.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "sess-storyboard": {
+      "title": "Storyboard",
+      "requires": "#session-tab-storyboard .storyboard-panel",
+      "steps": [
+        {
+          "selector": "#stab-storyboard",
+          "title": "Your storyboard",
+          "text": "Every image in the session lives here, ready to refine.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel.is-opening",
+          "title": "Title image",
+          "text": "The opening image for your story \u2014 usually a wide, distant shot that sets the scene.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening)",
+          "title": "A panel",
+          "text": "Each panel is one Moment from your story.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .pp-edit",
+          "title": "Edit prompt",
+          "text": "Edit the image prompt here, then Regenerate to apply it.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .pp-regen",
+          "title": "Regenerate",
+          "text": "Makes a fresh image from the prompt.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .pp-retouch",
+          "title": "Retouch",
+          "text": "Keeps the image as is, but lets you change small details.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .pp-replace",
+          "title": "Replace",
+          "text": "Pull a different image in from your Archive.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .pp-lock",
+          "title": "Lock",
+          "text": "Keeps this image from being overwritten on a global Regenerate.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .pp-archive",
+          "title": "Archive",
+          "text": "Sends a copy of this image to your Archive.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .moment-opts-btn",
+          "title": "Cast for this Moment",
+          "text": "Open these options to add or remove characters and assets for this Moment \u2014 just like the Review tab.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".storyboard-panel:not(.is-opening) .moment-prom",
+          "title": "Prominence",
+          "text": "High prominence makes this picture as big as possible when published.",
+          "placement": "auto",
+          "click": ".storyboard-panel:not(.is-opening) .moment-opts-btn"
+        },
+        {
+          "selector": ".narrative-regen-btn",
+          "title": "Narrative",
+          "text": "Regenerate the narrative if you do not like it, or simply retype it yourself.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "sess-export": {
+      "title": "Preview & Export",
+      "requires": ".storyboard-panel",
+      "steps": [
+        {
+          "selector": "#layout-style-btn",
+          "title": "Layout",
+          "text": "Choose how your story is laid out \u2014 comic, picture book, or magazine. (Same as the Publish page.)",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-preview-mode-btn",
+          "title": "Quick View vs True View",
+          "text": "Use Quick View to test and tweak quickly; switch to True View for an exact final look. (Same as the Publish page.)",
+          "placement": "auto"
+        },
+        {
+          "selector": "#session-access-status-select",
+          "title": "Draft or Ready",
+          "text": "When you mark a session Ready, other members can see it and create their own versions of it.",
+          "placement": "auto"
+        }
+      ]
+    }
   }
 }
