@@ -1455,6 +1455,7 @@ function showCampaignSection(section) {
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).
   applyRoleVisibility();
   // Fire the per-section guided tour (characters fires from its create modal instead).
+  if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   if (section !== 'characters') { try { maybeStartTour(section); } catch (e) {} }
 }
 
@@ -3864,6 +3865,7 @@ function switchSessionTab(tab) {
   if (tab === 'review') {
     loadReview();
   }
+  if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
@@ -7949,6 +7951,7 @@ function showCampaignSection(section) {
   // Phase 3 — apply role-based visibility (hide DM-only UI for players).
   applyRoleVisibility();
   // Fire the per-section guided tour (characters fires from its create modal instead).
+  if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   if (section !== 'characters') { try { maybeStartTour(section); } catch (e) {} }
 }
 
@@ -8333,6 +8336,7 @@ function switchSessionTab(tab) {
   if (tab === 'review') {
     loadReview();
   }
+  if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   try { maybeStartTour('sess-' + tab); } catch (e) {}
 }
 
@@ -12484,6 +12488,7 @@ var _tourIdx = 0;
 var _tourViewId = '';
 var _tourCurEl = null;
 var _tourCurStep = null;
+var _tourPanelEl = null;
 
 function _tourEnsureData(cb) {
   if (_toursData) { cb(); return; }
@@ -12550,6 +12555,21 @@ function showTour(viewId) {
   });
 }
 
+function _activeSessionTab() {
+  var ids = ['notes', 'characters', 'review', 'storyboard', 'export'];
+  for (var i = 0; i < ids.length; i++) {
+    var e = document.getElementById('stab-' + ids[i]);
+    if (e && e.classList.contains('active')) return ids[i];
+  }
+  return 'notes';
+}
+
+function tourKeyForView() {
+  var v = (window.state && state.currentView) || 'campaigns';
+  if (v === 'session-detail') return 'sess-' + _activeSessionTab();
+  return v;
+}
+
 function startTour(viewId, manual) {
   _tourViewId = viewId;
   _tourSteps = _tourStepsFor(viewId);
@@ -12612,6 +12632,8 @@ function _tourFindTarget(selector, tries, cb) {
 
 function _tourPlace(el, step) {
   _tourCurEl = el; _tourCurStep = step;
+  if (_tourPanelEl) { try { _tourPanelEl.classList.remove('tour-show-pills'); } catch (e) {} _tourPanelEl = null; }
+  if (el && el.closest) { try { var _sp = el.closest('.storyboard-panel'); if (_sp) { _sp.classList.add('tour-show-pills'); _tourPanelEl = _sp; } } catch (e) {} }
   var ov = document.getElementById('tour-overlay');
   var hl = document.getElementById('tour-highlight');
   var tip = document.getElementById('tour-tip');
@@ -12677,6 +12699,7 @@ function _tourTeardown() {
   document.removeEventListener('keydown', _tourKey);
   window.removeEventListener('resize', _tourReposition);
   window.removeEventListener('scroll', _tourReposition, true);
+  if (_tourPanelEl) { try { _tourPanelEl.classList.remove('tour-show-pills'); } catch (e) {} _tourPanelEl = null; }
   _tourCurEl = null; _tourCurStep = null;
 }
 
