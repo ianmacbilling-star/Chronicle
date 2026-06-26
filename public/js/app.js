@@ -4582,7 +4582,8 @@ function openCharModal(editId) {
   (function(){ var _cse = document.getElementById('char-save-error'); if (_cse) _cse.classList.add('hidden'); })();
   document.getElementById('char-modal').classList.remove('hidden');
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
-  try { maybeStartTour('characters'); } catch (e) {}
+  if (window.requestAnimationFrame) { requestAnimationFrame(function(){ try { maybeStartTour('characters'); } catch (e) {} }); }
+  else { try { maybeStartTour('characters'); } catch (e) {} }
 }
 
 function closeCharModal() { document.getElementById('char-modal').classList.add('hidden'); }
@@ -12490,6 +12491,7 @@ var _tourViewId = '';
 var _tourCurEl = null;
 var _tourCurStep = null;
 var _tourPanelEl = null;
+var _tourShownAny = false;
 
 function _tourEnsureData(cb) {
   if (_toursData) { cb(); return; }
@@ -12576,6 +12578,7 @@ function startTour(viewId, manual) {
   _tourSteps = _tourStepsFor(viewId);
   if (_tourSteps.length === 0) return;
   _tourIdx = 0;
+  _tourShownAny = false;
   _tourActive = true;
   var ov = document.getElementById('tour-overlay');
   if (ov) { ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); }
@@ -12593,7 +12596,7 @@ function _tourKey(e) {
 
 function _tourRenderStep() {
   var step = _tourSteps[_tourIdx];
-  if (!step) { _tourFinish(); return; }
+  if (!step) { if (_tourShownAny) { _tourFinish(); } else { _tourTeardown(); } return; }
   var titleEl = document.getElementById('tour-tip-title');
   var textEl = document.getElementById('tour-tip-text');
   var countEl = document.getElementById('tour-tip-count');
@@ -12634,6 +12637,7 @@ function _tourFindTarget(selector, tries, cb) {
 
 function _tourPlace(el, step) {
   _tourCurEl = el; _tourCurStep = step;
+  _tourShownAny = true;
   if (_tourPanelEl) { try { _tourPanelEl.classList.remove('tour-show-pills'); } catch (e) {} _tourPanelEl = null; }
   if (el && el.closest) { try { var _sp = el.closest('.storyboard-panel'); if (_sp) { _sp.classList.add('tour-show-pills'); _tourPanelEl = _sp; } } catch (e) {} }
   var ov = document.getElementById('tour-overlay');
