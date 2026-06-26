@@ -118,8 +118,8 @@
         },
         {
           "selector": "#char-save-btn",
-          "title": "Save your character",
-          "text": "Save, and Campaignia builds a reference image and prompt you can review and tweak until they're just right. These references stay style-neutral on purpose, so your character looks right in any art style.",
+          "title": "Create your character",
+          "text": "Click Create, then follow the on-screen instructions for building your reference image. These references stay style-neutral on purpose, so your character looks right in any art style.",
           "placement": "auto"
         }
       ]

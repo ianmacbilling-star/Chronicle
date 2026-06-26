@@ -4568,6 +4568,7 @@ function openCharModal(editId) {
   var char = editId ? state.characters.find(function(c){return c.id===editId;}) : null;
   document.getElementById('char-edit-id').value = editId || '';
   document.getElementById('char-modal-title').textContent = editId ? 'Edit Character' : 'Add Character';
+  (function(){ var _sb = document.getElementById('char-save-btn'); if (_sb) _sb.textContent = editId ? 'Done' : 'Create character'; })();
   document.getElementById('char-name').value = char ? char.name : '';
   document.getElementById('char-player').value = char ? (char.player_name || '') : '';
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
@@ -4586,7 +4587,25 @@ function openCharModal(editId) {
   else { try { maybeStartTour('characters'); } catch (e) {} }
 }
 
-function closeCharModal() { document.getElementById('char-modal').classList.add('hidden'); }
+function closeCharModal() {
+  try {
+    var editId = (document.getElementById('char-edit-id') || {}).value || '';
+    var nameEl = document.getElementById('char-name');
+    var name = nameEl ? nameEl.value.trim() : '';
+    if (editId && name && !(typeof isCharGenBusy === 'function' && isCharGenBusy(editId))) {
+      var fd = new FormData();
+      fd.append('name', name);
+      fd.append('player_name', document.getElementById('char-player').value.trim());
+      fd.append('cls', document.getElementById('char-cls').value.trim() || 'Adventurer');
+      fd.append('description', document.getElementById('char-desc').value.trim());
+      var npcEl = document.getElementById('char-is-npc');
+      fd.append('is_npc', (npcEl && npcEl.checked) ? 'true' : 'false');
+      fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + editId, { method: 'PUT', body: fd })
+        .then(function(){ loadCharacters(); }).catch(function(){});
+    }
+  } catch (e) {}
+  document.getElementById('char-modal').classList.add('hidden');
+}
 
 function previewCharImage() {
   var input = document.getElementById('char-image-input');
@@ -4630,6 +4649,11 @@ function showCharSaveError(msg, withPlans) {
   }
   el.classList.remove('hidden');
 }
+function charModalPrimary() {
+  var editId = (document.getElementById('char-edit-id') || {}).value || '';
+  if (editId) { closeCharModal(); } else { saveChar(); }
+}
+
 function saveChar() {
   (function(){ var _e = document.getElementById('char-save-error'); if (_e) _e.classList.add('hidden'); })();
   var name = document.getElementById('char-name').value.trim();
@@ -4690,11 +4714,12 @@ function saveChar() {
         // Re-render the prompt section so the Build button appears.
         renderCharModalPrompt(newChar);
         // Guided nudge: point the user at the now-available build step.
+        (function(){ var _sb = document.getElementById('char-save-btn'); if (_sb) _sb.textContent = 'Done'; })();
         showCharPromptNudge();
         return;
       }
 
-      closeCharModal();
+      document.getElementById('char-modal').classList.add('hidden');
       loadCharacters();
     });
 }
@@ -4709,7 +4734,7 @@ function showCharPromptNudge() {
   var nudge = document.createElement('div');
   nudge.id = 'char-prompt-nudge';
   nudge.style.cssText = 'margin:8px 0;padding:8px 12px;border-radius:6px;font-size:13px;' +
-    'background:rgba(15,110,86,0.25);border:1px solid rgba(134,212,186,0.4);color:#86d4ba;';
+    'background:rgba(15,110,86,0.15);border:1px solid rgba(15,110,86,0.4);color:#0a4a38;font-weight:500;';
   nudge.innerHTML = '&#10003; Character saved. Now build its character prompt below \u2014 ' +
     'this is what keeps the character looking consistent across your panels. ' +
     'You can close this window when you\u2019re done.';
