@@ -11,6 +11,12 @@
           "placement": "auto"
         },
         {
+          "selector": "#breadcrumb",
+          "title": "Finding your way",
+          "text": "I know there isn't much here yet, but this is how you navigate in and out of your screens.",
+          "placement": "auto"
+        },
+        {
           "selector": ".add-campaign-card",
           "title": "Start a {campaign}",
           "text": "Click here to create your first {campaign} \u2014 the world your {sessions} and graphic novel live inside.",
@@ -114,6 +120,29 @@
           "selector": "#char-save-btn",
           "title": "Save your character",
           "text": "Save, and Campaignia builds a reference image and prompt you can review and tweak until they're just right. These references stay style-neutral on purpose, so your character looks right in any art style.",
+          "placement": "auto"
+        }
+      ]
+    },
+    "char-grid": {
+      "title": "Characters",
+      "steps": [
+        {
+          "selector": "#char-grid",
+          "title": "Your characters",
+          "text": "These are your {campaign} characters \u2014 the canonical version of each one. Their reference image and prompt are reused across every {session}, so they stay consistent.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".add-char-card",
+          "title": "Add a character",
+          "text": "Add a new character here \u2014 give them a name, a description, and any reference pictures you have.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".char-card",
+          "title": "Refine a character",
+          "text": "Click a character to view or refine them. This is their canonical look, used across the whole {campaign}.",
           "placement": "auto"
         }
       ]
@@ -275,7 +304,7 @@
         {
           "selector": ".sc-review-retouch",
           "title": "Edit a character",
-          "text": "Edit how a character looks going forward. Give your instructions here, then Retouch the character to update the reference image.",
+          "text": "Edit how a character looks going forward. Type your instructions in the box above, then Retouch the character to update the reference image.",
           "placement": "auto",
           "click": ".sc-edit-btn"
         },
@@ -304,9 +333,9 @@
           "placement": "auto"
         },
         {
-          "selector": "#review-generate-btn",
-          "title": "Generate Narrative & Images",
-          "text": "This turns the outline below into your Story.",
+          "selector": "#review-action-row",
+          "title": "Style, then generate",
+          "text": "Set your Art Style and Narrative Style for this session, then Generate Narrative & Images to turn the outline into your Story.",
           "placement": "auto"
         }
       ]
@@ -377,7 +406,7 @@
           "click": ".storyboard-panel:not(.is-opening) .moment-opts-btn"
         },
         {
-          "selector": ".storyboard-panel:not(.is-opening) .moment-prom",
+          "selector": ".storyboard-panel:not(.is-opening) .moment-prom-select",
           "title": "Prominence",
           "text": "High prominence makes this picture as big as possible when published.",
           "placement": "auto"

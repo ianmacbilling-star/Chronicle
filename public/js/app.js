@@ -1456,7 +1456,7 @@ function showCampaignSection(section) {
   applyRoleVisibility();
   // Fire the per-section guided tour (characters fires from its create modal instead).
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
-  if (section !== 'characters') { try { maybeStartTour(section); } catch (e) {} }
+  try { maybeStartTour(section === 'characters' ? 'char-grid' : section); } catch (e) {}
 }
 
 // ============================================================
@@ -7952,7 +7952,7 @@ function showCampaignSection(section) {
   applyRoleVisibility();
   // Fire the per-section guided tour (characters fires from its create modal instead).
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
-  if (section !== 'characters') { try { maybeStartTour(section); } catch (e) {} }
+  try { maybeStartTour(section === 'characters' ? 'char-grid' : section); } catch (e) {}
 }
 
 // ============================================================
@@ -12548,7 +12548,7 @@ function maybeStartTour(viewId) {
 }
 
 function showTour(viewId) {
-  if (_tourActive) return;
+  if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   _tourEnsureData(function(){
     if (_tourStepsFor(viewId).length === 0) return;
     startTour(viewId, true);
