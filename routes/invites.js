@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, getCampaignRole } = require('../middleware/auth');
 const { sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
+const { grantSignupBonus } = require('./tokens');
 
 const INVITE_TTL_DAYS = 7;
 
@@ -235,6 +236,16 @@ router.post('/invites/:token/accept', requireAuth, async function(req, res) {
     'UPDATE campaign_invites SET used_at = ?, used_by = ? WHERE id = ?'
   ).run(new Date().toISOString(), req.session.userId, invite.id);
 
+  // Signup bonus: credit the Story Master for this unique joiner (existing
+  // subscribers included). Non-fatal. grantedBonus drives the "you earned X
+  // free tokens" line in the join-notification email below.
+  let grantedBonus = 0;
+  try {
+    grantedBonus = await grantSignupBonus(invite.created_by, req.session.userId, { campaignId: invite.campaign_id, source: 'invite_accept:' + invite.id });
+  } catch (bonusErr) {
+    console.error('Signup-bonus grant failed (non-fatal):', bonusErr.message);
+  }
+
   // Phase 3 Deploy 3 — fire the two join-lifecycle emails:
   // 1. notify the DM that the invitee accepted
   // 2. send the new player a welcome email
@@ -265,7 +276,8 @@ router.post('/invites/:token/accept', requireAuth, async function(req, res) {
         campaign_name: ctx.campaign_name,
         character_name: charInfo ? charInfo.name : null,
         character_class: charInfo ? charInfo.cls : null,
-        campaign_url: campaignUrl
+        campaign_url: campaignUrl,
+        bonus_tokens: grantedBonus
       });
       await sendPlayerJoinedWelcomeEmail({
         player_email: ctx.player_email,

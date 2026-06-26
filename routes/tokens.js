@@ -823,6 +823,37 @@ async function fulfillSubscriptionUpdate(subscription, previousAttributes, event
   await applyUpgradeProration(user.id, oldTier, newTier, { key: eventId, eventId: eventId });
 }
 
+// ------------------------------------------------------------
+// Signup bonus: credit the Story Master (campaign owner / invite creator)
+// N carry-over (cot) tokens when a UNIQUE person joins one of their
+// campaigns -- brand-new signup or existing subscriber accepting an invite.
+// One bonus per unique (SM, joiner) pair, ever: the same person re-joining
+// another of that SM's campaigns does not pay again. Configured on the admin
+// Dashboard -> Settings (signup_bonus_cot, default 0 = off). Returns the
+// number of tokens granted (0 if off or already paid).
+// ------------------------------------------------------------
+async function grantSignupBonus(smUserId, joinerUserId, opts = {}) {
+  if (!smUserId || !joinerUserId || smUserId === joinerUserId) return 0;
+  const db = await getDb();
+  const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'signup_bonus_cot'").get();
+  const n = row && row.value != null ? parseInt(row.value, 10) : 0;
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  // Unique-person dedupe: skip if this SM was already paid a signup bonus
+  // triggered by this same joiner.
+  const prior = await db.prepare(
+    "SELECT 1 FROM token_ledger WHERE user_id = ? AND triggered_by_user_id = ? AND event_type = 'signup_bonus' LIMIT 1"
+  ).get(smUserId, joinerUserId);
+  if (prior) return 0;
+  await creditTokens(smUserId, n, {
+    bucket: 'cot',
+    event_type: 'signup_bonus',
+    source: opts.source || 'signup_bonus',
+    triggered_by_user_id: joinerUserId,
+    related_campaign_id: opts.campaignId || null
+  });
+  return n;
+}
+
 module.exports = {
   router,
   getTokenCost,
@@ -830,6 +861,7 @@ module.exports = {
   canAfford,
   characterReserveStatus,
   creditTokens,
+  grantSignupBonus,
   spendTokens,
   ensureMonthlyGrant,
   fulfillSubscriptionInvoice,

@@ -5,7 +5,7 @@ const { getDb } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, TIERS } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
-const { ensureMonthlyGrant, creditTokens } = require('./tokens');
+const { ensureMonthlyGrant, grantSignupBonus } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 
 // Current Terms of Service / EULA version. Bump when the terms change so we
@@ -118,15 +118,11 @@ router.post('/register', async function(req, res) {
           ).run(new Date().toISOString(), newUserId, invite.id);
           autoJoinedCampaignId = invite.campaign_id;
 
-          // Signup bonus: credit the Story Master (the invite's creator) N
-          // carry-over tokens, configured on the admin Dashboard -> Settings tab.
-          // Non-fatal; the invite is single-use so this fires at most once.
+          // Signup bonus: credit the Story Master for this unique new joiner.
+          // Non-fatal; never breaks signup. Drives the email bonus line below.
+          let grantedBonus = 0;
           try {
-            const bonusRow = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'signup_bonus_cot'").get();
-            const bonusN = bonusRow && bonusRow.value != null ? parseInt(bonusRow.value, 10) : 0;
-            if (Number.isFinite(bonusN) && bonusN > 0 && invite.created_by) {
-              await creditTokens(invite.created_by, bonusN, { bucket: 'cot', event_type: 'signup_bonus', source: 'invite_signup:' + invite.id });
-            }
+            grantedBonus = await grantSignupBonus(invite.created_by, newUserId, { campaignId: invite.campaign_id, source: 'invite_signup:' + invite.id });
           } catch (bonusErr) {
             console.error('Signup-bonus grant failed (non-fatal):', bonusErr.message);
           }
@@ -157,7 +153,8 @@ router.post('/register', async function(req, res) {
                 campaign_name: ctx.campaign_name,
                 character_name: charInfo ? charInfo.name : null,
                 character_class: charInfo ? charInfo.cls : null,
-                campaign_url: campaignUrl
+                campaign_url: campaignUrl,
+                bonus_tokens: grantedBonus
               });
               await sendPlayerJoinedWelcomeEmail({
                 player_email: email.toLowerCase().trim(),

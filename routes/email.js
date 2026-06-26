@@ -249,10 +249,16 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
 </html>`;
 }
 
-function joinNotificationHTML(dm_name, player_name, player_email, campaign_name, character_name, character_class, campaign_url) {
+function joinNotificationHTML(dm_name, player_name, player_email, campaign_name, character_name, character_class, campaign_url, bonus_tokens) {
   const charLine = character_name
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'a character';
+  const bonusBlock = (bonus_tokens && bonus_tokens > 0)
+    ? `<div style="background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.4);border-radius:8px;padding:18px;margin:16px 0;text-align:center;">
+        <div style="font-size:18px;color:#c9a84c;font-weight:700;">You earned ${bonus_tokens} free tokens!</div>
+        <div style="font-size:13px;line-height:1.6;color:#e8d5a3;margin-top:6px;">Our thanks for bringing a new adventurer to Campaignia. They are already in your balance.</div>
+      </div>`
+    : '';
   // NOTE: styles are INLINE on purpose. Several mail clients (Gmail, Outlook)
   // strip <head><style> blocks, which left this email rendering as unstyled
   // text on white. Inline styles survive everywhere.
@@ -271,6 +277,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
       <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">${player_name} joined ${campaign_name}</div>
       <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Greetings, ${dm_name}.</div>
       <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Your invitation has been accepted. The party grows.</div>
+      ${bonusBlock}
       <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Player</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${player_name} <span style="color:rgba(201,168,76,0.6);font-size:13px;">&nbsp;${player_email}</span></div>
@@ -350,7 +357,7 @@ async function sendJoinNotificationEmail(opts) {
   // opts: { dm_email, dm_name, player_name, player_email, campaign_name, character_name, character_class, campaign_url }
   try {
     const subject = `${opts.player_name} joined ${opts.campaign_name}`;
-    const html = joinNotificationHTML(opts.dm_name, opts.player_name, opts.player_email, opts.campaign_name, opts.character_name, opts.character_class, opts.campaign_url);
+    const html = joinNotificationHTML(opts.dm_name, opts.player_name, opts.player_email, opts.campaign_name, opts.character_name, opts.character_class, opts.campaign_url, opts.bonus_tokens);
     await sendEmail(opts.dm_email, subject, html);
   } catch (e) {
     console.error('Join notification email error:', e.message); // Non-fatal
