@@ -4581,6 +4581,7 @@ function openCharModal(editId) {
   document.getElementById('char-modal-error').classList.add('hidden');
   (function(){ var _cse = document.getElementById('char-save-error'); if (_cse) _cse.classList.add('hidden'); })();
   document.getElementById('char-modal').classList.remove('hidden');
+  if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   try { maybeStartTour('characters'); } catch (e) {}
 }
 
