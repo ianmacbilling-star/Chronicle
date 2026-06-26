@@ -253,6 +253,17 @@ try {
   if (_q.has('signup') || _q.has('register')) showRegister();
 } catch (e) {}
 
+// Honor a ?returnTo= same-origin path (e.g. returning to an invite to accept)
+// after sign-in. Only relative paths beginning with a single '/' are allowed,
+// so this can never become an open redirect to another site.
+function _safeReturnTo() {
+  try {
+    var rt = new URLSearchParams(window.location.search).get('returnTo');
+    if (rt && rt.charAt(0) === '/' && rt.charAt(1) !== '/') return rt;
+  } catch (e) {}
+  return null;
+}
+
 document.getElementById('login-btn').addEventListener('click', async function() {
   hideError('login-error');
   var email = document.getElementById('login-email').value.trim();
@@ -263,7 +274,8 @@ document.getElementById('login-btn').addEventListener('click', async function() 
     var res = await fetch('/api/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
     var data = await res.json();
     if (data.error) { showError('login-error', data.error); this.disabled=false; this.textContent='Enter Campaignia'; return; }
-    window.location.replace(data.reactivated ? '/app.html?reactivated=1' : '/app.html');
+    var _rt = _safeReturnTo();
+    window.location.replace(_rt ? _rt : (data.reactivated ? '/app.html?reactivated=1' : '/app.html'));
   } catch(e) { showError('login-error','Connection error. Please try again.'); this.disabled=false; this.textContent='Enter Campaignia'; }
 });
 
@@ -286,7 +298,8 @@ document.getElementById('register-btn').addEventListener('click', async function
     var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload})});
     var data = await res.json();
     if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
-    window.location.replace('/app.html');
+    var _rt = _safeReturnTo();
+    window.location.replace(_rt ? _rt : '/app.html');
   } catch(e) { showError('register-error','Connection error.'); this.disabled=false; this.textContent='Create Account'; }
 });
 
@@ -311,7 +324,7 @@ document.getElementById('forgot-btn').addEventListener('click', async function()
 });
 document.getElementById('forgot-email').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('forgot-btn').click(); });
 
-fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated) window.location.replace('/app.html'); });
+fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:'/app.html'); } });
 </script>
 <script src="/js/pw-eye.js" defer></script>
 </body>
