@@ -224,10 +224,13 @@ function getTier(tierName) {
 
 function getMomentRange(tier, wordCount) {
   const t = getTier(tier);
-  if (wordCount < 2000) return t.max_moments_short + '-' + (t.max_moments_short + 1);
-  if (wordCount < 5000) return t.max_moments_medium + '-' + (t.max_moments_medium + 1);
-  if (wordCount < 10000) return t.max_moments_long + '-' + (t.max_moments_long + 1);
-  return t.max_moments_epic + '-' + Math.min(t.max_moments_epic + 2, 15);
+  // Returns an UPPER-BOUND cap (a ceiling, not a target). Word count selects
+  // which tier cap applies; the extract prompt then instructs the model to use
+  // FEWER than this when the story does not earn the full count.
+  if (wordCount < 2000) return t.max_moments_short;
+  if (wordCount < 5000) return t.max_moments_medium;
+  if (wordCount < 10000) return t.max_moments_long;
+  return t.max_moments_epic;
 }
 
 function isTrialExpired(user) {

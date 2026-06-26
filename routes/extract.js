@@ -110,8 +110,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '## SESSION TRANSCRIPT\n' + session.transcript + '\n\n' +
     '## YOUR TASK\n' +
     'This transcript is approximately ' + wordCount + ' words long. ' +
-    'Based on its length and the level of detail, extract ' + momentCount + ' key moments ' +
-    'for graphic novel panels (aim within that range). ' +
+    'Extract the moments that genuinely deserve their own graphic novel panel, up to a MAXIMUM of ' + momentCount + ' panels. ' +
+    'That maximum is a CEILING, not a target: do NOT pad to reach it. Use only as many panels as the story actually earns -- ' +
+    'a shorter set of strong, distinct panels is better than a long set with filler or near-duplicate beats. ' +
+    'If the session is short on real events, return correspondingly fewer panels. ' +
     'Focus on dramatic combat, emotional revelations, tense standoffs, and memorable character moments. ' +
     'If the director\'s instructions specify particular scenes, those MUST be included as panels.\n\n' +
     'Return ONLY valid JSON with no markdown fences or explanation:\n' +
