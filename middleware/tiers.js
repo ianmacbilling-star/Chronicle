@@ -498,12 +498,12 @@ const NARRATIVE_STYLE_MIN_RANK = {
   epic: 3,         // Gold
   journal: 3,      // Gold
   cinematic: 3,    // Gold
-  dialogue: 3,     // Gold (Comic Dialogue)
+  dialogue: 2,     // Silver (Comic Dialogue; was Gold)
   lorekeeper: 4,   // Platinum
   noir: 4,         // Platinum
   grim: 4,         // Platinum
   storybook: 4,    // Platinum
-  anime: 4         // Platinum
+  anime: 2         // Silver (High-Drama Anime; was Platinum)
 };
 
 // Unknown ids default to the floor (rank 1) so a never-mapped style never
