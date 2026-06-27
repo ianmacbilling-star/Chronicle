@@ -646,46 +646,49 @@
         </div>
       </div>
 
-      <!-- Profile (moved here from the Settings screen) -->
+      <!-- Profile + Change password, side by side -->
       <div class="settings-section">
-        <div class="settings-section-title">Profile</div>
-        <div class="settings-section-desc">Your name, email, and password</div>
-        <div id="profile-error" class="alert alert-error hidden"></div>
-        <div id="profile-success" class="alert alert-success hidden"></div>
-        <div class="form-group">
-          <label class="form-label">Your name</label>
-          <input class="form-input" id="settings-name" placeholder="Your name" />
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
+          <div style="flex:1;min-width:260px;">
+            <div class="settings-section-title">Profile</div>
+            <div class="settings-section-desc">Your name, email, and pen name</div>
+            <div id="profile-error" class="alert alert-error hidden"></div>
+            <div id="profile-success" class="alert alert-success hidden"></div>
+            <div class="form-group">
+              <label class="form-label">Your name</label>
+              <input class="form-input" id="settings-name" placeholder="Your name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email address</label>
+              <input class="form-input" id="settings-email" type="email" placeholder="you@example.com" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pen name <span style="font-weight:400;color:#9b8e80;">(optional)</span></label>
+              <input class="form-input" id="settings-penname" maxlength="40" placeholder="e.g. The Bard of Baldur" />
+              <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">Shown publicly as your author name if you publish a story to our Library, and as the Chronicled-by credit inside the book. Must be unique.</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
+          </div>
+          <div style="flex:1;min-width:260px;">
+            <div class="settings-section-title">Change password</div>
+            <div class="settings-section-desc">Choose a strong password of at least 8 characters</div>
+            <div id="password-error" class="alert alert-error hidden"></div>
+            <div id="password-success" class="alert alert-success hidden"></div>
+            <div class="form-group">
+              <label class="form-label">Current password</label>
+              <input class="form-input" id="settings-current-password" type="password" placeholder="Your current password" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">New password</label>
+              <input class="form-input" id="settings-new-password" type="password" placeholder="At least 8 characters" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm new password</label>
+              <input class="form-input" id="settings-confirm-password" type="password" placeholder="Re-enter your new password" />
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Email address</label>
-          <input class="form-input" id="settings-email" type="email" placeholder="you@example.com" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Pen name <span style="font-weight:400;color:#9b8e80;">(optional)</span></label>
-          <input class="form-input" id="settings-penname" maxlength="40" placeholder="e.g. The Bard of Baldur" />
-          <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">Shown publicly as your author name if you publish a story to our Library, and as the Chronicled-by credit inside the book. Must be unique.</div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save profile</button>
-
-        <div style="height:1px;background:rgba(245,232,200,0.12);margin:18px 0;"></div>
-
-        <div class="settings-section-title" style="font-size:14px;">Change password</div>
-        <div class="settings-section-desc">Choose a strong password of at least 8 characters</div>
-        <div id="password-error" class="alert alert-error hidden"></div>
-        <div id="password-success" class="alert alert-success hidden"></div>
-        <div class="form-group">
-          <label class="form-label">Current password</label>
-          <input class="form-input" id="settings-current-password" type="password" placeholder="Your current password" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">New password</label>
-          <input class="form-input" id="settings-new-password" type="password" placeholder="At least 8 characters" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Confirm new password</label>
-          <input class="form-input" id="settings-confirm-password" type="password" placeholder="Re-enter your new password" />
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="changePassword()">Change password</button>
       </div>
 
 
@@ -711,15 +714,6 @@
         <button class="btn btn-primary btn-sm" style="margin-top:16px;" onclick="savePreferences()">Save preferences</button>
       </div>
 
-      <div class="settings-section" style="border-color:#f09595;">
-        <div class="settings-section-title" style="color:var(--error);">Account</div>
-        <div class="settings-section-desc">Sign out, or suspend your account.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-          <button class="btn btn-sm" onclick="logout()">Sign out</button>
-          <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
-        </div>
-      </div>
-
       <!-- Usage -->
       <div class="settings-section">
         <div class="settings-section-title">Usage</div>
@@ -735,6 +729,19 @@
         <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
         <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;margin-top:14px;">Manage subscription &amp; billing</button>
         <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);"></div>
+      </div>
+
+      <!-- Account actions (current tier + sign out / suspend) -->
+      <div class="settings-section" style="border-color:#f09595;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div class="settings-section-title" style="color:var(--error);">Account</div>
+          <div id="account-tier-name" style="font-size:13px;color:var(--gold-light);font-family:var(--font-display);letter-spacing:0.5px;"></div>
+        </div>
+        <div class="settings-section-desc">Sign out, or suspend your account.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+          <button class="btn btn-sm" onclick="logout()">Sign out</button>
+          <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
+        </div>
       </div>
 
       <!-- My Published Stories (Public Library) -->
