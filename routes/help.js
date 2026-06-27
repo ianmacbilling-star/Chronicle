@@ -5,6 +5,7 @@ const path = require('path');
 const { getDb } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
+const { getTier } = require('../middleware/tiers');
 
 // Contextual in-app help: a short, read-only CHAT. It can ask a
 // clarifying question before answering. Short turns, so a lightweight model is
@@ -117,7 +118,20 @@ router.post('/ask', requireAuth, async function(req, res) {
 
   const fallback = 'CAMPAIGNIA BASICS: Campaignia turns tabletop-RPG sessions into AI-illustrated graphic novels. Users create a campaign, add characters, create sessions and paste a transcript, click Generate Story to extract panels, edit the storyboard, then publish to the public Library or order a printed book. Tokens pay for image generation. If unsure, suggest the user explore the relevant screen.';
 
-  const system = header.join('\n') + '\n\n' + (BRAIN || fallback);
+  // Live tier matrix -- getTier() merges dashboard overrides, so these are the
+  // current authoritative numbers for EVERY tier (not just the user's own).
+  function _n(v){ return (v === null || v === undefined) ? 'unlimited' : v; }
+  const _tierMatrix = ['trial','copper','silver','gold','platinum'].map(function (nm) {
+    const t = getTier(nm) || {};
+    if (nm === 'copper') {
+      return '- Copper (free floor): 0 free tokens/month (token packs only); cannot create its own campaigns or sessions; archives/campaign ' + _n(t.max_archives_per_campaign) + '; assets/campaign ' + _n(t.max_assets) + '. A Copper member works inside a paid Story Master\'s campaign and inherits that campaign\'s creative options.';
+    }
+    const mom = Math.max(t.max_moments_short || 0, t.max_moments_medium || 0, t.max_moments_long || 0, t.max_moments_epic || 0);
+    return '- ' + (t.name || nm) + ': ' + _n(t.monthly_utlt) + ' monthly use-it-or-lose-it + ' + _n(t.monthly_cot) + ' carry-over tokens/month; campaigns ' + _n(t.max_campaigns) + '; sessions/campaign ' + _n(t.max_sessions) + '; characters ' + _n(t.max_characters) + '; archives/campaign ' + _n(t.max_archives_per_campaign) + '; assets/campaign ' + _n(t.max_assets) + '; up to ' + mom + ' moments/session.';
+  }).join('\n');
+  const tierBlock = 'LIVE TIER NUMBERS (authoritative, pulled live from the dashboard -- use these for any "how many / which tier" question, for ANY tier, not just the user\'s own):\n' + _tierMatrix;
+
+  const system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + (BRAIN || fallback);
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
