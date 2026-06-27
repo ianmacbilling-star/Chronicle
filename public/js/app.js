@@ -2935,15 +2935,15 @@ function refreshNarrativeDirectionUI(gapKey) {
 // ============================================================
 var NARR_STYLE_META = [
   { id:'classic', name:'Classic', desc:'Vivid, dramatic graphic-novel narration in present tense \u2014 the default Campaignia voice.', example:'Torchlight trembles against the cavern wall as the party edges forward, every breath held, every shadow a possible threat.' },
+  { id:'dialogue', name:'Comic Dialogue', desc:'Dialogue-driven comic-book script \u2014 each spoken line led by the speaker, like a graphic novel.', example:'GARRICK: "Hold the line." VENA: "You said that last time."' },
+  { id:'anime', name:'High-Drama Anime', desc:'Intense, emotional, and heroic. Heightened emotion and dynamic, expressive action.', example:'Ruk\u2019s heartbeat thundered like a war drum as the darkness closed in \u2014 but his spirit refused to fall.' },
   { id:'epic', name:'Epic Saga', desc:'Mythic, poetic, and sweeping \u2014 a legendary saga recorded by ancient historians.', example:'Thus the companions pressed onward, their footsteps echoing through the hollow places of the world, unaware that fate watched them with patient eyes.' },
   { id:'journal', name:"Adventurer's Journal", desc:'Personal and grounded, with dry humor, like an adventurer\u2019s diary. May use first person.', example:'We thought the forest would be quiet after the fight. Turns out the turnips were louder than the monsters.' },
   { id:'cinematic', name:'Cinematic Script', desc:'Visual, fast, and minimal. Short punchy sentences describing what the camera sees.', example:'The torchlight flickers. Shadows stretch across the stone. Ruk stumbles, pale and shaking, as the shriek fades into the dark.' },
-  { id:'dialogue', name:'Comic Dialogue', desc:'Dialogue-driven comic-book script \u2014 each spoken line led by the speaker, like a graphic novel.', example:'GARRICK: "Hold the line." VENA: "You said that last time."' },
   { id:'lorekeeper', name:'Lorekeeper / Historian', desc:'Scholarly and mysterious \u2014 formal, slightly archaic, recorded by an in-world historian.', example:'In the annals of the Third Era, the incident of the SoupMaster is noted with both caution and curiosity.' },
   { id:'noir', name:'Noir', desc:'Gritty, moody, cynical fantasy-noir. Hard-boiled phrasing, shadows, and suspicion.', example:'The cave breathed cold air like a liar exhaling excuses, and the torchlight wasn\u2019t bright enough to chase off the truth.' },
   { id:'grim', name:'Dark Fantasy / Grim', desc:'Bleak, heavy, and visceral. Dread, decay, and the cost of every choice.', example:'Blood soaked into the stone, vanishing as if the earth itself were thirsty. Even hope felt like a dying ember.' },
-  { id:'storybook', name:"Children's Storybook", desc:'Whimsical, gentle, and playful \u2014 warm language and a sense of wonder.', example:'And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures.' },
-  { id:'anime', name:'High-Drama Anime', desc:'Intense, emotional, and heroic. Heightened emotion and dynamic, expressive action.', example:'Ruk\u2019s heartbeat thundered like a war drum as the darkness closed in \u2014 but his spirit refused to fall.' }
+  { id:'storybook', name:"Children's Storybook", desc:'Whimsical, gentle, and playful \u2014 warm language and a sense of wonder.', example:'And so the brave friends tip-toed into the twinkly cave, where shadows danced like shy little creatures.' }
 ];
 var STYLE_PICKER_KIND = null;
 
