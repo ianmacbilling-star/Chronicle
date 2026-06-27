@@ -7249,7 +7249,7 @@ function renderArchiveGrid() {
         '<div class="archive-title">' + escapeHtml(a.title || '(untitled)') + '</div>' +
         meta +
         '<div class="archive-actions">' +
-          (canDelete ? '<label class="archive-cover-toggle" title="Show this image in the anonymous public Library"><input type="checkbox" ' + (a.public ? 'checked' : '') + ' onchange="setArchivePublic(' + a.id + ', this.checked)" /> Public</label>' : '') +
+          (canDelete ? '<label class="archive-cover-toggle" title="Show this image in the public Library, credited to your pen name"><input type="checkbox" ' + (a.public ? 'checked' : '') + ' onchange="setArchivePublic(' + a.id + ', this.checked)" /> Public</label>' : '') +
         '</div>' +
       '</div>' +
     '</div>';
