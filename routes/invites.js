@@ -18,6 +18,7 @@ const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, getCampaignRole } = require('../middleware/auth');
 const { sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
 const { grantSignupBonus } = require('./tokens');
+const { isPaidTier } = require('../middleware/tiers');
 
 const INVITE_TTL_DAYS = 7;
 
@@ -417,6 +418,18 @@ router.post('/campaigns/:campaignId/members/:userId/make-dm', requireAuth, verif
   ).get(campaignId, targetUserId);
   if (!target) return res.status(404).json({ error: 'That player is not a member of this campaign' });
   if (target.role === 'dm') return res.status(400).json({ error: 'That member is already the Story Master' });
+
+  // Paywall guard: the incoming Story Master must hold a campaign-capable paid
+  // tier (Silver+). A Free Trial or Copper user would inherit a campaign they
+  // cannot extend -- checkSessionLimit hard-blocks Copper -- so block the
+  // handoff here rather than leave them with a half-dead campaign.
+  const targetUser = await db.prepare('SELECT tier FROM users WHERE id = ?').get(targetUserId);
+  if (!targetUser || !isPaidTier(targetUser.tier)) {
+    return res.status(403).json({
+      error: 'The new Story Master needs a Silver plan or higher. Ask them to upgrade before you hand off.',
+      code: 'SM_NOT_PAID'
+    });
+  }
 
   // Swap roles: demote the current DM to player, promote the target to dm.
   await db.prepare(
