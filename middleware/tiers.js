@@ -51,7 +51,7 @@ const TIERS = {
     can_edit_prompts: true,
     max_characters: null,
     session_reserve: 0,
-    description: '30-day free trial'
+    description: 'Get your own version of the story · no monthly subscription · token purchases only'
   },
   silver: {
     name: 'Silver',
