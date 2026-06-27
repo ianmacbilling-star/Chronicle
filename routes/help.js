@@ -126,9 +126,15 @@ router.post('/ask', requireAuth, async function(req, res) {
       body: JSON.stringify({ model: HELP_MODEL, max_tokens: 500, system: system, messages: msgs })
     });
     const data = await response.json();
-    if (data.error) return res.json({ ok: false, error: 'Could not answer that right now.' });
+    if (data.error) {
+      console.error('help/ask API error:', response.status, JSON.stringify(data.error));
+      return res.json({ ok: false, error: 'Could not answer that right now.' });
+    }
     const answer = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
-    if (!answer) return res.json({ ok: false, error: 'Could not answer that right now.' });
+    if (!answer) {
+      console.error('help/ask empty answer:', response.status, JSON.stringify(data).slice(0, 400));
+      return res.json({ ok: false, error: 'Could not answer that right now.' });
+    }
     return res.json({ ok: true, answer: answer });
   } catch (e) {
     console.error('help/ask error:', e.message);
