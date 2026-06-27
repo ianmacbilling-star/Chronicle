@@ -338,7 +338,8 @@ router.get('/campaigns/:campaignId/members', requireAuth, verifyCampaignMember, 
     const members = await db.prepare(
       'SELECT cm.user_id, cm.role, cm.joined_at, ' +
       'u.name AS user_name, u.email AS user_email, ' +
-      'ch.id AS character_id, ch.name AS character_name, ch.cls AS character_class ' +
+      'ch.id AS character_id, ch.name AS character_name, ch.cls AS character_class, ' +
+      'ch.canonical_reference_url AS character_image, ch.image_portrait AS character_portrait ' +
       'FROM campaign_members cm ' +
       'JOIN users u ON u.id = cm.user_id ' +
       'LEFT JOIN characters ch ON ch.owner_user_id = cm.user_id AND ch.campaign_id = cm.campaign_id ' +

@@ -10268,10 +10268,13 @@ function renderMembersList() {
   list.innerHTML = state.members.map(function(m) {
     var isDM = (m.role === 'dm');
     var isMe = (m.user_id === meUserId);
-    var icon = isDM ? '&#128081;' : '&#127922;'; // crown vs game die
+    var _headshot = m.character_image || m.character_portrait || '';
+    var iconHtml = _headshot
+      ? '<div class="member-row-icon"><img class="member-row-headshot" src="' + escapeHtml(_headshot) + '" alt="' + escapeHtml(m.character_name || '') + '" /></div>'
+      : '';
     var roleBadge = isDM
       ? '<span class="role-badge role-badge-dm">Story Master</span>'
-      : '<span class="role-badge role-badge-player">Player</span>';
+      : '<span class="role-badge role-badge-player">Member</span>';
     var meTag = isMe ? '<span style="font-size:11px;color:rgba(245,232,200,0.75);">(you)</span>' : '';
     var charInfo = m.character_name
       ? 'Playing ' + escapeHtml(m.character_name) + (m.character_class ? ' (' + escapeHtml(m.character_class) + ')' : '')
@@ -10292,7 +10295,7 @@ function renderMembersList() {
         '</div>';
     }
     return '<div class="member-row">' +
-      '<div class="member-row-icon">' + icon + '</div>' +
+      iconHtml +
       '<div class="member-row-body">' +
         '<div class="member-row-name">' + escapeHtml(m.user_name || '') + ' ' + meTag + ' ' + roleBadge + '</div>' +
         '<div class="member-row-email">' + escapeHtml(m.user_email || '') + '</div>' +

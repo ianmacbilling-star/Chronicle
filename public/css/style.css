@@ -1499,6 +1499,16 @@ body.role-player #stab-export { display: block !important; }
   flex-shrink: 0;
 }
 
+.member-row-headshot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  border: 1px solid rgba(201,168,76,0.3);
+}
+
 .member-row-body, .invite-row-body {
   flex: 1;
   min-width: 0;
