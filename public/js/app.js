@@ -6908,7 +6908,7 @@ function archiveFilterBarHTML(f, onchange) {
   }
   return '<select class="archive-filter" onchange="' + onchange + '(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'version\', this.value)"><option value="">All versions</option>' + opts(versions, f.version) + '</select>' +
-    '<input type="text" class="archive-filter archive-filter-search" placeholder="Search moments" value="' + escapeHtml(f.moment || '') + '" oninput="' + onchange + '(\'moment\', this.value)" />' +
+    '<input type="text" class="archive-filter archive-filter-search" placeholder="Moment Name" value="' + escapeHtml(f.moment || '') + '" oninput="' + onchange + '(\'moment\', this.value)" />' +
     '<select class="archive-filter" onchange="' + onchange + '(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
@@ -7083,7 +7083,6 @@ function openReplacePicker(mode, id) {
     state.pickerCtx.sessionId = state.currentSession ? state.currentSession.id : null;
     state.pickerCtx.forkId = state.currentForkId || null;
     if (state.pickerCtx.sessionId) f.session = String(state.pickerCtx.sessionId);
-    f.moment = String(id);
     if (state.currentForkId) f.version = String(state.currentForkId);
     if (tEl) tEl.textContent = 'Replace panel image from Archive';
   } else if (mode === 'canonical') {
