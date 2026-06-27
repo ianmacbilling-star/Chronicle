@@ -6830,7 +6830,7 @@ function getFilteredArchives(f) {
   if (f.creator) rows = rows.filter(function(a){ return String(a.archived_by) === String(f.creator); });
   if (f.type) rows = rows.filter(function(a){ return a.image_type === f.type; });
   if (f.style) rows = rows.filter(function(a){ return String(a.art_style) === String(f.style); });
-  if (f.version) rows = rows.filter(function(a){ return String(a.fork_id) === String(f.version); });
+  if (f.version) rows = rows.filter(function(a){ return archiveVersionLabel(a) === f.version; });
   if (f.character) rows = rows.filter(function(a){ return String(a.character_id) === String(f.character); });
   rows.sort(function(a,b){
     var ta = new Date(a.created_at || 0).getTime();
@@ -6852,7 +6852,7 @@ function renderArchiveFilters() {
     if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
     if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
     if (a.art_style) styles[a.art_style] = artStyleLabel(a.art_style, a.art_style_name);
-    if (a.fork_id) versions[a.fork_id] = (a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
+    var _vl = archiveVersionLabel(a); if (_vl) versions[_vl] = _vl;
     if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
   });
   function opts(map, sel) {
@@ -6898,7 +6898,7 @@ function archiveFilterBarHTML(f, onchange) {
     if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
     if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
     if (a.art_style) styles[a.art_style] = artStyleLabel(a.art_style, a.art_style_name);
-    if (a.fork_id) versions[a.fork_id] = (a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
+    var _vl = archiveVersionLabel(a); if (_vl) versions[_vl] = _vl;
     if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
   });
   function opts(map, sel) {
