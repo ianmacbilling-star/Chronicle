@@ -1588,6 +1588,8 @@ body.role-player #stab-export { display: block !important; }
   display: none;
 }
 .row-menu-dropdown.open { display: block; }
+/* Session tiles are short and clip overflow, so their menu opens upward. */
+.session-card .row-menu-dropdown { top: auto; bottom: 34px; }
 .row-menu-item {
   display: block;
   padding: 8px 14px;

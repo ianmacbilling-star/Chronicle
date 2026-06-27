@@ -1314,7 +1314,7 @@ function renderAccountTier(me) {
       val('campaigns', campLimit) +
       val('sessions per campaign', sessLimit) +
       row('Export to PDF', feat.can_export) +
-      row('Print on demand', feat.can_print) +
+      row('Order printed book', feat.can_print) +
       row('Prompt editing', feat.can_edit_prompts) +
       row('Watermark-free', !feat.watermark);
   }
