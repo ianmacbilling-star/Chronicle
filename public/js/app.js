@@ -12866,6 +12866,25 @@ function devClearTours() {
     .catch(function(){ if (msg) msg.textContent = 'Could not clear.'; });
 }
 
+// Account-facing: re-enable guided tours by clearing this account's seen-history
+// (same endpoint as the dev reset). Each screen's tour then auto-plays once on the
+// next visit and re-marks itself complete, so they settle down on their own.
+function replayTours() {
+  var msg = document.getElementById('tours-replay-msg');
+  if (msg) { msg.style.display = 'block'; msg.style.color = ''; msg.textContent = 'Turning tours back on...'; }
+  fetch('/api/auth/tour-reset', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.success) {
+        _tourProgress = {};
+        if (msg) { msg.style.color = 'var(--gold-light)'; msg.textContent = 'Guided tours are back on. Visit any screen to see its tour again.'; }
+      } else {
+        if (msg) { msg.style.color = '#c0392b'; msg.textContent = (d && d.error) ? d.error : 'Could not turn tours back on. Please try again.'; }
+      }
+    })
+    .catch(function(){ if (msg) { msg.style.color = '#c0392b'; msg.textContent = 'Could not turn tours back on. Please try again.'; } });
+}
+
 // ===== Cast picker modal: image grid (replaces the +Add character/asset dropdowns) =====
 var _castCharImg = {};
 var _castAssetImg = {};

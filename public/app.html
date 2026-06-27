@@ -26,6 +26,7 @@
     <a href="/library?from=app" class="btn btn-sm" id="header-library-btn" title="Browse the public Library" style="text-decoration:none;">Library</a>
     <span id="trial-badge" title="You are on the Free Trial plan (1 campaign, 1 session, character limit, watermark)" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#c9a84c;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;">&#9733; FREE TRIAL <span id="trial-badge-days" style="font-weight:600;opacity:0.8;"></span></span>
     <span id="token-balance-label" title="Buy more tokens" onclick="openTokensModal()" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:#c9a84c;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:4px 10px;margin:0 4px;cursor:pointer;">&#9672; <span id="token-balance-value">—</span></span>
+    <button id="help-fab" class="help-fab-header" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help"><b>?s</b></button>
     <div class="user-menu-wrap">
       <div class="user-menu-btn" onclick="toggleUserMenu()">
         <div class="user-avatar" id="user-avatar">DM</div>
@@ -48,19 +49,10 @@
   </div>
 </div>
 
-<!-- BREADCRUMB ROW: breadcrumb (left) + corner actions Tour/Ask (far right) -->
+<!-- BREADCRUMB ROW -->
 <div class="breadcrumb-row">
   <div class="breadcrumb" id="breadcrumb">
     <span class="breadcrumb-link" onclick="showView('campaigns')">My Campaigns</span>
-  </div>
-  <div id="corner-fabs" class="corner-fabs">
-    <button id="tour-replay" class="tour-replay" type="button" onclick="showTour(tourKeyForView())" title="Replay this screen's tour" aria-label="Replay this screen tour">Tour</button>
-    <button id="help-fab" class="help-fab" type="button" onclick="openHelp()" title="Ask us for help">Ask ?</button>
-    <button class="corner-kebab" type="button" onclick="toggleCornerMenu(event)" aria-label="More actions" title="More">&#8942;</button>
-    <div id="corner-menu" class="corner-menu">
-      <button type="button" class="corner-menu-item" onclick="closeCornerMenu();showTour(tourKeyForView())">Tour</button>
-      <button type="button" class="corner-menu-item" onclick="closeCornerMenu();openHelp()">Ask ?</button>
-    </div>
   </div>
 </div>
 
@@ -712,6 +704,13 @@
         </div>
         <div id="prefs-msg" style="display:none;margin-top:12px;font-size:12px;"></div>
         <button class="btn btn-primary btn-sm" style="margin-top:16px;" onclick="savePreferences()">Save preferences</button>
+      </div>
+
+      <div class="settings-section" id="account-tours-section">
+        <div class="settings-section-title">Guided tours</div>
+        <div class="settings-section-desc">Want a refresher? Turn the guided tours back on. Each screen's tour plays once as you visit it, then settles down again.</div>
+        <div id="tours-replay-msg" style="display:none;margin-top:12px;font-size:12px;"></div>
+        <button class="btn btn-sm" style="margin-top:14px;" onclick="replayTours()">Show guided tours again</button>
       </div>
 
       <!-- Usage -->

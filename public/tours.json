@@ -29,6 +29,12 @@
           "placement": "bottom"
         },
         {
+          "selector": "#help-fab",
+          "title": "Need a hand? Just ask",
+          "text": "Tap the ?s button any time to ask us anything about Campaignia - we'll point you to the right spot.",
+          "placement": "bottom"
+        },
+        {
           "selector": "#user-avatar",
           "title": "Your profile",
           "text": "Open this for your account details, plan and tokens \u2014 and to sign out.",
