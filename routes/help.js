@@ -5,7 +5,8 @@ const path = require('path');
 const { getDb } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
-const { getTier } = require('../middleware/tiers');
+const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
+const { listPacks } = require('../services/billing/packs');
 
 // Contextual in-app help: a short, read-only CHAT. It can ask a
 // clarifying question before answering. Short turns, so a lightweight model is
@@ -20,6 +21,35 @@ const MAX_TURNS = 12;   // cap conversation history sent to the model
 const BRAIN = (function () {
   try { return fs.readFileSync(path.join(__dirname, 'campaignia_brain.md'), 'utf8'); }
   catch (e) { console.error('help: could not load campaignia_brain.md:', e.message); return ''; }
+})();
+
+// Style-by-tier and token-pack reference, built once from the live code maps /
+// pack catalog (editing those + a restart updates these).
+const STYLE_REF = (function () {
+  function byTier(map, platinumExtra) {
+    const labels = { 1: 'all tiers', 2: 'Silver and up', 3: 'Gold and up', 4: 'Platinum' };
+    const buckets = { 1: [], 2: [], 3: [], 4: [] };
+    Object.keys(map || {}).forEach(function (k) { const r = map[k] || 1; (buckets[r] || (buckets[r] = [])).push(k); });
+    const parts = [];
+    [1, 2, 3, 4].forEach(function (r) { if (buckets[r] && buckets[r].length) parts.push(labels[r] + ': ' + buckets[r].join(', ')); });
+    if (platinumExtra) parts.push('Platinum: ' + platinumExtra);
+    return parts.join('. ');
+  }
+  try {
+    return 'ART & NARRATIVE STYLES BY TIER (a member sees the styles for their EFFECTIVE tier -- the higher of their own and their Story Master\'s):\n' +
+      '- Art styles -- ' + byTier(ART_STYLE_MIN_RANK, 'plus your own custom art styles') + '.\n' +
+      '- Narrative styles -- ' + byTier(NARRATIVE_STYLE_MIN_RANK, null) + '.';
+  } catch (e) { return ''; }
+})();
+
+const PACK_REF = (function () {
+  try {
+    const packs = listPacks() || [];
+    if (!packs.length) return '';
+    return 'TOKEN PACKS (current catalog; pricing may be finalized at launch): ' +
+      packs.map(function (p) { return p.name + ' = ' + p.tokens + ' tokens for $' + (p.price_cents / 100).toFixed(2); }).join('; ') +
+      '. Purchased tokens are carry-over and never expire.';
+  } catch (e) { return ''; }
 })();
 
 // In-memory per-user rate limit (sliding 60s window). Resets on restart, which
@@ -81,16 +111,37 @@ router.post('/ask', requireAuth, async function(req, res) {
               utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, tier, subscription_status, vocab FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, tier, subscription_status, vocab, trial_started_at, current_period_end FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
       ctx.tier = u.tier || 'unknown';
       ctx.subscription_status = u.subscription_status || 'unknown';
       ctx.in_free_trial = (u.subscription_status === 'trialing');
       ctx.vocab = u.vocab || 'ttrpg';
+      ctx.trial_started_at = u.trial_started_at || null;
+      ctx.current_period_end = u.current_period_end || null;
     }
   } catch (e) {}
   try { const b = await getBalance(userId); if (b) { ctx.utlt = b.utlt; ctx.cot = b.cot; ctx.total = b.total; } } catch (e) {}
+
+  // Live account facts (usage + key dates), read fresh each request.
+  const accountFacts = [];
+  try {
+    const dbA = await getDb();
+    const cc = await dbA.prepare('SELECT COUNT(*) AS n FROM campaigns WHERE user_id = ? AND is_active = true').get(userId);
+    const sc = await dbA.prepare('SELECT COUNT(*) AS n FROM sessions WHERE campaign_id IN (SELECT id FROM campaigns WHERE user_id = ?)').get(userId);
+    accountFacts.push('- You currently own ' + (((cc && cc.n) || 0)) + ' campaign(s) and ' + (((sc && sc.n) || 0)) + ' session(s).');
+  } catch (e) {}
+  try {
+    if (ctx.in_free_trial && ctx.trial_started_at) {
+      const td = (getTier('trial').trial_days) || 30;
+      const ends = new Date(new Date(ctx.trial_started_at).getTime() + td * 86400000);
+      accountFacts.push('- Your free trial ends on ' + ends.toISOString().slice(0, 10) + '.');
+    }
+    if (ctx.current_period_end) {
+      accountFacts.push('- Your next billing date is ' + new Date(ctx.current_period_end).toISOString().slice(0, 10) + '.');
+    }
+  } catch (e) {}
 
   const viewId = (req.body && typeof req.body.current_view_id === 'string') ? req.body.current_view_id : '';
   const campaignId = (req.body && req.body.current_campaign_id) ? req.body.current_campaign_id : null;
@@ -131,7 +182,8 @@ router.post('/ask', requireAuth, async function(req, res) {
   }).join('\n');
   const tierBlock = 'LIVE TIER NUMBERS (authoritative, pulled live from the dashboard -- use these for any "how many / which tier" question, for ANY tier, not just the user\'s own):\n' + _tierMatrix;
 
-  const system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + (BRAIN || fallback);
+  const extras = [accountFacts.join('\n'), STYLE_REF, PACK_REF].filter(function (b) { return b; }).join('\n\n');
+  const system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras + '\n\n' + (BRAIN || fallback);
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
