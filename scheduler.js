@@ -11,7 +11,8 @@
 // ============================================================
 const { getDb } = require('./database/db');
 const { runSnapshot } = require('./routes/admin');
-const { sendAlertEmail } = require('./routes/email');
+const { sendAlertEmail, sendTrialLifecycleEmail } = require('./routes/email');
+const { getTier } = require('./middleware/tiers');
 
 const HOUR = 60 * 60 * 1000;
 
@@ -80,6 +81,56 @@ async function sendSnapshotReport(db, snap) {
 // Tick: called shortly after boot, then hourly. Each job decides for
 // itself whether it is due, so the tick stays cheap and safe to repeat.
 // ------------------------------------------------------------
+// ------------------------------------------------------------
+// Trial-lifecycle emails. PRODUCTION-GATED behind LIFECYCLE_EMAILS_ENABLED
+// so staging never emails real users. Runs at most once per calendar day.
+// Each milestone is keyed off trial_started_at + the configured trial
+// window; the lifecycle_emails table guarantees one send per (user, type).
+// 'requireNotMember' suppresses the nudge for users who are players in
+// someone else's campaign (they still have access, so no expiry nag).
+// ------------------------------------------------------------
+async function runMilestone(db, type, daysAgo, requireNotMember) {
+  var sql =
+    "SELECT u.id, u.name, u.email FROM users u " +
+    "WHERE u.trial_started_at IS NOT NULL " +
+    "AND u.trial_started_at::date = (CURRENT_DATE - (? * INTERVAL '1 day'))::date " +
+    "AND u.tier NOT IN ('silver','gold','platinum') " +
+    "AND NOT EXISTS (SELECT 1 FROM lifecycle_emails le WHERE le.user_id = u.id AND le.email_type = ?)";
+  if (requireNotMember) {
+    sql += " AND NOT EXISTS (SELECT 1 FROM campaign_members cm WHERE cm.user_id = u.id AND cm.role = 'player')";
+  }
+  const rows = await db.prepare(sql).all(daysAgo, type);
+  var sent = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var u = rows[i];
+    try {
+      await sendTrialLifecycleEmail(type, u.name, u.email);
+      await db.prepare("INSERT INTO lifecycle_emails (user_id, email_type) VALUES (?, ?) ON CONFLICT (user_id, email_type) DO NOTHING").run(u.id, type);
+      sent++;
+      console.log('[scheduler] ' + type + ' -> user ' + u.id);
+    } catch (e) {
+      console.error('[scheduler] ' + type + ' failed for user ' + u.id + ':', e && e.message);
+    }
+  }
+  return sent;
+}
+
+async function maybeDailyTrialPass(db) {
+  if (process.env.LIFECYCLE_EMAILS_ENABLED !== 'true') return;   // production-gated
+  const today = new Date().toISOString().slice(0, 10);
+  const last = await getSetting(db, 'scheduler_last_trial_pass');
+  if (last === today) return;                                    // already ran today
+  var trialDays = 30;
+  try { trialDays = getTier('trial').trial_days || 30; } catch (e) {}
+  // ending_soon fires 7 days before expiry; the rest at / after expiry.
+  await runMilestone(db, 'trial_ending_soon', trialDays - 7, false);
+  await runMilestone(db, 'trial_expired',     trialDays,      true);
+  await runMilestone(db, 'trial_week_after',  trialDays + 7,  true);
+  await runMilestone(db, 'trial_month_after', trialDays + 30, true);
+  await setSetting(db, 'scheduler_last_trial_pass', today);
+  console.log('[scheduler] daily trial-lifecycle pass complete for ' + today);
+}
+
 async function tick() {
   let db;
   try { db = await getDb(); }
@@ -91,7 +142,11 @@ async function tick() {
     console.error('[scheduler] weekly snapshot failed:', e && e.message);
     try { await sendAlertEmail('Weekly snapshot FAILED', 'The automatic weekly snapshot threw an error:' + String.fromCharCode(10) + (e && e.message ? e.message : String(e))); } catch (_) {}
   }
-  // Future slices hook in here (e.g. daily trial-lifecycle pass).
+  try {
+    await maybeDailyTrialPass(db);
+  } catch (e) {
+    console.error('[scheduler] trial-lifecycle pass failed:', e && e.message);
+  }
 }
 
 let started = false;

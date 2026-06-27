@@ -594,6 +594,21 @@ async function initPostgres() {
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_metric_snapshots_uniq ON metric_snapshots (week_start, metric, tier)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_metric_snapshots_metric ON metric_snapshots (metric, week_start)');
 
+  // Lifecycle email ledger: one row per (user, email_type) when a scheduled
+  // lifecycle email is sent (trial nudges). The UNIQUE constraint makes the
+  // daily scheduler pass idempotent -- nobody is emailed the same milestone
+  // twice, even across restarts.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS lifecycle_emails (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      email_type TEXT NOT NULL,
+      sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (user_id, email_type)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_lifecycle_user ON lifecycle_emails(user_id)');
+
   // Record of every Stripe purchase. attributed_campaign_id is the
   // campaign that earns the DM the 10% bonus on this purchase.
   await pool.query(`

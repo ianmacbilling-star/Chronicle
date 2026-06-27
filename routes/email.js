@@ -643,4 +643,68 @@ async function sendFeedbackEmail(opts) {
   await sendEmail('support@campaignia.com', subject, feedbackHTML(opts), { replyTo: opts.from_email });
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail };
+// ============================================================
+// Trial lifecycle emails (scheduler-driven, production-gated)
+// ------------------------------------------------------------
+// One parametrized template, four milestones. Sent by the daily
+// scheduler pass; idempotency is enforced by the lifecycle_emails
+// table (not here). Production gating lives in the scheduler too.
+// ============================================================
+const TRIAL_LIFECYCLE_COPY = {
+  trial_ending_soon: {
+    subject: 'Your Campaignia trial ends in about a week',
+    headline: 'One week left on your free trial',
+    body: 'Your free trial wraps up in about a week. Upgrade to keep your campaigns, sessions, and the full set of art and styling options &mdash; and pick up right where you left off.',
+    cta: 'Choose a plan'
+  },
+  trial_expired: {
+    subject: 'Your Campaignia free trial has ended',
+    headline: 'Your free trial has ended',
+    body: 'Your trial has wrapped up, so your account has moved to the free Copper tier. Your work is safe &mdash; upgrade any time to bring back unlimited campaigns, more moments, and every styling option.',
+    cta: 'See plans'
+  },
+  trial_week_after: {
+    subject: 'Your campaigns are still here',
+    headline: 'We saved your spot',
+    body: 'It has been a week since your trial ended, and everything you created is still waiting for you. Whenever you are ready, a paid plan brings your full toolkit back in a single click.',
+    cta: 'Come back'
+  },
+  trial_month_after: {
+    subject: 'Your Campaignia campaigns are waiting',
+    headline: 'Still here whenever you are ready',
+    body: 'It has been a month &mdash; no pressure. Your stories and characters are safe on your account. If you would like to keep building, choose a plan and everything returns instantly.',
+    cta: 'Pick a plan'
+  }
+};
+
+function trialLifecycleHTML(copy, name, ctaUrl) {
+  const safeName = (name || 'there');
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0a0806;">
+  <div style="max-width:520px;margin:0 auto;background:#140f08;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+    <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#c9a84c;letter-spacing:4px;">CAMPAIGNIA</div>
+    </div>
+    <div style="padding:32px;">
+      <div style="font-size:20px;color:#f0e8d0;margin-bottom:16px;">${copy.headline}</div>
+      <div style="font-size:15px;line-height:1.7;color:#e8d5a3;margin-bottom:24px;">Hi ${safeName},<br><br>${copy.body}</div>
+      <a href="${ctaUrl}" style="display:inline-block;background:#c9a84c;color:#0a0806;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;letter-spacing:0.5px;">${copy.cta}</a>
+    </div>
+    <div style="padding:18px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:11px;color:rgba(201,168,76,0.5);">You are receiving this because you created a Campaignia account.</div>
+  </div>
+</body>
+</html>`;
+}
+
+async function sendTrialLifecycleEmail(kind, name, email) {
+  const copy = TRIAL_LIFECYCLE_COPY[kind];
+  if (!copy) { console.error('[lifecycle] unknown kind: ' + kind); return false; }
+  const appUrl = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  const ctaUrl = appUrl + '/app.html';
+  await sendEmail(email, copy.subject, trialLifecycleHTML(copy, name, ctaUrl));
+  return true;
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail };
