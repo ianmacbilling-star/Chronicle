@@ -6819,14 +6819,14 @@ function archiveMomentLabel(a) {
 function setArchiveFilter(key, val) {
   if (!state.archiveFilters) state.archiveFilters = {};
   state.archiveFilters[key] = val;
-  renderArchives();
+  if (key === 'moment') { renderArchiveGrid(); } else { renderArchives(); }
 }
 
 function getFilteredArchives(f) {
   f = f || state.archiveFilters || {};
   var rows = (state.archives || []).slice();
   if (f.session) rows = rows.filter(function(a){ return String(a.session_id) === String(f.session); });
-  if (f.moment) rows = rows.filter(function(a){ return String(a.moment_id) === String(f.moment); });
+  if (f.moment) { var _mq = String(f.moment).toLowerCase(); rows = rows.filter(function(a){ return (archiveMomentLabel(a) || '').toLowerCase().indexOf(_mq) !== -1; }); }
   if (f.creator) rows = rows.filter(function(a){ return String(a.archived_by) === String(f.creator); });
   if (f.type) rows = rows.filter(function(a){ return a.image_type === f.type; });
   if (f.style) rows = rows.filter(function(a){ return String(a.art_style) === String(f.style); });
@@ -6863,7 +6863,7 @@ function renderArchiveFilters() {
   host.innerHTML =
     '<select class="archive-filter" onchange="setArchiveFilter(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'version\', this.value)"><option value="">All versions</option>' + opts(versions, f.version) + '</select>' +
-    '<select class="archive-filter" onchange="setArchiveFilter(\'moment\', this.value)"><option value="">All moments</option>' + opts(moments, f.moment) + '</select>' +
+    '<input type="text" class="archive-filter archive-filter-search" placeholder="Search moments" value="' + escapeHtml(f.moment || '') + '" oninput="setArchiveFilter(\'moment\', this.value)" />' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'type\', this.value)"><option value="">All types</option>' +
@@ -6908,7 +6908,7 @@ function archiveFilterBarHTML(f, onchange) {
   }
   return '<select class="archive-filter" onchange="' + onchange + '(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'version\', this.value)"><option value="">All versions</option>' + opts(versions, f.version) + '</select>' +
-    '<select class="archive-filter" onchange="' + onchange + '(\'moment\', this.value)"><option value="">All moments</option>' + opts(moments, f.moment) + '</select>' +
+    '<input type="text" class="archive-filter archive-filter-search" placeholder="Search moments" value="' + escapeHtml(f.moment || '') + '" oninput="' + onchange + '(\'moment\', this.value)" />' +
     '<select class="archive-filter" onchange="' + onchange + '(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
@@ -7118,7 +7118,7 @@ function closeReplacePicker() {
 function setPickerFilter(key, val) {
   if (!state.pickerFilters) state.pickerFilters = {};
   state.pickerFilters[key] = val;
-  renderPicker();
+  if (key === 'moment') { renderPickerGrid(); } else { renderPicker(); }
 }
 
 function clearPickerFilters() {
@@ -7130,6 +7130,10 @@ function renderPicker() {
   var fhost = document.getElementById('replace-picker-filters');
   if (fhost) fhost.innerHTML = archiveFilterBarHTML(state.pickerFilters, 'setPickerFilter') +
     '<button class="archive-filter archive-clear" onclick="clearPickerFilters()">Clear filters</button>';
+  renderPickerGrid();
+}
+
+function renderPickerGrid() {
   var grid = document.getElementById('replace-picker-grid');
   if (!grid) return;
   var rows = getFilteredArchives(state.pickerFilters);
@@ -7204,6 +7208,10 @@ function openPromptModal(text, title) {
 
 function renderArchives() {
   renderArchiveFilters();
+  renderArchiveGrid();
+}
+
+function renderArchiveGrid() {
   var grid = document.getElementById('archives-grid');
   if (!grid) return;
   var meId = (state.user && state.user.id) || null;

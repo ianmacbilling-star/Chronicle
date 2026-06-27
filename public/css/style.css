@@ -1218,6 +1218,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .archives-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .archive-filter { padding: 6px 10px; background: rgba(0,0,0,0.3); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.25); border-radius: 8px; font-size: 12px; }
 .archive-filter option { background: #1b1b20; color: var(--gold-light); }
+.archive-filter-search { min-width: 150px; }
 .archive-clear { cursor: pointer; }
 .moment-replace-btn{position:absolute;top:6px;right:6px;padding:3px 8px;font-size:10px;background:rgba(0,0,0,0.6);color:rgba(201,168,76,0.8);border:1px solid rgba(201,168,76,0.3);border-radius:6px;cursor:pointer;opacity:0;transition:opacity 0.15s;}
 .moment-card:hover .moment-replace-btn{opacity:1;}
