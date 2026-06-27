@@ -274,7 +274,7 @@
         {
           "selector": "#transcript-input",
           "title": "Your story",
-          "text": "This is your story. Whatever you have \u2014 an actual story, a transcript, journal entries, session notes \u2014 we'll take it and use it.",
+          "text": "This is your story. Whatever you have \u2014 an actual story, a transcript, journal entries, session notes \u2014 we'll take it and use it. This is also the one field owned by the Story Master \u2014 if you've joined a campaign as a member, you'll be able to read it but not edit it.",
           "placement": "auto"
         },
         {
