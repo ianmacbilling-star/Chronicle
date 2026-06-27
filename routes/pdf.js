@@ -2171,7 +2171,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -2561,7 +2561,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && !paginated && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
