@@ -74,7 +74,7 @@ const TIERS = {
     can_edit_prompts: true,
     max_characters: null,
     session_reserve: 0,
-    description: '1 campaign, unlimited sessions'
+    description: '1 campaign · unlimited sessions · unlimited characters · free tokens · limited moments · limited styling options'
   },
   gold: {
     name: 'Gold',
@@ -97,7 +97,7 @@ const TIERS = {
     can_edit_prompts: true,
     max_characters: null,
     session_reserve: 0,
-    description: '3 campaigns, extended moment counts'
+    description: '3 campaigns · unlimited sessions · unlimited characters · more free tokens · more moments · more styling options'
   },
   platinum: {
     name: 'Platinum',
@@ -120,7 +120,7 @@ const TIERS = {
     can_edit_prompts: true,
     max_characters: null,
     session_reserve: 0,
-    description: 'Unlimited everything + prompt editing'
+    description: 'unlimited campaigns · unlimited sessions · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles'
   }
 };
 

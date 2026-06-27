@@ -1360,7 +1360,7 @@ function renderAccountPlans(me) {
   if (!el) return;
   var all = me.allTiers || {};
   var current = me.tier || 'copper';
-  var order = ['copper','silver','gold','platinum'];
+  var order = ['silver','gold','platinum'];
   var live = hasLiveSubscription(me);
 
   el.innerHTML = order.map(function(key) {
