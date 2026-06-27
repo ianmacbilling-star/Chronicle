@@ -6,7 +6,7 @@ const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, TIERS } = requ
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
 const { ensureMonthlyGrant, grantSignupBonus } = require('./tokens');
-const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail } = require('./email');
+const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendWelcomeEmail } = require('./email');
 
 // Current Terms of Service / EULA version. Bump when the terms change so we
 // can require re-acceptance later. Stored per user at sign-up.
@@ -172,6 +172,17 @@ router.post('/register', async function(req, res) {
         }
       } catch (inviteErr) {
         console.error('Auto-accept invite on register failed (non-fatal):', inviteErr.message);
+      }
+    }
+
+    // Thank-you / welcome email for a new account. Skipped when the signup
+    // auto-joined a campaign via invite -- those users already receive the
+    // "welcome to the table" campaign email above, so nobody gets two.
+    if (!autoJoinedCampaignId) {
+      try {
+        await sendWelcomeEmail(name.trim(), email.toLowerCase().trim());
+      } catch (welcomeErr) {
+        console.error('Welcome email failed (non-fatal):', welcomeErr.message);
       }
     }
 
