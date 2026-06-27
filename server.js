@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const { getDb } = require('./database/db');
 const { initStorage } = require('./storage/storage');
 const { sendAlertEmail } = require('./routes/email');
+const { startScheduler } = require('./scheduler');
 
 const app = express();
 
@@ -284,6 +285,7 @@ getDb().then(async function() {
     console.log('  Open: http://localhost:' + PORT);
     console.log('');
     startDbHeartbeat();
+    startScheduler();
   });
 
   server.on('clientError', function(err, socket) {

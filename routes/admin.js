@@ -344,4 +344,5 @@ router.put('/print-page-limit', requireAuth, requireAdmin, async function (req, 
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+router.runSnapshot = runSnapshot;
 module.exports = router;
