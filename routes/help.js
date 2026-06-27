@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { getDb } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
@@ -9,6 +11,15 @@ const { getBalance } = require('./tokens');
 // plenty; overridable via HELP_MODEL without a code change.
 const HELP_MODEL = process.env.HELP_MODEL || 'claude-haiku-4-5-20251001';
 const MAX_TURNS = 12;   // cap conversation history sent to the model
+
+// The Campaignia Brain is the knowledge base for this assistant. It is loaded
+// once at startup from routes/campaignia_brain.md -- to change what the help
+// assistant knows, edit that doc (no code change). Falls back to a tiny basics
+// note if the file is ever missing so help still answers.
+const BRAIN = (function () {
+  try { return fs.readFileSync(path.join(__dirname, 'campaignia_brain.md'), 'utf8'); }
+  catch (e) { console.error('help: could not load campaignia_brain.md:', e.message); return ''; }
+})();
 
 // In-memory per-user rate limit (sliding 60s window). Resets on restart, which
 // is fine -- abuse / runaway-cost protection, not billing. No schema.
@@ -85,39 +96,28 @@ router.post('/ask', requireAuth, async function(req, res) {
   const viewName = VIEW_NAMES[viewId] || 'the app';
   if (campaignId) { try { ctx.role = await getCampaignRole(userId, campaignId); } catch (e) {} }
 
-  const lines = [
-    'You are the in-app help assistant for Campaignia, a tabletop-RPG-to-graphic-novel web app. You are in a short chat inside the app and can see the user account details below. Keep every message to 1-4 sentences, warm and practical; do not use a personal name for yourself; do not apologize or pad.',
+  // Live, per-user context. The Brain (knowledge + behavior rules) is appended
+  // below; the numbers here are authoritative and override anything generic.
+  const vocabCampaign = (ctx.vocab === 'story') ? 'Stories' : 'Campaigns';
+  const vocabSession  = (ctx.vocab === 'story') ? 'Chapters' : 'Sessions';
+  const isFirstTurn = (msgs.length === 1);   // no prior assistant turn this session
+
+  const header = [
+    'You are the in-app help assistant for Campaignia, a tabletop-RPG-to-graphic-novel web app. You are in a short chat inside the app and can see the user account details below. Answer using the Campaignia Brain knowledge that follows. Keep every reply to 1-4 sentences, warm and practical; do not use a personal name for yourself; do not apologize or pad. If the Brain does not cover something, say you are not sure and point them to where to look in the app rather than inventing steps. You can only answer and guide -- you cannot change settings, spend tokens, or take actions.',
     '',
-    'BE INQUISITIVE: when a request could mean several different things, ask ONE short clarifying question (offer the likely options) before answering, instead of guessing. Use the current screen below as a strong hint about what they probably mean. Ask at most two clarifying questions in a row; after that, give your best concrete answer. If the request is already specific, just answer with the steps.',
-    '',
-    'WHO YOU ARE HELPING:',
+    'WHO YOU ARE HELPING (these live values are authoritative -- use them for any tier/token/billing answer):',
     '- Name: ' + ctx.name,
     '- Plan/tier: ' + ctx.tier + (ctx.in_free_trial ? ' (in the free trial)' : '') + '; subscription: ' + ctx.subscription_status,
     '- Tokens: ' + ctx.utlt + ' monthly (use-it-or-lose-it) plus ' + ctx.cot + ' carry-over, ' + ctx.total + ' total',
     '- Current screen: ' + viewName + (ctx.role ? '. Role in the current campaign: ' + ctx.role : ''),
-    '',
-    'VOCABULARY: address the user in their own terms -- they call campaigns "' + (ctx.vocab === 'story' ? 'Stories' : 'Campaigns') + '" and sessions "' + (ctx.vocab === 'story' ? 'Chapters' : 'Sessions') + '". Use those words in your replies regardless of how the steps below are phrased.',
-    '',
-    'WHAT CAMPAIGNIA CAN DO (use these concrete steps when answering):',
-    '- Create a campaign on the home screen; open it to add characters and sessions.',
-    '- CAMPAIGN TILE IMAGE: open a campaign, click its three-dots menu (Campaign settings), and under "Campaign image" pick an image from the Archive. It shows on the campaign tile and becomes the default cover when publishing if no cover is set.',
-    '- SESSIONS: inside a campaign, create a session and paste the game transcript, then Generate Story to extract the narrative and panel scenes; one image is generated per panel.',
-    '- STORYBOARD: each panel has controls to Edit prompt, Regenerate, Retouch (an in-place edit of the current image), Replace from the Archive, Lock, and Archive.',
-    '- ARCHIVE: the Archive is a manual store of saved image copies; images do NOT go there automatically. To save one, click the Archive (treasure-chest) button on a panel or character image. The images in the Archive are what you choose from when setting a Campaign image, a cover, or using Copy to Assets.',
-    '- REVIEW TAB: each panel has a Direction button that steers BOTH the narrative and the image for that panel; it applies when the panel is generated or regenerated.',
-    '- ASSETS: the Asset Library holds reference images (locations, NPCs, items) matched into panels by name or keyword (separate alternate names with a slash). You can also turn an archived image into an asset with the Copy to Assets button on the Archive screen.',
-    '- COVERS: choose Cover, Back, and Title images in the Pre-Publish Prep panel when publishing.',
-    '- PUBLISH: publish a finished story to the public Library as a web page, or order a printed book.',
-    '- TOKENS: generating images spends tokens (monthly use-it-or-lose-it first, then carry-over). Tiers low to high: Free Trial, Copper, Silver, Gold, Platinum.',
-    '',
-    'RULES:',
-    '- Use the actual tier and token numbers above when relevant.',
-    '- If a feature needs a higher tier than theirs, say so.',
-    '- If the question is not about Campaignia, briefly redirect.',
-    '- Only describe features and steps listed above. If you are not certain how something works, say you are not sure and suggest where to look in the app, rather than inventing steps.',
-    '- You can only answer and guide; you cannot change settings, spend tokens, or take actions.'
-  ];
-  const system = lines.join('\n');
+    '- This user calls campaigns "' + vocabCampaign + '" and sessions "' + vocabSession + '" -- use those words regardless of how the Brain phrases them.',
+    (isFirstTurn ? '- This is the user\u2019s first message this session: open with a brief, warm thank-you for trying Campaignia, then answer.' : ''),
+    ''
+  ].filter(function (l) { return l !== ''; });
+
+  const fallback = 'CAMPAIGNIA BASICS: Campaignia turns tabletop-RPG sessions into AI-illustrated graphic novels. Users create a campaign, add characters, create sessions and paste a transcript, click Generate Story to extract panels, edit the storyboard, then publish to the public Library or order a printed book. Tokens pay for image generation. If unsure, suggest the user explore the relevant screen.';
+
+  const system = header.join('\n') + '\n\n' + (BRAIN || fallback);
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
