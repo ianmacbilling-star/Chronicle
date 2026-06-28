@@ -253,6 +253,13 @@ try {
   if (_q.has('signup') || _q.has('register')) showRegister();
 } catch (e) {}
 
+// Prefill the signup email when arriving from an invite (?email=...), so the new
+// account is created with the invited address and the invite will accept on return.
+try {
+  var _qe = new URLSearchParams(window.location.search).get('email');
+  if (_qe) { var _re = document.getElementById('reg-email'); if (_re) _re.value = _qe; }
+} catch (e) {}
+
 // Honor a ?returnTo= same-origin path (e.g. returning to an invite to accept)
 // after sign-in. Only relative paths beginning with a single '/' are allowed,
 // so this can never become an open redirect to another site.
