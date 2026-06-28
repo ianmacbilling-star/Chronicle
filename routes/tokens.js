@@ -15,6 +15,7 @@ const { getDb } = require('../database/db');
 const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/tiers');
 const { getPack, listPacks } = require('../services/billing/packs');
 const stripeProvider = require('../services/billing/stripeProvider');
+const { logDebug } = require('./debug');
 
 // ------------------------------------------------------------
 // Cost lookup — per model, defaults to 1 if unset.
@@ -586,7 +587,14 @@ router.post('/sync-subscription', async function(req, res) {
       stripe_current_period_end_item: itemPeriodEnd,
       wrote: result
     };
-    try { console.log('[sync-subscription]', JSON.stringify(debug)); } catch (e) {}
+    try {
+      await logDebug(req.session.userId, {
+        level: 'info', source: 'billing', page: 'Account / billing',
+        fn: 'POST /sync-subscription',
+        message: 'Reconciled subscription from Stripe (status ' + (sub.status || '?') + ', pending-cancel ' + ((result && result.cancelAtPeriodEnd) ? 'yes' : 'no') + ')',
+        detail: debug
+      });
+    } catch (_le) {}
     res.json({ ok: true, synced: !(result && result.skipped), debug: debug });
   } catch (e) {
     res.status(500).json({ error: 'Could not sync subscription' });
