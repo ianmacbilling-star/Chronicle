@@ -575,7 +575,19 @@ router.post('/sync-subscription', async function(req, res) {
     }
     const sub = await stripeProvider.getSubscription(u.stripe_subscription_id);
     const result = await syncSubscriptionToUser(sub);
-    res.json({ ok: true, synced: !(result && result.skipped) });
+    let itemPeriodEnd = null;
+    try { itemPeriodEnd = sub.items.data[0].current_period_end || null; } catch (e) {}
+    const debug = {
+      lookedUpSubId: u.stripe_subscription_id,
+      stripe_status: sub.status,
+      stripe_cancel_at_period_end: sub.cancel_at_period_end,
+      stripe_cancel_at: sub.cancel_at || null,
+      stripe_current_period_end_top: sub.current_period_end || null,
+      stripe_current_period_end_item: itemPeriodEnd,
+      wrote: result
+    };
+    try { console.log('[sync-subscription]', JSON.stringify(debug)); } catch (e) {}
+    res.json({ ok: true, synced: !(result && result.skipped), debug: debug });
   } catch (e) {
     res.status(500).json({ error: 'Could not sync subscription' });
   }
@@ -712,6 +724,17 @@ function subscriptionPeriodEnd(subscription) {
   try { return new Date(epoch * 1000).toISOString(); } catch (e) { return null; }
 }
 
+// Is a cancel scheduled at period end? Read BOTH representations: the legacy
+// boolean `cancel_at_period_end`, and the newer `cancel_at` (epoch seconds) that
+// recent API versions use. Either one in the future, on a still-active sub, means
+// 'cancels at the end of the cycle'. Returns a boolean.
+function subscriptionPendingCancel(subscription) {
+  if (!subscription) return false;
+  if (subscription.cancel_at_period_end === true) return true;
+  if (subscription.cancel_at && (subscription.cancel_at * 1000) > Date.now()) return true;
+  return false;
+}
+
 // Subscription-mode checkout completed: establish the user<->customer<->subscription
 // link right away so the Billing Portal works immediately. The customer.subscription
 // .created event also lands and sets tier + status via syncSubscriptionToUser. We
@@ -760,12 +783,17 @@ async function syncSubscriptionToUser(subscription) {
   } else if (status === 'canceled' || status === 'incomplete_expired' || status === 'paused') {
     nextTier = 'copper';
   } // past_due / unpaid / incomplete -> keep current tier (grace period)
-  const periodEnd = subscriptionPeriodEnd(subscription);
-  const cancelAtEnd = (subscription.cancel_at_period_end === true);
+  let periodEnd = subscriptionPeriodEnd(subscription);
+  const cancelAtEnd = subscriptionPendingCancel(subscription);
+  // If the renewal date wasn't on the object but a cancel_at is, use it as the
+  // 'cancels on' date so the notice still has something to show.
+  if (!periodEnd && subscription.cancel_at) {
+    try { periodEnd = new Date(subscription.cancel_at * 1000).toISOString(); } catch (e) {}
+  }
   await db.prepare(
     "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = ?, subscription_status = ?, current_period_end = ?, cancel_at_period_end = ?, tier = ? WHERE id = ?"
   ).run(customerId, subId, status, periodEnd, cancelAtEnd, nextTier, user.id);
-  return { skipped: false, userId: user.id, status: status, tier: nextTier };
+  return { skipped: false, userId: user.id, status: status, tier: nextTier, cancelAtPeriodEnd: cancelAtEnd, currentPeriodEnd: periodEnd };
 }
 
 // ------------------------------------------------------------
