@@ -423,9 +423,27 @@ async function canPurchaseTokens(userId) {
     const me = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
     const myTier = (me && me.tier) || 'copper';
     if (isPaidTier(myTier)) return true;
-    if (myTier !== 'copper') return false;   // trial (or any non-paid, non-copper) -> blocked
+    // Account-lifecycle decision: ANY copper (lone OR covered) may buy tokens.
+    // Only the Free Trial (and any non-paid, non-copper) must subscribe first.
+    return myTier === 'copper';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Lone copper: a copper account with NO paid Story Master coverage -- not a member
+// of any campaign whose SM holds a paid tier. Drives the lifecycle idle clock and
+// the upgrade nudge. Trial and paid accounts are never 'lone copper'. Fails safe
+// to false (no nudge / no clock) on error.
+async function isLoneCopper(userId) {
+  const { getDb } = require('../database/db');
+  try {
+    const db = await getDb();
+    const me = await db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
+    const myTier = (me && me.tier) || 'copper';
+    if (myTier !== 'copper') return false;
     const paidTiers = Object.keys(TIERS).filter(function(t){ return isPaidTier(t); });
-    if (!paidTiers.length) return false;
+    if (!paidTiers.length) return true;
     const placeholders = paidTiers.map(function(){ return '?'; }).join(',');
     const row = await db.prepare(
       "SELECT 1 AS ok FROM campaign_members cm " +
@@ -433,7 +451,7 @@ async function canPurchaseTokens(userId) {
       "JOIN users u ON u.id = dm.user_id " +
       "WHERE cm.user_id = ? AND u.tier IN (" + placeholders + ") LIMIT 1"
     ).get([userId].concat(paidTiers));
-    return !!row;
+    return !row;
   } catch (e) {
     return false;
   }
@@ -513,4 +531,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/db');
-const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, TIERS } = require('../middleware/tiers');
+const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
 const { ensureMonthlyGrant, grantSignupBonus } = require('./tokens');
@@ -283,6 +283,7 @@ router.get('/me', async function(req, res) {
       subscriptionStatus: user.subscription_status || 'trialing',
       currentPeriodEnd: user.current_period_end || null,
       cancelAtPeriodEnd: !!user.cancel_at_period_end,
+      loneCopper: await isLoneCopper(user.id),
       hasBilling: !!user.stripe_customer_id,
       hasSubscription: !!user.stripe_subscription_id,
       renderThinking: !!user.render_thinking,

@@ -25,6 +25,7 @@
     <button class="btn btn-sm" id="header-campaigns-btn" onclick="showView('campaigns')">My Campaigns</button>
     <a href="/library?from=app" class="btn btn-sm" id="header-library-btn" title="Browse the public Library" style="text-decoration:none;">Library</a>
     <span id="trial-badge" title="You are on the Free Trial plan (1 campaign, 1 session, character limit, watermark)" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#c9a84c;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;">&#9733; FREE TRIAL <span id="trial-badge-days" style="font-weight:600;opacity:0.8;"></span></span>
+    <span id="lone-badge" onclick="goToPlans()" title="You are on Copper with no active Story Master coverage. Consider upgrading to Silver." style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#fff;background:#b87333;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;cursor:pointer;">COPPER</span>
     <span id="token-balance-label" class="btn btn-sm" title="Buy more tokens" onclick="openTokensModal()">&#9672; <span id="token-balance-value">—</span></span>
     <button id="help-fab" class="btn btn-sm" type="button" onclick="openHelp()" title="Ask us for help" aria-label="Ask us for help">?s</button>
     <div class="user-menu-wrap">
@@ -725,6 +726,7 @@
         <div class="settings-section-title">Plans &amp; Subscription Info</div>
         <div class="settings-section-desc">Your plan and your options</div>
         <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
+        <div id="account-lone-banner" onclick="goToPlans()" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(184,115,51,0.12);border:1px solid rgba(184,115,51,0.4);border-radius:var(--radius);font-size:12px;color:var(--text);cursor:pointer;"></div>
         <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
         <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">

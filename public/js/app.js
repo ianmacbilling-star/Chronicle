@@ -968,6 +968,9 @@ function checkAuth() {
           trialBadge.style.display = 'none';
         }
       }
+      // Lone-copper pill: copper account with no paid Story Master coverage.
+      var loneBadge = document.getElementById('lone-badge');
+      if (loneBadge) loneBadge.style.display = data.loneCopper ? 'inline-flex' : 'none';
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -1298,6 +1301,18 @@ function renderAccountTier(me) {
       banner.style.display = 'block';
     } else {
       banner.style.display = 'none';
+    }
+  }
+
+  // Lone-copper nudge: copper with no paid SM coverage. Conversion prompt only;
+  // the deletion clock is inactivity-driven, not shown here.
+  var loneBanner = document.getElementById('account-lone-banner');
+  if (loneBanner) {
+    if (me.loneCopper) {
+      loneBanner.textContent = 'You are on Copper with no active Story Master coverage. You can keep creating and buying tokens, but consider Silver to unlock more.';
+      loneBanner.style.display = 'block';
+    } else {
+      loneBanner.style.display = 'none';
     }
   }
 
@@ -7935,6 +7950,9 @@ function checkAuth() {
           trialBadge.style.display = 'none';
         }
       }
+      // Lone-copper pill: copper account with no paid Story Master coverage.
+      var loneBadge = document.getElementById('lone-badge');
+      if (loneBadge) loneBadge.style.display = data.loneCopper ? 'inline-flex' : 'none';
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
