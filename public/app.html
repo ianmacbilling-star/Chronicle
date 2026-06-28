@@ -727,21 +727,11 @@
         <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
         <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
         <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
-        <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;margin-top:14px;">Manage subscription &amp; billing</button>
-        <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);"></div>
-      </div>
-
-      <!-- Account actions (current tier + sign out / suspend) -->
-      <div class="settings-section" style="border-color:#f09595;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-          <div class="settings-section-title" style="color:var(--error);">Account</div>
-          <div id="account-tier-name" style="font-size:13px;color:var(--gold-light);font-family:var(--font-display);letter-spacing:0.5px;"></div>
-        </div>
-        <div class="settings-section-desc">Sign out, or suspend your account.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-          <button class="btn btn-sm" onclick="logout()">Sign out</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+          <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;">Manage subscription &amp; billing</button>
           <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
         </div>
+        <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);"></div>
       </div>
 
       <!-- My Published Stories (Public Library) -->

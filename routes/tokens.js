@@ -556,6 +556,31 @@ router.post('/portal', async function(req, res) {
   }
 });
 
+// POST /api/tokens/sync-subscription -- pull the user's live subscription straight
+// from Stripe and reconcile it onto the user NOW (tier / status / current_period_end /
+// cancel_at_period_end) without waiting for the async webhook. Called right after a
+// Billing Portal return so the account page reflects a just-made change (e.g. a pending
+// cancel) immediately. Reuses syncSubscriptionToUser, so the rules stay in one place.
+// No-ops cleanly if the user has no subscription on file.
+router.post('/sync-subscription', async function(req, res) {
+  if (!requireSession(req, res)) return;
+  if (!stripeProvider.isConfigured()) {
+    return res.status(503).json({ error: 'billing_unconfigured' });
+  }
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT stripe_subscription_id FROM users WHERE id = ?').get(req.session.userId);
+    if (!u || !u.stripe_subscription_id) {
+      return res.json({ ok: true, synced: false });
+    }
+    const sub = await stripeProvider.getSubscription(u.stripe_subscription_id);
+    const result = await syncSubscriptionToUser(sub);
+    res.json({ ok: true, synced: !(result && result.skipped) });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not sync subscription' });
+  }
+});
+
 // Stripe webhook handler. Mounted in server.js BEFORE the API rate limiter and
 // WITHOUT session auth (Stripe authenticates via signature). Verifies against
 // req.rawBody (captured by express.json's verify hook). Idempotent per checkout

@@ -711,7 +711,12 @@ function handleBillingReturn() {
     billingToast('Subscription checkout canceled - no charge was made.', 'info');
   } else if (portal === 'return') {
     billingToast('Billing updated.', 'success');
-    setTimeout(refreshAccount, 800);
+    // Reconcile straight from Stripe so a just-made change (e.g. a pending cancel)
+    // is reflected immediately, without waiting on the async webhook. Poll as backstop.
+    fetch('/api/tokens/sync-subscription', { method: 'POST' })
+      .then(function() { refreshAccount(); })
+      .catch(function() { refreshAccount(); });
+    setTimeout(refreshAccount, 2000);
   } else if (order === 'success') {
     billingToast('Payment received - your book is being sent to the printer.', 'success');
     setTimeout(function () { if (typeof loadOrders === 'function') loadOrders(); }, 1000);
