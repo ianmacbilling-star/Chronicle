@@ -12453,7 +12453,7 @@ function loadLifecycleConfig() {
   if (!idle || !purge) return;
   fetch('/api/admin/lifecycle-config')
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (j) { if (j) { if (j.idle_days != null) idle.value = j.idle_days; if (j.purge_days != null) purge.value = j.purge_days; var g = document.getElementById('lifecycle-grace-input'); if (g && j.grace_days != null) g.value = j.grace_days; } })
+    .then(function (j) { if (j) { if (j.idle_days != null) idle.value = j.idle_days; if (j.purge_days != null) purge.value = j.purge_days; var g = document.getElementById('lifecycle-grace-input'); if (g && j.grace_days != null) g.value = j.grace_days; var pw = document.getElementById('lifecycle-purgewarn-input'); if (pw && j.purge_warn_days != null) pw.value = j.purge_warn_days; } })
     .catch(function () {});
 }
 
@@ -12467,10 +12467,10 @@ function saveLifecycleConfig() {
   if (!isFinite(i) || i < 1 || !isFinite(pp) || pp < 1 || !isFinite(gg) || gg < 1) { if (msg) msg.textContent = 'Enter whole numbers of 1 or more.'; return; }
   if (msg) msg.textContent = 'Saving...';
   fetch('/api/admin/lifecycle-config', {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idle_days: i, purge_days: pp, grace_days: gg })
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idle_days: i, purge_days: pp, grace_days: gg, purge_warn_days: (document.getElementById('lifecycle-purgewarn-input') || {}).value || '' })
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
-      if (res.ok && res.j) { idle.value = res.j.idle_days; purge.value = res.j.purge_days; if (graceEl && res.j.grace_days != null) graceEl.value = res.j.grace_days; if (msg) msg.textContent = 'Saved.'; }
+      if (res.ok && res.j) { idle.value = res.j.idle_days; purge.value = res.j.purge_days; if (graceEl && res.j.grace_days != null) graceEl.value = res.j.grace_days; var pwEl = document.getElementById('lifecycle-purgewarn-input'); if (pwEl && res.j.purge_warn_days != null) pwEl.value = res.j.purge_warn_days; if (msg) msg.textContent = 'Saved.'; }
       else if (msg) msg.textContent = (res.j && res.j.error) || 'Could not save.';
     })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
@@ -12511,6 +12511,23 @@ function stageWarnedUser() {
   fetch('/api/admin/lifecycle/set-user-dates', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email, tier: 'copper', status: 'active', last_active_at: idleIso, lone_since: idleIso, last_purchase_at: idleIso, idle_warned_at: warnedIso, suspended_at: '' })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { _lifecycleTestOut(res.j); })
+    .catch(function () { _lifecycleTestOut('Could not stage user.'); });
+}
+
+function stageSuspendedUser() {
+  var emailEl = document.getElementById('lifecycle-test-email');
+  var email = emailEl ? emailEl.value : '';
+  if (!email) { _lifecycleTestOut('Enter a user email first.'); return; }
+  var sEl = document.getElementById('lifecycle-test-suspended');
+  var suspDays = parseInt(sEl && sEl.value, 10); if (!isFinite(suspDays) || suspDays < 0) suspDays = 0;
+  var oldIso = new Date(Date.now() - 730 * 86400000).toISOString();
+  var suspIso = new Date(Date.now() - suspDays * 86400000).toISOString();
+  _lifecycleTestOut('Staging ' + email + ' as suspended (' + suspDays + ' days ago)...');
+  fetch('/api/admin/lifecycle/set-user-dates', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email, tier: 'copper', status: 'suspended', last_active_at: oldIso, lone_since: oldIso, last_purchase_at: oldIso, idle_warned_at: oldIso, suspended_at: suspIso })
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) { _lifecycleTestOut(res.j); })
     .catch(function () { _lifecycleTestOut('Could not stage user.'); });

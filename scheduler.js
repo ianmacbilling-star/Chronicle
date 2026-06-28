@@ -11,7 +11,7 @@
 // ============================================================
 const { getDb, getAppSettingInt } = require('./database/db');
 const { runSnapshot } = require('./routes/admin');
-const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail } = require('./routes/email');
+const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail } = require('./routes/email');
 const { getTier, isLoneCopper } = require('./middleware/tiers');
 const { logDebug } = require('./routes/debug');
 
@@ -140,6 +140,7 @@ async function maybeDailyTrialPass(db) {
 // app_settings and clamped to a floor so a fat-fingered 0 can't sweep everyone.
 // ---------------------------------------------------------------------------
 const LIFECYCLE_FLOOR_DAYS = 1; // safety floor; revisit before enabling purge
+const PURGE_MAX_PER_RUN = 50; // safety cap: never tombstone more than this per sweep
 function _ms(v) {
   if (!v) return 0;
   const t = (v instanceof Date) ? v.getTime() : Date.parse(v);
@@ -157,9 +158,11 @@ async function runLifecycleSweep(db, opts) {
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const summary = { mode: 'warn-only', idleDays: idleDays, purgeDays: purgeDays,
-    scannedCopper: 0, loneStamped: 0, loneCleared: 0, warned: 0, wouldWarn: 0, emailed: 0, suspended: 0, wouldSuspend: 0, purged: 0, dryRun: !!opts.dryRun };
+    scannedCopper: 0, loneStamped: 0, loneCleared: 0, warned: 0, wouldWarn: 0, emailed: 0,
+    suspended: 0, wouldSuspend: 0, purgeWarned: 0, wouldPurgeWarn: 0, tombstoned: 0, wouldTombstone: 0, dryRun: !!opts.dryRun };
   const emailsEnabled = process.env.LIFECYCLE_EMAILS_ENABLED === 'true';
   const suspendEnabled = process.env.LIFECYCLE_SUSPEND_ENABLED === 'true';
+  const purgeEnabled = process.env.LIFECYCLE_PURGE_ENABLED === 'true';
   let graceDays = await getAppSettingInt('lifecycle_warn_grace_days', 14);
   if (!(graceDays >= LIFECYCLE_FLOOR_DAYS)) graceDays = LIFECYCLE_FLOOR_DAYS;
 
@@ -221,8 +224,50 @@ async function runLifecycleSweep(db, opts) {
         }
       }
     }
-    // Phase 4 (purge) slots in here, behind its own flag.
   }
+
+  // ===== PURGE stage (Phase 4): suspended accounts nearing / past the purge window.
+  // Sends escalating warnings, then TOMBSTONES (scrub PII + status='deleted'). Stored
+  // content and R2 objects are NOT reclaimed yet -- that runs in a later, reference-
+  // counted pass. Gated by LIFECYCLE_PURGE_ENABLED; capped per run.
+  const warnRaw = (await getSetting(db, 'lifecycle_purge_warn_days')) || '30,7';
+  const warnLeads = warnRaw.split(',').map(function (x) { return parseInt((x || '').trim(), 10); })
+    .filter(function (n) { return Number.isFinite(n) && n >= 0; }).sort(function (a, b) { return b - a; });
+  let tombstonedThisRun = 0;
+  const suspended = await db.prepare("SELECT id, name, email, suspended_at FROM users WHERE status = 'suspended' AND suspended_at IS NOT NULL").all();
+  for (let j = 0; j < suspended.length; j++) {
+    const su = suspended[j];
+    const suspMs = _ms(su.suspended_at);
+    const daysSusp = (nowMs - suspMs) / 86400000;
+    const deleteDateStr = new Date(suspMs + purgeDays * 86400000).toISOString().slice(0, 10);
+    for (let k = 0; k < warnLeads.length; k++) {
+      const L = warnLeads[k];
+      if (daysSusp >= (purgeDays - L)) {
+        const etype = 'purge_warn_' + L;
+        let already = false;
+        try { already = !!(await db.prepare('SELECT 1 FROM lifecycle_emails WHERE user_id = ? AND email_type = ?').get(su.id, etype)); } catch (e) {}
+        if (already) continue;
+        if (opts.dryRun || !purgeEnabled || !emailsEnabled) { summary.wouldPurgeWarn++; continue; }
+        let pw = false;
+        try { await sendPurgeWarningEmail(su.name, su.email, L, deleteDateStr); pw = true; } catch (e) {}
+        if (pw) { try { await db.prepare("INSERT INTO lifecycle_emails (user_id, email_type) VALUES (?, ?) ON CONFLICT (user_id, email_type) DO NOTHING").run(su.id, etype); } catch (e) {} summary.purgeWarned++; }
+      }
+    }
+    if (daysSusp >= purgeDays) {
+      if (opts.dryRun || !purgeEnabled || tombstonedThisRun >= PURGE_MAX_PER_RUN) { summary.wouldTombstone++; continue; }
+      if (emailsEnabled) { try { await sendAccountClosedEmail(su.name, su.email); } catch (e) {} }
+      try {
+        await db.prepare("UPDATE users SET status = 'deleted', tombstoned_at = ?, name = '[removed]', email = ?, password = 'TOMBSTONED' WHERE id = ?")
+          .run(nowIso, 'deleted-' + su.id + '@removed.invalid', su.id);
+        summary.tombstoned++;
+        tombstonedThisRun++;
+        try { await logDebug(su.id, { level: 'info', source: 'lifecycle', page: 'sweep', fn: 'runLifecycleSweep',
+          message: 'Account tombstoned (suspended ~' + Math.floor(daysSusp) + 'd, purge ' + purgeDays + 'd). Stored content/R2 NOT reclaimed yet (deferred).',
+          detail: { daysSusp: Math.floor(daysSusp), purgeDays: purgeDays } }); } catch (e) {}
+      } catch (e) {}
+    }
+  }
+
   return summary;
 }
 

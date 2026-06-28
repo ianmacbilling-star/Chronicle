@@ -143,6 +143,7 @@ async function initPostgres() {
       lone_since TIMESTAMP,
       last_purchase_at TIMESTAMP,
       idle_warned_at TIMESTAMP,
+      tombstoned_at TIMESTAMP,
       stripe_customer_id TEXT,
       stripe_subscription_id TEXT,
       subscription_status TEXT DEFAULT 'trialing',
@@ -332,6 +333,7 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS lone_since TIMESTAMP',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_purchase_at TIMESTAMP',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS idle_warned_at TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS tombstoned_at TIMESTAMP',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'trialing'",
@@ -571,6 +573,10 @@ async function initPostgres() {
   // Grace window (days) between the idle warning and suspension.
   await pool.query(
     "INSERT INTO app_settings (setting_key, value) VALUES ('lifecycle_warn_grace_days', '14') ON CONFLICT (setting_key) DO NOTHING"
+  );
+  // Purge-warning lead times (days before deletion), comma-separated.
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('lifecycle_purge_warn_days', '30,7') ON CONFLICT (setting_key) DO NOTHING"
   );
 
   // Global Max Pages Per Print limit (applies to ALL layouts). Default 250;

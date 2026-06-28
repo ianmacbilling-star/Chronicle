@@ -741,4 +741,35 @@ async function sendSuspendedEmail(name, email) {
   return true;
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail };
+// Account-lifecycle purge warning (ACCOUNT_LIFECYCLE_SPEC Phase 4). Escalating
+// 'your account will be closed on DATE' notices to a suspended account nearing the
+// purge window. daysLeft + dateStr are passed in by the sweep.
+async function sendPurgeWarningEmail(name, email, daysLeft, dateStr) {
+  const appUrl = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  const ctaUrl = appUrl + '/app.html';
+  const copy = {
+    subject: 'Your Campaignia account will be closed in ' + daysLeft + ' days',
+    headline: 'Your account will be closed on ' + dateStr,
+    body: 'Your account has been paused and inactive for a while, so it is scheduled to be closed on ' + dateStr + ' (' + daysLeft + ' days from now). Log back in any time before then to reactivate it and keep everything you have made. After that date the account is closed.',
+    cta: 'Reactivate my account'
+  };
+  await sendEmail(email, copy.subject, trialLifecycleHTML(copy, name, ctaUrl));
+  return true;
+}
+
+// Final 'account closed' notice, sent at tombstone time (before the address is
+// scrubbed). We do not delete stored content yet -- that reclaim runs later.
+async function sendAccountClosedEmail(name, email) {
+  const appUrl = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  const ctaUrl = appUrl + '/app.html';
+  const copy = {
+    subject: 'Your Campaignia account has been closed',
+    headline: 'Your account has been closed',
+    body: 'Your account stayed inactive through our reminders, so it has now been closed. If this was a mistake or you would like to start again, you are always welcome to create a new account.',
+    cta: 'Visit Campaignia'
+  };
+  await sendEmail(email, copy.subject, trialLifecycleHTML(copy, name, ctaUrl));
+  return true;
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail };
