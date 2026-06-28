@@ -707,4 +707,21 @@ async function sendTrialLifecycleEmail(kind, name, email) {
   return true;
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail };
+// Account-lifecycle idle warning (ACCOUNT_LIFECYCLE_SPEC). Sent by the sweep to a
+// lone copper account that has gone idle past the threshold, before it is suspended.
+// Reuses the lifecycle email shell. Production gating lives in the scheduler.
+const IDLE_WARNING_COPY = {
+  subject: 'Your Campaignia account will be paused if it stays idle',
+  headline: 'We will pause your account if it stays idle',
+  body: 'Your account is on the free Copper tier with no active Story Master coverage, and it has been quiet for a while. If it stays idle it will be temporarily suspended &mdash; your campaigns, characters, and books are kept safe, and a single login brings everything right back. Log in any time to keep your account active.',
+  cta: 'Open Campaignia'
+};
+
+async function sendIdleWarningEmail(name, email) {
+  const appUrl = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  const ctaUrl = appUrl + '/app.html';
+  await sendEmail(email, IDLE_WARNING_COPY.subject, trialLifecycleHTML(IDLE_WARNING_COPY, name, ctaUrl));
+  return true;
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail };

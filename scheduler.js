@@ -11,7 +11,7 @@
 // ============================================================
 const { getDb, getAppSettingInt } = require('./database/db');
 const { runSnapshot } = require('./routes/admin');
-const { sendAlertEmail, sendTrialLifecycleEmail } = require('./routes/email');
+const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail } = require('./routes/email');
 const { getTier, isLoneCopper } = require('./middleware/tiers');
 const { logDebug } = require('./routes/debug');
 
@@ -157,13 +157,14 @@ async function runLifecycleSweep(db, opts) {
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const summary = { mode: 'warn-only', idleDays: idleDays, purgeDays: purgeDays,
-    scannedCopper: 0, loneStamped: 0, loneCleared: 0, warned: 0, suspended: 0, purged: 0, dryRun: !!opts.dryRun };
+    scannedCopper: 0, loneStamped: 0, loneCleared: 0, warned: 0, wouldWarn: 0, emailed: 0, suspended: 0, purged: 0, dryRun: !!opts.dryRun };
+  const emailsEnabled = process.env.LIFECYCLE_EMAILS_ENABLED === 'true';
 
   // Anyone no longer copper (e.g. upgraded) shouldn't carry a lone clock.
   try { await db.prepare("UPDATE users SET lone_since = NULL WHERE lone_since IS NOT NULL AND tier <> 'copper'").run(); } catch (e) {}
 
   const coppers = await db.prepare(
-    "SELECT id, lone_since, last_active_at, last_purchase_at, idle_warned_at FROM users WHERE tier = 'copper' AND status = 'active'"
+    "SELECT id, name, email, lone_since, last_active_at, last_purchase_at, idle_warned_at FROM users WHERE tier = 'copper' AND status = 'active'"
   ).all();
   for (let i = 0; i < coppers.length; i++) {
     const u = coppers[i];
@@ -185,12 +186,19 @@ async function runLifecycleSweep(db, opts) {
     const startMs = Math.max(_ms(loneSince), _ms(u.last_active_at), _ms(u.last_purchase_at));
     const ageDays = (nowMs - startMs) / 86400000;
     if (ageDays >= idleDays && !u.idle_warned_at) {
-      if (!opts.dryRun) { try { await db.prepare('UPDATE users SET idle_warned_at = ? WHERE id = ?').run(nowIso, u.id); } catch (e) {} }
-      summary.warned++;
-      // Phase 2: log the warning. The warning EMAIL is wired in Phase 2b.
-      try { await logDebug(u.id, { level: 'info', source: 'lifecycle', page: 'sweep', fn: 'runLifecycleSweep',
-        message: 'Idle warning: lone copper ~' + Math.floor(ageDays) + 'd (threshold ' + idleDays + 'd)',
-        detail: { ageDays: Math.floor(ageDays), idleDays: idleDays } }); } catch (e) {}
+      if (opts.dryRun || !emailsEnabled) {
+        // Preview / emails not enabled: identify but do NOT warn or progress, so
+        // nobody is ever advanced toward suspension without a delivered warning.
+        summary.wouldWarn++;
+      } else {
+        try { await db.prepare('UPDATE users SET idle_warned_at = ? WHERE id = ?').run(nowIso, u.id); } catch (e) {}
+        summary.warned++;
+        let emailed = false;
+        try { await sendIdleWarningEmail(u.name, u.email); emailed = true; summary.emailed++; } catch (e) {}
+        try { await logDebug(u.id, { level: 'info', source: 'lifecycle', page: 'sweep', fn: 'runLifecycleSweep',
+          message: 'Idle warning (lone copper ~' + Math.floor(ageDays) + 'd, threshold ' + idleDays + 'd, emailed ' + emailed + ')',
+          detail: { ageDays: Math.floor(ageDays), idleDays: idleDays, emailed: emailed } }); } catch (e) {}
+      }
     }
     // Phase 3 (suspend) / Phase 4 (purge) slot in here, each behind its own flag.
   }

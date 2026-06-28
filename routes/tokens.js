@@ -672,6 +672,8 @@ async function fulfillCheckout(session, eventId) {
     bucket: 'cot', event_type: 'purchase', source: 'stripe',
     related_purchase_id: purchaseId, stripe_event_id: eventId
   });
+  // Account-lifecycle: a real purchase resets the lone-copper idle clock.
+  try { await db.prepare('UPDATE users SET last_purchase_at = ? WHERE id = ?').run(new Date().toISOString(), userId); } catch (e) {}
   if (attributed) {
     try {
       const camp = await db.prepare('SELECT user_id FROM campaigns WHERE id = ?').get(attributed);

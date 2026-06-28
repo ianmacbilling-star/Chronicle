@@ -404,6 +404,8 @@ async function fulfillPrintOrder(session, eventId) {
   await db.prepare(
     'UPDATE print_orders SET payment_status = ?, status = ?, stripe_payment_intent_id = ?, card_brand = ?, card_last4 = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
   ).run('paid', 'paid', paymentIntentId, cardBrand, cardLast4, orderId);
+  // Account-lifecycle: a real purchase resets the lone-copper idle clock.
+  try { await db.prepare('UPDATE users SET last_purchase_at = ? WHERE id = ?').run(new Date().toISOString(), row.user_id); } catch (e) {}
 
   // 2) Resolve contact + submit to the vendor now that payment cleared.
   const externalId = row.external_id || ('po-' + orderId);
