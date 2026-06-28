@@ -10,11 +10,37 @@
 
 const { getDb } = require('../database/db');
 
+// Throttled "last seen" stamp for the account-lifecycle idle clock
+// (ACCOUNT_LIFECYCLE_SPEC Phase 0). Updates users.last_active_at at most once
+// per ~12h per user per process (in-memory throttle) via a conditional write
+// that also no-ops at the DB if the column is already fresh. Fire-and-forget:
+// it must never block or fail a request.
+const _lastSeenStamp = new Map(); // userId -> ms of last stamp in THIS process
+const _SEEN_THROTTLE_MS = 12 * 60 * 60 * 1000;
+function stampLastActive(userId) {
+  if (!userId) return;
+  const nowMs = Date.now();
+  const prev = _lastSeenStamp.get(userId);
+  if (prev && (nowMs - prev) < _SEEN_THROTTLE_MS) return;
+  _lastSeenStamp.set(userId, nowMs);
+  const nowIso = new Date(nowMs).toISOString();
+  const cutoffIso = new Date(nowMs - _SEEN_THROTTLE_MS).toISOString();
+  Promise.resolve().then(async function () {
+    try {
+      const db = await getDb();
+      await db.prepare(
+        'UPDATE users SET last_active_at = ? WHERE id = ? AND (last_active_at IS NULL OR last_active_at < ?)'
+      ).run(nowIso, userId, cutoffIso);
+    } catch (e) { /* non-fatal: lifecycle stamp must never break a request */ }
+  });
+}
+
 // Session check — must be logged in.
 function requireAuth(req, res, next) {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
+  stampLastActive(req.session.userId);
   next();
 }
 

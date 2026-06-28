@@ -139,6 +139,7 @@ async function initPostgres() {
       pen_name TEXT,
       tier TEXT DEFAULT 'platinum',
       trial_started_at TIMESTAMP,
+      last_active_at TIMESTAMP,
       stripe_customer_id TEXT,
       stripe_subscription_id TEXT,
       subscription_status TEXT DEFAULT 'trialing',
@@ -319,6 +320,11 @@ async function initPostgres() {
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
+    // Account-lifecycle idle clock (ACCOUNT_LIFECYCLE_SPEC Phase 0). Backfill
+    // existing rows to now() ONCE so the clock starts today, never retroactively;
+    // new rows are stamped at registration/login so the WHERE no-ops thereafter.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP',
+    'UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE last_active_at IS NULL',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'trialing'",

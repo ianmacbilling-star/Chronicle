@@ -74,8 +74,8 @@ router.post('/register', async function(req, res) {
     // reserve, and a 30-day window. They lapse to Copper at expiry (lazy, on next
     // activity -- see lapseTrialIfExpired). trial_started_at stamps the window.
     const result = await db.prepare(
-      'INSERT INTO users (name, email, password, tier, created_at, trial_started_at, pen_name, date_of_birth, tos_accepted_version, tos_accepted_at, upload_terms_accepted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now, penRes.value || null, dob, TOS_VERSION, now, true);
+      'INSERT INTO users (name, email, password, tier, created_at, last_active_at, trial_started_at, pen_name, date_of_birth, tos_accepted_version, tos_accepted_at, upload_terms_accepted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now, now, penRes.value || null, dob, TOS_VERSION, now, true);
 
     const newUserId = result.lastInsertRowid;
 
@@ -217,6 +217,11 @@ router.post('/login', async function(req, res) {
       await db.prepare("UPDATE users SET status = 'active', suspended_at = NULL WHERE id = ?").run(user.id);
       reactivated = true;
     }
+
+    // Account-lifecycle: a login is the strongest 'still interested' signal,
+    // so stamp last_active_at unconditionally (logins are infrequent). Resets
+    // the idle clock. Non-fatal.
+    try { await db.prepare('UPDATE users SET last_active_at = ? WHERE id = ?').run(new Date().toISOString(), user.id); } catch (e) {}
 
     req.session.userId = user.id;
     req.session.userName = user.name;
