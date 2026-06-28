@@ -929,6 +929,8 @@
           <input class="form-input" id="lifecycle-idle-input" type="number" min="1" step="1" style="width:90px;">
           <label for="lifecycle-purge-input" style="color:var(--gold);font-size:13px;">Suspended -&gt; Deleted (days)</label>
           <input class="form-input" id="lifecycle-purge-input" type="number" min="1" step="1" style="width:90px;">
+          <label for="lifecycle-grace-input" style="color:var(--gold);font-size:13px;">Warn -&gt; Suspend grace (days)</label>
+          <input class="form-input" id="lifecycle-grace-input" type="number" min="1" step="1" style="width:90px;">
           <button class="btn btn-primary btn-sm" onclick="saveLifecycleConfig()">Save</button>
           <span class="settings-section-desc" id="lifecycle-config-msg" style="margin:0;"></span>
         </div>
@@ -941,6 +943,12 @@
             <button class="btn btn-sm" onclick="stageIdleUser()">Stage as idle lone copper</button>
             <label style="color:var(--text-muted);font-size:12px;"><input type="checkbox" id="lifecycle-dryrun"> dry run</label>
             <button class="btn btn-primary btn-sm" onclick="runSweepNow()">Run sweep now</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;">
+            <label style="color:var(--gold);font-size:13px;">warned days ago</label>
+            <input class="form-input" id="lifecycle-test-warned" type="number" min="0" step="1" value="20" style="width:90px;">
+            <button class="btn btn-sm" onclick="stageWarnedUser()">Stage as warned lone copper</button>
+            <span class="settings-section-desc" style="margin:0;font-size:11px;">(idle + already warned; run sweep to suspend)</span>
           </div>
           <pre id="lifecycle-test-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
         </div>

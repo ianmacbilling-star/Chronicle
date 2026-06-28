@@ -568,6 +568,10 @@ async function initPostgres() {
   await pool.query(
     "INSERT INTO app_settings (setting_key, value) VALUES ('lifecycle_purge_days', '180') ON CONFLICT (setting_key) DO NOTHING"
   );
+  // Grace window (days) between the idle warning and suspension.
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('lifecycle_warn_grace_days', '14') ON CONFLICT (setting_key) DO NOTHING"
+  );
 
   // Global Max Pages Per Print limit (applies to ALL layouts). Default 250;
   // admin-editable via the dashboard. ON CONFLICT preserves any saved value.

@@ -11,7 +11,7 @@
 // ============================================================
 const { getDb, getAppSettingInt } = require('./database/db');
 const { runSnapshot } = require('./routes/admin');
-const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail } = require('./routes/email');
+const { sendAlertEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail } = require('./routes/email');
 const { getTier, isLoneCopper } = require('./middleware/tiers');
 const { logDebug } = require('./routes/debug');
 
@@ -157,8 +157,11 @@ async function runLifecycleSweep(db, opts) {
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const summary = { mode: 'warn-only', idleDays: idleDays, purgeDays: purgeDays,
-    scannedCopper: 0, loneStamped: 0, loneCleared: 0, warned: 0, wouldWarn: 0, emailed: 0, suspended: 0, purged: 0, dryRun: !!opts.dryRun };
+    scannedCopper: 0, loneStamped: 0, loneCleared: 0, warned: 0, wouldWarn: 0, emailed: 0, suspended: 0, wouldSuspend: 0, purged: 0, dryRun: !!opts.dryRun };
   const emailsEnabled = process.env.LIFECYCLE_EMAILS_ENABLED === 'true';
+  const suspendEnabled = process.env.LIFECYCLE_SUSPEND_ENABLED === 'true';
+  let graceDays = await getAppSettingInt('lifecycle_warn_grace_days', 14);
+  if (!(graceDays >= LIFECYCLE_FLOOR_DAYS)) graceDays = LIFECYCLE_FLOOR_DAYS;
 
   // Anyone no longer copper (e.g. upgraded) shouldn't carry a lone clock.
   try { await db.prepare("UPDATE users SET lone_since = NULL WHERE lone_since IS NOT NULL AND tier <> 'copper'").run(); } catch (e) {}
@@ -200,7 +203,25 @@ async function runLifecycleSweep(db, opts) {
           detail: { ageDays: Math.floor(ageDays), idleDays: idleDays, emailed: emailed } }); } catch (e) {}
       }
     }
-    // Phase 3 (suspend) / Phase 4 (purge) slot in here, each behind its own flag.
+    // SUSPEND stage (Phase 3): a warned user still idle past the grace window.
+    // Gated by LIFECYCLE_SUSPEND_ENABLED; reactivation is automatic on next login.
+    if (u.idle_warned_at && ageDays >= idleDays) {
+      const warnedAgeDays = (nowMs - _ms(u.idle_warned_at)) / 86400000;
+      if (warnedAgeDays >= graceDays) {
+        if (opts.dryRun || !suspendEnabled) {
+          summary.wouldSuspend++;
+        } else {
+          try { await db.prepare("UPDATE users SET status = 'suspended', suspended_at = ? WHERE id = ?").run(nowIso, u.id); } catch (e) {}
+          summary.suspended++;
+          let sEmailed = false;
+          if (emailsEnabled) { try { await sendSuspendedEmail(u.name, u.email); sEmailed = true; } catch (e) {} }
+          try { await logDebug(u.id, { level: 'info', source: 'lifecycle', page: 'sweep', fn: 'runLifecycleSweep',
+            message: 'Account suspended (idle lone copper, warned ~' + Math.floor(warnedAgeDays) + 'd ago, grace ' + graceDays + 'd, emailed ' + sEmailed + ')',
+            detail: { warnedAgeDays: Math.floor(warnedAgeDays), graceDays: graceDays, emailed: sEmailed } }); } catch (e) {}
+        }
+      }
+    }
+    // Phase 4 (purge) slots in here, behind its own flag.
   }
   return summary;
 }

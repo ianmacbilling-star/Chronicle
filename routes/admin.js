@@ -356,9 +356,11 @@ router.get('/lifecycle-config', requireAuth, requireAdmin, async function (req, 
     const db = await getDb();
     const idleRow = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'lifecycle_idle_days'").get();
     const purgeRow = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'lifecycle_purge_days'").get();
+    const graceRow = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'lifecycle_warn_grace_days'").get();
     const idle = idleRow ? parseInt(idleRow.value, 10) : 90;
     const purge = purgeRow ? parseInt(purgeRow.value, 10) : 180;
-    res.json({ idle_days: Number.isFinite(idle) ? idle : 90, purge_days: Number.isFinite(purge) ? purge : 180, floor_days: LIFECYCLE_FLOOR_DAYS });
+    const grace = graceRow ? parseInt(graceRow.value, 10) : 14;
+    res.json({ idle_days: Number.isFinite(idle) ? idle : 90, purge_days: Number.isFinite(purge) ? purge : 180, grace_days: Number.isFinite(grace) ? grace : 14, floor_days: LIFECYCLE_FLOOR_DAYS });
   } catch (e) { console.error('GET lifecycle-config error:', e.message); res.status(500).json({ error: 'Could not load lifecycle config' }); }
 });
 
@@ -366,16 +368,18 @@ router.put('/lifecycle-config', requireAuth, requireAdmin, async function (req, 
   try {
     let idle = parseInt(req.body && req.body.idle_days, 10);
     let purge = parseInt(req.body && req.body.purge_days, 10);
+    let grace = parseInt(req.body && req.body.grace_days, 10);
     if (!Number.isFinite(idle) || idle < LIFECYCLE_FLOOR_DAYS) idle = LIFECYCLE_FLOOR_DAYS;
     if (!Number.isFinite(purge) || purge < LIFECYCLE_FLOOR_DAYS) purge = LIFECYCLE_FLOOR_DAYS;
+    if (!Number.isFinite(grace) || grace < LIFECYCLE_FLOOR_DAYS) grace = LIFECYCLE_FLOOR_DAYS;
     const db = await getDb();
-    const pairs = [['lifecycle_idle_days', String(idle)], ['lifecycle_purge_days', String(purge)]];
+    const pairs = [['lifecycle_idle_days', String(idle)], ['lifecycle_purge_days', String(purge)], ['lifecycle_warn_grace_days', String(grace)]];
     for (let i = 0; i < pairs.length; i++) {
       const ex = await db.prepare('SELECT 1 FROM app_settings WHERE setting_key = ?').get(pairs[i][0]);
       if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(pairs[i][1], pairs[i][0]);
       else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(pairs[i][0], pairs[i][1]);
     }
-    res.json({ ok: true, idle_days: idle, purge_days: purge, floor_days: LIFECYCLE_FLOOR_DAYS });
+    res.json({ ok: true, idle_days: idle, purge_days: purge, grace_days: grace, floor_days: LIFECYCLE_FLOOR_DAYS });
   } catch (e) { console.error('PUT lifecycle-config error:', e.message); res.status(500).json({ error: 'Could not save lifecycle config' }); }
 });
 

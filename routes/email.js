@@ -724,4 +724,21 @@ async function sendIdleWarningEmail(name, email) {
   return true;
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail };
+// Account-lifecycle suspension notice (ACCOUNT_LIFECYCLE_SPEC Phase 3). Sent when a
+// warned, still-idle lone copper account is suspended. Reactivation is automatic on
+// next login, so the message is reassuring, not punitive.
+const SUSPENDED_COPY = {
+  subject: 'Your Campaignia account has been paused',
+  headline: 'Your account has been paused',
+  body: 'Because your account stayed idle after our last note, we have temporarily paused it. Nothing is lost &mdash; your campaigns, characters, and books are all kept safe. Just log back in any time and your account reactivates instantly, right where you left off.',
+  cta: 'Reactivate my account'
+};
+
+async function sendSuspendedEmail(name, email) {
+  const appUrl = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+  const ctaUrl = appUrl + '/app.html';
+  await sendEmail(email, SUSPENDED_COPY.subject, trialLifecycleHTML(SUSPENDED_COPY, name, ctaUrl));
+  return true;
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail };
