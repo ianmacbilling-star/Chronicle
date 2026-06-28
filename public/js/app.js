@@ -1394,6 +1394,31 @@ function renderAccountPlans(me) {
     '</div>';
   }).join('');
 
+  // Billing status line: a pending cancel (cancel-at-period-end keeps status
+  // 'active', so cancelAtPeriodEnd is the only signal) takes precedence over the
+  // normal next-billing date. Only shown for a live subscriber with a known date.
+  var bs = document.getElementById('account-billing-status');
+  if (bs) {
+    var feat = (me.allTiers && me.allTiers[current]) ? me.allTiers[current] : null;
+    var tierLabel = (feat && feat.name) ? feat.name : current;
+    var dateStr = '';
+    if (me.currentPeriodEnd) {
+      try {
+        dateStr = new Date(me.currentPeriodEnd).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      } catch (e) { dateStr = ''; }
+    }
+    if (live && me.cancelAtPeriodEnd && dateStr) {
+      bs.textContent = 'Your ' + tierLabel + ' plan is set to cancel on ' + dateStr + ". You'll keep " + tierLabel + ' access until then, after which your account moves to Copper.';
+      bs.style.display = 'block';
+    } else if (live && !me.cancelAtPeriodEnd && dateStr) {
+      bs.textContent = 'Next billing date: ' + dateStr + '.';
+      bs.style.display = 'block';
+    } else {
+      bs.textContent = '';
+      bs.style.display = 'none';
+    }
+  }
+
   var mb = document.getElementById('account-manage-billing-btn');
   if (mb) mb.style.display = (me && me.hasBilling) ? 'inline-block' : 'none';
 }

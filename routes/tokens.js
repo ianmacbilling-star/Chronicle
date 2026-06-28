@@ -674,6 +674,19 @@ function subscriptionPriceId(subscription) {
   try { return subscription.items.data[0].price.id || null; } catch (e) { return null; }
 }
 
+// Period-end (renewal/cycle date) off a subscription payload, defensive against
+// Stripe API drift: as of 2025-03-31.basil+ the billing-period fields moved OFF
+// the subscription object onto each subscription ITEM. Read the item-level field
+// first, fall back to the legacy top-level field. Stripe gives epoch SECONDS;
+// we return an ISO timestamp string (or null).
+function subscriptionPeriodEnd(subscription) {
+  let epoch = null;
+  try { epoch = subscription.items.data[0].current_period_end || null; } catch (e) {}
+  if (!epoch && subscription && subscription.current_period_end) epoch = subscription.current_period_end;
+  if (!epoch) return null;
+  try { return new Date(epoch * 1000).toISOString(); } catch (e) { return null; }
+}
+
 // Subscription-mode checkout completed: establish the user<->customer<->subscription
 // link right away so the Billing Portal works immediately. The customer.subscription
 // .created event also lands and sets tier + status via syncSubscriptionToUser. We
@@ -722,9 +735,11 @@ async function syncSubscriptionToUser(subscription) {
   } else if (status === 'canceled' || status === 'incomplete_expired' || status === 'paused') {
     nextTier = 'copper';
   } // past_due / unpaid / incomplete -> keep current tier (grace period)
+  const periodEnd = subscriptionPeriodEnd(subscription);
+  const cancelAtEnd = (subscription.cancel_at_period_end === true);
   await db.prepare(
-    "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = ?, subscription_status = ?, tier = ? WHERE id = ?"
-  ).run(customerId, subId, status, nextTier, user.id);
+    "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = ?, subscription_status = ?, current_period_end = ?, cancel_at_period_end = ?, tier = ? WHERE id = ?"
+  ).run(customerId, subId, status, periodEnd, cancelAtEnd, nextTier, user.id);
   return { skipped: false, userId: user.id, status: status, tier: nextTier };
 }
 

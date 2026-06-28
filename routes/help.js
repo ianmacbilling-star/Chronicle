@@ -108,10 +108,10 @@ router.post('/ask', requireAuth, async function(req, res) {
 
   // Enrich context authoritatively from the DB -- never trust client-sent values.
   let ctx = { name: 'there', tier: 'unknown', subscription_status: 'unknown', in_free_trial: false,
-              utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
+              utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg', cancel_at_period_end: false };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, tier, subscription_status, vocab, trial_started_at, current_period_end FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, tier, subscription_status, vocab, trial_started_at, current_period_end, cancel_at_period_end FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
       ctx.tier = u.tier || 'unknown';
@@ -120,6 +120,7 @@ router.post('/ask', requireAuth, async function(req, res) {
       ctx.vocab = u.vocab || 'ttrpg';
       ctx.trial_started_at = u.trial_started_at || null;
       ctx.current_period_end = u.current_period_end || null;
+      ctx.cancel_at_period_end = !!u.cancel_at_period_end;
     }
   } catch (e) {}
   try { const b = await getBalance(userId); if (b) { ctx.utlt = b.utlt; ctx.cot = b.cot; ctx.total = b.total; } } catch (e) {}
@@ -138,7 +139,10 @@ router.post('/ask', requireAuth, async function(req, res) {
       const ends = new Date(new Date(ctx.trial_started_at).getTime() + td * 86400000);
       accountFacts.push('- Your free trial ends on ' + ends.toISOString().slice(0, 10) + '.');
     }
-    if (ctx.current_period_end) {
+    if (ctx.current_period_end && ctx.cancel_at_period_end) {
+      const d = new Date(ctx.current_period_end).toISOString().slice(0, 10);
+      accountFacts.push('- Your ' + ctx.tier + ' subscription is set to cancel on ' + d + ". You'll keep access until then, after which your account moves to Copper. (No further charges.)");
+    } else if (ctx.current_period_end) {
       accountFacts.push('- Your next billing date is ' + new Date(ctx.current_period_end).toISOString().slice(0, 10) + '.');
     }
   } catch (e) {}
