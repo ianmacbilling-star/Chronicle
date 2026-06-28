@@ -4675,7 +4675,7 @@ function renderCharacters() {
       (charAkaNames(c.name).length ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">a.k.a. ' + escapeHtml(charAkaNames(c.name).join(', ')) + '</div>' : '') +
       ownerBadge +
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
-      '<div class="char-desc">' + (c.description || '') + '</div>' +
+      charDescHtml(c.description) +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
       (isNpc ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
       imgGridHtml +
@@ -8579,7 +8579,7 @@ function renderCharacters() {
       (charAkaNames(c.name).length ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">a.k.a. ' + escapeHtml(charAkaNames(c.name).join(', ')) + '</div>' : '') +
       ownerBadge +
       (c.player_name ? '<div class="char-player">Played by ' + c.player_name + '</div>' : '') +
-      '<div class="char-desc">' + (c.description || '') + '</div>' +
+      charDescHtml(c.description) +
       '<span class="char-badge">' + (c.cls || '') + '</span>' +
       (isNpc ? '<span class="char-badge char-badge-npc">NPC</span>' : '') +
       imgGridHtml +
@@ -10602,6 +10602,21 @@ function writeToClipboard(text, flashText) {
 }
 
 // --- Small format helpers ---
+// Character-card descriptions are capped so a long bio can't stretch the card
+// without bound. Visible text is trimmed to ~184 chars at a word boundary with an
+// ellipsis; the full description is available on hover via the title attribute.
+function charDescHtml(desc) {
+  var full = (desc == null) ? '' : String(desc);
+  if (!full) return '<div class="char-desc"></div>';
+  var LIMIT = 184;
+  if (full.length <= LIMIT) return '<div class="char-desc">' + escapeHtml(full) + '</div>';
+  var cut = full.slice(0, LIMIT);
+  var lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > LIMIT - 30) cut = cut.slice(0, lastSpace);
+  cut = cut.replace(/[\s.,;:!?-]+$/, '');
+  return '<div class="char-desc" title="' + escapeHtml(full) + '">' + escapeHtml(cut) + '\u2026</div>';
+}
+
 function escapeHtml(s) {
   if (s == null) return '';
   return String(s)
