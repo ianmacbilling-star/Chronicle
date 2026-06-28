@@ -140,6 +140,9 @@ async function initPostgres() {
       tier TEXT DEFAULT 'platinum',
       trial_started_at TIMESTAMP,
       last_active_at TIMESTAMP,
+      lone_since TIMESTAMP,
+      last_purchase_at TIMESTAMP,
+      idle_warned_at TIMESTAMP,
       stripe_customer_id TEXT,
       stripe_subscription_id TEXT,
       subscription_status TEXT DEFAULT 'trialing',
@@ -325,6 +328,10 @@ async function initPostgres() {
     // new rows are stamped at registration/login so the WHERE no-ops thereafter.
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP',
     'UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE last_active_at IS NULL',
+    // Account-lifecycle Phase 2: lone-copper idle clock + warn idempotency.
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS lone_since TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_purchase_at TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS idle_warned_at TIMESTAMP',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'trialing'",
@@ -551,6 +558,15 @@ async function initPostgres() {
   // overwritten on a redeploy — we only fill it in if it's missing.
   await pool.query(
     "INSERT INTO app_settings (setting_key, value) VALUES ('image_model', 'nano2') ON CONFLICT (setting_key) DO NOTHING"
+  );
+
+  // Account-lifecycle thresholds (days), admin-tunable. 3 months to suspend,
+  // 6 months suspended -> deleted. ON CONFLICT keeps any admin-saved values.
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('lifecycle_idle_days', '90') ON CONFLICT (setting_key) DO NOTHING"
+  );
+  await pool.query(
+    "INSERT INTO app_settings (setting_key, value) VALUES ('lifecycle_purge_days', '180') ON CONFLICT (setting_key) DO NOTHING"
   );
 
   // Global Max Pages Per Print limit (applies to ALL layouts). Default 250;

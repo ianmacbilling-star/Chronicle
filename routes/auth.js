@@ -221,7 +221,7 @@ router.post('/login', async function(req, res) {
     // Account-lifecycle: a login is the strongest 'still interested' signal,
     // so stamp last_active_at unconditionally (logins are infrequent). Resets
     // the idle clock. Non-fatal.
-    try { await db.prepare('UPDATE users SET last_active_at = ? WHERE id = ?').run(new Date().toISOString(), user.id); } catch (e) {}
+    try { await db.prepare('UPDATE users SET last_active_at = ?, idle_warned_at = NULL WHERE id = ?').run(new Date().toISOString(), user.id); } catch (e) {}
 
     req.session.userId = user.id;
     req.session.userName = user.name;

@@ -9,10 +9,11 @@
 // Jobs are idempotent and use app_settings markers so a restart can
 // neither double-run nor silently skip a week.
 // ============================================================
-const { getDb } = require('./database/db');
+const { getDb, getAppSettingInt } = require('./database/db');
 const { runSnapshot } = require('./routes/admin');
 const { sendAlertEmail, sendTrialLifecycleEmail } = require('./routes/email');
-const { getTier } = require('./middleware/tiers');
+const { getTier, isLoneCopper } = require('./middleware/tiers');
+const { logDebug } = require('./routes/debug');
 
 const HOUR = 60 * 60 * 1000;
 
@@ -131,6 +132,81 @@ async function maybeDailyTrialPass(db) {
   console.log('[scheduler] daily trial-lifecycle pass complete for ' + today);
 }
 
+// ---------------------------------------------------------------------------
+// Account-lifecycle idle sweep (ACCOUNT_LIFECYCLE_SPEC Phase 2). PHASE 2 SHIPS
+// IN WARN-ONLY MODE: it reconciles lone_since for every active copper user and
+// flags warn-stage users (idle_warned_at). Suspend (Phase 3) and purge (Phase 4)
+// are intentionally NOT implemented here yet. Thresholds are admin-tunable via
+// app_settings and clamped to a floor so a fat-fingered 0 can't sweep everyone.
+// ---------------------------------------------------------------------------
+const LIFECYCLE_FLOOR_DAYS = 1; // safety floor; revisit before enabling purge
+function _ms(v) {
+  if (!v) return 0;
+  const t = (v instanceof Date) ? v.getTime() : Date.parse(v);
+  return Number.isFinite(t) ? t : 0;
+}
+
+// Run the sweep once. opts.dryRun = compute + report without writing. Returns a
+// summary object (also used by the admin 'Run sweep now' button).
+async function runLifecycleSweep(db, opts) {
+  opts = opts || {};
+  let idleDays = await getAppSettingInt('lifecycle_idle_days', 90);
+  let purgeDays = await getAppSettingInt('lifecycle_purge_days', 180);
+  if (!(idleDays >= LIFECYCLE_FLOOR_DAYS)) idleDays = LIFECYCLE_FLOOR_DAYS;
+  if (!(purgeDays >= LIFECYCLE_FLOOR_DAYS)) purgeDays = LIFECYCLE_FLOOR_DAYS;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const summary = { mode: 'warn-only', idleDays: idleDays, purgeDays: purgeDays,
+    scannedCopper: 0, loneStamped: 0, loneCleared: 0, warned: 0, suspended: 0, purged: 0, dryRun: !!opts.dryRun };
+
+  // Anyone no longer copper (e.g. upgraded) shouldn't carry a lone clock.
+  try { await db.prepare("UPDATE users SET lone_since = NULL WHERE lone_since IS NOT NULL AND tier <> 'copper'").run(); } catch (e) {}
+
+  const coppers = await db.prepare(
+    "SELECT id, lone_since, last_active_at, last_purchase_at, idle_warned_at FROM users WHERE tier = 'copper' AND status = 'active'"
+  ).all();
+  for (let i = 0; i < coppers.length; i++) {
+    const u = coppers[i];
+    summary.scannedCopper++;
+    let lone = false;
+    try { lone = await isLoneCopper(u.id); } catch (e) { lone = false; }
+    if (!lone) {
+      if (u.lone_since && !opts.dryRun) { try { await db.prepare('UPDATE users SET lone_since = NULL WHERE id = ?').run(u.id); } catch (e) {} }
+      if (u.lone_since) summary.loneCleared++;
+      continue;
+    }
+    let loneSince = u.lone_since;
+    if (!loneSince) {
+      if (!opts.dryRun) { try { await db.prepare('UPDATE users SET lone_since = ? WHERE id = ?').run(nowIso, u.id); } catch (e) {} }
+      loneSince = nowIso;
+      summary.loneStamped++;
+    }
+    // Clock 1 start = max(lone_since, last_active_at, last_purchase_at).
+    const startMs = Math.max(_ms(loneSince), _ms(u.last_active_at), _ms(u.last_purchase_at));
+    const ageDays = (nowMs - startMs) / 86400000;
+    if (ageDays >= idleDays && !u.idle_warned_at) {
+      if (!opts.dryRun) { try { await db.prepare('UPDATE users SET idle_warned_at = ? WHERE id = ?').run(nowIso, u.id); } catch (e) {} }
+      summary.warned++;
+      // Phase 2: log the warning. The warning EMAIL is wired in Phase 2b.
+      try { await logDebug(u.id, { level: 'info', source: 'lifecycle', page: 'sweep', fn: 'runLifecycleSweep',
+        message: 'Idle warning: lone copper ~' + Math.floor(ageDays) + 'd (threshold ' + idleDays + 'd)',
+        detail: { ageDays: Math.floor(ageDays), idleDays: idleDays } }); } catch (e) {}
+    }
+    // Phase 3 (suspend) / Phase 4 (purge) slot in here, each behind its own flag.
+  }
+  return summary;
+}
+
+// Once-per-day gate, mirroring maybeDailyTrialPass.
+async function maybeDailyLifecyclePass(db) {
+  const today = new Date().toISOString().slice(0, 10);
+  const last = await getSetting(db, 'scheduler_last_lifecycle_pass');
+  if (last === today) return;
+  const summary = await runLifecycleSweep(db, {});
+  await setSetting(db, 'scheduler_last_lifecycle_pass', today);
+  console.log('[scheduler] daily lifecycle sweep complete for ' + today + ' ' + JSON.stringify(summary));
+}
+
 async function tick() {
   let db;
   try { db = await getDb(); }
@@ -147,6 +223,11 @@ async function tick() {
   } catch (e) {
     console.error('[scheduler] trial-lifecycle pass failed:', e && e.message);
   }
+  try {
+    await maybeDailyLifecyclePass(db);
+  } catch (e) {
+    console.error('[scheduler] lifecycle sweep failed:', e && e.message);
+  }
 }
 
 let started = false;
@@ -158,4 +239,4 @@ function startScheduler() {
   console.log('[scheduler] started (hourly tick; weekly snapshot Sunday night UTC)');
 }
 
-module.exports = { startScheduler };
+module.exports = { startScheduler, runLifecycleSweep };

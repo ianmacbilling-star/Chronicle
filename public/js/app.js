@@ -6213,7 +6213,7 @@ function loadSettingsForm() {
     });
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
-  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint();
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig();
 }
 
 function saveImageModel() {
@@ -9477,7 +9477,7 @@ function loadSettingsForm() {
     });
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
-  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint();
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig();
 }
 
 function saveImageModel() {
@@ -11044,7 +11044,7 @@ function switchSettingsTab(tab) {
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', t === tab);
   });
-  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); }
+  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); }
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
@@ -12444,6 +12444,69 @@ function saveSignupBonus() {
       if (res.ok && res.j && res.j.signupBonusCot != null) inp.value = res.j.signupBonusCot;
     })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+// ---- Admin: Account lifecycle (config + test tools) ----
+function loadLifecycleConfig() {
+  var idle = document.getElementById('lifecycle-idle-input');
+  var purge = document.getElementById('lifecycle-purge-input');
+  if (!idle || !purge) return;
+  fetch('/api/admin/lifecycle-config')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j) { if (j.idle_days != null) idle.value = j.idle_days; if (j.purge_days != null) purge.value = j.purge_days; } })
+    .catch(function () {});
+}
+
+function saveLifecycleConfig() {
+  var idle = document.getElementById('lifecycle-idle-input');
+  var purge = document.getElementById('lifecycle-purge-input');
+  var msg = document.getElementById('lifecycle-config-msg');
+  if (!idle || !purge) return;
+  var i = parseInt(idle.value, 10), pp = parseInt(purge.value, 10);
+  if (!isFinite(i) || i < 1 || !isFinite(pp) || pp < 1) { if (msg) msg.textContent = 'Enter whole numbers of 1 or more.'; return; }
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/lifecycle-config', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idle_days: i, purge_days: pp })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j) { idle.value = res.j.idle_days; purge.value = res.j.purge_days; if (msg) msg.textContent = 'Saved.'; }
+      else if (msg) msg.textContent = (res.j && res.j.error) || 'Could not save.';
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+function _lifecycleTestOut(obj) {
+  var out = document.getElementById('lifecycle-test-output');
+  if (!out) return;
+  out.style.display = 'block';
+  out.textContent = (typeof obj === 'string') ? obj : JSON.stringify(obj, null, 2);
+}
+
+function stageIdleUser() {
+  var emailEl = document.getElementById('lifecycle-test-email');
+  var email = emailEl ? emailEl.value : '';
+  if (!email) { _lifecycleTestOut('Enter a user email first.'); return; }
+  var daysEl = document.getElementById('lifecycle-test-days');
+  var days = parseInt(daysEl && daysEl.value, 10); if (!isFinite(days) || days < 0) days = 0;
+  var iso = new Date(Date.now() - days * 86400000).toISOString();
+  _lifecycleTestOut('Staging ' + email + ' as lone copper idle ' + days + ' days...');
+  fetch('/api/admin/lifecycle/set-user-dates', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email, tier: 'copper', status: 'active', last_active_at: iso, lone_since: iso, last_purchase_at: iso, idle_warned_at: '', suspended_at: '' })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { _lifecycleTestOut(res.j); })
+    .catch(function () { _lifecycleTestOut('Could not stage user.'); });
+}
+
+function runSweepNow() {
+  var dry = document.getElementById('lifecycle-dryrun');
+  _lifecycleTestOut('Running sweep...');
+  fetch('/api/admin/lifecycle/run-sweep', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dryRun: !!(dry && dry.checked) })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { _lifecycleTestOut(res.j); })
+    .catch(function () { _lifecycleTestOut('Sweep request failed.'); });
 }
 
 // ---- Admin: Max Pages Per Print (dashboard Settings tab) ----

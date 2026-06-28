@@ -345,4 +345,76 @@ router.put('/print-page-limit', requireAuth, requireAdmin, async function (req, 
 });
 
 router.runSnapshot = runSnapshot;
+// ===========================================================================
+// Account-lifecycle admin (ACCOUNT_LIFECYCLE_SPEC Phase 2): tunable thresholds,
+// on-demand sweep, and a backdate test tool. All admin-gated.
+// ===========================================================================
+const LIFECYCLE_FLOOR_DAYS = 1; // safety floor; revisit before enabling purge
+
+router.get('/lifecycle-config', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const idleRow = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'lifecycle_idle_days'").get();
+    const purgeRow = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'lifecycle_purge_days'").get();
+    const idle = idleRow ? parseInt(idleRow.value, 10) : 90;
+    const purge = purgeRow ? parseInt(purgeRow.value, 10) : 180;
+    res.json({ idle_days: Number.isFinite(idle) ? idle : 90, purge_days: Number.isFinite(purge) ? purge : 180, floor_days: LIFECYCLE_FLOOR_DAYS });
+  } catch (e) { console.error('GET lifecycle-config error:', e.message); res.status(500).json({ error: 'Could not load lifecycle config' }); }
+});
+
+router.put('/lifecycle-config', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    let idle = parseInt(req.body && req.body.idle_days, 10);
+    let purge = parseInt(req.body && req.body.purge_days, 10);
+    if (!Number.isFinite(idle) || idle < LIFECYCLE_FLOOR_DAYS) idle = LIFECYCLE_FLOOR_DAYS;
+    if (!Number.isFinite(purge) || purge < LIFECYCLE_FLOOR_DAYS) purge = LIFECYCLE_FLOOR_DAYS;
+    const db = await getDb();
+    const pairs = [['lifecycle_idle_days', String(idle)], ['lifecycle_purge_days', String(purge)]];
+    for (let i = 0; i < pairs.length; i++) {
+      const ex = await db.prepare('SELECT 1 FROM app_settings WHERE setting_key = ?').get(pairs[i][0]);
+      if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(pairs[i][1], pairs[i][0]);
+      else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(pairs[i][0], pairs[i][1]);
+    }
+    res.json({ ok: true, idle_days: idle, purge_days: purge, floor_days: LIFECYCLE_FLOOR_DAYS });
+  } catch (e) { console.error('PUT lifecycle-config error:', e.message); res.status(500).json({ error: 'Could not save lifecycle config' }); }
+});
+
+// Run the sweep on demand (test/ops). Lazy require of the scheduler avoids a
+// load-order cycle (scheduler already requires this module for runSnapshot).
+router.post('/lifecycle/run-sweep', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const { runLifecycleSweep } = require('../scheduler');
+    const db = await getDb();
+    const summary = await runLifecycleSweep(db, { dryRun: !!(req.body && req.body.dryRun) });
+    res.json({ ok: true, summary: summary });
+  } catch (e) { console.error('run-sweep error:', e.message); res.status(500).json({ error: 'Sweep failed: ' + e.message }); }
+});
+
+// TEST TOOL: backdate a target user's lifecycle timestamps so the sweep can
+// move them through stages on demand. Column names come from a fixed allow-list
+// (never from the request), values are parameterized.
+router.post('/lifecycle/set-user-dates', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const email = ((req.body && req.body.email) || '').toLowerCase().trim();
+    if (!email) return res.status(400).json({ error: 'email required' });
+    const u = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    if (!u) return res.status(404).json({ error: 'No user with that email' });
+    const allow = ['tier', 'status', 'last_active_at', 'lone_since', 'last_purchase_at', 'idle_warned_at', 'suspended_at'];
+    const sets = []; const vals = [];
+    for (let i = 0; i < allow.length; i++) {
+      const k = allow[i];
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, k)) {
+        sets.push(k + ' = ?');
+        vals.push(req.body[k] === '' ? null : req.body[k]);
+      }
+    }
+    if (!sets.length) return res.status(400).json({ error: 'no fields to set' });
+    vals.push(u.id);
+    await db.prepare('UPDATE users SET ' + sets.join(', ') + ' WHERE id = ?').run(vals);
+    const after = await db.prepare('SELECT id, email, tier, status, last_active_at, lone_since, last_purchase_at, idle_warned_at, suspended_at FROM users WHERE id = ?').get(u.id);
+    res.json({ ok: true, user: after });
+  } catch (e) { console.error('set-user-dates error:', e.message); res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

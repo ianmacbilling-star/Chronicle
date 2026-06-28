@@ -920,6 +920,32 @@
         </div>
       </div>
 
+      <!-- Account lifecycle (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Account lifecycle</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Idle lone-copper accounts are warned, then suspended, then purged. Timeframes (days) are tunable; the sweep reads these live. Floor is 1 day.</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label for="lifecycle-idle-input" style="color:var(--gold);font-size:13px;">Lone copper -&gt; Suspended (days)</label>
+          <input class="form-input" id="lifecycle-idle-input" type="number" min="1" step="1" style="width:90px;">
+          <label for="lifecycle-purge-input" style="color:var(--gold);font-size:13px;">Suspended -&gt; Deleted (days)</label>
+          <input class="form-input" id="lifecycle-purge-input" type="number" min="1" step="1" style="width:90px;">
+          <button class="btn btn-primary btn-sm" onclick="saveLifecycleConfig()">Save</button>
+          <span class="settings-section-desc" id="lifecycle-config-msg" style="margin:0;"></span>
+        </div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+          <div class="settings-section-desc" style="margin-bottom:8px;"><strong>Test tools.</strong> Stage a user as an idle lone copper, then run the sweep on demand (warn-only in this phase).</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <input class="form-input" id="lifecycle-test-email" type="email" placeholder="user@email" style="width:200px;">
+            <label style="color:var(--gold);font-size:13px;">idle days</label>
+            <input class="form-input" id="lifecycle-test-days" type="number" min="0" step="1" value="100" style="width:90px;">
+            <button class="btn btn-sm" onclick="stageIdleUser()">Stage as idle lone copper</button>
+            <label style="color:var(--text-muted);font-size:12px;"><input type="checkbox" id="lifecycle-dryrun"> dry run</label>
+            <button class="btn btn-primary btn-sm" onclick="runSweepNow()">Run sweep now</button>
+          </div>
+          <pre id="lifecycle-test-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
+        </div>
+      </div>
+
       <!-- Print page limit (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Print limits</div>
