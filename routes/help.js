@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { getDb } = require('../database/db');
+const { getDb, getAppSettingInt } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
-const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
+const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper } = require('../middleware/tiers');
 const { listPacks } = require('../services/billing/packs');
 
 // Contextual in-app help: a short, read-only CHAT. It can ask a
@@ -108,10 +108,10 @@ router.post('/ask', requireAuth, async function(req, res) {
 
   // Enrich context authoritatively from the DB -- never trust client-sent values.
   let ctx = { name: 'there', tier: 'unknown', subscription_status: 'unknown', in_free_trial: false,
-              utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg', cancel_at_period_end: false };
+              utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, tier, subscription_status, vocab, trial_started_at, current_period_end, cancel_at_period_end FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, tier, subscription_status, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
       ctx.tier = u.tier || 'unknown';
@@ -120,7 +120,9 @@ router.post('/ask', requireAuth, async function(req, res) {
       ctx.vocab = u.vocab || 'ttrpg';
       ctx.trial_started_at = u.trial_started_at || null;
       ctx.current_period_end = u.current_period_end || null;
-      ctx.cancel_at_period_end = !!u.cancel_at_period_end;
+      ctx.status = u.status || 'active';
+      ctx.idle_warned_at = u.idle_warned_at || null;
+      ctx.suspended_at = u.suspended_at || null;
     }
   } catch (e) {}
   try { const b = await getBalance(userId); if (b) { ctx.utlt = b.utlt; ctx.cot = b.cot; ctx.total = b.total; } } catch (e) {}
@@ -139,12 +141,39 @@ router.post('/ask', requireAuth, async function(req, res) {
       const ends = new Date(new Date(ctx.trial_started_at).getTime() + td * 86400000);
       accountFacts.push('- Your free trial ends on ' + ends.toISOString().slice(0, 10) + '.');
     }
-    if (ctx.current_period_end && ctx.cancel_at_period_end) {
-      const d = new Date(ctx.current_period_end).toISOString().slice(0, 10);
-      accountFacts.push('- Your ' + ctx.tier + ' subscription is set to cancel on ' + d + ". You'll keep access until then, after which your account moves to Copper. (No further charges.)");
-    } else if (ctx.current_period_end) {
+    if (ctx.current_period_end) {
       accountFacts.push('- Your next billing date is ' + new Date(ctx.current_period_end).toISOString().slice(0, 10) + '.');
     }
+  } catch (e) {}
+
+  // Account-lifecycle: live policy numbers + this user's standing, read fresh.
+  let lifecycleBlock = '';
+  try {
+    const dbL = await getDb();
+    const idleDays = await getAppSettingInt('lifecycle_idle_days', 90);
+    const graceDays = await getAppSettingInt('lifecycle_warn_grace_days', 14);
+    const purgeDays = await getAppSettingInt('lifecycle_purge_days', 180);
+    let pwRow = null; try { pwRow = await dbL.prepare("SELECT value FROM app_settings WHERE setting_key = 'lifecycle_purge_warn_days'").get(); } catch (e) {}
+    const purgeWarn = (pwRow && pwRow.value) ? pwRow.value : '30,7';
+    const L = [];
+    L.push('ACCOUNT LIFECYCLE (live settings, authoritative -- use these exact numbers for any "what happens to my account over time / will it be deleted" question):');
+    L.push('- Applies ONLY to a free Copper account NOT covered by a paid Story Master (paid accounts and covered members are never on this timeline).');
+    L.push('- An inactivity warning email is sent after ' + idleDays + ' days of inactivity (no logins or purchases).');
+    L.push('- The account is suspended ' + graceDays + ' days after that warning if it is still idle.');
+    L.push('- A suspended account is closed ' + purgeDays + ' days after it was suspended.');
+    L.push('- Closure-warning emails go out ' + purgeWarn + ' days before the closing date.');
+    L.push('- Logging in (or buying tokens/prints) resets the timeline. Suspension is reversible by simply logging in; only closure is permanent.');
+    let lone = false; try { lone = await isLoneCopper(userId); } catch (e) {}
+    if (ctx.status === 'suspended' && ctx.suspended_at) {
+      const closeOn = new Date(new Date(ctx.suspended_at).getTime() + purgeDays * 86400000).toISOString().slice(0, 10);
+      L.push('- THIS USER is currently SUSPENDED (since ' + new Date(ctx.suspended_at).toISOString().slice(0, 10) + '). Logging in reactivates instantly; if left suspended it is scheduled to close on ' + closeOn + '.');
+    } else if (lone) {
+      L.push('- THIS USER is a free Copper account with no paid Story Master coverage, so this timeline applies to them; staying active keeps everything safe.');
+      if (ctx.idle_warned_at) L.push('- THIS USER was sent an inactivity warning on ' + new Date(ctx.idle_warned_at).toISOString().slice(0, 10) + '; logging in clears it.');
+    } else {
+      L.push('- THIS USER is NOT currently on the inactivity timeline (paid, covered by a paid Story Master, or otherwise active).');
+    }
+    lifecycleBlock = L.join('\n');
   } catch (e) {}
 
   const viewId = (req.body && typeof req.body.current_view_id === 'string') ? req.body.current_view_id : '';
@@ -186,7 +215,7 @@ router.post('/ask', requireAuth, async function(req, res) {
   }).join('\n');
   const tierBlock = 'LIVE TIER NUMBERS (authoritative, pulled live from the dashboard -- use these for any "how many / which tier" question, for ANY tier, not just the user\'s own):\n' + _tierMatrix;
 
-  const extras = [accountFacts.join('\n'), STYLE_REF, PACK_REF].filter(function (b) { return b; }).join('\n\n');
+  const extras = [accountFacts.join('\n'), lifecycleBlock, STYLE_REF, PACK_REF].filter(function (b) { return b; }).join('\n\n');
   const system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras + '\n\n' + (BRAIN || fallback);
 
   try {

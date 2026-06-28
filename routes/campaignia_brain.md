@@ -147,10 +147,10 @@ from the Archive, locking an image, and archiving an image. Generation is
   you're billed monthly on roughly the same date for your tier. Current pricing is on
   the Account page.
 - **Upgrades & downgrades:** change tiers anytime; Stripe handles all proration.
-- **Canceling:** cancel anytime and your subscription ends; your card isn't charged
-  while suspended. Your data is held for six months (and you may get reminder emails).
-  After six months suspended, we reserve the right to delete the data — with
-  confirmation emails first.
+- **Canceling:** cancel anytime and your subscription ends; you drop to the free Copper
+  tier and your card isn't charged again. Your campaigns and data stay with your account.
+  If a free account later goes inactive for a long time, the inactivity policy below
+  applies -- but simply logging in keeps it active.
 - **Manage on the Account page:** subscription changes, cancellation, and card updates
   all live there (a hosted Stripe Billing Portal).
 - **Suspend vs. cancel:** suspending your account (Account page) is a one-click pause —
@@ -160,13 +160,38 @@ from the Archive, locking an image, and archiving an image. Generation is
 - **Downgrading or lapsing to Copper doesn't lock or delete your campaigns.** You keep
   full editing of campaigns and sessions you own, and can keep generating while you have
   tokens. What changes: you can't create *new* campaigns or sessions, advanced styles
-  revert to the base options, and if you're not in a paid Story Master's campaign you
-  can't buy more tokens.
+  revert to the base options.
 - **Copper is the floor.** No monthly charge — you only pay when buying tokens. Follow
   along with your Story Master for free; to create your own images/version, buy tokens.
-  Copper can only buy tokens while part of a campaign run by a paid Story Master.
+  Any Copper account can buy token packs at any time to spend on its own images.
 - **Refunds:** all sales are final — no refunds, including on purchased tokens. If you
   think you were charged in error, contact support.
+
+### Account inactivity & closure (what happens over time)
+
+This applies ONLY to a free Copper account that is **not** covered by a paid Story
+Master (not a player in any campaign whose Story Master is on a paid tier). Paid accounts
+and covered members are never on this timeline.
+
+The exact day counts are configurable and are given to you in the ACCOUNT LIFECYCLE
+settings block provided with each question -- always quote those live numbers, never
+guess. The stages, in order:
+
+1. **Inactivity warning.** After the configured idle period with no logins or purchases,
+   we email a heads-up that the account will be paused if it stays idle.
+2. **Suspended.** If still idle after the configured grace period following that warning,
+   the account is paused. Nothing is lost -- campaigns, characters, and books are kept.
+   **Logging in reactivates it instantly.**
+3. **Closure reminders.** While suspended, we email reminders at the configured lead
+   times before the closing date, each naming the exact date.
+4. **Closed.** If it stays suspended through the configured window, the account is closed.
+
+**What resets the clock:** logging in -- or buying tokens or a print -- at any point
+before closure restarts the timeline and clears any pending warning or suspension. Every
+step before closure is undone simply by logging in; only closure itself is permanent.
+
+When asked "will my account be deleted / what happens if I stop using it," walk through
+this flow using the live numbers, and reassure that staying active keeps everything safe.
 
 ---
 
