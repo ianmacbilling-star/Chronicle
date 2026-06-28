@@ -711,12 +711,10 @@ function handleBillingReturn() {
     billingToast('Subscription checkout canceled - no charge was made.', 'info');
   } else if (portal === 'return') {
     billingToast('Billing updated.', 'success');
-    // Reconcile straight from Stripe so a just-made change (e.g. a pending cancel)
-    // is reflected immediately, without waiting on the async webhook. Poll as backstop.
-    fetch('/api/tokens/sync-subscription', { method: 'POST' })
-      .then(function() { refreshAccount(); })
-      .catch(function() { refreshAccount(); });
-    setTimeout(refreshAccount, 2000);
+    // loadAccount() reconciles from Stripe when it opens, so refreshing is enough;
+    // the second pass is a backstop in case the portal write lands a moment late.
+    setTimeout(refreshAccount, 600);
+    setTimeout(refreshAccount, 2500);
   } else if (order === 'success') {
     billingToast('Payment received - your book is being sent to the printer.', 'success');
     setTimeout(function () { if (typeof loadOrders === 'function') loadOrders(); }, 1000);
@@ -1156,8 +1154,12 @@ function loadAccount() {
   if (_pe) _pe.value = (state.user && state.user.email) || '';
   var _pp = document.getElementById('settings-penname');
   if (_pp) _pp.value = (state.user && state.user.penName) || '';
-  // Pull current tier + plan info, then usage counts.
-  fetch('/api/auth/me')
+  // Reconcile live billing state from Stripe first (self-healing: reflects a cancel,
+  // plan change, or payment problem made in the portal OR the Stripe dashboard), then
+  // render. The endpoint no-ops server-side for users with no subscription on file.
+  fetch('/api/tokens/sync-subscription', { method: 'POST' })
+    .then(function() {}, function() {})
+    .then(function() { return fetch('/api/auth/me'); })
     .then(function(r) { return r.json(); })
     .then(function(me) {
       if (!me || !me.authenticated) return;
@@ -1412,7 +1414,11 @@ function renderAccountPlans(me) {
         dateStr = new Date(me.currentPeriodEnd).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
       } catch (e) { dateStr = ''; }
     }
-    if (live && me.cancelAtPeriodEnd && dateStr) {
+    var billStatus = me.subscriptionStatus || '';
+    if (live && (billStatus === 'past_due' || billStatus === 'unpaid')) {
+      bs.textContent = 'There is a problem with your most recent payment (often an expired or declined card). Open "Manage subscription & billing" to update your card and keep your ' + tierLabel + ' plan.';
+      bs.style.display = 'block';
+    } else if (live && me.cancelAtPeriodEnd && dateStr) {
       bs.textContent = 'Your ' + tierLabel + ' plan is set to cancel on ' + dateStr + ". You'll keep " + tierLabel + ' access until then, after which your account moves to Copper.';
       bs.style.display = 'block';
     } else if (live && !me.cancelAtPeriodEnd && dateStr) {
