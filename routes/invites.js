@@ -208,6 +208,20 @@ router.post('/invites/:token/accept', requireAuth, async function(req, res) {
   if (invite.used_at) return res.status(410).json({ error: 'USED' });
   if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'EXPIRED' });
 
+  // Bind the invite to the address it was sent to: the logged-in account's email
+  // must match the invite's email_hint. Without this, a user signed in as a
+  // different account could claim an invitation meant for someone else.
+  const acceptingUser = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+  const _inviteEmail = (invite.email_hint || '').trim().toLowerCase();
+  const _userEmail = ((acceptingUser && acceptingUser.email) || '').trim().toLowerCase();
+  if (_inviteEmail && _userEmail && _inviteEmail !== _userEmail) {
+    return res.status(403).json({
+      error: 'EMAIL_MISMATCH',
+      message: 'This invitation was sent to ' + invite.email_hint + ', but you are signed in as ' + acceptingUser.email + '. Please sign in with ' + invite.email_hint + ' to accept it.',
+      invited_email: invite.email_hint
+    });
+  }
+
   // Reject if the accepting user is already a member of this campaign.
   // This prevents weird states (e.g. a DM accepting their own invite
   // would otherwise demote themselves to player, or stack memberships).

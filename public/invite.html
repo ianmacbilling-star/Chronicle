@@ -204,7 +204,28 @@ function renderAuthArea(invite, authState) {
   area.innerHTML = '';
 
   if (authState.logged_in) {
-    // Already logged in — single Accept button.
+    // If signed in as a different account than the invite was addressed to, do
+    // NOT offer Accept (the server would reject it). Explain and offer a switch.
+    var loggedEmail = (authState.email || '').trim().toLowerCase();
+    var invitedEmail = (invite.email_hint || '').trim().toLowerCase();
+    if (invitedEmail && loggedEmail && invitedEmail !== loggedEmail) {
+      var warn = document.createElement('div');
+      warn.className = 'invite-help';
+      warn.style.color = '#e6b800';
+      warn.style.marginBottom = '12px';
+      warn.textContent = 'This invitation was sent to ' + invite.email_hint + ', but you are signed in as ' + authState.email + '. Switch to that account to accept it.';
+      area.appendChild(warn);
+      var outBtn = document.createElement('button');
+      outBtn.className = 'btn btn-primary';
+      outBtn.style.width = '100%';
+      outBtn.textContent = 'Log out and switch account';
+      outBtn.onclick = function() {
+        fetch('/api/auth/logout', { method: 'POST' }).then(function() { window.location.reload(); }).catch(function() { window.location.reload(); });
+      };
+      area.appendChild(outBtn);
+      return;
+    }
+    // Already logged in with the matching account — single Accept button.
     var btn = document.createElement('button');
     btn.className = 'btn btn-primary';
     btn.style.width = '100%';

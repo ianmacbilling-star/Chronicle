@@ -103,7 +103,12 @@ router.post('/register', async function(req, res) {
         const invite = await db.prepare(
           'SELECT * FROM campaign_invites WHERE token = ?'
         ).get(invite_token);
-        if (invite && !invite.used_at && new Date(invite.expires_at) >= new Date()) {
+        // Only auto-accept if the registering email matches the invited address
+        // (the form pre-fills email_hint; a deliberately changed email is skipped,
+        // non-fatal -- the account is still created).
+        const _inviteEmail = ((invite && invite.email_hint) || '').trim().toLowerCase();
+        const _regEmail = (email || '').trim().toLowerCase();
+        if (invite && !invite.used_at && new Date(invite.expires_at) >= new Date() && (!_inviteEmail || _inviteEmail === _regEmail)) {
           await db.prepare(
             'INSERT INTO campaign_members (campaign_id, user_id, role) VALUES (?, ?, ?) ' +
             'ON CONFLICT (campaign_id, user_id) DO NOTHING'
