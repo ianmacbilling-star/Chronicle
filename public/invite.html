@@ -269,7 +269,8 @@ function renderAuthArea(invite, authState) {
   regBtn.onclick = function() {
     var rt = encodeURIComponent(window.location.pathname);
     var em = encodeURIComponent(invite.email_hint || '');
-    window.location.href = '/login?register=1&returnTo=' + rt + (em ? '&email=' + em : '');
+    var tk = encodeURIComponent(invite.token || '');
+    window.location.href = '/login?register=1&returnTo=' + rt + (em ? '&email=' + em : '') + (tk ? '&invite=' + tk : '');
   };
   area.appendChild(regBtn);
 }

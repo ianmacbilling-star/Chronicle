@@ -105,14 +105,12 @@ function welcomeHTML(name) {
     </div>
     <div class="body">
       <div class="title">Welcome to Campaignia, ${name}!</div>
-      <div class="text">Your 30-day free trial has begun. Here's what you can do with your Copper account:</div>
-      <div class="feature">📜 Create 1 campaign and up to 5 sessions</div>
-      <div class="feature">✨ AI-powered moment extraction from transcripts</div>
-      <div class="feature">🎨 AI image generation for every storyboard panel</div>
-      <div class="feature">📖 Graphic novel preview with multiple layouts</div>
-      <div style="margin: 24px 0; padding: 14px; background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2); border-radius: 8px; font-size: 13px; color: rgba(201,168,76,0.7);">
-        ⏳ Your trial runs for 30 days. Upgrade anytime to unlock unlimited campaigns, full export, and no watermarks.
-      </div>
+      <div class="text">Thank you for signing up &mdash; we're absolutely thrilled to have you. Campaignia turns your tabletop sessions into illustrated comics and print-ready graphic novels, so the stories you tell at the table become something you can hold, share, and keep forever.</div>
+      <div class="feature">📜 Turn your session transcripts into illustrated story panels</div>
+      <div class="feature">✨ AI-powered moment extraction that finds the scenes worth drawing</div>
+      <div class="feature">🎨 Original AI art for every panel, in the style you choose</div>
+      <div class="feature">📖 Assemble it all into a graphic novel you can print and hold</div>
+      <div class="text" style="margin-top:20px;">This is going to be good. Jump in and make something legendary &mdash; we can't wait to see what your party gets up to. Enjoy the adventure!</div>
       <div style="text-align:center;margin:24px 0;">
         <a href="https://campaignia.com" class="btn">Start Your Campaign</a>
       </div>

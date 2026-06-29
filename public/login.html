@@ -260,6 +260,11 @@ try {
   if (_qe) { var _re = document.getElementById('reg-email'); if (_re) _re.value = _qe; }
 } catch (e) {}
 
+// Carry an invite token from the invite landing page so registration auto-joins the
+// campaign (which suppresses the general welcome email; the campaign email is sent).
+var _inviteTok = null;
+try { _inviteTok = new URLSearchParams(window.location.search).get('invite') || null; } catch (e) {}
+
 // Honor a ?returnTo= same-origin path (e.g. returning to an invite to accept)
 // after sign-in. Only relative paths beginning with a single '/' are allowed,
 // so this can never become an open redirect to another site.
@@ -302,11 +307,12 @@ document.getElementById('register-btn').addEventListener('click', async function
   if (!accept_upload) { showError('register-error','Please accept the content and copyright agreement to continue.'); return; }
   this.disabled=true; this.textContent='Creating...';
   try {
-    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload})});
+    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload,invite_token:_inviteTok})});
     var data = await res.json();
     if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
     var _rt = _safeReturnTo();
-    window.location.replace(_rt ? _rt : '/app.html');
+    if (data.auto_joined_campaign_id) { window.location.replace('/app.html#campaign=' + data.auto_joined_campaign_id); }
+    else { window.location.replace(_rt ? _rt : '/app.html'); }
   } catch(e) { showError('register-error','Connection error.'); this.disabled=false; this.textContent='Create Account'; }
 });
 
