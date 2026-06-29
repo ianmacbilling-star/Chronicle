@@ -4772,8 +4772,11 @@ function showCharSaveError(msg, withPlans) {
   el.classList.remove('hidden');
 }
 function charModalPrimary() {
-  var editId = (document.getElementById('char-edit-id') || {}).value || '';
-  if (editId) { closeCharModal(); } else { saveChar(); }
+  // saveChar() handles BOTH new and edit: it builds the PUT with editId and
+  // appends every selected slot file (and clear_ flags), then closes + reloads.
+  // The old edit path (closeCharModal) sent only metadata, silently dropping
+  // any picked portrait/action/etc. image on edit.
+  saveChar();
 }
 
 function saveChar() {
@@ -10914,6 +10917,20 @@ function revertCharRef(charId) {
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not revert.'); return; }
+      // Update the OPEN modal in place so the restored image shows immediately;
+      // loadCharacters() only refreshes the card list, not the open dialog (which
+      // is why revert previously needed a close/reopen to show). The endpoint
+      // returns the restored URL; fall back to the client's armed slot if absent.
+      var ch = (state.characters || []).find(function(c) { return c.id === charId; });
+      if (ch) {
+        var restored = (d && d.canonical_reference_url) ? d.canonical_reference_url : ch.revert_reference_url;
+        if (restored) {
+          ch.canonical_reference_url = restored;
+          ch.revert_reference_url = null;
+          ch.archived = false;
+          if (typeof renderCharModalPrompt === 'function') renderCharModalPrompt(ch);
+        }
+      }
       if (typeof loadCharacters === 'function') loadCharacters();
     })
     .catch(function(e){ alert('Could not revert: ' + e.message); });
