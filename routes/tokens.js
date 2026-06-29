@@ -426,15 +426,18 @@ router.post('/checkout', async function(req, res) {
     const db = await getDb();
     // last_active_campaign_id drives the DM 10% bonus attribution.
     let attributed = null;
+    let buyerEmail = null;
     try {
-      const u = await db.prepare('SELECT last_active_campaign_id FROM users WHERE id = ?').get(req.session.userId);
+      const u = await db.prepare('SELECT last_active_campaign_id, email FROM users WHERE id = ?').get(req.session.userId);
       attributed = (u && u.last_active_campaign_id != null) ? u.last_active_campaign_id : null;
+      buyerEmail = (u && u.email) || null;
     } catch (e) { attributed = null; }
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
     const session = await stripeProvider.createCheckoutSession({
       pack: pack,
       userId: req.session.userId,
       attributedCampaignId: attributed,
+      customerEmail: buyerEmail,
       successUrl: base + '/app.html?purchase=success',
       cancelUrl: base + '/app.html?purchase=cancel'
     });

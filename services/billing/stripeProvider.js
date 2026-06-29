@@ -54,7 +54,7 @@ async function createCheckoutSession(opts) {
   const stripe = getClient();
   if (!stripe) throw unconfigured();
   const pack = opts.pack;
-  return await stripe.checkout.sessions.create({
+  const params = {
     mode: 'payment',
     line_items: [{
       quantity: 1,
@@ -72,7 +72,11 @@ async function createCheckoutSession(opts) {
       pack_id: pack.id,
       attributed_campaign_id: opts.attributedCampaignId != null ? String(opts.attributedCampaignId) : ''
     }
-  });
+  };
+  // Prefill the buyer's account email (and set the receipt email) so a browser-cached
+  // Stripe Link identity isn't the default. (Link may still be offered by the browser.)
+  if (opts.customerEmail) params.customer_email = opts.customerEmail;
+  return await stripe.checkout.sessions.create(params);
 }
 
 // Create a hosted Checkout Session for a recurring tier SUBSCRIPTION. priceId is a
