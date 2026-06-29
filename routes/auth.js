@@ -73,9 +73,24 @@ router.post('/register', async function(req, res) {
     // capped (1 campaign / 1 session / a few characters) with a session-token
     // reserve, and a 30-day window. They lapse to Copper at expiry (lazy, on next
     // activity -- see lapseTrialIfExpired). trial_started_at stamps the window.
+    // Brand-new accounts that join via a valid invite should land on COPPER (the
+    // free floor), NOT the 30-day Free Trial -- the trial is only for cold signups.
+    // Decide this BEFORE the insert so the welcome token grant matches the tier.
+    let preInvite = null;
+    let willJoinViaInvite = false;
+    if (invite_token && typeof invite_token === 'string') {
+      try {
+        preInvite = await db.prepare('SELECT * FROM campaign_invites WHERE token = ?').get(invite_token);
+        const _ie = ((preInvite && preInvite.email_hint) || '').trim().toLowerCase();
+        const _re = (email || '').trim().toLowerCase();
+        willJoinViaInvite = !!(preInvite && !preInvite.used_at && new Date(preInvite.expires_at) >= new Date() && (!_ie || _ie === _re));
+      } catch (e) { preInvite = null; willJoinViaInvite = false; }
+    }
+    const regTier = willJoinViaInvite ? 'copper' : 'trial';
+    const trialStart = willJoinViaInvite ? null : now;
     const result = await db.prepare(
       'INSERT INTO users (name, email, password, tier, created_at, last_active_at, trial_started_at, pen_name, date_of_birth, tos_accepted_version, tos_accepted_at, upload_terms_accepted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), email.toLowerCase().trim(), hash, 'trial', now, now, now, penRes.value || null, dob, TOS_VERSION, now, true);
+    ).run(name.trim(), email.toLowerCase().trim(), hash, regTier, now, now, trialStart, penRes.value || null, dob, TOS_VERSION, now, true);
 
     const newUserId = result.lastInsertRowid;
 
@@ -98,17 +113,10 @@ router.post('/register', async function(req, res) {
     // if the auto-accept fails, registration still succeeds — the user
     // can revisit the invite link manually and click Accept.
     let autoJoinedCampaignId = null;
-    if (invite_token && typeof invite_token === 'string') {
+    if (willJoinViaInvite && preInvite) {
       try {
-        const invite = await db.prepare(
-          'SELECT * FROM campaign_invites WHERE token = ?'
-        ).get(invite_token);
-        // Only auto-accept if the registering email matches the invited address
-        // (the form pre-fills email_hint; a deliberately changed email is skipped,
-        // non-fatal -- the account is still created).
-        const _inviteEmail = ((invite && invite.email_hint) || '').trim().toLowerCase();
-        const _regEmail = (email || '').trim().toLowerCase();
-        if (invite && !invite.used_at && new Date(invite.expires_at) >= new Date() && (!_inviteEmail || _inviteEmail === _regEmail)) {
+        const invite = preInvite;
+        {
           await db.prepare(
             'INSERT INTO campaign_members (campaign_id, user_id, role) VALUES (?, ?, ?) ' +
             'ON CONFLICT (campaign_id, user_id) DO NOTHING'
