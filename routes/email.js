@@ -336,7 +336,7 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
       <div style="text-align:center;margin:28px 0;">
         <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c9a84c;color:#1a0f08;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:1px;">Enter the Campaign</a>
       </div>
-      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">From here you can view storyboards, see your fellow adventurers, and follow the story as it unfolds. When your character isn't locked, you can edit its appearance and identity.</div>
+      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">From here you can view storyboards, see your fellow adventurers, and follow the story as it unfolds. Create your own version, build your own storyboard &mdash; the adventure begins.</div>
     </div>
     <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
       campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
