@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getAppSettingInt } = require('../database/db');
+const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const path = require('path');
@@ -2672,7 +2673,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
       try {
         var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
         _measured.plan = packComic(_measured.blocks, { pageHeightIn: 9.7, gapIn: 0.12, maxPages: _maxPP });
-      } catch (e) { _measured.planError = String(e && e.message ? e.message : e); }
+      } catch (e) { _measured.planError = friendlyError(e, ''); }
       _measured.layout = 'comicpage';
       _measured.sessionId = String(req.params.sessionId);
       return res.json(_measured);
@@ -2733,7 +2734,7 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     res.send(html);
   } catch(e) {
     console.error('PDF session error:', e.message);
-    res.status(500).send('<html><body style="background:#1a0f08;color:#c9a84c;font-family:serif;padding:2rem;"><h2>Error generating PDF</h2><p>' + e.message + '</p></body></html>');
+    res.status(500).send('<html><body style="background:#1a0f08;color:#c9a84c;font-family:serif;padding:2rem;"><h2>Error generating PDF</h2><p>' + friendlyError(e, 'The PDF could not be generated. Please try again.') + '</p></body></html>');
   }
 });
 
@@ -2824,7 +2825,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     var nMember = '';
     if (asUser) { var nu = await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser); if (nu && nu.name) nMember = nu.name; }
     try { return await sendHtmlAsPdf(res, html, pdfFileName([campaign.name, nMember])); }
-    catch (e) { return res.status(500).json({ error: 'PDF render failed', detail: String(e && e.message || e) }); }
+    catch (e) { return res.status(500).json({ error: 'PDF render failed', detail: friendlyError(e, '') }); }
   }
   res.send(html);
 });
@@ -2922,7 +2923,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     pdfBuffer = await renderHtmlToPdf(html, {});
   } catch (e) {
     console.error('[print-interior] render failed:', e && e.message ? e.message : e);
-    return res.status(500).json({ error: 'PDF render failed', detail: String(e && e.message ? e.message : e) });
+    return res.status(500).json({ error: 'PDF render failed', detail: friendlyError(e, '') });
   }
 
   try {
@@ -2946,7 +2947,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     return res.json({ url: url, bytes: pdfBuffer.length, pages: pages });
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
-    return res.status(500).json({ error: 'PDF upload failed', detail: String(e && e.message ? e.message : e) });
+    return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
   }
 });
 
@@ -3108,7 +3109,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
       pdfBuffer = await renderHtmlToPdf(html, { widthIn: dims.widthIn, heightIn: dims.heightIn });
     } catch (e) {
       console.error('[print-cover] render failed:', e && e.message ? e.message : e);
-      return res.status(500).json({ error: 'Cover render failed', detail: String(e && e.message ? e.message : e) });
+      return res.status(500).json({ error: 'Cover render failed', detail: friendlyError(e, '') });
     }
 
     if (req.query.download) {
@@ -3122,11 +3123,11 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
       return res.json({ url: url, bytes: pdfBuffer.length, widthIn: dims.widthIn, heightIn: dims.heightIn });
     } catch (e) {
       console.error('[print-cover] upload failed:', e && e.message ? e.message : e);
-      return res.status(500).json({ error: 'Cover upload failed', detail: String(e && e.message ? e.message : e) });
+      return res.status(500).json({ error: 'Cover upload failed', detail: friendlyError(e, '') });
     }
   } catch (e) {
     console.error('[print-cover] error:', e && e.message ? e.message : e);
-    return res.status(500).json({ error: 'Server error', detail: String(e && e.message ? e.message : e) });
+    return res.status(500).json({ error: 'Server error', detail: friendlyError(e, '') });
   }
 });
 

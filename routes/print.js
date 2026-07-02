@@ -25,6 +25,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
+const { friendlyError } = require('../middleware/friendlyErrors');
 const { getTier } = require('../middleware/tiers');
 const { getPrintProvider } = require('../services/printing');
 const catalog = require('../services/printing/catalog');
@@ -168,7 +169,7 @@ router.get('/novel-info/:campaignId', requireSession, async function (req, res) 
 
     res.json({ campaignName: camp.name, role: mem.role, versions: versions, pageEstimate: pageEstimate, momentCount: moments, estimated: true });
   } catch (e) {
-    res.status(500).json({ error: 'Server error', detail: String(e && e.message || e) });
+    res.status(500).json({ error: 'Server error', detail: friendlyError(e, '') });
   }
 });
 
@@ -200,7 +201,7 @@ router.post('/quote', requireSession, async function (req, res) {
       breakdown: { print: _m.printMarked, printAtCost: _m.printAtCost, shipping: _m.shipping },
     });
   } catch (e) {
-    res.status(502).json({ error: 'Quote failed', detail: String(e && e.message || e) });
+    res.status(502).json({ error: 'Quote failed', detail: friendlyError(e, '') });
   }
 });
 
@@ -325,7 +326,7 @@ router.post('/order', requireSession, async function (req, res) {
     return res.json({ url: session.url, orderId: orderId, externalId: externalId, customerCharge: customerCharge, currency: quote.currency });
   } catch (e) {
     if (e && e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
-    return res.status(502).json({ error: 'Order failed', detail: String(e && e.message || e) });
+    return res.status(502).json({ error: 'Order failed', detail: friendlyError(e, '') });
   }
 });
 
@@ -352,7 +353,7 @@ router.get('/order/:id', requireSession, async function (req, res) {
     }
     res.json(row);
   } catch (e) {
-    res.status(500).json({ error: 'Server error', detail: String(e && e.message || e) });
+    res.status(500).json({ error: 'Server error', detail: friendlyError(e, '') });
   }
 });
 
@@ -372,7 +373,7 @@ router.get('/orders', requireSession, async function (req, res) {
     ).all(req.session.userId);
     res.json({ orders: rows || [] });
   } catch (e) {
-    res.status(500).json({ error: 'Could not load orders', detail: String(e && e.message || e) });
+    res.status(500).json({ error: 'Could not load orders', detail: friendlyError(e, '') });
   }
 });
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId } = require('../database/db');
+const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
@@ -349,7 +350,7 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
     return res.json({ error: 'Unknown replace target.' });
   } catch (e) {
     console.error('archive apply error:', e.message);
-    res.json({ error: 'Replace failed: ' + e.message });
+    res.json({ error: friendlyError(e, 'Could not replace the image. Please try again.') });
   }
 });
 

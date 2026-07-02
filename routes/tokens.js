@@ -12,6 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
+const { friendlyError } = require('../middleware/friendlyErrors');
 const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/tiers');
 const { getPack, listPacks } = require('../services/billing/packs');
 const stripeProvider = require('../services/billing/stripeProvider');
@@ -261,7 +262,7 @@ router.post('/dev-credit', async function(req, res) {
     });
     res.json({ ok: true, balance: bal });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: friendlyError(e, 'The request could not be completed. Please try again.') });
   }
 });
 
@@ -291,7 +292,7 @@ router.post('/dev-grant-monthly', async function(req, res) {
     const bal = await getBalance(req.session.userId);
     res.json({ ok: true, tier: tierName, granted: { utlt: gUtlt, cot: gCot }, balance: bal });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: friendlyError(e, 'The request could not be completed. Please try again.') });
   }
 });
 
@@ -331,7 +332,7 @@ router.post('/dev-set-balance', async function(req, res) {
     const bal = await getBalance(uid);
     res.json({ ok: true, balance: bal, reserve: reserveSet });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: friendlyError(e, 'The request could not be completed. Please try again.') });
   }
 });
 
@@ -356,7 +357,7 @@ router.post('/admin/credit', async function(req, res) {
     });
     res.json({ ok: true, balance: bal });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: friendlyError(e, 'The request could not be completed. Please try again.') });
   }
 });
 
@@ -394,7 +395,7 @@ router.post('/admin/set-balance', async function(req, res) {
     }
     res.json({ ok: true, balance: bal });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: friendlyError(e, 'The request could not be completed. Please try again.') });
   }
 });
 
@@ -530,7 +531,7 @@ router.post('/change-plan', async function(req, res) {
   } catch (e) {
     if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
     console.error('change-plan error:', e.message);
-    res.status(500).json({ error: 'Could not change plan', detail: e.message });
+    res.status(500).json({ error: friendlyError(e, 'Could not change your plan. Please try again.') });
   }
 });
 

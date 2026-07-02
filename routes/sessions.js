@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
+const { friendlyImageError } = require('../middleware/friendlyErrors');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -443,7 +444,7 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('regenerate-reference error:', e.message);
-    res.json({ error: 'Could not regenerate: ' + e.message });
+    res.json({ error: friendlyImageError(e) });
   }
 });
 
@@ -510,7 +511,7 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('retouch-reference error:', e.message);
-    res.json({ error: 'Could not retouch: ' + e.message });
+    res.json({ error: friendlyImageError(e) });
   }
 });
 

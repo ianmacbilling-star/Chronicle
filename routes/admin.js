@@ -9,6 +9,7 @@ const router = express.Router();
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const tiers = require('../middleware/tiers');
 const { getDb } = require('../database/db');
+const { friendlyError } = require('../middleware/friendlyErrors');
 
 const TIER_ORDER = ['copper', 'silver', 'gold', 'platinum', 'trial'];
 
@@ -395,7 +396,7 @@ router.post('/lifecycle/run-sweep', requireAuth, requireAdmin, async function (r
     const db = await getDb();
     const summary = await runLifecycleSweep(db, { dryRun: !!(req.body && req.body.dryRun) });
     res.json({ ok: true, summary: summary });
-  } catch (e) { console.error('run-sweep error:', e.message); res.status(500).json({ error: 'Sweep failed: ' + e.message }); }
+  } catch (e) { console.error('run-sweep error:', e.message); res.status(500).json({ error: friendlyError(e, 'The sweep failed. Please try again.') }); }
 });
 
 // TEST TOOL: backdate a target user's lifecycle timestamps so the sweep can
@@ -422,7 +423,7 @@ router.post('/lifecycle/set-user-dates', requireAuth, requireAdmin, async functi
     await db.prepare('UPDATE users SET ' + sets.join(', ') + ' WHERE id = ?').run(vals);
     const after = await db.prepare('SELECT id, email, tier, status, last_active_at, lone_since, last_purchase_at, idle_warned_at, suspended_at FROM users WHERE id = ?').get(u.id);
     res.json({ ok: true, user: after });
-  } catch (e) { console.error('set-user-dates error:', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('set-user-dates error:', e.message); res.status(500).json({ error: friendlyError(e, 'Could not update the user dates. Please try again.') }); }
 });
 
 module.exports = router;

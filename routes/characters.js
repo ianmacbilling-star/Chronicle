@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
-const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
+const { friendlyAnthropicError, friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
 const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
 const imageHelpers = require('./images');
@@ -77,7 +77,7 @@ router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, uploadField
     res.json(character);
   } catch(e) {
     console.error('Character create error:', e.message);
-    res.json({ error: e.message });
+    res.json({ error: friendlyError(e, 'Could not create the character. Please try again.') });
   }
 });
 
@@ -142,7 +142,7 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, uploadFields, 
     res.json(updated);
   } catch(e) {
     console.error('Character update error:', e.message);
-    res.json({ error: e.message });
+    res.json({ error: friendlyError(e, 'Could not update the character. Please try again.') });
   }
 });
 
@@ -179,7 +179,7 @@ router.delete('/:id', requireAuth, verifyCampaignDM, async function(req, res) {
     res.json({ success: true });
   } catch(e) {
     console.error('Character delete error:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: friendlyError(e, 'Could not delete the character. Please try again.') });
   }
 });
 
@@ -310,7 +310,7 @@ router.put('/:id/canonical-prompt', requireAuth, verifyCampaignDmOrCharacterOwne
 
     res.json({ success: true, canonical_prompt: canonical_prompt, canonical_prompt_at: now });
   } catch(e) {
-    res.json({ error: e.message });
+    res.json({ error: friendlyError(e, 'Could not save the prompt. Please try again.') });
   }
 });
 
@@ -354,7 +354,7 @@ router.post('/:id/regenerate-reference', requireAuth, verifyCampaignDmOrCharacte
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Regenerate reference error:', e.message);
-    res.json({ error: e.message });
+    res.json({ error: friendlyImageError(e) });
   }
 });
 
@@ -398,7 +398,7 @@ router.post('/:id/retouch-reference', requireAuth, verifyCampaignDmOrCharacterOw
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Retouch reference error:', e.message);
-    res.json({ error: e.message });
+    res.json({ error: friendlyImageError(e) });
   }
 });
 
@@ -422,7 +422,7 @@ router.post('/:id/revert-reference', requireAuth, verifyCampaignDmOrCharacterOwn
     res.json({ success: true, canonical_reference_url: char.revert_reference_url });
   } catch(e) {
     console.error('Revert reference error:', e.message);
-    res.json({ error: e.message });
+    res.json({ error: friendlyError(e, 'Could not revert the reference image. Please try again.') });
   }
 });
 
