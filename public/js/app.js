@@ -4226,6 +4226,33 @@ function maybeShowNoCharacterHint() {
     .catch(function() {});
 }
 
+// One-time "no characters yet" nudge before Generate Story. Fires at most
+// once per browser session for a given (user, session): stories read and
+// illustrate better when characters exist first. Non-blocking -- returns true
+// to proceed, false only if the user chooses to stop and add characters.
+// Fails open on any error so a hiccup never blocks generation.
+async function warnIfNoCharacters() {
+  try {
+    if (!state.currentCampaign || !state.currentCampaign.id) return true;
+    var _uid = (state.user && state.user.id) || 'anon';
+    var _sid = (state.currentSession && state.currentSession.id) || 'nosess';
+    var _flagKey = 'chr_nochar_warn_' + _uid + '_' + _sid;
+    if (sessionStorage.getItem(_flagKey)) return true;
+    var resp = await fetch('/api/campaigns/' + state.currentCampaign.id + '/characters');
+    var data = await resp.json();
+    var arr = Array.isArray(data) ? data : [];
+    if (arr.length > 0) return true;
+    sessionStorage.setItem(_flagKey, '1');
+    return await uiConfirm(
+      'This campaign does not have any characters yet. Stories turn out better ' +
+      'when your characters are built first -- they appear more consistently in ' +
+      'the narrative and images. You can add characters first, or generate the ' +
+      'story now and add them later.\n\nGenerate the story now?');
+  } catch (e) {
+    return true;
+  }
+}
+
 function loadCharacters() {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters')
     .then(function(r) { return r.json(); })
@@ -5033,6 +5060,10 @@ async function extractMoments() {
     errorEl.classList.remove('hidden');
     return;
   }
+
+  // No-character nudge: one-time reminder that stories read and illustrate
+  // better when characters exist first. Non-blocking; proceeds if the user OKs.
+  if (!await warnIfNoCharacters()) return;
 
   // Warn before overwriting an existing storyboard
   if (state.moments && state.moments.length) {
@@ -8709,6 +8740,10 @@ async function extractMoments() {
     errorEl.classList.remove('hidden');
     return;
   }
+
+  // No-character nudge: one-time reminder that stories read and illustrate
+  // better when characters exist first. Non-blocking; proceeds if the user OKs.
+  if (!await warnIfNoCharacters()) return;
 
   // Warn before overwriting an existing storyboard
   if (state.moments && state.moments.length) {
