@@ -1470,6 +1470,17 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
     const seed = crypto.randomInt(1, 2147483647);
     const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, 'wide', null, isFade);
     try { await spendTokens(req.session.userId, cost, { source: 'custom_style_preview', event_type: 'generation_spend' }); } catch (e) { console.error('preview spend failed:', e.message); }
+    // Persist the preview to the style so reopening shows the last render.
+    const styleId = req.body && req.body.style_id;
+    if (styleId) {
+      try {
+        const srow = await db.prepare('SELECT id, preview_url FROM custom_art_styles WHERE id = ? AND owner_id = ?').get(styleId, req.session.userId);
+        if (srow) {
+          await db.prepare('UPDATE custom_art_styles SET preview_url = ?, updated_at = ? WHERE id = ?').run(url, new Date().toISOString(), srow.id);
+          if (srow.preview_url && srow.preview_url !== url) { try { await releaseImage(db, srow.preview_url); } catch (e) {} }
+        }
+      } catch (e) { console.error('preview persist failed:', e.message); }
+    }
     res.json({ image: url });
   } catch (e) {
     console.error('custom style preview error:', e.message);

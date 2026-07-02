@@ -4,7 +4,7 @@ const { getDb } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier } = require('../middleware/tiers');
 const { canAfford, spendTokens } = require('./tokens');
-const { uploadFile } = require('../storage/storage');
+const { uploadFile, releaseImage } = require('../storage/storage');
 const multer = require('multer');
 const path = require('path');
 
@@ -38,6 +38,7 @@ function rowOut(r) {
     style_prompt: r.style_prompt,
     is_fade: r.is_fade ? 1 : 0,
     sample_urls: parseSamples(r.sample_urls),
+    preview_url: r.preview_url || null,
     created_at: r.created_at,
     updated_at: r.updated_at
   };
@@ -127,15 +128,16 @@ router.post('/custom', requireAuth, requireTruePlatinum, async function(req, res
     const stylePrompt = (req.body && req.body.style_prompt || '').trim();
     const isFade = fadeFromBody(req.body && req.body.is_fade, 0);
     const sampleUrls = (req.body && Array.isArray(req.body.sample_urls)) ? req.body.sample_urls : [];
+    const previewUrl = (req.body && typeof req.body.preview_url === 'string' && req.body.preview_url) ? req.body.preview_url : null;
     if (!name) return res.json({ error: 'Please name your style.' });
     if (!stylePrompt) return res.json({ error: 'The style description is empty. Analyze your samples or write one first.' });
     const stylePromptN = /^STYLE:/i.test(stylePrompt) ? stylePrompt : ('STYLE: ' + stylePrompt);
     const db = await getDb();
     const now = new Date().toISOString();
     const result = await db.prepare(
-      'INSERT INTO custom_art_styles (owner_id, name, style_prompt, is_fade, sample_urls, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.session.userId, name, stylePromptN, isFade, JSON.stringify(sampleUrls), now, now);
+      'INSERT INTO custom_art_styles (owner_id, name, style_prompt, is_fade, sample_urls, preview_url, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.session.userId, name, stylePromptN, isFade, JSON.stringify(sampleUrls), previewUrl, now, now);
     const row = await db.prepare('SELECT * FROM custom_art_styles WHERE id = ?').get(result.lastInsertRowid);
     res.json(rowOut(row));
   } catch (e) {
@@ -155,13 +157,15 @@ router.put('/custom/:id', requireAuth, requireTruePlatinum, async function(req, 
     const name = (req.body && req.body.name !== undefined) ? String(req.body.name).trim() : row.name;
     const stylePrompt = (req.body && req.body.style_prompt !== undefined) ? String(req.body.style_prompt).trim() : row.style_prompt;
     const isFade = fadeFromBody(req.body && req.body.is_fade, row.is_fade ? 1 : 0);
+    const previewUrl = (req.body && req.body.preview_url !== undefined) ? (req.body.preview_url || null) : row.preview_url;
     if (!name) return res.json({ error: 'Please name your style.' });
     if (!stylePrompt) return res.json({ error: 'The style description is empty.' });
     const stylePromptN = /^STYLE:/i.test(stylePrompt) ? stylePrompt : ('STYLE: ' + stylePrompt);
     const now = new Date().toISOString();
     await db.prepare(
-      'UPDATE custom_art_styles SET name = ?, style_prompt = ?, is_fade = ?, updated_at = ? WHERE id = ? AND owner_id = ?'
-    ).run(name, stylePromptN, isFade, now, row.id, req.session.userId);
+      'UPDATE custom_art_styles SET name = ?, style_prompt = ?, is_fade = ?, preview_url = ?, updated_at = ? WHERE id = ? AND owner_id = ?'
+    ).run(name, stylePromptN, isFade, previewUrl, now, row.id, req.session.userId);
+    if (row.preview_url && previewUrl && row.preview_url !== previewUrl) { try { await releaseImage(db, row.preview_url); } catch (e) {} }
     const updated = await db.prepare('SELECT * FROM custom_art_styles WHERE id = ?').get(row.id);
     res.json(rowOut(updated));
   } catch (e) {
@@ -176,10 +180,11 @@ router.delete('/custom/:id', requireAuth, async function(req, res) {
   try {
     const db = await getDb();
     const row = await db.prepare(
-      'SELECT id FROM custom_art_styles WHERE id = ? AND owner_id = ?'
+      'SELECT id, preview_url FROM custom_art_styles WHERE id = ? AND owner_id = ?'
     ).get(req.params.id, req.session.userId);
     if (!row) return res.status(404).json({ error: 'Style not found' });
     await db.prepare('DELETE FROM custom_art_styles WHERE id = ? AND owner_id = ?').run(row.id, req.session.userId);
+    if (row.preview_url) { try { await releaseImage(db, row.preview_url); } catch (e) {} }
     res.json({ success: true });
   } catch (e) {
     console.error('delete custom style error:', e.message);

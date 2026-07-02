@@ -3178,6 +3178,7 @@ function applySessionRefDraft(charId, url, wrapId, msg) {
 
 // ===== Custom Art Styles (Platinum) =====
 var cstyleSamples = []; // sample_urls from the latest analyze, carried into save
+var cstylePreviewUrl = ''; // last-rendered preview image, persisted with the style
 function customStylesLoaded() { return !!(state && state._customStylesLoaded); }
 function getCustomStyles() { return (state && state.customStyles) ? state.customStyles : []; }
 function customStyleById(id) {
@@ -3211,6 +3212,7 @@ function cstyleErr(msg) { var e = document.getElementById('cstyle-error'); if (!
 function cstyleSaveErr(msg) { var e = document.getElementById('cstyle-save-error'); if (!e) return; if (msg) { e.textContent = msg; e.classList.remove('hidden'); } else { e.textContent = ''; e.classList.add('hidden'); } }
 function resetCustomStyleForm() {
   cstyleSamples = [];
+  cstylePreviewUrl = '';
   var vals = { 'cstyle-edit-id':'', 'cstyle-name':'', 'cstyle-prompt':'' };
   Object.keys(vals).forEach(function(k){ var el = document.getElementById(k); if (el) el.value = vals[k]; });
   var fade = document.getElementById('cstyle-fade'); if (fade) fade.checked = false;
@@ -3316,7 +3318,7 @@ function previewCustomStyle() {
   if (btn) { btn.disabled = true; btn.textContent = 'Rendering...'; }
   fetch('/api/images/custom-style-preview', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ style_prompt: txt, is_fade: !!(fade && fade.checked) })
+    body: JSON.stringify({ style_prompt: txt, is_fade: !!(fade && fade.checked), style_id: (document.getElementById('cstyle-edit-id') || {}).value || null })
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -3325,6 +3327,7 @@ function previewCustomStyle() {
       var img = document.getElementById('cstyle-preview-img');
       if (img) img.src = data.image || '';
       if (wrap) wrap.style.display = data.image ? 'block' : 'none';
+      cstylePreviewUrl = data.image || '';
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function(e){ cstyleErr('Could not render the preview: ' + e.message); })
@@ -3347,7 +3350,7 @@ function saveCustomStyle(opts) {
   if (btn && !keepOpen) { btn.disabled = true; btn.textContent = 'Saving...'; }
   var url = editId ? ('/api/art-styles/custom/' + editId) : '/api/art-styles/custom';
   var method = editId ? 'PUT' : 'POST';
-  var body = editId ? { name: name, style_prompt: prompt, is_fade: isFade } : { name: name, style_prompt: prompt, is_fade: isFade, sample_urls: cstyleSamples };
+  var body = editId ? { name: name, style_prompt: prompt, is_fade: isFade, preview_url: cstylePreviewUrl || null } : { name: name, style_prompt: prompt, is_fade: isFade, sample_urls: cstyleSamples, preview_url: cstylePreviewUrl || null };
   fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -3380,6 +3383,9 @@ function editCustomStyle(id) {
   var ft = document.getElementById('cstyle-form-title'); if (ft) ft.textContent = 'Edit style';
   cstyleSamples = Array.isArray(sObj.sample_urls) ? sObj.sample_urls : [];
   ['cstyle_1','cstyle_2','cstyle_3','cstyle_4'].forEach(function(k, i){ if (cstyleSamples[i]) paintSlotUrl(k, cstyleSamples[i]); });
+  cstylePreviewUrl = sObj.preview_url || '';
+  var _pi = document.getElementById('cstyle-preview-img'); if (_pi) _pi.src = cstylePreviewUrl;
+  var _pw = document.getElementById('cstyle-preview-wrap'); if (_pw) _pw.style.display = cstylePreviewUrl ? 'block' : 'none';
   var m = document.getElementById('cstyle-modal'); if (m) m.classList.remove('hidden');
 }
 function deleteCustomStyle(id) {
