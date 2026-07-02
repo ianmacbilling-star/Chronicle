@@ -3,7 +3,7 @@ const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignAssetCreator } = require('../middleware/auth');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
-const { uploadFile, deleteFile, restoreCopy } = require('../storage/storage');
+const { uploadFile, deleteFile, restoreCopy, releaseImage } = require('../storage/storage');
 const multer = require('multer');
 const path = require('path');
 const imageHelpers = require('./images');
@@ -183,6 +183,87 @@ router.post('/generate', requireAuth, verifyCampaignAssetCreator, async function
   } catch (e) {
     console.error('generate asset error:', e.message);
     res.json({ error: 'Could not generate the asset image.' });
+  }
+});
+
+// POST retouch an asset image: apply an instruction to the CURRENT image. Works
+// on ANY asset (uploaded, from-archive, or generated). Async; arms one-step
+// revert. Costs 1 token, spent on webhook success.
+router.post('/:assetId/retouch', requireAuth, verifyCampaignAssetCreator, async function(req, res) {
+  const instruction = (req.body && req.body.instruction || '').trim();
+  if (!instruction) return res.json({ error: 'Describe the change to make.' });
+  try {
+    const db = await getDb();
+    const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ? AND campaign_id = ?').get(req.params.assetId, req.params.campaignId);
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+    if (!asset.image_url) return res.json({ error: 'This asset has no image to retouch yet.' });
+    const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!falKey || !webhookUrl) return res.json({ error: 'Image generation is not configured.' });
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Retouching costs a token. Add more to continue.' });
+    }
+    const sub = await imageHelpers.submitRetouch(asset.image_url, instruction, '', falKey, webhookUrl, null, 'square');
+    const now = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, asset_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), asset.id, 'asset_retouch', 'queued', sub.model, cost, asset.image_url, now, now);
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
+  } catch (e) {
+    console.error('asset retouch error:', e.message);
+    res.json({ error: 'Could not retouch the asset image.' });
+  }
+});
+
+// POST regenerate an asset image from its stored description (re-roll). Only
+// available when the asset has a description. Async; arms one-step revert.
+router.post('/:assetId/regenerate', requireAuth, verifyCampaignAssetCreator, async function(req, res) {
+  try {
+    const db = await getDb();
+    const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ? AND campaign_id = ?').get(req.params.assetId, req.params.campaignId);
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+    if (!asset.description) return res.json({ error: 'This asset has no description to regenerate from.' });
+    const falKey = process.env.FAL_API_KEY || (req.body && req.body.fal_key);
+    const webhookUrl = imageHelpers.falWebhookUrl();
+    if (!falKey || !webhookUrl) return res.json({ error: 'Image generation is not configured.' });
+    const modelKey = await imageHelpers.getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Regenerating costs a token. Add more to continue.' });
+    }
+    const sub = await imageHelpers.submitAssetReference(falKey, asset.description, asset.category, modelKey, webhookUrl);
+    const now = new Date().toISOString();
+    const jobIns = await db.prepare(
+      'INSERT INTO image_jobs (request_id, user_id, campaign_id, asset_id, kind, status, model, cost, prev_image, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sub.request_id, req.session.userId, parseInt(req.params.campaignId, 10), asset.id, 'asset_ref', 'queued', sub.model, cost, asset.image_url || null, now, now);
+    res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
+  } catch (e) {
+    console.error('asset regenerate error:', e.message);
+    res.json({ error: 'Could not regenerate the asset image.' });
+  }
+});
+
+// POST revert an asset image: one-deep undo of the last retouch/regenerate.
+// Free (no token spend). Restores the retained prior image, releases the current.
+router.post('/:assetId/revert', requireAuth, verifyCampaignAssetCreator, async function(req, res) {
+  try {
+    const db = await getDb();
+    const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ? AND campaign_id = ?').get(req.params.assetId, req.params.campaignId);
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+    if (!asset.revert_image_url) return res.json({ error: 'There is no previous image to revert to.' });
+    const current = asset.image_url;
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE campaign_assets SET image_url = ?, revert_image_url = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(asset.revert_image_url, now, req.session.userId, asset.id);
+    if (current && current !== asset.revert_image_url) await releaseImage(db, current);
+    res.json({ success: true, image_url: asset.revert_image_url });
+  } catch (e) {
+    console.error('asset revert error:', e.message);
+    res.json({ error: 'Could not revert the asset image.' });
   }
 });
 

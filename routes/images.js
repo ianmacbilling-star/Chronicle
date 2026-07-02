@@ -1386,15 +1386,26 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (job.kind === 'session_ref' && job.character_id) {
           await logImageGeneration(db, job.user_id, 'session_reference', job.character_id, job.fork_id);
         }
-        if (job.kind === 'asset_ref' && job.asset_id) {
+        if ((job.kind === 'asset_ref' || job.kind === 'asset_retouch') && job.asset_id) {
           await db.prepare('UPDATE campaign_assets SET image_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, new Date().toISOString(), job.user_id, job.asset_id);
+          // Revert undo-slot (one-deep): regenerate/retouch retain the prior image.
+          const _priorA = await db.prepare('SELECT revert_image_url FROM campaign_assets WHERE id = ?').get(job.asset_id);
+          if (_priorA && _priorA.revert_image_url && _priorA.revert_image_url !== job.prev_image && _priorA.revert_image_url !== imageUrl) {
+            await releaseImage(db, _priorA.revert_image_url);
+          }
+          if (job.prev_image && job.prev_image !== imageUrl) {
+            await db.prepare('UPDATE campaign_assets SET revert_image_url = ? WHERE id = ?').run(job.prev_image, job.asset_id);
+          } else {
+            await db.prepare('UPDATE campaign_assets SET revert_image_url = NULL WHERE id = ?').run(job.asset_id);
+          }
           await logImageGeneration(db, job.user_id, 'asset_reference', job.asset_id, null);
         }
       if (job.cost && job.cost > 0) {
         const spendSource = (job.kind === 'char_ref') ? 'character_reference'
           : (job.kind === 'session_ref') ? 'amendment_reference'
           : (job.kind === 'asset_ref') ? 'asset_reference'
+          : (job.kind === 'asset_retouch') ? 'asset_retouch'
           : (job.kind === 'retouch') ? 'panel_retouch'
           : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: spendSource, event_type: 'generation_spend' });

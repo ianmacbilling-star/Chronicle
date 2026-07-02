@@ -4021,13 +4021,15 @@ function renderAssets() {
       ? '<img src="' + a.image_url + '" class="asset-card-photo" alt="' + a.name + '" onclick="openLightbox(this.src,this.alt)" />'
       : '<div class="asset-card-photo asset-photo-empty">&#127912;</div>';
     var cat = ASSET_CAT_LABEL[a.category] || 'Location';
+    var acts = '<button class="panel-pill" onclick="openAssetModal(' + a.id + ')" title="Edit this asset">&#9998; Edit</button>';
+    if (a.image_url) acts += '<button class="panel-pill" onclick="openRetouchAsset(' + a.id + ')" title="Keep this image and change just one thing">Retouch</button>';
+    if (a.description) acts += '<button class="panel-pill" onclick="regenerateAsset(' + a.id + ')" title="Re-roll the image from its description">Regenerate</button>';
+    if (a.revert_image_url) acts += '<button class="panel-pill" onclick="revertAsset(' + a.id + ')" title="Undo the last retouch or regenerate">Revert</button>';
+    acts += '<button class="panel-pill" onclick="deleteAsset(' + a.id + ')" title="Delete this asset">&#10005; Delete</button>';
     return '<div class="asset-card">' +
       '<div class="asset-card-img">' +
         img +
-        '<div class="panel-img-actions">' +
-          '<button class="panel-pill" onclick="openAssetModal(' + a.id + ')" title="Edit this asset">&#9998; Edit</button>' +
-          '<button class="panel-pill" onclick="deleteAsset(' + a.id + ')" title="Delete this asset">&#10005; Delete</button>' +
-        '</div>' +
+        '<div class="panel-img-actions">' + acts + '</div>' +
       '</div>' +
       '<div class="asset-card-meta">' +
         '<div class="asset-card-name">' + a.name + '</div>' +
@@ -4582,6 +4584,7 @@ function openRetouchChar(charId) {
   state.retouchCharId = charId;
   state.retouchMomentId = null;
   state.retouchSessionCharId = null;
+  state.retouchAssetId = null;
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal');
@@ -4596,6 +4599,7 @@ function openRetouchSessionChar(charId) {
   state.retouchSessionCharId = charId;
   state.retouchCharId = null;
   state.retouchMomentId = null;
+  state.retouchAssetId = null;
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal');
@@ -7077,6 +7081,7 @@ function openRetouch(momentId) {
   state.retouchMomentId = momentId;
   state.retouchCharId = null;
   state.retouchSessionCharId = null;
+  state.retouchAssetId = null;
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal');
@@ -7089,11 +7094,78 @@ function closeRetouch() {
   if (modal) modal.classList.add('hidden');
 }
 
+// Open the shared Retouch modal targeting an ASSET image.
+function openRetouchAsset(assetId) {
+  state.retouchAssetId = assetId;
+  state.retouchCharId = null;
+  state.retouchMomentId = null;
+  state.retouchSessionCharId = null;
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+// Regenerate an asset image from its stored description (re-roll). Arms revert.
+function regenerateAsset(assetId) {
+  if (!state.currentCampaign) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + assetId + '/regenerate', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ fal_key: getFalKey() || 'platform' })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.job_id) {
+        pollRefJob(data.job_id, function(url){ loadAssets(); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ loadAssets(); alert('Could not regenerate: ' + err); });
+        return;
+      }
+      if (data && data.error === 'INSUFFICIENT_TOKENS') { alert(data.message || 'You are out of tokens.'); }
+      else { alert((data && (data.message || data.error)) || 'Could not regenerate the asset.'); }
+    })
+    .catch(function(e){ alert('Could not regenerate: ' + e.message); });
+}
+
+// One-step undo of the last asset retouch/regenerate. Free (no token spend).
+function revertAsset(assetId) {
+  if (!state.currentCampaign) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + assetId + '/revert', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not revert.'); return; }
+      loadAssets();
+    })
+    .catch(function(){ alert('Could not revert the asset.'); });
+}
+
 function submitRetouch() {
   if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
   if (!instruction) { if (ta) ta.focus(); return; }
+
+  // Asset image target (uploaded, from-archive, or generated). Checked first.
+  if (state.retouchAssetId) {
+    var _aId = state.retouchAssetId;
+    closeRetouch();
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + _aId + '/retouch', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data && data.job_id) {
+          pollRefJob(data.job_id, function(url){ loadAssets(); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ loadAssets(); alert('Could not retouch: ' + err); });
+          return;
+        }
+        if (data && data.error === 'INSUFFICIENT_TOKENS') { alert(data.message || 'You are out of tokens.'); }
+        else { alert((data && (data.message || data.error)) || 'Could not retouch the asset.'); }
+      })
+      .catch(function(e){ alert('Could not retouch: ' + e.message); });
+    return;
+  }
 
   // Session-character reference target (a draft amendment image). Checked
   // before the canonical character branch below.

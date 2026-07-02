@@ -324,6 +324,7 @@ async function initPostgres() {
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS asset_id INTEGER',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS description TEXT',
+    'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS revert_image_url TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
     // Account-lifecycle idle clock (ACCOUNT_LIFECYCLE_SPEC Phase 0). Backfill
