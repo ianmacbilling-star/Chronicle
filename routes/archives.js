@@ -330,9 +330,13 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
         'SELECT * FROM campaign_assets WHERE id = ? AND campaign_id = ?'
       ).get(req.body.target_asset_id, req.params.campaignId);
       if (!asset) return res.json({ error: 'The target asset no longer exists.' });
-      const isCreator = String(asset.created_by) === String(req.session.userId);
-      if (req.campaignRole !== 'dm' && !isCreator)
-        return res.status(403).json({ error: 'Only the DM or the asset creator can replace its image.' });
+      // Same gate as verifyCampaignAssetCreator: DM, or a member when the
+      // campaign allows members to add/edit assets.
+      if (req.campaignRole !== 'dm') {
+        const camp = await db.prepare('SELECT allow_member_assets FROM campaigns WHERE id = ?').get(req.params.campaignId);
+        const allowMembers = camp && (camp.allow_member_assets === true || camp.allow_member_assets === 1 || camp.allow_member_assets === 't' || camp.allow_member_assets === 'true');
+        if (!allowMembers) return res.status(403).json({ error: 'The Story Master has not enabled members to add assets in this campaign.' });
+      }
       const freshUrl = await restoreCopy(archive.image_url);
       const prevImg = asset.image_url;
       const priorRevert = asset.revert_image_url;
