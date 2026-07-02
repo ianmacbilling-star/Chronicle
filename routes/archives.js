@@ -325,6 +325,23 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
     }
 
 
+    if (targetType === 'asset') {
+      const asset = await db.prepare(
+        'SELECT * FROM campaign_assets WHERE id = ? AND campaign_id = ?'
+      ).get(req.body.target_asset_id, req.params.campaignId);
+      if (!asset) return res.json({ error: 'The target asset no longer exists.' });
+      const isCreator = String(asset.created_by) === String(req.session.userId);
+      if (req.campaignRole !== 'dm' && !isCreator)
+        return res.status(403).json({ error: 'Only the DM or the asset creator can replace its image.' });
+      const freshUrl = await restoreCopy(archive.image_url);
+      const prevImg = asset.image_url;
+      const priorRevert = asset.revert_image_url;
+      await db.prepare('UPDATE campaign_assets SET image_url = ?, revert_image_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+        .run(freshUrl, (prevImg && prevImg !== freshUrl) ? prevImg : null, now, req.session.userId, asset.id);
+      if (priorRevert && priorRevert !== prevImg && priorRevert !== freshUrl) await releaseImage(db, priorRevert);
+      return res.json({ success: true, image_url: freshUrl });
+    }
+
     return res.json({ error: 'Unknown replace target.' });
   } catch (e) {
     console.error('archive apply error:', e.message);

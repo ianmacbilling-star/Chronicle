@@ -1220,49 +1220,30 @@
       <button class="modal-close" onclick="closeAssetModal()">&times;</button>
     </div>
     <div id="asset-modal-error" class="alert alert-error hidden"></div>
-    <div class="form-group" id="asset-mode-toggle">
-      <div style="display:flex;gap:8px;">
-        <button type="button" class="btn btn-sm btn-primary" id="asset-mode-upload-tab" onclick="setAssetMode('upload')">Upload image</button>
-        <button type="button" class="btn btn-sm" id="asset-mode-describe-tab" onclick="setAssetMode('describe')">Describe it</button>
-      </div>
-    </div>
     <div class="form-group">
-      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">— names the AI matches into panels; separate alternates with /</span></label>
-      <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow / the keep" />
+      <label class="form-label">Name / keywords <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; names the AI matches into panels; separate alternates with /</span></label>
+      <input class="form-input" id="asset-name" placeholder="e.g. Castle Ravenhollow / the keep" oninput="scheduleAssetMetaSave()" />
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
-      <select class="form-input" id="asset-category">
+      <select class="form-input" id="asset-category" onchange="scheduleAssetMetaSave()">
         <option value="location">Location</option>
         <option value="npc">NPC</option>
         <option value="item">Item</option>
       </select>
     </div>
-    <div class="form-group" id="asset-upload-group">
-      <label class="form-label">Image</label>
-      <div class="asset-drop" id="asset-drop"
-        onclick="document.getElementById('asset-image').click()"
-        ondragover="handleAssetDragOver(event)"
-        ondragleave="handleAssetDragLeave(event)"
-        ondrop="handleAssetDrop(event)">
-        <div id="asset-drop-empty" class="asset-drop-empty">
-          <div class="plus">+</div>
-          <span>Click or drag an image here</span>
-        </div>
-        <img id="asset-drop-preview" class="asset-drop-preview" style="display:none;" alt="asset" />
-      </div>
-      <input type="file" id="asset-image" accept="image/*" style="display:none;"
-        onchange="handleAssetFileSelect(event)" />
-      <div class="form-hint" style="margin-top:4px;">A reference image fed to panel generation when one of its names or keywords appears. Click the image to enlarge.</div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; what to generate from; editable anytime</span></label>
+      <textarea class="form-input" id="asset-description" rows="3" placeholder="Describe the item, location, or NPC to generate -- e.g. a weathered stone keep on a cliff at dusk, banners flying" oninput="scheduleAssetMetaSave()"></textarea>
     </div>
-    <div class="form-group hidden" id="asset-describe-group">
-      <label class="form-label">Description</label>
-      <textarea class="form-input" id="asset-description" rows="4" placeholder="Describe the item, location, or NPC to generate -- e.g. a weathered stone keep on a cliff at dusk, banners flying"></textarea>
-      <div class="form-hint" style="margin-top:4px;">Campaignia generates a reference image from your description. Costs 1 token.</div>
+    <div class="form-group">
+      <label class="form-label">Image</label>
+      <div id="asset-modal-image-body"></div>
+      <input type="file" id="asset-image" accept="image/*" style="display:none;" onchange="handleAssetFileSelect(event)" />
+      <div class="form-hint" style="margin-top:4px;">Generate an image from the description, or upload your own. Generating costs 1 token.</div>
     </div>
     <div class="modal-footer">
-      <button class="btn" onclick="closeAssetModal()">Cancel</button>
-      <button class="btn btn-primary" id="asset-save-btn" onclick="saveAsset()">Add asset</button>
+      <button class="btn" onclick="closeAssetModal()">Done</button>
     </div>
     <div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only upload images you own or have the rights to use. Do not upload copyrighted characters, logos, or artwork without permission.</div>
   </div>

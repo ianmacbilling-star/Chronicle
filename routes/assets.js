@@ -75,6 +75,7 @@ async function assetCapBlock(db, userId, campaignId) {
 router.post('/', requireAuth, verifyCampaignAssetCreator, uploadSingle, async function(req, res) {
   const name = (req.body && req.body.name || '').trim();
   const category = cleanCategory(req.body && req.body.category);
+  const description = (req.body && req.body.description || '').trim();
   if (!name) return res.json({ error: 'Asset name is required' });
 
   try {
@@ -85,9 +86,9 @@ router.post('/', requireAuth, verifyCampaignAssetCreator, uploadSingle, async fu
     if (req.file) imageUrl = await handleAssetUpload(req.file, null);
     const now = new Date().toISOString();
     const result = await db.prepare(
-      'INSERT INTO campaign_assets (campaign_id, name, category, image_url, created_at, created_by) ' +
-      'VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(req.params.campaignId, name, category, imageUrl, now, req.session.userId);
+      'INSERT INTO campaign_assets (campaign_id, name, category, image_url, description, created_at, created_by) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.params.campaignId, name, category, imageUrl, description, now, req.session.userId);
     const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(result.lastInsertRowid);
     res.json(asset);
   } catch (e) {
@@ -267,7 +268,7 @@ router.post('/:assetId/revert', requireAuth, verifyCampaignAssetCreator, async f
   }
 });
 
-router.put('/:assetId', requireAuth, verifyCampaignDM, uploadSingle, async function(req, res) {
+router.put('/:assetId', requireAuth, verifyCampaignAssetCreator, uploadSingle, async function(req, res) {
   try {
     const db = await getDb();
     const existing = await db.prepare(
@@ -279,14 +280,15 @@ router.put('/:assetId', requireAuth, verifyCampaignDM, uploadSingle, async funct
     const category = req.body && req.body.category
       ? cleanCategory(req.body.category)
       : existing.category;
+    const description = (req.body && typeof req.body.description === 'string') ? req.body.description.trim() : existing.description;
     let imageUrl = existing.image_url;
     if (req.file) imageUrl = await handleAssetUpload(req.file, existing.image_url);
 
     const now = new Date().toISOString();
     await db.prepare(
-      'UPDATE campaign_assets SET name = ?, category = ?, image_url = ?, edited_at = ?, edited_by = ? ' +
+      'UPDATE campaign_assets SET name = ?, category = ?, image_url = ?, description = ?, edited_at = ?, edited_by = ? ' +
       'WHERE id = ?'
-    ).run(name, category, imageUrl, now, req.session.userId, req.params.assetId);
+    ).run(name, category, imageUrl, description, now, req.session.userId, req.params.assetId);
     const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(req.params.assetId);
     res.json(asset);
   } catch (e) {

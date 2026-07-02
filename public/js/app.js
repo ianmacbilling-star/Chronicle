@@ -4021,15 +4021,13 @@ function renderAssets() {
       ? '<img src="' + a.image_url + '" class="asset-card-photo" alt="' + a.name + '" onclick="openLightbox(this.src,this.alt)" />'
       : '<div class="asset-card-photo asset-photo-empty">&#127912;</div>';
     var cat = ASSET_CAT_LABEL[a.category] || 'Location';
-    var acts = '<button class="panel-pill" onclick="openAssetModal(' + a.id + ')" title="Edit this asset">&#9998; Edit</button>';
-    if (a.image_url) acts += '<button class="panel-pill" onclick="openRetouchAsset(' + a.id + ')" title="Keep this image and change just one thing">Retouch</button>';
-    if (a.description) acts += '<button class="panel-pill" onclick="regenerateAsset(' + a.id + ')" title="Re-roll the image from its description">Regenerate</button>';
-    if (a.revert_image_url) acts += '<button class="panel-pill" onclick="revertAsset(' + a.id + ')" title="Undo the last retouch or regenerate">Revert</button>';
-    acts += '<button class="panel-pill" onclick="deleteAsset(' + a.id + ')" title="Delete this asset">&#10005; Delete</button>';
     return '<div class="asset-card">' +
       '<div class="asset-card-img">' +
         img +
-        '<div class="panel-img-actions">' + acts + '</div>' +
+        '<div class="panel-img-actions">' +
+          '<button class="panel-pill" onclick="openAssetModal(' + a.id + ')" title="Edit this asset">&#9998; Edit</button>' +
+          '<button class="panel-pill" onclick="deleteAsset(' + a.id + ')" title="Delete this asset">&#10005; Delete</button>' +
+        '</div>' +
       '</div>' +
       '<div class="asset-card-meta">' +
         '<div class="asset-card-name">' + a.name + '</div>' +
@@ -4050,39 +4048,31 @@ function renderAssets() {
 function openAssetModal(assetId) {
   var modal = document.getElementById('asset-modal');
   var title = document.getElementById('asset-modal-title');
-  var saveBtn = document.getElementById('asset-save-btn');
   var nameEl = document.getElementById('asset-name');
   var catEl = document.getElementById('asset-category');
+  var descEl = document.getElementById('asset-description');
   var fileEl = document.getElementById('asset-image');
   var errEl = document.getElementById('asset-modal-error');
   if (errEl) errEl.classList.add('hidden');
   if (fileEl) fileEl.value = '';
-
-  // Reset the picked-file holder each time the modal opens.
-  state.assetPickedFile = null;
+  if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
 
   if (assetId) {
     var a = (state.assets || []).find(function(x) { return x.id === assetId; });
     if (!a) return;
-    state.editingAssetId = assetId;
+    state.modalAsset = a;
     if (title) title.textContent = 'Edit Asset';
-    if (saveBtn) saveBtn.textContent = 'Save asset';
     if (nameEl) nameEl.value = a.name || '';
     if (catEl) catEl.value = a.category || 'location';
-    setAssetPreview(a.image_url || null);
+    if (descEl) descEl.value = a.description || '';
   } else {
-    state.editingAssetId = null;
+    state.modalAsset = { id: null, name: '', category: 'location', description: '', image_url: null, revert_image_url: null };
     if (title) title.textContent = 'Add Asset';
-    if (saveBtn) saveBtn.textContent = 'Add asset';
     if (nameEl) nameEl.value = '';
     if (catEl) catEl.value = 'location';
-    setAssetPreview(null);
+    if (descEl) descEl.value = '';
   }
-  var descEl = document.getElementById('asset-description');
-  if (descEl) descEl.value = '';
-  var modeToggle = document.getElementById('asset-mode-toggle');
-  if (modeToggle) modeToggle.classList.toggle('hidden', !!assetId);
-  setAssetMode('upload');
+  renderAssetModalImage(state.modalAsset);
   if (modal) modal.classList.remove('hidden');
   if (!assetId) { try { maybeStartTour('asset-modal'); } catch (e) {} }
 }
@@ -4122,7 +4112,7 @@ function acceptAssetFile(file) {
 }
 
 function handleAssetFileSelect(e) {
-  if (e.target.files && e.target.files[0]) acceptAssetFile(e.target.files[0]);
+  if (e.target.files && e.target.files[0]) assetUploadFile(e.target.files[0]);
 }
 function handleAssetDragOver(e) {
   e.preventDefault(); e.stopPropagation();
@@ -4145,111 +4135,177 @@ function handleAssetDrop(e) {
 function closeAssetModal() {
   var modal = document.getElementById('asset-modal');
   if (modal) modal.classList.add('hidden');
-  state.editingAssetId = null;
+  if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
+  state.modalAsset = null;
 }
 
-// Toggle the Add-Asset modal between uploading an image and describing one for
-// AI generation. Reuses btn-primary as the active-tab indicator (no new CSS).
-function setAssetMode(mode) {
-  state.assetMode = (mode === 'describe') ? 'describe' : 'upload';
-  var isDescribe = state.assetMode === 'describe';
-  var upTab = document.getElementById('asset-mode-upload-tab');
-  var dsTab = document.getElementById('asset-mode-describe-tab');
-  var upGroup = document.getElementById('asset-upload-group');
-  var dsGroup = document.getElementById('asset-describe-group');
-  var saveBtn = document.getElementById('asset-save-btn');
-  if (upTab) upTab.classList.toggle('btn-primary', !isDescribe);
-  if (dsTab) dsTab.classList.toggle('btn-primary', isDescribe);
-  if (upGroup) upGroup.classList.toggle('hidden', isDescribe);
-  if (dsGroup) dsGroup.classList.toggle('hidden', !isDescribe);
-  if (saveBtn && !state.editingAssetId) saveBtn.textContent = isDescribe ? 'Generate asset' : 'Add asset';
-}
+function assetPickFile() { var f = document.getElementById('asset-image'); if (f) f.click(); }
 
-// Create an asset from a text description: POST /generate, then poll the async
-// image job. The asset row exists immediately (image-less); the webhook fills
-// its image, and the poll refreshes the grid when it lands.
-function generateAssetFromDescription(name, category) {
-  var descEl = document.getElementById('asset-description');
-  var errEl = document.getElementById('asset-modal-error');
-  var saveBtn = document.getElementById('asset-save-btn');
-  var description = descEl ? descEl.value.trim() : '';
-  if (!description) {
-    if (errEl) { errEl.textContent = 'Add a description to generate an image.'; errEl.classList.remove('hidden'); }
-    return;
+// Render the asset modal's image area: the image with Retouch/Regenerate/Revert
+// pills once one exists, or Generate/Upload actions when it does not. Mirrors the
+// character reference section -- the modal stays open and updates in place.
+function renderAssetModalImage(asset) {
+  var body = document.getElementById('asset-modal-image-body');
+  if (!body) return;
+  asset = asset || state.modalAsset || {};
+  var aid = asset.id;
+  var hasImg = !!asset.image_url;
+  var hasDesc = !!(asset.description && asset.description.trim());
+  if (hasImg) {
+    var pills = '';
+    if (hasDesc) pills += '<button class="panel-pill" onclick="regenerateAsset(' + aid + ')" title="Re-roll the image from its description">Regenerate</button>';
+    pills += '<button class="panel-pill" onclick="openRetouchAsset(' + aid + ')" title="Keep this image and change just one thing">Retouch</button>';
+    if (asset.revert_image_url) pills += '<button class="panel-pill" onclick="revertAsset(' + aid + ')" title="Undo the last retouch or regenerate">Revert</button>';
+    pills += '<button class="panel-pill" onclick="openReplacePicker(\'asset\', ' + aid + ')" title="Replace with an image from the Archive">Replace</button>';
+    body.innerHTML =
+      '<div class="char-ref-image" id="asset-modal-imgwrap">' +
+        '<div class="char-ref-imgwrap">' +
+          '<img src="' + asset.image_url + '" alt="' + (asset.name || 'asset') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
+          '<div class="panel-img-actions">' + pills + '</div>' +
+        '</div>' +
+      '</div>';
+  } else {
+    var genBtn = hasDesc
+      ? '<button class="btn btn-sm btn-primary" onclick="assetGenerateFromModal()">Generate from description</button>'
+      : '<button class="btn btn-sm" onclick="assetGenerateFromModal()" title="Add a description above first">Generate from description</button>';
+    body.innerHTML =
+      '<div id="asset-modal-imgwrap" style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        genBtn +
+        '<button class="btn btn-sm" onclick="assetPickFile()">Upload image</button>' +
+      '</div>';
   }
-  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Generating...'; }
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name, category: category, description: description })
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+}
+
+// Debounced auto-save of name/category/description. Saves only once the asset
+// exists; a brand-new asset is created on the first image action.
+function scheduleAssetMetaSave() {
+  var nameEl = document.getElementById('asset-name');
+  var catEl = document.getElementById('asset-category');
+  var descEl = document.getElementById('asset-description');
+  if (state.modalAsset) {
+    state.modalAsset.name = nameEl ? nameEl.value : state.modalAsset.name;
+    state.modalAsset.category = catEl ? catEl.value : state.modalAsset.category;
+    state.modalAsset.description = descEl ? descEl.value : state.modalAsset.description;
+  }
+  if (!state.modalAsset || !state.modalAsset.id) return;
+  if (state.assetMetaTimer) clearTimeout(state.assetMetaTimer);
+  state.assetMetaTimer = setTimeout(saveAssetMeta, 700);
+}
+
+function saveAssetMeta() {
+  if (!state.modalAsset || !state.modalAsset.id) return;
+  var id = state.modalAsset.id;
+  var fd = new FormData();
+  fd.append('name', state.modalAsset.name || '');
+  fd.append('category', state.modalAsset.category || 'location');
+  fd.append('description', state.modalAsset.description || '');
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + id, { method: 'PUT', body: fd })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && !data.error) {
+        state.assets = (state.assets || []).map(function(x){ return String(x.id) === String(id) ? data : x; });
+        renderAssets();
+        _syncReviewAsset('upsert', data);
+        if (state.modalAsset && String(state.modalAsset.id) === String(id)) { state.modalAsset = data; renderAssetModalImage(data); }
+      }
+    })
+    .catch(function(){});
+}
+
+// Generate an image from the description. Auto-creates the asset if new (POST
+// /generate), else re-rolls (POST /:id/regenerate). Modal stays open.
+function assetGenerateFromModal() {
+  var errEl = document.getElementById('asset-modal-error');
+  var nameEl = document.getElementById('asset-name');
+  var catEl = document.getElementById('asset-category');
+  var descEl = document.getElementById('asset-description');
+  var name = nameEl ? nameEl.value.trim() : '';
+  var category = catEl ? catEl.value : 'location';
+  var description = descEl ? descEl.value.trim() : '';
+  if (errEl) errEl.classList.add('hidden');
+  if (!name) { if (errEl) { errEl.textContent = 'Give the asset a name first.'; errEl.classList.remove('hidden'); } return; }
+  if (!description) { if (errEl) { errEl.textContent = 'Add a description to generate an image.'; errEl.classList.remove('hidden'); } return; }
+  showBusyOverlay('asset-modal-image-body', 'Generating', 'Creating your image...');
+  var existingId = state.modalAsset && state.modalAsset.id;
+  var url, opts;
+  if (existingId) {
+    url = '/api/campaigns/' + state.currentCampaign.id + '/assets/' + existingId + '/regenerate';
+    opts = { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ fal_key: getFalKey() || 'platform' }) };
+  } else {
+    url = '/api/campaigns/' + state.currentCampaign.id + '/assets/generate';
+    opts = { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name, category: category, description: description }) };
+  }
+  fetch(url, opts)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
       if (data && data.error) {
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Generate asset'; }
+        hideBusyOverlay('asset-modal-image-body');
         if (errEl) { errEl.textContent = data.message || data.error; errEl.classList.remove('hidden'); }
         return;
       }
-      closeAssetModal();
-      loadAssets();
-      if (data.asset) _syncReviewAsset('upsert', data.asset);
-      if (data.image_job_id) {
-        pollRefJob(data.image_job_id, function(url) {
-          loadAssets();
-          if (data.asset) { data.asset.image_url = url; _syncReviewAsset('upsert', data.asset); }
-        }, function(err) { loadAssets(); });
+      if (data.asset) state.modalAsset = data.asset;
+      var jobId = data.image_job_id || data.job_id;
+      var targetId = state.modalAsset ? state.modalAsset.id : (data.asset && data.asset.id);
+      if (jobId) {
+        pollRefJob(jobId, function(u){ reloadAndRenderModalAsset(targetId); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ hideBusyOverlay('asset-modal-image-body'); if (errEl) { errEl.textContent = 'Could not generate: ' + err; errEl.classList.remove('hidden'); } });
+      } else {
+        hideBusyOverlay('asset-modal-image-body');
+        reloadAndRenderModalAsset(targetId);
       }
     })
-    .catch(function() {
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Generate asset'; }
-      if (errEl) { errEl.textContent = 'Could not start the generation.'; errEl.classList.remove('hidden'); }
-    });
+    .catch(function(){ hideBusyOverlay('asset-modal-image-body'); if (errEl) { errEl.textContent = 'Could not start generation.'; errEl.classList.remove('hidden'); } });
 }
 
-function saveAsset() {
+// Upload an image as the asset image. Auto-creates the asset if new, else
+// replaces the image on the existing asset. Modal stays open.
+function assetUploadFile(file) {
+  var errEl = document.getElementById('asset-modal-error');
+  if (!file || !file.type || !file.type.match('image.*')) { if (errEl) { errEl.textContent = 'Please choose an image file.'; errEl.classList.remove('hidden'); } return; }
   var nameEl = document.getElementById('asset-name');
   var catEl = document.getElementById('asset-category');
-  var fileEl = document.getElementById('asset-image');
-  var errEl = document.getElementById('asset-modal-error');
-  var saveBtn = document.getElementById('asset-save-btn');
+  var descEl = document.getElementById('asset-description');
   var name = nameEl ? nameEl.value.trim() : '';
-
-  if (!name) {
-    if (errEl) { errEl.textContent = 'Asset name is required.'; errEl.classList.remove('hidden'); }
-    return;
-  }
-
-  if ((state.assetMode === 'describe') && !state.editingAssetId) {
-    generateAssetFromDescription(name, catEl ? catEl.value : 'location');
-    return;
-  }
-
+  if (!name) { if (errEl) { errEl.textContent = 'Give the asset a name first.'; errEl.classList.remove('hidden'); } return; }
+  if (errEl) errEl.classList.add('hidden');
+  if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
+  showBusyOverlay('asset-modal-image-body', 'Uploading', 'Saving your image...');
   var fd = new FormData();
   fd.append('name', name);
   fd.append('category', catEl ? catEl.value : 'location');
-  if (state.assetPickedFile) fd.append('image', state.assetPickedFile);
-
-  var editing = state.editingAssetId;
-  var url = '/api/campaigns/' + state.currentCampaign.id + '/assets' + (editing ? '/' + editing : '');
-  var method = editing ? 'PUT' : 'POST';
-  if (saveBtn) saveBtn.disabled = true;
-
+  fd.append('description', descEl ? descEl.value : '');
+  fd.append('image', file);
+  var existingId = state.modalAsset && state.modalAsset.id;
+  var url = '/api/campaigns/' + state.currentCampaign.id + '/assets' + (existingId ? '/' + existingId : '');
+  var method = existingId ? 'PUT' : 'POST';
   fetch(url, { method: method, body: fd })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (saveBtn) saveBtn.disabled = false;
-      if (data && data.error) {
-        if (errEl) { errEl.textContent = data.error; errEl.classList.remove('hidden'); }
-        return;
-      }
-      closeAssetModal();
-      loadAssets();
-      _syncReviewAsset('upsert', data);   // TF-08: reflect in the storyboard picker
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      hideBusyOverlay('asset-modal-image-body');
+      if (data && data.error) { if (errEl) { errEl.textContent = data.error; errEl.classList.remove('hidden'); } return; }
+      state.modalAsset = data;
+      var found = false;
+      state.assets = (state.assets || []).map(function(x){ if (String(x.id) === String(data.id)) { found = true; return data; } return x; });
+      if (!found) state.assets.push(data);
+      renderAssets();
+      renderAssetModalImage(data);
+      _syncReviewAsset('upsert', data);
     })
-    .catch(function() {
-      if (saveBtn) saveBtn.disabled = false;
-      if (errEl) { errEl.textContent = 'Could not save the asset.'; errEl.classList.remove('hidden'); }
-    });
+    .catch(function(){ hideBusyOverlay('asset-modal-image-body'); if (errEl) { errEl.textContent = 'Could not upload the image.'; errEl.classList.remove('hidden'); } });
+}
+
+// Reload assets and, if the modal is open on this asset, re-render its image
+// area in place so retouch/regenerate/revert update the modal without closing.
+function reloadAndRenderModalAsset(assetId) {
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      state.assets = Array.isArray(data) ? data : [];
+      renderAssets();
+      var a = state.assets.find(function(x){ return String(x.id) === String(assetId); });
+      if (a) _syncReviewAsset('upsert', a);
+      if (a && state.modalAsset && String(state.modalAsset.id) === String(assetId)) { state.modalAsset = a; renderAssetModalImage(a); }
+    })
+    .catch(function(){});
 }
 
 // TF-08: keep the cached review/storyboard asset picker list
@@ -7110,6 +7166,7 @@ function openRetouchAsset(assetId) {
 // Regenerate an asset image from its stored description (re-roll). Arms revert.
 function regenerateAsset(assetId) {
   if (!state.currentCampaign) return;
+  showBusyOverlay('asset-modal-image-body', 'Generating', 'Re-rolling your image...');
   fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + assetId + '/regenerate', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -7118,13 +7175,14 @@ function regenerateAsset(assetId) {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.job_id) {
-        pollRefJob(data.job_id, function(url){ loadAssets(); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ loadAssets(); alert('Could not regenerate: ' + err); });
+        pollRefJob(data.job_id, function(url){ reloadAndRenderModalAsset(assetId); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ hideBusyOverlay('asset-modal-image-body'); alert('Could not regenerate: ' + err); });
         return;
       }
+      hideBusyOverlay('asset-modal-image-body');
       if (data && data.error === 'INSUFFICIENT_TOKENS') { alert(data.message || 'You are out of tokens.'); }
       else { alert((data && (data.message || data.error)) || 'Could not regenerate the asset.'); }
     })
-    .catch(function(e){ alert('Could not regenerate: ' + e.message); });
+    .catch(function(e){ hideBusyOverlay('asset-modal-image-body'); alert('Could not regenerate: ' + e.message); });
 }
 
 // One-step undo of the last asset retouch/regenerate. Free (no token spend).
@@ -7134,7 +7192,7 @@ function revertAsset(assetId) {
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not revert.'); return; }
-      loadAssets();
+      reloadAndRenderModalAsset(assetId);
     })
     .catch(function(){ alert('Could not revert the asset.'); });
 }
@@ -7149,6 +7207,7 @@ function submitRetouch() {
   if (state.retouchAssetId) {
     var _aId = state.retouchAssetId;
     closeRetouch();
+    showBusyOverlay('asset-modal-image-body', 'Retouching', 'Applying your change...');
     fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + _aId + '/retouch', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -7157,13 +7216,14 @@ function submitRetouch() {
       .then(function(r){ return r.json(); })
       .then(function(data){
         if (data && data.job_id) {
-          pollRefJob(data.job_id, function(url){ loadAssets(); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ loadAssets(); alert('Could not retouch: ' + err); });
+          pollRefJob(data.job_id, function(url){ reloadAndRenderModalAsset(_aId); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ hideBusyOverlay('asset-modal-image-body'); alert('Could not retouch: ' + err); });
           return;
         }
+        hideBusyOverlay('asset-modal-image-body');
         if (data && data.error === 'INSUFFICIENT_TOKENS') { alert(data.message || 'You are out of tokens.'); }
         else { alert((data && (data.message || data.error)) || 'Could not retouch the asset.'); }
       })
-      .catch(function(e){ alert('Could not retouch: ' + e.message); });
+      .catch(function(e){ hideBusyOverlay('asset-modal-image-body'); alert('Could not retouch: ' + e.message); });
     return;
   }
 
@@ -7320,6 +7380,11 @@ function openReplacePicker(mode, id) {
   } else if (mode === 'establishing') {
     state.pickerCtx.sessionId = id;
     if (tEl) tEl.textContent = 'Replace title image from Archive';
+  } else if (mode === 'asset') {
+    state.pickerCtx.assetId = id;
+    state.pickerCtx.sessionId = null;
+    state.pickerCtx.forkId = null;
+    if (tEl) tEl.textContent = 'Replace asset image from Archive';
   } else {
     state.pickerCtx.characterId = id;
     state.pickerCtx.sessionId = state.currentSession ? state.currentSession.id : null;
@@ -7387,6 +7452,8 @@ function applyArchiveToTarget(archiveId) {
     body = { target_type: 'canonical_character', target_character_id: ctx.characterId };
   } else if (ctx.mode === 'establishing') {
     body = { target_type: 'session_establishing', session_id: ctx.sessionId };
+  } else if (ctx.mode === 'asset') {
+    body = { target_type: 'asset', target_asset_id: ctx.assetId };
   } else {
     body = { target_type: 'character', target_character_id: ctx.characterId, session_id: ctx.sessionId, fork_id: ctx.forkId };
   }
@@ -7400,6 +7467,7 @@ function applyArchiveToTarget(archiveId) {
       var _ch = charById(ctx.characterId);
       if (_ch && data.image_url) { _ch.canonical_reference_url = data.image_url; _ch.archived = false; renderCharModalPrompt(_ch); }
     }
+    else if (ctx.mode === 'asset') { reloadAndRenderModalAsset(ctx.assetId); }
     else { if (typeof loadSessionCharacters === 'function') loadSessionCharacters(); }
   }).catch(function(e){ alert('Replace failed: ' + e.message); });
 }
