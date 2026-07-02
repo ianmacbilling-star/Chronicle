@@ -4,6 +4,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
+const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
 const crypto = require('crypto');
@@ -963,8 +964,8 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('Image generation error:', e.message);
-    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Storyboard / moment image', fn: 'POST /generate-moment', message: 'Image generation failed: ' + (e && e.message), detail: { moment_id: (req.body && req.body.moment_id) || null, stack: (e && e.stack) || '' } }); } catch (_le) {}
-    res.json({ error: e.message });
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Storyboard / moment image', fn: 'POST /generate-moment', message: 'Image generation failed: ' + (e && e.message), detail: { moment_id: (req.body && req.body.moment_id) || null, status: (e && e.status) || null, falBody: (e && e.body) || null, stack: (e && e.stack) || '' } }); } catch (_le) {}
+    res.json({ error: friendlyImageError(e) });
   }
 });
 
@@ -1035,8 +1036,8 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch (e) {
     console.error('retouch error:', e.message);
-    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Retouch failed: ' + (e && e.message), detail: { moment_id: (req.body && req.body.moment_id) || null, stack: (e && e.stack) || '' } }); } catch (_le) {}
-    res.json({ error: e.message });
+    try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Retouch moment', fn: 'POST /retouch-moment', message: 'Retouch failed: ' + (e && e.message), detail: { moment_id: (req.body && req.body.moment_id) || null, status: (e && e.status) || null, falBody: (e && e.body) || null, stack: (e && e.stack) || '' } }); } catch (_le) {}
+    res.json({ error: friendlyImageError(e) });
   }
 });
 
@@ -1066,7 +1067,7 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
     res.json({ success: true, image: moment.revert_image });
   } catch (e) {
     console.error('revert-moment error:', e.message);
-    res.json({ error: 'Could not revert: ' + e.message });
+    res.json({ error: friendlyError(e, 'Could not revert the image. Please try again.') });
   }
 });
 
@@ -1289,8 +1290,9 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     const status = String(body.status || '').toUpperCase();
     if (status && status !== 'OK' && status !== 'COMPLETED') {
       const errMsg = (body.error && (body.error.message || JSON.stringify(body.error))) || 'generation failed';
+      const friendlyMsg = friendlyImageError({ message: errMsg, status: (body.error && (body.error.status || body.error.code)) || null });
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
-        .run('failed', String(errMsg).slice(0, 500), new Date().toISOString(), job.id);
+        .run('failed', friendlyMsg, new Date().toISOString(), job.id);
       try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Generation failed: ' + String(errMsg).slice(0, 200), detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
@@ -1318,13 +1320,13 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     }
     if (!falUrl) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
-        .run('failed', 'no image in webhook payload', new Date().toISOString(), job.id);
+        .run('failed', friendlyImageError({ message: 'no image in webhook payload' }), new Date().toISOString(), job.id);
       try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Generation returned no image', detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
     if (payload.has_nsfw_concepts && payload.has_nsfw_concepts[0] === true) {
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
-        .run('failed', 'image was flagged by the safety filter (returned blank)', new Date().toISOString(), job.id);
+        .run('failed', friendlyImageError({ message: 'image was flagged by the safety filter (returned blank)' }), new Date().toISOString(), job.id);
       try { await logDebug(job.user_id, { level: 'error', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image flagged by safety filter (returned blank)', detail: { moment_id: job.moment_id, kind: job.kind, style: job.style || null } }); } catch (_le) {}
       return res.status(200).json({ ok: true });
     }
@@ -1415,7 +1417,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     } catch (e) {
       console.error('[fal webhook] processing error:', e.message);
       await db.prepare('UPDATE image_jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?')
-        .run('failed', String(e.message).slice(0, 500), new Date().toISOString(), job.id);
+        .run('failed', friendlyImageError(e), new Date().toISOString(), job.id);
     }
     return res.status(200).json({ ok: true });
   } catch (e) {
@@ -1434,7 +1436,7 @@ webhookRouter.get('/jobs-status', requireAuth, async function(req, res) {
     const ph = ids.map(function(){ return '?'; }).join(',');
     const rows = await db.prepare('SELECT id, status, image_url, error, moment_id FROM image_jobs WHERE id IN (' + ph + ') AND user_id = ?').all(ids.concat([req.session.userId]));
     res.json({ jobs: rows.map(function(j){ return { id: j.id, status: j.status, image_url: j.image_url || null, error: j.error || null, moment_id: j.moment_id }; }) });
-  } catch (e) { res.json({ error: e.message }); }
+  } catch (e) { res.json({ error: friendlyError(e, 'Could not check image status.') }); }
 });
 
 webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
@@ -1444,7 +1446,7 @@ webhookRouter.get('/jobs/:id', requireAuth, async function(req, res) {
       .get(req.params.id, req.session.userId);
     if (!job) return res.status(404).json({ error: 'job not found' });
     res.json({ status: job.status, image_url: job.image_url || null, error: job.error || null, moment_id: job.moment_id });
-  } catch (e) { res.json({ error: e.message }); }
+  } catch (e) { res.json({ error: friendlyError(e, 'Could not check image status.') }); }
 });
 
 // POST /api/images/custom-style-preview -- render ONE sample panel in a (possibly
@@ -1483,8 +1485,8 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
     }
     res.json({ image: url });
   } catch (e) {
-    console.error('custom style preview error:', e.message);
-    res.json({ error: 'Could not render the preview: ' + e.message });
+    console.error('custom style preview error:', (e && e.status) || '', e.message, (e && e.body && (e.body.detail || JSON.stringify(e.body))) || '');
+    res.json({ error: friendlyImageError(e) });
   }
 });
 
