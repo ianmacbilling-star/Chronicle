@@ -3,6 +3,7 @@ const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
+const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { releaseImage } = require('../storage/storage');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
@@ -162,7 +163,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     });
 
     const data = await response.json();
-    if (data.error) return res.json({ error: data.error.message });
+    if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
@@ -256,7 +257,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     parsed.pendingChanges = pendingChanges;
     res.json(parsed);
   } catch(e) {
-    res.json({ error: e.message });
+    res.json({ error: friendlyAnthropicError(e) });
   }
 });
 

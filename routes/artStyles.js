@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
+const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier } = require('../middleware/tiers');
 const { canAfford, spendTokens } = require('./tokens');
@@ -302,7 +303,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
         })
       });
       const data = await response.json();
-      if (data.error) return res.json({ error: (data.error.message || 'Style analysis failed.') });
+      if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
       const raw = (data.content || []).map(function(b) { return b.text || ''; }).join('').trim();
       if (!raw) return res.json({ error: 'The analysis came back empty. Try clearer style samples.' });
 
@@ -320,7 +321,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
       res.json({ style_prompt: stylePrompt, is_fade: isFade, sample_urls: sampleUrls });
     } catch (e) {
       console.error('analyze custom style error:', e.message);
-      res.json({ error: 'Could not analyze the style: ' + e.message });
+      res.json({ error: friendlyAnthropicError(e) });
     }
   });
 });

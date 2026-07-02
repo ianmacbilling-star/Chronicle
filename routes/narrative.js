@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('../database/db');
+const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
@@ -273,7 +274,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     });
 
     const data = await response.json();
-    if (data.error) return res.json({ error: data.error.message });
+    if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
@@ -323,7 +324,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   } catch(e) {
     console.error('Narrative generation error:', e.message);
     try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generation failed: ' + (e && e.message), detail: { campaign_id: req.params.campaignId, session_id: req.params.sessionId, stack: (e && e.stack) || '' } }); } catch (_le) {}
-    res.json({ error: e.message });
+    res.json({ error: friendlyAnthropicError(e) });
   }
 });
 

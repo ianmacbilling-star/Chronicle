@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../database/db');
+const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
 const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
 const imageHelpers = require('./images');
@@ -256,7 +257,7 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     });
 
     const data = await response.json();
-    if (data.error) return res.json({ error: data.error.message });
+    if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
 
     const promptText = data.content.map(function(b) { return b.text || ''; }).join('').trim();
     if (!promptText) return res.json({ error: 'No description was generated.' });
@@ -288,7 +289,7 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
     res.json({ success: true, canonical_prompt: promptText, canonical_prompt_at: now, image_job_id: imageJobId });
   } catch(e) {
     console.error('Rebuild prompt error:', e.message);
-    res.json({ error: e.message });
+    res.json({ error: friendlyAnthropicError(e) });
   }
 });
 

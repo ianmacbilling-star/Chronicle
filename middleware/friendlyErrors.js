@@ -61,4 +61,39 @@ function friendlyError(e, fallback) {
   return fallback || 'Something went wrong. Please try again.';
 }
 
-module.exports = { friendlyImageError, friendlyError, statusOf, isSafetyBlock, msgOf };
+// The Anthropic error type, if the caller passed Anthropic's { type, message }
+// error object (from a raw fetch's data.error) or an SDK-shaped error.
+function anthropicType(e) {
+  if (!e) return '';
+  var t = e.type || (e.error && e.error.type) || '';
+  return String(t).toLowerCase();
+}
+
+var AI_BUSY = 'The AI is handling a lot of requests right now. Please wait a moment and try again.';
+var AI_OVERLOADED = 'The AI service is temporarily overloaded. Please try again in a minute.';
+var AI_AUTH = 'The AI service rejected our credentials. This is on our end -- please let us know if it keeps happening.';
+var AI_TOOLONG = 'There was too much text for the AI to handle at once. Try a shorter session, or trim the transcript, and try again.';
+var AI_TEMP = 'The AI service had a temporary problem. Please try again in a moment.';
+var AI_GENERIC = 'The AI could not complete that right now. Please try again.';
+
+// Map an Anthropic failure to a friendly line. Accepts a thrown error OR the
+// Anthropic { type, message } error object passed through from data.error.
+function friendlyAnthropicError(e) {
+  var t = anthropicType(e);
+  var m = msgOf(e);
+  var s = statusOf(e);
+  if (t === 'rate_limit_error' || s === 429) return AI_BUSY;
+  if (t === 'overloaded_error' || s === 529 || m.indexOf('overloaded') !== -1) return AI_OVERLOADED;
+  if (t === 'authentication_error' || t === 'permission_error' || s === 401 || s === 403) return AI_AUTH;
+  if (t === 'invalid_request_error' || s === 400) {
+    if (m.indexOf('too long') !== -1 || m.indexOf('context') !== -1 || m.indexOf('maximum') !== -1 || m.indexOf('token') !== -1) return AI_TOOLONG;
+    return AI_GENERIC;
+  }
+  if (s >= 500) return AI_TEMP;
+  if (m.indexOf('rate limit') !== -1 || m.indexOf('rate_limit') !== -1) return AI_BUSY;
+  if (m.indexOf('too long') !== -1 || m.indexOf('context length') !== -1) return AI_TOOLONG;
+  if (!s && (m.indexOf('timeout') !== -1 || m.indexOf('network') !== -1 || m.indexOf('econn') !== -1 || m.indexOf('fetch failed') !== -1 || m.indexOf('socket hang') !== -1)) return AI_TEMP;
+  return AI_GENERIC;
+}
+
+module.exports = { friendlyImageError, friendlyAnthropicError, friendlyError, statusOf, isSafetyBlock, msgOf };

@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { getDb, getAppSettingInt } = require('../database/db');
+const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
 const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper } = require('../middleware/tiers');
@@ -227,7 +228,7 @@ router.post('/ask', requireAuth, async function(req, res) {
     const data = await response.json();
     if (data.error) {
       console.error('help/ask API error:', response.status, JSON.stringify(data.error));
-      return res.json({ ok: false, error: 'Could not answer that right now.' });
+      return res.json({ ok: false, error: friendlyAnthropicError(data.error) });
     }
     const answer = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
     if (!answer) {
@@ -237,7 +238,7 @@ router.post('/ask', requireAuth, async function(req, res) {
     return res.json({ ok: true, answer: answer });
   } catch (e) {
     console.error('help/ask error:', e.message);
-    return res.json({ ok: false, error: 'Could not answer that right now.' });
+    return res.json({ ok: false, error: friendlyAnthropicError(e) });
   }
 });
 
