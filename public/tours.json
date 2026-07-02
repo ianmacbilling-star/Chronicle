@@ -184,6 +184,18 @@
           "title": "Category",
           "text": "Tag it as a Location, NPC, or Item. Locations double as references for your scene backgrounds.",
           "placement": "auto"
+        },
+        {
+          "selector": "#asset-description",
+          "title": "Describe it",
+          "text": "Write what this asset looks like and Campaignia can generate a reference image from it \u2014 or leave it blank and upload your own. You can edit this description anytime.",
+          "placement": "auto"
+        },
+        {
+          "selector": "#asset-modal-image-body",
+          "title": "Generate or upload",
+          "text": "Generate an image from your description, or upload one. Once it's there you can Retouch it, Regenerate a fresh take, Revert your last change, or Replace it with an image from your Archive.",
+          "placement": "auto"
         }
       ]
     },

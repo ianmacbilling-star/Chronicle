@@ -272,7 +272,7 @@ name + description). A campaign is built from:
 - **Members' publishing & ordering access** — control whether members can publish and
   order books on their own, or whether you keep that in your hands (e.g. to produce and
   charge for copies yourself).
-- **Allow members to add assets** — decide whether members can upload their own assets.
+- **Allow members to add assets** — decide whether members can add their own assets.
   (Asset count limits still apply either way.)
 - **Campaign image** — pick an Archive image for the campaign tile; it also becomes the
   **default book cover** when publishing unless you choose another.
@@ -426,6 +426,14 @@ specific tavern, or a minor recurring NPC like the tavern barkeep).
   are set against in the moment images.
 - **Matched by name:** give an asset multiple names/keywords separated by a slash, and
   it'll match any of them.
+
+**Adding an asset:** open the Asset Library, click **Add asset**, give it a name (or
+several, slash-separated) and a category, then either **write a description and generate**
+a reference image, or **upload** your own. The description stays editable, and once an
+image exists you can **Regenerate** it (a fresh take from the description), **Retouch** it
+(change one thing), **Revert** the last change, or **Replace** it with an image from your
+**Archive**. There's no separate save step — the asset is created the moment you generate
+or upload, and edits save as you go.
 
 **Asset vs. character:** a *minor or one-off* recurring figure (the tavern barkeep)
 belongs here as an NPC asset; a *major, important* recurring character (a main villain,
