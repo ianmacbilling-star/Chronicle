@@ -739,6 +739,38 @@ async function submitReference(falKey, descriptionText, portraitUrl, modelKey, w
   return { request_id: submitted.request_id, model: built.model };
 }
 
+// Asset reference from a text description ("from scratch"). Unlike the
+// character builder above, this uses an ASSET-appropriate prompt (an item,
+// location, or NPC on a neutral background) rather than a full-body character
+// portrait, and a square aspect. Pure text-to-image: no input reference image.
+function buildAssetReferenceInput(descriptionText, category, modelKey) {
+  const cat = String(category || 'location').toLowerCase();
+  const catWord = (cat === 'item') ? 'item or object' : (cat === 'npc') ? 'character (NPC)' : 'location or place';
+  const catLabel = (cat === 'item') ? 'ITEM' : (cat === 'npc') ? 'NPC' : 'LOCATION';
+  const refPrompt =
+    IP_GUARD_IMG +
+    'Reference image of a single ' + catWord + ', centered on a plain neutral ' +
+    'background, even soft lighting, comic book art style. Show only the ' + catWord +
+    ' itself, with no extra characters, text, logos, or watermarks.\n\n' +
+    catLabel + ': ' + descriptionText;
+  const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
+  const model = IMAGE_MODELS[key];
+  let input;
+  if (key === 'nano2') {
+    input = { prompt: refPrompt, num_images: 1, aspect_ratio: '1:1', output_format: 'png', safety_tolerance: '5', resolution: '1K' };
+  } else {
+    input = { prompt: refPrompt, image_size: 'square_hd', num_inference_steps: 4, num_images: 1, enable_safety_checker: true };
+  }
+  return { model: model, input: input };
+}
+
+async function submitAssetReference(falKey, descriptionText, category, modelKey, webhookUrl) {
+  fal.config({ credentials: falKey });
+  const built = buildAssetReferenceInput(descriptionText, category, modelKey);
+  const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
+  return { request_id: submitted.request_id, model: built.model };
+}
+
 // Edit an EXISTING reference image to apply an amendment (Stage 3 Piece 5).
 // Unlike generateReferenceImage (which builds from scratch), this takes
 // the current reference image and changes ONLY the amended feature —
@@ -1354,9 +1386,15 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
         if (job.kind === 'session_ref' && job.character_id) {
           await logImageGeneration(db, job.user_id, 'session_reference', job.character_id, job.fork_id);
         }
+        if (job.kind === 'asset_ref' && job.asset_id) {
+          await db.prepare('UPDATE campaign_assets SET image_url = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+            .run(imageUrl, new Date().toISOString(), job.user_id, job.asset_id);
+          await logImageGeneration(db, job.user_id, 'asset_reference', job.asset_id, null);
+        }
       if (job.cost && job.cost > 0) {
         const spendSource = (job.kind === 'char_ref') ? 'character_reference'
           : (job.kind === 'session_ref') ? 'amendment_reference'
+          : (job.kind === 'asset_ref') ? 'asset_reference'
           : (job.kind === 'retouch') ? 'panel_retouch'
           : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: spendSource, event_type: 'generation_spend' });
@@ -1443,5 +1481,6 @@ module.exports.retouchImage = retouchImage;
 module.exports.webhookRouter = webhookRouter;
 module.exports.falWebhookUrl = falWebhookUrl;
 module.exports.submitReference = submitReference;
+module.exports.submitAssetReference = submitAssetReference;
 module.exports.submitEditReference = submitEditReference;
 module.exports.submitRetouch = submitRetouch;

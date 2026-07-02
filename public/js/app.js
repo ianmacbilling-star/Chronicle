@@ -4076,6 +4076,11 @@ function openAssetModal(assetId) {
     if (catEl) catEl.value = 'location';
     setAssetPreview(null);
   }
+  var descEl = document.getElementById('asset-description');
+  if (descEl) descEl.value = '';
+  var modeToggle = document.getElementById('asset-mode-toggle');
+  if (modeToggle) modeToggle.classList.toggle('hidden', !!assetId);
+  setAssetMode('upload');
   if (modal) modal.classList.remove('hidden');
   if (!assetId) { try { maybeStartTour('asset-modal'); } catch (e) {} }
 }
@@ -4141,6 +4146,64 @@ function closeAssetModal() {
   state.editingAssetId = null;
 }
 
+// Toggle the Add-Asset modal between uploading an image and describing one for
+// AI generation. Reuses btn-primary as the active-tab indicator (no new CSS).
+function setAssetMode(mode) {
+  state.assetMode = (mode === 'describe') ? 'describe' : 'upload';
+  var isDescribe = state.assetMode === 'describe';
+  var upTab = document.getElementById('asset-mode-upload-tab');
+  var dsTab = document.getElementById('asset-mode-describe-tab');
+  var upGroup = document.getElementById('asset-upload-group');
+  var dsGroup = document.getElementById('asset-describe-group');
+  var saveBtn = document.getElementById('asset-save-btn');
+  if (upTab) upTab.classList.toggle('btn-primary', !isDescribe);
+  if (dsTab) dsTab.classList.toggle('btn-primary', isDescribe);
+  if (upGroup) upGroup.classList.toggle('hidden', isDescribe);
+  if (dsGroup) dsGroup.classList.toggle('hidden', !isDescribe);
+  if (saveBtn && !state.editingAssetId) saveBtn.textContent = isDescribe ? 'Generate asset' : 'Add asset';
+}
+
+// Create an asset from a text description: POST /generate, then poll the async
+// image job. The asset row exists immediately (image-less); the webhook fills
+// its image, and the poll refreshes the grid when it lands.
+function generateAssetFromDescription(name, category) {
+  var descEl = document.getElementById('asset-description');
+  var errEl = document.getElementById('asset-modal-error');
+  var saveBtn = document.getElementById('asset-save-btn');
+  var description = descEl ? descEl.value.trim() : '';
+  if (!description) {
+    if (errEl) { errEl.textContent = 'Add a description to generate an image.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Generating...'; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, category: category, description: description })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Generate asset'; }
+        if (errEl) { errEl.textContent = data.message || data.error; errEl.classList.remove('hidden'); }
+        return;
+      }
+      closeAssetModal();
+      loadAssets();
+      if (data.asset) _syncReviewAsset('upsert', data.asset);
+      if (data.image_job_id) {
+        pollRefJob(data.image_job_id, function(url) {
+          loadAssets();
+          if (data.asset) { data.asset.image_url = url; _syncReviewAsset('upsert', data.asset); }
+        }, function(err) { loadAssets(); });
+      }
+    })
+    .catch(function() {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Generate asset'; }
+      if (errEl) { errEl.textContent = 'Could not start the generation.'; errEl.classList.remove('hidden'); }
+    });
+}
+
 function saveAsset() {
   var nameEl = document.getElementById('asset-name');
   var catEl = document.getElementById('asset-category');
@@ -4151,6 +4214,11 @@ function saveAsset() {
 
   if (!name) {
     if (errEl) { errEl.textContent = 'Asset name is required.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+
+  if ((state.assetMode === 'describe') && !state.editingAssetId) {
+    generateAssetFromDescription(name, catEl ? catEl.value : 'location');
     return;
   }
 
