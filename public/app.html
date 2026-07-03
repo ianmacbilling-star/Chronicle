@@ -1583,6 +1583,20 @@
     </div>
   </div>
 </div>
+<div class="modal-overlay hidden" id="outline-modal">
+  <div class="modal archive-picker" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="outline-title">Outline</div>
+      <button class="modal-close" onclick="closeOutlineModal()">&times;</button>
+    </div>
+    <p style="margin:0 0 10px;font-size:12px;color:var(--gold-dim);line-height:1.4;">The outline is the facts and sequence this part must cover &mdash; what happens, in order. The narration is written from it; Direction, separately, steers the flavor. Terse bullet points work best.</p>
+    <textarea class="form-textarea" id="outline-text" placeholder="e.g. - the party crosses the ravine at dusk &middot; - Kira spots the broken watchtower &middot; - they decide to camp" style="min-height:110px;"></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-sm" onclick="closeOutlineModal()">Cancel</button>
+      <button class="btn btn-sm btn-primary" onclick="saveOutline()">Save outline</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="image-prompt-modal">
   <div class="modal archive-picker" style="max-width:520px;">
     <div class="modal-header">

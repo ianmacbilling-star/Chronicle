@@ -2628,6 +2628,9 @@ function renderReview(data) {
   var panels = (data && data.panels) || [];
   state.reviewData = data || {};
   state.narrativeDirections = (data && data.directions) || {};
+  state.reviewOutlines = {};
+  var _rawOut = (data && data.outlines) || {};
+  Object.keys(_rawOut).forEach(function(k){ var v = _rawOut[k]; state.reviewOutlines[k] = (v && typeof v === 'object') ? (v.text || '') : (v || ''); });
 
   // Who may steer/edit this version's narrative (same rule as the Storyboard
   // Regen): the DM on canonical, or a player on their OWN version.
@@ -2647,27 +2650,31 @@ function renderReview(data) {
 
   // A steerable narrative row: shows the outline (what the prose WILL say)
   // plus a Direction pill that lights gold when a direction has been set.
-  function narrRow(gapKey, label, text, cls) {
+  function narrRow(gapKey, label, cls) {
     var hasDir = !!(state.narrativeDirections && state.narrativeDirections[gapKey]);
+    var oText = (state.reviewOutlines && state.reviewOutlines[gapKey]) || '';
     var safeLabel = escapeHtmlReview(label);
-    var btn = canEditNarr
+    var outBtn = canEditNarr
+      ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + gapKey + '\', \'' + safeLabel + '\')" title="Edit the facts this part must cover">\u270E ' + (oText ? 'Edit outline' : 'Add outline') + '</button>'
+      : '';
+    var dirBtn = canEditNarr
       ? '<button class="review-dir-btn' + (hasDir ? ' is-on' : '') + '" ' +
         'onclick="openNarrDirection(\'' + gapKey + '\', \'' + safeLabel + '\')" ' +
-        'title="' + (hasDir ? 'Narrative direction set - click to edit' : 'Steer the prose for this gap') + '">' +
+        'title="' + (hasDir ? 'Narrative direction set - click to edit' : 'Steer the flavor for this gap') + '">' +
         '\u270E Direction' + (hasDir ? ' \u2713' : '') + '</button>'
       : '';
-    var body = text
-      ? '<div class="review-nar-text">' + escapeHtmlReview(text) + '</div>'
-      : '<div class="review-nar-text review-nar-empty">No outline yet - prose will be generated for this gap.</div>';
+    var body = oText
+      ? '<div class="review-nar-text">' + escapeHtmlReview(oText) + '</div>'
+      : (canEditNarr ? '' : '<div class="review-nar-text review-nar-empty">No outline yet.</div>');
     return '<div class="review-nar ' + cls + '">' +
-      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div>' + btn + '</div>' +
+      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div>' + outBtn + dirBtn + '</div>' +
       body +
     '</div>';
   }
 
   var html = '';
   var _hasEstR = panels.some(function(p){ return p.kind === 'establishing'; });
-  if (!_hasEstR) html += narrRow('opening', 'Opening', intro, 'review-nar-open');
+  if (!_hasEstR) html += narrRow('opening', 'Opening', 'review-nar-open');
 
   var _pNumR = 0;
   panels.forEach(function(p, i) {
@@ -2726,14 +2733,15 @@ function renderReview(data) {
     var pDirBtn = canEditNarr
       ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
       : '';
+    var pOutBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openMomentOutline(' + mid + ')" title="Edit the facts this panel covers">\u270E ' + (p.description ? 'Edit outline' : 'Add outline') + '</button>' : '';
+    var pPromptBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Prompt</button>' : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
-        castBadge + resetBtn + pDirBtn +
+        castBadge + resetBtn + pOutBtn + pPromptBtn + pDirBtn +
       '</div>' +
-      ((_isEstR ? intro : p.moment) ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(_isEstR ? intro : p.moment) + '</div>' : '') +
-      (p.snippet ? '<div class="review-snippet">' + escapeHtmlReview(p.snippet) + '</div>' : '') +
+      (_isEstR ? (intro ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(intro) + '</div>' : '') : (p.description ? '<div class="review-snippet">' + escapeHtmlReview(p.description) + '</div>' : '')) +
       changeNote +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
@@ -2741,11 +2749,11 @@ function renderReview(data) {
 
     // Bridge gap AFTER this panel (the last gap is covered by the closing).
     if (!_isEstR && i < panels.length - 1) {
-      html += narrRow('between:' + i, 'Panel ' + num + ' \u2192 ' + (num + 1), p.bridge || '', 'review-nar-bridge');
+      html += narrRow('between:' + i, 'Panel ' + num + ' \u2192 ' + (num + 1), 'review-nar-bridge');
     }
   });
 
-  html += narrRow('closing', 'Closing', outro, 'review-nar-close');
+  html += narrRow('closing', 'Closing', 'review-nar-close');
 
   list.innerHTML = html;
 }
@@ -2976,6 +2984,65 @@ function refreshNarrativeDirectionUI(gapKey) {
       else el.classList.add('narr-dir-empty');
     }
   }
+}
+
+// Outline editors (Review). The gap outline (Opening/bridge/Closing) saves to
+// narrative_outlines via the /outline PUT; a moment/panel outline saves to the
+// moment's description. Both re-render Review on success.
+function openGapOutline(gapKey, label) {
+  state.outlineTarget = { type: 'gap', gap: gapKey };
+  var titleEl = document.getElementById('outline-title');
+  if (titleEl) titleEl.textContent = 'Outline \u2014 ' + (label || 'gap');
+  var ta = document.getElementById('outline-text');
+  if (ta) ta.value = (state.reviewOutlines && state.reviewOutlines[gapKey]) || '';
+  var modal = document.getElementById('outline-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+function openMomentOutline(momentId) {
+  state.outlineTarget = { type: 'moment', momentId: momentId };
+  var titleEl = document.getElementById('outline-title');
+  if (titleEl) titleEl.textContent = 'Panel outline';
+  var cur = '';
+  if (state.reviewData && Array.isArray(state.reviewData.panels)) {
+    var _rp = state.reviewData.panels.find(function(p){ return p.moment_id === momentId; });
+    if (_rp) cur = _rp.description || '';
+  }
+  var ta = document.getElementById('outline-text');
+  if (ta) ta.value = cur;
+  var modal = document.getElementById('outline-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function(){ ta.focus(); }, 30);
+}
+
+function closeOutlineModal() {
+  var modal = document.getElementById('outline-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function saveOutline() {
+  var tgt = state.outlineTarget;
+  if (!tgt) { closeOutlineModal(); return; }
+  var ta = document.getElementById('outline-text');
+  var text = ta ? ta.value.trim() : '';
+  if (!state.currentCampaign || !state.currentSession) { closeOutlineModal(); return; }
+  var url, body;
+  if (tgt.type === 'gap') {
+    url = '/api/narrative/outline/' + state.currentCampaign.id + '/' + state.currentSession.id;
+    body = { gap: tgt.gap, text: text };
+  } else {
+    url = '/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + tgt.momentId;
+    body = { description: text };
+  }
+  fetch(url, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data && data.error) { showAlert('Could not save outline: ' + (data.message || data.error)); return; }
+      closeOutlineModal();
+      if (typeof loadReview === 'function') loadReview();
+    })
+    .catch(function(e){ showAlert('Could not save outline: ' + e.message); });
 }
 
 // ============================================================
@@ -7942,8 +8009,13 @@ function savePrompt(momentId) {
 function openImagePrompt(momentId) {
   state.imagePromptMomentId = momentId;
   var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
+  var promptVal = moment ? (moment.prompt || '') : '';
+  if (!moment && state.reviewData && Array.isArray(state.reviewData.panels)) {
+    var _rp = state.reviewData.panels.find(function(p) { return p.moment_id === momentId; });
+    if (_rp) promptVal = _rp.prompt || '';
+  }
   var ta = document.getElementById('image-prompt-text');
-  if (ta) ta.value = moment ? (moment.prompt || '') : '';
+  if (ta) ta.value = promptVal;
   var modal = document.getElementById('image-prompt-modal');
   if (modal) modal.classList.remove('hidden');
   if (ta) setTimeout(function(){ ta.focus(); }, 30);
@@ -7975,6 +8047,8 @@ function saveImagePrompt() {
         var moment = (state.moments || []).find(function(m) { return m.id === momentId; });
         if (moment) moment.prompt = newPrompt;
         closeImagePrompt();
+        var _rvp = document.getElementById('session-tab-review');
+        if (_rvp && _rvp.style.display !== 'none' && typeof loadReview === 'function') loadReview();
       } else {
         showAlert((data && data.error) || 'Could not save the prompt.');
       }
