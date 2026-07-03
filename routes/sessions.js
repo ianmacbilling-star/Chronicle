@@ -796,13 +796,23 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       };
     });
 
+    var effectiveOutlines = {};
+    var _effOut = function(key, fb) {
+      var st = gapOutlines[key];
+      var ed = (st && typeof st === 'object') ? !!st.edited : (typeof st === 'string' && st.length > 0);
+      var tx = (st && typeof st === 'object') ? (st.text || '') : (st || '');
+      effectiveOutlines[key] = ed ? tx : (fb || '');
+    };
+    _effOut('opening', introSummary);
+    _effOut('closing', outroSummary);
+    moments.forEach(function(m, i) { var ns = narrativeByPanel[i]; _effOut('between:' + i, ns ? (ns.after_summary || '') : ''); });
     res.json({
       intro: narrativeIntro,
       intro_summary: introSummary,
       outro: narrativeOutro,
       outro_summary: outroSummary,
       directions: gapDirections,
-      outlines: gapOutlines,
+      outlines: effectiveOutlines,
       panels: panels,
       all_characters: chars.map(function(c){ return { id: c.character_id, name: c.name, cls: c.cls }; })
         .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }),

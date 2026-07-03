@@ -2655,16 +2655,16 @@ function renderReview(data) {
     var oText = (state.reviewOutlines && state.reviewOutlines[gapKey]) || '';
     var safeLabel = escapeHtmlReview(label);
     var outBtn = canEditNarr
-      ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + gapKey + '\', \'' + safeLabel + '\')" title="Edit the facts this part must cover">\u270E ' + (oText ? 'Edit outline' : 'Add outline') + '</button>'
+      ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + gapKey + '\', \'' + safeLabel + '\')" title="Edit the facts this part must cover">\u270E Edit Narrative Outline</button>'
       : '';
     var dirBtn = canEditNarr
       ? '<button class="review-dir-btn' + (hasDir ? ' is-on' : '') + '" ' +
         'onclick="openNarrDirection(\'' + gapKey + '\', \'' + safeLabel + '\')" ' +
         'title="' + (hasDir ? 'Narrative direction set - click to edit' : 'Steer the flavor for this gap') + '">' +
-        '\u270E Direction' + (hasDir ? ' \u2713' : '') + '</button>'
+        '\u270E Edit Narrative Direction' + (hasDir ? ' \u2713' : '') + '</button>'
       : '';
     var body = oText
-      ? '<div class="review-nar-text">' + escapeHtmlReview(oText) + '</div>'
+      ? '<div class="review-nar-text" style="white-space:pre-wrap;">' + escapeHtmlReview(oText) + '</div>'
       : (canEditNarr ? '' : '<div class="review-nar-text review-nar-empty">No outline yet.</div>');
     return '<div class="review-nar ' + cls + '">' +
       '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div>' + outBtn + dirBtn + '</div>' +
@@ -2716,7 +2716,7 @@ function renderReview(data) {
     // Auto vs Custom indicator + reset-to-auto (only when explicit + editable).
     var castBadge = p.cast_explicit
       ? '<span class="review-cast-badge is-custom">Custom cast</span>'
-      : '<span class="review-cast-badge">Auto-matched</span>';
+      : '<span class="review-cast-badge">Auto-Matched</span>';
     var resetBtn = (canEditNarr && p.cast_explicit)
       ? '<button class="review-reset-btn" onclick="castReset(' + mid + ')" title="Drop back to automatic name-matching">Reset to auto</button>'
       : '';
@@ -2731,17 +2731,17 @@ function renderReview(data) {
     var pDirKey = _isEstR ? 'opening' : ('moment:' + i);
     var pHasDir = !!(state.narrativeDirections && state.narrativeDirections[pDirKey]);
     var pDirBtn = canEditNarr
-      ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
+      ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Edit Narrative Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
       : '';
-    var pOutBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openMomentOutline(' + mid + ')" title="Edit the facts this panel covers">\u270E ' + (p.description ? 'Edit outline' : 'Add outline') + '</button>' : '';
-    var pPromptBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Prompt</button>' : '';
+    var pOutBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openMomentOutline(' + mid + ')" title="Edit the facts this panel covers">\u270E Edit Narrative Outline</button>' : '';
+    var pPromptBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Image Prompt</button>' : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
-        castBadge + resetBtn + pOutBtn + pPromptBtn + pDirBtn +
+        castBadge + resetBtn + pPromptBtn + pOutBtn + pDirBtn +
       '</div>' +
-      (_isEstR ? (intro ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(intro) + '</div>' : '') : (p.description ? '<div class="review-snippet">' + escapeHtmlReview(p.description) + '</div>' : '')) +
+      (_isEstR ? (intro ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(intro) + '</div>' : '') : (p.description ? '<div class="review-snippet" style="white-space:pre-wrap;">' + escapeHtmlReview(p.description) + '</div>' : '')) +
       changeNote +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
@@ -13077,7 +13077,7 @@ function renderMomentOptions(momentId) {
       var optsA = ((state.reviewData && state.reviewData.all_assets) || []).filter(function(a){ return !haveA[String(a.id)]; }).map(function(a){ return '<option value="' + a.id + '">' + escapeHtmlReview(a.name) + ' &#183; ' + (ACAT[a.category] || a.category) + '</option>'; }).join('');
       addAsset = '<button class="review-add-btn" onclick="openCastPicker(\'asset\', ' + momentId + ')">+ Add asset</button>';
     }
-    var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-matched</span>';
+    var badge = p.cast_explicit ? '<span class="review-cast-badge is-custom">Custom cast</span>' : '<span class="review-cast-badge">Auto-Matched</span>';
     var resetBtn = (canEdit && p.cast_explicit) ? '<button class="review-reset-btn" onclick="castReset(' + momentId + ')" title="Drop back to automatic name-matching">Reset to auto</button>' : '';
     castHtml = '<div class="moment-opts-casthead">' + badge + resetBtn + '</div>' +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +

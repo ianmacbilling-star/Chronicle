@@ -327,19 +327,6 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       narrStyleId, now, req.session.userId, targetForkId
     );
 
-    // Option-B outline seeding: pre-populate narrative_outlines from the emitted
-    // per-gap summaries so Review shows an editable draft. Refresh only gaps the
-    // user has NOT authored; preserve (and keep enforcing) user-edited outlines.
-    try {
-      const seeded = {};
-      Object.keys(gapOutlines || {}).forEach(function (k) { if (outlineEdited(gapOutlines[k])) seeded[k] = gapOutlines[k]; });
-      const _seedOutline = function (key, txt) { if (txt && !outlineEdited(gapOutlines[key])) seeded[key] = { text: String(txt), edited: false }; };
-      _seedOutline('opening', parsed.intro_summary);
-      (parsed.sections || []).forEach(function (sec, i) { _seedOutline('between:' + i, sec && sec.after_summary); });
-      _seedOutline('closing', parsed.outro_summary);
-      await db.prepare('UPDATE session_forks SET narrative_outlines = ? WHERE id = ?').run(JSON.stringify(seeded), targetForkId);
-    } catch (_se) { console.error('outline seed failed:', _se.message); }
-
     try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generated (' + narrStyleId + ', ' + ((parsed.sections || []).length) + ' sections)', detail: { style: narrStyleId, sections: (parsed.sections || []).length, moments: moments.length, campaign_id: req.params.campaignId, session_id: req.params.sessionId } }); } catch (_le) {}
 
     res.json({
