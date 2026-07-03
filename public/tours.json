@@ -347,7 +347,13 @@
         {
           "selector": "#review-list",
           "title": "Review before you generate",
-          "text": "This is where you can see what Campaignia came up with before it has generated anything. If needed, set narrative and image direction, and add characters and assets to different Moments.",
+          "text": "See Campaignia's plan before it generates anything. Every image panel and every bridge between them shows an outline \u2014 the facts the narration will cover \u2014 so you can fix anything missing or out of order before spending tokens.",
+          "placement": "auto"
+        },
+        {
+          "selector": ".review-panel",
+          "title": "Edit the plan",
+          "text": "On each panel, edit the Narrative Outline (the facts to cover), the Narrative Direction (how it's written \u2014 tone and pacing), or the Image Prompt (the picture), and add or remove characters and assets. On a phone these collapse into a menu.",
           "placement": "auto"
         },
         {

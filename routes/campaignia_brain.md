@@ -359,14 +359,22 @@ Lists the characters detected in this session. It also:
 - **Going back** — use **Replace from Archive** to restore an earlier look.
 
 ### 10.3 Review tab
-See how Campaignia interpreted your story **before** it writes the full narrative or
-spends tokens on images. Per panel you can:
-- **Add/remove characters** and **add/remove assets**.
-- See where a **character change** is set to land.
-- Set **Direction** (the **✎ Direction** button) — your instructions layered onto the
-  prompt; it steers **both the prose and the image** for that panel.
-- A small **cast badge** shows **Auto-matched** (Campaignia's automatic name-matching)
-  or **Custom cast** once you change it; a **Reset to auto** button reverts to automatic.
+See how Campaignia planned your story **before** it writes the full narrative or spends
+tokens on images. Every **image panel** and every **bridge** between panels shows an
+**outline** — the facts and sequence the narration will cover — so you can catch
+anything missing or out of order first. Per panel you can:
+- **Edit Narrative Outline** — the **facts** you want covered (the *what*). Your edits
+  persist and steer the prose on every regenerate.
+- **Edit Narrative Direction** — **how you want it written**: tone, emphasis, pacing
+  (the *how*). Optional flavor on top.
+- **Edit Image Prompt** — the wording that drives the **picture** for that panel
+  (image panels only).
+- **Add/remove characters** and **add/remove assets**, and see where a **character change**
+  lands. A **cast badge** shows **Auto-Matched** (automatic name-matching) or **Custom
+  cast** once you change it; **Reset to auto** reverts.
+- On a **phone**, a panel's actions collapse into a **⋯ menu**.
+
+Outline = the facts; Direction = the flavor — they work together and don't conflict.
 
 Pick your styles up top **first**: the **Narrative style** and **Art style** buttons
 (they show the current pick; which styles you can choose depends on your tier). Then
