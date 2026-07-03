@@ -257,10 +257,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .review-nar-head .review-nar-label{margin-bottom:0;}
 .review-actions-inline{display:inline-flex;gap:6px;align-items:center;}
 .review-nar-head .review-actions-inline{margin-left:auto;}
-.review-row-menu{display:none;}
+.row-menu.review-row-menu{display:none;}
 @media (max-width:640px){
   .review-actions-inline{display:none;}
-  .review-row-menu{display:inline-block;}
+  .row-menu.review-row-menu{display:inline-block;}
   .review-nar-head .review-row-menu{margin-left:auto;}
 }
 .review-nar-empty{color:rgba(201,168,76,0.45);font-style:italic;}
