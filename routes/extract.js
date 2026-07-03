@@ -3,7 +3,6 @@ const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
-const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { releaseImage } = require('../storage/storage');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
@@ -124,7 +123,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '  "moments": [\n' +
     '    {\n' +
     '      "title": "Short evocative panel title",\n' +
-    '      "description": "One sentence visual scene description for an artist",\n' +
+    '      "description": "A terse OUTLINE of the panel key facts as short bullet points (one per line, each starting with a dash), NOT prose sentences. Establish who is present, what happens, and the setting. Preserve the EXACT names of any known characters or assets in this panel (this text drives name-matching). Facts and sequence only; leave the flavor to the narration.",\n' +
     '      "type": "combat|drama|discovery|humor",\n' +
     '      "shape": "The frame shape for this panel - choose EXACTLY one of: square, standard, wide, panoramic, tall, tower, or fullpage. Pick the shape that best fits the scene composition, so the printed graphic novel can vary panel sizes for a dynamic, cinematic page. From widest to tallest: panoramic is an ultra-wide cinematic banner - use it only for grand sweeping vistas, a long horizon, or a landscape or army stretching across the view; wide is a broad establishing or action shot; standard is the default balanced frame and should be the most common choice; square is an intimate close-up on a single face or object, or a tight two-shot; tall is a vertical, full-height framing; tower is an extremely tall and narrow shot - use it only for towering subjects, a great height or fall, a dramatic full-body reveal, or a narrow vertical space; fullpage is an upright, full-page proportioned frame (shaped like a whole printed page) for a striking image worth showing large at page size. Reserve the dramatic extremes panoramic, tower, and fullpage for moments whose composition genuinely earns them, and do not overuse any single shape.",\n' +
     '      \"prominence\": \"How much visual weight this beat deserves on the page, an integer 1 to 5 (1 = a minor or background beat, 3 = a normal beat, 5 = a major hero or splash moment). Most panels are 2 to 4; reserve 5 for genuinely pivotal beats and do not overuse it.\",\\n' +
@@ -163,7 +162,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     });
 
     const data = await response.json();
-    if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
+    if (data.error) return res.json({ error: data.error.message });
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
@@ -257,7 +256,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     parsed.pendingChanges = pendingChanges;
     res.json(parsed);
   } catch(e) {
-    res.json({ error: friendlyAnthropicError(e) });
+    res.json({ error: e.message });
   }
 });
 

@@ -89,6 +89,12 @@ async function callerForkId(db, sessionId, userId, role) {
 // ============================================================
 // GENERATE narrative prose for a session
 // ============================================================
+// Outline value helpers. narrative_outlines stores either a plain string (a
+// user-authored outline, the Stage-1 shape) or { text, edited }. A plain string
+// counts as user-edited; a seeded object carries edited:false.
+function outlineText(v) { return (v && typeof v === 'object') ? (v.text || '') : (v || ''); }
+function outlineEdited(v) { return (v && typeof v === 'object') ? !!v.edited : (typeof v === 'string' && v.length > 0); }
+
 router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // Use platform key from env, fall back to request body key
   const key = process.env.ANTHROPIC_API_KEY || req.body.key;
@@ -191,8 +197,8 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       ? '\n    DIRECTOR STEERING for this bridge (you MUST follow this): ' + aDir
       : '';
     const aOutline = gapOutlines['between:' + i];
-    const aOutlineLine = aOutline
-      ? '\n    REQUIRED CONTENT for this bridge (you MUST cover these facts, in your own prose): ' + aOutline
+    const aOutlineLine = outlineEdited(aOutline)
+      ? '\n    REQUIRED CONTENT for this bridge (you MUST cover these facts, in your own prose): ' + outlineText(aOutline)
       : '';
     return 'PANEL ' + (i + 1) + ' - "' + m.title + '" -- THIS panel\'s image depicts: ' + m.description + '\n' +
       '  MOMENT block ("before"): its PRIMARY job is to narrate THIS panel\'s image -- the scene just described above -- telling what is happening in THIS picture and how it comes about. Connect smoothly from ' + prevRef + ', but do NOT spend this block continuing the previous panel\'s action; the bulk of it must describe and lead INTO this specific image, and THIS panel\'s depicted action MUST be told here in this block, not deferred to the bridge.' + mDirLine + '\n' +
@@ -222,9 +228,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'The blocks you need to write, panel by panel:\n\n' +
     beatsList + '\n\n' +
     'You will also write an "intro" (before panel 1) and an "outro" (after the final panel).\n' +
-    (gapOutlines['opening'] ? 'REQUIRED CONTENT for the intro (you MUST cover these facts, in your own prose): ' + gapOutlines['opening'] + '\n' : '') +
+    (outlineEdited(gapOutlines['opening']) ? 'REQUIRED CONTENT for the intro (you MUST cover these facts, in your own prose): ' + outlineText(gapOutlines['opening']) + '\n' : '') +
     (gapDirections['opening'] ? 'DIRECTOR STEERING for the intro (you MUST follow this): ' + gapDirections['opening'] + '\n' : '') +
-    (gapOutlines['closing'] ? 'REQUIRED CONTENT for the outro (you MUST cover these facts, in your own prose): ' + gapOutlines['closing'] + '\n' : '') +
+    (outlineEdited(gapOutlines['closing']) ? 'REQUIRED CONTENT for the outro (you MUST cover these facts, in your own prose): ' + outlineText(gapOutlines['closing']) + '\n' : '') +
     (gapDirections['closing'] ? 'DIRECTOR STEERING for the outro (you MUST follow this): ' + gapDirections['closing'] + '\n' : '') +
     '\n' +
     (directorNotes ? 'Overall narrative direction (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + directorNotes + '\n\n' : '') +
@@ -320,6 +326,19 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       parsed.outro_summary || '',
       narrStyleId, now, req.session.userId, targetForkId
     );
+
+    // Option-B outline seeding: pre-populate narrative_outlines from the emitted
+    // per-gap summaries so Review shows an editable draft. Refresh only gaps the
+    // user has NOT authored; preserve (and keep enforcing) user-edited outlines.
+    try {
+      const seeded = {};
+      Object.keys(gapOutlines || {}).forEach(function (k) { if (outlineEdited(gapOutlines[k])) seeded[k] = gapOutlines[k]; });
+      const _seedOutline = function (key, txt) { if (txt && !outlineEdited(gapOutlines[key])) seeded[key] = { text: String(txt), edited: false }; };
+      _seedOutline('opening', parsed.intro_summary);
+      (parsed.sections || []).forEach(function (sec, i) { _seedOutline('between:' + i, sec && sec.after_summary); });
+      _seedOutline('closing', parsed.outro_summary);
+      await db.prepare('UPDATE session_forks SET narrative_outlines = ? WHERE id = ?').run(JSON.stringify(seeded), targetForkId);
+    } catch (_se) { console.error('outline seed failed:', _se.message); }
 
     try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generated (' + narrStyleId + ', ' + ((parsed.sections || []).length) + ' sections)', detail: { style: narrStyleId, sections: (parsed.sections || []).length, moments: moments.length, campaign_id: req.params.campaignId, session_id: req.params.sessionId } }); } catch (_le) {}
 
@@ -470,7 +489,7 @@ router.put('/outline/:campaignId/:sessionId', requireAuth, async function(req, r
   if (row && row.narrative_outlines) {
     try { outlines = JSON.parse(row.narrative_outlines) || {}; } catch (e) { outlines = {}; }
   }
-  if (text) outlines[gap] = text;
+  if (text) outlines[gap] = { text: text, edited: true };
   else delete outlines[gap];
 
   const now = new Date().toISOString();
