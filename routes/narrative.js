@@ -192,6 +192,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     const mDirLine = mDir
       ? '\n    DIRECTOR STEERING for this moment (you MUST follow this): ' + mDir
       : '';
+    const mOutline = gapOutlines['moment:' + i];
+    const mOutlineLine = outlineEdited(mOutline)
+      ? '\n    REQUIRED CONTENT for this moment (you MUST cover these facts, in your own prose): ' + outlineText(mOutline)
+      : '';
     const aDir = gapDirections['between:' + i];
     const aDirLine = aDir
       ? '\n    DIRECTOR STEERING for this bridge (you MUST follow this): ' + aDir
@@ -201,7 +205,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       ? '\n    REQUIRED CONTENT for this bridge (you MUST cover these facts, in your own prose): ' + outlineText(aOutline)
       : '';
     return 'PANEL ' + (i + 1) + ' - "' + m.title + '" -- THIS panel\'s image depicts: ' + m.description + '\n' +
-      '  MOMENT block ("before"): its PRIMARY job is to narrate THIS panel\'s image -- the scene just described above -- telling what is happening in THIS picture and how it comes about. Connect smoothly from ' + prevRef + ', but do NOT spend this block continuing the previous panel\'s action; the bulk of it must describe and lead INTO this specific image, and THIS panel\'s depicted action MUST be told here in this block, not deferred to the bridge.' + mDirLine + '\n' +
+      '  MOMENT block ("before"): its PRIMARY job is to narrate THIS panel\'s image -- the scene just described above -- telling what is happening in THIS picture and how it comes about. Connect smoothly from ' + prevRef + ', but do NOT spend this block continuing the previous panel\'s action; the bulk of it must describe and lead INTO this specific image, and THIS panel\'s depicted action MUST be told here in this block, not deferred to the bridge.' + mDirLine + mOutlineLine + '\n' +
       '  BRIDGE block ("after"): ONLY after this panel\'s depicted action has been told in the MOMENT block above, carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover only travel, deliberation, and side events between this panel and the next. Do NOT narrate this panel\'s own depicted action here (that belongs in the MOMENT block above), and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine + aOutlineLine;
   }).join('\n\n');
 
@@ -467,7 +471,7 @@ router.put('/outline/:campaignId/:sessionId', requireAuth, async function(req, r
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
   const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
-  if (!/^(opening|closing|between:\d+)$/.test(gap)) {
+  if (!/^(opening|closing|moment:\d+|between:\d+)$/.test(gap)) {
     return res.json({ error: 'Invalid gap key' });
   }
 

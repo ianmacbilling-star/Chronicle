@@ -755,7 +755,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       // Bridge AFTER this panel: prefer the terse summary; fall back to a
       // truncated slice of the prose for sessions generated before the
       // summary field existed.
-      const nsec = narrativeByPanel[i];
+      const nsec = narrativeByPanel[m.panel_order];
       let bridge = '';
       if (nsec) {
         if (nsec.after_summary) bridge = nsec.after_summary;
@@ -805,7 +805,11 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     };
     _effOut('opening', introSummary);
     _effOut('closing', outroSummary);
-    moments.forEach(function(m, i) { var ns = narrativeByPanel[i]; _effOut('between:' + i, ns ? (ns.after_summary || '') : ''); });
+    panels.forEach(function(p, i) {
+      var ns = narrativeByPanel[p.panel_order];
+      _effOut('moment:' + i, ns ? (ns.before_summary || '') : '');
+      _effOut('between:' + i, ns ? (ns.after_summary || '') : '');
+    });
     res.json({
       intro: narrativeIntro,
       intro_summary: introSummary,

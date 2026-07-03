@@ -2733,7 +2733,8 @@ function renderReview(data) {
     var pDirBtn = canEditNarr
       ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Edit Narrative Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
       : '';
-    var pOutBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openMomentOutline(' + mid + ')" title="Edit the facts this panel covers">\u270E Edit Narrative Outline</button>' : '';
+    var pOutText = (state.reviewOutlines && state.reviewOutlines[pDirKey]) || '';
+    var pOutBtn = canEditNarr ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')" title="Edit the narration beat for this panel">\u270E Edit Narrative Outline</button>' : '';
     var pPromptBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Image Prompt</button>' : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
@@ -2741,7 +2742,7 @@ function renderReview(data) {
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + pPromptBtn + pOutBtn + pDirBtn +
       '</div>' +
-      (_isEstR ? (intro ? '<div class="review-nar-text" style="margin-bottom:4px;">' + escapeHtmlReview(intro) + '</div>' : '') : (p.description ? '<div class="review-snippet" style="white-space:pre-wrap;">' + escapeHtmlReview(p.description) + '</div>' : '')) +
+      (pOutText ? '<div class="review-snippet" style="white-space:pre-wrap;">' + escapeHtmlReview(pOutText) + '</div>' : '') +
       changeNote +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
