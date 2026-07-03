@@ -136,8 +136,12 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '  ],\n' +
     '  "narrative_outline": {\n' +
     '    "intro": "A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the key beats the OPENING narration (before panel 1) will cover. A PLAN of the prose, not the prose itself.",\n' +
-    '    "moments": ["One short sentence per PANEL describing the events that panel\'s image depicts and how they come about - the narration that leads INTO the picture. Return EXACTLY (number of panels) entries, in order."],\n' +
-    '    "gaps": ["A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the connective events that bridge one panel\'s moment to the next. Return EXACTLY (number of panels minus 1) entries, in order."],\n' +
+    '    "panels": [\n' +
+    '      {\n' +
+    '        "narration": "One short sentence describing the events THIS panel\'s image depicts and how they come about - the narration that leads INTO the picture.",\n' +
+    '        "bridge": "A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the connective events that bridge THIS panel to the NEXT one - travel, deliberation, side events. Leave this EMPTY for the final panel. The panels array MUST contain EXACTLY one entry per panel in the moments array above, in the same order, pairing each panel with the bridge that FOLLOWS it."\n' +
+    '      }\n' +
+    '    ],\n' +
     '    "outro": "A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the key beats the CLOSING narration (after the final panel) will cover."\n' +
     '  }\n' +
     '}';
@@ -217,11 +221,14 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       // (narrative_directions untouched) — they are the user's steering intent
       // and should survive a re-extract.
       var outlineObj = parsed.narrative_outline || {};
-      var outlineGaps = Array.isArray(outlineObj.gaps) ? outlineObj.gaps : [];
-      var outlineMoments = Array.isArray(outlineObj.moments) ? outlineObj.moments : [];
+      // Each panel object pairs its OWN narration (-> before) with the bridge
+      // that FOLLOWS it (-> outline). Pairing them in one object keeps the
+      // bridge aligned to its panel (no shift). Final panel's bridge stays empty.
+      var outlinePanels = Array.isArray(outlineObj.panels) ? outlineObj.panels : [];
       var outlineSections = [{ panel_index: 0, before: '', outline: '' }];
       for (var gi = 0; gi < parsed.moments.length; gi++) {
-        outlineSections.push({ panel_index: gi + 1, before: outlineMoments[gi] || '', outline: (gi < parsed.moments.length - 1) ? (outlineGaps[gi] || '') : '' });
+        var op = outlinePanels[gi] || {};
+        outlineSections.push({ panel_index: gi + 1, before: op.narration || '', outline: (gi < parsed.moments.length - 1) ? (op.bridge || '') : '' });
       }
       var outlineToStore = JSON.stringify({
         intro: outlineObj.intro || '',
