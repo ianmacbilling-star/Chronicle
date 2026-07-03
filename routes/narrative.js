@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('../database/db');
-const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
@@ -120,11 +119,15 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   //    the first generation AND every per-gap Regen honor it.
   let directorNotes = session.session_notes || '';
   let gapDirections = {};
-  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions, narrative_style FROM session_forks WHERE id = ?').get(targetForkId);
+  let gapOutlines = {};
+  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions, narrative_outlines, narrative_style FROM session_forks WHERE id = ?').get(targetForkId);
   if (fkSteer) {
     if (callerRole !== 'dm') directorNotes = fkSteer.fork_notes || '';
     if (fkSteer.narrative_directions) {
       try { gapDirections = JSON.parse(fkSteer.narrative_directions) || {}; } catch (e) { gapDirections = {}; }
+    }
+    if (fkSteer.narrative_outlines) {
+      try { gapOutlines = JSON.parse(fkSteer.narrative_outlines) || {}; } catch (e) { gapOutlines = {}; }
     }
   }
 
@@ -187,9 +190,13 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     const aDirLine = aDir
       ? '\n    DIRECTOR STEERING for this bridge (you MUST follow this): ' + aDir
       : '';
+    const aOutline = gapOutlines['between:' + i];
+    const aOutlineLine = aOutline
+      ? '\n    REQUIRED CONTENT for this bridge (you MUST cover these facts, in your own prose): ' + aOutline
+      : '';
     return 'PANEL ' + (i + 1) + ' - "' + m.title + '" -- THIS panel\'s image depicts: ' + m.description + '\n' +
       '  MOMENT block ("before"): its PRIMARY job is to narrate THIS panel\'s image -- the scene just described above -- telling what is happening in THIS picture and how it comes about. Connect smoothly from ' + prevRef + ', but do NOT spend this block continuing the previous panel\'s action; the bulk of it must describe and lead INTO this specific image, and THIS panel\'s depicted action MUST be told here in this block, not deferred to the bridge.' + mDirLine + '\n' +
-      '  BRIDGE block ("after"): ONLY after this panel\'s depicted action has been told in the MOMENT block above, carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover only travel, deliberation, and side events between this panel and the next. Do NOT narrate this panel\'s own depicted action here (that belongs in the MOMENT block above), and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine;
+      '  BRIDGE block ("after"): ONLY after this panel\'s depicted action has been told in the MOMENT block above, carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover only travel, deliberation, and side events between this panel and the next. Do NOT narrate this panel\'s own depicted action here (that belongs in the MOMENT block above), and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine + aOutlineLine;
   }).join('\n\n');
 
   const prompt =
@@ -215,7 +222,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'The blocks you need to write, panel by panel:\n\n' +
     beatsList + '\n\n' +
     'You will also write an "intro" (before panel 1) and an "outro" (after the final panel).\n' +
+    (gapOutlines['opening'] ? 'REQUIRED CONTENT for the intro (you MUST cover these facts, in your own prose): ' + gapOutlines['opening'] + '\n' : '') +
     (gapDirections['opening'] ? 'DIRECTOR STEERING for the intro (you MUST follow this): ' + gapDirections['opening'] + '\n' : '') +
+    (gapOutlines['closing'] ? 'REQUIRED CONTENT for the outro (you MUST cover these facts, in your own prose): ' + gapOutlines['closing'] + '\n' : '') +
     (gapDirections['closing'] ? 'DIRECTOR STEERING for the outro (you MUST follow this): ' + gapDirections['closing'] + '\n' : '') +
     '\n' +
     (directorNotes ? 'Overall narrative direction (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + directorNotes + '\n\n' : '') +
@@ -274,7 +283,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     });
 
     const data = await response.json();
-    if (data.error) return res.json({ error: friendlyAnthropicError(data.error) });
+    if (data.error) return res.json({ error: data.error.message });
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
@@ -324,7 +333,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   } catch(e) {
     console.error('Narrative generation error:', e.message);
     try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generation failed: ' + (e && e.message), detail: { campaign_id: req.params.campaignId, session_id: req.params.sessionId, stack: (e && e.stack) || '' } }); } catch (_le) {}
-    res.json({ error: friendlyAnthropicError(e) });
+    res.json({ error: e.message });
   }
 });
 
@@ -430,6 +439,45 @@ router.put('/direction/:campaignId/:sessionId', requireAuth, async function(req,
     .run(JSON.stringify(directions), now, req.session.userId, targetForkId);
 
   res.json({ success: true, gap: gap, text: text, directions: directions });
+});
+
+// ============================================================
+// SAVE a gap OUTLINE (facts/sequence) for this version. Mirrors the direction
+// PUT but writes narrative_outlines. The outline is the required CONTENT a gap
+// must cover; Direction is the flavor steer. Owner-scoped; empty text clears.
+// ============================================================
+router.put('/outline/:campaignId/:sessionId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.id FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+  ).get(req.params.sessionId, req.session.userId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
+  const text = (req.body && typeof req.body.text === 'string') ? req.body.text.trim() : '';
+  if (!/^(opening|closing|between:\d+)$/.test(gap)) {
+    return res.json({ error: 'Invalid gap key' });
+  }
+
+  const row = await db.prepare('SELECT narrative_outlines FROM session_forks WHERE id = ?').get(targetForkId);
+  let outlines = {};
+  if (row && row.narrative_outlines) {
+    try { outlines = JSON.parse(row.narrative_outlines) || {}; } catch (e) { outlines = {}; }
+  }
+  if (text) outlines[gap] = text;
+  else delete outlines[gap];
+
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE session_forks SET narrative_outlines = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(JSON.stringify(outlines), now, req.session.userId, targetForkId);
+
+  res.json({ success: true, gap: gap, text: text, outlines: outlines });
 });
 
 // ============================================================

@@ -52,13 +52,19 @@ router.put('/:momentId', requireAuth, verifyCampaignMember, async function(req, 
   if (!ownsThisFork) return res.status(403).json({ error: 'You can only edit your own version' });
   if (moment.locked) return res.status(403).json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to edit the prompt.' });
 
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string') return res.json({ error: 'Prompt required' });
+  const { prompt, description } = req.body;
+  const hasPrompt = typeof prompt === 'string';
+  const hasDesc = typeof description === 'string';
+  if (!hasPrompt && !hasDesc) return res.json({ error: 'Prompt or description required' });
 
   const now = new Date().toISOString();
-  await db.prepare(
-    'UPDATE moments SET prompt = ?, edited_at = ?, edited_by = ? WHERE id = ? AND session_id = ?'
-  ).run(prompt, now, req.session.userId, req.params.momentId, req.params.sessionId);
+  const sets = [], vals = [];
+  if (hasPrompt) { sets.push('prompt = ?'); vals.push(prompt); }
+  if (hasDesc) { sets.push('description = ?'); vals.push(description); }
+  sets.push('edited_at = ?'); vals.push(now);
+  sets.push('edited_by = ?'); vals.push(req.session.userId);
+  vals.push(req.params.momentId, req.params.sessionId);
+  await db.prepare('UPDATE moments SET ' + sets.join(', ') + ' WHERE id = ? AND session_id = ?').run(...vals);
 
   const updatedMoment = await db.prepare('SELECT * FROM moments WHERE id = ?').get(req.params.momentId);
   res.json({ success: true, moment: updatedMoment });

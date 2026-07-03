@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
-const { friendlyImageError } = require('../middleware/friendlyErrors');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -444,7 +443,7 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('regenerate-reference error:', e.message);
-    res.json({ error: friendlyImageError(e) });
+    res.json({ error: 'Could not regenerate: ' + e.message });
   }
 });
 
@@ -511,7 +510,7 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
     res.status(202).json({ status: 'queued', job_id: jobIns.lastInsertRowid });
   } catch(e) {
     console.error('retouch-reference error:', e.message);
-    res.json({ error: friendlyImageError(e) });
+    res.json({ error: 'Could not retouch: ' + e.message });
   }
 });
 
@@ -684,7 +683,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     // to any generated summaries on the fork for legacy versions.
     const fkRow = await db.prepare(
       'SELECT narrative_intro_summary, narrative_outro_summary, narrative_sections, ' +
-      'narrative_outline, narrative_directions FROM session_forks WHERE id = ?'
+      'narrative_outline, narrative_directions, narrative_outlines FROM session_forks WHERE id = ?'
     ).get(viewForkId);
     let narrativeByPanel = {};
     let narrativeIntro = '';
@@ -692,9 +691,13 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
     let introSummary = '';
     let outroSummary = '';
     let gapDirections = {};
+    let gapOutlines = {};
     if (fkRow) {
       if (fkRow.narrative_directions) {
         try { gapDirections = JSON.parse(fkRow.narrative_directions) || {}; } catch (e) { gapDirections = {}; }
+      }
+      if (fkRow.narrative_outlines) {
+        try { gapOutlines = JSON.parse(fkRow.narrative_outlines) || {}; } catch (e) { gapOutlines = {}; }
       }
       let usedOutline = false;
       if (fkRow.narrative_outline) {
@@ -780,6 +783,8 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
         kind: m.kind,
         title: m.title,
         snippet: snippet(m.description),
+        description: m.description || '',
+        prompt: m.prompt || '',
         type: m.type,
         bridge: bridge,
         moment: moment,
@@ -797,6 +802,7 @@ router.get('/:id/review', requireAuth, verifyCampaignMember, async function(req,
       outro: narrativeOutro,
       outro_summary: outroSummary,
       directions: gapDirections,
+      outlines: gapOutlines,
       panels: panels,
       all_characters: chars.map(function(c){ return { id: c.character_id, name: c.name, cls: c.cls }; })
         .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }),
