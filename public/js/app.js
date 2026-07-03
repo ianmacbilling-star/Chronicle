@@ -2609,6 +2609,18 @@ function loadReview() {
     });
 }
 
+// Render an outline string as a readable list: break onto a new bullet line at
+// the 'bigger' dashes (em/en) and at inline ' - ' bullet separators. Leaves
+// hyphenated words, already-multiline bullets, and plain sentences intact.
+function formatOutlineText(t) {
+  if (!t) return '';
+  var s = String(t).trim();
+  s = s.replace(/\s*[\u2014\u2013]\s*/g, '\n- ');
+  s = s.replace(/ +- +/g, '\n- ');
+  if (s.charAt(0) !== '-') s = '- ' + s;
+  return s;
+}
+
 function escapeHtmlReview(s) {
   return String(s || '').replace(/[&<>]/g, function(c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
@@ -2655,19 +2667,28 @@ function renderReview(data) {
     var oText = (state.reviewOutlines && state.reviewOutlines[gapKey]) || '';
     var safeLabel = escapeHtmlReview(label);
     var outBtn = canEditNarr
-      ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + gapKey + '\', \'' + safeLabel + '\')" title="Edit the facts this part must cover">\u270E Edit Narrative Outline</button>'
+      ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + gapKey + '\', \'' + safeLabel + '\')" title="The facts you want covered">\u270E Edit Narrative Outline</button>'
       : '';
     var dirBtn = canEditNarr
       ? '<button class="review-dir-btn' + (hasDir ? ' is-on' : '') + '" ' +
         'onclick="openNarrDirection(\'' + gapKey + '\', \'' + safeLabel + '\')" ' +
-        'title="' + (hasDir ? 'Narrative direction set - click to edit' : 'Steer the flavor for this gap') + '">' +
+        'title="How do you want it written">' +
         '\u270E Edit Narrative Direction' + (hasDir ? ' \u2713' : '') + '</button>'
       : '';
+    var narrMenuId = 'review-menu-' + gapKey.replace(/[^a-z0-9]/gi, '-');
+    var narrMenu = canEditNarr
+      ? '<div class="row-menu review-row-menu">' +
+        '<button class="row-menu-btn" onclick="toggleRowMenu(\'' + narrMenuId + '\', event)">&#8943;</button>' +
+        '<div class="row-menu-dropdown" id="' + narrMenuId + '">' +
+        '<button class="row-menu-item" onclick="openGapOutline(\'' + gapKey + '\', \'' + safeLabel + '\')">Edit Narrative Outline</button>' +
+        '<button class="row-menu-item" onclick="openNarrDirection(\'' + gapKey + '\', \'' + safeLabel + '\')">Edit Narrative Direction</button>' +
+        '</div></div>'
+      : '';
     var body = oText
-      ? '<div class="review-nar-text" style="white-space:pre-wrap;">' + escapeHtmlReview(oText) + '</div>'
+      ? '<div class="review-nar-text" style="white-space:pre-wrap;">' + escapeHtmlReview(formatOutlineText(oText)) + '</div>'
       : (canEditNarr ? '' : '<div class="review-nar-text review-nar-empty">No outline yet.</div>');
     return '<div class="review-nar ' + cls + '">' +
-      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div>' + outBtn + dirBtn + '</div>' +
+      '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div><div class="review-actions-inline">' + outBtn + dirBtn + '</div>' + narrMenu + '</div>' +
       body +
     '</div>';
   }
@@ -2731,18 +2752,28 @@ function renderReview(data) {
     var pDirKey = _isEstR ? 'opening' : ('moment:' + i);
     var pHasDir = !!(state.narrativeDirections && state.narrativeDirections[pDirKey]);
     var pDirBtn = canEditNarr
-      ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')" title="' + (pHasDir ? 'Direction set - click to edit' : 'Steer the prose and image for this panel') + '">\u270E Edit Narrative Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
+      ? '<button class="review-dir-btn' + (pHasDir ? ' is-on' : '') + '" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')" title="How do you want it written">\u270E Edit Narrative Direction' + (pHasDir ? ' \u2713' : '') + '</button>'
       : '';
     var pOutText = (state.reviewOutlines && state.reviewOutlines[pDirKey]) || '';
-    var pOutBtn = canEditNarr ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')" title="Edit the narration beat for this panel">\u270E Edit Narrative Outline</button>' : '';
+    var pOutBtn = canEditNarr ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')" title="The facts you want covered">\u270E Edit Narrative Outline</button>' : '';
     var pPromptBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Image Prompt</button>' : '';
+    var pMenuId = 'review-menu-p' + mid;
+    var pMenu = canEditNarr
+      ? '<div class="row-menu review-row-menu">' +
+        '<button class="row-menu-btn" onclick="toggleRowMenu(\'' + pMenuId + '\', event)">&#8943;</button>' +
+        '<div class="row-menu-dropdown" id="' + pMenuId + '">' +
+        ((!_isEstR) ? '<button class="row-menu-item" onclick="openImagePrompt(' + mid + ')">Edit Image Prompt</button>' : '') +
+        '<button class="row-menu-item" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')">Edit Narrative Outline</button>' +
+        '<button class="row-menu-item" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')">Edit Narrative Direction</button>' +
+        '</div></div>'
+      : '';
     html += '<div class="review-panel">' +
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
-        castBadge + resetBtn + pPromptBtn + pOutBtn + pDirBtn +
+        castBadge + resetBtn + '<div class="review-actions-inline">' + pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu +
       '</div>' +
-      (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(pOutText) + '</div>' : '') +
+      (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(formatOutlineText(pOutText)) + '</div>' : '') +
       changeNote +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
