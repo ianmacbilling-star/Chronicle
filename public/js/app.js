@@ -2742,7 +2742,7 @@ function renderReview(data) {
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + pPromptBtn + pOutBtn + pDirBtn +
       '</div>' +
-      (pOutText ? '<div class="review-snippet" style="white-space:pre-wrap;">' + escapeHtmlReview(pOutText) + '</div>' : '') +
+      (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(pOutText) + '</div>' : '') +
       changeNote +
       '<div class="review-row"><span class="review-label">Characters:</span> ' + charChips + ' ' + addChar + '</div>' +
       '<div class="review-row"><span class="review-label">Assets:</span> ' + assetChips + ' ' + addAsset + '</div>' +
