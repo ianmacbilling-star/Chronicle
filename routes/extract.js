@@ -135,10 +135,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '    }\n' +
     '  ],\n' +
     '  "narrative_outline": {\n' +
-    '    "intro": "One short sentence describing what the OPENING narration (before panel 1) will cover. A PLAN of the prose, not the prose itself.",\n' +
+    '    "intro": "A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the key beats the OPENING narration (before panel 1) will cover. A PLAN of the prose, not the prose itself.",\n' +
     '    "moments": ["One short sentence per PANEL describing the events that panel\'s image depicts and how they come about - the narration that leads INTO the picture. Return EXACTLY (number of panels) entries, in order."],\n' +
-    '    "gaps": ["One short sentence per BETWEEN-panel gap describing the connective narration that bridges one panel\'s moment to the next. Return EXACTLY (number of panels minus 1) entries, in order."],\n' +
-    '    "outro": "One short sentence describing what the CLOSING narration (after the final panel) will cover."\n' +
+    '    "gaps": ["A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the connective events that bridge one panel\'s moment to the next. Return EXACTLY (number of panels minus 1) entries, in order."],\n' +
+    '    "outro": "A terse outline as short bullet points (each on its own line, starting with a dash), NOT a prose sentence: the key beats the CLOSING narration (after the final panel) will cover."\n' +
     '  }\n' +
     '}';
 
