@@ -3733,34 +3733,33 @@ function generateNarrativeAndImages() {
   setGenLock('Generate Narrative');
   var btn = document.getElementById('review-generate-btn');
   var origLabel = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = 'Writing narrative\u2026'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Generating\u2026'; }
 
-  // Progress bar on the Review tab for the narrative-writing phase. The call
-  // duration is unknown (one LLM pass), so ease the bar toward ~90% and snap
-  // to 100% on success, then hand off to the Storyboard image bar.
-  var wrap = document.getElementById('review-progress-wrap');
-  var fill = document.getElementById('review-progress-fill');
-  var pmsg = document.getElementById('review-progress-msg');
-  var pct = 0;
-  if (wrap) wrap.style.display = 'block';
-  if (fill) fill.style.width = '0%';
-  if (pmsg) pmsg.textContent = 'Writing your narrative\u2026';
+  // PARALLEL: images don't depend on the narrative prose (the board renders
+  // from the moments/prompts), so start BOTH at once and poll each. Render the
+  // board now with empty prose + image spinners — the narrative fills in when
+  // its async job finishes. Narrative is a submit->poll job so a long write
+  // can't hit the gateway timeout.
+  state.narrativeData = { intro: '', sections: [], outro: '' };
+  state.narrativeStyleUsed = state.narrativeStyle || 'classic';
+  switchSessionTab('storyboard');
+  if (typeof renderStoryboard === 'function') renderStoryboard();
+
+  // Kick off image generation (its own progress bar + per-panel spinners + poll).
+  setTimeout(function() { if (typeof generateAllImages === 'function') generateAllImages(true); }, 60);
+
+  // Kick off the narrative as an async job and poll it independently.
+  state.narrJobActive = true;
   var _nctl = new AbortController();
   state.abortNarr = _nctl;
   var _ncb = document.getElementById('narr-cancel-btn'); if (_ncb) _ncb.style.display = 'inline-block';
-  var ticker = setInterval(function() {
-    pct = Math.min(90, pct + Math.max(1, (90 - pct) * 0.12));
-    if (fill) fill.style.width = pct.toFixed(0) + '%';
-  }, 400);
-  function endBar(done) {
-    clearInterval(ticker);
+  if (typeof billingToast === 'function') billingToast('Writing your narrative while the images render\u2026', 'info');
+
+  function _narrEnd() {
+    state.narrJobActive = false;
     clearGenLock();
-    var _ncb = document.getElementById('narr-cancel-btn'); if (_ncb) _ncb.style.display = 'none';
-    if (done && fill) fill.style.width = '100%';
-    setTimeout(function() {
-      if (wrap) wrap.style.display = 'none';
-      if (fill) fill.style.width = '0%';
-    }, done ? 350 : 0);
+    if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
+    var _c = document.getElementById('narr-cancel-btn'); if (_c) _c.style.display = 'none';
   }
 
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
@@ -3771,32 +3770,27 @@ function generateNarrativeAndImages() {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
-    if (data.error) { endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
-    if (pmsg) pmsg.textContent = 'Narrative ready \u2014 starting images\u2026';
-    endBar(true);
-    state.narrativeData = {
-      intro: data.intro || '',
-      sections: data.sections || [],
-      outro: data.outro || ''
+    if (!data || !data.job_id) { _narrEnd(); showAlert('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
+    var jobId = data.job_id;
+    var tries = 0;
+    var poll = function() {
+      if (!state.narrJobActive) return;
+      if (tries++ > 100) { _narrEnd(); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
+      fetch('/api/narrative/job/' + jobId, { signal: _nctl.signal })
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if (!state.narrJobActive) return;
+          if (j.status === 'pending') { setTimeout(poll, 3000); return; }
+          if (j.status === 'error') { _narrEnd(); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
+          state.narrativeData = { intro: j.intro || '', sections: j.sections || [], outro: j.outro || '' };
+          if (typeof fillStoryboardProse === 'function') fillStoryboardProse(state.narrativeData);
+          _narrEnd();
+        })
+        .catch(function(e){ if (e && e.name === 'AbortError') return; if (!state.narrJobActive) return; setTimeout(poll, 3000); });
     };
-    state.narrativeStyleUsed = state.narrativeStyle || 'classic';
-    // Paint the narrative into the storyboard right away so the user can start
-    // reading each panel's prose while the images are still being generated.
-    switchSessionTab('storyboard');
-    if (typeof renderStoryboard === 'function') renderStoryboard();
-    // Hand off to image generation — it overlays per-panel busy spinners on the
-    // image areas; the narrative text stays readable underneath while they run.
-    setTimeout(function() {
-      if (typeof generateAllImages === 'function') generateAllImages(true);
-    }, 60);
+    poll();
   })
-  .catch(function(e){
-    if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
-    endBar(false);
-    if (e && e.name === 'AbortError') return;
-    showAlert('Could not generate narrative: ' + e.message);
-  });
+  .catch(function(e){ _narrEnd(); if (e && e.name === 'AbortError') return; showAlert('Could not start narrative: ' + e.message); });
 }
 
 function cancelExtract() {
@@ -3817,6 +3811,7 @@ function cancelGenAll() {
 }
 
 function cancelNarr() {
+  state.narrJobActive = false;
   clearGenLock();
   if (state.abortNarr) { try { state.abortNarr.abort(); } catch (e) {} }
   var w = document.getElementById('review-progress-wrap'); if (w) w.style.display = 'none';
@@ -8234,6 +8229,23 @@ function renderStoryboard() {
     'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\'closing\')', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
+}
+
+// Fill the storyboard's narrative textareas in place from a finished narrative,
+// WITHOUT re-rendering the board (so in-flight image spinners are untouched).
+// Mirrors renderStoryboard's per-panel section lookup (panel_index === i).
+function fillStoryboardProse(narr) {
+  narr = narr || state.narrativeData || {};
+  var secs = narr.sections || [];
+  var setBox = function(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
+  setBox('narrative-intro-box', narr.intro);
+  setBox('narrative-outro-box', narr.outro);
+  (state.moments || []).forEach(function(m, i) {
+    if (m.kind === 'establishing') return;
+    var sec = secs.find(function(x){ return x.panel_index === i; }) || {};
+    setBox('narrative-moment-box-' + i, sec.before);
+    setBox('narrative-between-box-' + i, sec.after);
+  });
 }
 
 // STATE
