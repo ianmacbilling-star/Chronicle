@@ -279,6 +279,25 @@ async function initPostgres() {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_image_jobs_request ON image_jobs(request_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_image_jobs_user ON image_jobs(user_id, status)');
 
+  // Async narrative generation jobs (submit -> poll). One row per generate
+  // request; a background task fills result + flips status done/error, so a
+  // long Claude call can't hit the gateway timeout on a synchronous request.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS narrative_jobs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      campaign_id INTEGER,
+      session_id INTEGER,
+      fork_id INTEGER,
+      status TEXT DEFAULT 'pending',
+      result TEXT,
+      error TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_narrative_jobs_user ON narrative_jobs(user_id, status)');
+
   // Custom Art Styles (Platinum builder): account-wide, owned by the user. A
   // generated/edited STYLE: paragraph that rides system_prompt like any preset.
   await pool.query(`

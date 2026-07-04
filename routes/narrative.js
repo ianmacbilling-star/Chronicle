@@ -276,6 +276,16 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     '  "outro_summary": "A terse outline of the closing. Maximum 25 words; aim shorter."\n' +
     '}';
 
+  // Async: create a pending job, respond immediately, then run the (slow)
+  // generation in the background. Express does not await this handler, so the
+  // Claude call finishes after the response is sent \u2014 no gateway timeout.
+  const _jobNow = new Date().toISOString();
+  const _jobIns = await db.prepare(
+    "INSERT INTO narrative_jobs (user_id, campaign_id, session_id, fork_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)"
+  ).run(req.session.userId, req.params.campaignId, req.params.sessionId, targetForkId, _jobNow, _jobNow);
+  const jobId = _jobIns.lastInsertRowid;
+  res.json({ job_id: jobId });
+
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -293,7 +303,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     });
 
     const data = await response.json();
-    if (data.error) return res.json({ error: data.error.message });
+    if (data.error) {
+      await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(String((data.error && data.error.message) || 'AI service error'), new Date().toISOString(), jobId);
+      return;
+    }
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
@@ -333,18 +346,35 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
     try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generated (' + narrStyleId + ', ' + ((parsed.sections || []).length) + ' sections)', detail: { style: narrStyleId, sections: (parsed.sections || []).length, moments: moments.length, campaign_id: req.params.campaignId, session_id: req.params.sessionId } }); } catch (_le) {}
 
-    res.json({
-      success: true,
-      intro: parsed.intro || '',
-      sections: parsed.sections || [],
-      outro: parsed.outro || ''
-    });
+    await db.prepare("UPDATE narrative_jobs SET status='done', result=?, updated_at=? WHERE id=?").run(
+      JSON.stringify({ success: true, intro: parsed.intro || '', sections: parsed.sections || [], outro: parsed.outro || '' }),
+      new Date().toISOString(), jobId
+    );
 
   } catch(e) {
     console.error('Narrative generation error:', e.message);
     try { await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generation failed: ' + (e && e.message), detail: { campaign_id: req.params.campaignId, session_id: req.params.sessionId, stack: (e && e.stack) || '' } }); } catch (_le) {}
-    res.json({ error: e.message });
+    try { await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(String((e && e.message) || 'Narrative generation failed'), new Date().toISOString(), jobId); } catch (_je) {}
   }
+});
+
+// ============================================================
+// POLL a narrative job (async submit -> poll). Owner-scoped. Returns the
+// narrative payload when done, a friendly error when failed, else pending.
+// ============================================================
+router.get('/job/:jobId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const job = await db.prepare('SELECT * FROM narrative_jobs WHERE id = ? AND user_id = ?').get(req.params.jobId, req.session.userId);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (job.status === 'done') {
+    var result = {};
+    try { result = JSON.parse(job.result || '{}'); } catch (e) { result = {}; }
+    return res.json(Object.assign({ status: 'done' }, result));
+  }
+  if (job.status === 'error') {
+    return res.json({ status: 'error', error: job.error || 'Narrative generation failed' });
+  }
+  return res.json({ status: 'pending' });
 });
 
 // ============================================================
