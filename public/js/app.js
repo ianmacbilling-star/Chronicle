@@ -471,7 +471,7 @@ function buyTokenPack(packId) {
   }).then(function(data) {
     if (!data) return;
     if (data.url) { window.location = data.url; return; }
-    showError((data && data.error) ? data.error : "We couldn't start your token purchase -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
+    showError('Could not start checkout. Please try again.');
   }).catch(function() {
     showError('Could not reach the billing service. Please try again.');
   });
@@ -512,7 +512,7 @@ function subscribeTier(tier) {
   }).then(function(data) {
     if (!data) return;
     if (data.url) { window.location = data.url; return; }
-    show((data && data.error) ? data.error : "We couldn't start your subscription -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
+    show('Could not start the subscription. Please try again.');
   }).catch(function() {
     show('Could not reach the billing service. Please try again.');
   });
@@ -4211,44 +4211,11 @@ function setAssetPreview(src) {
 }
 
 // A file was picked or dropped — hold it and show a local preview.
-// Client-side image-type gate -- mirror of the server whitelist so users are
-// stopped at pick/drop time with the SAME message, right by the control used.
-function isSupportedUploadImage(file) {
-  return !!file && ['image/jpeg', 'image/png', 'image/webp'].indexOf(file.type) !== -1;
-}
-var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, or WebP image.';
-
-// Show a small inline error directly beneath an upload slot (drop-<slot>) rather
-// than a corner toast. Reused by character portraits AND custom art-style slots.
-function showSlotError(slot, msg) {
-  var zone = document.getElementById('drop-' + slot);
-  if (!zone || !zone.parentNode) { showAlert(msg); return; }
-  var el = document.getElementById('slot-err-' + slot);
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'slot-err-' + slot;
-    el.className = 'panel-dark';
-    var inner = document.createElement('div');
-    inner.className = 'alert alert-error';
-    inner.style.cssText = 'margin:6px 0 0;padding:8px 10px;font-size:12px;font-weight:600;text-align:center;';
-    el.appendChild(inner);
-    zone.parentNode.insertBefore(el, zone.nextSibling);
-  }
-  el.firstChild.textContent = msg;
-  el.style.display = 'block';
-  if (el._t) { clearTimeout(el._t); }
-  el._t = setTimeout(function() { if (el) { el.style.display = 'none'; } }, 6000);
-}
-function clearSlotError(slot) {
-  var el = document.getElementById('slot-err-' + slot);
-  if (el) { el.style.display = 'none'; }
-}
-
 function acceptAssetFile(file) {
   if (!file) return;
-  if (!isSupportedUploadImage(file)) {
+  if (!file.type || !file.type.match('image.*')) {
     var errEl = document.getElementById('asset-modal-error');
-    if (errEl) { errEl.textContent = UPLOAD_TYPE_MSG; errEl.classList.remove('hidden'); }
+    if (errEl) { errEl.textContent = 'Please choose an image file.'; errEl.classList.remove('hidden'); }
     return;
   }
   state.assetPickedFile = file;
@@ -4404,7 +4371,7 @@ function assetGenerateFromModal() {
 // replaces the image on the existing asset. Modal stays open.
 function assetUploadFile(file) {
   var errEl = document.getElementById('asset-modal-error');
-  if (!isSupportedUploadImage(file)) { if (errEl) { errEl.textContent = UPLOAD_TYPE_MSG; errEl.classList.remove('hidden'); } return; }
+  if (!file || !file.type || !file.type.match('image.*')) { if (errEl) { errEl.textContent = 'Please choose an image file.'; errEl.classList.remove('hidden'); } return; }
   var nameEl = document.getElementById('asset-name');
   var catEl = document.getElementById('asset-category');
   var descEl = document.getElementById('asset-description');
@@ -5339,10 +5306,14 @@ async function extractMoments() {
 
   // Warn before overwriting an existing storyboard
   if (state.moments && state.moments.length) {
+    var _forkNote = ((state.currentCampaign && state.currentCampaign.my_role === 'player') &&
+        state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId))
+      ? "(This affects only your own version, not anyone else's.) "
+      : '';
     if (!await uiConfirm('This session already has a storyboard with ' + state.moments.length +
         ' panel' + (state.moments.length === 1 ? '' : 's') +
         '. Generating again will replace it — existing panels, narrative, and images will be lost. ' +
-        'The character snapshots for this session will also be rebuilt. Continue?')) {
+        'The character snapshots for this session will also be rebuilt. ' + _forkNote + 'Continue?')) {
       return;
     }
   }
@@ -6679,20 +6650,18 @@ function handleSlotDrop(e, slot) {
   document.getElementById('drop-' + slot).classList.remove('drag-over');
   var files = e.dataTransfer.files;
   if (!files || !files[0]) return;
-  if (!isSupportedUploadImage(files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); return; }
+  if (!files[0].type.match('image.*')) { showAlert('Please drop an image file'); return; }
   setSlotFile(slot, files[0]);
 }
 
 function handleSlotFileSelect(e, slot) {
   if (e.target.files && e.target.files[0]) {
-    if (!isSupportedUploadImage(e.target.files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); e.target.value = ''; return; }
     setSlotFile(slot, e.target.files[0]);
   }
 }
 
 function setSlotFile(slot, file) {
   slotFiles[slot] = file;
-  clearSlotError(slot);
   var reader = new FileReader();
   reader.onload = function(ev) {
     var preview = document.getElementById('preview-' + slot);
@@ -6802,8 +6771,8 @@ function setupCardDragDrop() {
     if (!files || !files[0]) return;
 
     var file = files[0];
-    if (!isSupportedUploadImage(file)) {
-      showAlert(UPLOAD_TYPE_MSG);
+    if (!file.type.match('image.*')) {
+      showAlert('Please drop an image file (JPG, PNG, WebP)');
       return;
     }
 
@@ -9125,10 +9094,14 @@ async function extractMoments() {
 
   // Warn before overwriting an existing storyboard
   if (state.moments && state.moments.length) {
+    var _forkNote = ((state.currentCampaign && state.currentCampaign.my_role === 'player') &&
+        state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId))
+      ? "(This affects only your own version, not anyone else's.) "
+      : '';
     if (!await uiConfirm('This session already has a storyboard with ' + state.moments.length +
         ' panel' + (state.moments.length === 1 ? '' : 's') +
         '. Generating again will replace it — existing panels, narrative, and images will be lost. ' +
-        'The character snapshots for this session will also be rebuilt. Continue?')) {
+        'The character snapshots for this session will also be rebuilt. ' + _forkNote + 'Continue?')) {
       return;
     }
   }
@@ -10053,20 +10026,18 @@ function handleSlotDrop(e, slot) {
   document.getElementById('drop-' + slot).classList.remove('drag-over');
   var files = e.dataTransfer.files;
   if (!files || !files[0]) return;
-  if (!isSupportedUploadImage(files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); return; }
+  if (!files[0].type.match('image.*')) { showAlert('Please drop an image file'); return; }
   setSlotFile(slot, files[0]);
 }
 
 function handleSlotFileSelect(e, slot) {
   if (e.target.files && e.target.files[0]) {
-    if (!isSupportedUploadImage(e.target.files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); e.target.value = ''; return; }
     setSlotFile(slot, e.target.files[0]);
   }
 }
 
 function setSlotFile(slot, file) {
   slotFiles[slot] = file;
-  clearSlotError(slot);
   var reader = new FileReader();
   reader.onload = function(ev) {
     var preview = document.getElementById('preview-' + slot);
@@ -10176,8 +10147,8 @@ function setupCardDragDrop() {
     if (!files || !files[0]) return;
 
     var file = files[0];
-    if (!isSupportedUploadImage(file)) {
-      showAlert(UPLOAD_TYPE_MSG);
+    if (!file.type.match('image.*')) {
+      showAlert('Please drop an image file (JPG, PNG, WebP)');
       return;
     }
 
