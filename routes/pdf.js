@@ -525,7 +525,7 @@ var CO_DEFAULTS = {
   density: 'normal',     // busy | normal | roomy
   narr: 'plain',         // plain | box
   dropcap: 0,            // 0 | 1
-  paper: 'white',        // white | linen | grey
+  paper: 'white',        // white | cream
   condition: 'none',     // none | smoke | dirt | wrinkle | blood
   font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
@@ -1723,8 +1723,7 @@ var CO_BLOOD_MARKS =
   'radial-gradient(circle at 50% 46%, rgba(120,10,10,0.4), transparent 3%);';
 
 function coPaperColor(paper) {
-  if (paper === 'linen') return '#f3ece0';
-  if (paper === 'grey' || paper === 'lightgrey') return '#e9e9e7';
+  if (paper === 'cream' || paper === 'linen') return '#f3ece0';
   return '#ffffff';
 }
 function coConditionMarks(condition) {
@@ -2907,6 +2906,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   // would force buildNovelHTML down the a-la-carte engine (renderLayout) and lose
   // the reader's chosen preset / magazine wrap layout.
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  if (co) co.paper = 'white'; // Lulu interior PDF is ALWAYS white; the physical cream paper stock (chosen at order time) supplies the warmth. Preview/library renders keep the tint.
 
   var pageOpts = { noCover: true, bookTitle: req.query.bookTitle || '' }; // full book, never paginated for print
 
