@@ -4227,10 +4227,14 @@ function showSlotError(slot, msg) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'slot-err-' + slot;
-    el.style.cssText = 'color:#ff8a80;font-size:10px;line-height:1.35;margin-top:4px;text-align:center;';
+    el.className = 'panel-dark';
+    var inner = document.createElement('div');
+    inner.className = 'alert alert-error';
+    inner.style.cssText = 'margin:6px 0 0;padding:8px 10px;font-size:12px;font-weight:600;text-align:center;';
+    el.appendChild(inner);
     zone.parentNode.insertBefore(el, zone.nextSibling);
   }
-  el.textContent = msg;
+  el.firstChild.textContent = msg;
   el.style.display = 'block';
   if (el._t) { clearTimeout(el._t); }
   el._t = setTimeout(function() { if (el) { el.style.display = 'none'; } }, 6000);
