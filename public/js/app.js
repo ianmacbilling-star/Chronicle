@@ -3753,13 +3753,24 @@ function generateNarrativeAndImages() {
   var _nctl = new AbortController();
   state.abortNarr = _nctl;
   var _ncb = document.getElementById('narr-cancel-btn'); if (_ncb) _ncb.style.display = 'inline-block';
-  if (typeof billingToast === 'function') billingToast('Writing your narrative while the images render\u2026', 'info');
+  // Narrative progress bar, paired with the Images bar on the storyboard.
+  // Ease toward ~90% (write time is unknown), snap to 100% + fade out on done.
+  var _nbc = document.getElementById('narr-bar-cell'); if (_nbc) _nbc.style.display = 'block';
+  var _nfill = document.getElementById('narr-progress-fill'); if (_nfill) _nfill.style.width = '0%';
+  var _npct = 0;
+  var _nticker = setInterval(function() {
+    _npct = Math.min(90, _npct + Math.max(1, (90 - _npct) * 0.10));
+    if (_nfill) _nfill.style.width = _npct.toFixed(0) + '%';
+  }, 500);
 
-  function _narrEnd() {
+  function _narrEnd(ok) {
+    clearInterval(_nticker);
     state.narrJobActive = false;
     clearGenLock();
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
     var _c = document.getElementById('narr-cancel-btn'); if (_c) _c.style.display = 'none';
+    if (ok && _nfill) _nfill.style.width = '100%';
+    setTimeout(function() { var b = document.getElementById('narr-bar-cell'); if (b) b.style.display = 'none'; }, ok ? 400 : 0);
   }
 
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
@@ -3770,27 +3781,27 @@ function generateNarrativeAndImages() {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (!data || !data.job_id) { _narrEnd(); showAlert('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
+    if (!data || !data.job_id) { _narrEnd(false); showAlert('Could not start narrative: ' + ((data && data.error) || 'no job id returned')); return; }
     var jobId = data.job_id;
     var tries = 0;
     var poll = function() {
       if (!state.narrJobActive) return;
-      if (tries++ > 100) { _narrEnd(); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
+      if (tries++ > 100) { _narrEnd(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
       fetch('/api/narrative/job/' + jobId, { signal: _nctl.signal })
         .then(function(r){ return r.json(); })
         .then(function(j){
           if (!state.narrJobActive) return;
           if (j.status === 'pending') { setTimeout(poll, 3000); return; }
-          if (j.status === 'error') { _narrEnd(); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
+          if (j.status === 'error') { _narrEnd(false); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
           state.narrativeData = { intro: j.intro || '', sections: j.sections || [], outro: j.outro || '' };
           if (typeof fillStoryboardProse === 'function') fillStoryboardProse(state.narrativeData);
-          _narrEnd();
+          _narrEnd(true);
         })
         .catch(function(e){ if (e && e.name === 'AbortError') return; if (!state.narrJobActive) return; setTimeout(poll, 3000); });
     };
     poll();
   })
-  .catch(function(e){ _narrEnd(); if (e && e.name === 'AbortError') return; showAlert('Could not start narrative: ' + e.message); });
+  .catch(function(e){ _narrEnd(false); if (e && e.name === 'AbortError') return; showAlert('Could not start narrative: ' + e.message); });
 }
 
 function cancelExtract() {
@@ -11642,7 +11653,8 @@ function clMerge(saved){
   if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } }
   // Legacy migration: old single 'paper' control could hold a condition (smoke/dirt/...).
   if (CL_CONDITION_VALUES[r.paper]) { r.paper = 'white'; }
-  if (r.paper === 'parchment') { r.paper = 'linen'; }
+  if (r.paper === 'parchment' || r.paper === 'linen') { r.paper = 'cream'; }
+  if (r.paper === 'grey' || r.paper === 'lightgrey') { r.paper = 'white'; }
   return r;
 }
 function saveCustomLayoutPrefs(){
@@ -12248,6 +12260,7 @@ function refreshPrintOptions(pageCount) {
       var b = document.getElementById('print-binding');
       var c = document.getElementById('print-color');
       var f = document.getElementById('print-finish');
+      var pp = document.getElementById('print-paper');
       function fill(el, arr) {
         if (!el) return;
         el.innerHTML = (arr || []).map(function (x) {
@@ -12257,10 +12270,12 @@ function refreshPrintOptions(pageCount) {
       fill(b, o.bindings);
       fill(c, o.colorTiers);
       fill(f, o.coverFinishes);
+      fill(pp, o.papers);
       if (o.default) {
         if (b && o.default.binding) b.value = o.default.binding;
         if (c && o.default.colorTier) c.value = o.default.colorTier;
         if (f && o.default.coverFinish) f.value = o.default.coverFinish;
+        if (pp && o.default.paper) pp.value = o.default.paper;
       }
     })
     .catch(function () {});
@@ -12279,7 +12294,8 @@ function printSelectionBody() {
     selection: {
       binding: val('print-binding'),
       colorTier: val('print-color'),
-      coverFinish: val('print-finish')
+      coverFinish: val('print-finish'),
+      paper: val('print-paper')
     },
     shippingLevel: val('print-ship-level') || 'cheapest',
     shipTo: {
@@ -12415,6 +12431,7 @@ function printCoverUrl() {
     '?binding=' + encodeURIComponent(s.binding || '') +
     '&color=' + encodeURIComponent(s.colorTier || '') +
     '&finish=' + encodeURIComponent(s.coverFinish || '') +
+    '&paper=' + encodeURIComponent(s.paper || '') +
     '&pageCount=' + encodeURIComponent(pc) +
     '&bookTitle=' + encodeURIComponent((sel && sel.bookTitle) || '') +
     '&titleColor=' + encodeURIComponent((document.getElementById('print-title-color') || {}).value || '') +

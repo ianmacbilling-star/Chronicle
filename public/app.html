@@ -279,6 +279,11 @@
               <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Color</label>
               <select id="print-color" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
             </div>
+            <div style="flex:1;min-width:120px;">
+              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Paper</label>
+              <select id="print-paper" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
+              <div style="font-size:10px;color:rgba(245,232,200,0.5);margin-top:3px;line-height:1.3;">Cream is only recommended for black &amp; white books.</div>
+            </div>
             <div style="flex:1;min-width:100px;">
               <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Cover finish</label>
               <select id="print-finish" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
@@ -529,9 +534,16 @@
               <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">Generate Images</button>
               <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">Cancel</button>
             </div>
-            <div id="generate-progress" style="display:none;margin-top:10px;">
-              <div class="progress-bar"><div class="progress-fill" id="gen-progress-fill"></div></div>
-              <div class="progress-msg" id="gen-progress-msg">Generating images...</div>
+            <div id="gen-bars-row" style="display:flex;gap:14px;margin-top:10px;align-items:flex-start;">
+              <div id="narr-bar-cell" style="display:none;flex:1;min-width:0;">
+                <div class="gen-bar-label">Narrative:</div>
+                <div class="progress-bar"><div class="progress-fill" id="narr-progress-fill"></div></div>
+              </div>
+              <div id="generate-progress" style="display:none;flex:1;min-width:0;">
+                <div class="gen-bar-label">Images:</div>
+                <div class="progress-bar"><div class="progress-fill" id="gen-progress-fill"></div></div>
+                <div class="progress-msg" id="gen-progress-msg">Generating images...</div>
+              </div>
             </div>
             <div id="generate-error" class="alert alert-error hidden" style="margin-top:8px;"></div>
           </div>
@@ -1834,8 +1846,7 @@
       <label class="cl-field" title="The base paper color"><span>Paper</span>
         <select id="cl-paper">
           <option value="white">White</option>
-          <option value="linen">Linen</option>
-          <option value="grey">Light grey</option>
+          <option value="cream">Cream</option>
         </select>
       </label>
       <label class="cl-field" title="Plain paragraphs, or text inside a tinted box"><span>Narrative text</span>
