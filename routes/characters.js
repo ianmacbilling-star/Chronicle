@@ -8,16 +8,14 @@ const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens, getBalance, characterReserveStatus } = require('./tokens');
 const { checkCharacterLimit } = require('../middleware/tiers');
 const multer = require('multer');
+const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const path = require('path');
 
 // Use memory storage - we handle the upload ourselves via storage layer
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: function(req, file, cb) {
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Images only'));
-  }
+  fileFilter: imageFileFilter
 });
 
 const uploadFields = upload.fields([
@@ -54,7 +52,7 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
 });
 
 // POST create character
-router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, uploadFields, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, guardUpload(uploadFields, 'characters'), async function(req, res) {
   const { name, player_name, cls, description, is_npc } = req.body;
   if (!name) return res.json({ error: 'Character name is required' });
 
@@ -82,7 +80,7 @@ router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, uploadField
 });
 
 // PUT update character
-router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, uploadFields, async function(req, res) {
+router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, guardUpload(uploadFields, 'characters'), async function(req, res) {
   try {
     const db = await getDb();
     const char = await db.prepare('SELECT * FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);

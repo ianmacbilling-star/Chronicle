@@ -7,6 +7,7 @@ const { getEffectiveTier } = require('../middleware/tiers');
 const { canAfford, spendTokens } = require('./tokens');
 const { uploadFile, releaseImage } = require('../storage/storage');
 const multer = require('multer');
+const { imageFileFilter, friendlyUploadMsg, ACCEPTED_MIME } = require('../middleware/uploadGuard');
 const path = require('path');
 
 // Custom Art Styles are account-wide and owned by the user. CREATE / manage is
@@ -197,10 +198,7 @@ router.delete('/custom/:id', requireAuth, async function(req, res) {
 const sampleUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: function(req, file, cb) {
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Images only'));
-  }
+  fileFilter: imageFileFilter
 }).array('images', 4);
 
 // One token covers the analyze vision call (a cheap Claude text call); the style
@@ -252,7 +250,10 @@ const STYLE_ANALYZE_SYSTEM =
 // call writes a house-format STYLE: paragraph + fade flag from 2-4 samples.
 router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, res) {
   sampleUpload(req, res, async function(uploadErr) {
-    if (uploadErr) return res.json({ error: uploadErr.message || 'Could not read your images.' });
+    if (uploadErr) {
+      try { console.warn('[upload-reject] route=art-styles code=' + ((uploadErr && uploadErr.code) || 'THROWN') + ' type=' + ((uploadErr && uploadErr.rejectedMime) || 'unknown') + ((uploadErr && uploadErr.rejectedName) ? ' file=' + uploadErr.rejectedName : '')); } catch (_e) {}
+      return res.status(400).json({ error: friendlyUploadMsg(uploadErr) });
+    }
     try {
       const files = req.files || [];
       let existingUrls = [];
@@ -281,7 +282,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
           if (!r.ok) continue;
           const buf = Buffer.from(await r.arrayBuffer());
           const mt0 = (r.headers.get('content-type') || '').split(';')[0];
-          const okTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+          const okTypes = ACCEPTED_MIME;
           const mt = okTypes.indexOf(mt0) >= 0 ? mt0 : 'image/jpeg';
           content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: buf.toString('base64') } });
           sampleUrls.push(u);

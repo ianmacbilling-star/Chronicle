@@ -5,6 +5,7 @@ const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignAsset
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
 const { uploadFile, deleteFile, restoreCopy, releaseImage } = require('../storage/storage');
 const multer = require('multer');
+const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const path = require('path');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford } = require('./tokens');
@@ -13,10 +14,7 @@ const { getTokenCost, canAfford } = require('./tokens');
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: function(req, file, cb) {
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Images only'));
-  }
+  fileFilter: imageFileFilter
 });
 const uploadSingle = upload.single('image');
 
@@ -72,7 +70,7 @@ async function assetCapBlock(db, userId, campaignId) {
 }
 
 // POST create a new asset (with image upload).
-router.post('/', requireAuth, verifyCampaignAssetCreator, uploadSingle, async function(req, res) {
+router.post('/', requireAuth, verifyCampaignAssetCreator, guardUpload(uploadSingle, 'assets'), async function(req, res) {
   const name = (req.body && req.body.name || '').trim();
   const category = cleanCategory(req.body && req.body.category);
   const description = (req.body && req.body.description || '').trim();
@@ -268,7 +266,7 @@ router.post('/:assetId/revert', requireAuth, verifyCampaignAssetCreator, async f
   }
 });
 
-router.put('/:assetId', requireAuth, verifyCampaignAssetCreator, uploadSingle, async function(req, res) {
+router.put('/:assetId', requireAuth, verifyCampaignAssetCreator, guardUpload(uploadSingle, 'assets'), async function(req, res) {
   try {
     const db = await getDb();
     const existing = await db.prepare(
