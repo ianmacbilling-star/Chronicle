@@ -471,7 +471,7 @@ function buyTokenPack(packId) {
   }).then(function(data) {
     if (!data) return;
     if (data.url) { window.location = data.url; return; }
-    showError('Could not start checkout. Please try again.');
+    showError((data && data.error) ? data.error : "We couldn't start your token purchase -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
   }).catch(function() {
     showError('Could not reach the billing service. Please try again.');
   });
@@ -512,7 +512,7 @@ function subscribeTier(tier) {
   }).then(function(data) {
     if (!data) return;
     if (data.url) { window.location = data.url; return; }
-    show('Could not start the subscription. Please try again.');
+    show((data && data.error) ? data.error : "We couldn't start your subscription -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
   }).catch(function() {
     show('Could not reach the billing service. Please try again.');
   });
