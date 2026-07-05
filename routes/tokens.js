@@ -18,6 +18,24 @@ const { getPack, listPacks } = require('../services/billing/packs');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { logDebug } = require('./debug');
 
+// Pull the diagnostic fields Stripe hangs off a thrown error so the debug log
+// captures WHY a billing call failed (bad price vs. bad customer, mode mismatch,
+// archived/one-time price, etc.). Never surfaced to the user -- logs only. Safe on
+// non-Stripe errors too. `extra` folds in call-site context (tier, priceId, ...).
+function stripeErrDetail(e, extra) {
+  const d = {
+    message: (e && e.message) || String(e),
+    type: (e && e.type) || '',
+    code: (e && e.code) || '',
+    param: (e && e.param) || '',
+    statusCode: (e && (e.statusCode || e.status)) || '',
+    requestId: (e && e.requestId) || '',
+    docUrl: (e && e.doc_url) || ''
+  };
+  if (extra) { for (const k in extra) { d[k] = extra[k]; } }
+  return d;
+}
+
 // ------------------------------------------------------------
 // Cost lookup — per model, defaults to 1 if unset.
 // ------------------------------------------------------------
@@ -445,7 +463,14 @@ router.post('/checkout', async function(req, res) {
     res.json({ url: session.url });
   } catch (e) {
     if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
-    res.status(500).json({ error: 'Could not start checkout' });
+    console.error('checkout error:', e && e.message);
+    await logDebug(req.session.userId, {
+      level: 'error', source: 'stripe',
+      page: '/api/tokens/checkout', fn: 'createCheckoutSession',
+      message: 'Stripe token-pack checkout failed: ' + ((e && e.message) || 'unknown'),
+      detail: stripeErrDetail(e, { packId: (pack && pack.id) || '', tokens: (pack && pack.tokens) || '' })
+    });
+    res.status(500).json({ error: friendlyError(e, "We couldn't start your token purchase -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.") });
   }
 });
 
@@ -463,14 +488,16 @@ router.post('/subscribe', async function(req, res) {
   }
   const priceId = stripeProvider.priceForTier(tier);
   if (!priceId) return res.status(503).json({ error: 'tier_price_unconfigured' });
+  let customerId = null;
   try {
     const db = await getDb();
     const u = await db.prepare('SELECT email, stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
+    customerId = (u && u.stripe_customer_id) || null;
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
     const session = await stripeProvider.createSubscriptionCheckout({
       priceId: priceId,
       userId: req.session.userId,
-      customerId: (u && u.stripe_customer_id) || null,
+      customerId: customerId,
       customerEmail: (u && u.email) || null,
       successUrl: base + '/app.html?subscribe=success',
       cancelUrl: base + '/app.html?subscribe=cancel'
@@ -478,7 +505,14 @@ router.post('/subscribe', async function(req, res) {
     res.json({ url: session.url });
   } catch (e) {
     if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
-    res.status(500).json({ error: 'Could not start subscription' });
+    console.error('subscribe error:', e && e.message);
+    await logDebug(req.session.userId, {
+      level: 'error', source: 'stripe',
+      page: '/api/tokens/subscribe', fn: 'createSubscriptionCheckout',
+      message: 'Stripe subscription checkout failed: ' + ((e && e.message) || 'unknown'),
+      detail: stripeErrDetail(e, { tier: tier, priceId: priceId, hadCustomerId: !!customerId })
+    });
+    res.status(500).json({ error: friendlyError(e, "We couldn't start your subscription -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.") });
   }
 });
 
@@ -497,9 +531,11 @@ router.post('/change-plan', async function(req, res) {
   }
   const priceId = stripeProvider.priceForTier(tier);
   if (!priceId) return res.status(503).json({ error: 'tier_price_unconfigured' });
+  let customerId = null;
   try {
     const db = await getDb();
     const u = await db.prepare('SELECT email, stripe_customer_id, stripe_subscription_id FROM users WHERE id = ?').get(req.session.userId);
+    customerId = (u && u.stripe_customer_id) || null;
 
     // Is there a LIVE subscription to modify in place? Stripe is the source of
     // truth: the stored sub can be stale (e.g. canceled by a prior suspend) while
@@ -530,8 +566,14 @@ router.post('/change-plan', async function(req, res) {
     return res.json({ url: session.url });
   } catch (e) {
     if (e.code === 'BILLING_UNCONFIGURED') return res.status(503).json({ error: 'billing_unconfigured' });
-    console.error('change-plan error:', e.message);
-    res.status(500).json({ error: friendlyError(e, 'Could not change your plan. Please try again.') });
+    console.error('change-plan error:', e && e.message);
+    await logDebug(req.session.userId, {
+      level: 'error', source: 'stripe',
+      page: '/api/tokens/change-plan', fn: 'changeSubscriptionPrice/createSubscriptionCheckout',
+      message: 'Stripe plan change failed: ' + ((e && e.message) || 'unknown'),
+      detail: stripeErrDetail(e, { tier: tier, priceId: priceId, hadCustomerId: !!customerId })
+    });
+    res.status(500).json({ error: friendlyError(e, "We couldn't update your subscription -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.") });
   }
 });
 
