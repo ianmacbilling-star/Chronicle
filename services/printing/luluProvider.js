@@ -69,6 +69,9 @@ const BIND_CODE = { paperback: 'PB', saddle: 'SS', hardcover: 'CW' };
 // premium color) and for casewrap hardcover premium. Re-confirm if a new
 // trim/paper is added.
 const PAPER_CODE = '060UW444';
+// 60# uncoated cream. Lulu's SKU spec shows FC+cream is valid (060UC444);
+// SANDBOX-CONFIRM a cream quote before the first real cream order.
+const PAPER_CODE_CREAM = '060UC444';
 
 // Confirmed SKUs win over the parametric builder so a future code change
 // can't silently break a known-good product. All entries below are
@@ -120,15 +123,19 @@ class LuluProvider extends PrintProvider {
     const quality = spec.quality === 'premium' ? 'PRE' : 'STD';
     const finishKey = spec.coverFinish === 'gloss' ? 'gloss' : 'matte';
     const overrideKey = `${spec.binding}:${spec.quality === 'premium' ? 'premium' : 'standard'}:${finishKey}`;
-    if (SKU_OVERRIDES[overrideKey]) return SKU_OVERRIDES[overrideKey];
-
-    const bind = BIND_CODE[spec.binding];
-    if (!bind) throw new Error('lulu: unsupported binding ' + spec.binding);
-    const trim = `${pad4(spec.trimWidthIn)}X${pad4(spec.trimHeightIn)}`; // e.g. 0850X1100
-    const color = spec.ink === 'color' ? 'FC' : 'BW';
-    const finish = spec.coverFinish === 'matte' ? 'M' : 'G';
-    // Trailing Linen/Foil = 'XX' (none).
-    return `${trim}${color}${quality}${bind}${PAPER_CODE}${finish}XX`;
+    let sku = SKU_OVERRIDES[overrideKey];
+    if (!sku) {
+      const bind = BIND_CODE[spec.binding];
+      if (!bind) throw new Error('lulu: unsupported binding ' + spec.binding);
+      const trim = `${pad4(spec.trimWidthIn)}X${pad4(spec.trimHeightIn)}`; // e.g. 0850X1100
+      const color = spec.ink === 'color' ? 'FC' : 'BW';
+      const finish = spec.coverFinish === 'matte' ? 'M' : 'G';
+      // Trailing Linen/Foil = 'XX' (none).
+      sku = `${trim}${color}${quality}${bind}${PAPER_CODE}${finish}XX`;
+    }
+    // Cream is a paper-code swap on the resolved SKU (white -> cream).
+    if (spec.paper === 'cream') sku = sku.replace(PAPER_CODE, PAPER_CODE_CREAM);
+    return sku;
   }
 
   _lineItem(req) {

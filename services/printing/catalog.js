@@ -46,6 +46,15 @@ const COVER_FINISHES = {
   gloss: { label: 'Gloss' },
 };
 
+// Interior paper stock. White is the default (best for full color). Cream is a
+// warm stock offered for the aged look; Lulu positions it for B&W, so the UI
+// warns. The Lulu interior PDF is always rendered white; cream is the physical
+// paper (SKU swaps 060UW444 -> 060UC444).
+const PAPERS = {
+  white: { label: 'White', isDefault: true },
+  cream: { label: 'Cream', note: 'Only recommended for black & white books' },
+};
+
 function roundUpToMultiple(n, m) {
   return Math.ceil(n / m) * m;
 }
@@ -80,10 +89,12 @@ function optionsForPageCount(pageCount) {
     })),
     colorTiers: Object.keys(COLOR_TIERS).map((k) => ({ id: k, ...COLOR_TIERS[k] })),
     coverFinishes: Object.keys(COVER_FINISHES).map((k) => ({ id: k, ...COVER_FINISHES[k] })),
+    papers: Object.keys(PAPERS).map((k) => ({ id: k, ...PAPERS[k] })),
     default: {
       binding: bindings.includes('paperback') ? 'paperback' : (bindings[0] || null),
       colorTier: 'premium',
       coverFinish: 'matte',
+      paper: 'white',
     },
   };
 }
@@ -99,6 +110,7 @@ function buildSpec(sel, pageCount) {
   if (!BINDINGS[sel.binding]) errors.push('Unknown binding: ' + sel.binding);
   if (!COLOR_TIERS[sel.colorTier]) errors.push('Unknown color tier: ' + sel.colorTier);
   if (!COVER_FINISHES[sel.coverFinish]) errors.push('Unknown cover finish: ' + sel.coverFinish);
+  if (sel.paper && !PAPERS[sel.paper]) errors.push('Unknown paper: ' + sel.paper);
   if (!(pageCount > 0)) errors.push('Invalid page count: ' + pageCount);
   if (BINDINGS[sel.binding] && pageCount > 0 && !availableBindings(pageCount).includes(sel.binding)) {
     const b = BINDINGS[sel.binding];
@@ -116,11 +128,12 @@ function buildSpec(sel, pageCount) {
       ink: 'color',
       quality: sel.colorTier === 'standard' ? 'standard' : 'premium',
       coverFinish: sel.coverFinish === 'gloss' ? 'gloss' : 'matte',
+      paper: sel.paper === 'cream' ? 'cream' : 'white',
     },
   };
 }
 
 module.exports = {
-  TRIM, BINDINGS, COLOR_TIERS, COVER_FINISHES,
+  TRIM, BINDINGS, COLOR_TIERS, COVER_FINISHES, PAPERS,
   printedPageCount, availableBindings, optionsForPageCount, buildSpec,
 };
