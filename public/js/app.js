@@ -4211,11 +4211,40 @@ function setAssetPreview(src) {
 }
 
 // A file was picked or dropped — hold it and show a local preview.
+// Client-side image-type gate -- mirror of the server whitelist so users are
+// stopped at pick/drop time with the SAME message, right by the control used.
+function isSupportedUploadImage(file) {
+  return !!file && ['image/jpeg', 'image/png', 'image/webp'].indexOf(file.type) !== -1;
+}
+var UPLOAD_TYPE_MSG = 'Please upload a JPG, PNG, or WebP image.';
+
+// Show a small inline error directly beneath an upload slot (drop-<slot>) rather
+// than a corner toast. Reused by character portraits AND custom art-style slots.
+function showSlotError(slot, msg) {
+  var zone = document.getElementById('drop-' + slot);
+  if (!zone || !zone.parentNode) { showAlert(msg); return; }
+  var el = document.getElementById('slot-err-' + slot);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'slot-err-' + slot;
+    el.style.cssText = 'color:#ff8a80;font-size:10px;line-height:1.35;margin-top:4px;text-align:center;';
+    zone.parentNode.insertBefore(el, zone.nextSibling);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
+  if (el._t) { clearTimeout(el._t); }
+  el._t = setTimeout(function() { if (el) { el.style.display = 'none'; } }, 6000);
+}
+function clearSlotError(slot) {
+  var el = document.getElementById('slot-err-' + slot);
+  if (el) { el.style.display = 'none'; }
+}
+
 function acceptAssetFile(file) {
   if (!file) return;
-  if (!file.type || !file.type.match('image.*')) {
+  if (!isSupportedUploadImage(file)) {
     var errEl = document.getElementById('asset-modal-error');
-    if (errEl) { errEl.textContent = 'Please choose an image file.'; errEl.classList.remove('hidden'); }
+    if (errEl) { errEl.textContent = UPLOAD_TYPE_MSG; errEl.classList.remove('hidden'); }
     return;
   }
   state.assetPickedFile = file;
@@ -4371,7 +4400,7 @@ function assetGenerateFromModal() {
 // replaces the image on the existing asset. Modal stays open.
 function assetUploadFile(file) {
   var errEl = document.getElementById('asset-modal-error');
-  if (!file || !file.type || !file.type.match('image.*')) { if (errEl) { errEl.textContent = 'Please choose an image file.'; errEl.classList.remove('hidden'); } return; }
+  if (!isSupportedUploadImage(file)) { if (errEl) { errEl.textContent = UPLOAD_TYPE_MSG; errEl.classList.remove('hidden'); } return; }
   var nameEl = document.getElementById('asset-name');
   var catEl = document.getElementById('asset-category');
   var descEl = document.getElementById('asset-description');
@@ -6646,18 +6675,20 @@ function handleSlotDrop(e, slot) {
   document.getElementById('drop-' + slot).classList.remove('drag-over');
   var files = e.dataTransfer.files;
   if (!files || !files[0]) return;
-  if (!files[0].type.match('image.*')) { showAlert('Please drop an image file'); return; }
+  if (!isSupportedUploadImage(files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); return; }
   setSlotFile(slot, files[0]);
 }
 
 function handleSlotFileSelect(e, slot) {
   if (e.target.files && e.target.files[0]) {
+    if (!isSupportedUploadImage(e.target.files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); e.target.value = ''; return; }
     setSlotFile(slot, e.target.files[0]);
   }
 }
 
 function setSlotFile(slot, file) {
   slotFiles[slot] = file;
+  clearSlotError(slot);
   var reader = new FileReader();
   reader.onload = function(ev) {
     var preview = document.getElementById('preview-' + slot);
@@ -6767,8 +6798,8 @@ function setupCardDragDrop() {
     if (!files || !files[0]) return;
 
     var file = files[0];
-    if (!file.type.match('image.*')) {
-      showAlert('Please drop an image file (JPG, PNG, WebP)');
+    if (!isSupportedUploadImage(file)) {
+      showAlert(UPLOAD_TYPE_MSG);
       return;
     }
 
@@ -10018,18 +10049,20 @@ function handleSlotDrop(e, slot) {
   document.getElementById('drop-' + slot).classList.remove('drag-over');
   var files = e.dataTransfer.files;
   if (!files || !files[0]) return;
-  if (!files[0].type.match('image.*')) { showAlert('Please drop an image file'); return; }
+  if (!isSupportedUploadImage(files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); return; }
   setSlotFile(slot, files[0]);
 }
 
 function handleSlotFileSelect(e, slot) {
   if (e.target.files && e.target.files[0]) {
+    if (!isSupportedUploadImage(e.target.files[0])) { showSlotError(slot, UPLOAD_TYPE_MSG); e.target.value = ''; return; }
     setSlotFile(slot, e.target.files[0]);
   }
 }
 
 function setSlotFile(slot, file) {
   slotFiles[slot] = file;
+  clearSlotError(slot);
   var reader = new FileReader();
   reader.onload = function(ev) {
     var preview = document.getElementById('preview-' + slot);
@@ -10139,8 +10172,8 @@ function setupCardDragDrop() {
     if (!files || !files[0]) return;
 
     var file = files[0];
-    if (!file.type.match('image.*')) {
-      showAlert('Please drop an image file (JPG, PNG, WebP)');
+    if (!isSupportedUploadImage(file)) {
+      showAlert(UPLOAD_TYPE_MSG);
       return;
     }
 
