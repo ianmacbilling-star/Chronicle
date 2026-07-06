@@ -240,6 +240,34 @@ router.put('/signup-bonus', requireAuth, requireAdmin, async function (req, res)
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// Two independent toggles for emailing the in-app AI help transcript to
+// support: help_ai_done_email (AI marks the chat complete) and
+// help_logout_email (on logout). Stored in app_settings as '1'/'0' (default 0).
+router.get('/help-email-settings', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const a = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('help_ai_done_email');
+    const l = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('help_logout_email');
+    res.json({ aiDone: !!(a && a.value === '1'), logout: !!(l && l.value === '1') });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.put('/help-email-settings', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const pairs = [
+      ['help_ai_done_email', (req.body && req.body.aiDone) ? '1' : '0'],
+      ['help_logout_email', (req.body && req.body.logout) ? '1' : '0']
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get(pairs[i][0]);
+      if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(pairs[i][1], pairs[i][0]);
+      else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(pairs[i][0], pairs[i][1]);
+    }
+    res.json({ ok: true, aiDone: pairs[0][1] === '1', logout: pairs[1][1] === '1' });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 // GET /api/admin/library -- moderation view of ALL public Library images (no
 // time window), newest first, keyset-paginated. Returns the archive id so an
 // admin can pull an item down.

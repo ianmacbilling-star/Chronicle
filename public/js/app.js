@@ -998,8 +998,10 @@ function checkAuth() {
 }
 
 function logout() {
-  fetch('/api/auth/logout', { method: 'POST' })
-    .then(function() { window.location.href = '/'; });
+  _helpSendTranscriptOnLogout(function() {
+    fetch('/api/auth/logout', { method: 'POST' })
+      .then(function() { window.location.href = '/'; });
+  });
 }
 
 function toggleUserMenu() {
@@ -2884,6 +2886,23 @@ function generateFromReview() {
 // --- Ask Claudia: contextual help (read-only, multi-turn chat). -------------
 // Coarse current-view hint; the server enriches the rest (tier, tokens, role).
 var _helpThread = [];      // [{ role: 'user'|'assistant', content }]
+var _helpAiDoneSent = false; // set once the server emails an AI-done transcript this session
+var _helpLogoutSent = false; // guard so logout emails the transcript at most once
+
+function _helpSendTranscriptOnLogout(done) {
+  var proceed = function() { if (done) { var f = done; done = null; f(); } };
+  var hasQ = _helpThread && _helpThread.some(function(m) { return m.role === 'user'; });
+  if (_helpLogoutSent || !hasQ) { proceed(); return; }
+  _helpLogoutSent = true;
+  var body = { messages: _helpThread.slice(-60), view_id: _helpCurrentViewId() };
+  if (state && state.currentCampaign && state.currentCampaign.id) body.campaign_id = state.currentCampaign.id;
+  var t = setTimeout(proceed, 1200);
+  try {
+    fetch('/api/help/transcript', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function() { clearTimeout(t); proceed(); })
+      .catch(function() { clearTimeout(t); proceed(); });
+  } catch (e) { clearTimeout(t); proceed(); }
+}
 var _helpPending = false;  // a request is in flight
 var _helpError = '';       // transient error shown below the thread
 function _helpCurrentViewId() {
@@ -2933,7 +2952,7 @@ function submitHelp() {
   _helpPending = true;
   if (btn) btn.disabled = true;
   renderHelpThread();
-  var body = { messages: _helpThread.slice(-12), current_view_id: _helpCurrentViewId() };
+  var body = { messages: _helpThread.slice(-12), current_view_id: _helpCurrentViewId(), ai_done_sent: _helpAiDoneSent };
   if (state && state.currentCampaign && state.currentCampaign.id) body.current_campaign_id = state.currentCampaign.id;
   fetch('/api/help/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
@@ -2942,6 +2961,7 @@ function submitHelp() {
       if (btn) btn.disabled = false;
       if (data && data.ok && data.answer) {
         _helpThread.push({ role: 'assistant', content: data.answer });
+        if (data.ai_done_emailed) _helpAiDoneSent = true;
       } else {
         _helpThread.pop();
         if (qEl) qEl.value = q;
@@ -6526,7 +6546,7 @@ function loadSettingsForm() {
     });
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
-  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig();
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings();
 }
 
 function saveImageModel() {
@@ -8399,8 +8419,10 @@ function checkAuth() {
 }
 
 function logout() {
-  fetch('/api/auth/logout', { method: 'POST' })
-    .then(function() { window.location.href = '/'; });
+  _helpSendTranscriptOnLogout(function() {
+    fetch('/api/auth/logout', { method: 'POST' })
+      .then(function() { window.location.href = '/'; });
+  });
 }
 
 function toggleUserMenu() {
@@ -9903,7 +9925,7 @@ function loadSettingsForm() {
     });
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
-  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig();
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings();
 }
 
 function saveImageModel() {
@@ -11522,7 +11544,7 @@ function switchSettingsTab(tab) {
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', t === tab);
   });
-  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); }
+  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); }
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
@@ -12926,6 +12948,32 @@ function saveSignupBonus() {
     .then(function (res) {
       if (msg) msg.textContent = res.ok ? 'Saved.' : (res.j && res.j.error ? res.j.error : 'Could not save.');
       if (res.ok && res.j && res.j.signupBonusCot != null) inp.value = res.j.signupBonusCot;
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+function loadHelpEmailSettings() {
+  var a = document.getElementById('help-aidone-toggle');
+  var l = document.getElementById('help-logout-toggle');
+  if (!a && !l) return;
+  fetch('/api/admin/help-email-settings')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (!j) return; if (a) a.checked = !!j.aiDone; if (l) l.checked = !!j.logout; })
+    .catch(function () {});
+}
+
+function saveHelpEmailSettings() {
+  var a = document.getElementById('help-aidone-toggle');
+  var l = document.getElementById('help-logout-toggle');
+  var msg = document.getElementById('help-email-msg');
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/help-email-settings', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ aiDone: !!(a && a.checked), logout: !!(l && l.checked) })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (msg) msg.textContent = res.ok ? 'Saved.' : ((res.j && res.j.error) ? res.j.error : 'Could not save.');
+      if (res.ok && res.j) { if (a) a.checked = !!res.j.aiDone; if (l) l.checked = !!res.j.logout; }
     })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }

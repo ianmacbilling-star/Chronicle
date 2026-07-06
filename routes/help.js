@@ -8,6 +8,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getBalance } = require('./tokens');
 const { getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, isLoneCopper } = require('../middleware/tiers');
 const { listPacks } = require('../services/billing/packs');
+const { sendHelpTranscriptEmail } = require('./email');
 
 // Contextual in-app help: a short, read-only CHAT. It can ask a
 // clarifying question before answering. Short turns, so a lightweight model is
@@ -112,9 +113,10 @@ router.post('/ask', requireAuth, async function(req, res) {
               utlt: 0, cot: 0, total: 0, role: null, vocab: 'ttrpg' };
   try {
     const db = await getDb();
-    const u = await db.prepare('SELECT name, tier, subscription_status, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
+    const u = await db.prepare('SELECT name, email, tier, subscription_status, vocab, trial_started_at, current_period_end, status, idle_warned_at, suspended_at FROM users WHERE id = ?').get(userId);
     if (u) {
       ctx.name = u.name || 'there';
+      ctx.email = u.email || null;
       ctx.tier = u.tier || 'unknown';
       ctx.subscription_status = u.subscription_status || 'unknown';
       ctx.in_free_trial = (u.subscription_status === 'trialing');
@@ -217,7 +219,13 @@ router.post('/ask', requireAuth, async function(req, res) {
   const tierBlock = 'LIVE TIER NUMBERS (authoritative, pulled live from the dashboard -- use these for any "how many / which tier" question, for ANY tier, not just the user\'s own):\n' + _tierMatrix;
 
   const extras = [accountFacts.join('\n'), lifecycleBlock, STYLE_REF, PACK_REF].filter(function (b) { return b; }).join('\n\n');
-  const system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras + '\n\n' + (BRAIN || fallback);
+  let system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras + '\n\n' + (BRAIN || fallback);
+  let _aiDoneOn = false;
+  try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
+  const _aiDoneAlready = !!(req.body && req.body.ai_done_sent === true);
+  if (_aiDoneOn && !_aiDoneAlready) {
+    system += '\n\nSESSION-END SIGNAL: When the conversation appears fully resolved, or the user clearly wraps up or signs off (thanks/goodbye) with nothing left pending, append the exact token <<HELP_DONE>> on its own at the very end of your reply. Do not append it while any question is still open, and never mention, explain, or display this token to the user.';
+  }
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -230,16 +238,68 @@ router.post('/ask', requireAuth, async function(req, res) {
       console.error('help/ask API error:', response.status, JSON.stringify(data.error));
       return res.json({ ok: false, error: friendlyAnthropicError(data.error) });
     }
-    const answer = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
+    const rawAnswer = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
+    const _marker = '<<HELP_DONE>>';
+    const _isDone = rawAnswer.indexOf(_marker) !== -1;
+    const answer = rawAnswer.split(_marker).join('').trim();
     if (!answer) {
       console.error('help/ask empty answer:', response.status, JSON.stringify(data).slice(0, 400));
       return res.json({ ok: false, error: 'Could not answer that right now.' });
     }
-    return res.json({ ok: true, answer: answer });
+    let _aiDoneEmailed = false;
+    if (_aiDoneOn && !_aiDoneAlready && _isDone) {
+      try {
+        const _tx = msgs.concat([{ role: 'assistant', content: answer }]);
+        await sendHelpTranscriptEmail({
+          user: { id: userId, name: ctx.name, email: ctx.email, tier: ctx.tier },
+          trigger: 'ai_done',
+          viewName: viewName,
+          campaignName: null,
+          messages: _tx
+        });
+        _aiDoneEmailed = true;
+      } catch (e) { try { console.warn('[help ai-done email] ' + (e && e.message)); } catch (_e) {} }
+    }
+    return res.json({ ok: true, answer: answer, ai_done_emailed: _aiDoneEmailed });
   } catch (e) {
     console.error('help/ask error:', e.message);
     return res.json({ ok: false, error: friendlyAnthropicError(e) });
   }
+});
+
+// POST /api/help/transcript  { messages, view_id?, campaign_id? }
+// Called on logout. Emails the full help transcript to support IF the Dashboard
+// "email on logout" toggle is on; otherwise silently drops it. Not capped to the
+// model turn window -- we want the whole conversation.
+router.post('/transcript', requireAuth, async function(req, res) {
+  const userId = req.session.userId;
+  let msgs = [];
+  if (req.body && Array.isArray(req.body.messages)) {
+    msgs = req.body.messages
+      .filter(function(m){ return m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim(); })
+      .map(function(m){ return { role: m.role, content: String(m.content).trim().slice(0, 4000) }; })
+      .slice(-60);
+  }
+  if (!msgs.length || !msgs.some(function(m){ return m.role === 'user'; })) {
+    return res.json({ ok: true, skipped: 'empty' });
+  }
+  let on = false;
+  try { on = (await getAppSettingInt('help_logout_email', 0)) === 1; } catch (e) {}
+  if (!on) return res.json({ ok: true, skipped: 'off' });
+  let u = null;
+  try { const db = await getDb(); u = await db.prepare('SELECT id, name, email, tier FROM users WHERE id = ?').get(userId); } catch (e) {}
+  const viewId = (req.body && typeof req.body.view_id === 'string') ? req.body.view_id : '';
+  const viewName = VIEW_NAMES[viewId] || 'the app';
+  try {
+    await sendHelpTranscriptEmail({
+      user: u || { id: userId },
+      trigger: 'logout',
+      viewName: viewName,
+      campaignName: null,
+      messages: msgs
+    });
+  } catch (e) { try { console.warn('[help logout email] ' + (e && e.message)); } catch (_e) {} }
+  return res.json({ ok: true });
 });
 
 module.exports = router;

@@ -770,4 +770,51 @@ async function sendAccountClosedEmail(name, email) {
   return true;
 }
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail };
+async function sendHelpTranscriptEmail(opts) {
+  opts = opts || {};
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return;
+  const to = process.env.SUPPORT_EMAIL || 'support@campaignia.com';
+  const fromEmail = process.env.FROM_EMAIL || 'noreply@campaignia.com';
+  const u = opts.user || {};
+  const who = (u.name ? u.name : 'Unknown') + ' <' + (u.email || 'no-email') + '>' + (u.id != null ? ' (id ' + u.id + ')' : '');
+  const triggerLabel = (opts.trigger === 'logout') ? 'User logged out' : 'AI marked the conversation complete';
+  const msgs = Array.isArray(opts.messages) ? opts.messages : [];
+  const lines = msgs.map(function (m) {
+    const tag = (m.role === 'user') ? 'USER' : 'HELP';
+    return '[' + tag + '] ' + String(m.content == null ? '' : m.content);
+  });
+  const when = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
+  const bodyText =
+    'Campaignia in-app help transcript' +
+    '\nTrigger: ' + triggerLabel +
+    '\nUser: ' + who +
+    (u.tier ? ('\nTier: ' + u.tier) : '') +
+    (opts.viewName ? ('\nScreen: ' + opts.viewName) : '') +
+    (opts.campaignName ? ('\nCampaign: ' + opts.campaignName) : '') +
+    '\nWhen: ' + when +
+    '\nTurns: ' + msgs.length +
+    '\n\n' + (lines.length ? lines.join('\n\n') : '(no messages)') + '\n';
+  const esc = function (x) { return String(x == null ? '' : x).replace(/[&<>]/g, function (ch) { return ch === '&' ? '&amp;' : (ch === '<' ? '&lt;' : '&gt;'); }); };
+  const html =
+    '<p style="font:14px/1.5 sans-serif;">Help transcript (' + esc(triggerLabel) + ') from ' + esc(who) + '.</p>' +
+    '<p style="font:14px/1.5 sans-serif;">Screen: ' + esc(opts.viewName || '-') + (opts.campaignName ? (' &middot; Campaign: ' + esc(opts.campaignName)) : '') + '</p>' +
+    '<p style="font:14px/1.5 sans-serif;">Turns: ' + msgs.length + '. Full transcript attached.</p>';
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+  const fileName = 'campaignia-help-' + (u.id != null ? u.id : 'user') + '-' + stamp + '.txt';
+  try {
+    const { Resend } = require('resend');
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: 'Campaignia Help <' + fromEmail + '>',
+      to: to,
+      subject: 'Help transcript - ' + (u.email || ('user ' + (u.id != null ? u.id : '?'))) + ' (' + ((opts.trigger === 'logout') ? 'logout' : 'AI-done') + ')',
+      html: html,
+      attachments: [{ filename: fileName, content: Buffer.from(bodyText, 'utf8').toString('base64') }]
+    });
+  } catch (e) {
+    try { console.warn('[help transcript email] ' + (e && e.message)); } catch (_e) {}
+  }
+}
+
+module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

@@ -932,6 +932,20 @@
         </div>
       </div>
 
+      <!-- Help transcript emails (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Help transcript emails</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Email the in-app AI help chat transcript to support@campaignia.com so you can see what users are asking. Two independent triggers, each on/off on its own.</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <label style="color:var(--gold);font-size:13px;"><input type="checkbox" id="help-aidone-toggle"> When the AI decides the conversation is over</label>
+          <label style="color:var(--gold);font-size:13px;"><input type="checkbox" id="help-logout-toggle"> When the user logs out</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <button class="btn btn-primary btn-sm" onclick="saveHelpEmailSettings()">Save</button>
+          <span class="settings-section-desc" id="help-email-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       <!-- Account lifecycle (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Account lifecycle</div>
