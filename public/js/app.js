@@ -1595,13 +1595,15 @@ function renderCampaigns() {
   var html = state.campaigns.map(function(c) {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       ((c.campaign_image_url || c.cover_image_url)
-        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.campaign_image_url || c.cover_image_url) + '\');"></div>'
-        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
-      '<div class="campaign-card-name">' + c.name + '</div>' +
-      campCardDescHtml(c.description) +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
-        '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
-        (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
+        ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
+        : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
+      '<div class="campaign-card-body">' +
+        '<div class="campaign-card-name">' + c.name + '</div>' +
+        campCardDescHtml(c.description) +
+        '<div class="campaign-card-footer">' +
+          '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+          (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -8584,13 +8586,15 @@ function renderCampaigns() {
   var html = state.campaigns.map(function(c) {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' +
       ((c.campaign_image_url || c.cover_image_url)
-        ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.campaign_image_url || c.cover_image_url) + '\');"></div>'
-        : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
-      '<div class="campaign-card-name">' + c.name + '</div>' +
-      campCardDescHtml(c.description) +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
-        '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
-        (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
+        ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
+        : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
+      '<div class="campaign-card-body">' +
+        '<div class="campaign-card-name">' + c.name + '</div>' +
+        campCardDescHtml(c.description) +
+        '<div class="campaign-card-footer">' +
+          '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
+          (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');
