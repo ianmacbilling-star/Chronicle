@@ -1596,7 +1596,7 @@ function renderCampaigns() {
         ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.campaign_image_url || c.cover_image_url) + '\');"></div>'
         : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
-      '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
+      campCardDescHtml(c.description) +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
         '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
         (c.my_role === 'dm' ? '<button class="campaign-card-menu-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign settings">&#8943;</button>' : '') +
@@ -1696,12 +1696,12 @@ function renderSessions() {
   if (!state.sessions.length) {
     var _isDM = state.currentCampaign && state.currentCampaign.my_role === 'dm';
     if (!_isDM) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
         '<h3>No sessions ready yet</h3>' +
         '<p>Waiting on the Story Master to ready a session for viewing.</p></div>';
       return;
     }
-    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
@@ -3905,7 +3905,11 @@ function renderCampaignHeaderDisplay() {
     var n = state.sessions ? state.sessions.length : 0;
     cntEl.textContent = ' (' + n + ' session' + (n === 1 ? '' : 's') + ')';
   }
-  if (descEl) descEl.textContent = (c && c.description) ? c.description : '';
+  if (descEl) {
+    var _cd = campDescTrunc((c && c.description) ? c.description : '');
+    descEl.textContent = _cd.visible;
+    if (_cd.truncated) descEl.title = _cd.title; else descEl.removeAttribute('title');
+  }
 }
 
 function startCampaignEdit() {
@@ -8554,7 +8558,7 @@ function renderCampaigns() {
         ? '<div class="campaign-card-cover" style="background-image:url(\'' + encodeURI(c.campaign_image_url || c.cover_image_url) + '\');"></div>'
         : '<div class="campaign-card-icon"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
       '<div class="campaign-card-name">' + c.name + '</div>' +
-      '<div class="campaign-card-desc">' + (c.description || 'No description') + '</div>' +
+      campCardDescHtml(c.description) +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
         '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
         (c.my_role === 'dm' ? '<button class="campaign-card-menu-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign settings">&#8943;</button>' : '') +
@@ -8654,12 +8658,12 @@ function renderSessions() {
   if (!state.sessions.length) {
     var _isDM = state.currentCampaign && state.currentCampaign.my_role === 'dm';
     if (!_isDM) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
         '<h3>No sessions ready yet</h3>' +
         '<p>Waiting on the Story Master to ready a session for viewing.</p></div>';
       return;
     }
-    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div>' +
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
@@ -11029,6 +11033,27 @@ function writeToClipboard(text, flashText) {
 // Character-card descriptions are capped so a long bio can't stretch the card
 // without bound. Visible text is trimmed to ~184 chars at a word boundary with an
 // ellipsis; the full description is available on hover via the title attribute.
+function campDescTrunc(desc) {
+  var full = (desc == null) ? '' : String(desc);
+  var LIMIT = 144;
+  if (full.length <= LIMIT) return { visible: full, title: '', truncated: false };
+  var cut = full.slice(0, LIMIT);
+  var lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > LIMIT - 30) cut = cut.slice(0, lastSpace);
+  while (cut.length && ' .,;:!?-'.indexOf(cut.charAt(cut.length - 1)) !== -1) {
+    cut = cut.slice(0, cut.length - 1);
+  }
+  return { visible: cut + '\u2026', title: full, truncated: true };
+}
+
+function campCardDescHtml(desc) {
+  var full = (desc == null) ? '' : String(desc);
+  if (!full) return '<div class="campaign-card-desc">No description</div>';
+  var t = campDescTrunc(full);
+  var titleAttr = t.truncated ? ' title="' + escapeHtml(t.title) + '"' : '';
+  return '<div class="campaign-card-desc"' + titleAttr + '>' + escapeHtml(t.visible) + '</div>';
+}
+
 function charDescHtml(desc) {
   var full = (desc == null) ? '' : String(desc);
   if (!full) return '<div class="char-desc"></div>';
