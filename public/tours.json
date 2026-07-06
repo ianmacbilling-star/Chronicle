@@ -19,7 +19,7 @@
         {
           "selector": ".add-campaign-card",
           "title": "Start a {campaign}",
-          "text": "Click here to create your first {campaign} \u2014 the world your {sessions} and graphic novel live inside.",
+          "text": "Click here to create your first {campaign} \u2014 the world your {sessions} and graphic novel live inside. Once you have one, its tile gets a Details button \u2014 that is where its image, Lore / Background, and member settings live.",
           "placement": "auto"
         },
         {
@@ -54,7 +54,7 @@
         {
           "selector": "#camp-edit-btn",
           "title": "Edit your {campaign}",
-          "text": "Click the pencil to rename your {campaign} or update its description anytime.",
+          "text": "Click the pencil to rename your {campaign} or update its description anytime \u2014 and to write your {campaign}'s Lore / Background: the backstory and world it all takes place in.",
           "placement": "auto"
         },
         {

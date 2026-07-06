@@ -268,7 +268,7 @@ name + description). A campaign is built from:
 - **Archives** — saved images to reuse later.
 - **Publish** — where you publish to the Library and order printed copies.
 
-**Campaign settings (the tile's ⋯ menu — Story Master only):**
+**Campaign details (the tile's Details button — Story Master only):**
 - **Members' publishing & ordering access** — control whether members can publish and
   order books on their own, or whether you keep that in your hands (e.g. to produce and
   charge for copies yourself).
@@ -276,6 +276,11 @@ name + description). A campaign is built from:
   (Asset count limits still apply either way.)
 - **Campaign image** — pick an Archive image for the campaign tile; it also becomes the
   **default book cover** when publishing unless you choose another.
+- **Lore / Background** — describe the world your campaign takes place in: its
+  backstory, key locations, factions, history, and tone (up to 6,000 characters).
+  Every session draws on this when its story and image prompts are generated, keeping
+  the whole campaign consistent and connected across sessions. Also editable from the
+  pencil edit on the campaign page.
 - **Delete campaign** — only when the campaign is completely empty: no sessions,
   characters, assets, archived images, or other members.
 
