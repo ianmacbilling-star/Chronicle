@@ -224,7 +224,7 @@ router.post('/ask', requireAuth, async function(req, res) {
   try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
   const _aiDoneAlready = !!(req.body && req.body.ai_done_sent === true);
   if (_aiDoneOn && !_aiDoneAlready) {
-    system += '\n\nSESSION-END SIGNAL: When the conversation appears fully resolved, or the user clearly wraps up or signs off (thanks/goodbye) with nothing left pending, append the exact token <<HELP_DONE>> on its own at the very end of your reply. Do not append it while any question is still open, and never mention, explain, or display this token to the user.';
+    system += '\n\nSESSION-END SIGNAL (closed loop): After you give a substantive answer that should resolve what the user asked, you may add a brief friendly closing check (for example: Let me know if that did the trick, or Did that work for you). Use it lightly -- at most once when things look resolved, not on every turn, and do not nag. Then append the exact token <<HELP_DONE>> on its own at the very end of your reply ONLY when the latest user message signals the conversation is over -- EITHER (a) they confirm it worked or are satisfied (yes, thanks, that worked, perfect, got it, all set), OR (b) they give up or disengage even if it was not resolved (never mind, forget it, I give up, I will figure it out later). Do NOT append the token while the user is still asking or actively troubleshooting. Never mention, explain, or show this token to the user.';
   }
 
   try {
