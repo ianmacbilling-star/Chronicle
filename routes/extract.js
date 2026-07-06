@@ -16,7 +16,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // Verify membership (any member can load; the fork resolution below
   // decides what they may write to).
   const session = await db.prepare(
-    'SELECT s.*, c.art_style as campaign_style FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+    'SELECT s.*, c.art_style as campaign_style, c.lore as campaign_lore FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
@@ -107,6 +107,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'they are on this list — many of them are not in this session. If a ' +
     'character is not present in the transcript, they must not appear in any panel.\n' +
     notesSection + '\n\n' +
+    ((session.campaign_lore && session.campaign_lore.trim()) ? ('## WORLD / LORE (background for consistency and continuity \u2014 NOT events of this session; the transcript below is the sole source of what actually happened)\n' + session.campaign_lore.trim() + '\n\n') : '') +
     '## SESSION TRANSCRIPT\n' + session.transcript + '\n\n' +
     '## YOUR TASK\n' +
     'This transcript is approximately ' + wordCount + ' words long. ' +

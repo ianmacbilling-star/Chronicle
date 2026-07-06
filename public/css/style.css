@@ -2181,3 +2181,10 @@ html.staging-env .app-logo-text{color:#2b1400;}
 /* only one eye: suppress the native Edge/IE reveal control */
 input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:none;}
 
+/* Campaign card "Details" button - styled like the moment-panel pills, but
+   always visible (pills default to opacity:0 for storyboard hover-reveal). */
+.campaign-details-btn{padding:4px 11px;font-size:11px;background:rgba(0,0,0,0.6);color:rgba(201,168,76,0.85);border:1px solid rgba(201,168,76,0.3);border-radius:6px;cursor:pointer;line-height:1.3;white-space:nowrap;transition:background 0.15s,color 0.15s;}
+.campaign-details-btn:hover{background:rgba(0,0,0,0.85);color:var(--gold);}
+.camp-lore-count{font-size:11px;color:rgba(201,168,76,0.6);text-align:right;margin-top:4px;}
+.camp-lore-edit-wrap{margin-top:12px;}
+.camp-lore-edit-label{display:block;font-family:var(--font-display);font-size:12px;color:var(--gold);margin-bottom:4px;}

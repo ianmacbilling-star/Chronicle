@@ -71,10 +71,12 @@ router.put('/:id', requireAuth, async function(req, res) {
   var _allowAssets = (req.body.allow_member_assets !== undefined)
     ? (req.body.allow_member_assets === true || req.body.allow_member_assets === 'true' || req.body.allow_member_assets === 1)
     : campaign.allow_member_assets;
-  await db.prepare('UPDATE campaigns SET name=?, description=?, cover_image_url=?, back_cover_image_url=?, title_image_url=?, campaign_image_url=?, allow_player_novel_access=?, allow_member_assets=?, edited_at=?, edited_by=? WHERE id=?')
+  var _lore = (req.body.lore !== undefined) ? String(req.body.lore || '').slice(0, 6000) : campaign.lore;
+  await db.prepare('UPDATE campaigns SET name=?, description=?, lore=?, cover_image_url=?, back_cover_image_url=?, title_image_url=?, campaign_image_url=?, allow_player_novel_access=?, allow_member_assets=?, edited_at=?, edited_by=? WHERE id=?')
     .run(
       req.body.name || campaign.name,
       req.body.description !== undefined ? req.body.description : campaign.description,
+      _lore,
       req.body.cover_image_url !== undefined ? req.body.cover_image_url : campaign.cover_image_url,
       req.body.back_cover_image_url !== undefined ? req.body.back_cover_image_url : campaign.back_cover_image_url,
       req.body.title_image_url !== undefined ? req.body.title_image_url : campaign.title_image_url,

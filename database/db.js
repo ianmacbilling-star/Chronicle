@@ -371,6 +371,7 @@ async function initPostgres() {
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS title_image_url TEXT',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS allow_player_novel_access BOOLEAN DEFAULT false',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS allow_member_assets BOOLEAN DEFAULT false',
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS lore TEXT',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the

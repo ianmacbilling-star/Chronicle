@@ -1787,7 +1787,7 @@
 <div class="modal-overlay hidden" id="campaign-settings-modal">
   <div class="modal" style="max-width:460px;">
     <div class="modal-header">
-      <div class="modal-title">Campaign settings</div>
+      <div class="modal-title">Campaign details</div>
       <button class="modal-close" onclick="closeCampaignSettings()">&times;</button>
     </div>
     <div id="campaign-settings-error" class="alert alert-error hidden"></div>
@@ -1807,6 +1807,12 @@
         <div style="flex:0 0 96px;"><div class="prep-img-thumb" id="cs-image-thumb" onclick="openCampaignImagePicker(_csCampaignId)"><span class="prep-thumb-plus">+</span></div></div>
         <div class="settings-section-desc" style="margin:0;">Shown on this campaign's tile, and used as the default cover when you publish if no cover has been chosen.</div>
       </div>
+    </div>
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Lore / Background</div>
+      <div class="settings-section-desc" style="margin:0 0 8px;">Describe the world your campaign takes place in — the backstory, key locations, factions, history, and tone. Every session draws on this when its story and image prompts are generated, keeping the whole campaign consistent and connected. Story Master only.</div>
+      <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your campaign takes place in..." oninput="loreCount(this, 'cs-lore-count')"></textarea>
+      <div class="camp-lore-count" id="cs-lore-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(217,83,79,0.35);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:#e57373;margin-bottom:8px;">Delete campaign</div>

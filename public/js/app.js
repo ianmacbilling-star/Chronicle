@@ -1601,7 +1601,7 @@ function renderCampaigns() {
       campCardDescHtml(c.description) +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
         '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
-        (c.my_role === 'dm' ? '<button class="campaign-card-menu-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign settings">&#8943;</button>' : '') +
+        (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -3941,11 +3941,16 @@ function startCampaignEdit() {
   var cntEl = document.getElementById('sessions-count');
   if (cntEl) cntEl.textContent = '';
   if (nameEl) nameEl.innerHTML = '<input id="camp-edit-name-input" class="camp-edit-input" onblur="campaignEditBlur()" onkeydown="campaignEditKey(event)" />';
-  if (descEl) descEl.innerHTML = '<textarea id="camp-edit-desc-input" class="camp-edit-textarea" placeholder="Add a description..." onblur="campaignEditBlur()"></textarea>';
+  if (descEl) descEl.innerHTML = '<textarea id="camp-edit-desc-input" class="camp-edit-textarea" placeholder="Add a description..." onblur="campaignEditBlur()"></textarea>' +
+    '<div class="camp-lore-edit-wrap"><label class="camp-lore-edit-label">Lore / Background</label>' +
+    '<textarea id="camp-edit-lore-input" class="camp-edit-textarea" maxlength="6000" placeholder="Describe the world your campaign takes place in..." onblur="campaignEditBlur()"></textarea>' +
+    '<div class="camp-lore-count" id="camp-edit-lore-count"></div></div>';
   var ni = document.getElementById('camp-edit-name-input');
   if (ni) { ni.value = c.name || ''; ni.focus(); ni.select(); }
   var di = document.getElementById('camp-edit-desc-input');
   if (di) di.value = c.description || '';
+  var li = document.getElementById('camp-edit-lore-input');
+  if (li) { li.value = c.lore || ''; loreCount(li, 'camp-edit-lore-count'); li.addEventListener('input', function(){ loreCount(li, 'camp-edit-lore-count'); }); }
 }
 
 function campaignEditKey(e) {
@@ -3961,28 +3966,30 @@ function campaignEditBlur() {
   setTimeout(function() {
     var ni = document.getElementById('camp-edit-name-input');
     var di = document.getElementById('camp-edit-desc-input');
+    var li = document.getElementById('camp-edit-lore-input');
     var ae = document.activeElement;
-    if (ae === ni || ae === di) return; // still editing one of the fields
+    if (ae === ni || ae === di || ae === li) return; // still editing one of the fields
     var c = state.currentCampaign;
     if (!c) { renderCampaignHeaderDisplay(); return; }
     var newName = ni ? ni.value.trim() : (c.name || '');
     var newDesc = di ? di.value : (c.description || '');
+    var newLore = li ? li.value.slice(0, 6000) : (c.lore || '');
     if (!newName) newName = c.name; // never blank the name
-    if (newName === c.name && newDesc === (c.description || '')) {
+    if (newName === c.name && newDesc === (c.description || '') && newLore === (c.lore || '')) {
       renderCampaignHeaderDisplay();
       return;
     }
     fetch('/api/campaigns/' + c.id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName, description: newDesc })
+      body: JSON.stringify({ name: newName, description: newDesc, lore: newLore })
     })
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data && data.id) {
-        c.name = data.name; c.description = data.description;
+        c.name = data.name; c.description = data.description; c.lore = (data.lore != null ? data.lore : newLore);
         var i = state.campaigns.findIndex(function(x){ return x.id === data.id; });
-        if (i >= 0) { state.campaigns[i].name = data.name; state.campaigns[i].description = data.description; }
+        if (i >= 0) { state.campaigns[i].name = data.name; state.campaigns[i].description = data.description; state.campaigns[i].lore = (data.lore != null ? data.lore : newLore); }
       }
     })
     .catch(function(){})
@@ -8583,7 +8590,7 @@ function renderCampaigns() {
       campCardDescHtml(c.description) +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
         '<div class="campaign-card-meta">Created ' + new Date(c.created_at).toLocaleDateString() + '</div>' +
-        (c.my_role === 'dm' ? '<button class="campaign-card-menu-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign settings">&#8943;</button>' : '') +
+        (c.my_role === 'dm' ? '<button class="campaign-details-btn" onclick="openCampaignSettings(' + c.id + ', event)" title="Campaign details">Details</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -11969,6 +11976,12 @@ function closeCampaignImagePicker() {
   if (m && m.parentNode) m.parentNode.removeChild(m);
 }
 
+function loreCount(el, countId) {
+  var n = (el && el.value) ? el.value.length : 0;
+  var c = document.getElementById(countId);
+  if (c) c.textContent = n + ' / 6000';
+}
+
 function openCampaignSettings(id, ev) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
   _csCampaignId = id;
@@ -11983,6 +11996,8 @@ function openCampaignSettings(id, ev) {
     var va = c && c.allow_member_assets;
     cba.checked = (va === true || va === 1 || va === 't' || va === 'true');
   }
+  var loreEl = document.getElementById('cs-lore-input');
+  if (loreEl) { loreEl.value = (c && c.lore) ? c.lore : ''; loreCount(loreEl, 'cs-lore-count'); }
   var err = document.getElementById('campaign-settings-error');
   if (err) err.classList.add('hidden');
   var modal = document.getElementById('campaign-settings-modal');
@@ -12002,13 +12017,15 @@ function saveCampaignSettings() {
   var allow = !!(cb && cb.checked);
   var cba = document.getElementById('cs-allow-assets');
   var allowAssets = !!(cba && cba.checked);
+  var _loreEl = document.getElementById('cs-lore-input');
+  var _loreVal = _loreEl ? _loreEl.value.slice(0, 6000) : undefined;
   var btn = document.getElementById('cs-save-btn');
   var err = document.getElementById('campaign-settings-error');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   fetch('/api/campaigns/' + _csCampaignId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets })
+    body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal })
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -12018,8 +12035,8 @@ function saveCampaignSettings() {
         return;
       }
       var saveId = _csCampaignId;
-      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; } });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; }
+      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; } });
+      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; }
       closeCampaignSettings();
     })
     .catch(function (e) {

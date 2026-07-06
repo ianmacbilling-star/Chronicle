@@ -212,6 +212,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const prompt =
     'You are a skilled fantasy author writing the narrative for a graphic novel based on a real TTRPG session.\n\n' +
     'Campaign: ' + campaign.name + '\n' +
+    (campaign.lore && campaign.lore.trim() ? ('World / Lore (background for consistency and continuity across sessions \u2014 NOT events of this session; the transcript is the sole source of what actually happened):\n' + campaign.lore.trim() + '\n\n') : '') +
     'Session: ' + session.name + '\n' +
     'Date: ' + session.session_date + '\n\n' +
     'Characters:\n' + charList + '\n\n' +
