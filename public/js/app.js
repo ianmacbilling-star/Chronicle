@@ -3786,6 +3786,7 @@ function generateNarrativeAndImages() {
   }, 500);
 
   function _narrEnd(ok) {
+    if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
     clearInterval(_nticker);
     state.narrJobActive = false;
     clearGenLock();
@@ -3893,6 +3894,7 @@ function generateNarrativeOnly() {
     if (btn) { btn.disabled = false; btn.textContent = origLabel; }
     if (data.error) { endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
     endBar(true);
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     state.narrativeData = { intro: data.intro || '', sections: data.sections || [], outro: data.outro || '' };
     state.narrativeStyleUsed = state.narrativeStyle || 'classic';
     if (typeof renderStoryboard === 'function') renderStoryboard();
@@ -5450,6 +5452,7 @@ async function extractMoments() {
     state.narrativeData = { intro: '', sections: [], outro: '' };
     fill.style.width = '100%';
     msg.textContent = 'Your storyboard plan is ready!';
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     var _mc = document.getElementById('moment-count'); if (_mc) _mc.textContent = state.moments.length;
     renderStoryboard();
     setTimeout(function() {
@@ -9243,6 +9246,7 @@ async function extractMoments() {
     state.narrativeData = { intro: '', sections: [], outro: '' };
     fill.style.width = '100%';
     msg.textContent = 'Your storyboard plan is ready!';
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     var _mc = document.getElementById('moment-count'); if (_mc) _mc.textContent = state.moments.length;
     renderStoryboard();
     setTimeout(function() {
@@ -11994,9 +11998,12 @@ function updateWordCounts() {
 }
 
 function loreCount(el, countId) {
-  var n = (el && el.value) ? el.value.length : 0;
+  var val = (el && el.value) ? el.value : '';
+  var chars = val.length;
+  var t = val.trim();
+  var words = t ? t.split(/\s+/).length : 0;
   var c = document.getElementById(countId);
-  if (c) c.textContent = n + ' / 6000';
+  if (c) c.textContent = words + (words === 1 ? ' word' : ' words') + ' \u00B7 ' + chars + ' / 6000';
 }
 
 function openCampaignSettings(id, ev) {
