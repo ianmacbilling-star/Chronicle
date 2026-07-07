@@ -324,7 +324,34 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (perr) {
+      // The model occasionally returns JSON that is truncated (hit max_tokens) or
+      // carries a stray character. Conservative recovery: parse up to the last
+      // closing brace, and accept it ONLY if it has the expected shape.
+      let recovered = null;
+      try {
+        const lb = clean.lastIndexOf('}');
+        if (lb > 0) {
+          const cand = JSON.parse(clean.slice(0, lb + 1));
+          if (cand && (Array.isArray(cand.sections) || typeof cand.intro === 'string')) recovered = cand;
+        }
+      } catch (e2) { recovered = null; }
+      if (recovered) {
+        parsed = recovered;
+      } else {
+        // Give up, but CAPTURE the raw so the exact malformation is visible in the
+        // job error (queryable) and in the server logs.
+        try { console.error('[narrative] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
+        await db.prepare("UPDATE narrative_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(
+          ('The narrative came back in an unexpected format (' + perr.message + '). RAW: ' + clean.slice(0, 1500)),
+          new Date().toISOString(), jobId
+        );
+        return;
+      }
+    }
 
     // Defensive alignment: the prompt labels panels 1-based but asks for a
     // 0-based panel_index, an easy off-by-one that shifts every section in
