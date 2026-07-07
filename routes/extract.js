@@ -84,8 +84,12 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
   // Optional size-based charge for Generate Story (admin-configured; scales with
   // transcript words). Verified here; spent only after a successful extraction.
+  // Charge meters on total USER-authored words (transcript + notes + lore),
+  // never our behind-the-scenes prompt scaffolding.
+  var _wc = function (t) { var v = (t == null ? '' : String(t)).trim(); return v ? v.split(/\s+/).length : 0; };
+  var _userWords = _wc(session.transcript) + _wc(session.session_notes) + _wc(session.campaign_lore);
   var _storyCharge = 0;
-  try { _storyCharge = await computeGenCharge(wordCount, 'gen_story_words_per_token', 'gen_story_floor'); } catch (e) { _storyCharge = 0; }
+  try { _storyCharge = await computeGenCharge(_userWords, 'gen_story_words_per_token', 'gen_story_floor'); } catch (e) { _storyCharge = 0; }
   if (_storyCharge > 0) {
     const _bal = await getBalance(req.session.userId);
     if (_bal.total < _storyCharge) {
