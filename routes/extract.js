@@ -4,7 +4,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
-const { computeGenCharge, getBalance, spendTokens } = require('./tokens');
+const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
@@ -282,6 +282,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     if (_storyCharge > 0) {
       try { await spendTokens(req.session.userId, _storyCharge, { source: 'generate_story', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_story spend failed:', e.message); }
     }
+    try { await recordGeneration(req.session.userId, { event_type: 'generate_story', tokens_redeemed: _storyCharge, quantity: _userWords, unit: 'words', model: TEXT_MODEL, related_campaign_id: req.params.campaignId, related_session_id: req.params.sessionId }); } catch (e) {}
     res.json(parsed);
   } catch(e) {
     res.json({ error: e.message });

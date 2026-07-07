@@ -957,21 +957,55 @@ async function fulfillSubscriptionUpdate(subscription, previousAttributes, event
 // Dashboard -> Settings (signup_bonus_cot, default 0 = off). Returns the
 // number of tokens granted (0 if off or already paid).
 // ------------------------------------------------------------
-// One-time, per-tier subscription/signup welcome bonus to the SUBSCRIBER. Grants
-// that tier's configured signup_bonus in carry-over tokens, at most once per
-// (user, tier) -- tracked in token_ledger so tier-hopping cannot re-farm it.
-// DISTINCT from grantSignupBonus (the referral bonus paid to a Story Master).
+// One-time subscription/signup welcome bonus to the SUBSCRIBER, in carry-over
+// tokens. HIGH-WATER MARK: a tier's bonus is granted only when it outranks EVERY
+// tier the user has already claimed -- rewards moving UP, never a downgrade or a
+// re-claim. Tracked in token_ledger so it cannot be re-farmed. DISTINCT from
+// grantSignupBonus (the referral bonus paid to a Story Master).
+// Analytics record of a generation (charged OR free), parallel to token_ledger.
+// Best-effort: NEVER throws into the caller -- the money ledger stays authoritative,
+// and a missed analytics row must never block a spend or a user's generation.
+async function recordGeneration(userId, opts = {}) {
+  try {
+    if (!userId) return;
+    const db = await getDb();
+    await db.prepare(
+      'INSERT INTO generation_events (user_id, event_type, tokens_redeemed, quantity, unit, model, related_campaign_id, related_session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      userId,
+      String(opts.event_type || 'unknown'),
+      parseInt(opts.tokens_redeemed, 10) || 0,
+      (opts.quantity == null ? null : (parseInt(opts.quantity, 10) || 0)),
+      (opts.unit || null),
+      (opts.model || null),
+      (opts.related_campaign_id || null),
+      (opts.related_session_id || null)
+    );
+  } catch (e) { try { console.warn('recordGeneration non-fatal:', e.message); } catch (_e) {} }
+}
+
 async function grantTierSignupBonus(userId, tierName) {
   if (!userId || !tierName) return 0;
   try {
     const tier = getTier(tierName);
     const amount = parseInt((tier && tier.signup_bonus) || 0, 10);
     if (!Number.isFinite(amount) || amount <= 0) return 0;
+    const rank = parseInt((tier && tier.rank), 10);
+    if (!Number.isFinite(rank)) return 0;
     const db = await getDb();
-    const src = 'tier:' + tierName;
-    const prior = await db.prepare("SELECT 1 FROM token_ledger WHERE user_id = ? AND event_type = 'tier_signup_bonus' AND source = ? LIMIT 1").get(userId, src);
-    if (prior) return 0;
-    await creditTokens(userId, amount, { bucket: 'cot', event_type: 'tier_signup_bonus', source: src });
+    // High-water mark: grant only when this tier outranks EVERY tier the user has
+    // already claimed a sign-up bonus for. A downgrade to a lower (or already-
+    // claimed) tier grants nothing; this also subsumes the per-tier de-dupe.
+    const claimed = await db.prepare("SELECT source FROM token_ledger WHERE user_id = ? AND event_type = 'tier_signup_bonus'").all(userId);
+    let highWater = -1;
+    (claimed || []).forEach(function (r) {
+      const nm = (r && r.source && r.source.indexOf('tier:') === 0) ? r.source.slice(5) : '';
+      if (!nm) return;
+      const cr = parseInt((getTier(nm) || {}).rank, 10);
+      if (Number.isFinite(cr) && cr > highWater) highWater = cr;
+    });
+    if (rank <= highWater) return 0;
+    await creditTokens(userId, amount, { bucket: 'cot', event_type: 'tier_signup_bonus', source: 'tier:' + tierName });
     return amount;
   } catch (e) { try { console.error('grantTierSignupBonus failed (non-fatal):', e.message); } catch (_e) {} return 0; }
 }
@@ -1022,6 +1056,7 @@ module.exports = {
   creditTokens,
   grantSignupBonus,
   grantTierSignupBonus,
+  recordGeneration,
   spendTokens,
   ensureMonthlyGrant,
   fulfillSubscriptionInvoice,

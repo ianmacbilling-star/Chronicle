@@ -7,7 +7,7 @@ const { releaseImage, persistToR2 } = require('../storage/storage');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { fal } = require('@fal-ai/client');
-const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
+const { getTokenCost, canAfford, spendTokens, getBalance, recordGeneration } = require('./tokens');
 const crypto = require('crypto');
 const { logDebug } = require('./debug');
 
@@ -1400,15 +1400,16 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           }
           await logImageGeneration(db, job.user_id, 'asset_reference', job.asset_id, null);
         }
+      const genSource = (job.kind === 'char_ref') ? 'character_reference'
+        : (job.kind === 'session_ref') ? 'amendment_reference'
+        : (job.kind === 'asset_ref') ? 'asset_reference'
+        : (job.kind === 'asset_retouch') ? 'asset_retouch'
+        : (job.kind === 'retouch') ? 'panel_retouch'
+        : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
       if (job.cost && job.cost > 0) {
-        const spendSource = (job.kind === 'char_ref') ? 'character_reference'
-          : (job.kind === 'session_ref') ? 'amendment_reference'
-          : (job.kind === 'asset_ref') ? 'asset_reference'
-          : (job.kind === 'asset_retouch') ? 'asset_retouch'
-          : (job.kind === 'retouch') ? 'panel_retouch'
-          : (job.kind === 'batch') ? 'panel_batch' : 'panel_regen';
-        await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: spendSource, event_type: 'generation_spend' });
+        await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: genSource, event_type: 'generation_spend' });
       }
+      try { await recordGeneration(job.user_id, { event_type: genSource, tokens_redeemed: (job.cost || 0), quantity: 1, unit: 'images', model: job.model, related_campaign_id: job.campaign_id }); } catch (e) {}
       await db.prepare('UPDATE image_jobs SET status = ?, image_url = ?, updated_at = ? WHERE id = ?')
         .run('done', imageUrl, new Date().toISOString(), job.id);
     } catch (e) {
@@ -1469,6 +1470,7 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
     const seed = crypto.randomInt(1, 2147483647);
     const url = await generateImage(SAMPLE_PROMPT, stylePrompt, fal_key, null, seed, modelKey, 'wide', null, isFade);
     try { await spendTokens(req.session.userId, cost, { source: 'custom_style_preview', event_type: 'generation_spend' }); } catch (e) { console.error('preview spend failed:', e.message); }
+    try { await recordGeneration(req.session.userId, { event_type: 'custom_style_preview', tokens_redeemed: cost, quantity: 1, unit: 'images', model: (IMAGE_MODELS[modelKey] || modelKey) }); } catch (e) {}
     // Persist the preview to the style so reopening shows the last render.
     const styleId = req.body && req.body.style_id;
     if (styleId) {

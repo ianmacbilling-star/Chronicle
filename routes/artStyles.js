@@ -5,7 +5,7 @@ const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier } = require('../middleware/tiers');
 const { TEXT_MODEL } = require('../config/models');
-const { canAfford, spendTokens } = require('./tokens');
+const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { uploadFile, releaseImage } = require('../storage/storage');
 const multer = require('multer');
 const { imageFileFilter, friendlyUploadMsg, ACCEPTED_MIME } = require('../middleware/uploadGuard');
@@ -319,6 +319,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
       if (!/^STYLE:/i.test(stylePrompt)) stylePrompt = 'STYLE: ' + stylePrompt;
 
       try { await spendTokens(req.session.userId, COST_ANALYZE, { source: 'custom_style_analyze', event_type: 'generation_spend' }); } catch (e) { console.error('analyze spend failed:', e.message); }
+      try { await recordGeneration(req.session.userId, { event_type: 'custom_style_analyze', tokens_redeemed: COST_ANALYZE, quantity: 1, unit: 'analysis', model: TEXT_MODEL }); } catch (e) {}
 
       res.json({ style_prompt: stylePrompt, is_fade: isFade, sample_urls: sampleUrls });
     } catch (e) {

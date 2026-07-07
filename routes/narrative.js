@@ -4,7 +4,7 @@ const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('..
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
-const { computeGenCharge, getBalance, spendTokens } = require('./tokens');
+const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
 
 // ============================================================
@@ -363,6 +363,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     if (_narrCharge > 0) {
       try { await spendTokens(req.session.userId, _narrCharge, { source: 'generate_narrative', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_narrative spend failed:', e.message); }
     }
+    try { await recordGeneration(req.session.userId, { event_type: 'generate_narrative', tokens_redeemed: _narrCharge, quantity: moments.length, unit: 'panels', model: TEXT_MODEL, related_campaign_id: req.params.campaignId, related_session_id: req.params.sessionId }); } catch (e) {}
     await db.prepare("UPDATE narrative_jobs SET status='done', result=?, updated_at=? WHERE id=?").run(
       JSON.stringify({ success: true, intro: parsed.intro || '', sections: parsed.sections || [], outro: parsed.outro || '' }),
       new Date().toISOString(), jobId

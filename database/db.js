@@ -639,6 +639,26 @@ async function initPostgres() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_ledger_user ON token_ledger(user_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_ledger_user_bucket ON token_ledger(user_id, bucket)');
+  // Analytics record of every generation (charged OR free) -- parallel to, and
+  // independent of, token_ledger. tokens_redeemed = tokens charged (0 for free
+  // actions like an un-priced Story/Narrative). quantity + unit + model give the
+  // cost basis so the exact $ cost can be derived later regardless of vendor repricing.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS generation_events (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id),
+      event_type TEXT NOT NULL,
+      tokens_redeemed INTEGER NOT NULL DEFAULT 0,
+      quantity INTEGER,
+      unit TEXT,
+      model TEXT,
+      related_campaign_id INTEGER,
+      related_session_id INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_genevents_type ON generation_events(event_type)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_genevents_created ON generation_events(created_at)');
   await pool.query(`
     CREATE TABLE IF NOT EXISTS metric_snapshots (
       id SERIAL PRIMARY KEY,
