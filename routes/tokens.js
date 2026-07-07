@@ -883,6 +883,7 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
   // the user's account tier (users.tier) for the UTOLT + CO amounts and expires any
   // leftover use-it-or-lose-it balance before granting the new period.
   await ensureMonthlyGrant(user.id, invoice.id);
+  try { await grantTierSignupBonus(user.id, user.tier); } catch (e) {}
 }
 
 // ------------------------------------------------------------
@@ -956,6 +957,25 @@ async function fulfillSubscriptionUpdate(subscription, previousAttributes, event
 // Dashboard -> Settings (signup_bonus_cot, default 0 = off). Returns the
 // number of tokens granted (0 if off or already paid).
 // ------------------------------------------------------------
+// One-time, per-tier subscription/signup welcome bonus to the SUBSCRIBER. Grants
+// that tier's configured signup_bonus in carry-over tokens, at most once per
+// (user, tier) -- tracked in token_ledger so tier-hopping cannot re-farm it.
+// DISTINCT from grantSignupBonus (the referral bonus paid to a Story Master).
+async function grantTierSignupBonus(userId, tierName) {
+  if (!userId || !tierName) return 0;
+  try {
+    const tier = getTier(tierName);
+    const amount = parseInt((tier && tier.signup_bonus) || 0, 10);
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    const db = await getDb();
+    const src = 'tier:' + tierName;
+    const prior = await db.prepare("SELECT 1 FROM token_ledger WHERE user_id = ? AND event_type = 'tier_signup_bonus' AND source = ? LIMIT 1").get(userId, src);
+    if (prior) return 0;
+    await creditTokens(userId, amount, { bucket: 'cot', event_type: 'tier_signup_bonus', source: src });
+    return amount;
+  } catch (e) { try { console.error('grantTierSignupBonus failed (non-fatal):', e.message); } catch (_e) {} return 0; }
+}
+
 async function grantSignupBonus(smUserId, joinerUserId, opts = {}) {
   if (!smUserId || !joinerUserId || smUserId === joinerUserId) return 0;
   const db = await getDb();
@@ -1001,6 +1021,7 @@ module.exports = {
   characterReserveStatus,
   creditTokens,
   grantSignupBonus,
+  grantTierSignupBonus,
   spendTokens,
   ensureMonthlyGrant,
   fulfillSubscriptionInvoice,

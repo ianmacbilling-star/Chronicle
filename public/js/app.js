@@ -11541,6 +11541,7 @@ var TIER_FIELD_LABELS = {
   price: 'Price ($ / month, 0 = Invite only)',
   monthly_utlt: 'Monthly UTOLT tokens',
   monthly_cot: 'Monthly CO tokens',
+  signup_bonus: 'Sign-up bonus (one-time CO tokens, per tier)',
   max_campaigns: 'Max campaigns (blank/-1 = unlimited)',
   max_sessions: 'Max sessions / campaign (blank/-1 = unlimited)',
   max_characters: 'Max characters / campaign (blank/-1 = unlimited)',

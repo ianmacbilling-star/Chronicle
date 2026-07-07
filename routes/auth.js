@@ -5,7 +5,7 @@ const { getDb } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
-const { ensureMonthlyGrant, grantSignupBonus } = require('./tokens');
+const { ensureMonthlyGrant, grantSignupBonus, grantTierSignupBonus } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendWelcomeEmail } = require('./email');
 
 // Current Terms of Service / EULA version. Bump when the terms change so we
@@ -100,6 +100,7 @@ router.post('/register', async function(req, res) {
     // tokens, admin can credit later via the testing widget).
     try {
       await ensureMonthlyGrant(newUserId);
+      try { await grantTierSignupBonus(newUserId, regTier); } catch (e) {}
     } catch (grantErr) {
       console.error('Signup grant failed (non-fatal):', grantErr.message);
     }

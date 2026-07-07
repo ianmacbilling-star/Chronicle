@@ -6,6 +6,7 @@
 const TIERS = {
   trial: {
     name: 'Free Trial',
+    signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 0,
     access_rank: 4,    // bottom of hierarchy (lapses to copper) but TOP of creative access -- Platinum-equivalent art/narrative/layout
     price: 0,
@@ -31,6 +32,7 @@ const TIERS = {
   },
   copper: {
     name: 'Copper',
+    signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 1,
     price: 0,
     monthly_utlt: 0,         // UTOLT: use-it-or-lose-it tokens granted each cycle (expires)
@@ -55,6 +57,7 @@ const TIERS = {
   },
   silver: {
     name: 'Silver',
+    signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 2,
     price: 10,
     monthly_utlt: 20,        // UTOLT granted each cycle (expires)
@@ -78,6 +81,7 @@ const TIERS = {
   },
   gold: {
     name: 'Gold',
+    signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 3,
     price: 15,
     monthly_utlt: 30,        // UTOLT granted each cycle (expires)
@@ -101,6 +105,7 @@ const TIERS = {
   },
   platinum: {
     name: 'Platinum',
+    signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 4,
     price: 22,
     monthly_utlt: 35,        // UTOLT granted each cycle (expires)
@@ -148,7 +153,8 @@ const EDITABLE_TIER_FIELDS = [
   'max_moments_short',
   'max_moments_medium',
   'max_moments_long',
-  'max_moments_epic'
+  'max_moments_epic',
+  'signup_bonus'
 ];
 
 // Fields where an empty value means "unlimited" (stored as null). Every
@@ -250,6 +256,7 @@ async function lapseTrialIfExpired(user, db) {
     if (user && user.tier === 'trial' && isTrialExpired(user)) {
       await db.prepare('UPDATE users SET tier = ? WHERE id = ?').run('copper', user.id);
       user.tier = 'copper';
+      try { require('../routes/tokens').grantTierSignupBonus(user.id, 'copper'); } catch (e) {}
       return true;
     }
   } catch (e) { /* non-fatal: keep current tier for this request */ }
