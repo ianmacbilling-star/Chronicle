@@ -268,6 +268,46 @@ router.put('/help-email-settings', requireAuth, requireAdmin, async function (re
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// Generation charging + transcript cache TTL. Charging scales with size:
+// Story = tokens per N transcript words, Narrative = tokens per N panels, each
+// with a floor (minimum-that-scales, i.e. max(floor, size/N) rounded DOWN).
+// All default 0 (= no charge). transcript_cache_ttl is '5m' or '1h' (default 5m).
+function _giToInt(v){ var n=parseInt(v,10); return (Number.isFinite(n)&&n>=0)?n:0; }
+router.get('/generation-settings', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    async function g(k){ const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(k); return r ? r.value : null; }
+    res.json({
+      storyWordsPerToken: _giToInt(await g('gen_story_words_per_token')),
+      storyFloor: _giToInt(await g('gen_story_floor')),
+      narrativePanelsPerToken: _giToInt(await g('gen_narrative_panels_per_token')),
+      narrativeFloor: _giToInt(await g('gen_narrative_floor')),
+      transcriptCacheTtl: ((await g('transcript_cache_ttl')) === '1h') ? '1h' : '5m'
+    });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.put('/generation-settings', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const b = req.body || {};
+    const ttl = (b.transcriptCacheTtl === '1h') ? '1h' : '5m';
+    const pairs = [
+      ['gen_story_words_per_token', String(_giToInt(b.storyWordsPerToken))],
+      ['gen_story_floor', String(_giToInt(b.storyFloor))],
+      ['gen_narrative_panels_per_token', String(_giToInt(b.narrativePanelsPerToken))],
+      ['gen_narrative_floor', String(_giToInt(b.narrativeFloor))],
+      ['transcript_cache_ttl', ttl]
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get(pairs[i][0]);
+      if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(pairs[i][1], pairs[i][0]);
+      else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(pairs[i][0], pairs[i][1]);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 // GET /api/admin/library -- moderation view of ALL public Library images (no
 // time window), newest first, keyset-paginated. Returns the archive id so an
 // admin can pull an item down.

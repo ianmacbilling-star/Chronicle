@@ -978,7 +978,22 @@ async function grantSignupBonus(smUserId, joinerUserId, opts = {}) {
   return n;
 }
 
+// Size-scaled charge for a generation action. rateKey = units (words/panels)
+// per token; floorKey = minimum tokens. Returns max(floor, floor(size/rate));
+// rate 0 disables the scaled term, and 0/0 charges nothing.
+async function computeGenCharge(size, rateKey, floorKey) {
+  const db = await getDb();
+  async function g(k){ const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(k); const n = r ? parseInt(r.value, 10) : 0; return (Number.isFinite(n) && n >= 0) ? n : 0; }
+  const rate = await g(rateKey);
+  const floor = await g(floorKey);
+  const sz = (Number.isFinite(size) && size > 0) ? size : 0;
+  const scaled = (rate > 0) ? Math.floor(sz / rate) : 0;
+  const charge = Math.max(floor, scaled);
+  return charge > 0 ? charge : 0;
+}
+
 module.exports = {
+  computeGenCharge,
   router,
   getTokenCost,
   getBalance,

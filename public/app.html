@@ -946,6 +946,31 @@
         </div>
       </div>
 
+      <!-- Generation charging & caching (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Generation charging &amp; caching</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Charge tokens for story/narrative generation, scaled by size. Tokens = max(floor, size &divide; rate) rounded down. Set a rate to 0 to charge only the floor; set both floor and rate to 0 to charge nothing.</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;max-width:460px;">
+          <label style="color:var(--gold);font-size:13px;">Generate Story &mdash; words per token</label>
+          <input type="number" min="0" step="1" id="gen-story-wpt" style="width:110px;" />
+          <label style="color:var(--gold);font-size:13px;">Generate Story &mdash; floor (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-story-floor" style="width:110px;" />
+          <label style="color:var(--gold);font-size:13px;">Generate Narrative &mdash; panels per token</label>
+          <input type="number" min="0" step="1" id="gen-narr-ppt" style="width:110px;" />
+          <label style="color:var(--gold);font-size:13px;">Generate Narrative &mdash; floor (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-narr-floor" style="width:110px;" />
+          <label style="color:var(--gold);font-size:13px;">Transcript cache duration</label>
+          <select id="transcript-cache-ttl" style="width:110px;">
+            <option value="5m">5 minutes</option>
+            <option value="1h">1 hour</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+          <button class="btn btn-primary btn-sm" onclick="saveGenerationSettings()">Save</button>
+          <span class="settings-section-desc" id="gen-settings-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       <!-- Account lifecycle (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Account lifecycle</div>

@@ -4,6 +4,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
+const { computeGenCharge, getBalance, spendTokens } = require('./tokens');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { artStyle } = req.body;
@@ -79,6 +80,17 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // Platinum's moment counts — and a Gold player under a Silver SM keeps Gold.
   const effectiveTier = await getEffectiveTier(req.session.userId, req.params.campaignId);
   const momentCount = getMomentRange(effectiveTier, wordCount);
+
+  // Optional size-based charge for Generate Story (admin-configured; scales with
+  // transcript words). Verified here; spent only after a successful extraction.
+  var _storyCharge = 0;
+  try { _storyCharge = await computeGenCharge(wordCount, 'gen_story_words_per_token', 'gen_story_floor'); } catch (e) { _storyCharge = 0; }
+  if (_storyCharge > 0) {
+    const _bal = await getBalance(req.session.userId);
+    if (_bal.total < _storyCharge) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'Generating this story costs ' + _storyCharge + ' token' + (_storyCharge === 1 ? '' : 's') + ', but you have ' + _bal.total + '. Add tokens and try again.' });
+    }
+  }
 
   // Parse session notes into mandatory and optional directives
   const notesSection = session.session_notes
@@ -262,6 +274,9 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     } catch(pcErr) { pendingChanges = 0; }
 
     parsed.pendingChanges = pendingChanges;
+    if (_storyCharge > 0) {
+      try { await spendTokens(req.session.userId, _storyCharge, { source: 'generate_story', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_story spend failed:', e.message); }
+    }
     res.json(parsed);
   } catch(e) {
     res.json({ error: e.message });

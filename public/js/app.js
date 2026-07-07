@@ -6555,7 +6555,7 @@ function loadSettingsForm() {
     });
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
-  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings();
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings();
 }
 
 function saveImageModel() {
@@ -9936,7 +9936,7 @@ function loadSettingsForm() {
     });
   // Admin general-tab settings must load when the settings view is shown
   // (and on refresh), not only on a tab-button click via switchSettingsTab.
-  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings();
+  loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings();
 }
 
 function saveImageModel() {
@@ -11555,7 +11555,7 @@ function switchSettingsTab(tab) {
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', t === tab);
   });
-  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); }
+  if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings(); }
   if (tab === 'tiers') loadTiersConfig();
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
@@ -12970,6 +12970,42 @@ function saveSignupBonus() {
       if (msg) msg.textContent = res.ok ? 'Saved.' : (res.j && res.j.error ? res.j.error : 'Could not save.');
       if (res.ok && res.j && res.j.signupBonusCot != null) inp.value = res.j.signupBonusCot;
     })
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
+}
+
+function loadGenerationSettings() {
+  var el = document.getElementById('gen-story-wpt');
+  if (!el) return;
+  fetch('/api/admin/generation-settings')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      if (!j) return;
+      var g = function(id){ return document.getElementById(id); };
+      if (g('gen-story-wpt')) g('gen-story-wpt').value = j.storyWordsPerToken;
+      if (g('gen-story-floor')) g('gen-story-floor').value = j.storyFloor;
+      if (g('gen-narr-ppt')) g('gen-narr-ppt').value = j.narrativePanelsPerToken;
+      if (g('gen-narr-floor')) g('gen-narr-floor').value = j.narrativeFloor;
+      if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
+    })
+    .catch(function () {});
+}
+
+function saveGenerationSettings() {
+  var g = function(id){ return document.getElementById(id); };
+  var iv = function(id){ var n = parseInt((g(id)||{}).value, 10); return (isFinite(n) && n >= 0) ? n : 0; };
+  var msg = g('gen-settings-msg');
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/generation-settings', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      storyWordsPerToken: iv('gen-story-wpt'),
+      storyFloor: iv('gen-story-floor'),
+      narrativePanelsPerToken: iv('gen-narr-ppt'),
+      narrativeFloor: iv('gen-narr-floor'),
+      transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m'
+    })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { if (msg) msg.textContent = res.ok ? 'Saved.' : ((res.j && res.j.error) ? res.j.error : 'Could not save.'); if (res.ok) loadGenerationSettings(); })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }
 

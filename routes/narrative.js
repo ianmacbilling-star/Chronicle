@@ -4,6 +4,7 @@ const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('..
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
+const { computeGenCharge, getBalance, spendTokens } = require('./tokens');
 
 // ============================================================
 // NARRATIVE STYLES — the prose analog of art styles.
@@ -146,6 +147,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
   if (!moments.length) return res.json({ error: 'No moments found. Please extract key moments first.' });
+
+  // Optional size-based charge for Generate Narrative (admin-configured; scales
+  // with panel count). Verified before the job starts; spent on job success.
+  var _narrCharge = 0;
+  try { _narrCharge = await computeGenCharge(moments.length, 'gen_narrative_panels_per_token', 'gen_narrative_floor'); } catch (e) { _narrCharge = 0; }
+  if (_narrCharge > 0) {
+    const _nbal = await getBalance(req.session.userId);
+    if (_nbal.total < _narrCharge) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'Generating this narrative costs ' + _narrCharge + ' token' + (_narrCharge === 1 ? '' : 's') + ', but you have ' + _nbal.total + '. Add tokens and try again.' });
+    }
+  }
 
   // Get campaign and characters
   const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(session.campaign_id);
@@ -347,6 +359,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
     try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generated (' + narrStyleId + ', ' + ((parsed.sections || []).length) + ' sections)', detail: { style: narrStyleId, sections: (parsed.sections || []).length, moments: moments.length, campaign_id: req.params.campaignId, session_id: req.params.sessionId } }); } catch (_le) {}
 
+    if (_narrCharge > 0) {
+      try { await spendTokens(req.session.userId, _narrCharge, { source: 'generate_narrative', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_narrative spend failed:', e.message); }
+    }
     await db.prepare("UPDATE narrative_jobs SET status='done', result=?, updated_at=? WHERE id=?").run(
       JSON.stringify({ success: true, intro: parsed.intro || '', sections: parsed.sections || [], outro: parsed.outro || '' }),
       new Date().toISOString(), jobId
