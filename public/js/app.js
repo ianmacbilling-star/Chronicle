@@ -3862,13 +3862,14 @@ function generateNarrativeOnly() {
   var btn = document.getElementById('sb-generate-narr-btn');
   var origLabel = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Writing narrative\u2026'; }
-  var wrap = document.getElementById('generate-progress');
-  var fill = document.getElementById('gen-progress-fill');
-  var pmsg = document.getElementById('gen-progress-msg');
+  // Narrative-only drives its OWN dedicated 'Narrative:' bar (narr-bar-cell),
+  // not the shared 'Images:' bar -- so a solo narrative run is labeled correctly
+  // and, as the only visible bar, spans the full width.
+  var wrap = document.getElementById('narr-bar-cell');
+  var fill = document.getElementById('narr-progress-fill');
   var pct = 0;
   if (wrap) wrap.style.display = 'block';
   if (fill) fill.style.width = '0%';
-  if (pmsg) pmsg.textContent = 'Writing your narrative\u2026';
   var _nctl = new AbortController();
   state.abortNarrOnly = _nctl;
   var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'inline-block';
