@@ -138,6 +138,13 @@ analyzing or previewing a custom art style. **Free actions:** replacing a panel 
 from the Archive, locking an image, and archiving an image. Generation is
 **spend-on-success** — if an image fails, you are **not** charged.
 
+**Generating a story or a narrative may also cost tokens**, depending on current
+settings. When it does, the cost of *Generate Story* scales with how much text you
+provide (your transcript, notes, and lore), and the cost of *Generate Narrative* scales
+with how many panels it is writing for. Either can be set to cost nothing — and your
+token balance updates right after you generate, so you can always see what an action
+actually cost.
+
 ---
 
 ## 4. Billing & subscriptions
