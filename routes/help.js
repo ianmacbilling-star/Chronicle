@@ -13,7 +13,7 @@ const { sendHelpTranscriptEmail } = require('./email');
 // Contextual in-app help: a short, read-only CHAT. It can ask a
 // clarifying question before answering. Short turns, so a lightweight model is
 // plenty; overridable via HELP_MODEL without a code change.
-const HELP_MODEL = process.env.HELP_MODEL || 'claude-haiku-4-5-20251001';
+const { HELP_MODEL } = require('../config/models');
 const MAX_TURNS = 12;   // cap conversation history sent to the model
 
 // The Campaignia Brain is the knowledge base for this assistant. It is loaded

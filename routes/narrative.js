@@ -5,6 +5,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
 const { computeGenCharge, getBalance, spendTokens } = require('./tokens');
+const { TEXT_MODEL } = require('../config/models');
 
 // ============================================================
 // NARRATIVE STYLES — the prose analog of art styles.
@@ -308,7 +309,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+        model: TEXT_MODEL,
         max_tokens: 8000,
         system: styleBundle.system,
         messages: [{ role: 'user', content: prompt }]

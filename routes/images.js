@@ -4,6 +4,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
+const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance } = require('./tokens');
@@ -28,10 +29,6 @@ function falWebhookUrl() { return PUBLIC_BASE_URL ? (PUBLIC_BASE_URL + '/api/ima
 // model gets its own input builder. nano2 uses the /edit endpoint when
 // a panel has character/asset references (Lever 3) and the plain
 // text-to-image endpoint when it doesn't.
-const IMAGE_MODELS = {
-  schnell: 'fal-ai/flux/schnell',
-  nano2: 'fal-ai/nano-banana-2'
-};
 
 // Read the currently-selected model key from app_settings.
 // Falls back to 'nano2' if unset or on any error (the production model).
@@ -180,7 +177,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
     // language for attention — and lost. Putting it first establishes
     // "match these references" as the dominant rule before the scene
     // complexity is introduced.
-    model = 'fal-ai/nano-banana-2/edit';
+    model = IMAGE_EDIT_MODELS.nano2;
     var refMap = charRefs.map(function(r, i) {
       var n = 'Image ' + (i + 1);
       if (r.isAsset) {
@@ -327,7 +324,7 @@ async function retouchImage(currentImageUrl, instruction, style, falKey, shape) 
     'EXACTLY \u2014 identical composition, characters, faces, poses, framing, '+
     'background, colors, lighting, and art style \u2014 and change ONLY the '+
     'following, leaving everything else untouched:\n\n' + instruction;
-  const result = await fal.subscribe('fal-ai/nano-banana-2/edit', {
+  const result = await fal.subscribe(IMAGE_EDIT_MODELS.nano2, {
     input: {
       prompt: editPrompt,
       image_urls: [currentImageUrl],
@@ -385,7 +382,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
         'everything else untouched:\n\n') + instruction + refSection;
-  const submitted = await fal.queue.submit('fal-ai/nano-banana-2/edit', {
+  const submitted = await fal.queue.submit(IMAGE_EDIT_MODELS.nano2, {
     input: {
       prompt: editPrompt,
       image_urls: imageUrls,
@@ -397,7 +394,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
     },
     webhookUrl: webhookUrl
   });
-  return { request_id: submitted.request_id, model: 'fal-ai/nano-banana-2/edit' };
+  return { request_id: submitted.request_id, model: IMAGE_EDIT_MODELS.nano2 };
 }
 
 // Deterministic seed from a campaign id — same campaign, same seed every time.
@@ -712,7 +709,7 @@ function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
   let model = IMAGE_MODELS[key];
   let input;
   if (key === 'nano2' && portraitUrl && /^https?:\/\//.test(portraitUrl)) {
-    model = 'fal-ai/nano-banana-2/edit';
+    model = IMAGE_EDIT_MODELS.nano2;
     input = { prompt: refPrompt, image_urls: [portraitUrl], num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' };
   } else if (key === 'nano2') {
     input = { prompt: refPrompt, num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' };
@@ -790,7 +787,7 @@ function buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey) {
     'Comic book art style.';
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   if (key === 'nano2' && baseImageUrl && /^https?:\/\//.test(baseImageUrl)) {
-    return { model: 'fal-ai/nano-banana-2/edit', input: { prompt: instruction, image_urls: [baseImageUrl], num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' } };
+    return { model: IMAGE_EDIT_MODELS.nano2, input: { prompt: instruction, image_urls: [baseImageUrl], num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' } };
   }
   const fallbackText = changeText ? (name + ' \u2014 ' + changeText) : name;
   return buildReferenceInput(fallbackText, baseImageUrl, key);

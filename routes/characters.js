@@ -4,6 +4,7 @@ const { getDb } = require('../database/db');
 const { friendlyAnthropicError, friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
 const { uploadFile, deleteFile, releaseImage } = require('../storage/storage');
+const { TEXT_MODEL } = require('../config/models');
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens, getBalance, characterReserveStatus } = require('./tokens');
 const { checkCharacterLimit } = require('../middleware/tiers');
@@ -248,7 +249,7 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+        model: TEXT_MODEL,
         max_tokens: 600,
         messages: [{ role: 'user', content: content }]
       })

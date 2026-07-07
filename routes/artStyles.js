@@ -4,6 +4,7 @@ const { getDb } = require('../database/db');
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier } = require('../middleware/tiers');
+const { TEXT_MODEL } = require('../config/models');
 const { canAfford, spendTokens } = require('./tokens');
 const { uploadFile, releaseImage } = require('../storage/storage');
 const multer = require('multer');
@@ -297,7 +298,7 @@ router.post('/custom/analyze', requireAuth, requireTruePlatinum, function(req, r
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
-          model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+          model: TEXT_MODEL,
           max_tokens: 1000,
           system: STYLE_ANALYZE_SYSTEM,
           messages: [{ role: 'user', content: content }]

@@ -5,6 +5,7 @@ const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tie
 const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { computeGenCharge, getBalance, spendTokens } = require('./tokens');
+const { TEXT_MODEL } = require('../config/models');
 
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { artStyle } = req.body;
@@ -168,7 +169,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+        model: TEXT_MODEL,
         max_tokens: 8000,
         system: systemPrompt,
         messages: [{
@@ -496,7 +497,7 @@ async function detectCharacterChanges(db, session, campaignId, apiKey, now, fork
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: process.env.AI_MODEL || 'claude-sonnet-4-6',
+        model: TEXT_MODEL,
         max_tokens: 800,
         messages: [{ role: 'user', content: instruction }]
       })
