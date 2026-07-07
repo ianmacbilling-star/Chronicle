@@ -179,6 +179,30 @@ router.post('/ask', requireAuth, async function(req, res) {
     lifecycleBlock = L.join('\n');
   } catch (e) {}
 
+  // Generation charging: live rates so the assistant can quote the current cost of
+  // Generate Story / Generate Narrative (or say they are free). Read fresh each turn.
+  let generationCostBlock = '';
+  try {
+    const swpt = await getAppSettingInt('gen_story_words_per_token', 0);
+    const sfloor = await getAppSettingInt('gen_story_floor', 0);
+    const nppt = await getAppSettingInt('gen_narrative_panels_per_token', 0);
+    const nfloor = await getAppSettingInt('gen_narrative_floor', 0);
+    const _desc = function (rate, floor, unit) {
+      if (rate <= 0 && floor <= 0) return null;
+      if (rate > 0 && floor > 0) return 'the greater of ' + floor + ' token(s) or 1 token per ' + rate + ' ' + unit + ', rounded down';
+      if (rate > 0) return '1 token per ' + rate + ' ' + unit + ', rounded down';
+      return 'a flat ' + floor + ' token(s) per generation';
+    };
+    const storyDesc = _desc(swpt, sfloor, 'words of the user-provided text (transcript + notes + lore combined)');
+    const narrDesc = _desc(nppt, nfloor, 'panels being written');
+    const G = [];
+    G.push('GENERATION TOKEN COST (live settings, authoritative -- use these exact numbers for any "does generating a story/narrative cost tokens / how much" question):');
+    G.push(storyDesc ? '- Generate Story currently costs ' + storyDesc + '. (Based on the word count shown under the transcript, notes, and lore fields.)' : '- Generate Story is currently FREE (no token cost).');
+    G.push(narrDesc ? '- Generate Narrative currently costs ' + narrDesc + '.' : '- Generate Narrative is currently FREE (no token cost).');
+    G.push('- Charged on success only (a failed generation is never charged); the token balance updates right after generating.');
+    generationCostBlock = G.join('\n');
+  } catch (e) {}
+
   const viewId = (req.body && typeof req.body.current_view_id === 'string') ? req.body.current_view_id : '';
   const campaignId = (req.body && req.body.current_campaign_id) ? req.body.current_campaign_id : null;
   const viewName = VIEW_NAMES[viewId] || 'the app';
@@ -218,7 +242,7 @@ router.post('/ask', requireAuth, async function(req, res) {
   }).join('\n');
   const tierBlock = 'LIVE TIER NUMBERS (authoritative, pulled live from the dashboard -- use these for any "how many / which tier" question, for ANY tier, not just the user\'s own):\n' + _tierMatrix;
 
-  const extras = [accountFacts.join('\n'), lifecycleBlock, STYLE_REF, PACK_REF].filter(function (b) { return b; }).join('\n\n');
+  const extras = [accountFacts.join('\n'), lifecycleBlock, generationCostBlock, STYLE_REF, PACK_REF].filter(function (b) { return b; }).join('\n\n');
   let system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras + '\n\n' + (BRAIN || fallback);
   let _aiDoneOn = false;
   try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
