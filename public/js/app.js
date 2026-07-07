@@ -11357,6 +11357,7 @@ function updateNotesBox(data) {
       if (role === 'dm') { saveSessionField('transcript', transcriptEl.value.trim()); }
     };
   }
+  updateWordCounts();
 }
 
 function saveForkNotes(value) {
@@ -11978,6 +11979,18 @@ function openCampaignImagePicker(campaignId) {
 function closeCampaignImagePicker() {
   var m = document.getElementById('cs-img-modal');
   if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
+function updateWordCounts() {
+  var pairs = [['transcript-input', 'transcript-wordcount'], ['session-notes-input', 'session-notes-wordcount']];
+  pairs.forEach(function (pr) {
+    var el = document.getElementById(pr[0]);
+    var out = document.getElementById(pr[1]);
+    if (!el || !out) return;
+    var v = (el.value || '').trim();
+    var n = v ? v.split(/\s+/).length : 0;
+    out.textContent = n + (n === 1 ? ' word' : ' words');
+  });
 }
 
 function loreCount(el, countId) {
