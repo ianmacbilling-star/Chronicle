@@ -3891,13 +3891,31 @@ function generateNarrativeOnly() {
   })
   .then(function (r) { return r.json(); })
   .then(function (data) {
-    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
-    if (data.error) { endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
-    endBar(true);
-    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
-    state.narrativeData = { intro: data.intro || '', sections: data.sections || [], outro: data.outro || '' };
-    state.narrativeStyleUsed = state.narrativeStyle || 'classic';
-    if (typeof renderStoryboard === 'function') renderStoryboard();
+    // The endpoint is ASYNC: it returns a job_id, not the narrative. Poll the
+    // job until it is done, THEN render -- previously this read data.intro/
+    // sections/outro straight off the job_id response (all undefined), rendering
+    // an empty narrative while the background job quietly saved the real one.
+    if (data.error) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('Could not generate narrative: ' + data.error); return; }
+    if (!data.job_id) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('Could not start narrative: no job id returned'); return; }
+    var jobId = data.job_id;
+    var tries = 0;
+    var poll = function () {
+      if (tries++ > 100) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } endBar(false); showAlert('The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
+      fetch('/api/narrative/job/' + jobId, { signal: _nctl.signal })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.status === 'pending') { setTimeout(poll, 3000); return; }
+          if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+          if (j.status === 'error') { endBar(false); showAlert('Could not generate narrative: ' + (j.error || 'unknown error')); return; }
+          endBar(true);
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          state.narrativeData = { intro: j.intro || '', sections: j.sections || [], outro: j.outro || '' };
+          state.narrativeStyleUsed = state.narrativeStyle || 'classic';
+          if (typeof renderStoryboard === 'function') renderStoryboard();
+        })
+        .catch(function (e) { if (e && e.name === 'AbortError') return; setTimeout(poll, 3000); });
+    };
+    poll();
   })
   .catch(function (e) {
     if (btn) { btn.disabled = false; btn.textContent = origLabel; }
