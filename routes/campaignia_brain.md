@@ -374,7 +374,7 @@ Lists the characters detected in this session. It also:
 See how Campaignia planned your story **before** it writes the full narrative or spends
 tokens on images. Every **image panel** and every **bridge** between panels shows an
 **outline** — the facts and sequence the narration will cover — so you can catch
-anything missing or out of order first. Per panel you can:
+anything missing or wrong first. Per panel you can:
 - **Edit Narrative Outline** — the **facts** you want covered (the *what*). Your edits
   persist and steer the prose on every regenerate.
 - **Edit Narrative Direction** — **how you want it written**: tone, emphasis, pacing
@@ -387,6 +387,8 @@ anything missing or out of order first. Per panel you can:
 - On a **phone**, a panel's actions collapse into a **⋯ menu**.
 
 Outline = the facts; Direction = the flavor — they work together and don't conflict.
+
+**You cannot reorder the panels.** The panel order follows your story's chronology. If your story came out in the wrong order, the best fix is to correct the **Story / Transcript** field directly. If that isn't possible, add explicit notes in the **Story Notes / Instructions** field spelling out the correct order of events, then **Generate Story** again from scratch.
 
 Pick your styles up top **first**: the **Narrative style** and **Art style** buttons
 (they show the current pick; which styles you can choose depends on your tier). Then
