@@ -35,21 +35,41 @@ router.get('/library', async function (req, res) {
     let limit = parseInt(req.query.limit, 10) || 48;
     if (limit < 1) limit = 1;
     if (limit > 60) limit = 60;
-    const beforeId = parseInt(req.query.beforeId, 10) || 0;
     const all = req.query.window === 'all';
-    let sql = 'SELECT a.id, a.image_url, a.title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
-    const params = [];
-    if (!all) sql += " AND a.created_at >= NOW() - INTERVAL '6 months'";
-    if (beforeId > 0) { sql += ' AND a.id < ?'; params.push(beforeId); }
-    sql += ' ORDER BY a.id DESC LIMIT ?';
-    params.push(limit + 1);
+    const SELECT = 'SELECT a.id, a.image_url, a.title, u.pen_name FROM campaign_archives a LEFT JOIN users u ON u.id = a.archived_by WHERE a.public = TRUE';
+    if (all) {
+      // Show-all: newest-first, id-cursor pagination, no shuffle (unchanged).
+      const beforeId = parseInt(req.query.beforeId, 10) || 0;
+      let sql = SELECT;
+      const params = [];
+      if (beforeId > 0) { sql += ' AND a.id < ?'; params.push(beforeId); }
+      sql += ' ORDER BY a.id DESC LIMIT ?';
+      params.push(limit + 1);
+      const stmt = db.prepare(sql);
+      const rows = await stmt.all.apply(stmt, params);
+      const hasMore = rows.length > limit;
+      const slice = rows.slice(0, limit);
+      const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '' }; });
+      const nextCursor = slice.length ? slice[slice.length - 1].id : null;
+      return res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
+    }
+    // Default 6-month view: recency-weighted shuffle (newer higher, same-era shuffled),
+    // stable per visit via seed, offset-paginated. JITTER = +/- ~30 days of random nudge.
+    const JITTER_SECONDS = 30 * 24 * 60 * 60;
+    let seed = parseInt(req.query.seed, 10);
+    if (!Number.isFinite(seed)) seed = 0;
+    seed = ((seed % 2147483647) + 2147483647) % 2147483647;
+    let offset = parseInt(req.query.offset, 10) || 0;
+    if (offset < 0) offset = 0;
+    const order = "(EXTRACT(EPOCH FROM a.created_at) + " + JITTER_SECONDS + " * ((('x' || substr(md5(a.id::text || '_" + seed + "'), 1, 8))::bit(32)::int)::float8 / 2147483647.0))";
+    const sql = SELECT + " AND a.created_at >= NOW() - INTERVAL '6 months' ORDER BY " + order + ' DESC LIMIT ? OFFSET ?';
     const stmt = db.prepare(sql);
-    const rows = await stmt.all.apply(stmt, params);
+    const rows = await stmt.all.apply(stmt, [limit + 1, offset]);
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) { return { image_url: r.image_url, caption: r.title || '', author: r.pen_name || '' }; });
-    const nextCursor = slice.length ? slice[slice.length - 1].id : null;
-    res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });
+    const nextOffset = offset + slice.length;
+    return res.json({ items: items, hasMore: hasMore, nextOffset: nextOffset });
   } catch (e) {
     console.error('GET public library error:', e.message);
     res.status(500).json({ error: 'library unavailable' });

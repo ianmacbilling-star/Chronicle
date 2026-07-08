@@ -174,7 +174,7 @@
 
     var gallery = document.getElementById('gallery');
     var statusEl = document.getElementById('status');
-    var state = { cursor: 0, window: 'recent', loading: false, done: false, any: false, tab: 'images' };
+    var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', loading: false, done: false, any: false, tab: 'images' };
     var sstate = { cursor: 0, q: '', loading: false, done: false, any: false };
     var storiesEl = document.getElementById('stories');
     var authorSections = {};
@@ -210,13 +210,19 @@
       if (state.loading || state.done) return;
       state.loading = true;
       spinner();
-      var url = '/api/public/library?limit=48&window=' + state.window + (state.cursor ? '&beforeId=' + state.cursor : '');
+      var url;
+      if (state.window === 'all') {
+        url = '/api/public/library?limit=48&window=all' + (state.cursor ? '&beforeId=' + state.cursor : '');
+      } else {
+        url = '/api/public/library?limit=48&window=recent&seed=' + state.seed + '&offset=' + state.offset;
+      }
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         state.loading = false;
         var items = (d && d.items) || [];
         items.forEach(function (it) { state.any = true; renderCard(it); });
+        if (d && typeof d.nextOffset === 'number') state.offset = d.nextOffset;
         if (d && d.nextCursor) state.cursor = d.nextCursor;
-        if (!d || !d.hasMore || !d.nextCursor) {
+        if (!d || !d.hasMore) {
           state.done = true;
           setStatus(state.any ? '' : 'No public creations yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>');
         } else {
@@ -230,7 +236,7 @@
 
     function reset() {
       gallery.innerHTML = '';
-      state.cursor = 0; state.done = false; state.loading = false; state.any = false;
+      state.cursor = 0; state.offset = 0; state.done = false; state.loading = false; state.any = false;
       load();
     }
 
