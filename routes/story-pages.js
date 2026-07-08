@@ -158,7 +158,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     if (snap && snap.sessions) {
       const pageOpts = { publicMode: true, bookTitle: snap.bookTitle || title };
       html = buildNovelHTML(snap.campaign, snap.sessions, snap.characters, snap.layoutStyle || 'Classic', pageOpts, snap.co || null);
-      html = html.replace('<head>', '<head>' + seo + WEB_STYLE + PWA_HEAD);
+      html = html.replace('<head>', '<head>' + seo + WEB_STYLE + PWA_HEAD + '<script src="/analytics.js"></script>');
       html = html.replace('<body>', '<body>' + header + '<div id="cmp-book">');
       html = html.split('<div class="print-bar" id="printBar"><button onclick="window.print()">Save as PDF / Print</button></div>').join('');
       html = html.replace('</body>', '</div>' + footerCta + FIT_SCRIPT + '</body>');
@@ -168,7 +168,7 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
       html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8" />' +
         '<meta name="viewport" content="width=device-width, initial-scale=1.0" />' + seo +
         '<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text&display=swap" rel="stylesheet" />' +
-        PWA_HEAD + '</head><body style="margin:0;background:#0a0806;color:#f0e8d0;min-height:100vh;">' + header +
+        PWA_HEAD + '<script src="/analytics.js"></script></head><body style="margin:0;background:#0a0806;color:#f0e8d0;min-height:100vh;">' + header +
         '<div style="max-width:880px;margin:0 auto;padding:20px 18px;color:rgba(240,232,208,0.6);font-family:Georgia,serif;">Open the PDF to read this chronicle.</div>' +
         footerCta + '</body></html>';
     }
