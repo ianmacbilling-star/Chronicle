@@ -4178,7 +4178,14 @@ function loadAssets() {
 
 var ASSET_CAT_LABEL = { location: 'Location', npc: 'NPC', item: 'Item' };
 
+function updateAssetCount() {
+  var el = document.getElementById('asset-count');
+  if (!el) return;
+  var n = (state.assets || []).length;
+  el.textContent = n ? (' \u00b7 ' + n + (n === 1 ? ' asset' : ' assets')) : '';
+}
 function renderAssets() {
+  updateAssetCount();
   var grid = document.getElementById('asset-grid');
   if (!grid) return;
   var cards = (state.assets || []).map(function(a) {
@@ -7211,12 +7218,18 @@ function toggleMomentLock(momentId) {
 // ============================================================
 // ARCHIVES (campaign-wide gallery of saved image copies)
 // ============================================================
+function updateArchivesCount() {
+  var el = document.getElementById('archives-count');
+  if (!el) return;
+  var n = (state.archives || []).length;
+  el.textContent = n ? (' \u00b7 ' + n + (n === 1 ? ' archived image' : ' archived images')) : '';
+}
 function loadArchives() {
   var grid = document.getElementById('archives-grid');
   if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Loading…</div>';
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
-    .then(function(data){ state.archives = Array.isArray(data) ? data : []; renderArchives(); })
+    .then(function(data){ state.archives = Array.isArray(data) ? data : []; updateArchivesCount(); renderArchives(); })
     .catch(function(){ if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Could not load the archive.</div>'; });
 }
 
