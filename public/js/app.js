@@ -13013,6 +13013,23 @@ function saveSignupBonus() {
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }
 
+function sendEmailPreview() {
+  var sel = document.getElementById("email-preview-select");
+  var msg = document.getElementById("email-preview-msg");
+  if (!sel) return;
+  var type = sel.value;
+  if (msg) msg.textContent = "Sending...";
+  fetch("/api/email/preview", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: type })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!msg) return;
+      if (res.ok && res.j && res.j.success) { msg.textContent = "Sent to " + (res.j.sentTo || "your email") + "."; }
+      else { msg.textContent = (res.j && res.j.error) ? res.j.error : "Could not send."; }
+    })
+    .catch(function () { if (msg) msg.textContent = "Could not send."; });
+}
+
 function loadGenerationSettings() {
   var el = document.getElementById('gen-story-wpt');
   if (!el) return;

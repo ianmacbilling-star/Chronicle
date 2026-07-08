@@ -948,6 +948,35 @@
         </div>
       </div>
 
+      <!-- Email preview / test-send (admin) -->
+      <div class="settings-section">
+        <div class="settings-section-title">Email preview / test-send</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Send a copy of any transactional email &mdash; filled with sample data &mdash; to your own admin address, so you can see exactly how it renders in a real inbox. Subjects are prefixed with [TEST].</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label for="email-preview-select" style="color:var(--gold);font-size:13px;">Template</label>
+          <select id="email-preview-select" class="form-input" style="width:260px;">
+            <option value="welcome">Welcome (new account)</option>
+            <option value="password_reset">Password reset</option>
+            <option value="invite">Campaign invite</option>
+            <option value="join_notification">Join notification (to SM)</option>
+            <option value="player_joined_welcome">Player joined welcome</option>
+            <option value="order_confirmation">Print order confirmed</option>
+            <option value="order_problem">Print order problem</option>
+            <option value="feedback">Feedback (to support)</option>
+            <option value="trial_ending_soon">Trial &mdash; ending soon</option>
+            <option value="trial_expired">Trial &mdash; expired</option>
+            <option value="trial_week_after">Trial &mdash; one week after</option>
+            <option value="trial_month_after">Trial &mdash; one month after</option>
+            <option value="idle_warning">Idle warning</option>
+            <option value="suspended">Account suspended</option>
+            <option value="purge_warning">Purge warning</option>
+            <option value="account_closed">Account closed</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="sendEmailPreview()">Send test to me</button>
+          <span class="settings-section-desc" id="email-preview-msg" style="margin:0;"></span>
+        </div>
+      </div>
+
       <!-- Generation charging & caching (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Generation charging &amp; caching</div>

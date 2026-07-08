@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 const crypto = require('crypto');
 
 // ============================================================
@@ -816,5 +817,96 @@ async function sendHelpTranscriptEmail(opts) {
     try { console.warn('[help transcript email] ' + (e && e.message)); } catch (_e) {}
   }
 }
+
+// ============================================================
+// ADMIN: Email preview / test-send  (admin-gated)
+// Sends a copy of any transactional template, populated with realistic
+// sample data, to the requesting admin's own email so they can see how
+// it renders in a real inbox. Reuses the production sendEmail()/Resend path.
+// ============================================================
+function _previewAppUrl() {
+  return (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '');
+}
+
+function buildEmailPreview(type, name) {
+  var who = name || 'Ian';
+  var app = _previewAppUrl();
+  var sampleOrder = {
+    orderNo: 'CMP-2026-0042',
+    bookTitle: 'The Sunless Citadel',
+    campaignName: 'Curse of the Crimson Throne',
+    binding: 'Perfect Bound', colorTier: 'Premium Color', coverFinish: 'Matte',
+    pageCount: 84, quantity: 1,
+    total: 34.99, currency: 'USD',
+    cardBrand: 'Visa', cardLast4: '4242',
+    shipTo: { name: who, street1: '123 Adventurer Way', city: 'Hiawassee', stateCode: 'GA', postcode: '30546', countryCode: 'US' }
+  };
+  switch (type) {
+    case 'welcome':
+      return { subject: 'Welcome to Campaignia \u2014 Your adventure begins!', html: welcomeHTML(who) };
+    case 'password_reset':
+      return { subject: 'Reset your Campaignia password', html: passwordResetHTML(who, app + '/reset-password.html?token=SAMPLE-TOKEN') };
+    case 'invite':
+      return { subject: 'Marisol invited you to Curse of the Crimson Throne', html: inviteEmailHTML('newplayer@example.com', 'Marisol', 'Curse of the Crimson Throne', 'Thorin Ironfist', 'Paladin', app + '/invite.html?token=SAMPLE-TOKEN', 'January 30, 2026') };
+    case 'join_notification':
+      return { subject: 'Thorin Ironfist joined Curse of the Crimson Throne', html: joinNotificationHTML('Marisol', 'Thorin Ironfist', 'newplayer@example.com', 'Curse of the Crimson Throne', 'Thorin Ironfist', 'Paladin', app + '/app.html', 50) };
+    case 'player_joined_welcome':
+      return { subject: 'Welcome to Curse of the Crimson Throne', html: playerJoinedWelcomeHTML('Thorin Ironfist', 'Marisol', 'Curse of the Crimson Throne', 'Thorin Ironfist', 'Paladin', app + '/app.html') };
+    case 'order_confirmation':
+      return { subject: 'Your Campaignia order is confirmed (' + sampleOrder.orderNo + ')', html: orderConfirmationHTML(who, sampleOrder) };
+    case 'order_problem':
+      return { subject: 'There was a problem with your Campaignia order (' + sampleOrder.orderNo + ')', html: orderProblemHTML(who, sampleOrder) };
+    case 'feedback':
+      return { subject: '[Campaignia Feedback] Bug report - Storyboard not loading', html: feedbackHTML({ category: 'Bug report', subject: 'Storyboard not loading', from_name: who, from_email: 'player@example.com', tier: 'Gold', message: 'The storyboard spinner never finishes on my last session. I tried refreshing a few times with no luck.' }) };
+    case 'trial_ending_soon':
+    case 'trial_expired':
+    case 'trial_week_after':
+    case 'trial_month_after': {
+      var copy = TRIAL_LIFECYCLE_COPY[type];
+      return { subject: copy.subject, html: trialLifecycleHTML(copy, who, app + '/app.html') };
+    }
+    case 'idle_warning':
+      return { subject: IDLE_WARNING_COPY.subject, html: trialLifecycleHTML(IDLE_WARNING_COPY, who, app + '/app.html') };
+    case 'suspended':
+      return { subject: SUSPENDED_COPY.subject, html: trialLifecycleHTML(SUSPENDED_COPY, who, app + '/app.html') };
+    case 'purge_warning': {
+      var pcopy = {
+        subject: 'Your Campaignia account will be closed in 7 days',
+        headline: 'Your account will be closed on February 15, 2026',
+        body: 'Your account has been paused and inactive for a while, so it is scheduled to be closed on February 15, 2026 (7 days from now). Log back in any time before then to reactivate it and keep everything you have made. After that date the account is closed.',
+        cta: 'Reactivate my account'
+      };
+      return { subject: pcopy.subject, html: trialLifecycleHTML(pcopy, who, app + '/app.html') };
+    }
+    case 'account_closed': {
+      var ccopy = {
+        subject: 'Your Campaignia account has been closed',
+        headline: 'Your account has been closed',
+        body: 'Your account stayed inactive through our reminders, so it has now been closed. If this was a mistake or you would like to start again, you are always welcome to create a new account.',
+        cta: 'Visit Campaignia'
+      };
+      return { subject: ccopy.subject, html: trialLifecycleHTML(ccopy, who, app + '/app.html') };
+    }
+    default:
+      return null;
+  }
+}
+
+// POST /api/email/preview  { type }  -> sends the sample to the admin's own email.
+router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    var type = (req.body && req.body.type) ? String(req.body.type) : '';
+    var db = await getDb();
+    var user = await db.prepare('SELECT email, name FROM users WHERE id = ?').get(req.session.userId);
+    if (!user || !user.email) return res.status(400).json({ error: 'No email on your account.' });
+    var built = buildEmailPreview(type, user.name);
+    if (!built) return res.status(400).json({ error: 'Unknown email type: ' + type });
+    await sendEmail(user.email, '[TEST] ' + built.subject, built.html);
+    res.json({ success: true, sentTo: user.email, type: type });
+  } catch (e) {
+    console.error('Email preview error:', e.message);
+    res.status(500).json({ error: (e && e.message) ? e.message : 'Failed to send preview.' });
+  }
+});
 
 module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
