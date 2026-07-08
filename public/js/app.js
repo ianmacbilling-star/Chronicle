@@ -13528,6 +13528,7 @@ function _tourKey(e) {
 function _tourRenderStep() {
   var step = _tourSteps[_tourIdx];
   if (!step) { if (_tourShownAny) { _tourFinish(); } else { _tourTeardown(); } return; }
+  if (step.dmOnly && !(state.currentCampaign && state.currentCampaign.my_role === 'dm')) { _tourIdx++; _tourRenderStep(); return; }
   var titleEl = document.getElementById('tour-tip-title');
   var textEl = document.getElementById('tour-tip-text');
   var countEl = document.getElementById('tour-tip-count');

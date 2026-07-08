@@ -59,6 +59,7 @@
         },
         {
           "selector": "#camp-nav-members",
+          "dmOnly": true,
           "title": "Invite members",
           "text": "Invite others to join your {campaign} \u2014 give them a character to manage, or simply let them follow along. Each member can even build their own version of the story.",
           "placement": "bottom"
