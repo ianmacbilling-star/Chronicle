@@ -265,7 +265,11 @@
       gallery.style.display = onStories ? 'none' : '';
       storiesEl.style.display = onStories ? '' : 'none';
       setStatus('');
-      if (onStories && !sstate.any && !sstate.loading) resetStories();
+      if (onStories) {
+        if (!sstate.any && !sstate.loading) resetStories();
+      } else if (!state.any && !state.loading) {
+        load();
+      }
     }
 
     function resetStories() {
