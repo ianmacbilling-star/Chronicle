@@ -41,6 +41,8 @@ function passwordResetHTML(name, resetUrl) {
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
@@ -85,6 +87,8 @@ function welcomeHTML(name) {
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
@@ -224,6 +228,8 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
 <body style="margin:0;padding:0;background:#0a0806;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
@@ -276,6 +282,8 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
 <body style="margin:0;padding:0;background:#0a0806;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
@@ -321,6 +329,8 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
 <body style="margin:0;padding:0;background:#0a0806;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
@@ -513,6 +523,8 @@ function orderConfirmationHTML(name, order) {
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
@@ -586,6 +598,8 @@ function orderProblemHTML(name, order) {
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
@@ -689,6 +703,8 @@ function trialLifecycleHTML(copy, name, ctaUrl) {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
 <body style="margin:0;padding:0;background:#0a0806;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
