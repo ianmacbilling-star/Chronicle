@@ -45,25 +45,21 @@ function passwordResetHTML(name, resetUrl) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
     .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
     .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
     .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
     .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
     .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
     .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <div class="brand"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" /><span class="logo">CAMPAIGNIA</span></div>
-      <div class="divider"></div>
-      <div style="font-family:'Bangers',cursive;font-size:15px;letter-spacing:1px;line-height:1.3;color:#c9a84c;">You make it <span style="color:#f0e8d0;">legendary.</span> Campaignia makes it <span style="color:#c0392b;">forever.</span></div>
-    </div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Password Reset Request</div>
       <div class="text">Greetings, ${name}.</div>
@@ -91,26 +87,22 @@ function welcomeHTML(name) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
     .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
     .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
     .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
     .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
-    .feature { padding: 10px 14px; background: rgba(201,168,76,0.06); border-left: 3px solid #c9a84c; margin-bottom: 8px; font-size: 13px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .feature { padding: 10px 14px; background: rgba(201,168,76,0.06); margin-bottom: 8px; font-size: 13px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
     .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
     .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <div class="brand"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" /><span class="logo">CAMPAIGNIA</span></div>
-      <div class="divider"></div>
-      <div style="font-family:'Bangers',cursive;font-size:15px;letter-spacing:1px;line-height:1.3;color:#c9a84c;">You make it <span style="color:#f0e8d0;">legendary.</span> Campaignia makes it <span style="color:#c0392b;">forever.</span></div>
-    </div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Welcome to Campaignia, ${name}!</div>
       <div class="text">Thank you for signing up &mdash; we're absolutely thrilled to have you. Campaignia turns your imagination into illustrated comics and print-ready graphic novels, so the stories you tell become something you can hold, share, and keep forever.</div>
@@ -231,24 +223,20 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
-<body style="margin:0;padding:0;background:#0a0806;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
-    <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
-      <div style="font-family:'Cinzel',Georgia,serif;font-size:26px;font-weight:700;color:#c9a84c;letter-spacing:4px;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" />CAMPAIGNIA</div>
-      <div style="width:40px;height:1px;background:rgba(201,168,76,0.4);margin:16px auto;"></div>
-      <div style="font-size:12px;color:#c0392b;letter-spacing:3px;">YOU'VE BEEN INVITED</div>
-    </div>
+<body style="margin:0;padding:24px 0;background:#1a1008;">
+  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">${dm_name} invited you to a campaign</div>
       <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">A place in the story awaits you.</div>
-      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Campaign</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
         ${charBlock}
         ${expiresDate ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Invitation expires</div><div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${expiresDate}</div>` : ''}
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="${invite_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:1px;">Accept Invitation</a>
+        <a href="${invite_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Accept Invitation</a>
       </div>
       <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">If you don't have a Campaignia account yet, the link will let you create one and join in the same step.</div>
       <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">If the button doesn't work, paste this link into your browser:<br/><span style="color:#c9a84c;word-break:break-all;">${invite_url}</span></div>
@@ -270,7 +258,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>`
     : '';
   const bonusBlock = (bonus_tokens && bonus_tokens > 0)
-    ? `<div style="background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.4);border-radius:8px;padding:18px;margin:16px 0;text-align:center;">
+    ? `<div style="background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.4);border-radius:0;padding:18px;margin:16px 0;text-align:center;">
         <div style="font-size:18px;color:#c9a84c;font-weight:700;">You earned ${bonus_tokens} free tokens!</div>
         <div style="font-size:13px;line-height:1.6;color:#e8d5a3;margin-top:6px;">Our thanks for bringing a new adventurer to Campaignia. They are already in your balance.</div>
       </div>`
@@ -285,19 +273,15 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
-<body style="margin:0;padding:0;background:#0a0806;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
-    <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
-      <div style="font-family:'Cinzel',Georgia,serif;font-size:26px;font-weight:700;color:#c9a84c;letter-spacing:4px;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" />CAMPAIGNIA</div>
-      <div style="width:40px;height:1px;background:rgba(201,168,76,0.4);margin:16px auto;"></div>
-      <div style="font-size:12px;color:#c0392b;letter-spacing:3px;">A NEW PLAYER HAS JOINED</div>
-    </div>
+<body style="margin:0;padding:24px 0;background:#1a1008;">
+  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">${player_name} joined ${campaign_name}</div>
       <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Greetings, ${dm_name}.</div>
       <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Your invitation has been accepted. The party grows.</div>
       ${bonusBlock}
-      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Player</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${player_name} <span style="color:rgba(201,168,76,0.6);font-size:13px;">&nbsp;${player_email}</span></div>
         ${charBlock}
@@ -305,7 +289,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:1px;">Open Campaign</a>
+        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Open Campaign</a>
       </div>
     </div>
     <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
@@ -332,18 +316,14 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
-<body style="margin:0;padding:0;background:#0a0806;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
-    <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
-      <div style="font-family:'Cinzel',Georgia,serif;font-size:26px;font-weight:700;color:#c9a84c;letter-spacing:4px;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" />CAMPAIGNIA</div>
-      <div style="width:40px;height:1px;background:rgba(201,168,76,0.4);margin:16px auto;"></div>
-      <div style="font-size:12px;color:#c0392b;letter-spacing:3px;">WELCOME TO THE TABLE</div>
-    </div>
+<body style="margin:0;padding:24px 0;background:#1a1008;">
+  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">Welcome to ${campaign_name}</div>
       <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Greetings, ${player_name}.</div>
       <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">You've successfully joined ${dm_name}'s campaign. Your place in the story is secured.</div>
-      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:16px 18px;margin:16px 0;">
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Campaign</div>
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
         ${charBlock}
@@ -351,7 +331,7 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
         <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${dm_name}</div>
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:1px;">Enter the Campaign</a>
+        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Enter the Campaign</a>
       </div>
       <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">From here you can view storyboards, see your fellow adventurers, and follow the story as it unfolds. Create your own version, build your own storyboard &mdash; the adventure begins.</div>
     </div>
@@ -425,7 +405,7 @@ async function sendReportEmail(opts) {
       '<p><strong>Story URL:</strong> ' + esc(opts.storyUrl || '') + '</p>' +
       '<p><strong>Reporter email:</strong> ' + esc(opts.reporterEmail || '(not provided)') + '</p>' +
       '<p><strong>Reason:</strong></p>' +
-      '<pre style="white-space:pre-wrap;background:#f4f4f4;border:1px solid #ddd;border-radius:6px;padding:12px;">' + esc(opts.reason || '') + '</pre>' +
+      '<pre style="white-space:pre-wrap;background:#f4f4f4;border:1px solid #ddd;border-radius:0;padding:12px;">' + esc(opts.reason || '') + '</pre>' +
       '<p style="color:#888;font-size:12px;">Received ' + esc(ts) + '</p>' +
       '</div>';
     const { Resend } = require('resend');
@@ -462,11 +442,11 @@ async function sendAlertEmail(subject, message) {
     const safe = String(message == null ? '' : message)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const html = `<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;background:#0a0806;color:#e8d5a3;margin:0;padding:24px;">
-  <div style="max-width:560px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:10px;overflow:hidden;">
+  <div style="max-width:560px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:0;overflow:hidden;">
     <div style="background:#0a0806;padding:18px 24px;border-bottom:1px solid rgba(201,168,76,0.2);font-weight:700;letter-spacing:1px;color:#c9a84c;">CAMPAIGNIA MONITOR</div>
     <div style="padding:24px;">
       <div style="font-size:18px;color:#f0e8d0;margin-bottom:14px;">${subject}</div>
-      <pre style="white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px;line-height:1.6;color:#e8d5a3;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.15);border-radius:6px;padding:14px;margin:0 0 18px;">${safe}</pre>
+      <pre style="white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px;line-height:1.6;color:#e8d5a3;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.15);border-radius:0;padding:14px;margin:0 0 18px;">${safe}</pre>
       <div style="font-size:12px;color:rgba(201,168,76,0.55);line-height:1.8;">
         Environment: ${env}<br>App: ${appUrl}<br>Time: ${ts}
       </div>
@@ -527,14 +507,14 @@ function orderConfirmationHTML(name, order) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
     .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
     .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
     .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
     .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
     .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
     .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
     table { width: 100%; border-collapse: collapse; }
@@ -542,15 +522,11 @@ function orderConfirmationHTML(name, order) {
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <div class="brand"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" /><span class="logo">CAMPAIGNIA</span></div>
-      <div class="divider"></div>
-      <div style="font-size:12px;color:#c0392b;letter-spacing:3px;">ORDER CONFIRMED</div>
-    </div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">Your print order for <strong>${esc(bookTitle)}</strong> has been received and sent to print. Here are the details:</div>
-      <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:8px;">
+      <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
         <table>${rows}</table>
       </div>
       ${trackBtn}
@@ -602,8 +578,8 @@ function orderProblemHTML(name, order) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #0a0806; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 1px solid rgba(201,168,76,0.25); border-radius: 12px; overflow: hidden; }
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
     .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
     .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
@@ -616,16 +592,12 @@ function orderProblemHTML(name, order) {
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <div class="brand"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" /><span class="logo">CAMPAIGNIA</span></div>
-      <div class="divider"></div>
-      <div style="font-size:12px;color:#c0392b;letter-spacing:3px;">ORDER ISSUE</div>
-    </div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">There was a problem with your order</div>
       <div class="text">${name ? esc(name) + ', we' : 'We'} ran into a problem while placing your print order for <strong>${esc(bookTitle)}</strong>, so it has not been sent to print.</div>
       <div class="text">If your card was charged, that charge will be reversed. Our team has been notified and will look into it &mdash; you can also reply to this email and we&rsquo;ll help sort it out.</div>
-      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:8px;"><table>' + rows + '</table></div>' : ''}
+      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;"><table>' + rows + '</table></div>' : ''}
       <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">Sorry for the inconvenience.</div>
     </div>
     <div class="footer">Campaignia &middot; Support@campaignia.com</div>
@@ -706,15 +678,13 @@ function trialLifecycleHTML(copy, name, ctaUrl) {
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
-<body style="margin:0;padding:0;background:#0a0806;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:12px;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
-    <div style="background:#1a0f08;padding:32px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.2);">
-      <div style="font-family:'Cinzel',Georgia,serif;font-size:26px;font-weight:700;color:#c9a84c;letter-spacing:4px;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Logo.png" alt="" width="38" height="38" style="vertical-align:middle;margin-right:10px;" />CAMPAIGNIA</div>
-    </div>
+<body style="margin:0;padding:24px 0;background:#1a1008;">
+  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:#f0e8d0;margin-bottom:16px;">${copy.headline}</div>
       <div style="font-size:15px;line-height:1.7;color:#e8d5a3;margin-bottom:24px;">Hi ${safeName},<br><br>${copy.body}</div>
-      <a href="${ctaUrl}" style="display:inline-block;background:#c0392b;color:#f0e8d0;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;letter-spacing:0.5px;">${copy.cta}</a>
+      <a href="${ctaUrl}" style="display:inline-block;background:#c0392b;color:#f0e8d0;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:0;letter-spacing:0.5px;">${copy.cta}</a>
     </div>
     <div style="padding:18px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:11px;color:rgba(201,168,76,0.5);">You are receiving this because you created a Campaignia account.</div>
   </div>
