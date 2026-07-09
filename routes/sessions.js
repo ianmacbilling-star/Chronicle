@@ -166,19 +166,46 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
   const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used, art_style_override FROM session_forks WHERE id=?').get(viewForkId);
+  // Set-and-forget defaults: when this user has not chosen a style for THIS session
+  // yet, inherit their most recent prior choice in this campaign (per-user; DM forks
+  // carry the DM's user_id, so one lookup covers DM and players). Falls back to the
+  // generic default only when there is no prior session. Non-destructive -- a default
+  // only; it persists once the user picks a style or generates.
+  var _inhNarr = null, _inhArt = null;
+  try {
+    if (!viewForkRow || !viewForkRow.narrative_style) {
+      const _rn = await db.prepare(
+        'SELECT sf.narrative_style FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
+        'WHERE s.campaign_id = ? AND sf.user_id = ? AND sf.session_id <> ? ' +
+        "AND sf.narrative_style IS NOT NULL AND sf.narrative_style <> '' " +
+        'ORDER BY s.session_date DESC, s.created_at DESC LIMIT 1'
+      ).get(req.params.campaignId, req.session.userId, session.id);
+      _inhNarr = _rn ? _rn.narrative_style : null;
+    }
+    if (!(viewForkRow && viewForkRow.art_style_override) && !session.art_style) {
+      const _ra = await db.prepare(
+        'SELECT COALESCE(sf.art_style_override, s.art_style) AS art FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
+        'WHERE s.campaign_id = ? AND sf.user_id = ? AND sf.session_id <> ? ' +
+        "AND COALESCE(sf.art_style_override, s.art_style) IS NOT NULL AND COALESCE(sf.art_style_override, s.art_style) <> '' " +
+        'ORDER BY s.session_date DESC, s.created_at DESC LIMIT 1'
+      ).get(req.params.campaignId, req.session.userId, session.id);
+      _inhArt = _ra ? _ra.art : null;
+    }
+  } catch (e) { _inhNarr = null; _inhArt = null; }
   // Narrative is per-version now; surface the viewed fork's narrative so the
   // frontend (which reads data.narrative_* from this response) shows the
   // right story for the selected version.
   res.json(Object.assign({}, session, {
     moments,
     fork_id: viewForkId,
+    art_style: session.art_style || _inhArt,
     fork_status: viewForkRow ? viewForkRow.player_access_status : (session.player_access_status || 'draft'),
     fork_notes: viewForkRow ? (viewForkRow.fork_notes || '') : '',
     narrative_intro: viewForkRow ? (viewForkRow.narrative_intro || '') : (session.narrative_intro || ''),
     narrative_sections: viewForkRow ? (viewForkRow.narrative_sections || null) : (session.narrative_sections || null),
     narrative_outro: viewForkRow ? (viewForkRow.narrative_outro || '') : (session.narrative_outro || ''),
     narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null,
-    narrative_style: viewForkRow ? (viewForkRow.narrative_style || 'classic') : 'classic',
+    narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || 'classic',
     narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
     art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
   }));
