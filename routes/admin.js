@@ -503,7 +503,7 @@ router.post('/lifecycle/set-user-dates', requireAuth, requireAdmin, async functi
 router.get('/promo-codes', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
-    const rows = await db.prepare('SELECT id, code, label, action_type, action_value, expires_at, active, redeemed_count, created_at FROM promo_codes ORDER BY created_at DESC').all();
+    const rows = await db.prepare('SELECT id, code, label, action_type, action_value, per_user_limit, expires_at, active, redeemed_count, created_at FROM promo_codes ORDER BY created_at DESC').all();
     res.json({ codes: Array.isArray(rows) ? rows : [] });
   } catch (e) { console.error('promo-codes list error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
@@ -522,11 +522,35 @@ router.post('/promo-codes', requireAuth, requireAdmin, async function (req, res)
     if (!Number.isFinite(actionValue) || actionValue < 0) actionValue = 0;
     let expiresAt = null;
     if (body.expires_at) { const d = new Date(body.expires_at); if (!isNaN(d.getTime())) expiresAt = d.toISOString(); }
+    let perUserLimit = parseInt(body.per_user_limit, 10);
+    if (!Number.isFinite(perUserLimit) || perUserLimit < 1) perUserLimit = 1;
     const dup = await db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(code);
     if (dup) return res.status(400).json({ error: 'That code already exists.' });
-    await db.prepare('INSERT INTO promo_codes (code, label, action_type, action_value, expires_at) VALUES (?, ?, ?, ?, ?)').run(code, label, actionType, actionValue, expiresAt);
+    await db.prepare('INSERT INTO promo_codes (code, label, action_type, action_value, per_user_limit, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(code, label, actionType, actionValue, perUserLimit, expiresAt);
     res.json({ ok: true });
   } catch (e) { console.error('promo-codes create error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/promo-codes/:id/update', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id.' });
+    const row = await db.prepare('SELECT id FROM promo_codes WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ error: 'Not found.' });
+    const body = req.body || {};
+    const label = body.label ? String(body.label).trim().slice(0, 120) : null;
+    const allowed = ['token_grant', 'percent_off', 'amount_off'];
+    const actionType = allowed.indexOf(body.action_type) !== -1 ? body.action_type : 'token_grant';
+    let actionValue = parseInt(body.action_value, 10);
+    if (!Number.isFinite(actionValue) || actionValue < 0) actionValue = 0;
+    let perUserLimit = parseInt(body.per_user_limit, 10);
+    if (!Number.isFinite(perUserLimit) || perUserLimit < 1) perUserLimit = 1;
+    let expiresAt = null;
+    if (body.expires_at) { const d = new Date(body.expires_at); if (!isNaN(d.getTime())) expiresAt = d.toISOString(); }
+    await db.prepare('UPDATE promo_codes SET label = ?, action_type = ?, action_value = ?, per_user_limit = ?, expires_at = ? WHERE id = ?').run(label, actionType, actionValue, perUserLimit, expiresAt, id);
+    res.json({ ok: true });
+  } catch (e) { console.error('promo-codes update error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
 router.post('/promo-codes/:id/toggle', requireAuth, requireAdmin, async function (req, res) {

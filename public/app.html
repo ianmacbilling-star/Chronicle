@@ -1111,9 +1111,12 @@
             <input class="form-input" id="promo-value-input" type="number" min="0" step="1" placeholder="e.g. 30" style="width:140px;" />
             <label style="color:var(--gold);font-size:13px;">Expiration (optional)</label>
             <input class="form-input" id="promo-expires-input" type="date" style="width:180px;" />
+            <label style="color:var(--gold);font-size:13px;">Per-user limit</label>
+            <input class="form-input" id="promo-peruser-input" type="number" min="1" step="1" value="1" style="width:140px;" />
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
-            <button class="btn btn-primary btn-sm" onclick="createPromoCode()">Create code</button>
+            <button class="btn btn-primary btn-sm" id="promo-submit-btn" onclick="createPromoCode()">Create code</button>
+            <a id="promo-cancel-edit" onclick="cancelPromoEdit()" style="display:none;color:var(--gold);cursor:pointer;text-decoration:underline;font-size:13px;">Cancel edit</a>
             <span class="settings-section-desc" id="promo-create-msg" style="margin:0;"></span>
           </div>
         </div>

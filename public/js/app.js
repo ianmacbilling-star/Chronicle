@@ -11614,12 +11614,14 @@ function initUserTestingTab() {
   }).catch(function(){});
 }
 
+var _promoEditId = null;
+var _promoLoaded = [];
 function loadPromoCodes() {
   var box = document.getElementById('promo-codes-list');
   if (box) box.textContent = 'Loading...';
   fetch('/api/admin/promo-codes')
     .then(function (r) { return r.json(); })
-    .then(function (d) { renderPromoCodes((d && d.codes) || []); })
+    .then(function (d) { _promoLoaded = (d && d.codes) || []; renderPromoCodes(_promoLoaded); })
     .catch(function () { if (box) box.textContent = 'Could not load promo codes.'; });
 }
 
@@ -11635,16 +11637,48 @@ function renderPromoCodes(codes) {
     var exp = c.expires_at ? String(c.expires_at).slice(0, 10) : 'none';
     var badge = c.active ? 'Active' : 'Inactive';
     return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
-      '<strong style="color:var(--gold);min-width:120px;">' + escapeHtml(c.code) + '</strong>' +
-      '<span style="min-width:150px;">' + escapeHtml(c.label || '') + '</span>' +
-      '<span style="min-width:110px;">' + (typeLabel[c.action_type] || c.action_type) + ': ' + escapeHtml(String(val)) + '</span>' +
-      '<span style="min-width:110px;">exp: ' + escapeHtml(exp) + '</span>' +
-      '<span style="min-width:80px;">used: ' + (c.redeemed_count || 0) + '</span>' +
-      '<span style="min-width:70px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + badge + '</span>' +
+      '<strong style="color:var(--gold);min-width:110px;">' + escapeHtml(c.code) + '</strong>' +
+      '<span style="min-width:140px;">' + escapeHtml(c.label || '') + '</span>' +
+      '<span style="min-width:100px;">' + (typeLabel[c.action_type] || c.action_type) + ': ' + escapeHtml(String(val)) + '</span>' +
+      '<span style="min-width:90px;">' + escapeHtml(String(c.per_user_limit || 1)) + '/user</span>' +
+      '<span style="min-width:105px;">exp: ' + escapeHtml(exp) + '</span>' +
+      '<span style="min-width:70px;">used: ' + (c.redeemed_count || 0) + '</span>' +
+      '<span style="min-width:64px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + badge + '</span>' +
+      '<button class="btn btn-sm" onclick="editPromoCode(' + c.id + ')">Edit</button>' +
       '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Deactivate' : 'Activate') + '</button>' +
       '</div>';
   }).join('');
   box.innerHTML = rows;
+}
+
+function editPromoCode(id) {
+  var c = null;
+  for (var i = 0; i < _promoLoaded.length; i++) { if (_promoLoaded[i].id === id) { c = _promoLoaded[i]; break; } }
+  if (!c) return;
+  var g = function (x) { return document.getElementById(x); };
+  if (g('promo-code-input')) { g('promo-code-input').value = c.code; g('promo-code-input').readOnly = true; }
+  if (g('promo-label-input')) g('promo-label-input').value = c.label || '';
+  if (g('promo-type-input')) g('promo-type-input').value = c.action_type || 'token_grant';
+  if (g('promo-value-input')) g('promo-value-input').value = (c.action_value != null ? c.action_value : 0);
+  if (g('promo-peruser-input')) g('promo-peruser-input').value = (c.per_user_limit || 1);
+  if (g('promo-expires-input')) g('promo-expires-input').value = c.expires_at ? String(c.expires_at).slice(0, 10) : '';
+  _promoEditId = id;
+  if (g('promo-submit-btn')) g('promo-submit-btn').textContent = 'Save changes';
+  if (g('promo-cancel-edit')) g('promo-cancel-edit').style.display = '';
+  var msg = g('promo-create-msg'); if (msg) msg.textContent = 'Editing ' + c.code + ' (code cannot be changed).';
+  if (g('promo-code-input')) g('promo-code-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelPromoEdit() {
+  var g = function (x) { return document.getElementById(x); };
+  _promoEditId = null;
+  ['promo-code-input','promo-label-input','promo-value-input','promo-expires-input'].forEach(function (id) { if (g(id)) g(id).value = ''; });
+  if (g('promo-peruser-input')) g('promo-peruser-input').value = '1';
+  if (g('promo-type-input')) g('promo-type-input').value = 'token_grant';
+  if (g('promo-code-input')) g('promo-code-input').readOnly = false;
+  if (g('promo-submit-btn')) g('promo-submit-btn').textContent = 'Create code';
+  if (g('promo-cancel-edit')) g('promo-cancel-edit').style.display = 'none';
+  var msg = g('promo-create-msg'); if (msg) msg.textContent = '';
 }
 
 function createPromoCode() {
@@ -11655,22 +11689,25 @@ function createPromoCode() {
     label: (g('promo-label-input') || {}).value || '',
     action_type: (g('promo-type-input') || {}).value || 'token_grant',
     action_value: (g('promo-value-input') || {}).value || '0',
+    per_user_limit: (g('promo-peruser-input') || {}).value || '1',
     expires_at: (g('promo-expires-input') || {}).value || ''
   };
+  var editing = _promoEditId;
+  var url = editing ? ('/api/admin/promo-codes/' + editing + '/update') : '/api/admin/promo-codes';
   if (msg) msg.textContent = 'Saving...';
-  fetch('/api/admin/promo-codes', {
+  fetch(url, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
       if (res.ok && res.j && res.j.ok) {
-        if (msg) msg.textContent = 'Created.';
-        ['promo-code-input','promo-label-input','promo-value-input','promo-expires-input'].forEach(function(id){ if (g(id)) g(id).value = ''; });
+        cancelPromoEdit();
+        if (msg) msg.textContent = editing ? 'Saved.' : 'Created.';
         loadPromoCodes();
       } else {
-        if (msg) msg.textContent = (res.j && res.j.error) ? res.j.error : 'Could not create.';
+        if (msg) msg.textContent = (res.j && res.j.error) ? res.j.error : 'Could not save.';
       }
     })
-    .catch(function () { if (msg) msg.textContent = 'Could not create.'; });
+    .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
 }
 
 function togglePromoCode(id) {
@@ -11679,6 +11716,7 @@ function togglePromoCode(id) {
     .then(function () { loadPromoCodes(); })
     .catch(function () {});
 }
+
 
 function loadTiersConfig() {
   var box = document.getElementById('tiers-config-container');

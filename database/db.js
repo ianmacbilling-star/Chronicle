@@ -676,10 +676,12 @@ async function initPostgres() {
       expires_at TIMESTAMP,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       redeemed_count INTEGER NOT NULL DEFAULT 0,
+      per_user_limit INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code)');
+  await pool.query('ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS per_user_limit INTEGER NOT NULL DEFAULT 1');
   // Redemptions: one row per use (purchase or signup) -- the attribution/metrics spine.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS promo_redemptions (

@@ -662,10 +662,16 @@ async function recordAndGrantPromo(session, eventId) {
   const norm = String(code).trim().toUpperCase();
   const existing = await db.prepare('SELECT id FROM promo_redemptions WHERE user_id = ? AND stripe_session_id = ?').get(uid, session.id);
   if (existing) return;
-  const promo = await db.prepare('SELECT id, action_type, action_value, active, expires_at FROM promo_codes WHERE code = ?').get(norm);
+  const promo = await db.prepare('SELECT id, action_type, action_value, active, expires_at, per_user_limit FROM promo_codes WHERE code = ?').get(norm);
   let grant = 0;
   if (promo && promo.active && (!promo.expires_at || new Date(promo.expires_at) >= new Date()) && promo.action_type === 'token_grant' && promo.action_value > 0) {
     grant = promo.action_value;
+    // Per-user limit: how many times THIS user may receive this code's grant across
+    // all their purchases. Count prior redemptions of this code by this user; at/over
+    // the limit we still log the redemption (attribution) but skip the token grant.
+    const _limit = (promo.per_user_limit && promo.per_user_limit > 0) ? promo.per_user_limit : 1;
+    const _prior = await db.prepare('SELECT COUNT(*)::int AS n FROM promo_redemptions WHERE user_id = ? AND promo_code_id = ?').get(uid, promo.id);
+    if (_prior && Number(_prior.n) >= _limit) grant = 0;
   }
   // Insert the redemption row FIRST. The unique (user_id, stripe_session_id) index
   // makes a concurrent retry throw here, so only the winning call proceeds to grant.
