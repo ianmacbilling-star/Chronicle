@@ -11587,7 +11587,7 @@ var TIER_FIELD_LABELS = {
 };
 
 function switchSettingsTab(tab) {
-  ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting'].forEach(function (t) {
+  ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos'].forEach(function (t) {
     var pane = document.getElementById('settings-pane-' + t);
     var btn = document.getElementById('settings-tab-' + t);
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
@@ -11598,6 +11598,7 @@ function switchSettingsTab(tab) {
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
+  if (tab === 'promos') loadPromoCodes();
 }
 
 // Populate the User Testing tab with the signed-in account's current state
@@ -11611,6 +11612,72 @@ function initUserTestingTab() {
     var td = document.getElementById('dev-trial-date'); if (td && me.trialStartedAt) td.value = String(me.trialStartedAt).slice(0,10);
     var ov = document.getElementById('account-tier-override'); if (ov && me.tier) ov.value = me.tier;
   }).catch(function(){});
+}
+
+function loadPromoCodes() {
+  var box = document.getElementById('promo-codes-list');
+  if (box) box.textContent = 'Loading...';
+  fetch('/api/admin/promo-codes')
+    .then(function (r) { return r.json(); })
+    .then(function (d) { renderPromoCodes((d && d.codes) || []); })
+    .catch(function () { if (box) box.textContent = 'Could not load promo codes.'; });
+}
+
+function renderPromoCodes(codes) {
+  var box = document.getElementById('promo-codes-list');
+  if (!box) return;
+  if (!codes.length) { box.textContent = 'No promo codes yet.'; return; }
+  var typeLabel = { token_grant: 'Tokens', percent_off: '% off', amount_off: '$ off' };
+  var rows = codes.map(function (c) {
+    var val = (c.action_type === 'percent_off') ? (c.action_value + '%')
+            : (c.action_type === 'amount_off') ? ('$' + c.action_value)
+            : (c.action_value + ' CO');
+    var exp = c.expires_at ? String(c.expires_at).slice(0, 10) : 'none';
+    var badge = c.active ? 'Active' : 'Inactive';
+    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);">' +
+      '<strong style="color:var(--gold);min-width:120px;">' + escapeHtml(c.code) + '</strong>' +
+      '<span style="min-width:150px;">' + escapeHtml(c.label || '') + '</span>' +
+      '<span style="min-width:110px;">' + (typeLabel[c.action_type] || c.action_type) + ': ' + escapeHtml(String(val)) + '</span>' +
+      '<span style="min-width:110px;">exp: ' + escapeHtml(exp) + '</span>' +
+      '<span style="min-width:80px;">used: ' + (c.redeemed_count || 0) + '</span>' +
+      '<span style="min-width:70px;color:' + (c.active ? 'var(--gold)' : 'var(--text-muted)') + ';">' + badge + '</span>' +
+      '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Deactivate' : 'Activate') + '</button>' +
+      '</div>';
+  }).join('');
+  box.innerHTML = rows;
+}
+
+function createPromoCode() {
+  var g = function (id) { return document.getElementById(id); };
+  var msg = g('promo-create-msg');
+  var payload = {
+    code: (g('promo-code-input') || {}).value || '',
+    label: (g('promo-label-input') || {}).value || '',
+    action_type: (g('promo-type-input') || {}).value || 'token_grant',
+    action_value: (g('promo-value-input') || {}).value || '0',
+    expires_at: (g('promo-expires-input') || {}).value || ''
+  };
+  if (msg) msg.textContent = 'Saving...';
+  fetch('/api/admin/promo-codes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.ok && res.j && res.j.ok) {
+        if (msg) msg.textContent = 'Created.';
+        ['promo-code-input','promo-label-input','promo-value-input','promo-expires-input'].forEach(function(id){ if (g(id)) g(id).value = ''; });
+        loadPromoCodes();
+      } else {
+        if (msg) msg.textContent = (res.j && res.j.error) ? res.j.error : 'Could not create.';
+      }
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not create.'; });
+}
+
+function togglePromoCode(id) {
+  fetch('/api/admin/promo-codes/' + id + '/toggle', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function () { loadPromoCodes(); })
+    .catch(function () {});
 }
 
 function loadTiersConfig() {

@@ -659,6 +659,42 @@ async function initPostgres() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_genevents_type ON generation_events(event_type)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_genevents_created ON generation_events(created_at)');
+  // Promo codes (Stage 1): app-side catalog of promo/ad codes. Rides on top of
+  // Stripe-native discounts (purchases) and ad-link ?promo capture (signups). The
+  // action (token_grant / percent_off / amount_off + value) drives what happens;
+  // instructions JSONB is reserved for future richer directives. token_grant is the
+  // only action executed app-side for now.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id SERIAL PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      label TEXT,
+      action_type TEXT NOT NULL DEFAULT 'token_grant',
+      action_value INTEGER NOT NULL DEFAULT 0,
+      instructions JSONB,
+      expires_at TIMESTAMP,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      redeemed_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code)');
+  // Redemptions: one row per use (purchase or signup) -- the attribution/metrics spine.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS promo_redemptions (
+      id SERIAL PRIMARY KEY,
+      promo_code_id INTEGER REFERENCES promo_codes(id),
+      code TEXT,
+      user_id INTEGER REFERENCES users(id),
+      context TEXT,
+      applied JSONB,
+      stripe_session_id TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_redemptions_code ON promo_redemptions(promo_code_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_redemptions_user ON promo_redemptions(user_id)');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_redemptions_dedupe ON promo_redemptions(user_id, stripe_session_id) WHERE stripe_session_id IS NOT NULL');
   await pool.query(`
     CREATE TABLE IF NOT EXISTS metric_snapshots (
       id SERIAL PRIMARY KEY,

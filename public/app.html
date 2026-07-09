@@ -819,6 +819,7 @@
         <button class="settings-tab" id="settings-tab-stats" onclick="switchSettingsTab('stats')">Stats</button>
         <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
         <button class="settings-tab" id="settings-tab-financial" onclick="switchSettingsTab('financial')">Financial</button>
+        <button class="settings-tab" id="settings-tab-promos" onclick="switchSettingsTab('promos')">Promo Codes</button>
       </div>
 
       <div class="settings-pane" id="settings-pane-general">
@@ -1086,6 +1087,36 @@
         </div>
       </div>
 
+      <div class="settings-pane" id="settings-pane-promos" style="display:none;">
+        <div class="settings-section">
+          <div class="settings-section-title">Create a promo code</div>
+          <div class="settings-section-desc" style="margin-bottom:10px;">Catalog a code for attribution and (for token grants) app-side perks. For a code customers type at Stripe checkout, also create the matching discount in Stripe. Token grants apply on purchase or signup; percent/amount off are recorded for metrics only.</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;max-width:520px;">
+            <label style="color:var(--gold);font-size:13px;">Code</label>
+            <input class="form-input" id="promo-code-input" maxlength="40" placeholder="e.g. GOGOLD" style="text-transform:uppercase;" />
+            <label style="color:var(--gold);font-size:13px;">Label (ad source)</label>
+            <input class="form-input" id="promo-label-input" maxlength="120" placeholder="e.g. TikTok-Jan (for your metrics)" />
+            <label style="color:var(--gold);font-size:13px;">Type</label>
+            <select class="form-input" id="promo-type-input">
+              <option value="token_grant">Token grant (CO tokens)</option>
+              <option value="percent_off">% off (configure in Stripe)</option>
+              <option value="amount_off">$ off (configure in Stripe)</option>
+            </select>
+            <label style="color:var(--gold);font-size:13px;">Value</label>
+            <input class="form-input" id="promo-value-input" type="number" min="0" step="1" placeholder="e.g. 30" style="width:140px;" />
+            <label style="color:var(--gold);font-size:13px;">Expiration (optional)</label>
+            <input class="form-input" id="promo-expires-input" type="date" style="width:180px;" />
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+            <button class="btn btn-primary btn-sm" onclick="createPromoCode()">Create code</button>
+            <span class="settings-section-desc" id="promo-create-msg" style="margin:0;"></span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Existing codes</div>
+          <div id="promo-codes-list" class="settings-section-desc">Loading...</div>
+        </div>
+      </div>
       <div class="settings-pane" id="settings-pane-usertesting" style="display:none;">
         <div class="settings-section" style="border:1px solid rgba(201,168,76,0.45);background:rgba(201,168,76,0.06);">
           <div class="settings-section-title" style="color:#c9a84c;">User Testing</div>

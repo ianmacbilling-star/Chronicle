@@ -494,4 +494,53 @@ router.post('/lifecycle/set-user-dates', requireAuth, requireAdmin, async functi
   } catch (e) { console.error('set-user-dates error:', e.message); res.status(500).json({ error: friendlyError(e, 'Could not update the user dates. Please try again.') }); }
 });
 
+// ============================================================
+// PROMO CODES (Stage 1): admin CRUD for the app-side promo catalog.
+// Codes are normalized uppercase. token_grant is the only action executed
+// app-side (wired in Stage 2). percent_off/amount_off are cataloged here for
+// attribution; the actual checkout discount is configured in Stripe.
+// ============================================================
+router.get('/promo-codes', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare('SELECT id, code, label, action_type, action_value, expires_at, active, redeemed_count, created_at FROM promo_codes ORDER BY created_at DESC').all();
+    res.json({ codes: Array.isArray(rows) ? rows : [] });
+  } catch (e) { console.error('promo-codes list error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/promo-codes', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const body = req.body || {};
+    let code = String(body.code || '').trim().toUpperCase();
+    if (!code) return res.status(400).json({ error: 'Code is required.' });
+    if (!/^[A-Z0-9_-]{2,40}$/.test(code)) return res.status(400).json({ error: 'Code must be 2-40 characters: letters, numbers, - or _.' });
+    const label = body.label ? String(body.label).trim().slice(0, 120) : null;
+    const allowed = ['token_grant', 'percent_off', 'amount_off'];
+    const actionType = allowed.indexOf(body.action_type) !== -1 ? body.action_type : 'token_grant';
+    let actionValue = parseInt(body.action_value, 10);
+    if (!Number.isFinite(actionValue) || actionValue < 0) actionValue = 0;
+    let expiresAt = null;
+    if (body.expires_at) { const d = new Date(body.expires_at); if (!isNaN(d.getTime())) expiresAt = d.toISOString(); }
+    const dup = await db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(code);
+    if (dup) return res.status(400).json({ error: 'That code already exists.' });
+    await db.prepare('INSERT INTO promo_codes (code, label, action_type, action_value, expires_at) VALUES (?, ?, ?, ?, ?)').run(code, label, actionType, actionValue, expiresAt);
+    res.json({ ok: true });
+  } catch (e) { console.error('promo-codes create error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/promo-codes/:id/toggle', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id.' });
+    const row = await db.prepare('SELECT id, active FROM promo_codes WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ error: 'Not found.' });
+    const next = !row.active;
+    await db.prepare('UPDATE promo_codes SET active = ? WHERE id = ?').run(next, id);
+    res.json({ ok: true, active: next });
+  } catch (e) { console.error('promo-codes toggle error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+
 module.exports = router;
