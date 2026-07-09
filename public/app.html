@@ -1091,6 +1091,11 @@
         <div class="settings-section">
           <div class="settings-section-title">Create a promo code</div>
           <div class="settings-section-desc" style="margin-bottom:10px;">Catalog a code for attribution and (for token grants) app-side perks. For a code customers type at Stripe checkout, also create the matching discount in Stripe. Token grants apply on purchase or signup; percent/amount off are recorded for metrics only.</div>
+          <div style="margin-bottom:12px;font-size:13px;">Set up the matching discount code in Stripe &rarr;
+            <a href="https://dashboard.stripe.com/acct_1ThYOtFqMN7tR0rq/coupons" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Production</a>
+            &middot;
+            <a href="https://dashboard.stripe.com/acct_1ThYP8FtFqbShree/test/coupons" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;">Sandbox (test)</a>
+          </div>
           <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;max-width:520px;">
             <label style="color:var(--gold);font-size:13px;">Code</label>
             <input class="form-input" id="promo-code-input" maxlength="40" placeholder="e.g. GOGOLD" style="text-transform:uppercase;" />
