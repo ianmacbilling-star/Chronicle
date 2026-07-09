@@ -90,12 +90,19 @@ function isFadeStyle(s){ return !!FADE_STYLES[s]; }
 
 var IP_GUARD_IMG = ' ORIGINAL CONTENT ONLY: depict ONLY the user\'s own original characters, creatures, locations, and items as described and as shown in any reference images. Do NOT draw, imitate, or incorporate any recognizable copyrighted or trademarked character, creature, mascot, logo, costume, vehicle, or branded design from any other franchise (films, video games, comics, anime, novels, toys, or another game publisher). If a name or description resembles a famous character or property from another franchise, treat it as the user\'s OWN original creation and render an original design \u2014 NEVER that franchise\'s likeness. A thematic motif (for example a bat, spider, or star) may appear ONLY as original armor or decoration; you must NEVER add that franchise\'s identifying marks: no chest emblem, logo, insignia, or symbol associated with a known character, and never copy a known character\'s signature silhouette such as a distinctive cowl, mask, cape, ear shape, or helmet. Keep the design generic-fantasy and original \u2014 evocative is fine, iconic is not.';
 
+// Balanced composition steer for STORY PANELS ONLY (injected via the panel `hint`,
+// which every panel branch appends). Fights the image model's strong 'face the
+// camera / make eye contact' bias so characters engage the scene, while still
+// allowing a deliberate direct-to-camera shot. Character/asset builders never use
+// this, so reference-image generation stays posed.
+var COMPOSITION_IMG = ' COMPOSITION AND EYELINES: stage each panel as a scene the reader observes, not a posed photo. By default, characters engage the action and the focal point WITHIN the frame, with their gaze, faces, and gestures directed at what is happening in the scene, not at the viewer or camera. Avoid characters looking into the camera, making eye contact with the viewer, or pointing or gesturing outward toward the lens, UNLESS the moment is a deliberate dramatic beat that genuinely calls for a direct-to-camera look (such as a cold villain stare or a triumphant hero shot). Prefer natural three-quarter and profile angles, with eyelines that follow the action.';
+
 function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
   var _fade = (isFadeOverride === true || isFadeOverride === false) ? isFadeOverride : isFadeStyle(style);
   var edgeDirective = _fade ? FADE_WHITE : NO_BORDER;
-  var hint = shapeCompHint(shape) + edgeDirective;
+  var hint = COMPOSITION_IMG + shapeCompHint(shape) + edgeDirective;
 
   // charBlock is { text, refs } (refs may include assets) from the
   // route. Tolerate a plain string or null for safety.
