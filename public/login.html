@@ -269,6 +269,8 @@ try {
 // campaign (which suppresses the general welcome email; the campaign email is sent).
 var _inviteTok = null;
 try { _inviteTok = new URLSearchParams(window.location.search).get('invite') || null; } catch (e) {}
+var _signupPlan = '';
+try { _signupPlan = (new URLSearchParams(window.location.search).get('plan') || '').toLowerCase(); } catch (e) {}
 
 // Prefill the optional promo field from an ad-link ?promo= (or the stashed cookie),
 // so signups from an ad carry attribution without the person typing anything.
@@ -320,6 +322,17 @@ document.getElementById('register-btn').addEventListener('click', async function
     var data = await res.json();
     if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
     var _rt = _safeReturnTo();
+    // Chose a paid plan at signup: account is created on the trial, then straight to
+    // Stripe checkout for the tier (session is authed now). Tier flips on payment via
+    // the webhook. If checkout can't start (e.g. billing not configured), fall through
+    // to the app -- they stay on the trial, no charge.
+    if (_signupPlan === 'silver' || _signupPlan === 'gold' || _signupPlan === 'platinum') {
+      try {
+        var sres = await fetch('/api/tokens/subscribe', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:_signupPlan})});
+        var sdata = await sres.json();
+        if (sres.ok && sdata && sdata.url) { window.location.replace(sdata.url); return; }
+      } catch (e) {}
+    }
     if (data.auto_joined_campaign_id) { window.location.replace('/app.html#campaign=' + data.auto_joined_campaign_id); }
     else { window.location.replace(_rt ? _rt : '/app.html'); }
   } catch(e) { showError('register-error','Connection error.'); this.disabled=false; this.textContent='Create Account'; }
