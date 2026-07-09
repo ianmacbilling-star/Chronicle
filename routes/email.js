@@ -77,6 +77,45 @@ function passwordResetHTML(name, resetUrl) {
 </html>`;
 }
 
+function verifyEmailHTML(name, verifyUrl) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .body { padding: 32px; }
+    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div class="body">
+      <div class="title">Confirm your email</div>
+      <div class="text">Greetings, ${name}.</div>
+      <div class="text">Welcome to Campaignia! Confirm your email address to activate your account and begin your free trial. This link expires in 24 hours.</div>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${verifyUrl}" class="btn">Confirm my email</a>
+      </div>
+      <div class="text" style="font-size:12px;color:rgba(201,168,76,0.5);">Your 30-day free trial begins the moment you confirm. If you didn't create a Campaignia account, you can safely ignore this email.</div>
+    </div>
+    <div class="footer">
+      campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 function welcomeHTML(name) {
   return `
 <!DOCTYPE html>
@@ -184,6 +223,35 @@ router.post('/reset-password', async function(req, res) {
     res.json({ error: 'Something went wrong. Please try again.' });
   }
 });
+
+// POST /api/email/resend-verification { email } -- re-send the confirm link. Always
+// returns success (no account enumeration); only re-sends for unverified accounts.
+router.post('/resend-verification', async function (req, res) {
+  try {
+    const email = String((req.body || {}).email || '').toLowerCase().trim();
+    if (!email) return res.json({ success: true });
+    const db = await getDb();
+    const user = await db.prepare('SELECT id, name, email, email_verified FROM users WHERE email = ?').get(email);
+    if (user && user.email_verified === false) {
+      await sendVerificationEmail(user.id, user.name, user.email);
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Resend verification error:', e.message);
+    res.json({ success: true });
+  }
+});
+
+// Generate a verification token, store it on the user (24h), and send the confirm
+// email. Called from register (signup) and from the resend endpoint.
+async function sendVerificationEmail(userId, name, email) {
+  const db = await getDb();
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  await db.prepare('UPDATE users SET verify_token = ?, verify_token_expires = ? WHERE id = ?').run(token, expires, userId);
+  const verifyUrl = (process.env.APP_URL || 'https://campaignia.com') + '/api/auth/verify?token=' + token;
+  await sendEmail(email, 'Confirm your Campaignia email', verifyEmailHTML(name || 'there', verifyUrl));
+}
 
 // Internal function to send welcome email (called from auth route)
 async function sendWelcomeEmail(name, email) {
@@ -904,4 +972,4 @@ router.post('/preview', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
-module.exports = { router, sendWelcomeEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };
+module.exports = { router, sendWelcomeEmail, sendVerificationEmail, sendInviteEmail, sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendAlertEmail, sendOrderConfirmationEmail, sendOrderProblemEmail, sendReportEmail, sendFeedbackEmail, sendTrialLifecycleEmail, sendIdleWarningEmail, sendSuspendedEmail, sendPurgeWarningEmail, sendAccountClosedEmail, sendHelpTranscriptEmail };

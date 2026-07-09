@@ -376,6 +376,15 @@ function goToPlans() {
 // TF-05 (C): welcome-back modal, shown once when a login reactivated a suspended
 // account (login redirected here with ?reactivated=1). Tier-aware: the re-subscribe
 // nudge appears only for users who previously paid (now copper + had billing).
+function maybeStartCheckout() {
+  try {
+    var q = new URLSearchParams(window.location.search);
+    var plan = (q.get('start_checkout') || '').toLowerCase();
+    if (plan !== 'silver' && plan !== 'gold' && plan !== 'platinum') return;
+    try { history.replaceState(history.state, '', window.location.pathname); } catch (e) {}
+    subscribeTier(plan);
+  } catch (e) {}
+}
 function maybeShowReactivatedWelcome(data) {
   try {
     var q = new URLSearchParams(window.location.search);
@@ -955,6 +964,7 @@ function checkAuth() {
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
       maybeShowReactivatedWelcome(data);   // TF-05 (C): greet a just-reactivated account
+      maybeStartCheckout();   // post-verification: auto-start a chosen paid plan's checkout
       // Free Trial badge in the top bar -- driven by the ACTUAL tier (tier === 'trial'),
       // i.e. the state where the trial caps apply. If this badge is hidden, the trial
       // caps are NOT in effect for this account regardless of any watermark/trial window.
@@ -8420,6 +8430,7 @@ function checkAuth() {
       state.userTier = data.tierFeatures || null;
       state.inFreeTrial = !!data.inFreeTrial;
       maybeShowReactivatedWelcome(data);   // TF-05 (C): greet a just-reactivated account
+      maybeStartCheckout();   // post-verification: auto-start a chosen paid plan's checkout
       // Free Trial badge in the top bar -- driven by the ACTUAL tier (tier === 'trial'),
       // i.e. the state where the trial caps apply. If this badge is hidden, the trial
       // caps are NOT in effect for this account regardless of any watermark/trial window.

@@ -48,7 +48,7 @@ async function resolvePenName(db, raw, excludeUserId) {
 
 router.post('/register', async function(req, res) {
   try {
-    const { name, email, password, invite_token, pen_name, dob, accept_terms, accept_upload, promo_code } = req.body;
+    const { name, email, password, invite_token, pen_name, dob, accept_terms, accept_upload, promo_code, plan } = req.body;
     if (!name || !email || !password) return res.json({ error: 'All fields required' });
     if (password.length < 8) return res.json({ error: 'Password must be at least 8 characters' });
 
@@ -105,9 +105,21 @@ router.post('/register', async function(req, res) {
       console.error('Signup grant failed (non-fatal):', grantErr.message);
     }
 
-    req.session.userId = newUserId;
-    req.session.userName = name.trim();
-    req.session.userEmail = email.toLowerCase().trim();
+    // Full-strict email verification: new accounts start UNVERIFIED and get NO session.
+    // The person must click the emailed link -- which starts the trial clock and logs
+    // them in -- before they can enter the app. Closes the ghost-trial cost/abuse hole.
+    try {
+      await db.prepare('UPDATE users SET email_verified = false WHERE id = ?').run(newUserId);
+      await require('./email').sendVerificationEmail(newUserId, name.trim(), email.toLowerCase().trim());
+    } catch (verErr) { console.error('Verification email failed:', verErr.message); }
+    // Remember a paid-plan choice from the landing page so we can route them to
+    // checkout AFTER they verify (they aren't logged in until then).
+    try {
+      const _plan = (typeof plan === 'string') ? plan.toLowerCase() : '';
+      if (_plan === 'silver' || _plan === 'gold' || _plan === 'platinum') {
+        await db.prepare('UPDATE users SET pending_plan = ? WHERE id = ?').run(_plan, newUserId);
+      }
+    } catch (planErr) { console.error('pending_plan store failed (non-fatal):', planErr.message); }
 
     // Promo attribution (signup context): record which code/ad brought this account
     // in. No token grant on signup -- grants are purchase-only. Records the code even
@@ -204,26 +216,50 @@ router.post('/register', async function(req, res) {
       }
     }
 
-    // Thank-you / welcome email for a new account. Skipped when the signup
-    // auto-joined a campaign via invite -- those users already receive the
-    // "welcome to the table" campaign email above, so nobody gets two.
-    if (!autoJoinedCampaignId) {
-      try {
-        await sendWelcomeEmail(name.trim(), email.toLowerCase().trim());
-      } catch (welcomeErr) {
-        console.error('Welcome email failed (non-fatal):', welcomeErr.message);
-      }
-    }
-
+    // Welcome email moved to verification -- it now greets a real, confirmed account
+    // (see the /verify route) instead of a possibly-fake signup.
     res.json({
       success: true,
+      needs_verification: true,
       name: name.trim(),
-      email: email.toLowerCase().trim(),
-      auto_joined_campaign_id: autoJoinedCampaignId
+      email: email.toLowerCase().trim()
     });
   } catch(e) {
     console.error('Register error:', e.message);
     res.json({ error: 'Registration failed. Please try again.' });
+  }
+});
+
+// GET /api/auth/verify?token=... -- full-strict email verification. Marks the account
+// verified, STARTS the trial clock now (not at signup), logs the person in, and sends
+// them into the app. Invalid/expired tokens bounce to login with a notice. Invite-path
+// accounts (trial_started_at was null) keep null -- verifying doesn't grant them a trial.
+router.get('/verify', async function (req, res) {
+  try {
+    const token = String((req.query || {}).token || '');
+    if (!token) return res.redirect('/login?verify=invalid');
+    const db = await getDb();
+    const user = await db.prepare('SELECT * FROM users WHERE verify_token = ? AND verify_token_expires > ?').get(token, new Date().toISOString());
+    if (!user) return res.redirect('/login?verify=expired');
+    const now = new Date().toISOString();
+    const trialStart = user.trial_started_at ? now : user.trial_started_at;
+    await db.prepare('UPDATE users SET email_verified = true, verify_token = NULL, verify_token_expires = NULL, trial_started_at = ?, last_active_at = ? WHERE id = ?').run(trialStart, now, user.id);
+    // Welcome email fires here (a real, activated account). Invite-path accounts
+    // (trial_started_at was null) already received the campaign welcome, so only
+    // regular trial signups get the general welcome. Non-fatal.
+    if (user.trial_started_at) { try { await sendWelcomeEmail(user.name, user.email); } catch (e) {} }
+    req.session.userId = user.id;
+    req.session.userName = user.name;
+    req.session.userEmail = user.email;
+    var _pending = (user.pending_plan || '').toLowerCase();
+    if (_pending === 'silver' || _pending === 'gold' || _pending === 'platinum') {
+      try { await db.prepare('UPDATE users SET pending_plan = NULL WHERE id = ?').run(user.id); } catch (e) {}
+      return res.redirect('/app.html?verified=1&start_checkout=' + _pending);
+    }
+    res.redirect('/app.html?verified=1');
+  } catch (e) {
+    console.error('Verify error:', e.message);
+    res.redirect('/login?verify=error');
   }
 });
 
@@ -238,6 +274,11 @@ router.post('/login', async function(req, res) {
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.json({ error: 'Invalid email or password' });
+
+    // Full-strict: unverified accounts cannot log in until they confirm their email.
+    if (user.email_verified === false) {
+      return res.json({ error: 'email_unverified', needs_verification: true, email: user.email });
+    }
 
     // Account lifecycle: logging in reactivates a suspended account
     // (within the retention window) -- clears the suspend flag + clock.

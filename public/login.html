@@ -182,6 +182,17 @@
       <div class="auth-switch"><a onclick="showLogin()">Back to sign in</a></div>
     </div>
 
+    <!-- VERIFY EMAIL NOTICE -->
+    <div id="verify-panel" class="hidden">
+      <div class="auth-title">Confirm your email</div>
+      <div class="auth-subtitle">We sent a confirmation link to <strong id="verify-email-target"></strong>. Click it to activate your account and begin your free trial.</div>
+      <div class="auth-divider"></div>
+      <div id="verify-success" class="alert-success hidden"></div>
+      <div class="auth-subtitle" style="margin-bottom:16px;">Didn't get it? Check your spam folder, or resend below.</div>
+      <button class="btn btn-primary" id="verify-resend-btn" onclick="resendVerification()">Resend confirmation email</button>
+      <div class="auth-switch"><a onclick="showLogin()">Back to sign in</a></div>
+    </div>
+
     <!-- REGISTER -->
     <div id="register-panel" class="hidden">
       <div class="auth-title">Campaignia — Where Your Story Begins</div>
@@ -229,20 +240,29 @@
 </div>
 
 <script>
-function showLogin() {
-  document.getElementById('login-panel').classList.remove('hidden');
-  document.getElementById('register-panel').classList.add('hidden');
-  document.getElementById('forgot-panel').classList.add('hidden');
+function _hideAuthPanels() {
+  ['login-panel','register-panel','forgot-panel','verify-panel'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.classList.add('hidden');
+  });
 }
-function showRegister() {
-  document.getElementById('login-panel').classList.add('hidden');
-  document.getElementById('register-panel').classList.remove('hidden');
-  document.getElementById('forgot-panel').classList.add('hidden');
+function showLogin() { _hideAuthPanels(); document.getElementById('login-panel').classList.remove('hidden'); }
+function showRegister() { _hideAuthPanels(); document.getElementById('register-panel').classList.remove('hidden'); }
+function showForgotPassword() { _hideAuthPanels(); document.getElementById('forgot-panel').classList.remove('hidden'); }
+var _verifyEmail = '';
+function showVerify(email) {
+  _hideAuthPanels();
+  _verifyEmail = email || '';
+  var t = document.getElementById('verify-email-target'); if (t) t.textContent = _verifyEmail;
+  document.getElementById('verify-panel').classList.remove('hidden');
 }
-function showForgotPassword() {
-  document.getElementById('login-panel').classList.add('hidden');
-  document.getElementById('register-panel').classList.add('hidden');
-  document.getElementById('forgot-panel').classList.remove('hidden');
+function resendVerification() {
+  var btn = document.getElementById('verify-resend-btn');
+  var ok = document.getElementById('verify-success');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  fetch('/api/email/resend-verification', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_verifyEmail})})
+    .then(function () { if (ok) { ok.textContent = 'Sent. Check your inbox (and spam folder).'; ok.classList.remove('hidden'); } })
+    .catch(function () {})
+    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Resend confirmation email'; } });
 }
 function showError(id, msg) {
   var el = document.getElementById(id);
@@ -256,6 +276,9 @@ function hideError(id) { document.getElementById(id).classList.add('hidden'); }
 try {
   var _q = new URLSearchParams(window.location.search);
   if (_q.has('signup') || _q.has('register')) showRegister();
+  var _vq = _q.get('verify');
+  if (_vq === 'expired') showError('login-error', 'That confirmation link has expired. Sign in below to resend it.');
+  else if (_vq === 'invalid' || _vq === 'error') showError('login-error', 'That confirmation link was invalid. Sign in below to resend it.');
 } catch (e) {}
 
 // Prefill the signup email when arriving from an invite (?email=...), so the new
@@ -296,6 +319,7 @@ document.getElementById('login-btn').addEventListener('click', async function() 
   try {
     var res = await fetch('/api/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
     var data = await res.json();
+    if (data.error === 'email_unverified') { showVerify(data.email || email); this.disabled=false; this.textContent='Enter Campaignia'; return; }
     if (data.error) { showError('login-error', data.error); this.disabled=false; this.textContent='Enter Campaignia'; return; }
     var _rt = _safeReturnTo();
     window.location.replace(_rt ? _rt : (data.reactivated ? '/app.html?reactivated=1' : '/app.html'));
@@ -318,24 +342,13 @@ document.getElementById('register-btn').addEventListener('click', async function
   if (!accept_upload) { showError('register-error','Please accept the content and copyright agreement to continue.'); return; }
   this.disabled=true; this.textContent='Creating...';
   try {
-    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload,invite_token:_inviteTok,promo_code:(document.getElementById('reg-promo')||{}).value||''})});
+    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload,invite_token:_inviteTok,promo_code:(document.getElementById('reg-promo')||{}).value||'',plan:_signupPlan})});
     var data = await res.json();
     if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
-    var _rt = _safeReturnTo();
-    // Chose a paid plan at signup: account is created on the trial, then straight to
-    // Stripe checkout for the tier (session is authed now). Tier flips on payment via
-    // the webhook. If checkout can't start (e.g. billing not configured), fall through
-    // to the app -- they stay on the trial, no charge.
-    if (_signupPlan === 'silver' || _signupPlan === 'gold' || _signupPlan === 'platinum') {
-      try {
-        var sres = await fetch('/api/tokens/subscribe', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:_signupPlan})});
-        var sdata = await sres.json();
-        if (sres.ok && sdata && sdata.url) { window.location.replace(sdata.url); return; }
-      } catch (e) {}
-    }
-    if (data.auto_joined_campaign_id) { window.location.replace('/app.html#campaign=' + data.auto_joined_campaign_id); }
-    else { window.location.replace(_rt ? _rt : '/app.html'); }
-  } catch(e) { showError('register-error','Connection error.'); this.disabled=false; this.textContent='Create Account'; }
+    // Full-strict: the account exists but stays inactive until they confirm their
+    // email. Any paid-plan choice is stored server-side and resumes after verifying.
+    showVerify(data.email || email);
+    this.disabled = false; this.textContent = 'Create Account';  } catch(e) { showError('register-error','Connection error.'); this.disabled=false; this.textContent='Create Account'; }
 });
 
 document.getElementById('login-password').addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('login-btn').click(); });

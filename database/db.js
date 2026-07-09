@@ -456,6 +456,10 @@ async function initPostgres() {
     // properly so every environment gets them.
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token TEXT',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_expires TIMESTAMP',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_plan TEXT',
     // Token system (Phase 1). last_active_campaign_id drives DM bonus
     // attribution: it's stamped on a player's image generations, then
     // looked up when they purchase tokens to credit the right DM.
