@@ -47,6 +47,18 @@ function unconfigured() {
   return e;
 }
 
+// Build the price_data product reference for one-time (payment-mode) checkouts.
+// When the STRIPE_PRODUCT_* env var is set we point the ad-hoc price at that REAL
+// Stripe Product, so product-scoped coupons/promo codes can target it (e.g. a code
+// valid only on book orders). The amount stays server-computed via unit_amount.
+// Falls back to an inline product_data name when the env var is absent, so nothing
+// breaks before the Products are configured. Product IDs are account-specific, so the
+// value must match whichever Stripe account STRIPE_SECRET_KEY currently points at.
+function productRef(envVar, fallbackName) {
+  const pid = process.env[envVar];
+  return pid ? { product: pid } : { product_data: { name: fallbackName } };
+}
+
 // Create a hosted Checkout Session for a one-time token-pack purchase. The
 // caller redirects the buyer to the returned session.url. Amount + description
 // come from the server pack -- never from the client.
@@ -58,11 +70,10 @@ async function createCheckoutSession(opts) {
     mode: 'payment',
     line_items: [{
       quantity: 1,
-      price_data: {
+      price_data: Object.assign({
         currency: 'usd',
-        unit_amount: pack.price_cents,
-        product_data: { name: 'Campaignia tokens -- ' + pack.name + ' pack (' + pack.tokens + ' tokens)' }
-      }
+        unit_amount: pack.price_cents
+      }, productRef('STRIPE_PRODUCT_TOKENS', 'Campaignia tokens -- ' + pack.name + ' pack (' + pack.tokens + ' tokens)'))
     }],
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
@@ -161,11 +172,10 @@ async function createOneTimeCheckout(opts) {
     mode: 'payment',
     line_items: [{
       quantity: 1,
-      price_data: {
+      price_data: Object.assign({
         currency: opts.currency || 'usd',
-        unit_amount: opts.amountCents,
-        product_data: { name: opts.description || 'Campaignia order' }
-      }
+        unit_amount: opts.amountCents
+      }, productRef('STRIPE_PRODUCT_PRINT', opts.description || 'Campaignia order'))
     }],
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
