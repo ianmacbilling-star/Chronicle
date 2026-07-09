@@ -136,6 +136,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Campaignia" />
   <script src="/js/pwa.js" defer></script>
+    <script src="/promo.js"></script>
 </head>
 <body>
 <div class="auth-page">
@@ -209,6 +210,10 @@
         <input class="form-input" type="date" id="reg-dob" autocomplete="bday" />
         <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">You must be at least 13 years old to use Campaignia.</div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Promo code <span style="font-weight:400;color:#9b8e80;">(optional)</span></label>
+        <input class="form-input" type="text" id="reg-promo" placeholder="e.g. TIKTOK" autocomplete="off" maxlength="40" style="text-transform:uppercase;" />
+      </div>
       <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#cbb994;line-height:1.4;margin-bottom:10px;cursor:pointer;">
         <input type="checkbox" id="reg-terms" style="margin-top:3px;flex-shrink:0;" />
         <span>I have read and agree to the <a href="/terms.html" target="_blank" rel="noopener" style="color:#c9a84c;">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener" style="color:#c9a84c;">Privacy Policy</a>, and I confirm I am at least 13 years old.</span>
@@ -265,6 +270,10 @@ try {
 var _inviteTok = null;
 try { _inviteTok = new URLSearchParams(window.location.search).get('invite') || null; } catch (e) {}
 
+// Prefill the optional promo field from an ad-link ?promo= (or the stashed cookie),
+// so signups from an ad carry attribution without the person typing anything.
+try { var _pc = (window.getStashedPromo && window.getStashedPromo()) || ''; if (_pc) { var _rp = document.getElementById('reg-promo'); if (_rp) _rp.value = _pc; } } catch (e) {}
+
 // Honor a ?returnTo= same-origin path (e.g. returning to an invite to accept)
 // after sign-in. Only relative paths beginning with a single '/' are allowed,
 // so this can never become an open redirect to another site.
@@ -307,7 +316,7 @@ document.getElementById('register-btn').addEventListener('click', async function
   if (!accept_upload) { showError('register-error','Please accept the content and copyright agreement to continue.'); return; }
   this.disabled=true; this.textContent='Creating...';
   try {
-    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload,invite_token:_inviteTok})});
+    var res = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,pen_name,dob,accept_terms,accept_upload,invite_token:_inviteTok,promo_code:(document.getElementById('reg-promo')||{}).value||''})});
     var data = await res.json();
     if (data.error) { showError('register-error',data.error); this.disabled=false; this.textContent='Create Account'; return; }
     var _rt = _safeReturnTo();

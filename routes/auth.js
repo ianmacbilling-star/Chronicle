@@ -48,7 +48,7 @@ async function resolvePenName(db, raw, excludeUserId) {
 
 router.post('/register', async function(req, res) {
   try {
-    const { name, email, password, invite_token, pen_name, dob, accept_terms, accept_upload } = req.body;
+    const { name, email, password, invite_token, pen_name, dob, accept_terms, accept_upload, promo_code } = req.body;
     if (!name || !email || !password) return res.json({ error: 'All fields required' });
     if (password.length < 8) return res.json({ error: 'Password must be at least 8 characters' });
 
@@ -108,6 +108,21 @@ router.post('/register', async function(req, res) {
     req.session.userId = newUserId;
     req.session.userName = name.trim();
     req.session.userEmail = email.toLowerCase().trim();
+
+    // Promo attribution (signup context): record which code/ad brought this account
+    // in. No token grant on signup -- grants are purchase-only. Records the code even
+    // if it does not match a known promo_codes row so no attribution data is lost.
+    // Non-fatal: a failure here never breaks registration.
+    try {
+      const _pc = promo_code ? String(promo_code).trim().toUpperCase().slice(0, 40) : '';
+      if (_pc) {
+        await db.prepare('UPDATE users SET signup_promo_code = ? WHERE id = ?').run(_pc, newUserId);
+        const _promo = await db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(_pc);
+        await db.prepare(
+          'INSERT INTO promo_redemptions (promo_code_id, code, user_id, context) VALUES (?, ?, ?, ?)'
+        ).run(_promo ? _promo.id : null, _pc, newUserId, 'signup');
+      }
+    } catch (promoErr) { console.error('Signup promo capture failed (non-fatal):', promoErr.message); }
 
     // Phase 3: if registration came in via an invite link, auto-accept
     // the invite now. Same all-or-nothing semantics as the signup grant:

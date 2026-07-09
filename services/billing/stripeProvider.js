@@ -68,6 +68,7 @@ async function createCheckoutSession(opts) {
   const pack = opts.pack;
   const params = {
     mode: 'payment',
+    allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
       price_data: Object.assign({
@@ -170,6 +171,7 @@ async function createOneTimeCheckout(opts) {
   if (!stripe) throw unconfigured();
   return await stripe.checkout.sessions.create({
     mode: 'payment',
+    allow_promotion_codes: true,
     line_items: [{
       quantity: 1,
       price_data: Object.assign({
@@ -232,6 +234,34 @@ async function getSubscription(subId) {
   return await stripe.subscriptions.retrieve(subId);
 }
 
+// Read the human-readable promotion code a customer applied at checkout, from a
+// completed Checkout Session. Retrieves the session's discounts if absent, then the
+// promotion code object for its `code`. Defensive: any failure returns null so the
+// webhook never breaks on a promo read. NOTE: discount field paths are API-version
+// sensitive -- verify on the first real redemption.
+async function getSessionPromoCode(session) {
+  const stripe = getClient();
+  if (!stripe || !session) return null;
+  try {
+    let discounts = session.discounts;
+    if (!discounts || !discounts.length) {
+      const full = await stripe.checkout.sessions.retrieve(session.id, { expand: ['discounts'] });
+      discounts = full && full.discounts;
+    }
+    if (!discounts || !discounts.length) return null;
+    let promoId = null;
+    for (let i = 0; i < discounts.length; i++) {
+      const pc = discounts[i] && discounts[i].promotion_code;
+      if (pc) { promoId = (typeof pc === 'string') ? pc : pc.id; break; }
+    }
+    if (!promoId) return null;
+    const promo = await stripe.promotionCodes.retrieve(promoId);
+    return (promo && promo.code) ? String(promo.code) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 module.exports = {
   isConfigured,
   cancelSubscription,
@@ -245,5 +275,6 @@ module.exports = {
   tierForPrice,
   priceForTier,
   createOneTimeCheckout,
+  getSessionPromoCode,
   cardForPayment
 };

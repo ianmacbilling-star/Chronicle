@@ -647,6 +647,45 @@ router.post('/sync-subscription', async function(req, res) {
   }
 });
 
+// Promo redemption on a completed purchase: read the applied code, record it (the
+// attribution/metrics spine), and -- for token_grant codes -- credit CO tokens.
+// Idempotent per (user, session): a prior row means this checkout was already
+// processed, so Stripe retries never double-grant. Fully guarded; never blocks
+// fulfillment (the caller wraps it in try/catch too).
+async function recordAndGrantPromo(session, eventId) {
+  if (!session || !session.id) return;
+  const db = await getDb();
+  const uid = parseInt(session.client_reference_id || (session.metadata && session.metadata.user_id), 10);
+  if (!Number.isFinite(uid)) return;
+  const code = await stripeProvider.getSessionPromoCode(session);
+  if (!code) return;
+  const norm = String(code).trim().toUpperCase();
+  const existing = await db.prepare('SELECT id FROM promo_redemptions WHERE user_id = ? AND stripe_session_id = ?').get(uid, session.id);
+  if (existing) return;
+  const promo = await db.prepare('SELECT id, action_type, action_value, active, expires_at FROM promo_codes WHERE code = ?').get(norm);
+  let grant = 0;
+  if (promo && promo.active && (!promo.expires_at || new Date(promo.expires_at) >= new Date()) && promo.action_type === 'token_grant' && promo.action_value > 0) {
+    grant = promo.action_value;
+  }
+  // Insert the redemption row FIRST. The unique (user_id, stripe_session_id) index
+  // makes a concurrent retry throw here, so only the winning call proceeds to grant.
+  try {
+    await db.prepare(
+      'INSERT INTO promo_redemptions (promo_code_id, code, user_id, context, applied, stripe_session_id) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(promo ? promo.id : null, norm, uid, 'purchase', grant ? JSON.stringify({ granted_tokens: grant }) : null, session.id);
+  } catch (e) {
+    return; // duplicate from a concurrent retry -- do not grant twice
+  }
+  if (grant > 0) {
+    try {
+      await creditTokens(uid, grant, { bucket: 'cot', event_type: 'promo_grant', source: 'promo:' + norm, stripe_event_id: eventId });
+    } catch (e) { console.error('promo token grant failed:', e.message); }
+  }
+  if (promo) {
+    try { await db.prepare('UPDATE promo_codes SET redeemed_count = redeemed_count + 1 WHERE id = ?').run(promo.id); } catch (e) {}
+  }
+}
+
 // Stripe webhook handler. Mounted in server.js BEFORE the API rate limiter and
 // WITHOUT session auth (Stripe authenticates via signature). Verifies against
 // req.rawBody (captured by express.json's verify hook). Idempotent per checkout
@@ -672,6 +711,7 @@ async function stripeWebhook(req, res) {
       } else {
         await fulfillCheckout(s, event.id);
       }
+      try { await recordAndGrantPromo(s, event.id); } catch (promoErr) { console.error('promo grant failed (non-fatal):', promoErr.message); }
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.
       await fulfillSubscriptionInvoice(event.data.object, event.id);
