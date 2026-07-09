@@ -164,6 +164,16 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '  }\n' +
     '}';
 
+  // Async: create a pending job, respond immediately, then run the slow Claude
+  // extraction in the background. Express does not await this handler, so the AI
+  // call finishes AFTER the response is sent -- no gateway (Cloudflare 100s) timeout.
+  const _ejNow = new Date().toISOString();
+  const _ejIns = await db.prepare(
+    "INSERT INTO extract_jobs (user_id, campaign_id, session_id, fork_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)"
+  ).run(req.session.userId, req.params.campaignId, req.params.sessionId, targetForkId, _ejNow, _ejNow);
+  const extractJobId = _ejIns.lastInsertRowid;
+  res.json({ job_id: extractJobId });
+
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -184,11 +194,26 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     });
 
     const data = await response.json();
-    if (data.error) return res.json({ error: data.error.message });
+    if (data.error) { await db.prepare("UPDATE extract_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(String((data.error && data.error.message) || 'AI service error'), new Date().toISOString(), extractJobId); return; }
 
     const raw = data.content.map(function(b) { return b.text || ''; }).join('');
     const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (perr) {
+      // The model occasionally truncates (hit max_tokens) or emits a stray char.
+      // Conservative recovery: parse up to the last closing brace, accept only if
+      // it has the expected shape (a moments array).
+      let recovered = null;
+      try { const lb = clean.lastIndexOf('}'); if (lb > 0) { const cand = JSON.parse(clean.slice(0, lb + 1)); if (cand && Array.isArray(cand.moments)) recovered = cand; } } catch (e2) { recovered = null; }
+      if (recovered) { parsed = recovered; }
+      else {
+        try { console.error('[extract] JSON parse failed: ' + perr.message + ' | RAW(1200): ' + clean.slice(0, 1200)); } catch (_ce) {}
+        await db.prepare("UPDATE extract_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(('The story came back in an unexpected format (' + perr.message + ').'), new Date().toISOString(), extractJobId);
+        return;
+      }
+    }
 
     // Auto-save moments to database
     if (parsed.moments && parsed.moments.length) {
@@ -283,10 +308,25 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       try { await spendTokens(req.session.userId, _storyCharge, { source: 'generate_story', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_story spend failed:', e.message); }
     }
     try { await recordGeneration(req.session.userId, { event_type: 'generate_story', tokens_redeemed: _storyCharge, quantity: _userWords, unit: 'words', model: TEXT_MODEL, related_campaign_id: req.params.campaignId, related_session_id: req.params.sessionId }); } catch (e) {}
-    res.json(parsed);
+    await db.prepare("UPDATE extract_jobs SET status='done', result=?, updated_at=? WHERE id=?").run(JSON.stringify(parsed), new Date().toISOString(), extractJobId);
   } catch(e) {
-    res.json({ error: e.message });
+    try { await db.prepare("UPDATE extract_jobs SET status='error', error=?, updated_at=? WHERE id=?").run(String((e && e.message) || 'Story generation failed'), new Date().toISOString(), extractJobId); } catch (_je) {}
   }
+});
+
+// Poll an extraction (Generate Story) job. Owner-scoped. Returns the parsed result
+// (moments + pendingChanges) when done, a friendly error when failed, else pending.
+router.get('/job/:jobId', requireAuth, async function (req, res) {
+  const db = await getDb();
+  const job = await db.prepare('SELECT * FROM extract_jobs WHERE id = ? AND user_id = ?').get(req.params.jobId, req.session.userId);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (job.status === 'done') {
+    var result = {};
+    try { result = JSON.parse(job.result || '{}'); } catch (e) { result = {}; }
+    return res.json(Object.assign({ status: 'done' }, result));
+  }
+  if (job.status === 'error') return res.json({ status: 'error', error: job.error || 'Story generation failed' });
+  return res.json({ status: job.status || 'pending' });
 });
 
 // ============================================================

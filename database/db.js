@@ -297,6 +297,24 @@ async function initPostgres() {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_narrative_jobs_user ON narrative_jobs(user_id, status)');
+  // Extract (Generate Story) jobs -- async pattern mirroring narrative_jobs, so the
+  // long Claude extraction runs off the request cycle and never hits the gateway
+  // (Cloudflare 100s) timeout. Client submits, polls /api/extract/job/:id.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS extract_jobs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      campaign_id INTEGER,
+      session_id INTEGER,
+      fork_id INTEGER,
+      status TEXT DEFAULT 'pending',
+      result TEXT,
+      error TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_extract_jobs_user ON extract_jobs(user_id, status)');
 
   // Custom Art Styles (Platinum builder): account-wide, owned by the user. A
   // generated/edited STYLE: paragraph that rides system_prompt like any preset.

@@ -5381,6 +5381,33 @@ function applyLayoutStyle(layout) {
   refreshLayoutStyleButtons();
 }
 
+// Async Generate Story: poll the extraction job until done/error. Resolves to the job
+// result ({moments, pendingChanges, ...}) or an {error,message} object, so the existing
+// success handler consumes it exactly like the old synchronous response did.
+function _pollExtractJob(jobId, signal) {
+  return new Promise(function (resolve) {
+    var tries = 0;
+    (function loop() {
+      if (signal && signal.aborted) { resolve({ error: 'aborted', message: 'Generation cancelled.' }); return; }
+      fetch('/api/extract/job/' + jobId, { signal: signal })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j && j.status === 'done') { resolve(j); return; }
+          if (j && (j.status === 'error' || j.error)) { resolve({ error: j.error || 'generation_failed', message: j.error || 'Story generation failed.' }); return; }
+          tries++;
+          if (tries > 300) { resolve({ error: 'timeout', message: 'Generation is taking longer than expected -- please check back in a moment.' }); return; }
+          setTimeout(loop, 2000);
+        })
+        .catch(function () {
+          if (signal && signal.aborted) { resolve({ error: 'aborted', message: 'Generation cancelled.' }); return; }
+          tries++;
+          if (tries > 300) { resolve({ error: 'poll_failed', message: 'Lost connection while generating.' }); return; }
+          setTimeout(loop, 2000);
+        });
+    })();
+  });
+}
+
 async function extractMoments() {
   if (!ensureGenFree()) return;
   var key = getApiKey();
@@ -5466,6 +5493,11 @@ async function extractMoments() {
     signal: _xctl.signal
   })
   .then(function(r) { return r.json(); })
+  .then(function(start) {
+    if (start && start.error) return start;
+    if (!start || !start.job_id) return { error: 'no_job', message: 'Could not start story generation. Please try again.' };
+    return _pollExtractJob(start.job_id, _xctl.signal);
+  })
   .then(function(data) {
     clearInterval(ticker);
     clearGenLock();
@@ -9267,6 +9299,11 @@ async function extractMoments() {
     signal: _xctl.signal
   })
   .then(function(r) { return r.json(); })
+  .then(function(start) {
+    if (start && start.error) return start;
+    if (!start || !start.job_id) return { error: 'no_job', message: 'Could not start story generation. Please try again.' };
+    return _pollExtractJob(start.job_id, _xctl.signal);
+  })
   .then(function(data) {
     clearInterval(ticker);
     clearGenLock();
