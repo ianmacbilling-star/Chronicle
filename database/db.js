@@ -315,6 +315,16 @@ async function initPostgres() {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_extract_jobs_user ON extract_jobs(user_id, status)');
+  // One-time (idempotent) relabel: the establishing/title-image moment used to be
+  // stored with the literal title 'Title Image'. Show the session's own name instead,
+  // everywhere the moment title renders. Matches nothing on later boots (no rows keep
+  // that literal), so it is safe to run each startup.
+  await pool.query(`
+    UPDATE moments SET title = s.name
+    FROM session_forks sf JOIN sessions s ON s.id = sf.session_id
+    WHERE moments.fork_id = sf.id AND moments.kind = 'establishing'
+      AND moments.title = 'Title Image' AND s.name IS NOT NULL AND s.name <> ''
+  `);
 
   // Custom Art Styles (Platinum builder): account-wide, owned by the user. A
   // generated/edited STYLE: paragraph that rides system_prompt like any preset.

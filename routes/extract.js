@@ -252,7 +252,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       // wide + high-prominence with wide-shot scaffolding so it renders as the
       // session/chapter title image; editable like any panel.
       var _estMomentPrompt = ('Wide establishing shot of the setting, seen from a distance; any characters appear small and far away, never in close-up. ' + (estScene || '')).trim();
-      insert.run(session.id, dmForkId, 'Title Image', (estScene || ''), null, _estMomentPrompt, null, 'wide', JSON.stringify({ prominence: 5, focal: 'center', crop_safe: true, group_break: false }), 'establishing', 0, now, req.session.userId);
+      insert.run(session.id, dmForkId, (session.name || 'Title Image'), (estScene || ''), null, _estMomentPrompt, null, 'wide', JSON.stringify({ prominence: 5, focal: 'center', crop_safe: true, group_break: false }), 'establishing', 0, now, req.session.userId);
       parsed.moments.forEach(function(m, i) {
         insert.run(session.id, dmForkId, m.title, m.description, m.type, m.prompt, m.emphasis || null, (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard'), JSON.stringify({ prominence: (Number(m.prominence) >= 1 && Number(m.prominence) <= 5) ? Math.round(Number(m.prominence)) : 3, focal: (['center','top','bottom','left','right'].indexOf(m.focal) >= 0) ? m.focal : 'center', crop_safe: m.crop_safe === false ? false : true, group_break: m.group_break === true }), 'normal', i + 1, now, req.session.userId);
       });
