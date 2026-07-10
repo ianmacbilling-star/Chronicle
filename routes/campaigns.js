@@ -29,13 +29,13 @@ router.get('/', requireAuth, async function(req, res) {
 });
 
 router.post('/', requireAuth, checkCampaignLimit, async function(req, res) {
-  const { name, description } = req.body;
+  const { name, description, lore } = req.body;
   if (!name) return res.json({ error: 'Campaign name required' });
   const db = await getDb();
   const now = new Date().toISOString();
   const result = await db.prepare(
-    'INSERT INTO campaigns (user_id, name, description, created_at, created_by) VALUES (?,?,?,?,?)'
-  ).run(req.session.userId, name.trim(), description || '', now, req.session.userId);
+    'INSERT INTO campaigns (user_id, name, description, lore, created_at, created_by) VALUES (?,?,?,?,?,?)'
+  ).run(req.session.userId, name.trim(), description || '', String(lore || '').slice(0, 6000), now, req.session.userId);
   const campaignId = result.lastInsertRowid;
 
   // Phase 2: the creator is also the initial DM member. The Phase 1

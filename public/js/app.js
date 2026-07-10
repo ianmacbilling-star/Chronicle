@@ -1652,6 +1652,7 @@ function openCampaignModal(editId) {
   document.getElementById('campaign-save-btn').textContent = editId ? 'Save changes' : 'Create campaign';
   document.getElementById('campaign-name').value = editId && state.currentCampaign ? state.currentCampaign.name : '';
   document.getElementById('campaign-desc').value = editId && state.currentCampaign ? (state.currentCampaign.description || '') : '';
+  document.getElementById('campaign-lore').value = editId && state.currentCampaign ? (state.currentCampaign.lore || '') : '';
   document.getElementById('campaign-modal-error').classList.add('hidden');
   document.getElementById('campaign-modal').classList.remove('hidden');
 }
@@ -1661,6 +1662,7 @@ function closeCampaignModal() { document.getElementById('campaign-modal').classL
 function saveCampaign() {
   var name = document.getElementById('campaign-name').value.trim();
   var desc = document.getElementById('campaign-desc').value.trim();
+  var lore = (document.getElementById('campaign-lore') || {}).value || '';
   var editId = document.getElementById('campaign-edit-id').value;
   if (!name) { showModalError('campaign-modal-error', 'Campaign name is required.'); return; }
 
@@ -1668,7 +1670,7 @@ function saveCampaign() {
   fetch(url, {
     method: editId ? 'PUT' : 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, description:desc})
+    body: JSON.stringify({name:name, description:desc, lore:lore})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -8718,6 +8720,7 @@ function openCampaignModal(editId) {
   document.getElementById('campaign-save-btn').textContent = editId ? 'Save changes' : 'Create campaign';
   document.getElementById('campaign-name').value = editId && state.currentCampaign ? state.currentCampaign.name : '';
   document.getElementById('campaign-desc').value = editId && state.currentCampaign ? (state.currentCampaign.description || '') : '';
+  document.getElementById('campaign-lore').value = editId && state.currentCampaign ? (state.currentCampaign.lore || '') : '';
   document.getElementById('campaign-modal-error').classList.add('hidden');
   document.getElementById('campaign-modal').classList.remove('hidden');
 }
@@ -8727,6 +8730,7 @@ function closeCampaignModal() { document.getElementById('campaign-modal').classL
 function saveCampaign() {
   var name = document.getElementById('campaign-name').value.trim();
   var desc = document.getElementById('campaign-desc').value.trim();
+  var lore = (document.getElementById('campaign-lore') || {}).value || '';
   var editId = document.getElementById('campaign-edit-id').value;
   if (!name) { showModalError('campaign-modal-error', 'Campaign name is required.'); return; }
 
@@ -8734,7 +8738,7 @@ function saveCampaign() {
   fetch(url, {
     method: editId ? 'PUT' : 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name:name, description:desc})
+    body: JSON.stringify({name:name, description:desc, lore:lore})
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {

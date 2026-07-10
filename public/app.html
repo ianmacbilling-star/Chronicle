@@ -1273,6 +1273,10 @@
       <label class="form-label">Description</label>
       <textarea class="form-textarea" id="campaign-desc" style="min-height:80px;" placeholder="A brief description of your campaign..."></textarea>
     </div>
+    <div class="form-group">
+      <label class="form-label">Lore / Backstory <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+      <textarea class="form-textarea" id="campaign-lore" maxlength="6000" style="min-height:110px;" placeholder="Describe the world your campaign takes place in -- history, factions, tone..."></textarea>
+    </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeCampaignModal()">Cancel</button>
       <button class="btn btn-primary" id="campaign-save-btn" onclick="saveCampaign()">Create campaign</button>
