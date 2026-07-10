@@ -5074,6 +5074,13 @@ function openCharModal(editId) {
   document.getElementById('char-modal-error').classList.add('hidden');
   (function(){ var _cse = document.getElementById('char-save-error'); if (_cse) _cse.classList.add('hidden'); })();
   document.getElementById('char-modal').classList.remove('hidden');
+  // Always open scrolled to the top -- a freshly opened modal should never start at
+  // the bottom (reset now and next frame, after any late content layout).
+  (function(){
+    var _reset = function(){ var _m = document.getElementById('char-modal'); if (!_m) return; _m.scrollTop = 0; var _mi = _m.querySelector('.modal'); if (_mi) _mi.scrollTop = 0; };
+    _reset();
+    if (window.requestAnimationFrame) requestAnimationFrame(_reset);
+  })();
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   if (window.requestAnimationFrame) { requestAnimationFrame(function(){ try { maybeStartTour('characters'); } catch (e) {} }); }
   else { try { maybeStartTour('characters'); } catch (e) {} }
