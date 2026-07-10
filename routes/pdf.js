@@ -2352,6 +2352,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     : ('Story Master: ' + dmName + ' &nbsp;&nbsp;|&nbsp;&nbsp; ' + dateRange);
   var _bookTitleFM = (pageOpts && pageOpts.bookTitle != null && String(pageOpts.bookTitle).trim())
     ? String(pageOpts.bookTitle).trim() : (campaign._memberBookTitle || campaign.name);
+  // Cover title color picker (Prep to Publish). Applied inline to whichever cover
+  // title actually renders so the picker always wins over the CSS default. Cover
+  // only -- interior title/details pages keep their dark parchment color. Output
+  // is byte-identical when no valid color is supplied.
+  var _coverTitleColor = (pageOpts && pageOpts.titleColor && /^#[0-9a-fA-F]{3,8}$/.test(pageOpts.titleColor)) ? pageOpts.titleColor : '';
+  var _coverTitleStyle = _coverTitleColor ? (' style="color:' + _coverTitleColor + '"') : '';
   var titlePageHTML =
     '<div class="titlepage">' +
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
@@ -2530,7 +2536,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <img class="cover-art-img" src="${coverImg}" alt="" />
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
-        <div class="cover-art-title">${_fmEsc(_bookTitleFM)}</div>
+        <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
         <div class="cover-art-dates">${dateRange}</div>
         ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
       </div>
@@ -2538,7 +2544,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
   </div>` : `<div class="cover-content">
     ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     <div class="cover-eyebrow">The Saga of</div>
-    <div class="cover-title">${_fmEsc(_bookTitleFM)}</div>
+    <div class="cover-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
     <div class="cover-dates">${dateRange}</div>
@@ -2814,6 +2820,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     pageOpts.page = pageNum;
   }
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
+  if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   res.set('X-Total-Sessions', String(sessionsWithData.length));
 
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;

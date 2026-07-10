@@ -6029,6 +6029,8 @@ function loadNovelPreview(layout) {
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
   var _ptEl = document.getElementById('prep-title');
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
+  var _tcEl = document.getElementById('print-title-color');
+  if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
   // continuous document so the PDF viewer's own page navigation moves through it.
   if (total > 1 && novelPreviewMode === 'quick') {
@@ -9703,6 +9705,8 @@ function loadNovelPreview(layout) {
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
   var _ptEl = document.getElementById('prep-title');
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
+  var _tcEl = document.getElementById('print-title-color');
+  if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
   // continuous document so the PDF viewer's own page navigation moves through it.
   if (total > 1 && novelPreviewMode === 'quick') {
