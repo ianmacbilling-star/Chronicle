@@ -919,10 +919,20 @@ async function fulfillSubscriptionInvoice(invoice, eventId) {
   const reason = invoice.billing_reason || '';
   if (reason && reason !== 'subscription_create' && reason !== 'subscription_cycle') return;
   const db = await getDb();
+  // Webhook ordering is NOT guaranteed: invoice.paid can arrive before the
+  // customer.subscription.created event that sets users.tier + links the sub. Sync the
+  // subscription FIRST so the tier and sub->user link are current before we grant --
+  // otherwise ensureMonthlyGrant reads a stale tier (e.g. still copper right after an
+  // upgrade) and grants the wrong allotment, which the once-per-cycle marker then locks
+  // in for the whole billing period. Non-fatal if the retrieve fails.
+  try {
+    const sub = await stripeProvider.getSubscription(subId);
+    if (sub) await syncSubscriptionToUser(sub);
+  } catch (e) { console.error('invoice pre-grant sync failed (non-fatal):', e.message); }
   // Resolve the user from the subscription id (preferred), else the customer id.
-  let user = await db.prepare('SELECT id FROM users WHERE stripe_subscription_id = ?').get(subId);
+  let user = await db.prepare('SELECT id, tier FROM users WHERE stripe_subscription_id = ?').get(subId);
   if (!user && invoice.customer) {
-    user = await db.prepare('SELECT id FROM users WHERE stripe_customer_id = ?').get(invoice.customer);
+    user = await db.prepare('SELECT id, tier FROM users WHERE stripe_customer_id = ?').get(invoice.customer);
   }
   if (!user) return; // subscription not linked to a user yet
   // One grant per invoice id = one grant per billing period. ensureMonthlyGrant reads
