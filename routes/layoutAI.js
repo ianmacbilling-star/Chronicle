@@ -31,7 +31,11 @@ const MAX_PAGES_PER_CALL = 90;         // stay under the API's per-request PDF p
 const ANTHROPIC_VERSION = '2023-06-01';
 
 async function isEnabled() {
-  try { return (await getAppSettingInt(FLAG, 0)) === 1; } catch (e) { return false; }
+  // TEMP (staging testing): hard-coded ON so no app_settings row is needed.
+  // Admin gate still applies via requireAdmin on the routes below.
+  // To restore the runtime flag, replace this body with:
+  //   try { return (await getAppSettingInt(FLAG, 0)) === 1; } catch (e) { return false; }
+  return true;
 }
 
 // GET /api/layout-ai/status -> { enabled, model }. Drives whether the UI shows the tab.
