@@ -1079,7 +1079,11 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
     'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   var col = '<div style="display:flow-root;">' + (narrHtml || '') + (besideHtml || '') + '</div>';
-  return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + col + '</div>';
+  // Keep the tower + its beside-column narrative as ONE unbreakable unit. Without this the
+  // short narrative fills the scrap at a page bottom while the 9.2in tower bumps to the next
+  // page, stranding the text and leaving the tower's side column empty. (Rollback: remove
+  // `break-inside:avoid;page-break-inside:avoid;` from the wrapper below.)
+  return '<div style="display:flow-root;margin-bottom:0.10in;break-inside:avoid;page-break-inside:avoid;' + gzPanelCss(opts) + '">' + box + col + '</div>';
 }
 function cgBesidePanel(m, opts, narrHtml) {
   // A small panel rendered to STACK in the column beside a full-height tower (NOT floated).
