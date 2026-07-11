@@ -3471,5 +3471,67 @@ router.post('/story/:id/meta', requireAuth, async function(req, res) {
   }
 });
 
+// Assemble the same novel HTML the /novel export produces, for a campaign + request.
+// Used by the isolated Layout-AI dry run so it critiques the REAL book, not a
+// re-derivation. Deliberately mirrors the /novel route's gathering and is kept as a
+// SEPARATE function (the live export route is left untouched) so the export path
+// carries zero risk from this feature. Reuses buildNovelHTML, so the HTML is identical.
+async function assembleNovelHtml(req, campaignId) {
+  const db = await getDb();
+  const campaign = await db.prepare(
+    'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
+  ).get(campaignId, req.session.userId);
+  if (!campaign) { const e = new Error('Access denied'); e.status = 403; throw e; }
+  if (!campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
+
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
+  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
+  function sessionDateKey(s) {
+    if (!s.session_date) return '';
+    if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
+    try { return s.session_date.toISOString().split('T')[0]; } catch (e) { return String(s.session_date); }
+  }
+  sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
+
+  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  if (asUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+    if (_bm) {
+      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
+      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
+      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
+      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    }
+  }
+  const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
+    let forkId = null;
+    if (asUser) {
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      if (pf) forkId = pf.id;
+    }
+    if (!forkId) forkId = await getDmForkId(db, s.id);
+    const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
+    const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
+    return Object.assign({}, s, {
+      moments: moments,
+      narrative_intro: nfk ? (nfk.narrative_intro || '') : '',
+      narrative_sections: nfk ? (nfk.narrative_sections || null) : null,
+      narrative_outro: nfk ? (nfk.narrative_outro || '') : ''
+    });
+  }));
+
+  const layoutStyle = req.query.layout || 'Classic';
+  var pageOpts = {};
+  if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
+  if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
+
+  const co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
+  const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length };
+}
+
 module.exports = router;
 module.exports.buildNovelHTML = buildNovelHTML;
+module.exports.assembleNovelHtml = assembleNovelHtml;
