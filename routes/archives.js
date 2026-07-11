@@ -37,7 +37,7 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
 
     if (imageType === 'moment') {
       const moment = await db.prepare(
-        'SELECT m.id, m.title, m.prompt, m.image, m.session_id, m.fork_id, m.style, s.campaign_id ' +
+        'SELECT m.id, m.title, m.prompt, m.image, m.session_id, m.fork_id, m.style, m.img_w, m.img_h, m.shape, s.campaign_id ' +
         'FROM moments m JOIN sessions s ON s.id = m.session_id WHERE m.id = ?'
       ).get(req.body.moment_id);
       if (!moment) return res.status(404).json({ error: 'Moment not found' });
@@ -64,10 +64,10 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
       const archivedUrl = await archiveCopy(moment.image);
       const now = new Date().toISOString();
       const result = await db.prepare(
-        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, archived_by, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(req.params.campaignId, moment.session_id, moment.fork_id, moment.id, 'moment',
-            moment.title || null, archivedUrl, moment.image, moment.prompt || null, artStyle, artStyleName, req.session.userId, now);
+            moment.title || null, archivedUrl, moment.image, moment.prompt || null, artStyle, artStyleName, moment.img_w || null, moment.img_h || null, moment.shape || null, req.session.userId, now);
       const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
       return res.json({ success: true, archive: row });
     }
@@ -284,8 +284,8 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to replace the image.' });
       const freshUrl = await restoreCopy(archive.image_url);
       const prevImg = moment.image;
-      await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = NULL, img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
-        .run(freshUrl, archive.art_style || null, now, req.session.userId, moment.id);
+      await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, shape = COALESCE(?, shape), edited_at = ?, edited_by = ? WHERE id = ?')
+        .run(freshUrl, archive.art_style || null, archive.img_w || null, archive.img_h || null, archive.shape || null, now, req.session.userId, moment.id);
       if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
       return res.json({ success: true, image_url: freshUrl });
     }

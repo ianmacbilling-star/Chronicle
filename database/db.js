@@ -1080,6 +1080,12 @@ async function migrateArchives(pool) {
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS art_style_name TEXT');
   // public = owner opted this archived image into the anonymous Public Library.
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS public BOOLEAN DEFAULT FALSE');
+  // img_w / img_h / shape = the archived image's stored pixel dims and shape, copied from
+  // the source moment at archive time so a later replace-from-archive restores the true
+  // aspect instead of nulling dims (which mis-sizes towers). Null for legacy rows.
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS img_w INTEGER');
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS img_h INTEGER');
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS shape TEXT');
   await pool.query("CREATE INDEX IF NOT EXISTS idx_archives_public ON campaign_archives(created_at DESC, id DESC) WHERE public = TRUE");
 
   // public_stories: a fork owner's graphic-novel PDF published to the Public
