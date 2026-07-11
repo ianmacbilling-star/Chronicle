@@ -1086,6 +1086,7 @@ async function migrateArchives(pool) {
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS img_w INTEGER');
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS img_h INTEGER');
   await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS shape TEXT');
+  await pool.query('ALTER TABLE campaign_archives ADD COLUMN IF NOT EXISTS layout_meta TEXT');
   await pool.query("CREATE INDEX IF NOT EXISTS idx_archives_public ON campaign_archives(created_at DESC, id DESC) WHERE public = TRUE");
 
   // public_stories: a fork owner's graphic-novel PDF published to the Public

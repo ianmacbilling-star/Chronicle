@@ -37,7 +37,7 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
 
     if (imageType === 'moment') {
       const moment = await db.prepare(
-        'SELECT m.id, m.title, m.prompt, m.image, m.session_id, m.fork_id, m.style, m.img_w, m.img_h, m.shape, s.campaign_id ' +
+        'SELECT m.id, m.title, m.prompt, m.image, m.session_id, m.fork_id, m.style, m.img_w, m.img_h, m.shape, m.layout_meta, s.campaign_id ' +
         'FROM moments m JOIN sessions s ON s.id = m.session_id WHERE m.id = ?'
       ).get(req.body.moment_id);
       if (!moment) return res.status(404).json({ error: 'Moment not found' });
@@ -64,10 +64,10 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
       const archivedUrl = await archiveCopy(moment.image);
       const now = new Date().toISOString();
       const result = await db.prepare(
-        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, layout_meta, archived_by, created_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(req.params.campaignId, moment.session_id, moment.fork_id, moment.id, 'moment',
-            moment.title || null, archivedUrl, moment.image, moment.prompt || null, artStyle, artStyleName, moment.img_w || null, moment.img_h || null, moment.shape || null, req.session.userId, now);
+            moment.title || null, archivedUrl, moment.image, moment.prompt || null, artStyle, artStyleName, moment.img_w || null, moment.img_h || null, moment.shape || null, moment.layout_meta || null, req.session.userId, now);
       const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
       return res.json({ success: true, archive: row });
     }
@@ -273,7 +273,7 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
 
     if (targetType === 'moment') {
       const moment = await db.prepare(
-        'SELECT m.id, m.image, m.locked, sf.user_id AS fork_owner ' +
+        'SELECT m.id, m.image, m.locked, m.layout_meta, sf.user_id AS fork_owner ' +
         'FROM moments m JOIN session_forks sf ON sf.id = m.fork_id ' +
         'JOIN sessions s ON s.id = m.session_id ' +
         'WHERE m.id = ? AND s.campaign_id = ?'
@@ -284,8 +284,21 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to replace the image.' });
       const freshUrl = await restoreCopy(archive.image_url);
       const prevImg = moment.image;
-      await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, shape = COALESCE(?, shape), edited_at = ?, edited_by = ? WHERE id = ?')
-        .run(freshUrl, archive.art_style || null, archive.img_w || null, archive.img_h || null, archive.shape || null, now, req.session.userId, moment.id);
+      // Merge the archived image's image-specific layout hints (focal / crop_safe) into the
+      // target panel's layout_meta, preserving the panel's own prominence / group_break.
+      // mergedMeta stays null when the archive carries neither, so COALESCE keeps the panel's meta.
+      let mergedMeta = null;
+      try {
+        const _am = archive.layout_meta ? (typeof archive.layout_meta === 'object' ? archive.layout_meta : JSON.parse(archive.layout_meta)) : null;
+        if (_am && (_am.focal !== undefined || _am.crop_safe !== undefined)) {
+          const _pm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {};
+          if (_am.focal !== undefined) _pm.focal = _am.focal;
+          if (_am.crop_safe !== undefined) _pm.crop_safe = _am.crop_safe;
+          mergedMeta = JSON.stringify(_pm);
+        }
+      } catch (e) { mergedMeta = null; }
+      await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, shape = COALESCE(?, shape), layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
+        .run(freshUrl, archive.art_style || null, archive.img_w || null, archive.img_h || null, archive.shape || null, mergedMeta, now, req.session.userId, moment.id);
       if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
       return res.json({ success: true, image_url: freshUrl });
     }
