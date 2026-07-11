@@ -27,7 +27,8 @@ const { LAYOUT_MODEL } = require('../config/models');
 const { buildPrompt } = require('../services/layoutAI/brief');
 
 const FLAG = 'layout_ai_dryrun';       // app_settings int; 1 = feature on
-const MAX_PAGES_PER_CALL = 90;         // stay under the API's per-request PDF page cap
+const MAX_PAGES_PER_CALL = 40;         // secondary page cap (API allows ~100)
+const MAX_CHUNK_BYTES = 15 * 1024 * 1024;  // keep each request PDF well under the 32MB API cap (base64 inflates ~33%)
 const ANTHROPIC_VERSION = '2023-06-01';
 
 async function isEnabled() {
@@ -43,19 +44,41 @@ router.get('/status', requireAuth, requireAdmin, async function (req, res) {
   res.json({ enabled: await isEnabled(), model: LAYOUT_MODEL });
 });
 
-// Split a PDF buffer into base64 chunks of <= MAX_PAGES_PER_CALL pages each.
+// Split a PDF into base64 chunks that each stay under the API's request-size limit.
+// Full-res panel art can push a whole book well past 32MB, so we chunk by BYTES,
+// not just page count. Per-page sizes are summed (which OVERestimates the merged
+// chunk, since merged PDFs dedupe shared resources), so the budget errs safe.
 async function splitPdf(buf) {
   const src = await PDFDocument.load(buf);
   const total = src.getPageCount();
+
+  const pageBytes = [];
+  for (let i = 0; i < total; i++) {
+    const one = await PDFDocument.create();
+    const cp = await one.copyPages(src, [i]);
+    one.addPage(cp[0]);
+    pageBytes.push((await one.save()).length);
+  }
+
+  const groups = [];
+  let start = 0, bytes = 0, count = 0;
+  for (let i = 0; i < total; i++) {
+    if (count > 0 && (bytes + pageBytes[i] > MAX_CHUNK_BYTES || count >= MAX_PAGES_PER_CALL)) {
+      groups.push([start, i]); start = i; bytes = 0; count = 0;
+    }
+    bytes += pageBytes[i]; count++;
+  }
+  if (count > 0) groups.push([start, total]);
+
   const chunks = [];
-  for (let start = 0; start < total; start += MAX_PAGES_PER_CALL) {
+  for (const g of groups) {
     const out = await PDFDocument.create();
     const idx = [];
-    for (let i = start; i < Math.min(start + MAX_PAGES_PER_CALL, total); i++) idx.push(i);
+    for (let i = g[0]; i < g[1]; i++) idx.push(i);
     const copied = await out.copyPages(src, idx);
     copied.forEach(function (p) { out.addPage(p); });
-    const bytes = await out.save();
-    chunks.push({ startPage: start + 1, data: Buffer.from(bytes).toString('base64') });
+    const outBytes = await out.save();
+    chunks.push({ startPage: g[0] + 1, data: Buffer.from(outBytes).toString('base64') });
   }
   return { total: total, chunks: chunks };
 }
