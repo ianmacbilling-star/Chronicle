@@ -605,7 +605,7 @@ function coMedia(m, border) {
     ? '<div style="overflow:hidden;line-height:0;"><img style="width:calc(100% + 2px);aspect-ratio:' + ratio + ';object-fit:cover;display:block;margin:-1px;" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;"></div>';
   switch (border) {
-    case 'frame': return framedMedia(m);
+    case 'frame': return '<div style="padding:2px 0;line-height:0;">' + framedMedia(m) + '</div>';
     case 'comic': return '<div style="border:5px solid #0a0806;background:#160e06;overflow:hidden;line-height:0;">' + img + '</div>';
     case 'vignette':
       return '<div style="position:relative;line-height:0;">' + img + vignetteOverlayHtml() + '</div>';
@@ -614,7 +614,7 @@ function coMedia(m, border) {
         ? '<div style="padding:0 0.26in 0.26in 0;line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
         : img;
     case 'keyline':
-      return shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px');
+      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px') + '</div>';
     case 'none':
     default:
       return img;
@@ -851,6 +851,15 @@ function renderPaired(moments, sections, intro, outro, opts) {
         var pbCol = '<div style="display:flow-root;">' + beforeHtml + afterHtml + pbBeside + '</div>';
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + pbCol + '</div>';
         i += pbAdv;
+      } else if (!beforeHtml && !afterHtml) {
+        // No narrative to sit beside it -> don't strand the portrait in a floated column
+        // with an empty gutter. Center it and size to a taller target so it commands the
+        // page. Tune pbBigH (target height) / pbBigMax (max width) to taste.
+        var pbBigH = 7.6, pbBigMax = 5.8;
+        var pbBigW = Math.min(pbBigMax, pbBigH * shapeAspect(normShape(m)));
+        html += '<div style="margin:0 auto 0.12in;width:' + pbBigW.toFixed(2) + 'in;page-break-inside:avoid;">' +
+          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+          coCaptionBelow(m, i, opts.caption) + '</div>';
       } else {
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
       }
