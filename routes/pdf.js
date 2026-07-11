@@ -851,10 +851,10 @@ function renderPaired(moments, sections, intro, outro, opts) {
         var pbCol = '<div style="display:flow-root;">' + beforeHtml + afterHtml + pbBeside + '</div>';
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + pbCol + '</div>';
         i += pbAdv;
-      } else if (!beforeHtml && !afterHtml) {
-        // No narrative to sit beside it -> don't strand the portrait in a floated column
-        // with an empty gutter. Center it and size to a taller target so it commands the
-        // page. Tune pbBigH (target height) / pbBigMax (max width) to taste.
+      } else if (((section.before || '') + ' ' + (section.after || '')).replace(/\s+/g, ' ').trim().length < 160) {
+        // Little or no narrative to sit beside it (short bridge or none) -> don't strand the
+        // portrait in a floated column with a mostly-empty gutter. Center it and size to a
+        // taller target so it commands the page. Tune the 160-char threshold + pbBigH/pbBigMax.
         var pbBigH = 7.6, pbBigMax = 5.8;
         var pbBigW = Math.min(pbBigMax, pbBigH * shapeAspect(normShape(m)));
         html += '<div style="margin:0 auto 0.12in;width:' + pbBigW.toFixed(2) + 'in;page-break-inside:avoid;">' +
@@ -872,7 +872,10 @@ function renderPaired(moments, sections, intro, outro, opts) {
       html += '<div style="width:100%;margin:0 auto 0.06in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
-      html += beforeHtml + afterHtml;
+      // Keep the narrative glued to the image above it: a short bridge must not be
+      // able to start a fresh page alone (the near-blank "orphan" pages). break-before:avoid
+      // makes Chromium move the image+bridge together instead of stranding the text.
+      html += '<div style="break-before:avoid;page-break-before:avoid;">' + beforeHtml + afterHtml + '</div>';
     }
   }
   html += buildNarrativeHTML(outro, true);
