@@ -851,12 +851,15 @@ function renderPaired(moments, sections, intro, outro, opts) {
         var pbCol = '<div style="display:flow-root;">' + beforeHtml + afterHtml + pbBeside + '</div>';
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + pbCol + '</div>';
         i += pbAdv;
-      } else if (lmSizeTier(m) === 'max' || ((section.before || '') + ' ' + (section.after || '')).replace(/\s+/g, ' ').trim().length < 160) {
-        // Maximize prominence, OR little/no side narrative -> give the portrait the page:
-        // center it and size to a tall target (near full-page on Maximize). Any narrative
-        // flows BELOW and stays glued to the image. Tune pbBigH/pbBigMax per tier.
-        var _pbMax = (lmSizeTier(m) === 'max');
-        var pbBigH = _pbMax ? 9.3 : 7.6, pbBigMax = _pbMax ? 6.6 : 5.8;
+      } else if (lmSizeTier(m) !== 'min') {
+        // Picture Book maximizes portraits BY DEFAULT (Default & Maximize) -> center it big.
+        // Size it to fill the page WITH its narrative when the bridge is short/medium (so the
+        // text never orphans); when the narrative is long enough to carry its own page, go
+        // near-full-page and let the text flow after. Minimize (below) is the only dial-down.
+        var _sideLen = ((section.before || '') + ' ' + (section.after || '')).replace(/\s+/g, ' ').trim().length;
+        var _textIn = (_sideLen / 62) * 0.30 + (_sideLen ? 0.25 : 0);   // rough narrative block height (in)
+        var pbBigH = (_textIn > 2.6) ? 9.3 : Math.max(6.4, Math.min(9.3, 9.5 - _textIn - 0.35));
+        var pbBigMax = 6.6;
         var pbBigW = Math.min(pbBigMax, pbBigH * shapeAspect(normShape(m)));
         html += '<div style="margin:0 auto 0.12in;width:' + pbBigW.toFixed(2) + 'in;page-break-inside:avoid;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
@@ -1168,7 +1171,15 @@ function cgSplitNarr(text){
     buf += sents[i]; cnt++;
     if ((cnt >= 2 && buf.length >= 140) || buf.length >= 300) { chunks.push(buf.trim()); buf = ''; cnt = 0; }
   }
-  if (buf.trim()) chunks.push(buf.trim());
+  if (buf.trim()) {
+    var _tail = buf.trim();
+    // Don't let a tiny trailing sentence become its own panel cell -- a runt chunk lands as a
+    // lone cell that strands on a near-blank page. Merge a short tail into the previous chunk;
+    // it only stands alone when there is no previous chunk. (Rollback: restore the single line
+    // `if (buf.trim()) chunks.push(buf.trim());`.)
+    if (chunks.length && _tail.length < 140) chunks[chunks.length - 1] += ' ' + _tail;
+    else chunks.push(_tail);
+  }
   return chunks;
 }
 // Split narrative into `cols` roughly-equal parts, PRESERVING reading order
