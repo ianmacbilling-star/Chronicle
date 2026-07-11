@@ -5871,8 +5871,10 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
+  if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
+  if (tab === 'finalize' && typeof loadFinalize === 'function') { loadFinalize(); }
   if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
-  ['sessions', 'preview', 'order'].forEach(function(t) {
+  ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
     var el = document.getElementById('ntab-' + t);
@@ -9664,8 +9666,10 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
+  if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
+  if (tab === 'finalize' && typeof loadFinalize === 'function') { loadFinalize(); }
   if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
-  ['sessions', 'preview', 'order'].forEach(function(t) {
+  ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
     var el = document.getElementById('ntab-' + t);
@@ -14170,4 +14174,70 @@ function cmpClearDebugLog() {
     .then(function(r){ return r.json(); })
     .then(function(){ cmpRefreshDebugLog(); cmpDebugMsg('Log cleared.', true); })
     .catch(function(){ cmpDebugMsg('Could not clear the log.', false); });
+}
+
+// ==== Finalize tab: AI layout dry-run (admin-gated, read-only) ====
+var _layoutAiChecked = false;
+function layoutAiCheckStatus() {
+  if (_layoutAiChecked) return; _layoutAiChecked = true;
+  fetch('/api/layout-ai/status', { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j && j.enabled) { var t = document.getElementById('ntab-finalize'); if (t) t.style.display = ''; } })
+    .catch(function () {});
+}
+function finalizeBookQuery() {
+  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');
+}
+function loadFinalize() {
+  var ifr = document.getElementById('finalize-preview-iframe');
+  if (!ifr || !state.currentCampaign) return;
+  var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
+  var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
+  var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
+  if (ifr.src !== url) ifr.src = url;
+}
+function runLayoutAiDryRun() {
+  if (!state.currentCampaign) return;
+  var btn = document.getElementById('layoutai-run-btn');
+  var status = document.getElementById('layoutai-status');
+  var out = document.getElementById('layoutai-results');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing the whole book...'; }
+  if (status) status.textContent = 'Rendering the book and sending it to the model. This can take 30-90 seconds.';
+  if (out) out.innerHTML = '';
+  var url = '/api/layout-ai/' + state.currentCampaign.id + '/dry-run' + finalizeBookQuery();
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { renderLayoutAiResult(j); })
+    .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; })
+    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Run layout analysis'; } if (status) status.textContent = ''; });
+}
+function renderLayoutAiResult(j) {
+  var out = document.getElementById('layoutai-results');
+  if (!out) return;
+  if (!j || j.error) { out.innerHTML = '<div style="color:#e0a0a0;font-size:13px;">Error: ' + escapeHtml((j && j.error) || 'no response') + '</div>'; return; }
+  var h = '';
+  h += '<div style="font-size:11px;color:rgba(245,232,200,0.5);margin-bottom:8px;">' + escapeHtml(j.layout || '') + ' &middot; ' + escapeHtml(j.model || '') + ' &middot; ' + (j.total_pages || 0) + ' pages &middot; ' + (j.pages_flagged || 0) + ' flagged &middot; ' + (Math.round((j.ms || 0) / 100) / 10) + 's</div>';
+  if (j.book_assessment) h += '<div style="background:rgba(201,168,76,0.08);border-left:3px solid var(--gold);border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--cream);margin-bottom:10px;">' + escapeHtml(j.book_assessment) + '</div>';
+  if (j.notes && j.notes.length) h += '<div style="color:#d0a86a;font-size:11px;margin-bottom:8px;">' + escapeHtml(j.notes.join(' | ')) + '</div>';
+  var pages = j.pages || [];
+  if (!pages.length) h += '<div style="color:rgba(245,232,200,0.5);font-size:12px;">No page-level changes suggested.</div>';
+  pages.forEach(function (pg) {
+    var vc = pg.verdict === 'near_blank' ? '#c0392b' : (pg.verdict === 'under_filled' ? '#b06a2a' : '#3f7d4f');
+    h += '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:9px 11px;margin-bottom:7px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-family:var(--font-display);color:var(--gold);font-size:13px;">Page ' + escapeHtml(String(pg.page != null ? pg.page : '?')) + '</span>';
+    h += '<span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:' + vc + ';">' + escapeHtml(String(pg.verdict || '')) + '</span></div>';
+    if (pg.problem && !/^none$/i.test(String(pg.problem))) h += '<div style="font-size:12px;color:rgba(245,232,200,0.85);margin-top:3px;font-style:italic;">' + escapeHtml(pg.problem) + '</div>';
+    if (pg.fix) h += '<div style="font-size:12px;color:rgba(245,232,200,0.7);margin-top:3px;">Fix: ' + escapeHtml(pg.fix) + '</div>';
+    var panels = pg.panels || [];
+    if (panels.length) {
+      h += '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">';
+      panels.forEach(function (pn) {
+        var tag = (pn.label ? escapeHtml(String(pn.label)) : 'panel') + ': e' + escapeHtml(String(pn.emphasis)) + '/' + escapeHtml(String(pn.size_hint || 'keep'));
+        h += '<span style="font-size:10px;font-family:monospace;background:#0c0805;border:1px solid rgba(138,106,42,0.5);border-radius:3px;padding:1px 6px;color:#d8c9a0;">' + tag + '</span>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+  });
+  out.innerHTML = h;
 }
