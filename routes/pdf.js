@@ -91,7 +91,12 @@ async function countPdfPages(buffer) {
 function momentAspect(m) {
   var w = m && Number(m.img_w), h = m && Number(m.img_h);
   if (w > 0 && h > 0) return w / h;
-  return shapeAspect(normShape(m));
+  // No stored pixel dims: towers are GENERATED at 1:4 but their nominal shape ratio is
+  // 9:16, so packing/width math would reserve a 9:16 column for a 1:4 image. Fall back to
+  // the true generation aspect for towers; every other shape keeps its nominal aspect.
+  var s = normShape(m);
+  if (s === 'tower' || s === 'towerthin') return 1 / 4;
+  return shapeAspect(s);
 }
 // ---- Layout metadata accessors (Phase 1; consumed in Phase 2) ----
 // Read m.layout_meta (JSON string from extraction); default to TODAY'S behavior when absent.
@@ -118,6 +123,7 @@ function dispRatioCSS(m) {
   if (s === 'tower' || s === 'towerthin') {
     var w = m && Number(m.img_w), h = m && Number(m.img_h);
     if (w > 0 && h > 0) return Math.round(w) + ' / ' + Math.round(h);
+    return '1 / 4';   // no stored dims: true 1:4 generation ratio, not the nominal 9:16 box
   }
   return shapeRatioCSS(s);
 }
