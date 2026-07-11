@@ -2655,6 +2655,7 @@ function renderReview(data) {
   var ASSET_CAT = { location: 'Location', npc: 'NPC', item: 'Item' };
   var panels = (data && data.panels) || [];
   state.reviewData = data || {};
+  state.reviewDataKey = _reviewCtxKey();
   state.narrativeDirections = (data && data.directions) || {};
   state.reviewOutlines = {};
   var _rawOut = (data && data.outlines) || {};
@@ -2870,7 +2871,7 @@ function castReset(momentId) {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.error) { showAlert('Could not reset casting: ' + data.error); return; }
-    state.reviewData = null;   // force a fresh fetch so the auto cast returns
+    state.reviewData = null; state.reviewDataKey = null;   // force a fresh fetch so the auto cast returns
     ensureReviewData(function(){
       if (state.reviewData && document.getElementById('review-list')) renderReview(state.reviewData);
       _refreshOpenMomentOptions(momentId);
@@ -6342,11 +6343,12 @@ function renderPrepThumbs() {
   });
 }
 function _prepEnsureArchives(cb) {
-  if (state.archives && state.archives.length) { if (cb) cb(); return; }
+  var _cid = state.currentCampaign && state.currentCampaign.id;
+  if (state.archives && state.archives.length && state.archivesCid === _cid) { if (cb) cb(); return; }
   if (!state.currentCampaign) { if (cb) cb(); return; }
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
-    .then(function(rows){ state.archives = Array.isArray(rows) ? rows : []; if (cb) cb(); })
+    .then(function(rows){ state.archives = Array.isArray(rows) ? rows : []; state.archivesCid = state.currentCampaign && state.currentCampaign.id; if (cb) cb(); })
     .catch(function(){ state.archives = state.archives || []; if (cb) cb(); });
 }
 function openPrepImagePicker(kind) {
@@ -7282,7 +7284,7 @@ function loadArchives() {
   if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Loading…</div>';
   fetch('/api/campaigns/' + state.currentCampaign.id + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
-    .then(function(data){ state.archives = Array.isArray(data) ? data : []; updateArchivesCount(); renderArchives(); })
+    .then(function(data){ state.archives = Array.isArray(data) ? data : []; state.archivesCid = state.currentCampaign && state.currentCampaign.id; updateArchivesCount(); renderArchives(); })
     .catch(function(){ if (grid) grid.innerHTML = '<div class="muted" style="padding:20px;">Could not load the archive.</div>'; });
 }
 
@@ -7369,6 +7371,7 @@ function ensureArchivesLoaded(cb) {
   if (!cid) { cb(); return; }
   fetch('/api/campaigns/' + cid + '/archives', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(rows){
     state.archives = Array.isArray(rows) ? rows : [];
+    state.archivesCid = cid;
     cb();
   }).catch(function(){ state.archives = state.archives || []; cb(); });
 }
@@ -8319,7 +8322,7 @@ function renderStoryboard() {
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
         '<span class="moment-title">' + m.title + '</span>' +
-        '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : 'Unknown') + ', ' + (typeLabel[m.type]||m.type) + ', ' + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
+        '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : 'Unknown') + ', ' + (m.type ? ((typeLabel[m.type]||m.type) + ', ') : '') + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
         optsBtn +
       '</div>' +
       '<div class="moment-options" id="moment-options-' + m.id + '" style="display:none;"></div>' +
@@ -13500,12 +13503,21 @@ function canEditCurrentVersion() {
 }
 // Lazy-load the review payload (cast per panel + character/asset master lists)
 // once; one fetch covers every panel in the session.
-function ensureReviewData(cb) {
-  if (state.reviewData && state.reviewData.panels) { cb(); return; }
+function _reviewCtxKey() {
+  return (state.currentSession && state.currentSession.id) + ':' + (state.currentForkId == null ? 'dm' : state.currentForkId);
+}
+function ensureReviewData(cb, wantMomentId) {
+  // Cache is valid only for the session/fork it was built for; a context switch
+  // (or a regen that mints new moment ids) is treated as a miss so we refetch.
+  var _key = _reviewCtxKey();
+  var _fresh = !!(state.reviewData && state.reviewData.panels && state.reviewDataKey === _key);
+  var _hasMoment = _fresh && (wantMomentId == null ||
+    state.reviewData.panels.some(function(p){ return String(p.moment_id) === String(wantMomentId); }));
+  if (_fresh && _hasMoment) { cb(); return; }
   if (!state.currentCampaign || !state.currentSession) { cb(); return; }
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/review' + forkQ())
     .then(function(r){ return r.json(); })
-    .then(function(data){ state.reviewData = data || {}; cb(); })
+    .then(function(data){ state.reviewData = data || {}; state.reviewDataKey = _key; cb(); })
     .catch(function(){ cb(); });
 }
 function toggleMomentOptions(momentId) {
@@ -13514,7 +13526,7 @@ function toggleMomentOptions(momentId) {
   if (box.style.display === 'block') { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = 'block';
   box.innerHTML = '<div class="moment-opts-loading">Loading...</div>';
-  ensureReviewData(function(){ renderMomentOptions(momentId); });
+  ensureReviewData(function(){ renderMomentOptions(momentId); }, momentId);
 }
 function _refreshOpenMomentOptions(momentId) {
   var box = document.getElementById('moment-options-' + momentId);
