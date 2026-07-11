@@ -851,15 +851,17 @@ function renderPaired(moments, sections, intro, outro, opts) {
         var pbCol = '<div style="display:flow-root;">' + beforeHtml + afterHtml + pbBeside + '</div>';
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + pbCol + '</div>';
         i += pbAdv;
-      } else if (((section.before || '') + ' ' + (section.after || '')).replace(/\s+/g, ' ').trim().length < 160) {
-        // Little or no narrative to sit beside it (short bridge or none) -> don't strand the
-        // portrait in a floated column with a mostly-empty gutter. Center it and size to a
-        // taller target so it commands the page. Tune the 160-char threshold + pbBigH/pbBigMax.
-        var pbBigH = 7.6, pbBigMax = 5.8;
+      } else if (lmSizeTier(m) === 'max' || ((section.before || '') + ' ' + (section.after || '')).replace(/\s+/g, ' ').trim().length < 160) {
+        // Maximize prominence, OR little/no side narrative -> give the portrait the page:
+        // center it and size to a tall target (near full-page on Maximize). Any narrative
+        // flows BELOW and stays glued to the image. Tune pbBigH/pbBigMax per tier.
+        var _pbMax = (lmSizeTier(m) === 'max');
+        var pbBigH = _pbMax ? 9.3 : 7.6, pbBigMax = _pbMax ? 6.6 : 5.8;
         var pbBigW = Math.min(pbBigMax, pbBigH * shapeAspect(normShape(m)));
         html += '<div style="margin:0 auto 0.12in;width:' + pbBigW.toFixed(2) + 'in;page-break-inside:avoid;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
-          coCaptionBelow(m, i, opts.caption) + '</div>';
+          coCaptionBelow(m, i, opts.caption) + '</div>' +
+          '<div style="break-before:avoid;page-break-before:avoid;">' + beforeHtml + afterHtml + '</div>';
       } else {
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
       }

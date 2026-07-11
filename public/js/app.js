@@ -13577,7 +13577,7 @@ function renderMomentOptions(momentId) {
   if (canEdit) {
     var po = '';
     for (var pi = 0; pi < POPTS.length; pi++) { po += '<option value="' + POPTS[pi][0] + '"' + (POPTS[pi][0] === ptier ? ' selected' : '') + '>' + POPTS[pi][1] + '</option>'; }
-    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> <select class="moment-prom-select" onchange="setMomentProminence(' + momentId + ', this.value)">' + po + '</select> <span class="moment-opts-hint">how big this panel gets in the comic &amp; magazine layouts</span></div>';
+    promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> <select class="moment-prom-select" onchange="setMomentProminence(' + momentId + ', this.value)">' + po + '</select> <span class="moment-opts-hint">how big this panel gets in the comic, magazine &amp; picture book layouts</span></div>';
   } else {
     promHtml = '<div class="review-row"><span class="review-label">Prominence:</span> ' + plabel + '</div>';
   }
