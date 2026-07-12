@@ -14262,3 +14262,47 @@ function renderLayoutAiResult(j) {
   });
   out.innerHTML = h;
 }
+
+// ---- Finalize: draggable splitter + before/after PDF tabs ----
+var _finalizeDrag = null;
+function finalizeSplitStart(e) {
+  e.preventDefault();
+  var split = document.getElementById('finalize-split');
+  var left = document.getElementById('finalize-left');
+  if (!split || !left) return;
+  _finalizeDrag = { x: e.clientX, w: left.getBoundingClientRect().width, total: split.getBoundingClientRect().width };
+  document.addEventListener('mousemove', finalizeSplitMove);
+  document.addEventListener('mouseup', finalizeSplitEnd);
+  document.body.style.userSelect = 'none';
+}
+function finalizeSplitMove(e) {
+  if (!_finalizeDrag || !_finalizeDrag.total) return;
+  var left = document.getElementById('finalize-left');
+  var pct = ((_finalizeDrag.w + (e.clientX - _finalizeDrag.x)) / _finalizeDrag.total) * 100;
+  if (pct < 20) pct = 20; if (pct > 75) pct = 75;
+  if (left) left.style.flexBasis = pct + '%';
+}
+function finalizeSplitEnd() {
+  _finalizeDrag = null;
+  document.removeEventListener('mousemove', finalizeSplitMove);
+  document.removeEventListener('mouseup', finalizeSplitEnd);
+  document.body.style.userSelect = '';
+}
+function finalizeSetPdfTab(which) {
+  var before = document.getElementById('finalize-before-wrap');
+  var after = document.getElementById('finalize-after-wrap');
+  ['before', 'after', 'both'].forEach(function (t) {
+    var b = document.getElementById('finalize-pdftab-' + t);
+    if (b) { b.style.color = (t === which) ? 'var(--gold)' : 'rgba(245,232,200,0.55)'; b.style.borderBottomColor = (t === which) ? 'var(--gold)' : 'transparent'; }
+  });
+  if (which === 'both') {
+    if (before) { before.style.display = ''; before.style.flex = '1 1 50%'; }
+    if (after) { after.style.display = ''; after.style.flex = '1 1 50%'; }
+  } else if (which === 'after') {
+    if (before) before.style.display = 'none';
+    if (after) { after.style.display = ''; after.style.flex = '1 1 auto'; }
+  } else {
+    if (before) { before.style.display = ''; before.style.flex = '1 1 auto'; }
+    if (after) after.style.display = 'none';
+  }
+}
