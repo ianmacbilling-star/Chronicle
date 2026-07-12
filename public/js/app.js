@@ -14252,6 +14252,11 @@ function renderLayoutAiResult(j) {
   if (!j || j.error) { out.innerHTML = '<div style="color:#e0a0a0;font-size:13px;">Error: ' + escapeHtml((j && j.error) || 'no response') + '</div>'; return; }
   var h = '';
   h += '<div style="font-size:11px;color:rgba(245,232,200,0.5);margin-bottom:8px;">' + escapeHtml(j.layout || '') + ' &middot; ' + escapeHtml(j.model || '') + ' &middot; ' + (j.total_pages || 0) + ' pages &middot; ' + (j.pages_flagged || 0) + ' flagged &middot; ' + (j.applied != null ? j.applied + ' applied &middot; ' : '') + (Math.round((j.ms || 0) / 100) / 10) + 's</div>';
+  if (j.settings) {
+    var _co = j.settings.co || {};
+    var _coStr = Object.keys(_co).map(function (k) { return k + '=' + _co[k]; }).join(', ');
+    h += '<div style="font-size:10px;color:rgba(245,232,200,0.4);margin-bottom:8px;font-family:monospace;word-break:break-all;">rendered: layout=' + escapeHtml(String(j.settings.layout || '')) + ' &middot; panels=' + (j.settings.panels || 0) + (_coStr ? ' &middot; ' + escapeHtml(_coStr) : '') + '</div>';
+  }
   if (j.book_assessment) h += '<div style="background:rgba(201,168,76,0.08);border-left:3px solid var(--gold);border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--cream);margin-bottom:10px;">' + escapeHtml(j.book_assessment) + '</div>';
   if (j.notes && j.notes.length) h += '<div style="color:#d0a86a;font-size:11px;margin-bottom:8px;">' + escapeHtml(j.notes.join(' | ')) + '</div>';
   var pages = j.pages || [];

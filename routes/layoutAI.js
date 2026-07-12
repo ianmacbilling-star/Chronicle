@@ -156,11 +156,16 @@ async function analyzeBook(req, campaignId, overridesForRender) {
 // Turn the AI's per-panel signals into an in-memory layout_meta override map keyed by
 // manifest idx. size_hint drives prominence (grow -> Maximize, shrink -> Minimize),
 // otherwise emphasis; focal/crop_safe/group_break pass through when present.
-function buildOverrides(pages) {
+function buildOverrides(pages, manifest) {
+  var byTitle = {};
+  (manifest || []).forEach(function (m) { if (m && m.title) byTitle[String(m.title).trim().toLowerCase()] = m.idx; });
   var ov = {};
   (pages || []).forEach(function (pg) {
     (pg.panels || []).forEach(function (pn) {
-      if (pn == null || pn.idx == null) return;
+      if (pn == null) return;
+      var idx = (pn.idx != null) ? pn.idx : null;
+      if (idx == null && pn.label) { var k = String(pn.label).trim().toLowerCase(); if (byTitle[k] != null) idx = byTitle[k]; }
+      if (idx == null) return;
       var e = Number(pn.emphasis);
       var base = (e >= 1 && e <= 5) ? Math.round(e) : 3;
       var prom = pn.size_hint === 'grow' ? 5 : (pn.size_hint === 'shrink' ? 1 : base);
@@ -168,7 +173,7 @@ function buildOverrides(pages) {
       if (['center', 'top', 'bottom', 'left', 'right'].indexOf(pn.focal) >= 0) patch.focal = pn.focal;
       if (pn.crop_safe === true || pn.crop_safe === false) patch.crop_safe = pn.crop_safe;
       if (pn.group_break === true || pn.group_break === false) patch.group_break = pn.group_break;
-      ov[pn.idx] = patch;
+      ov[idx] = patch;
     });
   });
   return ov;
@@ -192,6 +197,7 @@ router.post('/:campaignId/dry-run', requireAuth, requireAdmin, async function (r
     const a = await analyzeBook(req, req.params.campaignId, null);
     const result = {
       dry_run: true, campaign: a.built.campaign.name, layout: a.built.layoutStyle, model: LAYOUT_MODEL,
+      settings: { layout: a.built.layoutStyle, co: a.built.co || null, panels: (a.built.manifest || []).length },
       total_pages: a.total_pages, pages_flagged: a.pages.length, book_assessment: a.book_assessment,
       pages: a.pages, notes: a.notes, ms: Date.now() - t0
     };
@@ -210,11 +216,12 @@ router.post('/:campaignId/optimize', requireAuth, requireAdmin, async function (
   const t0 = Date.now();
   try {
     const a = await analyzeBook(req, req.params.campaignId, null);
-    const overrides = buildOverrides(a.pages);
+    const overrides = buildOverrides(a.pages, a.built.manifest);
     const token = cachePut(overrides, req.params.campaignId);
     console.log('[layout-ai optimize]', a.built.campaign.name, '|', a.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| ' + (Date.now() - t0) + 'ms');
     res.json({
       dry_run: false, token: token, campaign: a.built.campaign.name, layout: a.built.layoutStyle, model: LAYOUT_MODEL,
+      settings: { layout: a.built.layoutStyle, co: a.built.co || null, panels: (a.built.manifest || []).length },
       total_pages: a.total_pages, pages_flagged: a.pages.length, applied: Object.keys(overrides).length,
       book_assessment: a.book_assessment, pages: a.pages, notes: a.notes, ms: Date.now() - t0
     });
