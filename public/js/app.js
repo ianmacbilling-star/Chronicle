@@ -14402,10 +14402,11 @@ function ensurePdfJs() {
 // BOTH before and after, so a page renders pixel-identical in each pane -- only content differs.
 var _finalizeLockedWidth = 0;
 function finalizeRenderWidth(container) {
+  if (_finalizeLockedWidth > 0) return _finalizeLockedWidth;   // truly locked: measure once, reuse for both panes
   var rp = document.getElementById('finalize-right');
   var w = rp ? rp.clientWidth : 0;
-  if (w > 8) _finalizeLockedWidth = w - 8;
-  return _finalizeLockedWidth > 0 ? _finalizeLockedWidth : Math.max(400, (container ? container.clientWidth : 400) - 8);
+  if (w > 8) { _finalizeLockedWidth = w - 8; return _finalizeLockedWidth; }
+  return Math.max(400, (container ? container.clientWidth : 400) - 8);
 }
 var _pdfRenderTokens = {};
 function renderPdfInto(url, containerId) {
@@ -14501,6 +14502,7 @@ function resetPublishForCampaignSwitch() {
   state._prepOwnTitle = null;
   state.bookMeta = null;
   if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null;
+  _finalizeLockedWidth = 0;   // re-lock the render width for the new campaign
   var bs = document.getElementById('finalize-before-scroll'); if (bs) bs.innerHTML = '';
   var as = document.getElementById('finalize-after-scroll'); if (as) { as.innerHTML = ''; as.style.display = 'none'; }
   var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
