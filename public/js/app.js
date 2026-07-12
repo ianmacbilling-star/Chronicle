@@ -14236,8 +14236,8 @@ function runLayoutAiDryRun() {
         var afterBody = document.getElementById('finalize-after-body');
         if (afterScroll) afterScroll.style.display = '';
         if (afterBody) afterBody.style.display = 'none';
-        renderPdfInto(aurl, 'finalize-after-scroll');
         if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('both');
+        renderPdfInto(aurl, 'finalize-after-scroll');
         finalizeAttachSync();
       }
     })
@@ -14365,13 +14365,14 @@ function renderPdfInto(url, containerId) {
     }).then(function (pdf) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
-      var width = Math.max(120, container.clientWidth - 8);
+      var rp = document.getElementById('finalize-right');
+      var width = (rp && rp.clientWidth > 8) ? (rp.clientWidth - 8) : Math.max(400, container.clientWidth - 8);
       var chain = Promise.resolve();
       var _loop = function (pageNum) {
         chain = chain.then(function () {
           if (_pdfRenderTokens[containerId] !== myToken) return;
           return pdf.getPage(pageNum).then(function (page) {
-            var dpr = Math.min(window.devicePixelRatio || 1, 2);
+            var dpr = Math.min((window.devicePixelRatio || 1) * 1.25, 2.5);
             var vp1 = page.getViewport({ scale: 1 });
             var vp = page.getViewport({ scale: (width / vp1.width) * dpr });   // render at screen pixel density -> crisp
             var canvas = document.createElement('canvas');

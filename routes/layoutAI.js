@@ -28,7 +28,7 @@ const { buildPrompt } = require('../services/layoutAI/brief');
 
 const FLAG = 'layout_ai_dryrun';       // app_settings int; 1 = feature on
 const MAX_PAGES_PER_CALL = 40;         // secondary page cap (API allows ~100)
-const MAX_CHUNK_BYTES = 15 * 1024 * 1024;  // keep each request PDF well under the 32MB API cap (base64 inflates ~33%)
+const MAX_CHUNK_BYTES = 20 * 1024 * 1024;  // keep each request PDF under the 32MB API cap (base64 inflates ~33%)
 const ANTHROPIC_VERSION = '2023-06-01';
 
 async function isEnabled() {
@@ -83,12 +83,23 @@ async function splitPdf(buf) {
   return { total: total, chunks: chunks };
 }
 
+// Tolerant JSON: the model sometimes wraps its JSON in a sentence of prose or a code
+// fence. Try a direct parse, then fall back to the outermost { ... } span.
+function extractJson(text) {
+  if (!text) return null;
+  var t = String(text).replace(/```json/g, '').replace(/```/g, '').trim();
+  try { return JSON.parse(t); } catch (e) {}
+  var a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e2) {} }
+  return null;
+}
+
 async function critiqueChunk(pdfB64, prompt, startPage) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error('ANTHROPIC_API_KEY not set');
   const note = startPage > 1
-    ? '\n\nNOTE: this is a chunk of a larger book; its first page is book page ' + startPage +
-      '. Report every page number as the BOOK page (add ' + (startPage - 1) + ' to the in-chunk index).'
+    ? '\n\nIMPORTANT: The attached PDF contains only PART of the book, starting at book page ' + startPage +
+      '. The panel MANIFEST above lists ALL panels in the whole book -- use it ONLY to look up the idx of the panels you can SEE in this PDF. Assess ONLY the pages present here, and report page numbers as BOOK pages (this PDF starts at book page ' + startPage + '). Output MUST be pure JSON with no prose before or after.'
     : '';
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -108,9 +119,9 @@ async function critiqueChunk(pdfB64, prompt, startPage) {
   const data = await resp.json();
   if (data && data.error) throw new Error('API: ' + (data.error.message || JSON.stringify(data.error)));
   const text = (data.content || []).map(function (i) { return i.type === 'text' ? i.text : ''; }).filter(Boolean).join('\n');
-  const clean = text.replace(/```json|```/g, '').trim();
-  try { return JSON.parse(clean); }
-  catch (e) { return { parseError: true, raw: text.slice(0, 4000) }; }
+  const parsed = extractJson(text);
+  if (parsed) return parsed;
+  return { parseError: true, raw: text.slice(0, 500) };
 }
 
 // POST /api/layout-ai/:campaignId/dry-run
