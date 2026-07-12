@@ -14262,6 +14262,52 @@ function runLayoutAiDryRun() {
     })
     .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; finish(); });
 }
+// ---- Free (tokenless) layout scan: measure the already-rendered Before canvases to find
+// under-filled pages. No server, no API -- pure client-side pixel measurement. Runs on load.
+function measureCanvasFill(canvas) {
+  try {
+    var W = canvas.width, H = canvas.height;
+    if (!W || !H) return null;
+    var data = canvas.getContext('2d').getImageData(0, 0, W, H).data;
+    var lastContent = 0;
+    for (var y = 0; y < H; y += 3) {
+      var rowHas = false;
+      for (var x = 0; x < W; x += 7) {
+        var i = (y * W + x) * 4;
+        if (data[i + 3] > 10 && (data[i] < 238 || data[i + 1] < 238 || data[i + 2] < 238)) { rowHas = true; break; }
+      }
+      if (rowHas) lastContent = y;
+    }
+    return lastContent / H;
+  } catch (e) { return null; }
+}
+function finalizeFreeAnalysis() {
+  var container = document.getElementById('finalize-before-scroll');
+  var out = document.getElementById('layoutai-results');
+  if (!container || !out) return;
+  if (out.getAttribute('data-mode') === 'ai') return;   // don't clobber an AI pass result
+  var canvases = container.querySelectorAll('canvas');
+  if (!canvases.length) return;
+  var flagged = [];
+  for (var n = 0; n < canvases.length; n++) {
+    if (n < 5) continue;   // skip front matter (cover/title/credits/roster/contents)
+    var fill = measureCanvasFill(canvases[n]);
+    if (fill != null && fill < 0.62) flagged.push({ page: n + 1, fill: Math.round(fill * 100) });
+  }
+  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.5);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + canvases.length + ' pages</div>';
+  if (!flagged.length) {
+    h += '<div style="color:rgba(245,232,200,0.6);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
+  } else {
+    h += '<div style="color:var(--cream);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled &mdash; content stops high with space below:</div>';
+    flagged.forEach(function (f) {
+      h += '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
+    });
+    h += '<div style="color:rgba(245,232,200,0.5);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them (grow image / flow text).</div>';
+  }
+  out.innerHTML = h;
+  out.setAttribute('data-mode', 'free');
+}
+
 function renderLayoutAiResult(j) {
   var out = document.getElementById('layoutai-results');
   if (!out) return;
@@ -14296,6 +14342,7 @@ function renderLayoutAiResult(j) {
     h += '</div>';
   });
   out.innerHTML = h;
+  out.setAttribute('data-mode', 'ai');
 }
 
 // ---- Finalize: draggable splitter + before/after PDF tabs ----
@@ -14324,22 +14371,12 @@ function finalizeSplitEnd() {
   document.body.style.userSelect = '';
 }
 function finalizeSetPdfTab(which) {
+  // Tabs removed -- the panes are always side by side now. Kept as a safe hook so existing
+  // callers (e.g. the optimize handler) still work; it just ensures both panes are visible.
   var before = document.getElementById('finalize-before-wrap');
   var after = document.getElementById('finalize-after-wrap');
-  ['before', 'after', 'both'].forEach(function (t) {
-    var b = document.getElementById('finalize-pdftab-' + t);
-    if (b) { b.style.color = (t === which) ? 'var(--gold)' : 'rgba(245,232,200,0.55)'; b.style.borderBottomColor = (t === which) ? 'var(--gold)' : 'transparent'; }
-  });
-  if (which === 'both') {
-    if (before) { before.style.display = ''; before.style.flex = '1 1 50%'; }
-    if (after) { after.style.display = ''; after.style.flex = '1 1 50%'; }
-  } else if (which === 'after') {
-    if (before) before.style.display = 'none';
-    if (after) { after.style.display = ''; after.style.flex = '1 1 auto'; }
-  } else {
-    if (before) { before.style.display = ''; before.style.flex = '1 1 auto'; }
-    if (after) after.style.display = 'none';
-  }
+  if (before) { before.style.display = ''; before.style.flex = '1 1 50%'; }
+  if (after) { after.style.display = ''; after.style.flex = '1 1 50%'; }
 }
 
 // ---- Finalize: pdf.js render into scroll containers + synced scrolling ----
@@ -14422,6 +14459,7 @@ function renderPdfInto(url, containerId) {
         if (_pdfRenderTokens[containerId] !== myToken) return;
         var pw = document.getElementById(containerId + '-pw');
         if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
+        if (containerId === 'finalize-before-scroll' && typeof finalizeFreeAnalysis === 'function') finalizeFreeAnalysis();
       });
     });
   }).catch(function (e) {
@@ -14466,7 +14504,7 @@ function resetPublishForCampaignSwitch() {
   var bs = document.getElementById('finalize-before-scroll'); if (bs) bs.innerHTML = '';
   var as = document.getElementById('finalize-after-scroll'); if (as) { as.innerHTML = ''; as.style.display = 'none'; }
   var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
-  var lr = document.getElementById('layoutai-results'); if (lr) lr.innerHTML = '';
+  var lr = document.getElementById('layoutai-results'); if (lr) { lr.innerHTML = ''; lr.removeAttribute('data-mode'); }
   var pw = document.getElementById('layoutai-progress-wrap'); if (pw) pw.style.display = 'none';
   if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('before');
   // Re-pull book meta + title/thumbs for the new campaign.

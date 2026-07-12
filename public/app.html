@@ -270,16 +270,13 @@
             <div style="width:3px;height:70px;background:rgba(201,168,76,0.45);border-radius:2px;"></div>
           </div>
           <div id="finalize-right" style="flex:1 1 auto;min-width:220px;padding-left:8px;display:flex;flex-direction:column;">
-            <div style="display:flex;gap:2px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:8px;">
-              <div id="finalize-pdftab-before" onclick="finalizeSetPdfTab('before')" style="cursor:pointer;font-size:12px;padding:5px 12px;color:var(--gold);border-bottom:2px solid var(--gold);">Before</div>
-              <div id="finalize-pdftab-after" onclick="finalizeSetPdfTab('after')" style="cursor:pointer;font-size:12px;padding:5px 12px;color:rgba(245,232,200,0.55);border-bottom:2px solid transparent;">After</div>
-              <div id="finalize-pdftab-both" onclick="finalizeSetPdfTab('both')" style="cursor:pointer;font-size:12px;padding:5px 12px;color:rgba(245,232,200,0.55);border-bottom:2px solid transparent;">Side by side</div>
-            </div>
             <div id="finalize-pdf-panes" style="display:flex;gap:8px;align-items:stretch;">
-              <div id="finalize-before-wrap" style="flex:1 1 auto;min-width:0;">
+              <div id="finalize-before-wrap" style="flex:1 1 50%;min-width:0;">
+                <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;">Before</div>
                 <div id="finalize-before-scroll" style="height:600px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;"></div>
               </div>
-              <div id="finalize-after-wrap" style="flex:1 1 auto;min-width:0;display:none;">
+              <div id="finalize-after-wrap" style="flex:1 1 50%;min-width:0;">
+                <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;">After (optimized)</div>
                 <div id="finalize-after-scroll" style="height:600px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
                 <div id="finalize-after-body" style="width:100%;height:600px;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">The optimized &ldquo;after&rdquo; book will appear here once the Optimize pass is built &mdash; analysis only for now.</div>
               </div>
