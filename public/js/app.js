@@ -14270,20 +14270,19 @@ function finalizeGoToPage(n) {
   if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
 }
 function finalizeShowFreeAnalysis(flagged, numPages) {
-  var out = document.getElementById('layoutai-results');
-  if (!out || out.getAttribute('data-mode') === 'ai') return;
+  var out = document.getElementById('layoutai-free');
+  if (!out) return;
   var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + numPages + ' pages</div>';
   if (!flagged.length) {
     h += '<div style="color:rgba(245,232,200,0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
     h += '<div style="color:var(--cream);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled:</div>';
     flagged.forEach(function (f) {
-      h += '<div style="border:1px solid rgba(201,168,76,0.3);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--cream);"><span style="font-family:var(--font-display);color:var(--gold);cursor:pointer;" onclick="finalizeGoToPage(' + f.page + ')">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
+      h += '<div onclick="finalizeGoToPage(' + f.page + ')" title="Go to page ' + f.page + '" style="cursor:pointer;border:1px solid rgba(201,168,76,0.3);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--cream);"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
     });
     h += '<div style="color:rgba(245,232,200,0.7);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them.</div>';
   }
   out.innerHTML = h;
-  out.setAttribute('data-mode', 'free');
 }
 function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
@@ -14408,7 +14407,7 @@ function renderLayoutAiResult(j) {
   if (!pages.length) h += '<div style="color:rgba(245,232,200,0.5);font-size:12px;">No page-level changes suggested.</div>';
   pages.forEach(function (pg) {
     var vc = pg.verdict === 'near_blank' ? '#c0392b' : (pg.verdict === 'under_filled' ? '#b06a2a' : '#3f7d4f');
-    h += '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:9px 11px;margin-bottom:7px;">';
+    h += '<div' + (pg.page != null && !isNaN(Number(pg.page)) ? ' onclick="finalizeGoToPage(' + Number(pg.page) + ')"' : '') + ' title="Go to page" style="cursor:pointer;border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:9px 11px;margin-bottom:7px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-family:var(--font-display);color:var(--gold);font-size:13px;">Page ' + escapeHtml(String(pg.page != null ? pg.page : '?')) + '</span>';
     h += '<span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:' + vc + ';">' + escapeHtml(String(pg.verdict || '')) + '</span></div>';
     if (pg.problem && !/^none$/i.test(String(pg.problem))) h += '<div style="font-size:12px;color:rgba(245,232,200,0.85);margin-top:3px;font-style:italic;">' + escapeHtml(pg.problem) + '</div>';
@@ -14591,6 +14590,7 @@ function resetPublishForCampaignSwitch() {
   var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
   var _nv = document.getElementById('finalize-page-nav'); if (_nv) _nv.innerHTML = '';
   var lr = document.getElementById('layoutai-results'); if (lr) { lr.innerHTML = ''; lr.removeAttribute('data-mode'); }
+  var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.innerHTML = '';
   var pw = document.getElementById('layoutai-progress-wrap'); if (pw) pw.style.display = 'none';
   if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('before');
   // Re-pull book meta + title/thumbs for the new campaign.
