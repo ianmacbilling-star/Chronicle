@@ -14189,12 +14189,12 @@ function finalizeBookQuery() {
   return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');
 }
 function loadFinalize() {
-  var ifr = document.getElementById('finalize-preview-iframe');
-  if (!ifr || !state.currentCampaign) return;
+  if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
-  if (ifr.src !== url) ifr.src = url;
+  if (loadFinalize._lastUrl !== url) { loadFinalize._lastUrl = url; renderPdfInto(url, 'finalize-before-scroll'); }
+  finalizeAttachSync();
 }
 function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
@@ -14231,12 +14231,14 @@ function runLayoutAiDryRun() {
     .then(function (j) {
       renderLayoutAiResult(j);
       if (j && j.token && state.currentCampaign) {
-        var afterIfr = document.getElementById('finalize-after-iframe');
-        var afterBody = document.getElementById('finalize-after-body');
         var aurl = '/api/layout-ai/' + state.currentCampaign.id + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
-        if (afterIfr) { afterIfr.src = aurl; afterIfr.style.display = ''; }
+        var afterScroll = document.getElementById('finalize-after-scroll');
+        var afterBody = document.getElementById('finalize-after-body');
+        if (afterScroll) afterScroll.style.display = '';
         if (afterBody) afterBody.style.display = 'none';
+        renderPdfInto(aurl, 'finalize-after-scroll');
         if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('both');
+        finalizeAttachSync();
       }
     })
     .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; })
@@ -14315,4 +14317,85 @@ function finalizeSetPdfTab(which) {
     if (before) { before.style.display = ''; before.style.flex = '1 1 auto'; }
     if (after) after.style.display = 'none';
   }
+}
+
+// ---- Finalize: pdf.js render into scroll containers + synced scrolling ----
+var _pdfjsPromise = null;
+function ensurePdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (_pdfjsPromise) return _pdfjsPromise;
+  _pdfjsPromise = new Promise(function (resolve, reject) {
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    sc.onload = function () {
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      } else { reject(new Error('pdf.js did not initialize')); }
+    };
+    sc.onerror = function () { reject(new Error('pdf.js CDN could not load')); };
+    document.head.appendChild(sc);
+  });
+  return _pdfjsPromise;
+}
+var _pdfRenderTokens = {};
+function renderPdfInto(url, containerId) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var myToken = Date.now() + ':' + Math.random();
+  _pdfRenderTokens[containerId] = myToken;
+  container.innerHTML = '<div style="color:rgba(245,232,200,0.4);font-size:12px;padding:16px;">Rendering pages...</div>';
+  ensurePdfJs().then(function (pdfjsLib) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
+      return r.arrayBuffer();
+    }).then(function (buf) {
+      return pdfjsLib.getDocument({ data: buf }).promise;
+    }).then(function (pdf) {
+      if (_pdfRenderTokens[containerId] !== myToken) return;
+      container.innerHTML = '';
+      var width = Math.max(120, container.clientWidth - 8);
+      var chain = Promise.resolve();
+      var _loop = function (pageNum) {
+        chain = chain.then(function () {
+          if (_pdfRenderTokens[containerId] !== myToken) return;
+          return pdf.getPage(pageNum).then(function (page) {
+            var vp1 = page.getViewport({ scale: 1 });
+            var vp = page.getViewport({ scale: width / vp1.width });
+            var canvas = document.createElement('canvas');
+            canvas.width = vp.width; canvas.height = vp.height;
+            canvas.style.width = '100%'; canvas.style.display = 'block'; canvas.style.marginBottom = '6px'; canvas.style.borderRadius = '3px';
+            container.appendChild(canvas);
+            return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+          });
+        });
+      };
+      for (var n = 1; n <= pdf.numPages; n++) _loop(n);
+      return chain;
+    });
+  }).catch(function (e) {
+    if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
+  });
+}
+var _finalizeSyncing = false;
+function finalizeSyncScroll(srcId) {
+  if (_finalizeSyncing) return;
+  _finalizeSyncing = true;
+  var src = document.getElementById(srcId);
+  if (src) {
+    var denom = src.scrollHeight - src.clientHeight;
+    var ratio = denom > 0 ? src.scrollTop / denom : 0;
+    ['layoutai-results', 'finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
+      if (id === srcId) return;
+      var el = document.getElementById(id);
+      if (el && el.offsetParent !== null) { var d = el.scrollHeight - el.clientHeight; if (d > 0) el.scrollTop = ratio * d; }
+    });
+  }
+  window.requestAnimationFrame(function () { _finalizeSyncing = false; });
+}
+function finalizeAttachSync() {
+  ['layoutai-results', 'finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && !el._syncAttached) { el._syncAttached = true; el.addEventListener('scroll', function () { finalizeSyncScroll(id); }); }
+  });
 }
