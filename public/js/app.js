@@ -14201,7 +14201,7 @@ function loadFinalize() {
   loadFinalize._lastUrl = url;
   _finalizeBeforeBase = url;
   var ifr = document.getElementById('finalize-before-iframe');
-  if (ifr) ifr.src = url + '#page=1';   // native viewer = identical to True View (no pink)
+  if (ifr) ifr.src = url + '#toolbar=0&navpanes=0&page=1';   // native viewer = identical to True View (no pink); toolbar hidden
   finalizeMeasureBook(url);   // hidden pass: page count for the gutter + free under-fill scan
 }
 // Hidden pdf.js pass -- renders off-screen ONLY to measure. The visible panes stay native.
@@ -14242,10 +14242,15 @@ function finalizeBuildNav(numPages) {
   nav.innerHTML = h;
 }
 function finalizeGoToPage(n) {
-  ['finalize-before-iframe', 'finalize-after-iframe'].forEach(function (id) {
-    var ifr = document.getElementById(id);
-    if (!ifr || ifr.style.display === 'none' || !ifr.src || ifr.src === 'about:blank') return;
-    ifr.src = ifr.src.split('#')[0] + '#page=' + n;
+  var panes = [['finalize-before-iframe', _finalizeBeforeBase], ['finalize-after-iframe', _finalizeAfterBase]];
+  panes.forEach(function (pair) {
+    var ifr = document.getElementById(pair[0]);
+    var base = pair[1];
+    if (!ifr || ifr.style.display === 'none' || !base) return;
+    var target = base + '#toolbar=0&navpanes=0&page=' + n;
+    // Chrome's PDF viewer only reads the page fragment on (re)load, so force a reload (cached, fast).
+    ifr.src = 'about:blank';
+    (function (frame, u) { setTimeout(function () { frame.src = u; }, 30); })(ifr, target);
   });
   var nav = document.getElementById('finalize-page-nav');
   if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
@@ -14301,7 +14306,7 @@ function runLayoutAiDryRun() {
       _finalizeAfterBase = aurl;
       var afterIfr = document.getElementById('finalize-after-iframe');
       var afterBody = document.getElementById('finalize-after-body');
-      if (afterIfr) { afterIfr.src = aurl + '#page=1'; afterIfr.style.display = ''; }
+      if (afterIfr) { afterIfr.src = aurl + '#toolbar=0&navpanes=0&page=1'; afterIfr.style.display = ''; }
       if (afterBody) afterBody.style.display = 'none';
     }
     finish();
