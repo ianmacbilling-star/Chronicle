@@ -14192,6 +14192,8 @@ function finalizeBookQuery() {
 }
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
+var _finalizeBeforeBlob = '';
+var _finalizeAfterBlob = '';
 function loadFinalize() {
   if (!state.currentCampaign || !document.getElementById('finalize-before-iframe')) return;
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
@@ -14199,18 +14201,28 @@ function loadFinalize() {
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
   if (loadFinalize._lastUrl === url) return;
   loadFinalize._lastUrl = url;
-  _finalizeBeforeBase = url;
-  var ifr = document.getElementById('finalize-before-iframe');
-  if (ifr) ifr.src = url + '#toolbar=0&navpanes=0&page=1';   // native viewer = identical to True View (no pink); toolbar hidden
-  finalizeMeasureBook(url);   // hidden pass: page count for the gutter + free under-fill scan
+  finalizeLoadPdf(url, 'finalize-before-iframe', true);
 }
-// Hidden pdf.js pass -- renders off-screen ONLY to measure. The visible panes stay native.
-function finalizeMeasureBook(url) {
-  var hidden = document.getElementById('finalize-measure-hidden');
-  if (!hidden) return;
+// Fetch the PDF ONCE, hold it as an in-memory blob, and point the iframe at the blob URL.
+// Page jumps then reload the blob locally (instant) instead of re-hitting the server (30s).
+function finalizeLoadPdf(url, iframeId, isBefore) {
+  fetch(url, { credentials: 'same-origin' }).then(function (r) {
+    if (!r.ok) throw new Error('fetch ' + r.status);
+    return r.blob();
+  }).then(function (blob) {
+    var blobUrl = URL.createObjectURL(blob);
+    if (isBefore) { if (_finalizeBeforeBlob) URL.revokeObjectURL(_finalizeBeforeBlob); _finalizeBeforeBlob = blobUrl; _finalizeBeforeBase = blobUrl; }
+    else { if (_finalizeAfterBlob) URL.revokeObjectURL(_finalizeAfterBlob); _finalizeAfterBlob = blobUrl; _finalizeAfterBase = blobUrl; }
+    var ifr = document.getElementById(iframeId);
+    if (ifr) { ifr.src = blobUrl + '#toolbar=0&navpanes=0&page=1'; ifr.style.display = ''; }
+    if (isBefore) finalizeMeasureBlob(blob);
+  }).catch(function () {});
+}
+// Hidden pdf.js measurement from the SAME blob (no extra fetch): page count + under-fill scan.
+function finalizeMeasureBlob(blob) {
+  if (!document.getElementById('finalize-measure-hidden')) return;
   ensurePdfJs().then(function (pdfjsLib) {
-    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.arrayBuffer(); })
-      .then(function (buf) { return pdfjsLib.getDocument({ data: buf }).promise; })
+    return blob.arrayBuffer().then(function (buf) { return pdfjsLib.getDocument({ data: buf }).promise; })
       .then(function (pdf) {
         finalizeBuildNav(pdf.numPages);
         var flagged = [];
@@ -14303,11 +14315,9 @@ function runLayoutAiDryRun() {
     renderLayoutAiResult(j);
     if (j && j.token) {
       var aurl = '/api/layout-ai/' + cid + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
-      _finalizeAfterBase = aurl;
-      var afterIfr = document.getElementById('finalize-after-iframe');
       var afterBody = document.getElementById('finalize-after-body');
-      if (afterIfr) { afterIfr.src = aurl + '#toolbar=0&navpanes=0&page=1'; afterIfr.style.display = ''; }
       if (afterBody) afterBody.style.display = 'none';
+      finalizeLoadPdf(aurl, 'finalize-after-iframe', false);
     }
     finish();
   }
