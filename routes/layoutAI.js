@@ -173,6 +173,7 @@ function buildOverrides(pages, manifest) {
       if (['center', 'top', 'bottom', 'left', 'right'].indexOf(pn.focal) >= 0) patch.focal = pn.focal;
       if (pn.crop_safe === true || pn.crop_safe === false) patch.crop_safe = pn.crop_safe;
       if (pn.group_break === true || pn.group_break === false) patch.group_break = pn.group_break;
+      if (pn.flow === true) patch.flow = true;
       ov[idx] = patch;
     });
   });

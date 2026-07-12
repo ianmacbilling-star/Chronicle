@@ -70,6 +70,7 @@ HARD RULE: a deterministic engine owns ALL geometry (exact sizes, margins, page 
 - crop_safe: boolean (true = may crop-to-fill; false = must show the whole image)
 - group_break: boolean (true = starts a new visual scene/row)
 - size_hint: shrink | keep | grow
+- flow: boolean (true = pull the FOLLOWING beat's intro narrative up onto THIS page to fill leftover vertical space below this panel; use on under-filled pages where growing the image can't help, e.g. a short wide image with a gap beneath it)
 
 PANEL MANIFEST (reading order -- the panels appear in the PDF in this exact order; match each to what you see by order and by its title caption):
 ${manifestStr}
@@ -86,7 +87,7 @@ Respond with STRICT JSON only -- no markdown, no prose outside the JSON. Be ters
       "problem": "what's wrong or 'none'",
       "fix": "grow which image / split which text into the gap / drop emphasis, etc.",
       "panels": [
-        {"idx":7,"label":"panel title or position","emphasis":3,"focal":"center","crop_safe":true,"group_break":false,"size_hint":"keep","why":"terse reason"}
+        {"idx":7,"label":"panel title or position","emphasis":3,"focal":"center","crop_safe":true,"group_break":false,"size_hint":"keep","flow":false,"why":"terse reason"}
       ]
     }
   ]

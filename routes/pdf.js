@@ -112,6 +112,7 @@ function lmSizeTier(m) { var p = lmProminence(m); return p >= 4 ? 'max' : (p <= 
 function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom', 'left', 'right'].indexOf(f) >= 0) ? f : 'center'; }
 function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
+function lmFlow(m) { return lmMeta(m).flow === true; }   // text-flow: pull next beat's intro up
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 // Display aspect for the IMG box. Towers are GENERATED tall (1:4) but their nominal shape
 // ratio is 9:16 (Picture Book's towerthin is 2:5), so a cover-fit box at the nominal ratio
@@ -808,12 +809,21 @@ function pbBesidePanel(m, sec, idx, opts) {
 function renderPaired(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
   var pbN = 0;
+  var _pulled = {};   // beats whose intro was pulled up by a flow-flagged prior beat
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var overlay = coCaptionOverlay(m, opts.caption);
-    var beforeHtml = section.before ? '<div style="margin-top:0.1in;">' + coNarr(section.before, opts, false) + '</div>' : '';
+    // Text-flow (initial phase): a beat flagged `flow` pulls the NEXT beat's intro up to
+    // fill its page; that next beat then skips the intro (already shown here). Only fires
+    // when the flow signal is set (optimize preview), so normal books are untouched.
+    var _beforeTxt = _pulled[i] ? '' : (section.before || '');
+    var beforeHtml = _beforeTxt ? '<div style="margin-top:0.1in;">' + coNarr(_beforeTxt, opts, false) + '</div>' : '';
     var afterHtml = section.after ? '<div style="margin-top:0.1in;">' + coNarr(section.after, opts, false) + '</div>' : '';
+    if (lmFlow(m) && (i + 1) < moments.length) {
+      var _nsec = sections.find(function (s) { return s.panel_index === (i + 1); }) || {};
+      if (_nsec.before) { afterHtml += '<div style="margin-top:0.1in;">' + coNarr(_nsec.before, opts, false) + '</div>'; _pulled[i + 1] = true; }
+    }
     if (isPortrait(m)) {
       // Picture Book portraits FLOAT left/right (alternating) with the narrative
       // beside and flowing below them, instead of centered with the text underneath.
@@ -868,6 +878,17 @@ function renderPaired(moments, sections, intro, outro, opts) {
       } else {
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
       }
+    } else if (lmSizeTier(m) === 'max' && lmCropSafe(m) && m.image) {
+      // GROW a non-portrait (square/wide/panoramic) flagged Maximize into a taller hero
+      // box that fills the vertical gap, cropped toward the AI's focal point. Gated on
+      // crop_safe (the AI judged cropping acceptable). Only fires on Maximize, so normal
+      // books are untouched -- in the optimize preview this is the AI's grow signal acting.
+      var _npFocal = lmFocal(m);
+      var _npPos = ({ center: 'center center', top: 'center top', bottom: 'center bottom', left: 'left center', right: 'right center' })[_npFocal] || 'center center';
+      html += '<div style="width:100%;height:7.4in;margin:0 auto 0.08in;overflow:hidden;border-radius:3px;page-break-inside:avoid;background:#0c0805;">' +
+        '<img src="' + m.image + '" alt="" style="width:100%;height:100%;object-fit:cover;object-position:' + _npPos + ';display:block;" />' +
+        '</div>' + coCaptionBelow(m, i, opts.caption);
+      html += '<div style="break-before:avoid;page-break-before:avoid;">' + beforeHtml + afterHtml + '</div>';
     } else {
       // Wide / panoramic / square / standard: keep the image + caption together
       // in the avoid-block, but let the narrative flow BELOW as its own block so
@@ -3543,6 +3564,7 @@ async function assembleNovelHtml(req, campaignId, overrides) {
         if (ov.focal != null) meta.focal = ov.focal;
         if (ov.crop_safe != null) meta.crop_safe = ov.crop_safe;
         if (ov.group_break != null) meta.group_break = ov.group_break;
+        if (ov.flow != null) meta.flow = ov.flow;
         m.layout_meta = JSON.stringify(meta);
       }
     });
