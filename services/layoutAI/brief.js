@@ -53,6 +53,8 @@ function buildPrompt(layoutStyle, opts) {
   var key = styleKeyFor(layoutStyle);
   var house = opts.houseRules || HOUSE_RULES;
   var styleBrief = opts.styleBrief || STYLE_BRIEFS[key] || '';
+  var manifest = opts.manifest || [];
+  var manifestStr = manifest.length ? manifest.map(function (m) { return m.idx + ' | ' + (m.title || '(untitled)') + (m.shape ? ' [' + m.shape + ']' : ''); }).join('\n') : '(none provided)';
   return (
 `You are a print art director reviewing a rendered tabletop-RPG graphic novel in the "${key}" style. The attached PDF is the actual book, one page per page.
 
@@ -69,9 +71,12 @@ HARD RULE: a deterministic engine owns ALL geometry (exact sizes, margins, page 
 - group_break: boolean (true = starts a new visual scene/row)
 - size_hint: shrink | keep | grow
 
+PANEL MANIFEST (reading order -- the panels appear in the PDF in this exact order; match each to what you see by order and by its title caption):
+${manifestStr}
+
 DENSITY IS THE PRIORITY. Go page by page. Flag every page that is under-filled or near-blank, and say how to close the gap: grow an undersized image, or split/flow narrative text into the empty space. Judge fullness by eye; do not invent exact percentages.
 
-Respond with STRICT JSON only -- no markdown, no prose outside the JSON. Be terse. Identify pages by their 1-based order in the PDF. Shape:
+Respond with STRICT JSON only -- no markdown, no prose outside the JSON. Be terse. Identify pages by their 1-based order in the PDF. Every panel you reference MUST include its "idx" from the manifest so the engine can apply your signals. Shape:
 {
   "book_assessment": "2-3 sentences on the book overall",
   "pages": [
@@ -81,7 +86,7 @@ Respond with STRICT JSON only -- no markdown, no prose outside the JSON. Be ters
       "problem": "what's wrong or 'none'",
       "fix": "grow which image / split which text into the gap / drop emphasis, etc.",
       "panels": [
-        {"label":"panel title or position","emphasis":3,"focal":"center","crop_safe":true,"group_break":false,"size_hint":"keep","why":"terse reason"}
+        {"idx":7,"label":"panel title or position","emphasis":3,"focal":"center","crop_safe":true,"group_break":false,"size_hint":"keep","why":"terse reason"}
       ]
     }
   ]

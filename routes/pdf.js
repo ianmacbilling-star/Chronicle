@@ -3476,7 +3476,7 @@ router.post('/story/:id/meta', requireAuth, async function(req, res) {
 // re-derivation. Deliberately mirrors the /novel route's gathering and is kept as a
 // SEPARATE function (the live export route is left untouched) so the export path
 // carries zero risk from this feature. Reuses buildNovelHTML, so the HTML is identical.
-async function assembleNovelHtml(req, campaignId) {
+async function assembleNovelHtml(req, campaignId, overrides) {
   const db = await getDb();
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
@@ -3526,10 +3526,32 @@ async function assembleNovelHtml(req, campaignId) {
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
 
+  // Book-wide panel index (reading order): a manifest the AI keys its signals to, and the
+  // hook for applying in-memory layout_meta overrides for the optimize PREVIEW. NOTHING here
+  // is persisted -- overrides patch the in-memory moment objects for this one render only.
+  var manifest = [];
+  var _pidx = 0;
+  sessionsWithData.forEach(function (sd) {
+    (sd.moments || []).forEach(function (m) {
+      _pidx++;
+      manifest.push({ idx: _pidx, title: String(m.title || '').slice(0, 60), shape: String(m.shape || '') });
+      if (overrides && overrides[_pidx]) {
+        var meta = lmMeta(m);
+        meta = (meta && typeof meta === 'object') ? Object.assign({}, meta) : {};
+        var ov = overrides[_pidx];
+        if (ov.prominence != null) meta.prominence = ov.prominence;
+        if (ov.focal != null) meta.focal = ov.focal;
+        if (ov.crop_safe != null) meta.crop_safe = ov.crop_safe;
+        if (ov.group_break != null) meta.group_break = ov.group_break;
+        m.layout_meta = JSON.stringify(meta);
+      }
+    });
+  });
+
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
-  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length };
+  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest };
 }
 
 module.exports = router;

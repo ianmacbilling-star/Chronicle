@@ -118,49 +118,115 @@ async function critiqueChunk(pdfB64, prompt, startPage) {
 // critique targets the exact book the user is viewing. Body may override the brief:
 //   { houseRules?: string, styleBrief?: string }
 // Returns the model's JSON. Writes nothing.
-router.post('/:campaignId/dry-run', requireAuth, requireAdmin, async function (req, res) {
-  if (!(await isEnabled())) {
-    return res.status(403).json({ error: 'Layout AI dry-run is disabled. Set app setting layout_ai_dryrun=1 to enable.' });
+// Shared: assemble the real book, render to PDF, chunk, critique -> merged result.
+// overridesForRender (or null) is applied in-memory during render, so ONE path serves
+// both the read-only dry run and the optimize preview (no persistence either way).
+async function analyzeBook(req, campaignId, overridesForRender) {
+  const built = await assembleNovelHtml(req, campaignId, overridesForRender);
+  const pdfBuf = await renderHtmlToPdf(built.html, {});
+  const split = await splitPdf(pdfBuf);
+  const prompt = buildPrompt(built.layoutStyle, {
+    houseRules: req.body && req.body.houseRules,
+    styleBrief: req.body && req.body.styleBrief,
+    manifest: built.manifest
+  });
+  let pages = [];
+  const assessments = [];
+  const notes = [];
+  for (const ch of split.chunks) {
+    const out = await critiqueChunk(ch.data, prompt, ch.startPage);
+    if (out && out.parseError) { notes.push('chunk@' + ch.startPage + ': unparseable model output'); continue; }
+    if (out && out.book_assessment) assessments.push(out.book_assessment);
+    if (out && Array.isArray(out.pages)) pages = pages.concat(out.pages);
   }
+  return { built: built, book_assessment: assessments.join(' '), pages: pages, notes: notes, total_pages: split.total };
+}
+
+// Turn the AI's per-panel signals into an in-memory layout_meta override map keyed by
+// manifest idx. size_hint drives prominence (grow -> Maximize, shrink -> Minimize),
+// otherwise emphasis; focal/crop_safe/group_break pass through when present.
+function buildOverrides(pages) {
+  var ov = {};
+  (pages || []).forEach(function (pg) {
+    (pg.panels || []).forEach(function (pn) {
+      if (pn == null || pn.idx == null) return;
+      var e = Number(pn.emphasis);
+      var base = (e >= 1 && e <= 5) ? Math.round(e) : 3;
+      var prom = pn.size_hint === 'grow' ? 5 : (pn.size_hint === 'shrink' ? 1 : base);
+      var patch = { prominence: prom };
+      if (['center', 'top', 'bottom', 'left', 'right'].indexOf(pn.focal) >= 0) patch.focal = pn.focal;
+      if (pn.crop_safe === true || pn.crop_safe === false) patch.crop_safe = pn.crop_safe;
+      if (pn.group_break === true || pn.group_break === false) patch.group_break = pn.group_break;
+      ov[pn.idx] = patch;
+    });
+  });
+  return ov;
+}
+
+// Transient store for optimize overrides (PREVIEW only). Keyed by a short token the
+// 'After' iframe fetches back. Pruned after 15 min; nothing is written to the DB.
+const _optCache = new Map();
+function cachePut(overrides, campaignId) {
+  var token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  _optCache.set(token, { overrides: overrides, campaignId: String(campaignId), ts: Date.now() });
+  for (const kv of _optCache) { if (Date.now() - kv[1].ts > 15 * 60 * 1000) _optCache.delete(kv[0]); }
+  return token;
+}
+
+// POST /:campaignId/dry-run  -> read-only analysis, no overrides, writes nothing.
+router.post('/:campaignId/dry-run', requireAuth, requireAdmin, async function (req, res) {
+  if (!(await isEnabled())) return res.status(403).json({ error: 'Layout AI is disabled.' });
   const t0 = Date.now();
   try {
-    const built = await assembleNovelHtml(req, req.params.campaignId);   // reuses the real export assembly
-    const pdfBuf = await renderHtmlToPdf(built.html, {});
-    const split = await splitPdf(pdfBuf);
-    const prompt = buildPrompt(built.layoutStyle, {
-      houseRules: req.body && req.body.houseRules,
-      styleBrief: req.body && req.body.styleBrief
-    });
-
-    let pages = [];
-    const assessments = [];
-    const notes = [];
-    for (const ch of split.chunks) {
-      const out = await critiqueChunk(ch.data, prompt, ch.startPage);
-      if (out && out.parseError) { notes.push('chunk@' + ch.startPage + ': unparseable model output'); continue; }
-      if (out && out.book_assessment) assessments.push(out.book_assessment);
-      if (out && Array.isArray(out.pages)) pages = pages.concat(out.pages);
-    }
-
+    const a = await analyzeBook(req, req.params.campaignId, null);
     const result = {
-      dry_run: true,
-      campaign: built.campaign.name,
-      layout: built.layoutStyle,
-      model: LAYOUT_MODEL,
-      total_pages: split.total,
-      pages_flagged: pages.length,
-      book_assessment: assessments.join(' '),
-      pages: pages,
-      notes: notes,
-      ms: Date.now() - t0
+      dry_run: true, campaign: a.built.campaign.name, layout: a.built.layoutStyle, model: LAYOUT_MODEL,
+      total_pages: a.total_pages, pages_flagged: a.pages.length, book_assessment: a.book_assessment,
+      pages: a.pages, notes: a.notes, ms: Date.now() - t0
     };
-    console.log('[layout-ai dry-run]', result.campaign, '|', result.layout, '|', result.total_pages + 'pp',
-      '| flagged=' + result.pages_flagged, '| ' + result.ms + 'ms');
+    console.log('[layout-ai dry-run]', result.campaign, '|', result.layout, '|', result.total_pages + 'pp', '| flagged=' + result.pages_flagged, '| ' + result.ms + 'ms');
     res.json(result);
   } catch (e) {
     console.error('[layout-ai dry-run] error:', e && e.message);
-    const code = (e && e.status === 403) ? 403 : 500;
-    res.status(code).json({ error: (e && e.message) || 'dry-run failed', dry_run: true });
+    res.status((e && e.status === 403) ? 403 : 500).json({ error: (e && e.message) || 'dry-run failed', dry_run: true });
+  }
+});
+
+// POST /:campaignId/optimize  -> analyze, build overrides, cache under a token.
+// Writes NOTHING to the DB; the token drives the GET below that renders the 'After'.
+router.post('/:campaignId/optimize', requireAuth, requireAdmin, async function (req, res) {
+  if (!(await isEnabled())) return res.status(403).json({ error: 'Layout AI is disabled.' });
+  const t0 = Date.now();
+  try {
+    const a = await analyzeBook(req, req.params.campaignId, null);
+    const overrides = buildOverrides(a.pages);
+    const token = cachePut(overrides, req.params.campaignId);
+    console.log('[layout-ai optimize]', a.built.campaign.name, '|', a.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| ' + (Date.now() - t0) + 'ms');
+    res.json({
+      dry_run: false, token: token, campaign: a.built.campaign.name, layout: a.built.layoutStyle, model: LAYOUT_MODEL,
+      total_pages: a.total_pages, pages_flagged: a.pages.length, applied: Object.keys(overrides).length,
+      book_assessment: a.book_assessment, pages: a.pages, notes: a.notes, ms: Date.now() - t0
+    });
+  } catch (e) {
+    console.error('[layout-ai optimize] error:', e && e.message);
+    res.status((e && e.status === 403) ? 403 : 500).json({ error: (e && e.message) || 'optimize failed' });
+  }
+});
+
+// GET /:campaignId/optimized/:token  -> re-render the WHOLE book with the cached overrides
+// applied in-memory, streamed as a PDF for the 'After' pane. Persists nothing.
+router.get('/:campaignId/optimized/:token', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const cached = _optCache.get(req.params.token);
+    if (!cached || cached.campaignId !== String(req.params.campaignId)) return res.status(404).send('Optimize preview expired -- run Optimize again.');
+    const built = await assembleNovelHtml(req, req.params.campaignId, cached.overrides);
+    const pdfBuf = await renderHtmlToPdf(built.html, {});
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="optimized-preview.pdf"');
+    res.send(Buffer.from(pdfBuf));
+  } catch (e) {
+    console.error('[layout-ai optimized] error:', e && e.message);
+    res.status(500).send('Render failed: ' + ((e && e.message) || 'error'));
   }
 });
 

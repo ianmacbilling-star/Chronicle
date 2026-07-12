@@ -14223,12 +14223,22 @@ function runLayoutAiDryRun() {
     if (fill) fill.style.width = '100%';
     if (pmsg) pmsg.textContent = '';
     setTimeout(function () { if (wrap) wrap.style.display = 'none'; }, 500);
-    if (btn) { btn.disabled = false; btn.textContent = 'Run layout analysis'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Optimize layout'; }
   }
-  var url = '/api/layout-ai/' + state.currentCampaign.id + '/dry-run' + finalizeBookQuery();
+  var url = '/api/layout-ai/' + state.currentCampaign.id + '/optimize' + finalizeBookQuery();
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' })
     .then(function (r) { return r.json(); })
-    .then(function (j) { renderLayoutAiResult(j); })
+    .then(function (j) {
+      renderLayoutAiResult(j);
+      if (j && j.token && state.currentCampaign) {
+        var afterIfr = document.getElementById('finalize-after-iframe');
+        var afterBody = document.getElementById('finalize-after-body');
+        var aurl = '/api/layout-ai/' + state.currentCampaign.id + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
+        if (afterIfr) { afterIfr.src = aurl; afterIfr.style.display = ''; }
+        if (afterBody) afterBody.style.display = 'none';
+        if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('both');
+      }
+    })
     .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; })
     .then(function () { finish(); });
 }
