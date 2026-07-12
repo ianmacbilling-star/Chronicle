@@ -14190,13 +14190,81 @@ function layoutAiCheckStatus() {
 function finalizeBookQuery() {
   return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');
 }
+var _finalizeBeforeBase = '';
+var _finalizeAfterBase = '';
 function loadFinalize() {
-  if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
+  if (!state.currentCampaign || !document.getElementById('finalize-before-iframe')) return;
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
-  if (loadFinalize._lastUrl !== url) { loadFinalize._lastUrl = url; renderPdfInto(url, 'finalize-before-scroll'); }
-  finalizeAttachSync();
+  if (loadFinalize._lastUrl === url) return;
+  loadFinalize._lastUrl = url;
+  _finalizeBeforeBase = url;
+  var ifr = document.getElementById('finalize-before-iframe');
+  if (ifr) ifr.src = url + '#page=1';   // native viewer = identical to True View (no pink)
+  finalizeMeasureBook(url);   // hidden pass: page count for the gutter + free under-fill scan
+}
+// Hidden pdf.js pass -- renders off-screen ONLY to measure. The visible panes stay native.
+function finalizeMeasureBook(url) {
+  var hidden = document.getElementById('finalize-measure-hidden');
+  if (!hidden) return;
+  ensurePdfJs().then(function (pdfjsLib) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.arrayBuffer(); })
+      .then(function (buf) { return pdfjsLib.getDocument({ data: buf }).promise; })
+      .then(function (pdf) {
+        finalizeBuildNav(pdf.numPages);
+        var flagged = [];
+        var chain = Promise.resolve();
+        var _one = function (pageNum) {
+          chain = chain.then(function () {
+            return pdf.getPage(pageNum).then(function (page) {
+              var vp = page.getViewport({ scale: 0.5 });
+              var canvas = document.createElement('canvas');
+              canvas.width = vp.width; canvas.height = vp.height;
+              return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
+                if (pageNum > 5) { var fill = measureCanvasFill(canvas); if (fill != null && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
+              });
+            });
+          });
+        };
+        for (var n = 1; n <= pdf.numPages; n++) _one(n);
+        return chain.then(function () { finalizeShowFreeAnalysis(flagged, pdf.numPages); });
+      });
+  }).catch(function () {});
+}
+function finalizeBuildNav(numPages) {
+  var nav = document.getElementById('finalize-page-nav');
+  if (!nav) return;
+  var h = '';
+  for (var n = 1; n <= numPages; n++) {
+    h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
+  }
+  nav.innerHTML = h;
+}
+function finalizeGoToPage(n) {
+  ['finalize-before-iframe', 'finalize-after-iframe'].forEach(function (id) {
+    var ifr = document.getElementById(id);
+    if (!ifr || ifr.style.display === 'none' || !ifr.src || ifr.src === 'about:blank') return;
+    ifr.src = ifr.src.split('#')[0] + '#page=' + n;
+  });
+  var nav = document.getElementById('finalize-page-nav');
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
+}
+function finalizeShowFreeAnalysis(flagged, numPages) {
+  var out = document.getElementById('layoutai-results');
+  if (!out || out.getAttribute('data-mode') === 'ai') return;
+  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + numPages + ' pages</div>';
+  if (!flagged.length) {
+    h += '<div style="color:rgba(245,232,200,0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
+  } else {
+    h += '<div style="color:var(--cream);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled:</div>';
+    flagged.forEach(function (f) {
+      h += '<div style="border:1px solid rgba(201,168,76,0.3);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--cream);"><span style="font-family:var(--font-display);color:var(--gold);cursor:pointer;" onclick="finalizeGoToPage(' + f.page + ')">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
+    });
+    h += '<div style="color:rgba(245,232,200,0.7);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them.</div>';
+  }
+  out.innerHTML = h;
+  out.setAttribute('data-mode', 'free');
 }
 function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
@@ -14230,13 +14298,11 @@ function runLayoutAiDryRun() {
     renderLayoutAiResult(j);
     if (j && j.token) {
       var aurl = '/api/layout-ai/' + cid + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
-      var afterScroll = document.getElementById('finalize-after-scroll');
+      _finalizeAfterBase = aurl;
+      var afterIfr = document.getElementById('finalize-after-iframe');
       var afterBody = document.getElementById('finalize-after-body');
-      if (afterScroll) afterScroll.style.display = '';
+      if (afterIfr) { afterIfr.src = aurl + '#page=1'; afterIfr.style.display = ''; }
       if (afterBody) afterBody.style.display = 'none';
-      if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('both');
-      renderPdfInto(aurl, 'finalize-after-scroll');
-      finalizeAttachSync();
     }
     finish();
   }
@@ -14503,9 +14569,10 @@ function resetPublishForCampaignSwitch() {
   state.bookMeta = null;
   if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null;
   _finalizeLockedWidth = 0;   // re-lock the render width for the new campaign
-  var bs = document.getElementById('finalize-before-scroll'); if (bs) bs.innerHTML = '';
-  var as = document.getElementById('finalize-after-scroll'); if (as) { as.innerHTML = ''; as.style.display = 'none'; }
+  var bi = document.getElementById('finalize-before-iframe'); if (bi) bi.src = 'about:blank';
+  var ai = document.getElementById('finalize-after-iframe'); if (ai) { ai.src = 'about:blank'; ai.style.display = 'none'; }
   var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
+  var _nv = document.getElementById('finalize-page-nav'); if (_nv) _nv.innerHTML = '';
   var lr = document.getElementById('layoutai-results'); if (lr) { lr.innerHTML = ''; lr.removeAttribute('data-mode'); }
   var pw = document.getElementById('layoutai-progress-wrap'); if (pw) pw.style.display = 'none';
   if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('before');
