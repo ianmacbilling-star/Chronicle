@@ -14344,16 +14344,27 @@ function renderPdfInto(url, containerId) {
   if (!container) return;
   var myToken = Date.now() + ':' + Math.random();
   _pdfRenderTokens[containerId] = myToken;
-  container.innerHTML = '<div style="color:rgba(245,232,200,0.4);font-size:12px;padding:16px;">Rendering pages...</div>';
+  // Red progress bar + a canvas holder. The bar fills per page and is removed when done.
+  container.innerHTML =
+    '<div class="progress-wrap" id="' + containerId + '-pw" style="display:block;padding:12px 12px 6px;">' +
+      '<div class="progress-bar"><div class="progress-fill" id="' + containerId + '-pf" style="width:0%;"></div></div>' +
+      '<div class="progress-msg" id="' + containerId + '-pm">Rendering preview...</div>' +
+    '</div>' +
+    '<div id="' + containerId + '-cv"></div>';
+  var cv = document.getElementById(containerId + '-cv');
+  var pf = document.getElementById(containerId + '-pf');
+  var pm = document.getElementById(containerId + '-pm');
   ensurePdfJs().then(function (pdfjsLib) {
+    if (pm) pm.textContent = 'Fetching book...';
     return fetch(url, { credentials: 'same-origin' }).then(function (r) {
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
       return r.arrayBuffer();
     }).then(function (buf) {
+      if (pm) pm.textContent = 'Preparing pages...';
       return pdfjsLib.getDocument({ data: buf }).promise;
     }).then(function (pdf) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
-      container.innerHTML = '';
+      var total = pdf.numPages;
       var width = Math.max(120, container.clientWidth - 8);
       var chain = Promise.resolve();
       var _loop = function (pageNum) {
@@ -14365,13 +14376,20 @@ function renderPdfInto(url, containerId) {
             var canvas = document.createElement('canvas');
             canvas.width = vp.width; canvas.height = vp.height;
             canvas.style.width = '100%'; canvas.style.display = 'block'; canvas.style.marginBottom = '6px'; canvas.style.borderRadius = '3px';
-            container.appendChild(canvas);
-            return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+            if (cv) cv.appendChild(canvas);
+            return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
+              if (pf) pf.style.width = Math.round((pageNum / total) * 100) + '%';
+              if (pm) pm.textContent = 'Rendering page ' + pageNum + ' of ' + total;
+            });
           });
         });
       };
-      for (var n = 1; n <= pdf.numPages; n++) _loop(n);
-      return chain;
+      for (var n = 1; n <= total; n++) _loop(n);
+      return chain.then(function () {
+        if (_pdfRenderTokens[containerId] !== myToken) return;
+        var pw = document.getElementById(containerId + '-pw');
+        if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
+      });
     });
   }).catch(function (e) {
     if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
