@@ -878,17 +878,6 @@ function renderPaired(moments, sections, intro, outro, opts) {
       } else {
         html += '<div style="display:flow-root;margin-bottom:0.1in;">' + pbImg + beforeHtml + afterHtml + '</div>';
       }
-    } else if (lmSizeTier(m) === 'max' && lmCropSafe(m) && m.image) {
-      // GROW a non-portrait (square/wide/panoramic) flagged Maximize into a taller hero
-      // box that fills the vertical gap, cropped toward the AI's focal point. Gated on
-      // crop_safe (the AI judged cropping acceptable). Only fires on Maximize, so normal
-      // books are untouched -- in the optimize preview this is the AI's grow signal acting.
-      var _npFocal = lmFocal(m);
-      var _npPos = ({ center: 'center center', top: 'center top', bottom: 'center bottom', left: 'left center', right: 'right center' })[_npFocal] || 'center center';
-      html += '<div style="width:100%;height:7.4in;margin:0 auto 0.08in;overflow:hidden;border-radius:3px;page-break-inside:avoid;background:#0c0805;">' +
-        '<img src="' + m.image + '" alt="" style="width:100%;height:100%;object-fit:cover;object-position:' + _npPos + ';display:block;" />' +
-        '</div>' + coCaptionBelow(m, i, opts.caption);
-      html += '<div style="break-before:avoid;page-break-before:avoid;">' + beforeHtml + afterHtml + '</div>';
     } else {
       // Wide / panoramic / square / standard: keep the image + caption together
       // in the avoid-block, but let the narrative flow BELOW as its own block so
