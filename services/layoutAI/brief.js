@@ -19,6 +19,7 @@ REDISTRIBUTE ONLY WHAT ALREADY EXISTS: grow or crop an existing image, or split 
 Give each page one clear focal beat: push the climax's emphasis up, drop supporting beats down.
 On story pages, never strand an image beside empty space, and never leave a near-blank page. If a tall image has little text next to it, grow it. If a gap sits next to an image, flag it to be filled.
 Text is the filler. Where empty space remains, note where existing narrative could be split (at periods/clauses, or mid-sentence only if it stays contiguous) and flowed into the gap.
+Shrink to fit: if a large or full-page image sits at the top of a page and the PREVIOUS page is under-filled, mark that image size_hint "shrink" -- the engine scales it down (up to 50%, aspect locked) so it moves up to fill the prior page's gap while staying as large as possible. Prefer this over leaving a near-blank page above a big image.
 Show the whole subject on a character reveal (crop_safe:false); crop-to-fill for environments and action.
 Group beats within a scene; break at scene changes.`;
 

@@ -113,6 +113,7 @@ function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom
 function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function lmFlow(m) { return lmMeta(m).flow === true; }   // text-flow: pull next beat's intro up
+function lmScale(m) { var n = Number(lmMeta(m).scale); return (n >= 0.3 && n <= 1) ? n : 1; }   // measured shrink-to-fit
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 // Display aspect for the IMG box. Towers are GENERATED tall (1:4) but their nominal shape
 // ratio is 9:16 (Picture Book's towerthin is 2:5), so a cover-fit box at the nominal ratio
@@ -824,6 +825,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
       var _nsec = sections.find(function (s) { return s.panel_index === (i + 1); }) || {};
       if (_nsec.before) { afterHtml += '<div style="margin-top:0.1in;">' + coNarr(_nsec.before, opts, false) + '</div>'; _pulled[i + 1] = true; }
     }
+    var _sc = lmScale(m);   // measured shrink factor (1 = unchanged); applied to image widths below
     if (isPortrait(m)) {
       // Picture Book portraits FLOAT left/right (alternating) with the narrative
       // beside and flowing below them, instead of centered with the text underneath.
@@ -839,6 +841,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
       var pbW = pbTower
         ? Math.min(6.8 - pbCol, 9.2 * momentAspect(m))
         : Math.min(6.8 - pbCol, 7.0 * shapeAspect(normShape(m)));
+      pbW = pbW * _sc;
       var pbLeft = (pbN % 2 === 0); pbN += 1;
       var pbFl = pbLeft ? 'float:left;margin:0 0.24in 0.12in 0;' : 'float:right;margin:0 0 0.12in 0.24in;';
       var pbImg = '<div style="' + pbFl + 'width:' + pbW.toFixed(2) + 'in;page-break-inside:avoid;">' +
@@ -871,6 +874,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
         var pbBigH = (_textIn > 2.6) ? 9.3 : Math.max(6.4, Math.min(9.3, 9.5 - _textIn - 0.35));
         var pbBigMax = 6.6;
         var pbBigW = Math.min(pbBigMax, pbBigH * shapeAspect(normShape(m)));
+        pbBigW = pbBigW * _sc;
         html += '<div style="margin:0 auto 0.12in;width:' + pbBigW.toFixed(2) + 'in;page-break-inside:avoid;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
           coCaptionBelow(m, i, opts.caption) + '</div>' +
@@ -884,7 +888,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // a wide shot is never dragged onto the next page by long text. Two wide
       // shots then pack onto one sheet when there is room instead of stranding
       // white space at a page bottom.
-      html += '<div style="width:100%;margin:0 auto 0.06in;page-break-inside:avoid;">' +
+      html += '<div style="width:' + Math.round(_sc * 100) + '%;margin:0 auto 0.06in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
       // Keep the narrative glued to the image above it: a short bridge must not be
@@ -3554,6 +3558,7 @@ async function assembleNovelHtml(req, campaignId, overrides) {
         if (ov.crop_safe != null) meta.crop_safe = ov.crop_safe;
         if (ov.group_break != null) meta.group_break = ov.group_break;
         if (ov.flow != null) meta.flow = ov.flow;
+        if (ov.scale != null) meta.scale = ov.scale;
         m.layout_meta = JSON.stringify(meta);
       }
     });

@@ -14193,6 +14193,7 @@ function finalizeBookQuery() {
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
 var _finalizeBeforeBlob = '';
+var _finalizeFills = {};
 var _finalizeAfterBlob = '';
 function loadFinalize() {
   if (!state.currentCampaign || !document.getElementById('finalize-before-iframe')) return;
@@ -14221,6 +14222,7 @@ function finalizeLoadPdf(url, iframeId, isBefore) {
 // Hidden pdf.js measurement from the SAME blob (no extra fetch): page count + under-fill scan.
 function finalizeMeasureBlob(blob) {
   if (!document.getElementById('finalize-measure-hidden')) return;
+  _finalizeFills = {};
   ensurePdfJs().then(function (pdfjsLib) {
     return blob.arrayBuffer().then(function (buf) { return pdfjsLib.getDocument({ data: buf }).promise; })
       .then(function (pdf) {
@@ -14234,7 +14236,7 @@ function finalizeMeasureBlob(blob) {
               var canvas = document.createElement('canvas');
               canvas.width = vp.width; canvas.height = vp.height;
               return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
-                if (pageNum > 5) { var fill = measureCanvasFill(canvas); if (fill != null && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
+                var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (pageNum > 5 && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
               });
             });
           });
@@ -14322,7 +14324,7 @@ function runLayoutAiDryRun() {
     finish();
   }
   var startUrl = '/api/layout-ai/' + cid + '/optimize' + finalizeBookQuery();
-  fetch(startUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' })
+  fetch(startUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ fills: _finalizeFills }) })
     .then(function (r) { return r.json(); })
     .then(function (j) {
       if (j && j.error) { renderLayoutAiResult(j); finish(); return; }

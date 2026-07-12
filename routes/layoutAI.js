@@ -156,11 +156,12 @@ async function analyzeBook(req, campaignId, overridesForRender) {
 // Turn the AI's per-panel signals into an in-memory layout_meta override map keyed by
 // manifest idx. size_hint drives prominence (grow -> Maximize, shrink -> Minimize),
 // otherwise emphasis; focal/crop_safe/group_break pass through when present.
-function buildOverrides(pages, manifest) {
+function buildOverrides(pages, manifest, fills) {
   var byTitle = {};
   (manifest || []).forEach(function (m) { if (m && m.title) byTitle[String(m.title).trim().toLowerCase()] = m.idx; });
   var ov = {};
   (pages || []).forEach(function (pg) {
+    var _pageNum = Number(pg.page);
     (pg.panels || []).forEach(function (pn) {
       if (pn == null) return;
       var idx = (pn.idx != null) ? pn.idx : null;
@@ -174,6 +175,14 @@ function buildOverrides(pages, manifest) {
       if (pn.crop_safe === true || pn.crop_safe === false) patch.crop_safe = pn.crop_safe;
       if (pn.group_break === true || pn.group_break === false) patch.group_break = pn.group_break;
       if (pn.flow === true) patch.flow = true;
+      // Measured shrink-to-fit: an image flagged "shrink" tucks into the PRIOR page's
+      // gap. The client-measured fill of that prior page sets the amount (capped 50%).
+      if (pn.size_hint === 'shrink' && fills && _pageNum >= 2) {
+        var _pf = fills[_pageNum - 1];
+        if (_pf == null) _pf = fills[String(_pageNum - 1)];
+        if (_pf != null) { patch.scale = Math.max(0.5, Math.min(1, 1 - (Number(_pf) / 100))); }
+        else { patch.scale = 0.5; }
+      }
       ov[idx] = patch;
     });
   });
@@ -227,13 +236,14 @@ router.post('/:campaignId/optimize', requireAuth, requireAdmin, async function (
   if (!(await isEnabled())) return res.status(403).json({ error: 'Layout AI is disabled.' });
   const jobId = jobNew();
   const campaignId = req.params.campaignId;
+  const _fills = (req.body && req.body.fills) || null;   // client-measured per-page fill, for shrink-to-fit
   res.json({ job: jobId, status: 'running' });   // return immediately -- no proxy timeout
   // Heavy work runs in the background (not awaited); the client polls optimize-status.
   (async function () {
     const t0 = Date.now();
     try {
       const a = await analyzeBook(req, campaignId, null);
-      const overrides = buildOverrides(a.pages, a.built.manifest);
+      const overrides = buildOverrides(a.pages, a.built.manifest, _fills);
       const token = cachePut(overrides, campaignId);
       console.log('[layout-ai optimize]', a.built.campaign.name, '|', a.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| ' + (Date.now() - t0) + 'ms');
       _optJobs.set(jobId, { status: 'done', ts: Date.now(), result: {
