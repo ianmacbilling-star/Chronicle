@@ -259,8 +259,12 @@
             <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Finalize &mdash; Layout AI <span style="font-size:10px;background:rgba(201,168,76,0.18);border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">DRY RUN</span></div>
             <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:12px;">An art director reviews the whole book and suggests layout fixes. This is a read-only preview &mdash; nothing changes yet.</div>
             <button id="layoutai-run-btn" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:11px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;">Run layout analysis</button>
+            <div class="progress-wrap" id="layoutai-progress-wrap" style="display:none;margin-top:12px;">
+              <div class="progress-bar"><div class="progress-fill" id="layoutai-progress-fill"></div></div>
+              <div class="progress-msg" id="layoutai-progress-msg"></div>
+            </div>
             <div id="layoutai-status" style="color:rgba(245,232,200,0.55);font-size:12px;margin-top:8px;"></div>
-            <div id="layoutai-results" style="margin-top:14px;"></div>
+            <div id="layoutai-results" style="margin-top:14px;max-height:540px;overflow-y:auto;padding-right:6px;"></div>
           </div>
           <div style="flex:1 1 340px;min-width:300px;">
             <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:6px;">Current book</div>

@@ -14201,15 +14201,36 @@ function runLayoutAiDryRun() {
   var btn = document.getElementById('layoutai-run-btn');
   var status = document.getElementById('layoutai-status');
   var out = document.getElementById('layoutai-results');
-  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing the whole book...'; }
-  if (status) status.textContent = 'Rendering the book and sending it to the model. This can take 30-90 seconds.';
+  var wrap = document.getElementById('layoutai-progress-wrap');
+  var fill = document.getElementById('layoutai-progress-fill');
+  var pmsg = document.getElementById('layoutai-progress-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  if (status) status.textContent = '';
   if (out) out.innerHTML = '';
+  // Red storyboard-style bar. The request is one long POST with no streamed
+  // progress, so we ease the fill toward ~92% and snap to 100% on completion.
+  var pct = 0;
+  if (wrap) wrap.style.display = 'block';
+  if (fill) fill.style.width = '0%';
+  if (pmsg) pmsg.textContent = 'Rendering the book and sending it to the art director (30-90s)...';
+  var timer = setInterval(function () {
+    pct += Math.max(0.6, (92 - pct) * 0.05);
+    if (pct > 92) pct = 92;
+    if (fill) fill.style.width = pct.toFixed(1) + '%';
+  }, 650);
+  function finish() {
+    clearInterval(timer);
+    if (fill) fill.style.width = '100%';
+    if (pmsg) pmsg.textContent = '';
+    setTimeout(function () { if (wrap) wrap.style.display = 'none'; }, 500);
+    if (btn) { btn.disabled = false; btn.textContent = 'Run layout analysis'; }
+  }
   var url = '/api/layout-ai/' + state.currentCampaign.id + '/dry-run' + finalizeBookQuery();
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' })
     .then(function (r) { return r.json(); })
     .then(function (j) { renderLayoutAiResult(j); })
     .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; })
-    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Run layout analysis'; } if (status) status.textContent = ''; });
+    .then(function () { finish(); });
 }
 function renderLayoutAiResult(j) {
   var out = document.getElementById('layoutai-results');
