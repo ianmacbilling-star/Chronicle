@@ -56,6 +56,10 @@ function buildPrompt(layoutStyle, opts) {
   var styleBrief = opts.styleBrief || STYLE_BRIEFS[key] || '';
   var manifest = opts.manifest || [];
   var manifestStr = manifest.length ? manifest.map(function (m) { return m.idx + ' | ' + (m.title || '(untitled)') + (m.shape ? ' [' + m.shape + ']' : ''); }).join('\n') : '(none provided)';
+  var fills = opts.fills || null;
+  var under = [];
+  if (fills) { Object.keys(fills).forEach(function (pg) { var v = Number(fills[pg]); if (v < 62 && Number(pg) > 5) under.push(Number(pg) + ' -> ' + v + '% filled'); }); under.sort(function (a, b) { return parseInt(a) - parseInt(b); }); }
+  var measuredStr = under.length ? under.join('\n') : '(none flagged)';
   return (
 `You are a print art director reviewing a rendered tabletop-RPG graphic novel in the "${key}" style. The attached PDF is the actual book, one page per page.
 
@@ -72,6 +76,9 @@ HARD RULE: a deterministic engine owns ALL geometry (exact sizes, margins, page 
 - group_break: boolean (true = starts a new visual scene/row)
 - size_hint: shrink | keep | grow
 - flow: boolean (true = pull the FOLLOWING beat's intro narrative up onto THIS page to fill leftover vertical space below this panel; use on under-filled pages where growing the image can't help, e.g. a short wide image with a gap beneath it)
+
+MEASURED UNDER-FILL (from a pixel scan of the ACTUAL rendered book -- these are the authoritative gaps; a page listed here IS under-filled even if it looks acceptable, so prioritize closing these specific pages):
+${measuredStr}
 
 PANEL MANIFEST (reading order -- the panels appear in the PDF in this exact order; match each to what you see by order and by its title caption):
 ${manifestStr}

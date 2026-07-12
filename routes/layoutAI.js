@@ -132,14 +132,15 @@ async function critiqueChunk(pdfB64, prompt, startPage) {
 // Shared: assemble the real book, render to PDF, chunk, critique -> merged result.
 // overridesForRender (or null) is applied in-memory during render, so ONE path serves
 // both the read-only dry run and the optimize preview (no persistence either way).
-async function analyzeBook(req, campaignId, overridesForRender) {
+async function analyzeBook(req, campaignId, overridesForRender, fills) {
   const built = await assembleNovelHtml(req, campaignId, overridesForRender);
   const pdfBuf = await renderHtmlToPdf(built.html, {});
   const split = await splitPdf(pdfBuf);
   const prompt = buildPrompt(built.layoutStyle, {
     houseRules: req.body && req.body.houseRules,
     styleBrief: req.body && req.body.styleBrief,
-    manifest: built.manifest
+    manifest: built.manifest,
+    fills: fills
   });
   let pages = [];
   const assessments = [];
@@ -242,7 +243,7 @@ router.post('/:campaignId/optimize', requireAuth, requireAdmin, async function (
   (async function () {
     const t0 = Date.now();
     try {
-      const a = await analyzeBook(req, campaignId, null);
+      const a = await analyzeBook(req, campaignId, null, _fills);
       const overrides = buildOverrides(a.pages, a.built.manifest, _fills);
       const token = cachePut(overrides, campaignId);
       console.log('[layout-ai optimize]', a.built.campaign.name, '|', a.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| ' + (Date.now() - t0) + 'ms');
