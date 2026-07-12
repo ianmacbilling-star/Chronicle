@@ -14196,13 +14196,13 @@ var _finalizeBeforeBlob = '';
 var _finalizeFills = {};
 var _finalizeAfterBlob = '';
 function loadFinalize() {
-  if (!state.currentCampaign || !document.getElementById('finalize-before-iframe')) return;
+  if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
   if (loadFinalize._lastUrl === url) return;
   loadFinalize._lastUrl = url;
-  finalizeLoadPdf(url, 'finalize-before-iframe', true);
+  renderPdfInto(url, 'finalize-before-scroll', true);
 }
 // Fetch the PDF ONCE, hold it as an in-memory blob, and point the iframe at the blob URL.
 // Page jumps then reload the blob locally (instant) instead of re-hitting the server (30s).
@@ -14246,25 +14246,21 @@ function finalizeMeasureBlob(blob) {
       });
   }).catch(function () {});
 }
-function finalizeBuildNav(numPages) {
+function finalizeBuildNav(first, last) {
   var nav = document.getElementById('finalize-page-nav');
   if (!nav) return;
   var h = '';
-  for (var n = 1; n <= numPages; n++) {
+  for (var n = first; n <= last; n++) {
     h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
   }
   nav.innerHTML = h;
 }
 function finalizeGoToPage(n) {
-  var panes = [['finalize-before-iframe', _finalizeBeforeBase], ['finalize-after-iframe', _finalizeAfterBase]];
-  panes.forEach(function (pair) {
-    var ifr = document.getElementById(pair[0]);
-    var base = pair[1];
-    if (!ifr || ifr.style.display === 'none' || !base) return;
-    var target = base + '#toolbar=0&navpanes=0&page=' + n;
-    // Chrome's PDF viewer only reads the page fragment on (re)load, so force a reload (cached, fast).
-    ifr.src = 'about:blank';
-    (function (frame, u) { setTimeout(function () { frame.src = u; }, 30); })(ifr, target);
+  ['finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
+    var container = document.getElementById(id);
+    if (!container || container.style.display === 'none') return;
+    var canvas = container.querySelector('canvas[data-page="' + n + '"]');
+    if (canvas) container.scrollTop = canvas.offsetTop - (container.firstChild ? container.firstChild.offsetTop : 0) - 2;
   });
   var nav = document.getElementById('finalize-page-nav');
   if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
@@ -14318,7 +14314,9 @@ function runLayoutAiDryRun() {
       var aurl = '/api/layout-ai/' + cid + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
       var afterBody = document.getElementById('finalize-after-body');
       if (afterBody) afterBody.style.display = 'none';
-      finalizeLoadPdf(aurl, 'finalize-after-iframe', false);
+      var afterScroll = document.getElementById('finalize-after-scroll');
+      if (afterScroll) afterScroll.style.display = '';
+      renderPdfInto(aurl, 'finalize-after-scroll', false);
     }
     finish();
   }
@@ -14344,8 +14342,6 @@ function runLayoutAiDryRun() {
     })
     .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; finish(); });
 }
-// ---- Free (tokenless) layout scan: measure the already-rendered Before canvases to find
-// under-filled pages. No server, no API -- pure client-side pixel measurement. Runs on load.
 function measureCanvasFill(canvas) {
   try {
     var W = canvas.width, H = canvas.height;
@@ -14491,12 +14487,11 @@ function finalizeRenderWidth(container) {
   return Math.max(400, (container ? container.clientWidth : 400) - 8);
 }
 var _pdfRenderTokens = {};
-function renderPdfInto(url, containerId) {
+function renderPdfInto(url, containerId, isBefore) {
   var container = document.getElementById(containerId);
   if (!container) return;
   var myToken = Date.now() + ':' + Math.random();
   _pdfRenderTokens[containerId] = myToken;
-  // Red progress bar + a canvas holder. The bar fills per page and is removed when done.
   container.innerHTML =
     '<div class="progress-wrap" id="' + containerId + '-pw" style="display:block;padding:12px 12px 6px;">' +
       '<div class="progress-bar"><div class="progress-fill" id="' + containerId + '-pf" style="width:0%;"></div></div>' +
@@ -14506,6 +14501,8 @@ function renderPdfInto(url, containerId) {
   var cv = document.getElementById(containerId + '-cv');
   var pf = document.getElementById(containerId + '-pf');
   var pm = document.getElementById(containerId + '-pm');
+  if (isBefore) _finalizeFills = {};
+  var flagged = [];
   ensurePdfJs().then(function (pdfjsLib) {
     if (pm) pm.textContent = 'Fetching book...';
     return fetch(url, { credentials: 'same-origin' }).then(function (r) {
@@ -14517,32 +14514,38 @@ function renderPdfInto(url, containerId) {
     }).then(function (pdf) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
-      var width = finalizeRenderWidth(container);   // locked, shared -> Before and After render at identical page size
+      var first = 2, last = total - 1;   // skip cover (pg 1) and back cover (last pg) -- those are for publishing
+      if (last < first) { first = 1; last = total; }   // tiny book: show everything
+      var width = finalizeRenderWidth(container);   // locked, shared -> before/after identical size
+      var span = (last - first + 1);
       var chain = Promise.resolve();
       var _loop = function (pageNum) {
         chain = chain.then(function () {
           if (_pdfRenderTokens[containerId] !== myToken) return;
           return pdf.getPage(pageNum).then(function (page) {
-            var dpr = Math.min(window.devicePixelRatio || 1, 2);   // standard retina; the 2.5x oversample tripped pdf.js on the cover
+            var dpr = Math.min(window.devicePixelRatio || 1, 2);
             var vp1 = page.getViewport({ scale: 1 });
-            var vp = page.getViewport({ scale: (width / vp1.width) * dpr });   // render at screen pixel density -> crisp
+            var vp = page.getViewport({ scale: (width / vp1.width) * dpr });
             var canvas = document.createElement('canvas');
-            canvas.width = vp.width; canvas.height = vp.height;   // high-res buffer
-            canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.display = 'block'; canvas.style.marginBottom = '6px'; canvas.style.borderRadius = '3px';   // displayed at logical width
+            canvas.width = vp.width; canvas.height = vp.height;
+            canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.display = 'block'; canvas.style.marginBottom = '6px'; canvas.style.borderRadius = '3px';
+            canvas.setAttribute('data-page', pageNum);
             if (cv) cv.appendChild(canvas);
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
-              if (pf) pf.style.width = Math.round((pageNum / total) * 100) + '%';
-              if (pm) pm.textContent = 'Rendering page ' + pageNum + ' of ' + total;
+              if (pf) pf.style.width = Math.round(((pageNum - first + 1) / span) * 100) + '%';
+              if (pm) pm.textContent = 'Rendering page ' + pageNum;
+              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (pageNum > 5 && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
             });
           });
         });
       };
-      for (var n = 1; n <= total; n++) _loop(n);
+      for (var n = first; n <= last; n++) _loop(n);
       return chain.then(function () {
         if (_pdfRenderTokens[containerId] !== myToken) return;
         var pw = document.getElementById(containerId + '-pw');
         if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
-        if (containerId === 'finalize-before-scroll' && typeof finalizeFreeAnalysis === 'function') finalizeFreeAnalysis();
+        if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
+        finalizeAttachSync();
       });
     });
   }).catch(function (e) {
@@ -14557,7 +14560,7 @@ function finalizeSyncScroll(srcId) {
   if (src) {
     var denom = src.scrollHeight - src.clientHeight;
     var ratio = denom > 0 ? src.scrollTop / denom : 0;
-    ['layoutai-results', 'finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
+    ['finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
       if (id === srcId) return;
       var el = document.getElementById(id);
       if (el && el.offsetParent !== null) { var d = el.scrollHeight - el.clientHeight; if (d > 0) el.scrollTop = ratio * d; }
@@ -14566,7 +14569,7 @@ function finalizeSyncScroll(srcId) {
   window.requestAnimationFrame(function () { _finalizeSyncing = false; });
 }
 function finalizeAttachSync() {
-  ['layoutai-results', 'finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
+  ['finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el && !el._syncAttached) { el._syncAttached = true; el.addEventListener('scroll', function () { finalizeSyncScroll(id); }); }
   });
@@ -14585,8 +14588,8 @@ function resetPublishForCampaignSwitch() {
   state.bookMeta = null;
   if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null;
   _finalizeLockedWidth = 0;   // re-lock the render width for the new campaign
-  var bi = document.getElementById('finalize-before-iframe'); if (bi) bi.src = 'about:blank';
-  var ai = document.getElementById('finalize-after-iframe'); if (ai) { ai.src = 'about:blank'; ai.style.display = 'none'; }
+  var bi = document.getElementById('finalize-before-scroll'); if (bi) bi.innerHTML = '';
+  var ai = document.getElementById('finalize-after-scroll'); if (ai) { ai.innerHTML = ''; ai.style.display = 'none'; }
   var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
   var _nv = document.getElementById('finalize-page-nav'); if (_nv) _nv.innerHTML = '';
   var lr = document.getElementById('layoutai-results'); if (lr) { lr.innerHTML = ''; lr.removeAttribute('data-mode'); }
