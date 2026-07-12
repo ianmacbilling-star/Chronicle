@@ -1638,6 +1638,7 @@ function selectCampaign(id) {
 
 function selectCampaignNovel(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
   var _scn=document.getElementById('sidebar-campaign-name'); if(_scn)_scn.textContent=state.currentCampaign.name;
@@ -8713,6 +8714,7 @@ function selectCampaign(id) {
 
 function selectCampaignNovel(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
   var _scn=document.getElementById('sidebar-campaign-name'); if(_scn)_scn.textContent=state.currentCampaign.name;
@@ -14418,4 +14420,22 @@ function finalizeAttachSync() {
     var el = document.getElementById(id);
     if (el && !el._syncAttached) { el._syncAttached = true; el.addEventListener('scroll', function () { finalizeSyncScroll(id); }); }
   });
+}
+
+// ---- Reset the publish/Finalize page when switching campaigns ----
+// prepSyncTitle only fills the title when empty, and the Layout AI panels cache the
+// prior campaign, so switching campaigns must clear these before the novel tab reloads.
+function resetPublishForCampaignSwitch() {
+  var t = document.getElementById('prep-title'); if (t) t.value = '';
+  state._prepOwnTitle = null;
+  state.bookMeta = null;
+  if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null;
+  var bs = document.getElementById('finalize-before-scroll'); if (bs) bs.innerHTML = '';
+  var as = document.getElementById('finalize-after-scroll'); if (as) { as.innerHTML = ''; as.style.display = 'none'; }
+  var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
+  var lr = document.getElementById('layoutai-results'); if (lr) lr.innerHTML = '';
+  var pw = document.getElementById('layoutai-progress-wrap'); if (pw) pw.style.display = 'none';
+  if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('before');
+  // Re-pull book meta + title/thumbs for the new campaign.
+  if (typeof prepPanelSync === 'function') prepPanelSync();
 }
