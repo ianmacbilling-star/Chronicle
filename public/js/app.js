@@ -1576,7 +1576,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') { loadNovelPeople(); loadNovelSummary(); }
+  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(); }
   if (section === 'assets') loadAssets();
   if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
@@ -8652,7 +8652,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') { loadNovelPeople(); loadNovelSummary(); }
+  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(); }
   if (section === 'assets') loadAssets();
   if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
@@ -14431,7 +14431,11 @@ function finalizeAttachSync() {
 // prepSyncTitle only fills the title when empty, and the Layout AI panels cache the
 // prior campaign, so switching campaigns must clear these before the novel tab reloads.
 function resetPublishForCampaignSwitch() {
+  var _cid = state.currentCampaign ? state.currentCampaign.id : null;
+  if (resetPublishForCampaignSwitch._last === _cid) return;   // already reset for this campaign
+  resetPublishForCampaignSwitch._last = _cid;
   var t = document.getElementById('prep-title'); if (t) t.value = '';
+  var pv = document.getElementById('novel-preview-iframe'); if (pv) pv.src = '';   // clear cached Preview & Export
   state._prepOwnTitle = null;
   state.bookMeta = null;
   if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null;
