@@ -13,10 +13,12 @@
 // ============================================================
 
 const HOUSE_RULES =
-`Fill the page. Aim for as little white space as possible on every style -- shoot for ~100% of the live area used; near-full is the goal, not a wall of equal panels.
+`Fill the STORY pages. Aim for as little white space as possible -- shoot for ~100% of the live area on story pages; near-full is the goal, not a wall of equal panels.
+LEAVE THE FRONT MATTER ALONE. Do NOT suggest any change to the cover, the character roster page (often titled "The Company"), or the table of contents ("Contents") -- these are intentionally sparse and meant to breathe. Mark them "full" with no fix. You MAY lightly assess the title page, but do not force it to full density.
+REDISTRIBUTE ONLY WHAT ALREADY EXISTS: grow or crop an existing image, or split and flow existing narrative into a gap. Do NOT propose adding new artwork, new panels, or illustrations that are not already in the book. (Adding art may be an option later; not now.)
 Give each page one clear focal beat: push the climax's emphasis up, drop supporting beats down.
-Never strand an image beside empty space, and never leave a near-blank page. If a tall image has little text next to it, grow it. If a gap sits next to an image, flag it to be filled.
-Text is the filler. Where empty space remains, note where narrative could be split (at periods/clauses, or mid-sentence only if it stays contiguous) and flowed into the gap.
+On story pages, never strand an image beside empty space, and never leave a near-blank page. If a tall image has little text next to it, grow it. If a gap sits next to an image, flag it to be filled.
+Text is the filler. Where empty space remains, note where existing narrative could be split (at periods/clauses, or mid-sentence only if it stays contiguous) and flowed into the gap.
 Show the whole subject on a character reveal (crop_safe:false); crop-to-fill for environments and action.
 Group beats within a scene; break at scene changes.`;
 
