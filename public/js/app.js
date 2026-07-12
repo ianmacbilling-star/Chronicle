@@ -14440,7 +14440,7 @@ function renderPdfInto(url, containerId) {
         chain = chain.then(function () {
           if (_pdfRenderTokens[containerId] !== myToken) return;
           return pdf.getPage(pageNum).then(function (page) {
-            var dpr = Math.min((window.devicePixelRatio || 1) * 1.25, 2.5);
+            var dpr = Math.min(window.devicePixelRatio || 1, 2);   // standard retina; the 2.5x oversample tripped pdf.js on the cover
             var vp1 = page.getViewport({ scale: 1 });
             var vp = page.getViewport({ scale: (width / vp1.width) * dpr });   // render at screen pixel density -> crisp
             var canvas = document.createElement('canvas');
