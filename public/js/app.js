@@ -14371,11 +14371,12 @@ function renderPdfInto(url, containerId) {
         chain = chain.then(function () {
           if (_pdfRenderTokens[containerId] !== myToken) return;
           return pdf.getPage(pageNum).then(function (page) {
+            var dpr = Math.min(window.devicePixelRatio || 1, 2);
             var vp1 = page.getViewport({ scale: 1 });
-            var vp = page.getViewport({ scale: width / vp1.width });
+            var vp = page.getViewport({ scale: (width / vp1.width) * dpr });   // render at screen pixel density -> crisp
             var canvas = document.createElement('canvas');
-            canvas.width = vp.width; canvas.height = vp.height;
-            canvas.style.width = '100%'; canvas.style.display = 'block'; canvas.style.marginBottom = '6px'; canvas.style.borderRadius = '3px';
+            canvas.width = vp.width; canvas.height = vp.height;   // high-res buffer
+            canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.display = 'block'; canvas.style.marginBottom = '6px'; canvas.style.borderRadius = '3px';   // displayed at logical width
             if (cv) cv.appendChild(canvas);
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
               if (pf) pf.style.width = Math.round((pageNum / total) * 100) + '%';
