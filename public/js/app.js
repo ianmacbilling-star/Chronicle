@@ -14361,6 +14361,15 @@ function ensurePdfJs() {
   });
   return _pdfjsPromise;
 }
+// Locked render width: capture the right pane's width once (when valid) and reuse it for
+// BOTH before and after, so a page renders pixel-identical in each pane -- only content differs.
+var _finalizeLockedWidth = 0;
+function finalizeRenderWidth(container) {
+  var rp = document.getElementById('finalize-right');
+  var w = rp ? rp.clientWidth : 0;
+  if (w > 8) _finalizeLockedWidth = w - 8;
+  return _finalizeLockedWidth > 0 ? _finalizeLockedWidth : Math.max(400, (container ? container.clientWidth : 400) - 8);
+}
 var _pdfRenderTokens = {};
 function renderPdfInto(url, containerId) {
   var container = document.getElementById(containerId);
@@ -14388,8 +14397,7 @@ function renderPdfInto(url, containerId) {
     }).then(function (pdf) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
-      var rp = document.getElementById('finalize-right');
-      var width = (rp && rp.clientWidth > 8) ? (rp.clientWidth - 8) : Math.max(400, container.clientWidth - 8);
+      var width = finalizeRenderWidth(container);   // locked, shared -> Before and After render at identical page size
       var chain = Promise.resolve();
       var _loop = function (pageNum) {
         chain = chain.then(function () {
