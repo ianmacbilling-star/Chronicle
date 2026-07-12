@@ -210,26 +210,52 @@ router.post('/:campaignId/dry-run', requireAuth, requireAdmin, async function (r
   }
 });
 
-// POST /:campaignId/optimize  -> analyze, build overrides, cache under a token.
-// Writes NOTHING to the DB; the token drives the GET below that renders the 'After'.
+// ---- Async optimize: a whole-book render + vision analysis takes longer than the edge
+// proxy's request timeout ("upstream error"), so we run it as a BACKGROUND job and let the
+// client poll. Jobs are in-memory (like the override cache) and pruned after 30 min.
+// Nothing is persisted to the DB.
+const _optJobs = new Map();
+function jobNew() {
+  var id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  _optJobs.set(id, { status: 'running', ts: Date.now() });
+  for (const kv of _optJobs) { if (Date.now() - kv[1].ts > 30 * 60 * 1000) _optJobs.delete(kv[0]); }
+  return id;
+}
+
+// POST /:campaignId/optimize  -> start a background job, return its id immediately.
 router.post('/:campaignId/optimize', requireAuth, requireAdmin, async function (req, res) {
   if (!(await isEnabled())) return res.status(403).json({ error: 'Layout AI is disabled.' });
-  const t0 = Date.now();
-  try {
-    const a = await analyzeBook(req, req.params.campaignId, null);
-    const overrides = buildOverrides(a.pages, a.built.manifest);
-    const token = cachePut(overrides, req.params.campaignId);
-    console.log('[layout-ai optimize]', a.built.campaign.name, '|', a.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| ' + (Date.now() - t0) + 'ms');
-    res.json({
-      dry_run: false, token: token, campaign: a.built.campaign.name, layout: a.built.layoutStyle, model: LAYOUT_MODEL,
-      settings: { layout: a.built.layoutStyle, co: a.built.co || null, panels: (a.built.manifest || []).length },
-      total_pages: a.total_pages, pages_flagged: a.pages.length, applied: Object.keys(overrides).length,
-      book_assessment: a.book_assessment, pages: a.pages, notes: a.notes, ms: Date.now() - t0
-    });
-  } catch (e) {
-    console.error('[layout-ai optimize] error:', e && e.message);
-    res.status((e && e.status === 403) ? 403 : 500).json({ error: (e && e.message) || 'optimize failed' });
-  }
+  const jobId = jobNew();
+  const campaignId = req.params.campaignId;
+  res.json({ job: jobId, status: 'running' });   // return immediately -- no proxy timeout
+  // Heavy work runs in the background (not awaited); the client polls optimize-status.
+  (async function () {
+    const t0 = Date.now();
+    try {
+      const a = await analyzeBook(req, campaignId, null);
+      const overrides = buildOverrides(a.pages, a.built.manifest);
+      const token = cachePut(overrides, campaignId);
+      console.log('[layout-ai optimize]', a.built.campaign.name, '|', a.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| ' + (Date.now() - t0) + 'ms');
+      _optJobs.set(jobId, { status: 'done', ts: Date.now(), result: {
+        dry_run: false, token: token, campaign: a.built.campaign.name, layout: a.built.layoutStyle, model: LAYOUT_MODEL,
+        settings: { layout: a.built.layoutStyle, co: a.built.co || null, panels: (a.built.manifest || []).length },
+        total_pages: a.total_pages, pages_flagged: a.pages.length, applied: Object.keys(overrides).length,
+        book_assessment: a.book_assessment, pages: a.pages, notes: a.notes, ms: Date.now() - t0
+      } });
+    } catch (e) {
+      console.error('[layout-ai optimize] error:', e && e.message);
+      _optJobs.set(jobId, { status: 'error', ts: Date.now(), error: (e && e.message) || 'optimize failed' });
+    }
+  })();
+});
+
+// GET /:campaignId/optimize-status/:job  -> poll the background job.
+router.get('/:campaignId/optimize-status/:job', requireAuth, requireAdmin, function (req, res) {
+  const job = _optJobs.get(req.params.job);
+  if (!job) return res.json({ status: 'unknown' });
+  if (job.status === 'done') return res.json(Object.assign({ status: 'done' }, job.result));
+  if (job.status === 'error') return res.json({ status: 'error', error: job.error });
+  res.json({ status: 'running' });
 });
 
 // GET /:campaignId/optimized/:token  -> re-render the WHOLE book with the cached overrides

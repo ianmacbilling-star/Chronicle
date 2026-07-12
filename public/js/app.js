@@ -14200,6 +14200,7 @@ function loadFinalize() {
 }
 function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
+  var cid = state.currentCampaign.id;
   var btn = document.getElementById('layoutai-run-btn');
   var status = document.getElementById('layoutai-status');
   var out = document.getElementById('layoutai-results');
@@ -14209,17 +14210,15 @@ function runLayoutAiDryRun() {
   if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
-  // Red storyboard-style bar. The request is one long POST with no streamed
-  // progress, so we ease the fill toward ~92% and snap to 100% on completion.
   var pct = 0;
   if (wrap) wrap.style.display = 'block';
   if (fill) fill.style.width = '0%';
-  if (pmsg) pmsg.textContent = 'Rendering the book and sending it to the art director (30-90s)...';
+  if (pmsg) pmsg.textContent = 'Rendering the book and sending it to the art director (this can take a minute or two)...';
   var timer = setInterval(function () {
-    pct += Math.max(0.6, (92 - pct) * 0.05);
-    if (pct > 92) pct = 92;
+    pct += Math.max(0.25, (95 - pct) * 0.02);
+    if (pct > 95) pct = 95;
     if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 650);
+  }, 800);
   function finish() {
     clearInterval(timer);
     if (fill) fill.style.width = '100%';
@@ -14227,24 +14226,41 @@ function runLayoutAiDryRun() {
     setTimeout(function () { if (wrap) wrap.style.display = 'none'; }, 500);
     if (btn) { btn.disabled = false; btn.textContent = 'Optimize layout'; }
   }
-  var url = '/api/layout-ai/' + state.currentCampaign.id + '/optimize' + finalizeBookQuery();
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' })
+  function handleDone(j) {
+    renderLayoutAiResult(j);
+    if (j && j.token) {
+      var aurl = '/api/layout-ai/' + cid + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
+      var afterScroll = document.getElementById('finalize-after-scroll');
+      var afterBody = document.getElementById('finalize-after-body');
+      if (afterScroll) afterScroll.style.display = '';
+      if (afterBody) afterBody.style.display = 'none';
+      if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('both');
+      renderPdfInto(aurl, 'finalize-after-scroll');
+      finalizeAttachSync();
+    }
+    finish();
+  }
+  var startUrl = '/api/layout-ai/' + cid + '/optimize' + finalizeBookQuery();
+  fetch(startUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' })
     .then(function (r) { return r.json(); })
     .then(function (j) {
-      renderLayoutAiResult(j);
-      if (j && j.token && state.currentCampaign) {
-        var aurl = '/api/layout-ai/' + state.currentCampaign.id + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
-        var afterScroll = document.getElementById('finalize-after-scroll');
-        var afterBody = document.getElementById('finalize-after-body');
-        if (afterScroll) afterScroll.style.display = '';
-        if (afterBody) afterBody.style.display = 'none';
-        if (typeof finalizeSetPdfTab === 'function') finalizeSetPdfTab('both');
-        renderPdfInto(aurl, 'finalize-after-scroll');
-        finalizeAttachSync();
-      }
+      if (j && j.error) { renderLayoutAiResult(j); finish(); return; }
+      if (!j || !j.job) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Could not start optimize.</div>'; finish(); return; }
+      var misses = 0;
+      var poll = function () {
+        fetch('/api/layout-ai/' + cid + '/optimize-status/' + j.job, { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (st) {
+            if (st.status === 'running') { setTimeout(poll, 3000); return; }
+            if (st.status === 'unknown') { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Optimize job expired -- please run it again.</div>'; finish(); return; }
+            if (st.status === 'error') { renderLayoutAiResult(st); finish(); return; }
+            handleDone(st);
+          })
+          .catch(function () { misses++; if (misses < 5) { setTimeout(poll, 3000); } else { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Lost connection while optimizing.</div>'; finish(); } });
+      };
+      setTimeout(poll, 2500);
     })
-    .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; })
-    .then(function () { finish(); });
+    .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; finish(); });
 }
 function renderLayoutAiResult(j) {
   var out = document.getElementById('layoutai-results');
