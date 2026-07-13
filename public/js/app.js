@@ -14275,6 +14275,11 @@ function finalizeGoToPage(n) {
   var nav = document.getElementById('finalize-page-nav');
   if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
 }
+var LAYOUT_DISPLAY = {
+  'classic': 'Picture Book', 'paired': 'Picture Book', 'picture book': 'Picture Book',
+  'comic': 'Comic', 'comicpage': 'Comic',
+  'magazine': 'Magazine', 'gazette': 'Gazette'
+};
 var LAYOUT_DESCRIPTIONS = {
   'Picture Book': 'Keeps images as large as possible.',
   'Classic': 'Keeps images as large as possible.',
@@ -14286,14 +14291,13 @@ var OPT_EST_COST_PER_PAGE = 0.015;   // rough $/page incl. the 2-pass cascade; c
 function finalizeUpdateHeader(numPages) {
   var el = document.getElementById('layoutai-header');
   if (!el) return;
-  var layout = novelLayoutStyle || 'Classic';
+  var raw = novelLayoutStyle || 'Classic';
+  var layout = LAYOUT_DISPLAY[String(raw).toLowerCase()] || raw;   // forward-facing name (e.g. Classic -> Picture Book)
   var desc = LAYOUT_DESCRIPTIONS[layout] || '';
   var estCost = (numPages || 0) * OPT_EST_COST_PER_PAGE;
   var estTokens = Math.max(1, Math.ceil((estCost * 100) / 15));   // Ian rule: cost(cents)/15 -- confirm
-  var h = '<div style="font-family:var(--font-display);color:var(--gold);font-size:13px;">' + escapeHtml(layout) + '</div>';
-  if (desc) h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;">' + escapeHtml(desc) + '</div>';
-  h += '<div style="margin-top:5px;">' + (numPages || 0) + ' pages</div>';
-  h += '<div style="color:rgba(245,232,200,0.6);font-size:11px;margin-top:2px;">Optimize: ~' + estTokens + ' tokens (est.) &middot; ~$' + estCost.toFixed(2) + ' cost</div>';
+  var h = '<div><span style="font-family:var(--font-display);color:var(--gold);">' + escapeHtml(layout) + '</span>' + (desc ? ' - ' + escapeHtml(desc) : '') + '</div>';
+  h += '<div style="color:rgba(245,232,200,0.7);font-size:11px;margin-top:2px;">' + (numPages || 0) + ' pages, Optimize: ~' + estTokens + ' tokens (est.)</div>';
   el.innerHTML = h;
 }
 
@@ -14331,7 +14335,7 @@ function runLayoutAiDryRun() {
   var pct = 0;
   if (wrap) wrap.style.display = 'block';
   if (fill) fill.style.width = '0%';
-  if (pmsg) pmsg.textContent = 'Rendering the book and sending it to the art director (this can take a minute or two)...';
+  if (pmsg) pmsg.textContent = 'Rendering the book and sending it to the art director (this can take several minutes, depending on the size of the book)...';
   var timer = setInterval(function () {
     // Slow, steady, and ALWAYS creeping so it never looks frozen: a constant slow crawl
     // up to 90%, then a tiny minimum step keeps it inching toward ~99% on long jobs.
