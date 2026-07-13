@@ -820,7 +820,7 @@ function buildPairedMeasureBody(moments, sections, opts) {
     ['before', 'after'].forEach(function (part) {
       var txt = sec[part];
       if (!txt) return;
-      var inner = coNarr(txt, opts || {}, false);
+      var inner = coNarr(txt, opts || {}, false).replace('margin:0.15in 0', 'margin:0');
       out += '<div data-mblk="p' + i + '_' + part + '" data-mkind="narr" data-mmoment="' + i + '" data-mpart="' + part + '" data-mchars="' + String(txt).length + '">' + inner + '</div>';
     });
   }
@@ -3735,7 +3735,7 @@ function composeBook(plan, beats, opts) {
             isCont = (pl.charStart || 0) > 0;
           }
           if (seg) {
-            var rendered = coNarr(seg, opts, false);
+            var rendered = coNarr(seg, opts, false).replace('margin:0.15in 0', 'margin:0');
             if (isCont) rendered = rendered.replace('text-indent:0.3in', 'text-indent:0');   // continuation of a split paragraph: no indent
             inner += '<div style="margin-top:0.1in;">' + rendered + '</div>';
           }
@@ -3743,7 +3743,7 @@ function composeBook(plan, beats, opts) {
       }
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
-    out += '<div class="content-page" style="height:9.55in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
+    out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
   });
   return out;
 }
