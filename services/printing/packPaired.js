@@ -124,14 +124,6 @@ function packPaired(beats, opts) {
       place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
       return;
     }
-    // Keep a TALL image with its intro text: if the intro + a meaningfully-sized image won't
-    // both fit on the current page, start fresh so the text stays WITH its image (rather than the
-    // intro getting pulled up to the prior page and the tall image stranded alone on the next).
-    if (b.hasImage && b.imageH >= 6.0 && cur().usedIn > 1e-6) {
-      var _minImg = b.imageH * shrinkFloor(b.shape);
-      var _needTogether = (b.textBeforeH || 0) + (b.textBeforeH ? gap : 0) + _minImg;
-      if (_needTogether > remaining() + 1e-6) newPage();
-    }
     if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines, b.beforeLineChars, b.beforeLen);
     if (b.hasImage && b.imageH > 0) {
       placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0);
