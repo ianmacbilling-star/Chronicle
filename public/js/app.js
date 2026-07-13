@@ -14202,6 +14202,7 @@ function loadFinalize() {
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
   if (loadFinalize._lastUrl === url) return;
   loadFinalize._lastUrl = url;
+  var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = true; _rb.textContent = 'Scanning book...'; }
   renderPdfInto(url, 'finalize-before-scroll', true);
 }
 // Fetch the PDF ONCE, hold it as an in-memory blob, and point the iframe at the blob URL.
@@ -14271,7 +14272,9 @@ function finalizeGoToPage(n) {
 function finalizeShowFreeAnalysis(flagged, numPages) {
   var out = document.getElementById('layoutai-free');
   if (!out) return;
-  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + numPages + ' pages</div>';
+  var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; }
+  out.style.maxHeight = '540px';   // scan fills the panel until Optimize runs
+  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Initial layout scan &middot; ' + numPages + ' pages</div>';
   if (!flagged.length) {
     h += '<div style="color:rgba(245,232,200,0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
@@ -14292,6 +14295,7 @@ function runLayoutAiDryRun() {
   var wrap = document.getElementById('layoutai-progress-wrap');
   var fill = document.getElementById('layoutai-progress-fill');
   var pmsg = document.getElementById('layoutai-progress-msg');
+  var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.style.maxHeight = '220px';   // shrink the scan once Optimize runs
   if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
