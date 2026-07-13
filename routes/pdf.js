@@ -3672,12 +3672,26 @@ async function computePairedPack(req, campaignId, packOpts) {
   var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
   delete req.query.measurePaired;
   var pageH = 9.7;
-  var bi = 0;
+  // Robust alignment: match each beat's before/after to a measured narration block by
+  // (part + char length), scanning forward. This can't cascade-drift the way strict
+  // lockstep did when the measure's section set differs slightly from the beats'.
+  var narr = (blocks || []).filter(function (bl) { return (bl.kind || '').indexOf('narr') !== -1 || bl.part; });
+  var used = new Array(narr.length);
+  function matchHeight(part, len, fromIdx) {
+    for (var k = fromIdx; k < narr.length; k++) {
+      if (!used[k] && narr[k].part === part && Math.abs((narr[k].chars || 0) - len) <= 2) { used[k] = true; return { h: narr[k].heightIn, at: k + 1 }; }
+    }
+    for (var j = fromIdx; j < narr.length; j++) {
+      if (!used[j]) { used[j] = true; return { h: narr[j].heightIn, at: j + 1 }; }
+    }
+    return { h: 0, at: fromIdx };
+  }
+  var cursor = 0;
   var packBeats = (mbuilt.beats || []).map(function (beat) {
     var tb = 0, ta = 0;
-    if (beat.before) { tb = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
-    if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
-    return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta };
+    if (beat.before) { var rb = matchHeight('before', String(beat.before).length, cursor); tb = rb.h; cursor = rb.at; }
+    if (beat.after) { var ra = matchHeight('after', String(beat.after).length, cursor); ta = ra.h; cursor = ra.at; }
+    return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, isTower: ((beat.aspect || 1) <= 0.42) };
   });
   var plan = packPaired(packBeats, Object.assign({ pageHeightIn: pageH }, packOpts || {}));
   var overrides = {};
