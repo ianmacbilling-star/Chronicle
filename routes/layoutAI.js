@@ -126,15 +126,12 @@ async function critiqueChunk(pdfB64, prompt, startPage) {
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfB64 } },
           { type: 'text', text: prompt + note }
         ]
-      }, {
-        role: 'assistant',
-        content: '{'
       }]
     })
   });
   const data = await resp.json();
   if (data && data.error) throw new Error('API: ' + (data.error.message || JSON.stringify(data.error)));
-  const text = '{' + (data.content || []).map(function (i) { return i.type === 'text' ? i.text : ''; }).filter(Boolean).join('\n');   // '{' was prefilled
+  const text = (data.content || []).map(function (i) { return i.type === 'text' ? i.text : ''; }).filter(Boolean).join('\n');
   const parsed = extractJson(text);
   if (parsed) return parsed;
   return { parseError: true, raw: text.slice(0, 500) };
