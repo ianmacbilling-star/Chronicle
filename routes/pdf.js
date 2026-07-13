@@ -3727,7 +3727,18 @@ function composeBook(plan, beats, opts) {
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>';
       } else if (pl.kind === 'narr') {
         var txt = (pl.part === 'after') ? b.after : b.before;
-        if (txt) inner += '<div style="margin-top:0.1in;">' + coNarr(txt, opts, false) + '</div>';
+        if (txt) {
+          var rendered = coNarr(txt, opts, false);
+          if (pl.split || (pl.offsetIn && pl.offsetIn > 0.01)) {
+            // Split paragraph: render the WHOLE thing, reveal only this page's slice by
+            // clipping to the segment height and offsetting past what earlier pages showed.
+            // No word-counting, no lost text -- the browser wraps it, we window it.
+            inner += '<div style="margin-top:0.1in;height:' + (pl.heightIn || 0).toFixed(2) + 'in;overflow:hidden;">' +
+              '<div style="margin-top:-' + (pl.offsetIn || 0).toFixed(2) + 'in;">' + rendered + '</div></div>';
+          } else {
+            inner += '<div style="margin-top:0.1in;">' + rendered + '</div>';
+          }
+        }
       }
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
@@ -3739,7 +3750,7 @@ function composeBook(plan, beats, opts) {
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
-      var packedC = await computePairedPack(req, req.params.campaignId, { noSplit: true, pageHeightIn: 9.4 });
+      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
       var body = composeBook(packedC.plan, packedC.beats, {});
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});

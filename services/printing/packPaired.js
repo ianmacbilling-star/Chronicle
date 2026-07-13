@@ -54,11 +54,13 @@ function packPaired(beats, opts) {
       return;
     }
     var left = h;
+    var placed = 0;
     while (left > 1e-6) {
       var rem = remaining();
       if (rem < minLeftForText && cur().usedIn > 1e-6) { newPage(); rem = remaining(); }
       var chunk = Math.min(left, rem);
-      place('narr', beatIdx, chunk, { part: part, split: (chunk < h - 1e-6) });
+      place('narr', beatIdx, chunk, { part: part, split: (h - chunk > 1e-6), offsetIn: round3(placed), totalH: round3(h) });
+      placed = round3(placed + chunk);
       left = round3(left - chunk);
       if (left > 1e-6) newPage();
     }
