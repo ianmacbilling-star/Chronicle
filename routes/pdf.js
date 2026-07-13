@@ -3584,7 +3584,7 @@ async function assembleNovelHtml(req, campaignId, overrides) {
   });
 
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
-  if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.measurePaired = true; }
+  if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.measurePaired = true; co.arrange = 'paired'; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co };
