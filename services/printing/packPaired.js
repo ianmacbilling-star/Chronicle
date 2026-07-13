@@ -91,6 +91,27 @@ function packPaired(beats, opts) {
     place('image', beatIdx, round3(fullH * pageScale), { scale: pageScale, shrunk: pageScale < 1, fullH: round3(fullH) });
   }
 
+  // JOINT sizing: place an image AND leave room for its own following text on the same page,
+  // so a beat's image + narration are considered together (not image-first, discover-text-doesn't-fit).
+  function placeImageWithText(beatIdx, fullH, shape, afterH) {
+    if (!(fullH > 0)) return;
+    var floor = shrinkFloor(shape);
+    var minH = round3(fullH * floor);
+    var rem = remaining();
+    var need = afterH > 0 ? (afterH + gap) : 0;   // room the following text wants
+    var avail = rem - need;                        // room for the image if the text shares the page
+    if (fullH <= avail + 1e-6) { place('image', beatIdx, fullH, { scale: 1, fullH: round3(fullH) }); return; }
+    if (avail >= minH) {
+      // Shrink the image (within its cap) just enough that its text fits beneath it -- no stranded
+      // white -- whether the page already has content or the image+text start a fresh page.
+      var scale = round3(avail / fullH);
+      place('image', beatIdx, round3(fullH * scale), { scale: scale, shrunk: true, fullH: round3(fullH) });
+      return;
+    }
+    // Can't fit both -> size the image on its own; the text flows to the next page.
+    placeImage(beatIdx, fullH, shape);
+  }
+
   newPage();
   (beats || []).forEach(function (b) {
     if (b.isTower && b.hasImage && b.imageH > 0) {
@@ -103,8 +124,12 @@ function packPaired(beats, opts) {
       return;
     }
     if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines);
-    if (b.hasImage && b.imageH > 0) placeImage(b.idx, b.imageH, b.shape);
-    if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines);
+    if (b.hasImage && b.imageH > 0) {
+      placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0);
+      if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines);
+    } else if (b.textAfterH > 0) {
+      placeText(b.idx, 'after', b.textAfterH, b.afterLines);
+    }
   });
 
   var whiteByPage = pages.map(function (p) { return round3(Math.max(0, pageH - p.usedIn)); });
