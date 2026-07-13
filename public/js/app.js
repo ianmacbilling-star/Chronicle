@@ -14236,7 +14236,7 @@ function finalizeMeasureBlob(blob) {
               var canvas = document.createElement('canvas');
               canvas.width = vp.width; canvas.height = vp.height;
               return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
-                var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (pageNum > 5 && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
+                var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
               });
             });
           });
@@ -14297,10 +14297,13 @@ function runLayoutAiDryRun() {
   if (fill) fill.style.width = '0%';
   if (pmsg) pmsg.textContent = 'Rendering the book and sending it to the art director (this can take a minute or two)...';
   var timer = setInterval(function () {
-    pct += Math.max(0.25, (95 - pct) * 0.02);
-    if (pct > 95) pct = 95;
+    // Slow, steady, and ALWAYS creeping so it never looks frozen: a constant slow crawl
+    // up to 90%, then a tiny minimum step keeps it inching toward ~99% on long jobs.
+    // finish() snaps to 100% whenever the job actually lands (a jump beats sitting still).
+    var step = pct < 90 ? 0.09 : Math.max(0.02, (99.4 - pct) * 0.01);
+    pct = Math.min(99.4, pct + step);
     if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 800);
+  }, 650);
   function finish() {
     clearInterval(timer);
     if (fill) fill.style.width = '100%';
@@ -14412,7 +14415,7 @@ function renderLayoutAiResult(j) {
     if (panels.length) {
       h += '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">';
       panels.forEach(function (pn) {
-        var tag = (pn.label ? escapeHtml(String(pn.label)) : 'panel') + ': e' + escapeHtml(String(pn.emphasis)) + '/' + escapeHtml(String(pn.size_hint || 'keep'));
+        var tag = (pn.label ? escapeHtml(String(pn.label)) : 'panel') + ': e' + escapeHtml(String(pn.emphasis)) + '/' + escapeHtml(String(pn.size_hint || 'keep')) + (pn.flow === true ? ' +flow' : '');
         h += '<span style="font-size:10px;font-family:monospace;background:#0c0805;border:1px solid rgba(138,106,42,0.5);border-radius:3px;padding:1px 6px;color:#d8c9a0;">' + tag + '</span>';
       });
       h += '</div>';
@@ -14539,7 +14542,7 @@ function renderPdfInto(url, containerId, isBefore) {
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
-              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (pageNum > 5 && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
+              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
             });
           });
         });
