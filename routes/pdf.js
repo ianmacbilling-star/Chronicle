@@ -3677,10 +3677,19 @@ async function computePairedPack(req, campaignId, packOpts) {
   // and then clipped (which dropped the last page).
   function estTextH(len) { return Math.max(0.3, 0.28 + (Number(len) || 0) / 360 * 1.9); }
   var bi = 0;
+  function takeBlock(expectedLen) {
+    // Match this beat's text to the measured block with the same char count, scanning a small
+    // window forward to resync if the sets drift. Returns null (-> height estimate, whole block,
+    // NO split) rather than consuming a wrong block -- so a split can never land on wrong offsets.
+    for (var k = bi; k < Math.min(bi + 6, blocks.length); k++) {
+      if (Math.abs((blocks[k].chars || 0) - expectedLen) <= 2) { bi = k + 1; return blocks[k]; }
+    }
+    return null;
+  }
   var packBeats = (mbuilt.beats || []).map(function (beat) {
     var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
-    if (beat.before) { var _b1 = blocks[bi]; tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; bi++; }
-    if (beat.after) { var _b2 = blocks[bi]; ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; bi++; }
+    if (beat.before) { var _b1 = takeBlock(String(beat.before).length); tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; }
+    if (beat.after) { var _b2 = takeBlock(String(beat.after).length); ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; }
     return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
   });
   var plan = packPaired(packBeats, Object.assign({ pageHeightIn: pageH }, packOpts || {}));
@@ -3731,8 +3740,10 @@ function composeBook(plan, beats, opts) {
           var seg = full;
           var isCont = false;
           if (pl.charStart != null || pl.charEnd != null) {
-            seg = full.slice(pl.charStart || 0, (pl.charEnd != null) ? pl.charEnd : full.length);
-            isCont = (pl.charStart || 0) > 0;
+            var cs = Math.max(0, Math.min(pl.charStart || 0, full.length));
+            var ce = (pl.charEnd != null) ? Math.max(cs, Math.min(pl.charEnd, full.length)) : full.length;
+            seg = full.slice(cs, ce);
+            isCont = cs > 0;
           }
           if (seg) {
             var rendered = coNarr(seg, opts, false).replace('margin:0.15in 0', 'margin:0');
