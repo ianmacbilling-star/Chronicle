@@ -14352,40 +14352,21 @@ function runLayoutAiDryRun() {
     setTimeout(function () { if (wrap) wrap.style.display = 'none'; }, 500);
     if (btn) { btn.disabled = false; btn.textContent = 'Optimize layout'; }
   }
-  function handleDone(j) {
-    renderLayoutAiResult(j);
-    if (j && j.token) {
-      var aurl = '/api/layout-ai/' + cid + '/optimized/' + encodeURIComponent(j.token) + finalizeBookQuery();
-      var afterBody = document.getElementById('finalize-after-body');
-      if (afterBody) afterBody.style.display = 'none';
-      var afterScroll = document.getElementById('finalize-after-scroll');
-      if (afterScroll) afterScroll.style.display = '';
-      renderPdfInto(aurl, 'finalize-after-scroll', false);
-    }
-    finish();
-  }
-  var startUrl = '/api/layout-ai/' + cid + '/optimize' + finalizeBookQuery();
-  fetch(startUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ fills: _finalizeFills }) })
-    .then(function (r) { return r.json(); })
-    .then(function (j) {
-      if (j && j.error) { renderLayoutAiResult(j); finish(); return; }
-      if (!j || !j.job) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Could not start optimize.</div>'; finish(); return; }
-      var misses = 0;
-      var unknownMisses = 0;
-      var poll = function () {
-        fetch('/api/layout-ai/' + cid + '/optimize-status/' + j.job, { credentials: 'same-origin' })
-          .then(function (r) { return r.json(); })
-          .then(function (st) {
-            if (st.status === 'running') { unknownMisses = 0; setTimeout(poll, 3000); return; }
-            if (st.status === 'unknown') { unknownMisses++; if (unknownMisses < 8) { setTimeout(poll, 3000); return; } if (out) out.innerHTML = '<div style="color:#e0a0a0;">Optimize job expired -- please run it again.</div>'; finish(); return; }
-            if (st.status === 'error') { renderLayoutAiResult(st); finish(); return; }
-            handleDone(st);
-          })
-          .catch(function () { misses++; if (misses < 5) { setTimeout(poll, 3000); } else { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Lost connection while optimizing.</div>'; finish(); } });
-      };
-      setTimeout(poll, 2500);
-    })
-    .catch(function (e) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Request failed: ' + escapeHtml((e && e.message) || 'error') + '</div>'; finish(); });
+  // Load the deterministic page-packer / composer into the After pane. Synchronous render,
+  // no async job, no tokens -- the packer composes the book page by page and returns the PDF,
+  // rendered through the same styled shell as the Before pane so it's a true comparison.
+  var composeUrl = '/api/pdf/pack-render/' + cid + '?compose=1' + finalizeBookQuery().replace('?', '&');
+  var afterBody = document.getElementById('finalize-after-body');
+  if (afterBody) afterBody.style.display = 'none';
+  var afterScroll = document.getElementById('finalize-after-scroll');
+  if (afterScroll) afterScroll.style.display = '';
+  if (pmsg) pmsg.textContent = 'Composing the book page by page (this can take up to a minute)...';
+  renderPdfInto(composeUrl, 'finalize-after-scroll', false);
+  var _composeWatch = setInterval(function () {
+    var sc = document.getElementById('finalize-after-scroll');
+    if (sc && sc.querySelector('canvas')) { clearInterval(_composeWatch); finish(); }
+  }, 500);
+  setTimeout(function () { clearInterval(_composeWatch); finish(); }, 180000);
 }
 function measureCanvasFill(canvas) {
   try {
