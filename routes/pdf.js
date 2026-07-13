@@ -850,33 +850,23 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // Phase 3.1 (page-packer) HYBRID render.
       var _aspect = momentAspect(m) || 1;   // width / height
       var _isTower = (normShape(m) === 'tower') || (_aspect <= 0.5);
-      if (_isTower && m.image) {
-        // Tower / very-tall: FLOAT with the narrative BESIDE it (fills the side-gutter, so a
-        // 1:4 image never strands empty margins or a near-blank page). Height clamped to a page.
-        var _tw = Math.min(6.8 - 2.6, 9.2 * _aspect) * _sc;
-        if ((_tw / _aspect) > 9.3) _tw = 9.3 * _aspect;
-        var _tLeft = (pbN % 2 === 0); pbN += 1;
-        var _tFl = _tLeft ? 'float:left;margin:0 0.24in 0.12in 0;' : 'float:right;margin:0 0 0.12in 0.24in;';
-        html += '<div style="display:flow-root;margin-bottom:0.1in;">' +
-          '<div style="' + _tFl + 'width:' + _tw.toFixed(2) + 'in;page-break-inside:avoid;">' +
-            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
-            coCaptionBelow(m, i, opts.caption) + '</div>' +
-          '<div style="display:flow-root;">' + beforeHtml + afterHtml + '</div></div>';
+      if (!_isTower) {
+        // Non-tower: STACKED and centered, text above/below, no floats. Width is the packer's
+        // modeled display width x scale; height clamped to one page (so nothing splits).
+        var _isP = isPortrait(m);
+        var _maxImgH = 9.3;
+        var _dispW = (_isP ? 4.6 : 6.8) * _sc;
+        if ((_dispW / _aspect) > _maxImgH) _dispW = _maxImgH * _aspect;
+        var _imgHtml = m.image
+          ? '<div style="margin:0 auto 0.1in;width:' + _dispW.toFixed(2) + 'in;page-break-inside:avoid;">' +
+              '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+              coCaptionBelow(m, i, opts.caption) + '</div>'
+          : '';
+        html += beforeHtml + _imgHtml + afterHtml;
         continue;
       }
-      // Everything else: STACKED and centered, text above/below, no floats. Width is the
-      // packer's modeled display width x scale; height clamped to one page.
-      var _isP = isPortrait(m);
-      var _maxImgH = 9.3;
-      var _dispW = (_isP ? 4.6 : 6.8) * _sc;
-      if ((_dispW / _aspect) > _maxImgH) _dispW = _maxImgH * _aspect;
-      var _imgHtml = m.image
-        ? '<div style="margin:0 auto 0.1in;width:' + _dispW.toFixed(2) + 'in;page-break-inside:avoid;">' +
-            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
-            coCaptionBelow(m, i, opts.caption) + '</div>'
-        : '';
-      html += beforeHtml + _imgHtml + afterHtml;
-      continue;
+      // Towers fall through to the proven pbTower logic below (floats the tall image AND pulls
+      // the following panels/text into the space beside it -- fills the gutter, saves the page).
     }
     if (isPortrait(m)) {
       // Picture Book portraits FLOAT left/right (alternating) with the narrative
