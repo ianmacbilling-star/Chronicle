@@ -47,6 +47,12 @@ function packPaired(beats, opts) {
   // Text flows: fill the remaining space, then continue on fresh pages.
   function placeText(beatIdx, part, h) {
     if (!(h > 0)) return;
+    if (opts.noSplit) {
+      // Whole-block mode (for the literal composer): never split a paragraph across pages.
+      if (h > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
+      place('narr', beatIdx, h, { part: part, split: false });
+      return;
+    }
     var left = h;
     while (left > 1e-6) {
       var rem = remaining();

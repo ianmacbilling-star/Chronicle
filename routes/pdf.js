@@ -2359,7 +2359,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // Build session content. When paginated, only one session is rendered,
   // but it keeps its real session number, and the chapter seam is suppressed
   // so a sequence spanning sessions reads continuously in the preview.
-  var allSessionsHTML = renderSessions.map(function(s, localIdx) {
+  var allSessionsHTML = (co && co.packComposedBody) ? co.packComposedBody : renderSessions.map(function(s, localIdx) {
     var si = paginated ? pageIndex : localIdx;
     var moments = s.moments || [];
     var narrative = {
@@ -3524,7 +3524,7 @@ router.post('/story/:id/meta', requireAuth, async function(req, res) {
 // re-derivation. Deliberately mirrors the /novel route's gathering and is kept as a
 // SEPARATE function (the live export route is left untouched) so the export path
 // carries zero risk from this feature. Reuses buildNovelHTML, so the HTML is identical.
-async function assembleNovelHtml(req, campaignId, overrides) {
+async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   const db = await getDb();
   const campaign = await db.prepare(
     'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
@@ -3587,7 +3587,7 @@ async function assembleNovelHtml(req, campaignId, overrides) {
       _pidx++;
       manifest.push({ idx: _pidx, title: String(m.title || '').slice(0, 60), shape: String(m.shape || '') });
       var _sec = (_secs || []).find(function (s) { return s.panel_index === _j; }) || {};
-      beats.push({ idx: _pidx, shape: String(m.shape || ''), aspect: (typeof momentAspect === 'function' ? (momentAspect(m) || 1) : 1), hasImage: !!m.image, before: _sec.before || '', after: _sec.after || '' });
+      beats.push({ idx: _pidx, moment: m, shape: String(m.shape || ''), aspect: (typeof momentAspect === 'function' ? (momentAspect(m) || 1) : 1), hasImage: !!m.image, before: _sec.before || '', after: _sec.after || '' });
       if (overrides && overrides[_pidx]) {
         var meta = lmMeta(m);
         meta = (meta && typeof meta === 'object') ? Object.assign({}, meta) : {};
@@ -3607,6 +3607,7 @@ async function assembleNovelHtml(req, campaignId, overrides) {
   if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.arrange = 'paired'; co.measurePaired = true; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
+  if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats };
 }
@@ -3665,7 +3666,7 @@ function beatImageHeight(beat, pageH) {
 // PHASE 3 (page-packer): measure a paired book's text, compute image heights, run the
 // packer, and return { plan, overrides }. Overrides carry the per-beat image scale the
 // packer chose, ready to apply through the normal override render path.
-async function computePairedPack(req, campaignId) {
+async function computePairedPack(req, campaignId, packOpts) {
   req.query.measurePaired = '1';
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
   var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
@@ -3678,18 +3679,69 @@ async function computePairedPack(req, campaignId) {
     if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
     return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta };
   });
-  var plan = packPaired(packBeats, { pageHeightIn: pageH });
+  var plan = packPaired(packBeats, Object.assign({ pageHeightIn: pageH }, packOpts || {}));
   var overrides = {};
   plan.pages.forEach(function (pg) { pg.placements.forEach(function (pl) {
     if (pl.kind === 'image' && pl.scale != null && pl.scale < 0.999) overrides[pl.beat] = { scale: pl.scale };
   }); });
-  return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length };
+  return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length, beats: mbuilt.beats };
 }
 // PHASE 3 (page-packer) render: apply the packer's chosen image scales through the normal
 // override render path and return the packed PDF. Chromium flows text + splits paragraphs;
 // the packer only decides image sizes. Body-only preview (default styling) for judging density.
+// ROAD B (page-packer) LITERAL COMPOSER: build the page body from the packer's plan, one
+// page at a time. Each plan page becomes a content-page div with a hard break after it, so
+// the browser never re-paginates -- towers can't split, gaps are exactly what the packer set.
+// Increment 1: whole text blocks (noSplit); paragraph-level split is the next increment.
+function composeBook(plan, beats, opts) {
+  opts = opts || {};
+  var byIdx = {};
+  (beats || []).forEach(function (b) { byIdx[b.idx] = b; });
+  var out = '';
+  var pages = (plan && plan.pages) || [];
+  pages.forEach(function (pg, pi) {
+    var inner = '';
+    (pg.placements || []).forEach(function (pl) {
+      var b = byIdx[pl.beat];
+      if (!b) return;
+      var m = b.moment;
+      if (pl.kind === 'tower' && m && m.image) {
+        var asp = momentAspect(m) || 1;
+        var tw = Math.min(6.8 - 2.6, 9.2 * asp);
+        if ((tw / asp) > 9.3) tw = 9.3 * asp;
+        inner += '<div style="display:flow-root;margin-bottom:0.1in;">' +
+          '<div style="float:left;margin:0 0.24in 0.12in 0;width:' + tw.toFixed(2) + 'in;">' +
+            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>' +
+          '<div style="display:flow-root;">' +
+            (b.before ? '<div style="margin-bottom:0.1in;">' + coNarr(b.before, opts, false) + '</div>' : '') +
+            (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
+          '</div></div>';
+      } else if (pl.kind === 'image' && m && m.image) {
+        var w = (isPortrait(m) ? 4.6 : 6.8) * (pl.scale || 1);
+        inner += '<div style="margin:0 auto 0.1in;width:' + w.toFixed(2) + 'in;">' +
+          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>';
+      } else if (pl.kind === 'narr') {
+        var txt = (pl.part === 'after') ? b.after : b.before;
+        if (txt) inner += '<div style="margin-top:0.1in;">' + coNarr(txt, opts, false) + '</div>';
+      }
+    });
+    var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
+    out += '<div class="content-page" style="' + brk + 'position:relative;">' + inner + '</div>';
+  });
+  return out;
+}
+
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
+    if (req.query.compose === '1' || req.query.compose === 'true') {
+      var packedC = await computePairedPack(req, req.params.campaignId, { noSplit: true });
+      var body = composeBook(packedC.plan, packedC.beats, {});
+      var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
+      var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'inline; filename="composed-preview.pdf"');
+      return res.send(Buffer.isBuffer(pdfC) ? pdfC : Buffer.from(pdfC));
+    }
     var packed = await computePairedPack(req, req.params.campaignId);
     req.query.packRender = '1';
     var rbuilt = await assembleNovelHtml(req, req.params.campaignId, packed.overrides);
