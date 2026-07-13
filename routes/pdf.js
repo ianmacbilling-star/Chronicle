@@ -8,6 +8,7 @@ const path = require('path');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
+const { packPaired } = require('../services/printing/packPaired');
 const { packComic } = require('../services/printing/packComic');
 const { planComic } = require('../services/printing/comicEngine');
 const { getPrintProvider } = require('../services/printing');
@@ -3563,11 +3564,16 @@ async function assembleNovelHtml(req, campaignId, overrides) {
   // hook for applying in-memory layout_meta overrides for the optimize PREVIEW. NOTHING here
   // is persisted -- overrides patch the in-memory moment objects for this one render only.
   var manifest = [];
+  var beats = [];
   var _pidx = 0;
   sessionsWithData.forEach(function (sd) {
-    (sd.moments || []).forEach(function (m) {
+    var _secs = [];
+    try { _secs = sd.narrative_sections ? JSON.parse(sd.narrative_sections) : []; } catch (e) { _secs = []; }
+    (sd.moments || []).forEach(function (m, _j) {
       _pidx++;
       manifest.push({ idx: _pidx, title: String(m.title || '').slice(0, 60), shape: String(m.shape || '') });
+      var _sec = (_secs || []).find(function (s) { return s.panel_index === _j; }) || {};
+      beats.push({ idx: _pidx, shape: String(m.shape || ''), aspect: (typeof momentAspect === 'function' ? (momentAspect(m) || 1) : 1), hasImage: !!m.image, before: _sec.before || '', after: _sec.after || '' });
       if (overrides && overrides[_pidx]) {
         var meta = lmMeta(m);
         meta = (meta && typeof meta === 'object') ? Object.assign({}, meta) : {};
@@ -3587,8 +3593,52 @@ async function assembleNovelHtml(req, campaignId, overrides) {
   if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.measurePaired = true; co.arrange = 'paired'; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
-  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co };
+  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats };
 }
+
+// PHASE 2 (page-packer): analytic image display height for a beat in the paired layout.
+// Portraits float narrow (~4.6in wide); non-portraits sit ~full content width. Height is
+// width / aspect, capped to a page. (Float text-beside footprint is a Phase 3 refinement.)
+function beatImageHeight(beat, pageH) {
+  var aspect = (beat && beat.aspect) || 1;   // width / height
+  var shape = String((beat && beat.shape) || '').toLowerCase();
+  var isPortrait = aspect < 0.95 || /tall|tower|portrait/.test(shape);
+  var displayW = isPortrait ? 4.6 : 6.6;
+  var h = displayW / (aspect || 1);
+  return Math.min(pageH, Math.max(1.2, h));
+}
+// PHASE 2 (page-packer) inspect: measure text, compute image heights, run packPaired,
+// and return the deterministic page plan (beat -> page, with image shrink factors) as JSON.
+// Pure inspection -- renders nothing, changes nothing. Validate the plan before Phase 3 renders it.
+router.get('/pack-paired/:campaignId', requireAuth, async function (req, res) {
+  try {
+    req.query.measurePaired = '1';
+    var built = await assembleNovelHtml(req, req.params.campaignId, null);
+    var measured = await measureDocument(built.html, {});
+    var blocks = measured.blocks || [];
+    var pageH = 9.7;
+    var bi = 0;
+    var packBeats = (built.beats || []).map(function (beat) {
+      var tb = 0, ta = 0;
+      if (beat.before) { tb = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
+      if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
+      return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta };
+    });
+    var plan = packPaired(packBeats, { pageHeightIn: pageH });
+    res.json({
+      campaign: built.campaign ? built.campaign.name : null,
+      beatCount: packBeats.length,
+      textBlocksMeasured: blocks.length,
+      pageCount: plan.pageCount,
+      imagesShrunk: plan.imagesShrunk,
+      totalWhiteIn: plan.totalWhiteIn,
+      whiteByPage: plan.whiteByPage,
+      pages: plan.pages
+    });
+  } catch (e) {
+    res.status(500).json({ error: (e && e.message) || 'pack-paired failed' });
+  }
+});
 
 // PHASE 1 (page-packer) verification: measure paired-layout narration heights.
 // Returns the true rendered height (in inches) of every text block in reading order,
