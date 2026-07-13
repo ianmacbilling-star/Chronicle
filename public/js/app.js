@@ -14256,12 +14256,15 @@ function finalizeBuildNav(first, last) {
   nav.innerHTML = h;
 }
 function finalizeGoToPage(n) {
-  ['finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
-    var container = document.getElementById(id);
-    if (!container || container.style.display === 'none') return;
-    var canvas = container.querySelector('canvas[data-page="' + n + '"]');
-    if (canvas) container.scrollTop = canvas.offsetTop - (container.firstChild ? container.firstChild.offsetTop : 0) - 2;
-  });
+  var before = document.getElementById('finalize-before-scroll');
+  var top = null;
+  if (before) { var canvas = before.querySelector('canvas[data-page="' + n + '"]'); if (canvas) top = canvas.offsetTop - (before.firstChild ? before.firstChild.offsetTop : 0) - 2; }
+  if (top != null) {
+    ['finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
+      var c = document.getElementById(id);
+      if (c && c.style.display !== 'none') c.scrollTop = top;   // same absolute offset -> page tops align
+    });
+  }
   var nav = document.getElementById('finalize-page-nav');
   if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
 }
@@ -14567,12 +14570,11 @@ function finalizeSyncScroll(srcId) {
   _finalizeSyncing = true;
   var src = document.getElementById(srcId);
   if (src) {
-    var denom = src.scrollHeight - src.clientHeight;
-    var ratio = denom > 0 ? src.scrollTop / denom : 0;
+    var top = src.scrollTop;
     ['finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) {
       if (id === srcId) return;
       var el = document.getElementById(id);
-      if (el && el.offsetParent !== null) { var d = el.scrollHeight - el.clientHeight; if (d > 0) el.scrollTop = ratio * d; }
+      if (el && el.offsetParent !== null) el.scrollTop = top;   // absolute: equal-height pages -> page tops align
     });
   }
   window.requestAnimationFrame(function () { _finalizeSyncing = false; });
