@@ -831,6 +831,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
   var pbN = 0;
   var _pulled = {};   // beats whose intro was pulled up by a flow-flagged prior beat
+  var _towerDefer = [];   // packer: small beats deferred to the NEXT tower's gutter (consolidates the page)
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
@@ -850,6 +851,13 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // Phase 3.1 (page-packer) HYBRID render.
       var _aspect = momentAspect(m) || 1;   // width / height
       var _isTower = (_aspect <= 0.42);   // true 1:2.4+ column ONLY; a shape mislabeled 'tower' but not actually skinny stays stacked
+      var _nextTower = (i + 1 < moments.length) && ((momentAspect(moments[i + 1]) || 1) <= 0.42);
+      if (!_isTower && _nextTower && normShape(m) !== 'wide' && normShape(m) !== 'panoramic') {
+        // This small beat immediately precedes a tower -> defer it into that tower's side gutter
+        // (consolidates it onto the tower's page instead of stranding a half-empty page before).
+        _towerDefer.push(i);
+        continue;
+      }
       if (!_isTower) {
         // Non-tower: STACKED and centered, text above/below, no floats. Width is the packer's
         // modeled display width x scale; height clamped to one page (so nothing splits).
@@ -874,7 +882,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // Towering (narrow) shots go full page height; tall shots stay large but cap
       // their width so a readable narrative column fits alongside. (7.0in tall target
       // sentinel preserved below; tune pbCol to trade image size vs side-text width.)
-      var pbTower = (normShape(m) === 'tower');
+      var pbTower = (normShape(m) === 'tower') || (opts.packStacked && (momentAspect(m) || 1) <= 0.42);
       var pbCol = 2.6;
       // Towers are generated as a true tall column (1:4); show them at their REAL aspect.
       // coMedia uses dispRatioCSS (the stored pixel ratio for towers), so object-fit:cover
@@ -895,6 +903,11 @@ function renderPaired(moments, sections, intro, outro, opts) {
         // that sits alongside the float. The shared flow-root still clears, so document flow after
         // the tower is unchanged -- only the previously-empty side column gets populated.
         var pbBeside = '', pbAdv = 0, pbFill = 0;
+        if (opts.packStacked && _towerDefer.length) {
+          // Consolidate the deferred pre-tower beat(s) into the gutter (fills the side, saves a page).
+          _towerDefer.forEach(function (di) { var dsec = sections.find(function (s) { return s.panel_index === di; }) || {}; pbBeside += pbBesidePanel(moments[di], dsec, di, opts); });
+          _towerDefer = [];
+        }
         while ((i + 1 + pbAdv) < moments.length && pbFill < 3) {
           var pbNs = normShape(moments[i + 1 + pbAdv]);
           if (pbNs === 'tower' || pbNs === 'panoramic' || pbNs === 'wide') break;
@@ -938,6 +951,18 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // makes Chromium move the image+bridge together instead of stranding the text.
       html += '<div style="break-before:avoid;page-break-before:avoid;">' + beforeHtml + afterHtml + '</div>';
     }
+  }
+  if (opts.packStacked && _towerDefer.length) {
+    // Safety: any deferred pre-tower beat that never reached a tower gets rendered normally.
+    _towerDefer.forEach(function (di) {
+      var dsec = sections.find(function (s) { return s.panel_index === di; }) || {};
+      var dm = moments[di];
+      var db = dsec.before ? '<div style="margin-top:0.1in;">' + coNarr(dsec.before, opts, false) + '</div>' : '';
+      var da = dsec.after ? '<div style="margin-top:0.1in;">' + coNarr(dsec.after, opts, false) + '</div>' : '';
+      var dimg = dm.image ? '<div style="margin:0 auto 0.1in;width:6.0in;page-break-inside:avoid;"><div style="position:relative;line-height:0;">' + coMedia(dm, opts.border) + '</div>' + coCaptionBelow(dm, di, opts.caption) + '</div>' : '';
+      html += db + dimg + da;
+    });
+    _towerDefer = [];
   }
   html += buildNarrativeHTML(outro, true);
   return html;
