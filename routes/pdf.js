@@ -3590,11 +3590,52 @@ async function assembleNovelHtml(req, campaignId, overrides) {
   });
 
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
-  if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.measurePaired = true; co.arrange = 'paired'; }
+  if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.arrange = 'paired'; co.measurePaired = true; }
+  else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats };
 }
+
+// PHASE 3 (page-packer) v1: render the packed book. Measure -> pack -> feed the packer's
+// per-beat image shrink factors into the SAME override apply path the optimize uses, then
+// render normally. Deterministic (no AI, no missed gaps). Isolated route; the live export is
+// untouched. (v1 applies shrinks + lets the engine reflow; exact page-break pagination is next.)
+router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
+  try {
+    // 1) measure narration heights
+    req.query.measurePaired = '1';
+    var measBuilt = await assembleNovelHtml(req, req.params.campaignId, null);
+    var measured = await measureDocument(measBuilt.html, {});
+    delete req.query.measurePaired;
+    var blocks = measured.blocks || [];
+    var pageH = 9.7;
+    // 2) align measured text to beats, add analytic image heights, pack
+    var bi = 0;
+    var packBeats = (measBuilt.beats || []).map(function (beat) {
+      var tb = 0, ta = 0;
+      if (beat.before) { tb = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
+      if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
+      return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta };
+    });
+    var plan = packPaired(packBeats, { pageHeightIn: pageH });
+    // 3) per-beat shrink factors -> overrides (same shape the optimize builds)
+    var overrides = {};
+    plan.pages.forEach(function (pg) {
+      (pg.placements || []).forEach(function (pl) {
+        if (pl.kind === 'image' && pl.scale && pl.scale < 0.999) overrides[pl.beat] = { scale: Math.round(pl.scale * 1000) / 1000 };
+      });
+    });
+    // 4) render normally with the packer's deterministic shrinks applied
+    var built = await assembleNovelHtml(req, req.params.campaignId, overrides);
+    if (req.query.debug === '1') { return res.json({ plan_pages: plan.pageCount, images_shrunk: plan.imagesShrunk, overrides_applied: Object.keys(overrides).length, total_white_in: plan.totalWhiteIn }); }
+    var buf = await renderHtmlToPdf(built.html, {});
+    res.set('Content-Type', 'application/pdf');
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({ error: (e && e.message) || 'novel-packed failed' });
+  }
+});
 
 // PHASE 2 (page-packer): analytic image display height for a beat in the paired layout.
 // Portraits float narrow (~4.6in wide); non-portraits sit ~full content width. Height is
@@ -3607,6 +3648,47 @@ function beatImageHeight(beat, pageH) {
   var h = displayW / (aspect || 1);
   return Math.min(pageH, Math.max(1.2, h));
 }
+// PHASE 3 (page-packer): measure a paired book's text, compute image heights, run the
+// packer, and return { plan, overrides }. Overrides carry the per-beat image scale the
+// packer chose, ready to apply through the normal override render path.
+async function computePairedPack(req, campaignId) {
+  req.query.measurePaired = '1';
+  var mbuilt = await assembleNovelHtml(req, campaignId, null);
+  var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
+  delete req.query.measurePaired;
+  var pageH = 9.7;
+  var bi = 0;
+  var packBeats = (mbuilt.beats || []).map(function (beat) {
+    var tb = 0, ta = 0;
+    if (beat.before) { tb = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
+    if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
+    return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta };
+  });
+  var plan = packPaired(packBeats, { pageHeightIn: pageH });
+  var overrides = {};
+  plan.pages.forEach(function (pg) { pg.placements.forEach(function (pl) {
+    if (pl.kind === 'image' && pl.scale != null && pl.scale < 0.999) overrides[pl.beat] = { scale: pl.scale };
+  }); });
+  return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length };
+}
+// PHASE 3 (page-packer) render: apply the packer's chosen image scales through the normal
+// override render path and return the packed PDF. Chromium flows text + splits paragraphs;
+// the packer only decides image sizes. Body-only preview (default styling) for judging density.
+router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var packed = await computePairedPack(req, req.params.campaignId);
+    req.query.packRender = '1';
+    var rbuilt = await assembleNovelHtml(req, req.params.campaignId, packed.overrides);
+    var pdf = await renderHtmlToPdf(rbuilt.html, {});
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', 'inline; filename="packed-preview.pdf"');
+    res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
+  } catch (e) {
+    res.status(500).json({ error: (e && e.message) || 'pack-render failed' });
+  }
+});
+
+// PHASE 2 (page-packer) inspect: measure text, compute image heights, run packPaired,
 // PHASE 2 (page-packer) inspect: measure text, compute image heights, run packPaired,
 // and return the deterministic page plan (beat -> page, with image shrink factors) as JSON.
 // Pure inspection -- renders nothing, changes nothing. Validate the plan before Phase 3 renders it.
