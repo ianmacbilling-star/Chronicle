@@ -821,7 +821,7 @@ function buildPairedMeasureBody(moments, sections, opts) {
       var txt = sec[part];
       if (!txt) return;
       var inner = coNarr(txt, opts || {}, false);
-      out += '<div data-mblk="p' + i + '_' + part + '" data-mkind="narr" data-mmoment="' + i + '" data-mpart="' + part + '" data-mchars="' + String(txt).length + '">' + inner + '</div>';
+      out += '<div data-mblk="p' + i + '_' + part + '" data-mkind="narr" data-mmoment="' + i + '" data-mpart="' + part + '" data-mchars="' + String(txt).length + '" style="display:flow-root;">' + inner + '</div>';
     });
   }
   return out || '<div data-mblk="empty" data-mkind="narr"></div>';
@@ -3730,13 +3730,13 @@ function composeBook(plan, beats, opts) {
         if (txt) {
           var rendered = coNarr(txt, opts, false);
           if (pl.split || (pl.offsetIn && pl.offsetIn > 0.01)) {
-            // Split paragraph: render the WHOLE thing, reveal only this page's slice by
-            // clipping to the segment height and offsetting past what earlier pages showed.
-            // No word-counting, no lost text -- the browser wraps it, we window it.
+            // Split paragraph: render the WHOLE thing in a clip window (a BFC, like the measure),
+            // and shift it up with a transform (which never disturbs margins) to reveal this
+            // page's slice. Snapped to measured line boundaries, so lines are never cut.
             inner += '<div style="margin-top:0.1in;height:' + (pl.heightIn || 0).toFixed(2) + 'in;overflow:hidden;">' +
-              '<div style="margin-top:-' + (pl.offsetIn || 0).toFixed(2) + 'in;">' + rendered + '</div></div>';
+              '<div style="transform:translateY(-' + (pl.offsetIn || 0).toFixed(2) + 'in);">' + rendered + '</div></div>';
           } else {
-            inner += '<div style="margin-top:0.1in;">' + rendered + '</div>';
+            inner += '<div style="margin-top:0.1in;display:flow-root;">' + rendered + '</div>';
           }
         }
       }
