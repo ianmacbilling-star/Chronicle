@@ -29,6 +29,8 @@ const { buildPrompt } = require('../services/layoutAI/brief');
 const FLAG = 'layout_ai_dryrun';       // app_settings int; 1 = feature on
 const MAX_PAGES_PER_CALL = 12;         // small chunks so per-page JSON never truncates
 const MAX_CHUNK_BYTES = 20 * 1024 * 1024;  // keep each request PDF under the 32MB API cap (base64 inflates ~33%)
+const INPUT_COST_PER_TOKEN = 3 / 1e6;     // Sonnet ~ $3 / M input tokens (PDF pages billed as input)
+const OUTPUT_COST_PER_TOKEN = 15 / 1e6;   // Sonnet ~ $15 / M output tokens
 const ANTHROPIC_VERSION = '2023-06-01';
 
 async function isEnabled() {
@@ -132,9 +134,10 @@ async function critiqueChunk(pdfB64, prompt, startPage) {
   const data = await resp.json();
   if (data && data.error) throw new Error('API: ' + (data.error.message || JSON.stringify(data.error)));
   const text = (data.content || []).map(function (i) { return i.type === 'text' ? i.text : ''; }).filter(Boolean).join('\n');
+  const _usage = { input: (data.usage && data.usage.input_tokens) || 0, output: (data.usage && data.usage.output_tokens) || 0 };
   const parsed = extractJson(text);
-  if (parsed) return parsed;
-  return { parseError: true, raw: text.slice(0, 500) };
+  if (parsed) { parsed._usage = _usage; return parsed; }
+  return { parseError: true, raw: text.slice(0, 500), _usage: _usage };
 }
 
 // POST /api/layout-ai/:campaignId/dry-run
@@ -158,21 +161,31 @@ async function analyzeBook(req, campaignId, overridesForRender, fills) {
   let pages = [];
   const assessments = [];
   const notes = [];
+  var usage = { input: 0, output: 0 };
   for (const ch of split.chunks) {
     const out = await critiqueChunk(ch.data, prompt, ch.startPage);
+    if (out && out._usage) { usage.input += out._usage.input; usage.output += out._usage.output; }
     if (out && out.parseError) { notes.push('chunk@' + ch.startPage + ': unparseable model output'); continue; }
     if (out && out.book_assessment) assessments.push(out.book_assessment);
     if (out && Array.isArray(out.pages)) pages = pages.concat(out.pages);
   }
-  return { built: built, book_assessment: assessments.join(' '), pages: pages, notes: notes, total_pages: split.total };
+  return { built: built, book_assessment: assessments.join(' '), pages: pages, notes: notes, total_pages: split.total, usage: usage };
 }
 
 // Turn the AI's per-panel signals into an in-memory layout_meta override map keyed by
 // manifest idx. size_hint drives prominence (grow -> Maximize, shrink -> Minimize),
 // otherwise emphasis; focal/crop_safe/group_break pass through when present.
+// Bigger images can give up more height. Full-page can shrink up to 40%, half-page 30%, small 20%.
+function shrinkFloor(shape) {
+  shape = String(shape || '').toLowerCase();
+  if (/full|tall|tower/.test(shape)) return 0.60;           // up to 40%
+  if (/wide|panoram|square|half/.test(shape)) return 0.70;  // up to 30%
+  return 0.80;                                              // up to 20%
+}
 function buildOverrides(pages, manifest, fills) {
   var byTitle = {};
-  (manifest || []).forEach(function (m) { if (m && m.title) byTitle[String(m.title).trim().toLowerCase()] = m.idx; });
+  var shapeByIdx = {};
+  (manifest || []).forEach(function (m) { if (m && m.title) byTitle[String(m.title).trim().toLowerCase()] = m.idx; if (m) shapeByIdx[m.idx] = String(m.shape || '').toLowerCase(); });
   var ov = {};
   (pages || []).forEach(function (pg) {
     var _pageNum = Number(pg.page);
@@ -192,10 +205,11 @@ function buildOverrides(pages, manifest, fills) {
       // Measured shrink-to-fit: an image flagged "shrink" tucks into the PRIOR page's
       // gap. The client-measured fill of that prior page sets the amount (capped 50%).
       if (pn.size_hint === 'shrink' && fills && _pageNum >= 2) {
+        var _floor = shrinkFloor(shapeByIdx[idx]);
         var _pf = fills[_pageNum - 1];
         if (_pf == null) _pf = fills[String(_pageNum - 1)];
-        if (_pf != null) { patch.scale = Math.max(0.5, Math.min(1, 1 - (Number(_pf) / 100))); }
-        else { patch.scale = 0.5; }
+        if (_pf != null) { patch.scale = Math.max(_floor, Math.min(1, 1 - (Number(_pf) / 100))); }
+        else { patch.scale = _floor; }
       }
       ov[idx] = patch;
     });
@@ -256,15 +270,30 @@ router.post('/:campaignId/optimize', requireAuth, requireAdmin, async function (
   (async function () {
     const t0 = Date.now();
     try {
-      const a = await analyzeBook(req, campaignId, null, _fills);
-      const overrides = buildOverrides(a.pages, a.built.manifest, _fills);
+      // Pass 1: analyze the original book and build the first round of overrides.
+      const a1 = await analyzeBook(req, campaignId, null, _fills);
+      var overrides = buildOverrides(a1.pages, a1.built.manifest, _fills);
+      var usage = a1.usage || { input: 0, output: 0 };
+      var passes = 1;
+      // Pass 2 (cascade): if pass 1 changed the layout, re-analyze the REFLOWED book so
+      // gaps that only appear AFTER the first round get caught (the page-49 case). Pass 2
+      // saw the reflowed state, so its signals win on any panel it also touches.
+      if (Object.keys(overrides).length > 0) {
+        const a2 = await analyzeBook(req, campaignId, overrides, _fills);
+        const overrides2 = buildOverrides(a2.pages, a2.built.manifest, _fills);
+        overrides = Object.assign({}, overrides, overrides2);
+        if (a2.usage) { usage = { input: usage.input + a2.usage.input, output: usage.output + a2.usage.output }; }
+        passes = 2;
+      }
       const token = cachePut(overrides, campaignId);
-      console.log('[layout-ai optimize]', a.built.campaign.name, '|', a.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| ' + (Date.now() - t0) + 'ms');
+      const cost = usage.input * INPUT_COST_PER_TOKEN + usage.output * OUTPUT_COST_PER_TOKEN;
+      console.log('[layout-ai optimize]', a1.built.campaign.name, '|', a1.built.layoutStyle, '| overrides=' + Object.keys(overrides).length, '| passes=' + passes, '| tok in/out=' + usage.input + '/' + usage.output, '| $' + cost.toFixed(4), '| ' + (Date.now() - t0) + 'ms');
       _optJobs.set(jobId, { status: 'done', ts: Date.now(), result: {
-        dry_run: false, token: token, campaign: a.built.campaign.name, layout: a.built.layoutStyle, model: LAYOUT_MODEL,
-        settings: { layout: a.built.layoutStyle, co: a.built.co || null, panels: (a.built.manifest || []).length },
-        total_pages: a.total_pages, pages_flagged: a.pages.length, applied: Object.keys(overrides).length,
-        book_assessment: a.book_assessment, pages: a.pages, notes: a.notes, ms: Date.now() - t0
+        dry_run: false, token: token, campaign: a1.built.campaign.name, layout: a1.built.layoutStyle, model: LAYOUT_MODEL,
+        settings: { layout: a1.built.layoutStyle, co: a1.built.co || null, panels: (a1.built.manifest || []).length },
+        total_pages: a1.total_pages, pages_flagged: a1.pages.length, applied: Object.keys(overrides).length,
+        book_assessment: a1.book_assessment, pages: a1.pages, notes: a1.notes,
+        usage: usage, cost_usd: Math.round(cost * 10000) / 10000, passes: passes, ms: Date.now() - t0
       } });
     } catch (e) {
       console.error('[layout-ai optimize] error:', e && e.message);
