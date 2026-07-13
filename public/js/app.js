@@ -1987,8 +1987,11 @@ function selectSession(id) {
       document.getElementById('view-session-detail').style.display = 'block';
       try { _navRecord('session-detail'); } catch (e) {}
 
-      // Now that view is visible, populate fields
-      switchSessionTab('notes');
+      // Now that view is visible, open the most relevant tab for the session's state:
+      // moments + images -> Storyboard; story generated but no images -> Review; else Story (notes).
+      var _hasImg = (state.moments || []).some(function (m) { return m && (m.image || m.image_url); });
+      var _hasStory = (state.moments && state.moments.length > 0) || (state.narrativeData && state.narrativeData.sections && state.narrativeData.sections.length > 0) || !!(data && data.narrative_intro);
+      switchSessionTab((state.moments.length && _hasImg) ? 'storyboard' : (_hasStory ? 'review' : 'notes'));
       // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
       applyRoleVisibility();
       // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
@@ -8975,8 +8978,11 @@ function selectSession(id) {
       document.getElementById('view-session-detail').style.display = 'block';
       try { _navRecord('session-detail'); } catch (e) {}
 
-      // Now that view is visible, populate fields
-      switchSessionTab('notes');
+      // Now that view is visible, open the most relevant tab for the session's state:
+      // moments + images -> Storyboard; story generated but no images -> Review; else Story (notes).
+      var _hasImg = (state.moments || []).some(function (m) { return m && (m.image || m.image_url); });
+      var _hasStory = (state.moments && state.moments.length > 0) || (state.narrativeData && state.narrativeData.sections && state.narrativeData.sections.length > 0) || !!(data && data.narrative_intro);
+      switchSessionTab((state.moments.length && _hasImg) ? 'storyboard' : (_hasStory ? 'review' : 'notes'));
       // Phase 3: apply role-based UI (hides DM-only buttons, sets readonly on Notes textareas for players)
       applyRoleVisibility();
       // Phase 3 Deploy 3 — initialize access-status (Ready/Draft) UI
