@@ -31,7 +31,7 @@ const MAX_PAGES_PER_CALL = 12;         // small chunks so per-page JSON never tr
 const MAX_CHUNK_BYTES = 20 * 1024 * 1024;  // keep each request PDF under the 32MB API cap (base64 inflates ~33%)
 const INPUT_COST_PER_TOKEN = 3 / 1e6;     // Sonnet ~ $3 / M input tokens (PDF pages billed as input)
 const OUTPUT_COST_PER_TOKEN = 15 / 1e6;   // Sonnet ~ $15 / M output tokens
-const CASCADE_PASS = false;   // 2nd (reflow) pass doubles memory/time -> caused job-loss restarts; off until jobs are DB-backed
+const CASCADE_PASS = true;   // 2nd (reflow) pass catches gaps that open after the first round; the 'unknown' poll issue is handled client-side by retry
 const ANTHROPIC_VERSION = '2023-06-01';
 
 async function isEnabled() {
