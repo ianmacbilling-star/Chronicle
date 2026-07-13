@@ -32,6 +32,35 @@ app.get('/health', async function(req, res) {
   }
 });
 
+// Build stamp: lets admins / debug-mode users confirm exactly which deploy is live.
+// The version comes from version-info.json (bumped every push); the commit sha is
+// Railway-injected at runtime. `show` is true only for admins or debug-mode users,
+// so the stamp never renders for normal users.
+app.get('/version', async function(req, res) {
+  var info = {};
+  try { info = require('./version-info.json'); } catch (e) { info = {}; }
+  var pkg = {};
+  try { pkg = require('./package.json'); } catch (e) { pkg = {}; }
+  var version = info.version || pkg.version || '3.0.0';
+  var sha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT || '';
+  var show = false;
+  try {
+    if (req.session && req.session.userId) {
+      const db = await getDb();
+      const u = await db.prepare('SELECT is_admin, debug_mode FROM users WHERE id = ?').get(req.session.userId);
+      show = !!(u && (u.is_admin || u.debug_mode));
+    }
+  } catch (e) { show = false; }
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    version: version,
+    commit: sha ? String(sha).slice(0, 7) : 'dev',
+    env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'local',
+    show: show,
+    ts: new Date().toISOString()
+  });
+});
+
 // Session store — PostgreSQL in production, memory locally
 function buildSessionMiddleware() {
   if (process.env.DATABASE_URL) {
