@@ -43,14 +43,16 @@ app.get('/version', async function(req, res) {
   try { pkg = require('./package.json'); } catch (e) { pkg = {}; }
   var version = info.version || pkg.version || '3.0.0';
   var sha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT || '';
-  var show = false;
-  try {
-    if (req.session && req.session.userId) {
-      const db = await getDb();
-      const u = await db.prepare('SELECT is_admin, debug_mode FROM users WHERE id = ?').get(req.session.userId);
-      show = !!(u && (u.is_admin || u.debug_mode));
-    }
-  } catch (e) { show = false; }
+  // NOTE: temporarily ungated (show to everyone) so it works as a deploy indicator while we
+  // debug. Re-gate to admins/debug-mode once stable (the query is kept below, commented).
+  var show = true;
+  // try {
+  //   if (req.session && req.session.userId) {
+  //     const db = await getDb();
+  //     const u = await db.prepare('SELECT is_admin, debug_mode FROM users WHERE id = ?').get(req.session.userId);
+  //     show = !!(u && (u.is_admin || u.debug_mode));
+  //   }
+  // } catch (e) { show = false; }
   res.set('Cache-Control', 'no-store');
   res.json({
     version: version,
