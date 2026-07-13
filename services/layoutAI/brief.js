@@ -14,12 +14,13 @@
 
 const HOUSE_RULES =
 `Fill the STORY pages. Aim for as little white space as possible -- shoot for ~100% of the live area on story pages; near-full is the goal, not a wall of equal panels.
-LEAVE THE FRONT MATTER ALONE. Do NOT suggest any change to the cover, the character roster page (often titled "The Company"), or the table of contents ("Contents") -- these are intentionally sparse and meant to breathe. Mark them "full" with no fix. You MAY lightly assess the title page, but do not force it to full density.
+LEAVE ALONE (mark "full", no fix): the COVER, the credits/legal page, the character roster ("The Company"), and the table of contents ("Contents") -- these are intentionally sparse and meant to breathe. BUT DO WORK THE TITLE PAGE (the book's title page, typically page 2, with its hero image): if it is under-filled, MAXIMIZE / grow its image (size_hint "grow") to fill the page.
 REDISTRIBUTE ONLY WHAT ALREADY EXISTS: grow or crop an existing image, or split and flow existing narrative into a gap. Do NOT propose adding new artwork, new panels, or illustrations that are not already in the book. (Adding art may be an option later; not now.)
 Give each page one clear focal beat: push the climax's emphasis up, drop supporting beats down.
 On story pages, never strand an image beside empty space, and never leave a near-blank page. If a tall image has little text next to it, grow it. If a gap sits next to an image, flag it to be filled.
 Text is the filler. Where empty space remains, note where existing narrative could be split (at periods/clauses, or mid-sentence only if it stays contiguous) and flowed into the gap.
 Shrink to fit: if a large or full-page image sits at the top of a page and the PREVIOUS page is under-filled, mark that image size_hint "shrink" -- the engine scales it down (up to 50%, aspect locked) so it moves up to fill the prior page's gap while staying as large as possible. Prefer this over leaving a near-blank page above a big image.
+DENSITY IS THE OBJECTIVE. Aim for every page to be as full as the layout allows -- fewer TOTAL pages is the natural RESULT of good density, never a target to chase, so never cram, distort, or hurt a composition just to save a page. When a page is under-filled, prefer COLLAPSING the whole beat rather than nudging one line: shrink the next image (size_hint "shrink") AND flow its narrative up (flow:true) TOGETHER on the same gap, so the entire beat packs onto the prior page and the near-empty page disappears on its own. Reach for both levers at once whenever one alone won't close the gap.
 Show the whole subject on a character reveal (crop_safe:false); crop-to-fill for environments and action.
 Group beats within a scene; break at scene changes.`;
 
@@ -58,7 +59,7 @@ function buildPrompt(layoutStyle, opts) {
   var manifestStr = manifest.length ? manifest.map(function (m) { return m.idx + ' | ' + (m.title || '(untitled)') + (m.shape ? ' [' + m.shape + ']' : ''); }).join('\n') : '(none provided)';
   var fills = opts.fills || null;
   var under = [];
-  if (fills) { Object.keys(fills).forEach(function (pg) { var v = Number(fills[pg]); if (v < 62 && Number(pg) > 5) under.push(Number(pg) + ' -> ' + v + '% filled'); }); under.sort(function (a, b) { return parseInt(a) - parseInt(b); }); }
+  if (fills) { Object.keys(fills).forEach(function (pg) { var v = Number(fills[pg]); if (v < 62 && (Number(pg) === 2 || Number(pg) > 5)) under.push(Number(pg) + ' -> ' + v + '% filled'); }); under.sort(function (a, b) { return parseInt(a) - parseInt(b); }); }
   var measuredStr = under.length ? under.join('\n') : '(none flagged)';
   return (
 `You are a print art director reviewing a rendered tabletop-RPG graphic novel in the "${key}" style. The attached PDF is the actual book, one page per page.
