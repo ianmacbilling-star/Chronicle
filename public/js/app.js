@@ -14291,8 +14291,9 @@ var OPT_EST_COST_PER_PAGE = 0.015;   // rough $/page incl. the 2-pass cascade; c
 function finalizeUpdateHeader(numPages) {
   var el = document.getElementById('layoutai-header');
   if (!el) return;
-  var raw = novelLayoutStyle || 'Classic';
-  var layout = LAYOUT_DISPLAY[String(raw).toLowerCase()] || raw;   // forward-facing name (e.g. Classic -> Picture Book)
+  var _arr = document.getElementById('cl-arrange');
+  var arrange = (_arr && _arr.value) ? _arr.value : 'paired';
+  var layout = (typeof CL_ARRANGE_LABEL !== 'undefined' && CL_ARRANGE_LABEL[arrange]) ? CL_ARRANGE_LABEL[arrange] : 'Picture Book';   // forward-facing name from the arrange selector
   var desc = LAYOUT_DESCRIPTIONS[layout] || '';
   var estCost = (numPages || 0) * OPT_EST_COST_PER_PAGE;
   var estTokens = Math.max(1, Math.ceil((estCost * 100) / 15));   // Ian rule: cost(cents)/15 -- confirm
