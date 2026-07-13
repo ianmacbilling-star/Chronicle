@@ -14503,8 +14503,12 @@ function renderPdfInto(url, containerId, isBefore) {
   var pm = document.getElementById(containerId + '-pm');
   if (isBefore) _finalizeFills = {};
   var flagged = [];
+  // The server generates the whole PDF (~20s). Nothing to show real progress on during
+  // that fetch, so creep the bar to ~45% so it's obviously working, not stuck.
+  var creepPct = 0;
+  var creepTimer = setInterval(function () { creepPct += Math.max(0.5, (45 - creepPct) * 0.05); if (creepPct > 45) creepPct = 45; if (pf) pf.style.width = creepPct.toFixed(1) + '%'; }, 300);
   ensurePdfJs().then(function (pdfjsLib) {
-    if (pm) pm.textContent = 'Fetching book...';
+    if (pm) pm.textContent = 'Generating the book (~20s)...';
     return fetch(url, { credentials: 'same-origin' }).then(function (r) {
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
       return r.arrayBuffer();
@@ -14512,6 +14516,7 @@ function renderPdfInto(url, containerId, isBefore) {
       if (pm) pm.textContent = 'Preparing pages...';
       return pdfjsLib.getDocument({ data: buf }).promise;
     }).then(function (pdf) {
+      clearInterval(creepTimer);
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
       var first = 2, last = total - 1;   // skip cover (pg 1) and back cover (last pg) -- those are for publishing
@@ -14532,7 +14537,7 @@ function renderPdfInto(url, containerId, isBefore) {
             canvas.setAttribute('data-page', pageNum);
             if (cv) cv.appendChild(canvas);
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
-              if (pf) pf.style.width = Math.round(((pageNum - first + 1) / span) * 100) + '%';
+              if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
               if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (pageNum > 5 && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
             });
@@ -14549,6 +14554,7 @@ function renderPdfInto(url, containerId, isBefore) {
       });
     });
   }).catch(function (e) {
+    clearInterval(creepTimer);
     if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
   });
 }
