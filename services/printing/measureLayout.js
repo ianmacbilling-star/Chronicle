@@ -60,20 +60,14 @@ async function measureDocument(html, options) {
         var lineStartChars = [];
         try {
           var pEl = n.querySelector('p') || n;
-          var rng = document.createRange();
-          rng.selectNodeContents(pEl);
-          var rects = rng.getClientRects();
-          var last = -1;
-          for (var ri = 0; ri < rects.length; ri++) {
-            var bb = rects[ri].bottom - r.top;   // each line's bottom, relative to block top
-            if (bb - last > 2) { lineBottoms.push(Math.round((bb / PX) * 1000) / 1000); last = bb; }
-          }
-          // char offset where each line starts -- only for a single plain text node (flowing prose)
           var tnode = pEl.firstChild;
           if (tnode && tnode.nodeType === 3) {
+            // One walk over the words: whenever the line's top jumps, we've started a new line,
+            // so record BOTH the previous line's bottom and this line's start char -- from the
+            // same source, so line bottoms and char offsets can never disagree.
             var full = tnode.textContent;
             var rng2 = document.createRange();
-            var prevTop = null, pos = 0;
+            var prevTop = null, pos = 0, curBottom = 0;
             var parts = full.split(/(\s+)/);
             for (var wi = 0; wi < parts.length; wi++) {
               var wlen = parts[wi].length;
@@ -81,13 +75,19 @@ async function measureDocument(html, options) {
               if (/^\s+$/.test(parts[wi])) { pos += wlen; continue; }
               rng2.setStart(tnode, pos);
               rng2.setEnd(tnode, Math.min(pos + wlen, full.length));
-              var wtop = rng2.getBoundingClientRect().top;
-              if (prevTop === null) { lineStartChars.push(0); prevTop = wtop; }
-              else if (wtop > prevTop + 2) { lineStartChars.push(pos); prevTop = wtop; }
+              var wr = rng2.getBoundingClientRect();
+              if (prevTop === null) { lineStartChars.push(0); prevTop = wr.top; }
+              else if (wr.top > prevTop + 2) {
+                lineBottoms.push(Math.round(((curBottom - r.top) / PX) * 1000) / 1000);
+                lineStartChars.push(pos);
+                prevTop = wr.top;
+              }
+              curBottom = wr.bottom;
               pos += wlen;
             }
+            if (prevTop !== null) lineBottoms.push(Math.round(((curBottom - r.top) / PX) * 1000) / 1000);
           }
-        } catch (e) { lineBottoms = lineBottoms; lineStartChars = lineStartChars; }
+        } catch (e) { lineBottoms = []; lineStartChars = []; }
         return {
           id: n.getAttribute('data-mblk'),
           kind: n.getAttribute('data-mkind') || '',
