@@ -41,7 +41,7 @@ function packPaired(beats, opts) {
     if (extra) { for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) pl[k] = extra[k]; } }
     p.placements.push(pl);
     p.usedIn = round3(p.usedIn + h + gap);
-    if (kind === 'image') p.hasImage = true;
+    if (kind === 'image' || kind === 'tower') p.hasImage = true;
   }
 
   // Text flows: fill the remaining space, then continue on fresh pages.
@@ -78,6 +78,15 @@ function packPaired(beats, opts) {
 
   newPage();
   (beats || []).forEach(function (b) {
+    if (b.isTower && b.hasImage && b.imageH > 0) {
+      // Tower: image floats with text BESIDE it, so the beat's footprint is the taller of
+      // the image or its narration -- not the sum. Place it as one block.
+      var textH = (b.textBeforeH || 0) + (b.textAfterH || 0);
+      var blockH = Math.max(b.imageH, textH);
+      if (blockH > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
+      place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
+      return;
+    }
     if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH);
     if (b.hasImage && b.imageH > 0) placeImage(b.idx, b.imageH, b.shape);
     if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH);

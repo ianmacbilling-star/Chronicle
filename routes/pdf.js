@@ -847,15 +847,29 @@ function renderPaired(moments, sections, intro, outro, opts) {
     }
     var _sc = lmScale(m);   // measured shrink factor (1 = unchanged); applied to image widths below
     if (opts.packStacked) {
-      // Phase 3.1 (page-packer): stacked page-by-page render. Every image is CENTERED with
-      // text above and below -- no floats -- matching the packer's geometry so Chromium's flow
-      // reproduces the plan. Width is the packer's modeled display width x scale; but the height
-      // is CLAMPED to one page so a very tall tower can never split across a page break.
+      // Phase 3.1 (page-packer) HYBRID render.
+      var _aspect = momentAspect(m) || 1;   // width / height
+      var _isTower = (normShape(m) === 'tower') || (_aspect <= 0.5);
+      if (_isTower && m.image) {
+        // Tower / very-tall: FLOAT with the narrative BESIDE it (fills the side-gutter, so a
+        // 1:4 image never strands empty margins or a near-blank page). Height clamped to a page.
+        var _tw = Math.min(6.8 - 2.6, 9.2 * _aspect) * _sc;
+        if ((_tw / _aspect) > 9.3) _tw = 9.3 * _aspect;
+        var _tLeft = (pbN % 2 === 0); pbN += 1;
+        var _tFl = _tLeft ? 'float:left;margin:0 0.24in 0.12in 0;' : 'float:right;margin:0 0 0.12in 0.24in;';
+        html += '<div style="display:flow-root;margin-bottom:0.1in;">' +
+          '<div style="' + _tFl + 'width:' + _tw.toFixed(2) + 'in;page-break-inside:avoid;">' +
+            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+            coCaptionBelow(m, i, opts.caption) + '</div>' +
+          '<div style="display:flow-root;">' + beforeHtml + afterHtml + '</div></div>';
+        continue;
+      }
+      // Everything else: STACKED and centered, text above/below, no floats. Width is the
+      // packer's modeled display width x scale; height clamped to one page.
       var _isP = isPortrait(m);
-      var _maxImgH = 9.3;                              // never taller than one page
-      var _dispW = (_isP ? 4.6 : 6.8) * _sc;           // portraits ~4.6in; others full content width
-      var _aspect = momentAspect(m) || 1;              // width / height
-      if ((_dispW / _aspect) > _maxImgH) _dispW = _maxImgH * _aspect;   // clamp by height for towers/tall
+      var _maxImgH = 9.3;
+      var _dispW = (_isP ? 4.6 : 6.8) * _sc;
+      if ((_dispW / _aspect) > _maxImgH) _dispW = _maxImgH * _aspect;
       var _imgHtml = m.image
         ? '<div style="margin:0 auto 0.1in;width:' + _dispW.toFixed(2) + 'in;page-break-inside:avoid;">' +
             '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
@@ -3634,7 +3648,7 @@ router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
       var tb = 0, ta = 0;
       if (beat.before) { tb = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
       if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
-      return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta };
+      return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, isTower: (String(beat.shape || '').toLowerCase() === 'tower' || (beat.aspect || 1) <= 0.5) };
     });
     var plan = packPaired(packBeats, { pageHeightIn: pageH });
     // 3) per-beat shrink factors -> overrides (same shape the optimize builds)
@@ -3722,7 +3736,7 @@ router.get('/pack-paired/:campaignId', requireAuth, async function (req, res) {
       var tb = 0, ta = 0;
       if (beat.before) { tb = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
       if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || 0; bi++; }
-      return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta };
+      return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, isTower: (String(beat.shape || '').toLowerCase() === 'tower' || (beat.aspect || 1) <= 0.5) };
     });
     var plan = packPaired(packBeats, { pageHeightIn: pageH });
     res.json({
