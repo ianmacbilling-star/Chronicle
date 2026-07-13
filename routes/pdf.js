@@ -847,12 +847,15 @@ function renderPaired(moments, sections, intro, outro, opts) {
     }
     var _sc = lmScale(m);   // measured shrink factor (1 = unchanged); applied to image widths below
     if (opts.packStacked) {
-      // Phase 3.1 (page-packer): stacked page-by-page render. Every image is CENTERED at the
-      // packer's modeled display width x scale (portraits ~4.6in, others ~6.6in), with text
-      // above and below -- no floats. This matches the packer's geometry exactly, so Chromium's
-      // flow reproduces the plan (killing the float-stranded blank-then-portrait gaps).
+      // Phase 3.1 (page-packer): stacked page-by-page render. Every image is CENTERED with
+      // text above and below -- no floats -- matching the packer's geometry so Chromium's flow
+      // reproduces the plan. Width is the packer's modeled display width x scale; but the height
+      // is CLAMPED to one page so a very tall tower can never split across a page break.
       var _isP = isPortrait(m);
-      var _dispW = (_isP ? 4.6 : 6.6) * _sc;
+      var _maxImgH = 9.3;                              // never taller than one page
+      var _dispW = (_isP ? 4.6 : 6.8) * _sc;           // portraits ~4.6in; others full content width
+      var _aspect = momentAspect(m) || 1;              // width / height
+      if ((_dispW / _aspect) > _maxImgH) _dispW = _maxImgH * _aspect;   // clamp by height for towers/tall
       var _imgHtml = m.image
         ? '<div style="margin:0 auto 0.1in;width:' + _dispW.toFixed(2) + 'in;page-break-inside:avoid;">' +
             '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
@@ -3659,9 +3662,9 @@ function beatImageHeight(beat, pageH) {
   var aspect = (beat && beat.aspect) || 1;   // width / height
   var shape = String((beat && beat.shape) || '').toLowerCase();
   var isPortrait = aspect < 0.95 || /tall|tower|portrait/.test(shape);
-  var displayW = isPortrait ? 4.6 : 6.6;
+  var displayW = isPortrait ? 4.6 : 6.8;
   var h = displayW / (aspect || 1);
-  return Math.min(pageH, Math.max(1.2, h));
+  return Math.min(9.3, Math.max(1.2, h));   // clamp to one page (matches the stacked render)
 }
 // PHASE 3 (page-packer): measure a paired book's text, compute image heights, run the
 // packer, and return { plan, overrides }. Overrides carry the per-beat image scale the
