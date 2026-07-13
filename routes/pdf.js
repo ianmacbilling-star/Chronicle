@@ -3726,7 +3726,7 @@ function composeBook(plan, beats, opts) {
       }
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
-    out += '<div class="content-page" style="' + brk + 'position:relative;">' + inner + '</div>';
+    out += '<div class="content-page" style="height:9.55in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
   });
   return out;
 }
@@ -3734,7 +3734,7 @@ function composeBook(plan, beats, opts) {
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
-      var packedC = await computePairedPack(req, req.params.campaignId, { noSplit: true });
+      var packedC = await computePairedPack(req, req.params.campaignId, { noSplit: true, pageHeightIn: 9.4 });
       var body = composeBook(packedC.plan, packedC.beats, {});
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
