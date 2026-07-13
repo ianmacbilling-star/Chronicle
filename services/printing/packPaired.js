@@ -45,7 +45,7 @@ function packPaired(beats, opts) {
   }
 
   // Text flows: fill the remaining space, then continue on fresh pages.
-  function placeText(beatIdx, part, h) {
+  function placeText(beatIdx, part, h, lines) {
     if (!(h > 0)) return;
     if (opts.noSplit) {
       // Whole-block mode (for the literal composer): never split a paragraph across pages.
@@ -59,9 +59,16 @@ function packPaired(beats, opts) {
       var rem = remaining();
       if (rem < minLeftForText && cur().usedIn > 1e-6) { newPage(); rem = remaining(); }
       var chunk = Math.min(left, rem);
+      // Snap the split to a real measured line boundary so a line is never cut in half.
+      if (lines && lines.length && (h - chunk > 1e-6)) {
+        var target = placed + chunk;
+        var snap = 0;
+        for (var li = 0; li < lines.length; li++) { if (lines[li] <= target + 0.02) snap = lines[li]; else break; }
+        if (snap > placed + 0.05) chunk = round3(snap - placed);
+      }
       place('narr', beatIdx, chunk, { part: part, split: (h - chunk > 1e-6), offsetIn: round3(placed), totalH: round3(h) });
       placed = round3(placed + chunk);
-      left = round3(left - chunk);
+      left = round3(h - placed);
       if (left > 1e-6) newPage();
     }
   }
@@ -95,9 +102,9 @@ function packPaired(beats, opts) {
       place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
       return;
     }
-    if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH);
+    if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines);
     if (b.hasImage && b.imageH > 0) placeImage(b.idx, b.imageH, b.shape);
-    if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH);
+    if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines);
   });
 
   var whiteByPage = pages.map(function (p) { return round3(Math.max(0, pageH - p.usedIn)); });

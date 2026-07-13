@@ -56,6 +56,18 @@ async function measureDocument(html, options) {
       var nodes = Array.prototype.slice.call(document.querySelectorAll('[data-mblk]'));
       var blocks = nodes.map(function (n) {
         var r = n.getBoundingClientRect();
+        var lineBottoms = [];
+        try {
+          var pEl = n.querySelector('p') || n;
+          var rng = document.createRange();
+          rng.selectNodeContents(pEl);
+          var rects = rng.getClientRects();
+          var last = -1;
+          for (var ri = 0; ri < rects.length; ri++) {
+            var bb = rects[ri].bottom - r.top;   // each line's bottom, relative to block top
+            if (bb - last > 2) { lineBottoms.push(Math.round((bb / PX) * 1000) / 1000); last = bb; }
+          }
+        } catch (e) { lineBottoms = []; }
         return {
           id: n.getAttribute('data-mblk'),
           kind: n.getAttribute('data-mkind') || '',
@@ -63,6 +75,7 @@ async function measureDocument(html, options) {
           part: n.getAttribute('data-mpart') || '',
           chars: parseInt(n.getAttribute('data-mchars'), 10) || 0,
           split: n.getAttribute('data-msplit') === '1',
+          lines: lineBottoms,
           topIn: round3(r.top / PX),
           widthIn: round3(r.width / PX),
           heightIn: round3(r.height / PX)

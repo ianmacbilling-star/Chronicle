@@ -3679,10 +3679,10 @@ async function computePairedPack(req, campaignId, packOpts) {
   function estTextH(len) { return Math.max(0.3, 0.28 + (Number(len) || 0) / 360 * 1.9); }
   var bi = 0;
   var packBeats = (mbuilt.beats || []).map(function (beat) {
-    var tb = 0, ta = 0;
-    if (beat.before) { tb = (blocks[bi] && blocks[bi].heightIn) || estTextH(String(beat.before).length); bi++; }
-    if (beat.after) { ta = (blocks[bi] && blocks[bi].heightIn) || estTextH(String(beat.after).length); bi++; }
-    return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, isTower: ((beat.aspect || 1) <= 0.42) };
+    var tb = 0, ta = 0, bl = null, al = null;
+    if (beat.before) { var _b1 = blocks[bi]; tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; bi++; }
+    if (beat.after) { var _b2 = blocks[bi]; ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; bi++; }
+    return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, isTower: ((beat.aspect || 1) <= 0.42) };
   });
   var plan = packPaired(packBeats, Object.assign({ pageHeightIn: pageH }, packOpts || {}));
   var overrides = {};
