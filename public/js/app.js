@@ -14275,10 +14275,33 @@ function finalizeGoToPage(n) {
   var nav = document.getElementById('finalize-page-nav');
   if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
 }
+var LAYOUT_DESCRIPTIONS = {
+  'Picture Book': 'Keeps images as large as possible.',
+  'Classic': 'Keeps images as large as possible.',
+  'Comic': 'Panel grid with captions and dialogue.',
+  'Magazine': 'Text flows around floating images.',
+  'Gazette': 'Enclosed, newspaper-style columns.'
+};
+var OPT_EST_COST_PER_PAGE = 0.015;   // rough $/page incl. the 2-pass cascade; calibrate from server logs
+function finalizeUpdateHeader(numPages) {
+  var el = document.getElementById('layoutai-header');
+  if (!el) return;
+  var layout = novelLayoutStyle || 'Classic';
+  var desc = LAYOUT_DESCRIPTIONS[layout] || '';
+  var estCost = (numPages || 0) * OPT_EST_COST_PER_PAGE;
+  var estTokens = Math.max(1, Math.ceil((estCost * 100) / 15));   // Ian rule: cost(cents)/15 -- confirm
+  var h = '<div style="font-family:var(--font-display);color:var(--gold);font-size:13px;">' + escapeHtml(layout) + '</div>';
+  if (desc) h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;">' + escapeHtml(desc) + '</div>';
+  h += '<div style="margin-top:5px;">' + (numPages || 0) + ' pages</div>';
+  h += '<div style="color:rgba(245,232,200,0.6);font-size:11px;margin-top:2px;">Optimize: ~' + estTokens + ' tokens (est.) &middot; ~$' + estCost.toFixed(2) + ' cost</div>';
+  el.innerHTML = h;
+}
+
 function finalizeShowFreeAnalysis(flagged, numPages) {
   var out = document.getElementById('layoutai-free');
   if (!out) return;
   var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; }
+  finalizeUpdateHeader(numPages);
   out.style.maxHeight = '540px';   // scan fills the panel until Optimize runs
   var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Initial layout scan &middot; ' + numPages + ' pages</div>';
   if (!flagged.length) {
