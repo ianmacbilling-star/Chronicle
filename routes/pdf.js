@@ -3678,10 +3678,10 @@ async function computePairedPack(req, campaignId, packOpts) {
   function estTextH(len) { return Math.max(0.3, 0.28 + (Number(len) || 0) / 360 * 1.9); }
   var bi = 0;
   var packBeats = (mbuilt.beats || []).map(function (beat) {
-    var tb = 0, ta = 0, bl = null, al = null;
-    if (beat.before) { var _b1 = blocks[bi]; tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; bi++; }
-    if (beat.after) { var _b2 = blocks[bi]; ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; bi++; }
-    return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, isTower: ((beat.aspect || 1) <= 0.42) };
+    var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
+    if (beat.before) { var _b1 = blocks[bi]; tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; bi++; }
+    if (beat.after) { var _b2 = blocks[bi]; ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; bi++; }
+    return { idx: beat.idx, shape: beat.shape, hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
   });
   var plan = packPaired(packBeats, Object.assign({ pageHeightIn: pageH }, packOpts || {}));
   var overrides = {};
@@ -3726,8 +3726,20 @@ function composeBook(plan, beats, opts) {
         inner += '<div style="margin:0 auto 0.1in;width:' + w.toFixed(2) + 'in;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>';
       } else if (pl.kind === 'narr') {
-        var txt = (pl.part === 'after') ? b.after : b.before;
-        if (txt) inner += '<div style="margin-top:0.1in;">' + coNarr(txt, opts, false) + '</div>';
+        var full = (pl.part === 'after') ? b.after : b.before;
+        if (full) {
+          var seg = full;
+          var isCont = false;
+          if (pl.charStart != null || pl.charEnd != null) {
+            seg = full.slice(pl.charStart || 0, (pl.charEnd != null) ? pl.charEnd : full.length);
+            isCont = (pl.charStart || 0) > 0;
+          }
+          if (seg) {
+            var rendered = coNarr(seg, opts, false);
+            if (isCont) rendered = rendered.replace('text-indent:0.3in', 'text-indent:0');   // continuation of a split paragraph: no indent
+            inner += '<div style="margin-top:0.1in;">' + rendered + '</div>';
+          }
+        }
       }
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
@@ -3739,7 +3751,7 @@ function composeBook(plan, beats, opts) {
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
-      var packedC = await computePairedPack(req, req.params.campaignId, { noSplit: true, pageHeightIn: 9.4 });
+      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
       var body = composeBook(packedC.plan, packedC.beats, {});
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});

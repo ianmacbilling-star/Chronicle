@@ -57,6 +57,7 @@ async function measureDocument(html, options) {
       var blocks = nodes.map(function (n) {
         var r = n.getBoundingClientRect();
         var lineBottoms = [];
+        var lineStartChars = [];
         try {
           var pEl = n.querySelector('p') || n;
           var rng = document.createRange();
@@ -67,7 +68,26 @@ async function measureDocument(html, options) {
             var bb = rects[ri].bottom - r.top;   // each line's bottom, relative to block top
             if (bb - last > 2) { lineBottoms.push(Math.round((bb / PX) * 1000) / 1000); last = bb; }
           }
-        } catch (e) { lineBottoms = []; }
+          // char offset where each line starts -- only for a single plain text node (flowing prose)
+          var tnode = pEl.firstChild;
+          if (tnode && tnode.nodeType === 3) {
+            var full = tnode.textContent;
+            var rng2 = document.createRange();
+            var prevTop = null, pos = 0;
+            var parts = full.split(/(\s+)/);
+            for (var wi = 0; wi < parts.length; wi++) {
+              var wlen = parts[wi].length;
+              if (wlen === 0) continue;
+              if (/^\s+$/.test(parts[wi])) { pos += wlen; continue; }
+              rng2.setStart(tnode, pos);
+              rng2.setEnd(tnode, Math.min(pos + wlen, full.length));
+              var wtop = rng2.getBoundingClientRect().top;
+              if (prevTop === null) { lineStartChars.push(0); prevTop = wtop; }
+              else if (wtop > prevTop + 2) { lineStartChars.push(pos); prevTop = wtop; }
+              pos += wlen;
+            }
+          }
+        } catch (e) { lineBottoms = lineBottoms; lineStartChars = lineStartChars; }
         return {
           id: n.getAttribute('data-mblk'),
           kind: n.getAttribute('data-mkind') || '',
@@ -76,6 +96,7 @@ async function measureDocument(html, options) {
           chars: parseInt(n.getAttribute('data-mchars'), 10) || 0,
           split: n.getAttribute('data-msplit') === '1',
           lines: lineBottoms,
+          lineChars: lineStartChars,
           topIn: round3(r.top / PX),
           widthIn: round3(r.width / PX),
           heightIn: round3(r.height / PX)

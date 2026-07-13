@@ -45,31 +45,32 @@ function packPaired(beats, opts) {
   }
 
   // Text flows: fill the remaining space, then continue on fresh pages.
-  function placeText(beatIdx, part, h, lines) {
+  function placeText(beatIdx, part, h, lines, lineChars, textLen) {
     if (!(h > 0)) return;
-    if (opts.noSplit) {
-      // Whole-block mode (for the literal composer): never split a paragraph across pages.
+    var nLines = (lines && lines.length) || 0;
+    var canSplit = !opts.noSplit && nLines >= 2 && lineChars && lineChars.length >= 2;
+    if (!canSplit) {
+      // Whole block: won't fit? start a fresh page and place it there.
       if (h > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
       place('narr', beatIdx, h, { part: part, split: false });
       return;
     }
-    var left = h;
-    var placed = 0;
-    while (left > 1e-6) {
+    // Split at whole measured lines; each slice carries the exact character range so the
+    // composer renders it as a normal paragraph (no clip tricks).
+    var lineIdx = 0;
+    while (lineIdx < nLines) {
       var rem = remaining();
       if (rem < minLeftForText && cur().usedIn > 1e-6) { newPage(); rem = remaining(); }
-      var chunk = Math.min(left, rem);
-      // Snap the split to a real measured line boundary so a line is never cut in half.
-      if (lines && lines.length && (h - chunk > 1e-6)) {
-        var target = placed + chunk;
-        var snap = 0;
-        for (var li = 0; li < lines.length; li++) { if (lines[li] <= target + 0.02) snap = lines[li]; else break; }
-        if (snap > placed + 0.05) chunk = round3(snap - placed);
-      }
-      place('narr', beatIdx, chunk, { part: part, split: (h - chunk > 1e-6), offsetIn: round3(placed), totalH: round3(h) });
-      placed = round3(placed + chunk);
-      left = round3(h - placed);
-      if (left > 1e-6) newPage();
+      var startY = lineIdx > 0 ? lines[lineIdx - 1] : 0;
+      var endLine = -1;
+      for (var k = lineIdx; k < nLines; k++) { if ((lines[k] - startY) <= rem + 0.03) endLine = k; else break; }
+      if (endLine < lineIdx) { newPage(); continue; }   // not even one line fits here
+      var segH = round3(lines[endLine] - startY);
+      var cStart = (lineChars[lineIdx] != null) ? lineChars[lineIdx] : 0;
+      var cEnd = (endLine + 1 < nLines && lineChars[endLine + 1] != null) ? lineChars[endLine + 1] : textLen;
+      place('narr', beatIdx, segH, { part: part, split: (lineIdx > 0 || endLine + 1 < nLines), charStart: cStart, charEnd: cEnd });
+      lineIdx = endLine + 1;
+      if (lineIdx < nLines) newPage();
     }
   }
 
@@ -123,12 +124,12 @@ function packPaired(beats, opts) {
       place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
       return;
     }
-    if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines);
+    if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines, b.beforeLineChars, b.beforeLen);
     if (b.hasImage && b.imageH > 0) {
       placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0);
-      if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines);
+      if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen);
     } else if (b.textAfterH > 0) {
-      placeText(b.idx, 'after', b.textAfterH, b.afterLines);
+      placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen);
     }
   });
 
