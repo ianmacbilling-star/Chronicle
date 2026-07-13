@@ -807,6 +807,25 @@ function pbBesidePanel(m, sec, idx, opts) {
   var na = sec.after ? '<div style="margin-top:0.1in;">' + coNarr(sec.after, opts, false) + '</div>' : '';
   return '<div style="margin-bottom:0.14in;">' + img + nb + na + '</div>';
 }
+// PHASE 1 (page-packer): text-only measure body for the PAIRED layout. Tags each beat's
+// narration so measureDocument returns its TRUE rendered height at the page width. Image
+// heights are analytic (aspect x width) so only text -- the genuinely unknown height -- is
+// measured. Wrapped in the real novel shell by buildNovelHTML, so fonts/CSS match exactly.
+// Fires only when opts.measurePaired is set; normal rendering untouched.
+function buildPairedMeasureBody(moments, sections, opts) {
+  var out = '';
+  for (var i = 0; i < moments.length; i++) {
+    var sec = (sections || []).find(function (s) { return s.panel_index === i; }) || {};
+    ['before', 'after'].forEach(function (part) {
+      var txt = sec[part];
+      if (!txt) return;
+      var inner = coNarr(txt, opts || {}, false);
+      out += '<div data-mblk="p' + i + '_' + part + '" data-mkind="narr" data-mmoment="' + i + '" data-mpart="' + part + '" data-mchars="' + String(txt).length + '">' + inner + '</div>';
+    });
+  }
+  return out || '<div data-mblk="empty" data-mkind="narr"></div>';
+}
+
 function renderPaired(moments, sections, intro, outro, opts) {
   var html = coDropOrIntro(intro, opts);
   var pbN = 0;
@@ -1688,7 +1707,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
   switch (opts.arrange) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
-    case 'paired': return renderPaired(moments, sections, intro, outro, opts);
+    case 'paired': return (opts && opts.measurePaired) ? buildPairedMeasureBody(moments, sections, opts) : renderPaired(moments, sections, intro, outro, opts);
     case 'comicpage': return (opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.engine && opts._enginePlan) ? renderComicEngine(moments, sections, intro, outro, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts)));
     case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
     case 'gazette': return renderGazette(moments, sections, intro, outro, opts);
@@ -3564,11 +3583,32 @@ async function assembleNovelHtml(req, campaignId, overrides) {
     });
   });
 
-  const co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  var co = req.query.co ? parseCustomOpts(req.query.co) : null;
+  if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.measurePaired = true; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co };
 }
+
+// PHASE 1 (page-packer) verification: measure paired-layout narration heights.
+// Returns the true rendered height (in inches) of every text block in reading order,
+// so the measurement foundation can be validated before the packer is built.
+router.get('/measure-paired/:campaignId', requireAuth, async function (req, res) {
+  try {
+    req.query.measurePaired = '1';
+    var built = await assembleNovelHtml(req, req.params.campaignId, null);
+    var measured = await measureDocument(built.html, {});
+    res.json({
+      campaign: built.campaign ? built.campaign.name : null,
+      layout: built.layoutStyle,
+      blockCount: measured.blockCount,
+      totalTextHeightIn: measured.totalBlockHeightIn,
+      blocks: measured.blocks
+    });
+  } catch (e) {
+    res.status(500).json({ error: (e && e.message) || 'measure-paired failed' });
+  }
+});
 
 module.exports = router;
 module.exports.buildNovelHTML = buildNovelHTML;
