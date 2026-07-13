@@ -3657,11 +3657,10 @@ router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
 // width / aspect, capped to a page. (Float text-beside footprint is a Phase 3 refinement.)
 function beatImageHeight(beat, pageH) {
   var aspect = (beat && beat.aspect) || 1;   // width / height
-  var shape = String((beat && beat.shape) || '').toLowerCase();
-  var isPortrait = aspect < 0.95 || /tall|tower|portrait/.test(shape);
-  var displayW = isPortrait ? 4.6 : 6.8;
-  var h = displayW / (aspect || 1);
-  return Math.min(9.3, Math.max(1.2, h));   // clamp to one page (matches the stacked render)
+  // Picture Book MAXIMIZES: the biggest the image can be while fitting the content width
+  // (6.8in) and one page (9.3in). Joint sizing shrinks from here only when text needs room.
+  var h = 6.8 / (aspect || 1);
+  return Math.min(9.3, Math.max(1.2, h));
 }
 // PHASE 3 (page-packer): measure a paired book's text, compute image heights, run the
 // packer, and return { plan, overrides }. Overrides carry the per-beat image scale the
@@ -3722,7 +3721,8 @@ function composeBook(plan, beats, opts) {
             (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
           '</div></div>';
       } else if (pl.kind === 'image' && m && m.image) {
-        var w = (isPortrait(m) ? 4.6 : 6.8) * (pl.scale || 1);
+        var asp = momentAspect(m) || 1;
+        var w = Math.min(6.8, (pl.heightIn || 0) * asp);   // width from the packer's placed height
         inner += '<div style="margin:0 auto 0.1in;width:' + w.toFixed(2) + 'in;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>';
       } else if (pl.kind === 'narr') {
