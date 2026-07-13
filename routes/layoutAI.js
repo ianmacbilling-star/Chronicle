@@ -27,7 +27,7 @@ const { LAYOUT_MODEL } = require('../config/models');
 const { buildPrompt } = require('../services/layoutAI/brief');
 
 const FLAG = 'layout_ai_dryrun';       // app_settings int; 1 = feature on
-const MAX_PAGES_PER_CALL = 40;         // secondary page cap (API allows ~100)
+const MAX_PAGES_PER_CALL = 12;         // small chunks so per-page JSON never truncates
 const MAX_CHUNK_BYTES = 20 * 1024 * 1024;  // keep each request PDF under the 32MB API cap (base64 inflates ~33%)
 const ANTHROPIC_VERSION = '2023-06-01';
 
@@ -106,7 +106,7 @@ async function critiqueChunk(pdfB64, prompt, startPage) {
     headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
     body: JSON.stringify({
       model: LAYOUT_MODEL,
-      max_tokens: 8000,
+      max_tokens: 16000,
       messages: [{
         role: 'user',
         content: [

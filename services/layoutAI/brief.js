@@ -85,6 +85,8 @@ ${manifestStr}
 
 DENSITY IS THE PRIORITY. Go page by page. Flag every page that is under-filled or near-blank, and say how to close the gap: grow an undersized image, or split/flow narrative text into the empty space. Judge fullness by eye; do not invent exact percentages.
 
+CRITICAL -- ENCODE YOUR FIX AS A SIGNAL, OR NOTHING HAPPENS: the engine only acts on the structured panel fields, never on your prose. If your fix flows text, set that panel's "flow":true. If it shrinks an image, set "size_hint":"shrink". If it grows one, set "size_hint":"grow". Any page you mark under_filled or near_blank MUST carry at least one panel whose flow/size_hint is NOT the default (flow:true, or size_hint shrink/grow) -- a page flagged as under-filled with only "keep" panels does NOTHING and the gap remains. Never describe a fix you did not encode.
+
 Respond with STRICT JSON only -- no markdown, no prose outside the JSON. Be terse. Identify pages by their 1-based order in the PDF. Every panel you reference MUST include its "idx" from the manifest so the engine can apply your signals. Shape:
 {
   "book_assessment": "2-3 sentences on the book overall",
