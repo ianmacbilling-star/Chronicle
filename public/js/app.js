@@ -14366,12 +14366,13 @@ function runLayoutAiDryRun() {
       if (j && j.error) { renderLayoutAiResult(j); finish(); return; }
       if (!j || !j.job) { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Could not start optimize.</div>'; finish(); return; }
       var misses = 0;
+      var unknownMisses = 0;
       var poll = function () {
         fetch('/api/layout-ai/' + cid + '/optimize-status/' + j.job, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (st) {
-            if (st.status === 'running') { setTimeout(poll, 3000); return; }
-            if (st.status === 'unknown') { if (out) out.innerHTML = '<div style="color:#e0a0a0;">Optimize job expired -- please run it again.</div>'; finish(); return; }
+            if (st.status === 'running') { unknownMisses = 0; setTimeout(poll, 3000); return; }
+            if (st.status === 'unknown') { unknownMisses++; if (unknownMisses < 8) { setTimeout(poll, 3000); return; } if (out) out.innerHTML = '<div style="color:#e0a0a0;">Optimize job expired -- please run it again.</div>'; finish(); return; }
             if (st.status === 'error') { renderLayoutAiResult(st); finish(); return; }
             handleDone(st);
           })

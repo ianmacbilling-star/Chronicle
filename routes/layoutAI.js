@@ -31,6 +31,7 @@ const MAX_PAGES_PER_CALL = 12;         // small chunks so per-page JSON never tr
 const MAX_CHUNK_BYTES = 20 * 1024 * 1024;  // keep each request PDF under the 32MB API cap (base64 inflates ~33%)
 const INPUT_COST_PER_TOKEN = 3 / 1e6;     // Sonnet ~ $3 / M input tokens (PDF pages billed as input)
 const OUTPUT_COST_PER_TOKEN = 15 / 1e6;   // Sonnet ~ $15 / M output tokens
+const CASCADE_PASS = false;   // 2nd (reflow) pass doubles memory/time -> caused job-loss restarts; off until jobs are DB-backed
 const ANTHROPIC_VERSION = '2023-06-01';
 
 async function isEnabled() {
@@ -278,12 +279,14 @@ router.post('/:campaignId/optimize', requireAuth, requireAdmin, async function (
       // Pass 2 (cascade): if pass 1 changed the layout, re-analyze the REFLOWED book so
       // gaps that only appear AFTER the first round get caught (the page-49 case). Pass 2
       // saw the reflowed state, so its signals win on any panel it also touches.
-      if (Object.keys(overrides).length > 0) {
-        const a2 = await analyzeBook(req, campaignId, overrides, _fills);
-        const overrides2 = buildOverrides(a2.pages, a2.built.manifest, _fills);
-        overrides = Object.assign({}, overrides, overrides2);
-        if (a2.usage) { usage = { input: usage.input + a2.usage.input, output: usage.output + a2.usage.output }; }
-        passes = 2;
+      if (CASCADE_PASS && Object.keys(overrides).length > 0) {
+        try {
+          const a2 = await analyzeBook(req, campaignId, overrides, _fills);
+          const overrides2 = buildOverrides(a2.pages, a2.built.manifest, _fills);
+          overrides = Object.assign({}, overrides, overrides2);
+          if (a2.usage) { usage = { input: usage.input + a2.usage.input, output: usage.output + a2.usage.output }; }
+          passes = 2;
+        } catch (e2) { console.error('[layout-ai] cascade pass 2 failed, using pass 1:', e2 && e2.message); }
       }
       const token = cachePut(overrides, campaignId);
       const cost = usage.input * INPUT_COST_PER_TOKEN + usage.output * OUTPUT_COST_PER_TOKEN;
