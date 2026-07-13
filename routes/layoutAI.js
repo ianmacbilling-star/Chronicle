@@ -91,6 +91,19 @@ function extractJson(text) {
   try { return JSON.parse(t); } catch (e) {}
   var a = t.indexOf('{'), b = t.lastIndexOf('}');
   if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e2) {} }
+  // Truncation salvage: output cut off mid-array. Close it at the last complete object.
+  if (a >= 0) {
+    var body = t.slice(a);
+    var lb = body.lastIndexOf('}');
+    var tries = 0;
+    while (lb > 0 && tries < 200) {
+      var head = body.slice(0, lb + 1);
+      try { return JSON.parse(head + ']}'); } catch (e3) {}
+      try { return JSON.parse(head + '}'); } catch (e4) {}
+      try { return JSON.parse(head); } catch (e5) {}
+      lb = body.lastIndexOf('}', lb - 1); tries++;
+    }
+  }
   return null;
 }
 
@@ -113,12 +126,15 @@ async function critiqueChunk(pdfB64, prompt, startPage) {
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfB64 } },
           { type: 'text', text: prompt + note }
         ]
+      }, {
+        role: 'assistant',
+        content: '{'
       }]
     })
   });
   const data = await resp.json();
   if (data && data.error) throw new Error('API: ' + (data.error.message || JSON.stringify(data.error)));
-  const text = (data.content || []).map(function (i) { return i.type === 'text' ? i.text : ''; }).filter(Boolean).join('\n');
+  const text = '{' + (data.content || []).map(function (i) { return i.type === 'text' ? i.text : ''; }).filter(Boolean).join('\n');   // '{' was prefilled
   const parsed = extractJson(text);
   if (parsed) return parsed;
   return { parseError: true, raw: text.slice(0, 500) };
