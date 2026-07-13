@@ -846,6 +846,21 @@ function renderPaired(moments, sections, intro, outro, opts) {
       if (_nsec.before) { afterHtml += '<div style="margin-top:0.1in;">' + coNarr(_nsec.before, opts, false) + '</div>'; _pulled[i + 1] = true; }
     }
     var _sc = lmScale(m);   // measured shrink factor (1 = unchanged); applied to image widths below
+    if (opts.packStacked) {
+      // Phase 3.1 (page-packer): stacked page-by-page render. Every image is CENTERED at the
+      // packer's modeled display width x scale (portraits ~4.6in, others ~6.6in), with text
+      // above and below -- no floats. This matches the packer's geometry exactly, so Chromium's
+      // flow reproduces the plan (killing the float-stranded blank-then-portrait gaps).
+      var _isP = isPortrait(m);
+      var _dispW = (_isP ? 4.6 : 6.6) * _sc;
+      var _imgHtml = m.image
+        ? '<div style="margin:0 auto 0.1in;width:' + _dispW.toFixed(2) + 'in;page-break-inside:avoid;">' +
+            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
+            coCaptionBelow(m, i, opts.caption) + '</div>'
+        : '';
+      html += beforeHtml + _imgHtml + afterHtml;
+      continue;
+    }
     if (isPortrait(m)) {
       // Picture Book portraits FLOAT left/right (alternating) with the narrative
       // beside and flowing below them, instead of centered with the text underneath.
@@ -3591,7 +3606,7 @@ async function assembleNovelHtml(req, campaignId, overrides) {
 
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
   if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.arrange = 'paired'; co.measurePaired = true; }
-  else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; }
+  else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats };
