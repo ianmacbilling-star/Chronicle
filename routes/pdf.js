@@ -3699,7 +3699,7 @@ async function computePairedPack(req, campaignId, packOpts) {
   var _dco = req.query.co ? parseCustomOpts(req.query.co) : {};
   var _border = _dco.border || 'frame';
   var _lh = DEFAULT_LH;
-  for (var _li = 0; _li < blocks.length; _li++) { if (blocks[_li].lines && blocks[_li].lines.length >= 2) { _lh = round3(blocks[_li].lines[1] - blocks[_li].lines[0]); break; } }
+  for (var _li = 0; _li < blocks.length; _li++) { if (blocks[_li].lines && blocks[_li].lines.length >= 2) { _lh = Math.round((blocks[_li].lines[1] - blocks[_li].lines[0]) * 1000) / 1000; break; } }
   var _imgOver = decoSumHeight(['frame:' + _border, 'image-margin'], _lh);
   // Lockstep alignment (measured blocks are in reading order, as are the beats). If the
   // index runs past the measured blocks (a slight section-set mismatch), fall back to an
