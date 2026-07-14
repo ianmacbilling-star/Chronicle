@@ -3784,8 +3784,12 @@ function composeBook(plan, beats, opts) {
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
-      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+      // Each border style adds a different amount of height; reserve it so nothing clips.
+      // (bronze 'frame' is inset -> ~0; 'gallery' drop-shadow adds its 0.26in offset; etc.)
+      var _bover = ({ gallery: 0.28, comic: 0.12, keyline: 0.06, frame: 0.02, vignette: 0.02, none: 0 })[_cco.border || 'frame'];
+      if (_bover == null) _bover = 0.02;
+      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, imgOverIn: _bover + 0.1 });
       var body = composeBook(packedC.plan, packedC.beats, _cco);
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});

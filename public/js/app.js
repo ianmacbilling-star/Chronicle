@@ -6020,9 +6020,16 @@ function toggleSessionPreviewMode() {
   if (typeof loadPreview === 'function') loadPreview(state.layoutStyle || 'Classic');
 }
 
+function clearFinalizePanes() {
+  ['finalize-before-scroll', 'finalize-after-scroll'].forEach(function (id) { var el = document.getElementById(id); if (el) el.innerHTML = ''; });
+  var _o = document.getElementById('layoutai-results'); if (_o) _o.innerHTML = '';
+  var _f = document.getElementById('layoutai-free'); if (_f) _f.innerHTML = '';
+  try { if (typeof loadFinalize !== 'undefined') loadFinalize._lastUrl = null; } catch (e) {}
+}
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
+  clearFinalizePanes();   // preview changed -> stale Finalize panes; clear them
   if (!iframe) return;
 
   if (layout) novelLayoutStyle = layout;
@@ -9707,6 +9714,7 @@ function selNovelLayout(el, layout) {
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
+  clearFinalizePanes();   // preview changed -> stale Finalize panes; clear them
   if (!iframe) return;
 
   if (layout) novelLayoutStyle = layout;
@@ -14333,9 +14341,9 @@ function runLayoutAiDryRun() {
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
   var pct = 0;
-  if (wrap) wrap.style.display = 'block';
+  if (wrap) { wrap.style.display = 'block'; var _pbar = wrap.querySelector('.progress-bar'); if (_pbar) _pbar.style.display = 'none'; }   // composer is deterministic -- hide the creeping bar (kept in DOM)
   if (fill) fill.style.width = '0%';
-  if (pmsg) pmsg.textContent = 'Rendering the book and sending it to the art director (this can take several minutes, depending on the size of the book)...';
+  if (pmsg) pmsg.textContent = 'Composing the book page by page...';
   var timer = setInterval(function () {
     // Slow, steady, and ALWAYS creeping so it never looks frozen: a constant slow crawl
     // up to 90%, then a tiny minimum step keeps it inching toward ~99% on long jobs.
