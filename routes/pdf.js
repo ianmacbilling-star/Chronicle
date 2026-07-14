@@ -813,8 +813,9 @@ function pbBesidePanel(m, sec, idx, opts) {
 // heights are analytic (aspect x width) so only text -- the genuinely unknown height -- is
 // measured. Wrapped in the real novel shell by buildNovelHTML, so fonts/CSS match exactly.
 // Fires only when opts.measurePaired is set; normal rendering untouched.
-function buildPairedMeasureBody(moments, sections, opts) {
+function buildPairedMeasureBody(moments, sections, intro, outro, opts) {
   var out = '';
+  if (intro) out += '<div data-mblk="mintro" data-mkind="narr" data-mmoment="-1" data-mpart="before" data-mchars="' + String(intro).length + '">' + coNarr(intro, opts || {}, false).replace('margin:0.15in 0', 'margin:0') + '</div>';
   for (var i = 0; i < moments.length; i++) {
     var sec = (sections || []).find(function (s) { return s.panel_index === i; }) || {};
     ['before', 'after'].forEach(function (part) {
@@ -824,6 +825,7 @@ function buildPairedMeasureBody(moments, sections, opts) {
       out += '<div data-mblk="p' + i + '_' + part + '" data-mkind="narr" data-mmoment="' + i + '" data-mpart="' + part + '" data-mchars="' + String(txt).length + '">' + inner + '</div>';
     });
   }
+  if (outro) out += '<div data-mblk="moutro" data-mkind="narr" data-mmoment="-2" data-mpart="before" data-mchars="' + String(outro).length + '">' + coNarr(outro, opts || {}, false).replace('margin:0.15in 0', 'margin:0') + '</div>';
   return out || '<div data-mblk="empty" data-mkind="narr"></div>';
 }
 
@@ -1722,7 +1724,7 @@ function renderLayout(opts, moments, sections, intro, outro) {
   switch (opts.arrange) {
     case 'stack':  return renderStack(moments, sections, intro, outro, opts);
     case 'splash': return renderSplash(moments, sections, intro, outro, opts);
-    case 'paired': return (opts && opts.measurePaired) ? buildPairedMeasureBody(moments, sections, opts) : renderPaired(moments, sections, intro, outro, opts);
+    case 'paired': return (opts && opts.measurePaired) ? buildPairedMeasureBody(moments, sections, intro, outro, opts) : renderPaired(moments, sections, intro, outro, opts);
     case 'comicpage': return (opts && opts.measureChunks) ? buildChunkMeasureBody(moments, sections, opts) : ((opts && opts.engine && opts._enginePlan) ? renderComicEngine(moments, sections, intro, outro, opts) : ((opts && opts.twoPass && opts._twoPassMeasured) ? renderComicTwoPass(moments, sections, intro, outro, opts) : renderComicPage(moments, sections, intro, outro, opts)));
     case 'magazine': return renderMagazine(moments, sections, intro, outro, opts);
     case 'gazette': return renderGazette(moments, sections, intro, outro, opts);
@@ -3580,9 +3582,11 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   var manifest = [];
   var beats = [];
   var _pidx = 0;
+  var _ioIdx = 900000;   // separate id range for intro/outro text beats (keeps moment indices stable)
   sessionsWithData.forEach(function (sd) {
     var _secs = [];
     try { _secs = sd.narrative_sections ? JSON.parse(sd.narrative_sections) : []; } catch (e) { _secs = []; }
+    if (sd.narrative_intro) beats.push({ idx: ++_ioIdx, kind: 'intro', shape: '', aspect: 1, hasImage: false, before: sd.narrative_intro, after: '' });
     (sd.moments || []).forEach(function (m, _j) {
       _pidx++;
       manifest.push({ idx: _pidx, title: String(m.title || '').slice(0, 60), shape: String(m.shape || '') });
@@ -3601,6 +3605,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
         m.layout_meta = JSON.stringify(meta);
       }
     });
+    if (sd.narrative_outro) beats.push({ idx: ++_ioIdx, kind: 'outro', shape: '', aspect: 1, hasImage: false, before: sd.narrative_outro, after: '' });
   });
 
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
