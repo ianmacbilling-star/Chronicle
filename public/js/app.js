@@ -14407,9 +14407,13 @@ function measureCanvasFill(canvas) {
   try {
     var W = canvas.width, H = canvas.height;
     if (!W || !H) return null;
-    var data = canvas.getContext('2d').getImageData(0, 0, W, H).data;
+    var data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
     var lastContent = 0;
-    for (var y = 0; y < H; y += 3) {
+    // Ignore the bottom page-margin band: the faint "CAMPAIGNIA.COM" page watermark lives there
+    // (position:fixed near the page bottom) and its gold-on-white sits right at the 238 cutoff, which
+    // would otherwise pin every page to ~90% full and mask genuinely under-filled pages above it.
+    var yMax = Math.floor(H * 0.94);
+    for (var y = 0; y < yMax; y += 3) {
       var rowHas = false;
       for (var x = 0; x < W; x += 7) {
         var i = (y * W + x) * 4;
