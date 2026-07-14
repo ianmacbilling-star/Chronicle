@@ -305,7 +305,7 @@ function companionEligible(m) { var s = normShape(m); return s === 'standard' ||
 // AND the title page / cast portraits so the 'frame' option looks identical
 // everywhere. inline=true makes the frame hug a fixed-size image (title/cast);
 // the default is a full-width block (interior columns).
-function bronzeFrame(inner, inline, scale) {
+function bronzeFrame(inner, inline, scale, ratio) {
   // scale (default 1) shrinks the whole frame proportionally. The interior story
   // images are large so the full-size frame reads thin; the title image and the
   // (often small) cast portraits pass a smaller scale so the frame stays in
@@ -317,6 +317,16 @@ function bronzeFrame(inner, inline, scale) {
   var dia = Math.max(3, Math.round(6 * sc));
   var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:' + dia + 'px;height:' + dia + 'px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
   var _dia = _d('top:0;left:0;', 'translate(-50%,-50%)') + _d('top:0;right:0;', 'translate(50%,-50%)') + _d('bottom:0;left:0;', 'translate(-50%,50%)') + _d('bottom:0;right:0;', 'translate(50%,50%)');
+  if (ratio) {
+    // INSET frame: the outer box IS the image box (fixed to the image aspect ratio); all the
+    // frame padding is drawn INWARD via border-box, so the frame adds zero height/width -- it
+    // just covers the outermost sliver of the image. Keeps the packer's geometry exact.
+    return '<div style="' + (inline ? 'display:inline-block;' : '') + 'width:100%;aspect-ratio:' + ratio + ';box-sizing:border-box;padding:' + padO + 'px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
+      '<div style="width:100%;height:100%;box-sizing:border-box;padding:' + padM + 'px;background:#0a0806;">' +
+      '<div style="position:relative;width:100%;height:100%;box-sizing:border-box;border:' + gold + 'px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
+      '</div>' +
+    '</div>';
+  }
   return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + padO + 'px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
     '<div style="padding:' + padM + 'px;background:#0a0806;">' +
     '<div style="position:relative;border:' + gold + 'px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
@@ -326,9 +336,9 @@ function bronzeFrame(inner, inline, scale) {
 function framedMedia(m) {
   var ratio = dispRatioCSS(m);
   var inner = m.image
-    ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
-    : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#160e06;"></div>';
-  return bronzeFrame(inner, false);
+    ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    : '<div style="width:100%;height:100%;background:#160e06;"></div>';
+  return bronzeFrame(inner, false, 1, ratio);
 }
 function frameCell(m, pct, showCaption) {
   var cap = '';
@@ -3742,7 +3752,8 @@ function composeBook(plan, beats, opts) {
           '</div></div>';
       } else if (pl.kind === 'image' && m && m.image) {
         var asp = momentAspect(m) || 1;
-        var w = Math.min(6.8, (pl.heightIn || 0) * asp);   // width from the packer's placed height
+        var _visH = beatImageHeight(b, 9.3) * (pl.scale != null ? pl.scale : 1);   // true image height (placement height includes border/margin overhead)
+        var w = Math.min(6.8, _visH * asp);
         inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>';
       } else if (pl.kind === 'narr') {

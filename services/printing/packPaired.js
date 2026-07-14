@@ -28,6 +28,7 @@ function packPaired(beats, opts) {
   opts = opts || {};
   var pageH = opts.pageHeightIn || 9.7;
   var gap = (opts.gapIn != null) ? opts.gapIn : 0.1;
+  var IMG_OVER = (opts.imgOverIn != null) ? opts.imgOverIn : 0.1;   // image margins beyond the gap (frame is now inset, adds no height)
   var maxPages = opts.maxPages || 400;
   var minLeftForText = (opts.minLeftForTextIn != null) ? opts.minLeftForTextIn : 0.4;
 
@@ -80,16 +81,17 @@ function packPaired(beats, opts) {
     if (!(fullH > 0)) return;
     var floor = shrinkFloor(shape);
     var minH = round3(fullH * floor);
-    var rem = remaining();
-    if (fullH <= rem + 1e-6) { place('image', beatIdx, fullH, { scale: 1, fullH: round3(fullH) }); return; }
+    var rem = remaining() - IMG_OVER;   // visual space for the image, after reserving its overhead
+    if (fullH <= rem + 1e-6) { place('image', beatIdx, round3(fullH + IMG_OVER), { scale: 1, fullH: round3(fullH) }); return; }
     if (cur().usedIn > 1e-6 && rem >= minH) {
       var scale = round3(rem / fullH);
-      place('image', beatIdx, round3(fullH * scale), { scale: scale, shrunk: true, fullH: round3(fullH) });
+      place('image', beatIdx, round3(fullH * scale + IMG_OVER), { scale: scale, shrunk: true, fullH: round3(fullH) });
       return;
     }
     if (cur().usedIn > 1e-6) newPage();
-    var pageScale = fullH > pageH ? round3(pageH / fullH) : 1;
-    place('image', beatIdx, round3(fullH * pageScale), { scale: pageScale, shrunk: pageScale < 1, fullH: round3(fullH) });
+    var freeVis = pageH - IMG_OVER;
+    var pageScale = fullH > freeVis ? round3(freeVis / fullH) : 1;
+    place('image', beatIdx, round3(fullH * pageScale + IMG_OVER), { scale: pageScale, shrunk: pageScale < 1, fullH: round3(fullH) });
   }
 
   // JOINT sizing: place an image AND leave room for its own following text on the same page,
@@ -100,13 +102,13 @@ function packPaired(beats, opts) {
     var minH = round3(fullH * floor);
     var rem = remaining();
     var need = afterH > 0 ? (afterH + gap) : 0;   // room the following text wants
-    var avail = rem - need;                        // room for the image if the text shares the page
-    if (fullH <= avail + 1e-6) { place('image', beatIdx, fullH, { scale: 1, fullH: round3(fullH) }); return; }
+    var avail = rem - need - IMG_OVER;             // visual room for the image, after overhead + text
+    if (fullH <= avail + 1e-6) { place('image', beatIdx, round3(fullH + IMG_OVER), { scale: 1, fullH: round3(fullH) }); return; }
     if (avail >= minH) {
       // Shrink the image (within its cap) just enough that its text fits beneath it -- no stranded
       // white -- whether the page already has content or the image+text start a fresh page.
       var scale = round3(avail / fullH);
-      place('image', beatIdx, round3(fullH * scale), { scale: scale, shrunk: true, fullH: round3(fullH) });
+      place('image', beatIdx, round3(fullH * scale + IMG_OVER), { scale: scale, shrunk: true, fullH: round3(fullH) });
       return;
     }
     // Can't fit both -> size the image on its own; the text flows to the next page.

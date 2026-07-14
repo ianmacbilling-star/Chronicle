@@ -14328,7 +14328,7 @@ function runLayoutAiDryRun() {
   var wrap = document.getElementById('layoutai-progress-wrap');
   var fill = document.getElementById('layoutai-progress-fill');
   var pmsg = document.getElementById('layoutai-progress-msg');
-  var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.style.maxHeight = '220px';   // shrink the scan once Optimize runs
+  var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.style.maxHeight = '540px';   // composer is free -- keep the full findings shown, don't collapse
   if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
