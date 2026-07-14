@@ -14362,9 +14362,25 @@ function runLayoutAiDryRun() {
   if (afterScroll) afterScroll.style.display = '';
   if (pmsg) pmsg.textContent = 'Composing the book page by page (this can take up to a minute)...';
   renderPdfInto(composeUrl, 'finalize-after-scroll', false);
+  var _afterCount = 0, _stable = 0;
   var _composeWatch = setInterval(function () {
     var sc = document.getElementById('finalize-after-scroll');
-    if (sc && sc.querySelector('canvas')) { clearInterval(_composeWatch); finish(); }
+    var cnt = sc ? sc.querySelectorAll('canvas').length : 0;
+    if (cnt > 0) {
+      if (cnt === _afterCount) { _stable++; } else { _stable = 0; _afterCount = cnt; }
+      if (_stable >= 3) {   // page count stable for ~1.5s -> render finished
+        clearInterval(_composeWatch);
+        finish();
+        var bp = document.querySelectorAll('#finalize-before-scroll canvas').length;
+        if (out) {
+          var delta = bp - cnt;
+          out.innerHTML = '<div style="padding:8px 2px;font-size:13px;color:#d8c9a8;line-height:1.6;">' +
+            'Before: <strong>' + bp + '</strong> pages &nbsp;&rarr;&nbsp; After: <strong>' + cnt + '</strong> pages' +
+            (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : '')) +
+            ' &nbsp;&middot;&nbsp; <strong style="color:#8fd18f;">Free</strong> &mdash; deterministic packing, no tokens</div>';
+        }
+      }
+    }
   }, 500);
   setTimeout(function () { clearInterval(_composeWatch); finish(); }, 180000);
 }

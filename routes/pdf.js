@@ -3763,7 +3763,8 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
       var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
-      var body = composeBook(packedC.plan, packedC.beats, {});
+      var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+      var body = composeBook(packedC.plan, packedC.beats, _cco);
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
       res.set('Content-Type', 'application/pdf');
