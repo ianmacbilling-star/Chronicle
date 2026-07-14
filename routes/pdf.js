@@ -9,7 +9,7 @@ const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packPaired } = require('../services/printing/packPaired');
-const { decoSumHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
+const { decoSumHeight, decoHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
 const { packComic } = require('../services/printing/packComic');
 const { planComic } = require('../services/printing/comicEngine');
 const { getPrintProvider } = require('../services/printing');
@@ -549,7 +549,7 @@ var CO_DEFAULTS = {
   condition: 'none',     // none | smoke | dirt | wrinkle | blood
   font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
-  cover: 1, cast: 1, toc: 1, header: 1, markers: 1, watermark: 1,
+  cover: 1, cast: 1, toc: 1, header: 1, markers: 1, markerbreak: 0, watermark: 1,
   hidelogo: 0
 };
 
@@ -2276,6 +2276,16 @@ ${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
 // ============================================================
 // BUILD Graphic Novel HTML (all sessions)
 // ============================================================
+// Session divider ("Session N - Name - Date") at each session boundary. Shared by the flow
+// render (buildNovelHTML) and the deterministic composer (composeBook) so both look identical.
+// Gated by the `markers` layout option upstream.
+function sessionMarkerHTML(num, name, date) {
+  return '<div class="session-marker">' +
+    '<div class="session-marker-ornament">&bull; &bull; &bull;</div>' +
+    '<div class="session-marker-label">Session ' + num + ' &mdash; ' + (name || '') +
+      ' &middot; ' + formatDate(date) + '</div>' +
+  '</div>';
+}
 function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, opts) {
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
@@ -2291,6 +2301,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fToc    = co ? !!co.toc       : false;
   var fHeader = co ? !!co.header    : true;
   var fMarkers= co ? !!co.markers   : true;
+  var fMarkerBreak = fMarkers && !!(co && co.markerbreak);   // start each session on a fresh page
   var fWmark  = true; // watermark always on
   var paperCSS = coPaperCSS(co ? co.paper : 'parchment', co ? co.condition : 'none');
   var fontImp = coFontImport(co ? co.font : '');
@@ -2401,15 +2412,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
       : '';
 
-    var chapterHeading = (paginated || !fMarkers)
-      ? ''
-      : '<div class="session-marker">' +
-          '<div class="session-marker-ornament">&bull; &bull; &bull;</div>' +
-          '<div class="session-marker-label">Session ' + (si+1) + ' &mdash; ' + s.name +
-            ' &middot; ' + formatDate(s.session_date) + '</div>' +
-        '</div>';
+    // Session dividers now also show in Quick View (removed the `paginated` suppression) so
+    // decorations are visible in the fast preview -- gated only on the markers option.
+    var chapterHeading = !fMarkers ? '' : sessionMarkerHTML(si + 1, s.name, s.session_date);
 
-    return '<div class="content-page" style="position:relative;">' +
+    var _sessBreak = (fMarkerBreak && si > 0 && !paginated) ? 'page-break-before:always;' : '';
+    return '<div class="content-page" style="' + _sessBreak + 'position:relative;">' +
       (co ? coCondOverlay(co.condition) : '') +
       (co ? coCondPreload(co.condition) : '') +
       '<div style="position:relative;z-index:1;">' +
@@ -3594,7 +3602,13 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   var beats = [];
   var _pidx = 0;
   var _ioIdx = 900000;   // separate id range for intro/outro text beats (keeps moment indices stable)
-  sessionsWithData.forEach(function (sd) {
+  var _coEarly = req.query.co ? parseCustomOpts(req.query.co) : null;
+  var _wantMarkers = _coEarly ? !!_coEarly.markers : true;   // session dividers default on
+  var _wantMarkerBreak = _wantMarkers && !!(_coEarly && _coEarly.markerbreak);
+  sessionsWithData.forEach(function (sd, _sIdx) {
+    if (_wantMarkers) {
+      beats.push({ idx: ++_ioIdx, kind: 'section-header', title: (sd.name || ''), num: (_sIdx + 1), date: sd.session_date, pageBreak: (_wantMarkerBreak && _sIdx > 0), shape: '', aspect: 1, hasImage: false, before: '', after: '' });
+    }
     var _secs = [];
     try { _secs = sd.narrative_sections ? JSON.parse(sd.narrative_sections) : []; } catch (e) { _secs = []; }
     var _est = (sd.moments || []).find(function (m) { return m && m.kind === 'establishing'; });
@@ -3717,6 +3731,9 @@ async function computePairedPack(req, campaignId, packOpts) {
     return null;
   }
   var packBeats = (mbuilt.beats || []).map(function (beat) {
+    if (beat.kind === 'section-header') {
+      return { idx: beat.idx, kind: 'section-header', headerH: decoHeight('section-header', _lh), pageBreak: !!beat.pageBreak, hasImage: false };
+    }
     var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
     if (beat.before) { var _b1 = takeBlock(String(beat.before).length); tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; }
     if (beat.after) { var _b2 = takeBlock(String(beat.after).length); ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; }
@@ -3748,7 +3765,9 @@ function composeBook(plan, beats, opts) {
       var b = byIdx[pl.beat];
       if (!b) return;
       var m = b.moment;
-      if (pl.kind === 'tower' && m && m.image) {
+      if (pl.kind === 'section-header') {
+        inner += sessionMarkerHTML(b.num, b.title, b.date);
+      } else if (pl.kind === 'tower' && m && m.image) {
         var asp = momentAspect(m) || 1;
         var tw = Math.min(6.8 - 2.6, 9.2 * asp);
         if ((tw / asp) > 9.3) tw = 9.3 * asp;

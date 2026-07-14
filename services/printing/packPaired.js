@@ -119,6 +119,15 @@ function packPaired(beats, opts) {
 
   newPage();
   (beats || []).forEach(function (b) {
+    if (b.kind === 'section-header') {
+      // Fixed-height divider (height from the decoration registry). pageBreak forces a fresh
+      // page; otherwise wrap to a new page only if it would not fit at the bottom.
+      var hH = (b.headerH > 0) ? b.headerH : 0.4;
+      if (b.pageBreak && cur().usedIn > 1e-6) newPage();
+      else if (hH > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
+      place('section-header', b.idx, hH);
+      return;
+    }
     if (b.isTower && b.hasImage && b.imageH > 0) {
       // Tower: image floats with text BESIDE it, so the beat's footprint is the taller of
       // the image or its narration -- not the sum. Place it as one block.
