@@ -9,6 +9,7 @@ const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packPaired } = require('../services/printing/packPaired');
+const { decoSumHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
 const { packComic } = require('../services/printing/packComic');
 const { planComic } = require('../services/printing/comicEngine');
 const { getPrintProvider } = require('../services/printing');
@@ -3692,6 +3693,14 @@ async function computePairedPack(req, campaignId, packOpts) {
   var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
   delete req.query.measurePaired;
   var pageH = 9.7;
+  // Decoration costs from the registry. Line height is taken from the measure pass so any
+  // font-relative decoration costs scale with font size automatically. Per-image overhead =
+  // the active frame + the image margins; captions/etc. will add to this per beat later.
+  var _dco = req.query.co ? parseCustomOpts(req.query.co) : {};
+  var _border = _dco.border || 'frame';
+  var _lh = DEFAULT_LH;
+  for (var _li = 0; _li < blocks.length; _li++) { if (blocks[_li].lines && blocks[_li].lines.length >= 2) { _lh = round3(blocks[_li].lines[1] - blocks[_li].lines[0]); break; } }
+  var _imgOver = decoSumHeight(['frame:' + _border, 'image-margin'], _lh);
   // Lockstep alignment (measured blocks are in reading order, as are the beats). If the
   // index runs past the measured blocks (a slight section-set mismatch), fall back to an
   // estimated height from the text length -- NEVER zero, so a beat can't be packed weightless
@@ -3711,7 +3720,7 @@ async function computePairedPack(req, campaignId, packOpts) {
     var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
     if (beat.before) { var _b1 = takeBlock(String(beat.before).length); tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; }
     if (beat.after) { var _b2 = takeBlock(String(beat.after).length); ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; }
-    return { idx: beat.idx, shape: beat.shape, aspect: (beat.aspect || 1), hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
+    return { idx: beat.idx, shape: beat.shape, aspect: (beat.aspect || 1), hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, imgOver: beat.hasImage ? _imgOver : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
   });
   var plan = packPaired(packBeats, Object.assign({ pageHeightIn: pageH }, packOpts || {}));
   var overrides = {};
@@ -3785,11 +3794,9 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
-      // Each border style adds a different amount of height; reserve it so nothing clips.
-      // (bronze 'frame' is inset -> ~0; 'gallery' drop-shadow adds its 0.26in offset; etc.)
-      var _bover = ({ gallery: 0.28, comic: 0.12, keyline: 0.06, frame: 0.02, vignette: 0.02, none: 0 })[_cco.border || 'frame'];
-      if (_bover == null) _bover = 0.02;
-      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, imgOverIn: _bover + 0.1 });
+      // Per-image decoration overhead (frame + margins) is resolved from the decoration
+      // registry inside computePairedPack, per beat -- no hand-coded per-style numbers here.
+      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
       var body = composeBook(packedC.plan, packedC.beats, _cco);
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});

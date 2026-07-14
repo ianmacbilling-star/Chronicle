@@ -77,42 +77,44 @@ function packPaired(beats, opts) {
 
   // Image: fit full if it can; else shrink to fill the remaining gap (within cap);
   // else move to a fresh page (shrinking only if taller than a whole page).
-  function placeImage(beatIdx, fullH, shape) {
+  function placeImage(beatIdx, fullH, shape, over) {
     if (!(fullH > 0)) return;
+    if (over == null) over = IMG_OVER;
     var floor = shrinkFloor(shape);
     var minH = round3(fullH * floor);
-    var rem = remaining() - IMG_OVER;   // visual space for the image, after reserving its overhead
-    if (fullH <= rem + 1e-6) { place('image', beatIdx, round3(fullH + IMG_OVER), { scale: 1, fullH: round3(fullH) }); return; }
+    var rem = remaining() - over;   // visual space for the image, after reserving its decoration overhead
+    if (fullH <= rem + 1e-6) { place('image', beatIdx, round3(fullH + over), { scale: 1, fullH: round3(fullH) }); return; }
     if (cur().usedIn > 1e-6 && rem >= minH) {
       var scale = round3(rem / fullH);
-      place('image', beatIdx, round3(fullH * scale + IMG_OVER), { scale: scale, shrunk: true, fullH: round3(fullH) });
+      place('image', beatIdx, round3(fullH * scale + over), { scale: scale, shrunk: true, fullH: round3(fullH) });
       return;
     }
     if (cur().usedIn > 1e-6) newPage();
-    var freeVis = pageH - IMG_OVER;
+    var freeVis = pageH - over;
     var pageScale = fullH > freeVis ? round3(freeVis / fullH) : 1;
-    place('image', beatIdx, round3(fullH * pageScale + IMG_OVER), { scale: pageScale, shrunk: pageScale < 1, fullH: round3(fullH) });
+    place('image', beatIdx, round3(fullH * pageScale + over), { scale: pageScale, shrunk: pageScale < 1, fullH: round3(fullH) });
   }
 
   // JOINT sizing: place an image AND leave room for its own following text on the same page,
   // so a beat's image + narration are considered together (not image-first, discover-text-doesn't-fit).
-  function placeImageWithText(beatIdx, fullH, shape, afterH) {
+  function placeImageWithText(beatIdx, fullH, shape, afterH, over) {
     if (!(fullH > 0)) return;
+    if (over == null) over = IMG_OVER;
     var floor = shrinkFloor(shape);
     var minH = round3(fullH * floor);
     var rem = remaining();
     var need = afterH > 0 ? (afterH + gap) : 0;   // room the following text wants
-    var avail = rem - need - IMG_OVER;             // visual room for the image, after overhead + text
-    if (fullH <= avail + 1e-6) { place('image', beatIdx, round3(fullH + IMG_OVER), { scale: 1, fullH: round3(fullH) }); return; }
+    var avail = rem - need - over;                 // visual room for the image, after overhead + text
+    if (fullH <= avail + 1e-6) { place('image', beatIdx, round3(fullH + over), { scale: 1, fullH: round3(fullH) }); return; }
     if (avail >= minH) {
       // Shrink the image (within its cap) just enough that its text fits beneath it -- no stranded
       // white -- whether the page already has content or the image+text start a fresh page.
       var scale = round3(avail / fullH);
-      place('image', beatIdx, round3(fullH * scale + IMG_OVER), { scale: scale, shrunk: true, fullH: round3(fullH) });
+      place('image', beatIdx, round3(fullH * scale + over), { scale: scale, shrunk: true, fullH: round3(fullH) });
       return;
     }
     // Can't fit both -> size the image on its own; the text flows to the next page.
-    placeImage(beatIdx, fullH, shape);
+    placeImage(beatIdx, fullH, shape, over);
   }
 
   newPage();
@@ -128,7 +130,7 @@ function packPaired(beats, opts) {
     }
     if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines, b.beforeLineChars, b.beforeLen);
     if (b.hasImage && b.imageH > 0) {
-      placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0);
+      placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0, b.imgOver);
       if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen);
     } else if (b.textAfterH > 0) {
       placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen);
