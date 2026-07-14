@@ -3586,12 +3586,18 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   sessionsWithData.forEach(function (sd) {
     var _secs = [];
     try { _secs = sd.narrative_sections ? JSON.parse(sd.narrative_sections) : []; } catch (e) { _secs = []; }
+    var _est = (sd.moments || []).find(function (m) { return m && m.kind === 'establishing'; });
+    var _estImg = (_est && _est.image) ? _est.image : sd.establishing_image;
+    if (_estImg) {
+      var _tm = { image: _estImg, title: '', shape: (_est && _est.shape) || sd.establishing_shape || 'wide', img_w: (_est && _est.img_w) || sd.establishing_img_w || null, img_h: (_est && _est.img_h) || sd.establishing_img_h || null };
+      beats.push({ idx: ++_ioIdx, kind: 'title', moment: _tm, shape: _tm.shape, aspect: (typeof momentAspect === 'function' ? (momentAspect(_tm) || 1) : 1), hasImage: true, before: '', after: '' });
+    }
     if (sd.narrative_intro) beats.push({ idx: ++_ioIdx, kind: 'intro', shape: '', aspect: 1, hasImage: false, before: sd.narrative_intro, after: '' });
     (sd.moments || []).forEach(function (m, _j) {
       _pidx++;
       manifest.push({ idx: _pidx, title: String(m.title || '').slice(0, 60), shape: String(m.shape || '') });
       var _sec = (_secs || []).find(function (s) { return s.panel_index === _j; }) || {};
-      beats.push({ idx: _pidx, moment: m, shape: String(m.shape || ''), aspect: (typeof momentAspect === 'function' ? (momentAspect(m) || 1) : 1), hasImage: !!m.image, before: _sec.before || '', after: _sec.after || '' });
+      if (m.kind !== 'establishing') beats.push({ idx: _pidx, moment: m, shape: String(m.shape || ''), aspect: (typeof momentAspect === 'function' ? (momentAspect(m) || 1) : 1), hasImage: !!m.image, before: _sec.before || '', after: _sec.after || '' });
       if (overrides && overrides[_pidx]) {
         var meta = lmMeta(m);
         meta = (meta && typeof meta === 'object') ? Object.assign({}, meta) : {};
@@ -3737,7 +3743,7 @@ function composeBook(plan, beats, opts) {
       } else if (pl.kind === 'image' && m && m.image) {
         var asp = momentAspect(m) || 1;
         var w = Math.min(6.8, (pl.heightIn || 0) * asp);   // width from the packer's placed height
-        inner += '<div style="margin:0 auto 0.1in;width:' + w.toFixed(2) + 'in;">' +
+        inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>';
       } else if (pl.kind === 'narr') {
         var full = (pl.part === 'after') ? b.after : b.before;

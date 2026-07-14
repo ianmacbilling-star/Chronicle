@@ -14295,10 +14295,9 @@ function finalizeUpdateHeader(numPages) {
   var arrange = (_arr && _arr.value) ? _arr.value : 'paired';
   var layout = (typeof CL_ARRANGE_LABEL !== 'undefined' && CL_ARRANGE_LABEL[arrange]) ? CL_ARRANGE_LABEL[arrange] : 'Picture Book';   // forward-facing name from the arrange selector
   var desc = LAYOUT_DESCRIPTIONS[layout] || '';
-  var estCost = (numPages || 0) * OPT_EST_COST_PER_PAGE;
-  var estTokens = Math.max(1, Math.ceil((estCost * 100) / 15));   // Ian rule: cost(cents)/15 -- confirm
-  var h = '<div><span style="font-family:var(--font-display);color:var(--gold);">' + escapeHtml(layout) + '</span>' + (desc ? ' - ' + escapeHtml(desc) : '') + '</div>';
-  h += '<div style="color:rgba(245,232,200,0.7);font-size:11px;margin-top:2px;">' + (numPages || 0) + ' pages, Optimize: ~' + estTokens + ' tokens (est.)</div>';
+  var h = '<div><span style="font-family:var(--font-display);color:var(--gold);">' + escapeHtml(layout) + '</span>' +
+    ' <span style="color:rgba(245,232,200,0.7);font-size:12px;">&middot; ' + (numPages || 0) + ' pages</span></div>';
+  if (desc) h += '<div style="color:rgba(245,232,200,0.6);font-size:11px;margin-top:2px;">' + escapeHtml(desc) + '</div>';
   el.innerHTML = h;
 }
 
