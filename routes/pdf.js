@@ -2286,6 +2286,15 @@ function sessionMarkerHTML(num, name, date) {
       ' &middot; ' + formatDate(date) + '</div>' +
   '</div>';
 }
+// Per-page running head for the composed book: campaign name + current session, tucked just
+// inside the top margin, repeated on every page. Absolutely positioned so it never consumes
+// packed body space (the packer's page plan stays exact). Suppressed on session-opening pages.
+function runningHeaderHTML(campaignName, num, name) {
+  return '<div class="page-header" style="position:absolute;top:0.02in;left:0.85in;right:0.85in;margin:0;">' +
+    '<div class="page-header-campaign">' + (campaignName || '') + '</div>' +
+    '<div class="page-header-session">Session ' + num + ' &mdash; ' + (name || '') + '</div>' +
+  '</div>';
+}
 function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, opts) {
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
@@ -3604,10 +3613,14 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   var _ioIdx = 900000;   // separate id range for intro/outro text beats (keeps moment indices stable)
   var _coEarly = req.query.co ? parseCustomOpts(req.query.co) : null;
   var _wantMarkers = _coEarly ? !!_coEarly.markers : true;   // session dividers default on
+  var _wantHeader = _coEarly ? !!_coEarly.header : true;     // running page header default on
   var _wantMarkerBreak = _wantMarkers && !!(_coEarly && _coEarly.markerbreak);
   sessionsWithData.forEach(function (sd, _sIdx) {
-    if (_wantMarkers) {
-      beats.push({ idx: ++_ioIdx, kind: 'section-header', title: (sd.name || ''), num: (_sIdx + 1), date: sd.session_date, pageBreak: (_wantMarkerBreak && _sIdx > 0), shape: '', aspect: 1, hasImage: false, before: '', after: '' });
+    if (_wantMarkers || _wantHeader) {
+      // One boundary beat per session: the composer draws the divider when markers is on, and
+      // always uses it to track which session each page belongs to (for the per-page running
+      // header) and to suppress that header on the session-opening page.
+      beats.push({ idx: ++_ioIdx, kind: 'section-header', title: (sd.name || ''), num: (_sIdx + 1), date: sd.session_date, showDivider: _wantMarkers, pageBreak: (_wantMarkerBreak && _sIdx > 0), shape: '', aspect: 1, hasImage: false, before: '', after: '' });
     }
     var _secs = [];
     try { _secs = sd.narrative_sections ? JSON.parse(sd.narrative_sections) : []; } catch (e) { _secs = []; }
@@ -3732,7 +3745,7 @@ async function computePairedPack(req, campaignId, packOpts) {
   }
   var packBeats = (mbuilt.beats || []).map(function (beat) {
     if (beat.kind === 'section-header') {
-      return { idx: beat.idx, kind: 'section-header', headerH: decoHeight('section-header', _lh), pageBreak: !!beat.pageBreak, hasImage: false };
+      return { idx: beat.idx, kind: 'section-header', headerH: beat.showDivider ? decoHeight('section-header', _lh) : 0, showDivider: !!beat.showDivider, pageBreak: !!beat.pageBreak, hasImage: false };
     }
     var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
     if (beat.before) { var _b1 = takeBlock(String(beat.before).length); tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; }
@@ -3759,14 +3772,26 @@ function composeBook(plan, beats, opts) {
   (beats || []).forEach(function (b) { byIdx[b.idx] = b; });
   var out = '';
   var pages = (plan && plan.pages) || [];
+  var headerOn = (opts && opts.header != null) ? !!opts.header : true;   // running page header default on
+  var campName = (opts && opts.campaignName) || '';
+  var curNum = null, curTitle = '';   // running session context for the per-page header
   pages.forEach(function (pg, pi) {
+    // A session-opening page carries a section-header placement; advance the running session
+    // context here and suppress the per-page running header on this page.
+    var openBeat = null, hasDivider = false;
+    (pg.placements || []).forEach(function (pl) {
+      if (pl.kind === 'section-header') { var hb = byIdx[pl.beat]; if (hb) { openBeat = hb; if (hb.showDivider) hasDivider = true; } }
+    });
+    if (openBeat) { curNum = openBeat.num; curTitle = openBeat.title; }
     var inner = '';
+    // Suppress the running header only where a visible divider already announces the session.
+    if (headerOn && !hasDivider && curNum != null) inner += runningHeaderHTML(campName, curNum, curTitle);
     (pg.placements || []).forEach(function (pl) {
       var b = byIdx[pl.beat];
       if (!b) return;
       var m = b.moment;
       if (pl.kind === 'section-header') {
-        inner += sessionMarkerHTML(b.num, b.title, b.date);
+        if (b.showDivider) inner += sessionMarkerHTML(b.num, b.title, b.date);
       } else if (pl.kind === 'tower' && m && m.image) {
         var asp = momentAspect(m) || 1;
         var tw = Math.min(6.8 - 2.6, 9.2 * asp);
@@ -3816,6 +3841,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       // Per-image decoration overhead (frame + margins) is resolved from the decoration
       // registry inside computePairedPack, per beat -- no hand-coded per-style numbers here.
       var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+      _cco.campaignName = (packedC.campaign && packedC.campaign.name) || '';
       var body = composeBook(packedC.plan, packedC.beats, _cco);
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});

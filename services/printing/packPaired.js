@@ -120,12 +120,17 @@ function packPaired(beats, opts) {
   newPage();
   (beats || []).forEach(function (b) {
     if (b.kind === 'section-header') {
-      // Fixed-height divider (height from the decoration registry). pageBreak forces a fresh
-      // page; otherwise wrap to a new page only if it would not fit at the bottom.
-      var hH = (b.headerH > 0) ? b.headerH : 0.4;
+      // Session boundary. With a visible divider it reserves its registry height (wrapping to a
+      // fresh page if it would not fit); otherwise it is a zero-height marker that only tags the
+      // page as a session start so the composer can suppress the running header there.
       if (b.pageBreak && cur().usedIn > 1e-6) newPage();
-      else if (hH > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
-      place('section-header', b.idx, hH);
+      var hH = (b.headerH > 0) ? b.headerH : 0;
+      if (hH > 0) {
+        if (hH > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
+        place('section-header', b.idx, hH);
+      } else {
+        cur().placements.push({ beat: b.idx, kind: 'section-header', heightIn: 0 });
+      }
       return;
     }
     if (b.isTower && b.hasImage && b.imageH > 0) {
