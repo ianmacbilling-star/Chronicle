@@ -10,6 +10,7 @@ const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packPaired } = require('../services/printing/packPaired');
 const { decoSumHeight, decoHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
+var HEADER_BAND_IN = 0.24;   // top band reserved on each composed page for the per-page running header (keeps body clear)
 const { packComic } = require('../services/printing/packComic');
 const { planComic } = require('../services/printing/comicEngine');
 const { getPrintProvider } = require('../services/printing');
@@ -2290,7 +2291,7 @@ function sessionMarkerHTML(num, name, date) {
 // inside the top margin, repeated on every page. Absolutely positioned so it never consumes
 // packed body space (the packer's page plan stays exact). Suppressed on session-opening pages.
 function runningHeaderHTML(campaignName, num, name) {
-  return '<div class="page-header" style="position:absolute;top:0.02in;left:0.85in;right:0.85in;margin:0;">' +
+  return '<div class="page-header" style="position:absolute;top:0.02in;left:0.85in;right:0.85in;margin:0;padding-bottom:0.03in;">' +
     '<div class="page-header-campaign">' + (campaignName || '') + '</div>' +
     '<div class="page-header-session">Session ' + num + ' &mdash; ' + (name || '') + '</div>' +
   '</div>';
@@ -3752,7 +3753,12 @@ async function computePairedPack(req, campaignId, packOpts) {
     if (beat.after) { var _b2 = takeBlock(String(beat.after).length); ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; }
     return { idx: beat.idx, shape: beat.shape, aspect: (beat.aspect || 1), hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, imgOver: beat.hasImage ? _imgOver : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
   });
-  var plan = packPaired(packBeats, Object.assign({ pageHeightIn: pageH }, packOpts || {}));
+  // Reserve a top band for the per-page running header (when on) by lowering the packer's usable
+  // page height, leaving the existing bottom safety buffer intact so nothing clips. The header
+  // renders inside the reserved band, never over the body.
+  var _hdrOn = (_dco.header == null) ? true : !!_dco.header;
+  var _basePackH = (packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : pageH;
+  var plan = packPaired(packBeats, Object.assign({}, packOpts || {}, { pageHeightIn: _basePackH - (_hdrOn ? HEADER_BAND_IN : 0) }));
   var overrides = {};
   plan.pages.forEach(function (pg) { pg.placements.forEach(function (pl) {
     if (pl.kind === 'image' && pl.scale != null && pl.scale < 0.999) overrides[pl.beat] = { scale: pl.scale };
@@ -3773,6 +3779,7 @@ function composeBook(plan, beats, opts) {
   var out = '';
   var pages = (plan && plan.pages) || [];
   var headerOn = (opts && opts.header != null) ? !!opts.header : true;   // running page header default on
+  var bandCss = headerOn ? ('padding-top:' + HEADER_BAND_IN + 'in;') : '';   // reserved header band (matches packer target)
   var campName = (opts && opts.campaignName) || '';
   var curNum = null, curTitle = '';   // running session context for the per-page header
   pages.forEach(function (pg, pi) {
@@ -3829,7 +3836,7 @@ function composeBook(plan, beats, opts) {
       }
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
-    out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
+    out += '<div class="content-page" style="height:9.65in;' + bandCss + 'overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
   });
   return out;
 }
