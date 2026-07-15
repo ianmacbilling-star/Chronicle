@@ -6029,7 +6029,6 @@ function clearFinalizePanes() {
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
-  clearFinalizePanes();   // preview changed -> stale Finalize panes; clear them
   if (!iframe) return;
 
   if (layout) novelLayoutStyle = layout;
@@ -9714,7 +9713,6 @@ function selNovelLayout(el, layout) {
 function loadNovelPreview(layout) {
   var loading = document.getElementById('novel-preview-loading');
   var iframe = document.getElementById('novel-preview-iframe');
-  clearFinalizePanes();   // preview changed -> stale Finalize panes; clear them
   if (!iframe) return;
 
   if (layout) novelLayoutStyle = layout;
@@ -14229,8 +14227,17 @@ function loadFinalize() {
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
   if (loadFinalize._lastUrl === url) return;
   loadFinalize._lastUrl = url;
-  var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = true; _rb.textContent = 'Scanning book...'; }
+  finalizeClearScanState();   // fresh initial scan -> drop stale counts / under-fill list / optimized pane
+  var _rb = document.getElementById('layoutai-run-btn'); if (_rb) _rb.style.display = 'none';
+  var _sl = document.getElementById('layoutai-scan-label'); if (_sl) _sl.style.display = '';
   renderPdfInto(url, 'finalize-before-scroll', true);
+}
+// Clear everything a prior optimize/scan left behind so a fresh initial scan starts clean.
+function finalizeClearScanState() {
+  ['layoutai-free', 'layoutai-delta'].forEach(function (id) { var e = document.getElementById(id); if (e) e.innerHTML = ''; });
+  ['finalize-before-count', 'finalize-after-count'].forEach(function (id) { var e = document.getElementById(id); if (e) e.textContent = ''; });
+  var af = document.getElementById('finalize-after-scroll'); if (af) { af.innerHTML = ''; af.style.display = 'none'; }
+  var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
 }
 // Fetch the PDF ONCE, hold it as an in-memory blob, and point the iframe at the blob URL.
 // Page jumps then reload the blob locally (instant) instead of re-hitting the server (30s).
@@ -14344,10 +14351,11 @@ function finalizeUpdateHeader() {
 function finalizeShowFreeAnalysis(flagged, numPages) {
   var out = document.getElementById('layoutai-free');
   if (!out) return;
-  var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; }
+  var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; _rb.classList.add('has-token'); _rb.style.display = ''; }
+  var _sl = document.getElementById('layoutai-scan-label'); if (_sl) _sl.style.display = 'none';
   finalizeUpdateHeader();
   out.style.maxHeight = '540px';   // scan fills the panel until Optimize runs
-  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Initial layout scan</div>';
+  var h = '';
   if (!flagged.length) {
     h += '<div style="color:rgba(245,232,200,0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
@@ -14361,6 +14369,23 @@ function finalizeShowFreeAnalysis(flagged, numPages) {
 }
 function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
+  // Optimize costs 1 token -- gate on the balance first (the server also enforces).
+  var _gb = document.getElementById('layoutai-run-btn'); if (_gb) _gb.disabled = true;
+  fetch('/api/tokens/balance', { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      var bal = (j && typeof j.total === 'number') ? j.total : 1;   // unreadable -> let the server decide
+      if (bal < 1) {
+        if (_gb) _gb.disabled = false;
+        if (typeof billingToast === 'function') billingToast('You need at least 1 token to optimize the layout.', 'error');
+        return;
+      }
+      _runLayoutAiOptimize();
+    })
+    .catch(function () { _runLayoutAiOptimize(); });
+}
+function _runLayoutAiOptimize() {
+  if (!state.currentCampaign) return;
   var cid = state.currentCampaign.id;
   var btn = document.getElementById('layoutai-run-btn');
   var status = document.getElementById('layoutai-status');
@@ -14369,7 +14394,7 @@ function runLayoutAiDryRun() {
   var fill = document.getElementById('layoutai-progress-fill');
   var pmsg = document.getElementById('layoutai-progress-msg');
   var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.style.maxHeight = '540px';   // composer is free -- keep the full findings shown, don't collapse
-  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; btn.classList.remove('has-token'); }
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
   var _d0 = document.getElementById('layoutai-delta'); if (_d0) _d0.innerHTML = '';
@@ -14377,7 +14402,7 @@ function runLayoutAiDryRun() {
   if (status) status.textContent = 'Composing the book page by page...';
   function finish() {
     if (status) status.textContent = '';
-    if (btn) { btn.disabled = false; btn.textContent = 'Optimize layout'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Optimize layout'; btn.classList.add('has-token'); }
   }
   // Load the deterministic page-packer / composer into the After pane. Synchronous render,
   // no async job, no tokens -- the packer composes the book page by page and returns the PDF,
@@ -14405,6 +14430,7 @@ function runLayoutAiDryRun() {
           _dEl.innerHTML = 'Before: <strong>' + bp + '</strong> pages &nbsp;&rarr;&nbsp; After: <strong>' + cnt + '</strong> pages' +
             (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
         }
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // reflect the spent token
       }
     }
   }, 500);

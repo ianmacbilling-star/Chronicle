@@ -4,6 +4,7 @@ const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBoo
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
+const { canAfford, spendTokens } = require('./tokens');
 const path = require('path');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
@@ -3844,6 +3845,8 @@ function composeBook(plan, beats, opts) {
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
+      // Optimize costs 1 token. Check up front; charge only after a successful compose (below).
+      if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
       // Per-image decoration overhead (frame + margins) is resolved from the decoration
       // registry inside computePairedPack, per beat -- no hand-coded per-style numbers here.
@@ -3852,6 +3855,8 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       var body = composeBook(packedC.plan, packedC.beats, _cco);
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
+      try { await spendTokens(req.session.userId, 1, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
+      catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
       res.set('Content-Type', 'application/pdf');
       res.set('Content-Disposition', 'inline; filename="composed-preview.pdf"');
       return res.send(Buffer.isBuffer(pdfC) ? pdfC : Buffer.from(pdfC));
