@@ -14403,6 +14403,22 @@ function runLayoutAiDryRun() {
   }, 500);
   setTimeout(function () { clearInterval(_composeWatch); finish(); }, 180000);
 }
+// DIAGNOSTIC (temporary): draw a line on the preview canvas at the scan's detected content
+// bottom, labeled with fill %, so we can see whether pages are truly full or a stray element
+// is fooling the scan. Remove once the under-fill detection is confirmed.
+function finalizeDebugMarkCanvas(canvas, fill) {
+  try {
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    var y = Math.round(fill * canvas.height);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(230,0,140,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(canvas.width, y + 0.5); ctx.stroke();
+    ctx.fillStyle = 'rgba(230,0,140,0.95)';
+    ctx.font = 'bold ' + Math.max(12, Math.round(canvas.width * 0.03)) + 'px sans-serif';
+    ctx.fillText(Math.round(fill * 100) + '% fill (scan bottom)', 6, Math.max(16, y - 5));
+    ctx.restore();
+  } catch (e) {}
+}
 function measureCanvasFill(canvas) {
   try {
     var W = canvas.width, H = canvas.height;
@@ -14604,7 +14620,7 @@ function renderPdfInto(url, containerId, isBefore) {
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
-              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
+              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); finalizeDebugMarkCanvas(canvas, fill); if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
             });
           });
         });
