@@ -2930,6 +2930,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   // Optional pagination: ?page=N renders only session N (1-indexed).
   // Total session count is returned in a header so the client can build a pager.
   var pageOpts = {};
+  if (req.query.nocover === '1') pageOpts.noCover = true;   // Finalize preview: interior only (covers are a publish-time artifact)
   var pageNum = parseInt(req.query.page, 10);
   if (!isNaN(pageNum) && pageNum > 0) {
     pageOpts.page = pageNum;
@@ -3603,6 +3604,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
 
   const layoutStyle = req.query.layout || 'Classic';
   var pageOpts = {};
+  if (req.query.nocover === '1') pageOpts.noCover = true;   // optimize/interior renders never include covers
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
 
@@ -3831,6 +3833,7 @@ function composeBook(plan, beats, opts) {
           if (seg) {
             var rendered = coNarr(seg, opts, false).replace('margin:0.15in 0', 'margin:0');
             if (isCont) rendered = rendered.replace('text-indent:0.3in', 'text-indent:0');   // continuation of a split paragraph: no indent
+            if (opts.dropcap && b.kind === 'intro' && !isCont) rendered = coDropcap(rendered.replace('text-indent:0.3in', 'text-indent:0'));   // drop cap replaces the first-line indent on each session's opening paragraph
             inner += '<div style="margin-top:0.1in;">' + rendered + '</div>';
           }
         }

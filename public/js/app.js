@@ -14212,7 +14212,7 @@ function layoutAiCheckStatus() {
     .catch(function () {});
 }
 function finalizeBookQuery() {
-  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');
+  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&') + '&nocover=1';
 }
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
@@ -14341,6 +14341,7 @@ function finalizeUpdateHeader() {
   parts.push('Borders: ' + optLabel('cl-border', o.border));
   parts.push('Paper: ' + optLabel('cl-paper', o.paper));
   parts.push('Body font: ' + optLabel('cl-font', o.font));
+  parts.push('Drop cap: ' + (o.dropcap ? 'On' : 'Off'));
   parts.push('Narrative: ' + optLabel('cl-narr', o.narr));
   var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
     (desc ? ' <span style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
