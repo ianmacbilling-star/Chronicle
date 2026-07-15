@@ -14223,6 +14223,7 @@ var _finalizeFills = {};
 var _finalizeAfterBlob = '';
 function loadFinalize() {
   if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
+  finalizeUpdateHeader();   // show the layout + attributes immediately, before the scan finishes
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
@@ -14308,16 +14309,35 @@ var LAYOUT_DESCRIPTIONS = {
   'Gazette': 'Enclosed, newspaper-style columns.'
 };
 var OPT_EST_COST_PER_PAGE = 0.015;   // rough $/page incl. the 2-pass cascade; calibrate from server logs
-function finalizeUpdateHeader(numPages) {
+function finalizeUpdateHeader() {
   var el = document.getElementById('layoutai-header');
   if (!el) return;
-  var _arr = document.getElementById('cl-arrange');
-  var arrange = (_arr && _arr.value) ? _arr.value : 'paired';
-  var layout = (typeof CL_ARRANGE_LABEL !== 'undefined' && CL_ARRANGE_LABEL[arrange]) ? CL_ARRANGE_LABEL[arrange] : 'Picture Book';   // forward-facing name from the arrange selector
+  // Effective layout the Optimizer will actually run: the custom arrange when custom layout is
+  // active, otherwise the main layout selection. (Previously read the modal's cl-arrange, which
+  // defaulted to Picture Book and ignored the real selection.)
+  var o = (typeof customActive !== 'undefined' && customActive.novel && typeof customOpts !== 'undefined' && customOpts.novel)
+    ? customOpts.novel
+    : (typeof CUSTOM_LAYOUT_DEFAULTS !== 'undefined' ? CUSTOM_LAYOUT_DEFAULTS : {});
+  var arrange = o.arrange || 'paired';
+  var layout = (typeof CL_ARRANGE_LABEL !== 'undefined' && CL_ARRANGE_LABEL[arrange]) ? CL_ARRANGE_LABEL[arrange] : 'Picture Book';
   var desc = LAYOUT_DESCRIPTIONS[layout] || '';
-  var h = '<div><span style="font-family:var(--font-display);color:var(--gold);">' + escapeHtml(layout) + '</span>' +
-    ' <span style="color:rgba(245,232,200,0.7);font-size:12px;">&middot; ' + (numPages || 0) + ' pages</span></div>';
-  if (desc) h += '<div style="color:rgba(245,232,200,0.6);font-size:11px;margin-top:2px;">' + escapeHtml(desc) + '</div>';
+  function optLabel(selId, val) {
+    var sel = document.getElementById(selId);
+    if (sel) { var opt = sel.querySelector('option[value="' + val + '"]'); if (opt && opt.textContent) return opt.textContent.trim(); }
+    return String(val == null ? '' : val);
+  }
+  // Only attributes the Optimizer accounts for. (Drop cap is omitted until the composer supports it.)
+  var parts = [];
+  parts.push('Running header: ' + (o.header ? 'On' : 'Off'));
+  parts.push('Session dividers: ' + (o.markers ? ('On' + (o.markerbreak ? ' (new page per session)' : '')) : 'Off'));
+  parts.push('Captions: ' + optLabel('cl-caption', o.caption));
+  parts.push('Borders: ' + optLabel('cl-border', o.border));
+  parts.push('Paper: ' + optLabel('cl-paper', o.paper));
+  parts.push('Body font: ' + optLabel('cl-font', o.font));
+  parts.push('Narrative: ' + optLabel('cl-narr', o.narr));
+  var h = '<div style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</div>';
+  if (desc) h += '<div style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;margin:1px 0 6px;">&ldquo;' + escapeHtml(desc) + '&rdquo;</div>';
+  h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(201,168,76,0.6);">&middot;</span> ') + '</div>';
   el.innerHTML = h;
 }
 
@@ -14325,9 +14345,9 @@ function finalizeShowFreeAnalysis(flagged, numPages) {
   var out = document.getElementById('layoutai-free');
   if (!out) return;
   var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; }
-  finalizeUpdateHeader(numPages);
+  finalizeUpdateHeader();
   out.style.maxHeight = '540px';   // scan fills the panel until Optimize runs
-  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Initial layout scan &middot; ' + numPages + ' pages</div>';
+  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.75);margin-bottom:8px;">Initial layout scan</div>';
   if (!flagged.length) {
     h += '<div style="color:rgba(245,232,200,0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
@@ -14352,23 +14372,10 @@ function runLayoutAiDryRun() {
   if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
-  var pct = 0;
-  if (wrap) { wrap.style.display = 'block'; var _pbar = wrap.querySelector('.progress-bar'); if (_pbar) _pbar.style.display = 'none'; }   // composer is deterministic -- hide the creeping bar (kept in DOM)
-  if (fill) fill.style.width = '0%';
-  if (pmsg) pmsg.textContent = 'Composing the book page by page...';
-  var timer = setInterval(function () {
-    // Slow, steady, and ALWAYS creeping so it never looks frozen: a constant slow crawl
-    // up to 90%, then a tiny minimum step keeps it inching toward ~99% on long jobs.
-    // finish() snaps to 100% whenever the job actually lands (a jump beats sitting still).
-    var step = pct < 90 ? 0.09 : Math.max(0.02, (99.4 - pct) * 0.01);
-    pct = Math.min(99.4, pct + step);
-    if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 650);
+  // Composer is deterministic and fast -- a lightweight status line, no progress bar.
+  if (status) status.textContent = 'Composing the book page by page...';
   function finish() {
-    clearInterval(timer);
-    if (fill) fill.style.width = '100%';
-    if (pmsg) pmsg.textContent = '';
-    setTimeout(function () { if (wrap) wrap.style.display = 'none'; }, 500);
+    if (status) status.textContent = '';
     if (btn) { btn.disabled = false; btn.textContent = 'Optimize layout'; }
   }
   // Load the deterministic page-packer / composer into the After pane. Synchronous render,
@@ -14613,6 +14620,8 @@ function renderPdfInto(url, containerId, isBefore) {
       clearInterval(creepTimer);
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
+      var _cntEl = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
+      if (_cntEl) _cntEl.textContent = total + (total === 1 ? ' page' : ' pages');
       // Preview renders interior-only (noCover): page 1 IS the title page and the last page IS the
       // last content page -- there is no cover/back cover to skip, so show every page.
       var first = 1, last = total;
