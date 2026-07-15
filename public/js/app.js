@@ -14410,12 +14410,16 @@ function finalizeDebugMarkCanvas(canvas, fill) {
   try {
     var ctx = canvas.getContext('2d', { willReadFrequently: true });
     var y = Math.round(fill * canvas.height);
+    var d = canvas.__scanDbg || {};
     ctx.save();
     ctx.strokeStyle = 'rgba(230,0,140,0.9)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(canvas.width, y + 0.5); ctx.stroke();
     ctx.fillStyle = 'rgba(230,0,140,0.95)';
-    ctx.font = 'bold ' + Math.max(12, Math.round(canvas.width * 0.03)) + 'px sans-serif';
-    ctx.fillText(Math.round(fill * 100) + '% fill (scan bottom)', 6, Math.max(16, y - 5));
+    ctx.font = 'bold ' + Math.max(11, Math.round(canvas.width * 0.026)) + 'px sans-serif';
+    var lbl = Math.round(fill * 100) + '%';
+    if (d.bg) lbl += '  bg(' + d.bg.join(',') + ')';
+    if (d.px) lbl += '  ink@x' + d.px[0] + '(' + d.px[1] + ',' + d.px[2] + ',' + d.px[3] + ')';
+    ctx.fillText(lbl, 6, Math.max(16, y - 5));
     ctx.restore();
   } catch (e) {}
 }
@@ -14424,19 +14428,28 @@ function measureCanvasFill(canvas) {
     var W = canvas.width, H = canvas.height;
     if (!W || !H) return null;
     var data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
-    var lastContent = 0;
-    // Ignore the bottom page-margin band: the faint "CAMPAIGNIA.COM" page watermark lives there
-    // (position:fixed near the page bottom) and its gold-on-white sits right at the 238 cutoff, which
-    // would otherwise pin every page to ~90% full and mask genuinely under-filled pages above it.
+    // Sample the ACTUAL paper background from the top-left corner (always blank margin) and count a
+    // pixel as ink only if it differs from that background by more than TOL. The old code used an
+    // absolute 'channel < 238' cutoff, so any near-white artifact (faint watermark, anti-alias ghost)
+    // registered as content and pinned every page's fill high. Comparing to the real background fixes it.
+    var bgR = 255, bgG = 255, bgB = 255, sr = 0, sg = 0, sb = 0, sn = 0;
+    var cx0 = Math.floor(W * 0.02), cx1 = Math.max(cx0 + 1, Math.floor(W * 0.07));
+    var cy0 = Math.floor(H * 0.01), cy1 = Math.max(cy0 + 1, Math.floor(H * 0.03));
+    for (var yy = cy0; yy < cy1; yy++) { for (var xx = cx0; xx < cx1; xx++) { var k = (yy * W + xx) * 4; if (data[k + 3] < 10) continue; sr += data[k]; sg += data[k + 1]; sb += data[k + 2]; sn++; } }
+    if (sn > 0) { bgR = Math.round(sr / sn); bgG = Math.round(sg / sn); bgB = Math.round(sb / sn); }
+    var TOL = 34;
+    var lastContent = 0, pxDbg = null;
     var yMax = Math.floor(H * 0.94);
     for (var y = 0; y < yMax; y += 3) {
       var rowHas = false;
       for (var x = 0; x < W; x += 7) {
         var i = (y * W + x) * 4;
-        if (data[i + 3] > 10 && (data[i] < 238 || data[i + 1] < 238 || data[i + 2] < 238)) { rowHas = true; break; }
+        if (data[i + 3] < 10) continue;
+        if (Math.abs(data[i] - bgR) > TOL || Math.abs(data[i + 1] - bgG) > TOL || Math.abs(data[i + 2] - bgB) > TOL) { rowHas = true; if (y >= lastContent) pxDbg = [x, data[i], data[i + 1], data[i + 2]]; break; }
       }
       if (rowHas) lastContent = y;
     }
+    canvas.__scanDbg = { bg: [bgR, bgG, bgB], px: pxDbg };
     return lastContent / H;
   } catch (e) { return null; }
 }
