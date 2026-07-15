@@ -259,7 +259,10 @@
             <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Finalize &mdash; Layout <span style="font-size:10px;background:rgba(201,168,76,0.18);border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
             <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
             <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
-            <button id="layoutai-run-btn" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:11px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;">Optimize layout</button>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <button id="layoutai-run-btn" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;">Optimize layout</button>
+              <div id="layoutai-delta" style="font-size:13px;color:#d8c9a8;line-height:1.5;flex:1 1 auto;min-width:0;"></div>
+            </div>
             <div id="layoutai-status" style="color:rgba(245,232,200,0.55);font-size:12px;margin-top:8px;"></div>
             <div id="layoutai-free" style="margin-top:12px;max-height:540px;overflow-y:auto;padding-right:6px;"></div>
             <div id="layoutai-results" style="margin-top:10px;max-height:400px;overflow-y:auto;padding-right:6px;"></div>
@@ -2053,6 +2056,8 @@
 </div>
 
 <style>
+  #layoutai-run-btn { text-align:center; line-height:1.15; }
+  #layoutai-run-btn::after { content:'1 Token'; display:block; font-size:9px; font-weight:400; opacity:0.72; letter-spacing:0.06em; margin-top:1px; text-transform:none; }
   .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--gold);font-family:var(--font-display);letter-spacing:0.02em; }
   .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:6px 8px;font-size:12px;font-family:var(--font-display);width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }

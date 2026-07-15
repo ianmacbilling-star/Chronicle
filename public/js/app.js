@@ -14335,8 +14335,8 @@ function finalizeUpdateHeader() {
   parts.push('Paper: ' + optLabel('cl-paper', o.paper));
   parts.push('Body font: ' + optLabel('cl-font', o.font));
   parts.push('Narrative: ' + optLabel('cl-narr', o.narr));
-  var h = '<div style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</div>';
-  if (desc) h += '<div style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;margin:1px 0 6px;">&ldquo;' + escapeHtml(desc) + '&rdquo;</div>';
+  var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
+    (desc ? ' <span style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
   h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(201,168,76,0.6);">&middot;</span> ') + '</div>';
   el.innerHTML = h;
 }
@@ -14372,6 +14372,7 @@ function runLayoutAiDryRun() {
   if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; }
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
+  var _d0 = document.getElementById('layoutai-delta'); if (_d0) _d0.innerHTML = '';
   // Composer is deterministic and fast -- a lightweight status line, no progress bar.
   if (status) status.textContent = 'Composing the book page by page...';
   function finish() {
@@ -14398,12 +14399,11 @@ function runLayoutAiDryRun() {
         clearInterval(_composeWatch);
         finish();
         var bp = document.querySelectorAll('#finalize-before-scroll canvas').length;
-        if (out) {
+        var _dEl = document.getElementById('layoutai-delta');
+        if (_dEl) {
           var delta = bp - cnt;
-          out.innerHTML = '<div style="padding:8px 2px;font-size:13px;color:#d8c9a8;line-height:1.6;">' +
-            'Before: <strong>' + bp + '</strong> pages &nbsp;&rarr;&nbsp; After: <strong>' + cnt + '</strong> pages' +
-            (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : '')) +
-            ' &nbsp;&middot;&nbsp; <strong style="color:#8fd18f;">Free</strong> &mdash; deterministic packing, no tokens</div>';
+          _dEl.innerHTML = 'Before: <strong>' + bp + '</strong> pages &nbsp;&rarr;&nbsp; After: <strong>' + cnt + '</strong> pages' +
+            (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
         }
       }
     }
