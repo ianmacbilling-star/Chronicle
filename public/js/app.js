@@ -14633,7 +14633,7 @@ function renderPdfInto(url, containerId, isBefore) {
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
-              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); finalizeDebugMarkCanvas(canvas, fill); if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
+              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); -- draws the scan's detected content-bottom line + culprit pixel on each Before page. Un-comment to debug the under-fill scan. */ if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
             });
           });
         });

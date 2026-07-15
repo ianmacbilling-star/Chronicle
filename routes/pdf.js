@@ -1906,7 +1906,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   var fHideLogo = co ? !!co.hideLogo : false;
   var fCover  = (renderOpts && renderOpts.noCover) ? false : (co ? !!co.cover     : true);
   var fHeader = co ? !!co.header    : true;
-  var fWmark  = true; // watermark always on
+  var fWmark  = false; // OFF for now; set to (user is on free trial) later. Under-fill scan samples the paper background, so the watermark never affects optimization even when on.
   var paperCSS = co ? coPaperCSS(co.paper, co.condition) : '';
   var fontImp = co ? coFontImport(co.font) : '';
   var fontFam = co ? coFontFamily(co.font) : '';
@@ -2248,7 +2248,7 @@ ${fCover ? `<!-- COVER PAGE -->
     <div class="cover-session">${session.name}</div>
     <div class="cover-date">${formatDate(session.session_date)}</div>
   </div>`}
-  <div class="cover-watermark">CAMPAIGNIA.COM</div>
+  ${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}
 </div>` : ''}
 
 <!-- CONTENT PAGE -->
@@ -2268,7 +2268,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div>${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}</div>` : ''}
 
 </body>
 </html>`;
@@ -2312,7 +2312,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fHeader = co ? !!co.header    : true;
   var fMarkers= co ? !!co.markers   : true;
   var fMarkerBreak = fMarkers && !!(co && co.markerbreak);   // start each session on a fresh page
-  var fWmark  = true; // watermark always on
+  var fWmark  = false; // OFF for now; set to (user is on free trial) later. Under-fill scan samples the paper background, so the watermark never affects optimization even when on.
   var paperCSS = coPaperCSS(co ? co.paper : 'parchment', co ? co.condition : 'none');
   var fontImp = coFontImport(co ? co.font : '');
   var fontFam = coFontFamily(co ? co.font : '');
@@ -2663,7 +2663,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
     <div class="cover-dates">${dateRange}</div>
   </div>`}
-  <div class="cover-watermark">CAMPAIGNIA.COM</div>
+  ${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}
 </div>` : ''}
 ${(!paginated || pageOpts.page === 1) ? titlePageHTML : ''}
 ${(!paginated || pageOpts.page === 1) ? detailsPageHTML : ''}
@@ -2681,7 +2681,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && !paginated && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div>${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}</div>` : ''}
 
 </body>
 </html>`;
