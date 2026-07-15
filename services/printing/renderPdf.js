@@ -15,6 +15,13 @@
 
 async function renderHtmlToPdf(html, options) {
   options = options || {};
+  // Ensure relative asset URLs (Campaignia logo, paper textures) resolve: Puppeteer's
+  // setContent has no document base. Guarded so callers that already injected <base>
+  // (the print routes) are not doubled. Preview routes rely on this.
+  if (html && html.indexOf('<base ') === -1) {
+    var _baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    if (_baseUrl) html = html.replace('<head>', '<head><base href="' + _baseUrl + '/">');
+  }
   const puppeteer = require('puppeteer');
 
   const launchOpts = {
