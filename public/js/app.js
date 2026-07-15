@@ -14613,8 +14613,9 @@ function renderPdfInto(url, containerId, isBefore) {
       clearInterval(creepTimer);
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
-      var first = 2, last = total - 1;   // skip cover (pg 1) and back cover (last pg) -- those are for publishing
-      if (last < first) { first = 1; last = total; }   // tiny book: show everything
+      // Preview renders interior-only (noCover): page 1 IS the title page and the last page IS the
+      // last content page -- there is no cover/back cover to skip, so show every page.
+      var first = 1, last = total;
       var width = finalizeRenderWidth(container);   // locked, shared -> before/after identical size
       var span = (last - first + 1);
       var chain = Promise.resolve();
