@@ -248,13 +248,14 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
 router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const owner = req.query.as_user ? Number(req.query.as_user) : req.session.userId;
-  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(owner, req.params.campaignId)) || {};
+  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title, title_color FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(owner, req.params.campaignId)) || {};
   const camp = await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, name FROM campaigns WHERE id = ?').get(req.params.campaignId);
   res.json({
     cover_image_url: cur.cover_image_url || (camp ? camp.cover_image_url : '') || '',
     back_cover_image_url: cur.back_cover_image_url || (camp ? camp.back_cover_image_url : '') || '',
     title_image_url: cur.title_image_url || (camp ? camp.title_image_url : '') || '',
     book_title: cur.book_title || '',
+    title_color: cur.title_color || '',
     own_cover: cur.cover_image_url || '', own_back: cur.back_cover_image_url || '', own_title: cur.title_image_url || ''
   });
 });
@@ -262,22 +263,24 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
 router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const uid = req.session.userId, cid = req.params.campaignId, b = req.body || {};
-  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(uid, cid)) || {};
+  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title, title_color FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(uid, cid)) || {};
   const cover  = (b.cover_image_url !== undefined) ? (b.cover_image_url || null) : (cur.cover_image_url || null);
   const back   = (b.back_cover_image_url !== undefined) ? (b.back_cover_image_url || null) : (cur.back_cover_image_url || null);
   const title  = (b.title_image_url !== undefined) ? (b.title_image_url || null) : (cur.title_image_url || null);
   const btitle = (b.book_title !== undefined) ? (b.book_title || null) : (cur.book_title || null);
+  const tcolor = (b.title_color !== undefined) ? (b.title_color || null) : (cur.title_color || null);
   await db.prepare(
-    'INSERT INTO novel_book_meta (user_id, campaign_id, cover_image_url, back_cover_image_url, title_image_url, book_title, edited_at) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
-    'ON CONFLICT (user_id, campaign_id) DO UPDATE SET cover_image_url = EXCLUDED.cover_image_url, back_cover_image_url = EXCLUDED.back_cover_image_url, title_image_url = EXCLUDED.title_image_url, book_title = EXCLUDED.book_title, edited_at = CURRENT_TIMESTAMP'
-  ).run(uid, cid, cover, back, title, btitle);
+    'INSERT INTO novel_book_meta (user_id, campaign_id, cover_image_url, back_cover_image_url, title_image_url, book_title, title_color, edited_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
+    'ON CONFLICT (user_id, campaign_id) DO UPDATE SET cover_image_url = EXCLUDED.cover_image_url, back_cover_image_url = EXCLUDED.back_cover_image_url, title_image_url = EXCLUDED.title_image_url, book_title = EXCLUDED.book_title, title_color = EXCLUDED.title_color, edited_at = CURRENT_TIMESTAMP'
+  ).run(uid, cid, cover, back, title, btitle, tcolor);
   const camp = await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, name FROM campaigns WHERE id = ?').get(cid);
   res.json({
     cover_image_url: cover || (camp ? camp.cover_image_url : '') || '',
     back_cover_image_url: back || (camp ? camp.back_cover_image_url : '') || '',
     title_image_url: title || (camp ? camp.title_image_url : '') || '',
     book_title: btitle || '',
+    title_color: tcolor || '',
     own_cover: cover || '', own_back: back || '', own_title: title || ''
   });
 });

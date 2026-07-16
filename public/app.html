@@ -192,7 +192,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
-            <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower).">Quick View</button>
+            <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower)." style="display:none">Quick View</button>
             <button class="btn btn-sm" onclick="refreshNovelPreview()" title="Refresh the preview">&#8635; Refresh</button>
             <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
               <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
@@ -206,7 +206,7 @@
             <select id="novel-pager-select" onchange="novelPageJump(this.value)" style="background:rgba(20,12,4,0.8);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);"></select>
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()">Next</button>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()">Open in New Tab</button>
+          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Open in New Tab</button>
         </div>
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
@@ -243,7 +243,7 @@
               <div class="prep-field-label">Title</div>
               <input type="text" id="prep-title" maxlength="200" placeholder="e.g. The Shattered Crown" class="prep-input" />
               <div class="prep-color-row">
-                <input id="print-title-color" type="color" value="#f0d98a" class="prep-color-input" />
+                <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
                 <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
               </div>
               <div class="prep-field-label">Cover, Back &amp; Title images</div>

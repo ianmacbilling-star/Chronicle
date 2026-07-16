@@ -6345,6 +6345,16 @@ function prepSyncTitle() {
       : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
     tEl.readOnly = true;
   }
+  var _cEl = document.getElementById('print-title-color');
+  if (_cEl) _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
+}
+// Persist the title color per user (campaign + user) via /my-book-meta, mirroring the title text.
+function prepSaveTitleColor() {
+  var el = document.getElementById('print-title-color');
+  if (!el || !state.currentCampaign) return;
+  if (typeof prepUseMember === 'function' && prepUseMember()) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title_color: el.value }) }).catch(function(){});
+  }
 }
 function prepPanelSync() {
   prepLoadBookMeta(function(){

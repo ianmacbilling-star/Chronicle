@@ -373,6 +373,7 @@ async function initPostgres() {
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS asset_id INTEGER',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS description TEXT',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS revert_image_url TEXT',
+    'ALTER TABLE novel_book_meta ADD COLUMN IF NOT EXISTS title_color TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
     // Account-lifecycle idle clock (ACCOUNT_LIFECYCLE_SPEC Phase 0). Backfill
@@ -960,6 +961,7 @@ async function migrateForks(pool) {
       back_cover_image_url TEXT,
       title_image_url TEXT,
       book_title TEXT,
+      title_color TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       edited_at TIMESTAMP,
       UNIQUE (user_id, campaign_id)
