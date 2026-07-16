@@ -3826,8 +3826,9 @@ function composeBook(plan, beats, opts) {
         if (b.showDivider) inner += sessionMarkerHTML(b.num, b.title, b.date);
       } else if (pl.kind === 'tower' && m && m.image) {
         var asp = momentAspect(m) || 1;
-        var tw = Math.min(6.8 - 2.6, 9.2 * asp);
-        if ((tw / asp) > 9.3) tw = 9.3 * asp;
+        var _twCap = (m.title && (opts.caption === 'bar' || opts.caption === 'engraved')) ? 8.8 : 9.3;   // titled tower: shrink ~0.5in so the below title bar isn't clipped
+        var tw = Math.min(6.8 - 2.6, Math.min(9.2, _twCap) * asp);
+        if ((tw / asp) > _twCap) tw = _twCap * asp;
         var _tpi = panelN; panelN += 1;
         inner += '<div style="display:flow-root;margin-bottom:0.1in;break-inside:avoid;page-break-inside:avoid;">' +
           '<div style="float:left;margin:0 0.24in 0.12in 0;width:' + tw.toFixed(2) + 'in;">' +
