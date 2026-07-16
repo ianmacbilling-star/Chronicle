@@ -6334,7 +6334,7 @@ function prepSyncTitle() {
     tEl.readOnly = false;
     if (state._prepOwnTitle != null) { tEl.value = state._prepOwnTitle; state._prepOwnTitle = null; }
     if (!tEl.value) {
-      tEl.value = (state.novelAsUser && state.bookMeta && state.bookMeta.book_title)
+      tEl.value = (state.bookMeta && state.bookMeta.book_title)
         ? state.bookMeta.book_title
         : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
     }
@@ -6353,6 +6353,7 @@ function prepSaveTitleColor() {
   var el = document.getElementById('print-title-color');
   if (!el || !state.currentCampaign) return;
   if (typeof prepUseMember === 'function' && prepUseMember()) {
+    // Per-fork (SM canonical or member), written to the logged-in user's own row.
     fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title_color: el.value }) }).catch(function(){});
   }
 }
@@ -6368,20 +6369,22 @@ function prepPanelSync() {
 // Per-member book images (Phase 2b): a member on their own fork edits their own
 // cover/back/title via /my-book-meta; the SM edits the campaign images as before.
 function prepUseMember() {
-  var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
-  return !isSM && (typeof novelOwnView === 'function' ? novelOwnView() : false);
+  // Every fork -- SM canonical included -- stores its own book meta. True whenever the
+  // viewer is on their own fork (SM on canonical, or a member on their own).
+  return (typeof novelOwnView === 'function') ? novelOwnView() : false;
 }
 function _prepCampaignMeta() {
   var c = state.currentCampaign || {};
-  return { cover_image_url: c.cover_image_url || '', back_cover_image_url: c.back_cover_image_url || '', title_image_url: c.title_image_url || '', book_title: '' };
+  return { cover_image_url: c.campaign_image_url || '', back_cover_image_url: '', title_image_url: '', book_title: '', title_color: '' };
 }
 // Load book-meta for the CURRENTLY VIEWED fork. Canonical (null) reads the live
 // campaign in renderPrepThumbs; a fork view fetches that fork's effective meta so
 // the SM and other members see the member's own cover/back/title selections.
 function prepLoadBookMeta(cb) {
   var c = state.currentCampaign;
-  if (!c || !state.novelAsUser) { state.bookMeta = {}; if (cb) cb(); return; }
-  fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(state.novelAsUser))
+  var forkUser = state.novelAsUser || (state.user && state.user.id);
+  if (!c || !forkUser) { state.bookMeta = _prepCampaignMeta(); if (cb) cb(); return; }
+  fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser))
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(m){ state.bookMeta = m || _prepCampaignMeta(); if (cb) cb(); })
     .catch(function(){ state.bookMeta = _prepCampaignMeta(); if (cb) cb(); });
@@ -6400,7 +6403,7 @@ function renderPrepThumbs() {
   ['cover','back','title'].forEach(function(kind){
     var el = document.getElementById('prep-thumb-' + kind); if (!el) return;
     var _f = PREP_IMG_KINDS[kind].field;
-    var url = ((state.novelAsUser ? (state.bookMeta || {}) : c)[_f]) || '';
+    var url = ((state.bookMeta || {})[_f]) || '';
     if (url) { el.style.backgroundImage = 'url("' + encodeURI(url) + '")'; el.classList.add('has-img'); el.innerHTML = ''; }
     else { el.style.backgroundImage = ''; el.classList.remove('has-img'); el.innerHTML = '<span class="prep-thumb-plus">+</span>'; }
   });
@@ -6420,7 +6423,7 @@ function openPrepImagePicker(kind) {
   _prepEnsureArchives(function(){
     closePrepImagePicker();
     var c = state.currentCampaign;
-    var curUrl = ((state.novelAsUser ? (state.bookMeta || {}) : c)[cfg.field]) || '';
+    var curUrl = ((state.bookMeta || {})[cfg.field]) || '';
     var rows = (state.archives || []).filter(function(a){ return a && a.image_url; });
     var overlay = document.createElement('div');
     overlay.id = 'prep-img-modal'; overlay.className = 'prep-img-modal';
