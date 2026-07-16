@@ -12140,9 +12140,15 @@ function prepLayoutLoad(){
   var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);
   var _hl=document.getElementById('pcl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; }
   var _hll=document.getElementById('pcl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; }
+  // Commit panel selections to customOpts.novel the moment any control changes, so a plain
+  // Refresh (not just Apply) reflects the chosen arrangement. Programmatic .value sets above
+  // don't fire 'change', so this never clobbers on load.
+  var _lp = document.getElementById('prep-acc-layout');
+  if (_lp && !_lp._commitWired) { _lp._commitWired = true; _lp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
 }
-function prepLayoutApply(){
-  if(typeof blockLayoutChangeIfOrdering==='function' && blockLayoutChangeIfOrdering()) return;
+// Read the layout panel (pcl-*) into customOpts.novel + mark it active, WITHOUT rendering.
+function prepLayoutCommit(){
+  if(typeof blockLayoutChangeIfOrdering==='function' && blockLayoutChangeIfOrdering()) return false;
   var o={};
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
@@ -12151,7 +12157,10 @@ function prepLayoutApply(){
   if(typeof mpSave==='function') mpSave('novel', { layout_opts: o });
   saveCustomLayoutPrefs();
   if(typeof refreshLayoutStyleButtons==='function') refreshLayoutStyleButtons();
-  if(typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle);
+  return true;
+}
+function prepLayoutApply(){
+  if(prepLayoutCommit() && typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle);
 }
 function prepLayoutReset(){
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=CUSTOM_LAYOUT_DEFAULTS[k]; });
