@@ -628,7 +628,7 @@ function coMedia(m, border) {
     case 'gallery':
       // B: full-size image; drop-shadow bleeds outward (was 'padding:0 0.26in 0.26in 0', which carved ~0.26in of width -> ~1in short on towers)
       return m.image
-        ? '<div style="line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
+        ? '<div style="line-height:0;padding-bottom:0.14in;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
         : img;
     case 'keyline':
       return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px') + '</div>';
