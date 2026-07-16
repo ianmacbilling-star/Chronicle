@@ -6354,7 +6354,8 @@ function prepSaveTitleColor() {
   if (!el || !state.currentCampaign) return;
   if (typeof prepUseMember === 'function' && prepUseMember()) {
     // Per-fork (SM canonical or member), written to the logged-in user's own row.
-    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title_color: el.value }) }).catch(function(){});
+    var _tcB = { title_color: el.value }; if (state.novelAsUser) _tcB.fork_user = state.novelAsUser;
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tcB) }).catch(function(){});
   }
 }
 function prepPanelSync() {
@@ -6369,9 +6370,11 @@ function prepPanelSync() {
 // Per-member book images (Phase 2b): a member on their own fork edits their own
 // cover/back/title via /my-book-meta; the SM edits the campaign images as before.
 function prepUseMember() {
-  // Every fork -- SM canonical included -- stores its own book meta. True whenever the
-  // viewer is on their own fork (SM on canonical, or a member on their own).
-  return (typeof novelOwnView === 'function') ? novelOwnView() : false;
+  // True whenever the viewer may edit the currently-shown book: their own fork (SM
+  // canonical or member own), OR the SM curating a member's fork into the SM overlay.
+  if (typeof novelOwnView === 'function' && novelOwnView()) return true;
+  var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
+  return isSM && !!state.novelAsUser;
 }
 function _prepCampaignMeta() {
   var c = state.currentCampaign || {};
@@ -6392,7 +6395,7 @@ function prepLoadBookMeta(cb) {
 function _prepMemberSetImage(kind, url) {
   var c = state.currentCampaign; if (!c) return;
   var field = PREP_IMG_KINDS[kind].field;
-  var body = {}; body[field] = url;
+  var body = {}; body[field] = url; if (state.novelAsUser) body.fork_user = state.novelAsUser;
   fetch('/api/campaigns/' + c.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Reverted to the campaign image.'); })
@@ -6419,7 +6422,7 @@ function _prepEnsureArchives(cb) {
 }
 function openPrepImagePicker(kind) {
   var cfg = PREP_IMG_KINDS[kind]; if (!cfg || !state.currentCampaign) return;
-  if (typeof novelOwnView === 'function' && !novelOwnView()) { showAlert('Switch to your own version to change the cover, back, or title image.'); return; }
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) { showAlert('Switch to your own version to change the cover, back, or title image.'); return; }
   _prepEnsureArchives(function(){
     closePrepImagePicker();
     var c = state.currentCampaign;
@@ -6498,7 +6501,7 @@ async function publishStory() {
   var bEl = document.getElementById('prep-blurb');
   var aEl = document.getElementById('prep-attest');
   var _title = tEl ? tEl.value.trim() : '';
-  if (prepUseMember() && _title) { fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ book_title: _title }) }).catch(function(){}); }
+  if (prepUseMember() && _title) { var _btB = { book_title: _title }; if (state.novelAsUser) _btB.fork_user = state.novelAsUser; fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_btB) }).catch(function(){}); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
   var btn = document.getElementById('novel-publish-btn');
@@ -12244,7 +12247,9 @@ function mpLoadAndApply(ctx, done){
 }
 function mpSave(ctx, patch){
   var m = mpMemberFor(ctx);
-  if (!state.currentCampaign || !m.userId || !m.isMe) return;   // own fork only -- never another member's
+  // Own fork, OR the SM curating a member's fork (server routes it to the SM overlay).
+  var _ok = m.isMe || (typeof prepUseMember === 'function' && prepUseMember());
+  if (!state.currentCampaign || !m.userId || !_ok) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/members/' + m.userId + '/prefs', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch)
   }).catch(function(){});

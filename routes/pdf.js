@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getAppSettingInt } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, getAppSettingInt } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -2913,9 +2913,10 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   // Load moments and narrative for each session
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  var _bmUser = asUser || (req.session && req.session.userId) || null;
-  if (_bmUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
+  var _bmFork = asUser || (req.session && req.session.userId) || null;
+  var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  if (_bmFork) {
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).
@@ -3011,9 +3012,10 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  var _bmUser = asUser || (req.session && req.session.userId) || null;
-  if (_bmUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
+  var _bmFork = asUser || (req.session && req.session.userId) || null;
+  var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  if (_bmFork) {
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).
@@ -3217,9 +3219,10 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
 
     // Per-member wrap cover: use the viewed fork's own cover/back/title images.
     const asUser = req.query.as_user ? Number(req.query.as_user) : null;
-    var _bmUser = asUser || (req.session && req.session.userId) || null;
-    if (_bmUser) {
-      const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
+    var _bmFork = asUser || (req.session && req.session.userId) || null;
+    var _bmChooser = (req.session && req.session.userId) || _bmFork;
+    if (_bmFork) {
+      const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
       {
         var _fbm = _bm || {};
         campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
@@ -3344,9 +3347,10 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  var _bmUser = asUser || (req.session && req.session.userId) || null;
-  if (_bmUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
+  var _bmFork = asUser || (req.session && req.session.userId) || null;
+  var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  if (_bmFork) {
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).
@@ -3606,9 +3610,10 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
 
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  var _bmUser = asUser || (req.session && req.session.userId) || null;
-  if (_bmUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
+  var _bmFork = asUser || (req.session && req.session.userId) || null;
+  var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  if (_bmFork) {
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).

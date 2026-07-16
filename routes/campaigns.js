@@ -202,7 +202,7 @@ router.get('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
       'SELECT user_id FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
     ).get(req.params.campaignId, targetId);
     if (!row) return res.status(404).json({ error: 'Not a member of this campaign' });
-    var prefs = await getForkBookPrefs(db, targetId, targetId, req.params.campaignId);
+    var prefs = await getForkBookPrefs(db, req.session.userId, targetId, req.params.campaignId, { inherit: true });
     res.json({
       art_style: (typeof prefs.art_style === 'string') ? prefs.art_style : null,
       narrative_style: (typeof prefs.narrative_style === 'string') ? prefs.narrative_style : null,
@@ -217,8 +217,9 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
   try {
     var targetId = parseInt(req.params.userId, 10);
     if (!Number.isFinite(targetId)) return res.status(400).json({ error: 'Bad user id' });
-    // WRITE: own fork only -- you may save ONLY your own prefs, even as DM.
-    if (targetId !== req.session.userId) {
+    // WRITE: your own fork always; the DM may also curate any member's fork, saved into
+    // the DM's OWN overlay slot (chooser = self, fork = target) -- never the member's.
+    if (targetId !== req.session.userId && req.campaignRole !== 'dm') {
       return res.status(403).json({ error: 'You can only save preferences on your own fork' });
     }
     var db = await getDb();
@@ -234,7 +235,7 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
     if (typeof body.narrative_style === 'string' || body.narrative_style === null) patch.narrative_style = body.narrative_style;
     if (body.layout_opts && typeof body.layout_opts === 'object') patch.layout_opts = body.layout_opts;
     if (JSON.stringify(patch).length > 20000) return res.status(413).json({ error: 'Preferences too large' });
-    var merged = await setForkBookPrefs(db, targetId, targetId, req.params.campaignId, patch);
+    var merged = await setForkBookPrefs(db, req.session.userId, targetId, req.params.campaignId, patch);
     res.json({ success: true, prefs: {
       art_style: (typeof merged.art_style === 'string') ? merged.art_style : null,
       narrative_style: (typeof merged.narrative_style === 'string') ? merged.narrative_style : null,
@@ -251,8 +252,8 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
 // campaign values so every book has a cover. Keyed to the requester.
 router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const owner = req.query.as_user ? Number(req.query.as_user) : req.session.userId;
-  const cur = await getForkBookPrefs(db, owner, owner, req.params.campaignId);
+  const fork = req.query.as_user ? Number(req.query.as_user) : req.session.userId;
+  const cur = await getForkBookPrefs(db, req.session.userId, fork, req.params.campaignId, { inherit: true });
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(req.params.campaignId);
   res.json({
     cover_image_url: cur.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
@@ -267,13 +268,15 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
 router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const uid = req.session.userId, cid = req.params.campaignId, b = req.body || {};
+  const fork = (b.fork_user != null) ? Number(b.fork_user) : (req.query.as_user ? Number(req.query.as_user) : uid);
+  if (fork !== uid && req.campaignRole !== 'dm') return res.status(403).json({ error: 'You can only edit your own fork' });
   const patch = {};
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
   if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
   if (b.title_color !== undefined) patch.title_color = b.title_color || null;
-  const merged = await setForkBookPrefs(db, uid, uid, cid, patch);
+  const merged = await setForkBookPrefs(db, uid, fork, cid, patch);
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
     cover_image_url: merged.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
