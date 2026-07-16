@@ -2452,7 +2452,6 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       else { _idxMap[_k] = _storyMoments.length; _storyMoments.push(moments[_k]); }
     }
     var _storySections = (narrative.sections || []).filter(function(_s){ return Object.prototype.hasOwnProperty.call(_idxMap, _s.panel_index); }).map(function(_s){ var _c = Object.assign({}, _s); _c.panel_index = _idxMap[_s.panel_index]; return _c; });
-    var panelsHTML = buildLayout(layoutStyle, _storyMoments, _storySections, narrative.intro, narrative.outro, co);
     // Session title image: the wide establishing shot that opens each session,
     // placed below the session marker and above the narrative. Additive - does
     // NOT touch buildLayout / renderPaired. Flows through preview, print, publish,
@@ -2466,6 +2465,16 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     // Session dividers now also show in Quick View (removed the `paginated` suppression) so
     // decorations are visible in the fast preview -- gated only on the markers option.
     var chapterHeading = !fMarkers ? '' : sessionMarkerHTML(si + 1, s.name, s.session_date);
+
+    // Magazine/Gazette Optimize measure: the session marker + title image live OUTSIDE
+    // buildLayout, so capture them as this session's LEADING bands (pushed before the panel
+    // bands) or the deterministic composer drops them. Order: session-header, title-image,
+    // then intro/panels/outro from buildLayout below.
+    if (co && co.measureMagazine && _mzBands) {
+      if (chapterHeading) { var _mzhI = _mzBands.length; _mzBands.push({ kind: 'session-header', html: chapterHeading }); chapterHeading = '<div data-mblk="mzb:' + _mzhI + '" data-mkind="session-header" style="display:flow-root;">' + chapterHeading + '</div>'; }
+      if (titleImageHTML) { var _mztI = _mzBands.length; _mzBands.push({ kind: 'title-image', html: titleImageHTML }); titleImageHTML = '<div data-mblk="mzb:' + _mztI + '" data-mkind="title-image" style="display:flow-root;">' + titleImageHTML + '</div>'; }
+    }
+    var panelsHTML = buildLayout(layoutStyle, _storyMoments, _storySections, narrative.intro, narrative.outro, co);
 
     var _sessBreak = (fMarkerBreak && si > 0 && !paginated) ? 'page-break-before:always;' : '';
     return '<div class="content-page" style="' + _sessBreak + 'position:relative;">' +
@@ -3940,11 +3949,13 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   });
   var _hdrOn = (_co.header == null) ? true : !!_co.header;
   var pageH = ((packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : 9.4) - (_hdrOn ? HEADER_BAND_IN : 0);
+  var _markerBreak = !!_co.markerbreak;   // each session starts a fresh page when set
   var pages = [], cur = [], used = 0;
   for (var i = 0; i < bands.length; i++) {
     var h = bandH[i] || 0;
     if (h <= 0.001) continue;   // empty intro/outro band -- skip
-    if (cur.length && (used + h) > pageH) { pages.push(cur); cur = []; used = 0; }
+    var _forceBreak = (_markerBreak && bands[i].kind === 'session-header' && cur.length);
+    if (_forceBreak || (cur.length && (used + h) > pageH)) { pages.push(cur); cur = []; used = 0; }
     cur.push({ band: i, heightIn: h }); used += h;
   }
   if (cur.length) pages.push(cur);
