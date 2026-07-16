@@ -2916,11 +2916,14 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   var _bmUser = asUser || (req.session && req.session.userId) || null;
   if (_bmUser) {
     const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
-    if (_bm) {
-      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
-      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
-      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
-      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    {
+      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
+      // record cover_image_url is vestigial after the per-fork move -- never use it).
+      var _fbm = _bm || {};
+      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
+      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
+      campaign.title_image_url = _fbm.title_image_url || '';
+      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
@@ -3011,11 +3014,14 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   var _bmUser = asUser || (req.session && req.session.userId) || null;
   if (_bmUser) {
     const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
-    if (_bm) {
-      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
-      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
-      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
-      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    {
+      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
+      // record cover_image_url is vestigial after the per-fork move -- never use it).
+      var _fbm = _bm || {};
+      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
+      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
+      campaign.title_image_url = _fbm.title_image_url || '';
+      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
@@ -3214,11 +3220,12 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     var _bmUser = asUser || (req.session && req.session.userId) || null;
     if (_bmUser) {
       const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
-      if (_bm) {
-        if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
-        if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
-        if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
-        if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+      {
+        var _fbm = _bm || {};
+        campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
+        campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
+        campaign.title_image_url = _fbm.title_image_url || '';
+        if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
       }
     }
 
@@ -3340,11 +3347,14 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var _bmUser = asUser || (req.session && req.session.userId) || null;
   if (_bmUser) {
     const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
-    if (_bm) {
-      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
-      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
-      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
-      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    {
+      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
+      // record cover_image_url is vestigial after the per-fork move -- never use it).
+      var _fbm = _bm || {};
+      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
+      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
+      campaign.title_image_url = _fbm.title_image_url || '';
+      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
@@ -3599,11 +3609,14 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   var _bmUser = asUser || (req.session && req.session.userId) || null;
   if (_bmUser) {
     const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
-    if (_bm) {
-      if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
-      if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
-      if (_bm.title_image_url) campaign.title_image_url = _bm.title_image_url;
-      if (_bm.book_title) campaign._memberBookTitle = _bm.book_title;
+    {
+      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
+      // record cover_image_url is vestigial after the per-fork move -- never use it).
+      var _fbm = _bm || {};
+      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
+      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
+      campaign.title_image_url = _fbm.title_image_url || '';
+      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
