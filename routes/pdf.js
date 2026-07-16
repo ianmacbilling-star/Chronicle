@@ -622,12 +622,13 @@ function coMedia(m, border) {
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;"></div>';
   switch (border) {
     case 'frame': return '<div style="padding:2px 0;line-height:0;">' + framedMedia(m) + '</div>';
-    case 'comic': return '<div style="border:5px solid #0a0806;background:#160e06;overflow:hidden;line-height:0;">' + img + '</div>';
+    case 'comic': return '<div style="position:relative;line-height:0;">' + img + '<div style="position:absolute;inset:0;border:5px solid #0a0806;pointer-events:none;"></div></div>';   // B: full-size image + INSET border (was 'border:5px solid' on the wrapper, which carved ~0.1in of width)
     case 'vignette':
       return '<div style="position:relative;line-height:0;">' + img + vignetteOverlayHtml() + '</div>';
     case 'gallery':
+      // B: full-size image; drop-shadow bleeds outward (was 'padding:0 0.26in 0.26in 0', which carved ~0.26in of width -> ~1in short on towers)
       return m.image
-        ? '<div style="padding:0 0.26in 0.26in 0;line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
+        ? '<div style="line-height:0;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
         : img;
     case 'keyline':
       return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px') + '</div>';

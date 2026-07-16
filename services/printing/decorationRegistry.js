@@ -31,8 +31,8 @@ var REGISTRY = {
   // ---- image frames (keyed frame:<border> from coMedia's border styles) ----
   'frame:none':     { heightIn: 0,    heightLh: 0, widthIn: 0,    widthCol: 0, inside: true },
   'frame:frame':    { heightIn: 0.02, heightLh: 0, widthIn: 0,    widthCol: 0, inside: true  },  // bronze -- INSET, adds ~nothing (2px wrapper)
-  'frame:gallery':  { heightIn: 0.28, heightLh: 0, widthIn: 0.28, widthCol: 0, inside: false },  // drop-shadow: reserves its offset
-  'frame:comic':    { heightIn: 0.12, heightLh: 0, widthIn: 0.12, widthCol: 0, inside: false },  // 5px solid border each side
+  'frame:gallery':  { heightIn: 0.12, heightLh: 0, widthIn: 0,    widthCol: 0, inside: false },  // B: image full-size, shadow bleeds outward; small bottom reserve only (was heightIn 0.28 / widthIn 0.28)
+  'frame:comic':    { heightIn: 0,    heightLh: 0, widthIn: 0,    widthCol: 0, inside: true  },  // B: 5px border drawn INSET over the image, zero-cost (was heightIn 0.12 / widthIn 0.12)
   'frame:vignette': { heightIn: 0,    heightLh: 0, widthIn: 0,    widthCol: 0, inside: true  },  // overlay gradient, no size
   'frame:keyline':  { heightIn: 0.06, heightLh: 0, widthIn: 0,    widthCol: 0, inside: false },  // 1px hairline + soft shadow
 
