@@ -1111,7 +1111,11 @@ function gzNarrBox(narrHtml, opts) {
 // true height (width fixed, height:auto) so the border can never exceed the picture.
 function gzImgBox(m, opts, fl, w, h) {
   if ((opts && opts.enclose) && !lmCropSafe(m) && m.image) {
-    return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;">' +
+    // Full uncropped image (height:auto). min-height reserves the computed height so the box
+    // does NOT collapse when image loads are aborted during the magazine measure pass -- without
+    // this the band measures short and the deterministic composer clips its overflow. When the
+    // image loads (compose/flow render) it renders at its natural height (>= the floor).
+    return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;min-height:' + h.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;">' +
       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   }
   return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;height:' + h.toFixed(2) +
