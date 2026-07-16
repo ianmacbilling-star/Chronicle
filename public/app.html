@@ -194,6 +194,12 @@
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
             <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower).">Quick View</button>
             <button class="btn btn-sm" onclick="refreshNovelPreview()" title="Refresh the preview">&#8635; Refresh</button>
+            <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
+              <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
+              <span id="novel-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">100%</span>
+              <button class="btn btn-sm" onclick="novelZoomStep(0.1)" title="Zoom in">+</button>
+              <button class="btn btn-sm" onclick="novelZoomFit()" title="Fit to width">Fit</button>
+            </div>
           </div>
           <div id="novel-pager" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-pager-prev" onclick="novelPagePrev()">Prev</button>

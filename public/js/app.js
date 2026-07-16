@@ -6006,10 +6006,49 @@ function onNovelVersionChange(val) {
 // (default); 'wysiwyg' = the exact paged PDF that prints (slower). One mode each
 // for the novel and the session preview.
 var novelPreviewMode = 'quick';
+// ---- Quick View zoom (same-origin HTML preview; True View uses the browser's native PDF zoom) ----
+var novelZoom = 1;
+try { var _nz0 = localStorage.getItem('novelZoom'); if (_nz0) novelZoom = Math.max(0.4, Math.min(3, parseFloat(_nz0) || 1)); } catch (_e) {}
+function applyNovelZoom() {
+  var lbl = document.getElementById('novel-zoom-label');
+  if (lbl) lbl.textContent = Math.round(novelZoom * 100) + '%';
+  if (typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'quick') return;
+  try { var iframe = document.getElementById('novel-preview-iframe'); var doc = iframe && iframe.contentDocument; if (doc && doc.body) doc.body.style.zoom = novelZoom; } catch (_e) {}
+}
+function setNovelZoom(z) {
+  novelZoom = Math.max(0.4, Math.min(3, z));
+  try { localStorage.setItem('novelZoom', String(novelZoom)); } catch (_e) {}
+  applyNovelZoom();
+}
+function novelZoomStep(delta) { setNovelZoom(Math.round((novelZoom + delta) * 100) / 100); }
+function novelZoomFit() {
+  try {
+    var iframe = document.getElementById('novel-preview-iframe');
+    var doc = iframe && iframe.contentDocument;
+    if (doc && doc.body) {
+      doc.body.style.zoom = 1;
+      var natural = Math.max(doc.body.scrollWidth || 0, doc.documentElement.scrollWidth || 0);
+      var avail = (iframe.clientWidth || 0) - 4;
+      if (natural > 0 && avail > 0) { setNovelZoom(avail / natural); return; }
+    }
+  } catch (_e) {}
+  applyNovelZoom();
+}
+function novelZoomWheel(e) {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  if (typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'quick') return;
+  e.preventDefault();
+  novelZoomStep(e.deltaY < 0 ? 0.1 : -0.1);
+}
+function novelZoomSyncCtrl() {
+  var zc = document.getElementById('novel-zoom-ctrl');
+  if (zc) zc.style.display = (typeof novelPreviewMode !== 'undefined' && novelPreviewMode === 'quick') ? 'inline-flex' : 'none';
+}
 function toggleNovelPreviewMode() {
   novelPreviewMode = (novelPreviewMode === 'quick') ? 'wysiwyg' : 'quick';
   var btn = document.getElementById('novel-preview-mode-btn');
   if (btn) btn.textContent = (novelPreviewMode === 'wysiwyg') ? 'True View' : 'Quick View';
+  novelZoomSyncCtrl();
   if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
 }
 var sessionPreviewMode = 'quick';
@@ -6060,6 +6099,8 @@ function loadNovelPreview(layout) {
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
     resizeNovelPreviewIframe();
+    applyNovelZoom();
+    try { var _zd = iframe.contentDocument; if (_zd) _zd.addEventListener('wheel', novelZoomWheel, { passive: false }); } catch (_e) {}
   };
   iframe.src = url;
 }
@@ -9744,6 +9785,8 @@ function loadNovelPreview(layout) {
     if (loading) loading.style.display = 'none';
     iframe.style.display = 'block';
     resizeNovelPreviewIframe();
+    applyNovelZoom();
+    try { var _zd = iframe.contentDocument; if (_zd) _zd.addEventListener('wheel', novelZoomWheel, { passive: false }); } catch (_e) {}
   };
   iframe.src = url;
 }
