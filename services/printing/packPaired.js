@@ -141,7 +141,7 @@ function packPaired(beats, opts) {
       // Tower: image floats with text BESIDE it, so the beat's footprint is the taller of
       // the image or its narration -- not the sum. Place it as one block.
       var textH = (b.textBeforeH || 0) + (b.textAfterH || 0);
-      var blockH = Math.max(b.imageH, textH);
+      var blockH = Math.max(b.imageH + (b.capBelowH || 0), textH);   // reserve a below-image caption so it can't clip past the page
       if (blockH > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
       place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
       return;

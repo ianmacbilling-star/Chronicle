@@ -3737,6 +3737,8 @@ async function computePairedPack(req, campaignId, packOpts) {
   var _lh = DEFAULT_LH;
   for (var _li = 0; _li < blocks.length; _li++) { if (blocks[_li].lines && blocks[_li].lines.length >= 2) { _lh = Math.round((blocks[_li].lines[1] - blocks[_li].lines[0]) * 1000) / 1000; break; } }
   var _imgOver = decoSumHeight(['frame:' + _border, 'image-margin'], _lh);
+  var _caption = _dco.caption || 'bar';
+  var _capBelowH = (_caption === 'bar' || _caption === 'engraved') ? decoHeight('caption:below', _lh) : 0;   // below-image title reserves height; on-image (plate/gradient) captions are inside/free
   // Lockstep alignment (measured blocks are in reading order, as are the beats). If the
   // index runs past the measured blocks (a slight section-set mismatch), fall back to an
   // estimated height from the text length -- NEVER zero, so a beat can't be packed weightless
@@ -3761,7 +3763,7 @@ async function computePairedPack(req, campaignId, packOpts) {
     var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
     if (beat.before) { var _b1 = takeBlock(String(beat.before).length); tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; }
     if (beat.after) { var _b2 = takeBlock(String(beat.after).length); ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; }
-    return { idx: beat.idx, shape: beat.shape, aspect: (beat.aspect || 1), hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, imgOver: beat.hasImage ? _imgOver : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
+    return { idx: beat.idx, shape: beat.shape, aspect: (beat.aspect || 1), hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, imgOver: beat.hasImage ? (_imgOver + ((beat.moment && beat.moment.title) ? _capBelowH : 0)) : 0, capBelowH: (beat.hasImage && ((beat.aspect || 1) <= 0.42) && beat.moment && beat.moment.title) ? _capBelowH : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
   });
   // Reserve a top band for the per-page running header (when on) by lowering the packer's usable
   // page height, leaving the existing bottom safety buffer intact so nothing clips. The header
@@ -3792,6 +3794,7 @@ function composeBook(plan, beats, opts) {
   var bandCss = headerOn ? ('padding-top:' + HEADER_BAND_IN + 'in;') : '';   // reserved header band (matches packer target)
   var campName = (opts && opts.campaignName) || '';
   var curNum = null, curTitle = '';   // running session context for the per-page header
+  var panelN = 0;   // per-session panel counter for the 'bar' caption's "Panel N" label
   pages.forEach(function (pg, pi) {
     // A session-opening page carries a section-header placement; advance the running session
     // context here and suppress the per-page running header on this page.
@@ -3799,7 +3802,7 @@ function composeBook(plan, beats, opts) {
     (pg.placements || []).forEach(function (pl) {
       if (pl.kind === 'section-header') { var hb = byIdx[pl.beat]; if (hb) { openBeat = hb; if (hb.showDivider) hasDivider = true; } }
     });
-    if (openBeat) { curNum = openBeat.num; curTitle = openBeat.title; }
+    if (openBeat) { curNum = openBeat.num; curTitle = openBeat.title; panelN = 0; }
     var inner = '';
     // Suppress the running header only where a visible divider already announces the session.
     if (headerOn && !hasDivider && curNum != null) inner += runningHeaderHTML(campName, curNum, curTitle);
@@ -3813,9 +3816,10 @@ function composeBook(plan, beats, opts) {
         var asp = momentAspect(m) || 1;
         var tw = Math.min(6.8 - 2.6, 9.2 * asp);
         if ((tw / asp) > 9.3) tw = 9.3 * asp;
-        inner += '<div style="display:flow-root;margin-bottom:0.1in;">' +
+        var _tpi = panelN; panelN += 1;
+        inner += '<div style="display:flow-root;margin-bottom:0.1in;break-inside:avoid;page-break-inside:avoid;">' +
           '<div style="float:left;margin:0 0.24in 0.12in 0;width:' + tw.toFixed(2) + 'in;">' +
-            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>' +
+            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _tpi, opts.caption) + '</div>' +
           '<div style="display:flow-root;">' +
             (b.before ? '<div style="margin-bottom:0.1in;">' + coNarr(b.before, opts, false) + '</div>' : '') +
             (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
@@ -3824,8 +3828,9 @@ function composeBook(plan, beats, opts) {
         var asp = momentAspect(m) || 1;
         var _visH = beatImageHeight(b, 9.3) * (pl.scale != null ? pl.scale : 1);   // true image height (placement height includes border/margin overhead)
         var w = Math.min(6.8, _visH * asp);
-        inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;">' +
-          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + '</div></div>';
+        var _ipi = panelN; panelN += 1;
+        inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' +
+          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _ipi, opts.caption) + '</div>';
       } else if (pl.kind === 'narr') {
         var full = (pl.part === 'after') ? b.after : b.before;
         if (full) {
