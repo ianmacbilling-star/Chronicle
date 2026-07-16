@@ -14212,7 +14212,7 @@ function layoutAiCheckStatus() {
     .catch(function () {});
 }
 function finalizeBookQuery() {
-  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&') + '&nocover=1';   // pane=1 (paneSafeHtml) OFF for the viewer-upgrade spike -- real fade now renders in the panes
+  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');   // covers now render in the panes (viewer upgraded to pdf.js 6.x, which handles the cover/caption gradients)
 }
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
@@ -14647,8 +14647,8 @@ function renderPdfInto(url, containerId, isBefore) {
       var total = pdf.numPages;
       var _cntEl = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
       if (_cntEl) _cntEl.textContent = total + (total === 1 ? ' page' : ' pages');
-      // Preview renders interior-only (noCover): page 1 IS the title page and the last page IS the
-      // last content page -- there is no cover/back cover to skip, so show every page.
+      // Preview now includes covers (viewer upgraded): page 1 is the front cover, last is the back
+      // cover, interior between -- show every page.
       var first = 1, last = total;
       var width = finalizeRenderWidth(container);   // locked, shared -> before/after identical size
       var span = (last - first + 1);
