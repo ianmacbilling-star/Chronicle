@@ -2050,12 +2050,15 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   }
   .cover-watermark {
     position: absolute;
-    bottom: 0.5in;
+    bottom: 0.4in;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, 50%);
     font-family: 'Cinzel', serif;
     font-size: 8pt;
-    color: rgba(201,168,76,0.2);
+    line-height: 1;
+    color: rgba(201,168,76,0.4);
+    background: #0a0604;
+    padding: 0 0.12in;
     letter-spacing: 0.15em;
     z-index: 1;
   }
@@ -2525,7 +2528,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-divider { width:80px;height:1px;background:rgba(201,168,76,0.5);margin:0.25in auto; }
   .cover-subtitle { font-family:'Crimson Text',serif;font-size:13pt;color:rgba(201,168,76,0.6);font-style:italic;margin-bottom:0.08in; }
   .cover-dates { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
-  .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:8pt;color:rgba(201,168,76,0.2);letter-spacing:0.15em;z-index:1; }
+  .cover-watermark { position:absolute;bottom:0.4in;left:50%;transform:translate(-50%,50%);font-family:'Cinzel',serif;font-size:8pt;line-height:1;color:rgba(201,168,76,0.4);background:#0a0604;padding:0 0.12in;letter-spacing:0.15em;z-index:1; }
   /* Cover-art layout: framed cover image fills the page; title, dates, and centered logo overlaid in the lower half. */
   .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in;text-align:center; }
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
