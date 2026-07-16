@@ -12028,6 +12028,45 @@ function togglePrepAcc(key){
   body.style.display=isOpen?'none':'';
   if(head) head.setAttribute('aria-expanded', isOpen?'false':'true');
   acc.classList.toggle('open', !isOpen);
+  if(key==='layout' && !isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open
+}
+// Inline layout panel (Preview & Export tab, Panel 2): mirrors the Layout modal for the 'novel'
+// context using pcl-* controls, wired to the same customOpts.novel store. Storyboard modal untouched.
+function prepSyncMarkerBreak(){
+  var mk=document.getElementById('pcl-markers');
+  var mb=document.getElementById('pcl-markerbreak');
+  var mbl=document.getElementById('pcl-markerbreak-label');
+  if(!mb) return;
+  var on = mk ? !!mk.checked : true;
+  mb.disabled = !on;
+  if(!on) mb.checked = false;
+  if(mbl){ mbl.style.opacity = on ? '1' : '0.55'; }
+}
+function prepLayoutLoad(){
+  var o = (typeof customOpts !== 'undefined' && customOpts.novel) ? customOpts.novel : CUSTOM_LAYOUT_DEFAULTS;
+  CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=o[k]; });
+  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!o[k]; });
+  prepSyncMarkerBreak();
+  var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);
+  var _hl=document.getElementById('pcl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; }
+  var _hll=document.getElementById('pcl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; }
+}
+function prepLayoutApply(){
+  if(typeof blockLayoutChangeIfOrdering==='function' && blockLayoutChangeIfOrdering()) return;
+  var o={};
+  CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
+  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
+  customOpts.novel=o;
+  customActive.novel=true;
+  if(typeof mpSave==='function') mpSave('novel', { layout_opts: o });
+  saveCustomLayoutPrefs();
+  if(typeof refreshLayoutStyleButtons==='function') refreshLayoutStyleButtons();
+  if(typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle);
+}
+function prepLayoutReset(){
+  CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=CUSTOM_LAYOUT_DEFAULTS[k]; });
+  CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!CUSTOM_LAYOUT_DEFAULTS[k]; });
+  prepSyncMarkerBreak();
 }
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';

@@ -251,7 +251,74 @@
           <div class="prep-acc" id="prep-acc-layout">
             <button class="prep-acc-head" type="button" onclick="togglePrepAcc('layout')" aria-expanded="false"><span>Layout</span><span class="prep-acc-chev">&#9662;</span></button>
             <div class="prep-acc-body" style="display:none;">
-              <div style="color:rgba(245,232,200,0.55);font-size:12px;line-height:1.5;">Layout controls move here next &mdash; border, caption, paper, fonts, dividers and page options, right beside the preview.</div>
+              <div class="pcl-fields">
+                <label class="cl-field" title="How the panels are arranged on the page"><span>Panel arrangement</span>
+                  <select id="pcl-arrange">
+                    <option value="paired">Picture Book &mdash; big pictures that fill the page</option>
+                    <option value="comicpage">Comic page &mdash; connected bordered panels</option>
+                    <option value="magazine">Magazine &mdash; text wraps around images</option>
+                    <option value="gazette">Gazette &mdash; text wraps around images, in panels</option>
+                  </select>
+                </label>
+                <label class="cl-field" title="The frame or treatment drawn around each image"><span>Picture border</span>
+                  <select id="pcl-border">
+                    <option value="none">None</option>
+                    <option value="keyline">Thin keyline</option>
+                    <option value="frame">Bronze picture frame</option>
+                    <option value="comic">Thick comic border</option>
+                    <option value="vignette">Soft vignette fade</option>
+                    <option value="gallery">Gallery (shadow only)</option>
+                  </select>
+                </label>
+                <label class="cl-field" title="How each panel's title is shown"><span>Caption style</span>
+                  <select id="pcl-caption">
+                    <option value="bar">Title bar (caption under the image)</option>
+                    <option value="plate">Comic title plate (on image, top-left corner)</option>
+                    <option value="engraved">Engraved small-caps (centered under image)</option>
+                    <option value="gradient">Gradient over image (banner at image bottom)</option>
+                    <option value="none">None (no caption)</option>
+                  </select>
+                </label>
+                <label class="cl-field" title="The base paper color"><span>Paper</span>
+                  <select id="pcl-paper">
+                    <option value="white">White</option>
+                    <option value="cream">Cream</option>
+                  </select>
+                </label>
+                <label class="cl-field" title="Plain paragraphs, or text inside a tinted box"><span>Narrative text</span>
+                  <select id="pcl-narr">
+                    <option value="plain">Plain paragraphs</option>
+                    <option value="box">Boxed panels</option>
+                  </select>
+                </label>
+                <label class="cl-field" title="Typeface used for the narrative / body text"><span>Body font</span>
+                  <select id="pcl-font">
+                    <option value="classic">Classic serif (Crimson)</option>
+                    <option value="garamond">Elegant (EB Garamond)</option>
+                    <option value="lora">Modern serif (Lora)</option>
+                    <option value="merriweather">Bookish (Merriweather)</option>
+                    <option value="sans">Clean sans (Helvetica)</option>
+                    <option value="mono">Typewriter (Courier)</option>
+                    <option value="script">Cursive script (Dancing Script)</option>
+                    <option value="journal">Handwritten journal (Caveat)</option>
+                    <option value="comic">Comic lettering (Comic Neue)</option>
+                  </select>
+                </label>
+              </div>
+              <div class="pcl-toggles" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:10px;">
+                <label class="cl-toggle" title="Large decorative first letter on the opening paragraph"><input type="checkbox" id="pcl-dropcap"><span>Drop cap on opening</span></label>
+                <label class="cl-toggle" title="Show the campaign / session header at the top of each page"><input type="checkbox" id="pcl-header"><span>Running page header</span></label>
+                <label class="cl-toggle" title="Show the decorative divider at the start of each session"><input type="checkbox" id="pcl-markers" onchange="prepSyncMarkerBreak()"><span>Session dividers</span></label>
+                <label class="cl-toggle" id="pcl-markerbreak-label" title="Start each session on a fresh page (only applies when Session dividers is on)" style="padding-left:26px;"><input type="checkbox" id="pcl-markerbreak"><span>&#8627; New page per session</span></label>
+                <label class="cl-toggle" title="Include the cover page"><input type="checkbox" id="pcl-cover"><span>Include cover page</span></label>
+                <label class="cl-toggle" id="pcl-hidelogo-label" title="Hiding the logo is a Platinum feature"><input type="checkbox" id="pcl-hidelogo" disabled><span>Hide Campaignia logo</span></label>
+                <label class="cl-toggle" title="Include the character / cast page"><input type="checkbox" id="pcl-cast"><span>Include character page</span></label>
+                <label class="cl-toggle" title="Include a table of contents listing the sessions"><input type="checkbox" id="pcl-toc"><span>Include table of contents</span></label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:14px;">
+                <button class="btn btn-sm" type="button" onclick="prepLayoutReset()">Reset</button>
+                <button class="btn btn-sm btn-primary" type="button" onclick="prepLayoutApply()" style="flex:1;">Apply &amp; preview</button>
+              </div>
             </div>
           </div>
 
