@@ -2696,7 +2696,7 @@ ${allSessionsHTML}
 
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
-${(fCover && !paginated && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
+${(fCover && (!paginated || pageOpts.page === totalSessions) && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
 <div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
@@ -2913,8 +2913,9 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   // Load moments and narrative for each session
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  if (asUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+  var _bmUser = asUser || (req.session && req.session.userId) || null;
+  if (_bmUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
     if (_bm) {
       if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
       if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
@@ -3007,8 +3008,9 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  if (asUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+  var _bmUser = asUser || (req.session && req.session.userId) || null;
+  if (_bmUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
     if (_bm) {
       if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
       if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
@@ -3209,8 +3211,9 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
 
     // Per-member wrap cover: use the viewed fork's own cover/back/title images.
     const asUser = req.query.as_user ? Number(req.query.as_user) : null;
-    if (asUser) {
-      const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+    var _bmUser = asUser || (req.session && req.session.userId) || null;
+    if (_bmUser) {
+      const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
       if (_bm) {
         if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
         if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
@@ -3334,8 +3337,9 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  if (asUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+  var _bmUser = asUser || (req.session && req.session.userId) || null;
+  if (_bmUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
     if (_bm) {
       if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
       if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
@@ -3592,8 +3596,9 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
 
   const asUser = req.query.as_user ? Number(req.query.as_user) : null;
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
-  if (asUser) {
-    const _bm = await effectiveBookMeta(db, campaign.id, asUser);
+  var _bmUser = asUser || (req.session && req.session.userId) || null;
+  if (_bmUser) {
+    const _bm = await effectiveBookMeta(db, campaign.id, _bmUser);
     if (_bm) {
       if (_bm.cover_image_url) campaign.cover_image_url = _bm.cover_image_url;
       if (_bm.back_cover_image_url) campaign.back_cover_image_url = _bm.back_cover_image_url;
