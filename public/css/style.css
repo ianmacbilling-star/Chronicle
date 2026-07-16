@@ -3,7 +3,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
   --ink:#2c1810;--ink-light:#5c3d2e;
-  --gold:#c9a84c;--gold-light:#e8d5a3;--gold-dim:rgba(201,168,76,0.6);
+  --gold:#d8b85c;--gold-light:#e8d5a3;--gold-dim:rgba(201,168,76,0.6);
   --crimson:#8b1a1a;--crimson-light:#fcebeb;
   --parchment:#f0e8d0;--parchment-dark:#e0d0a8;
   --cream:#f5e8c8;
