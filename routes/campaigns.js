@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile } = require('../storage/storage');
@@ -199,10 +199,15 @@ router.get('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
     }
     var db = await getDb();
     var row = await db.prepare(
-      'SELECT member_prefs FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+      'SELECT user_id FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
     ).get(req.params.campaignId, targetId);
     if (!row) return res.status(404).json({ error: 'Not a member of this campaign' });
-    res.json(safeParsePrefs(row.member_prefs));
+    var prefs = await getForkBookPrefs(db, targetId, targetId, req.params.campaignId);
+    res.json({
+      art_style: (typeof prefs.art_style === 'string') ? prefs.art_style : null,
+      narrative_style: (typeof prefs.narrative_style === 'string') ? prefs.narrative_style : null,
+      layout_opts: (prefs.layout_opts && typeof prefs.layout_opts === 'object') ? prefs.layout_opts : {}
+    });
   } catch (e) {
     res.status(500).json({ error: 'Failed to load member prefs' });
   }
@@ -217,25 +222,24 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
       return res.status(403).json({ error: 'You can only save preferences on your own fork' });
     }
     var db = await getDb();
-    var cur0 = await db.prepare(
-      'SELECT member_prefs FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
+    var mrow = await db.prepare(
+      'SELECT user_id FROM campaign_members WHERE campaign_id = ? AND user_id = ?'
     ).get(req.params.campaignId, targetId);
-    if (!cur0) return res.status(404).json({ error: 'Not a member of this campaign' });
-    var cur = safeParsePrefs(cur0.member_prefs);
+    if (!mrow) return res.status(404).json({ error: 'Not a member of this campaign' });
     var body = req.body || {};
     // Merge: a field provided as a string sets it; explicit null clears it;
     // omitted leaves the stored value. layout_opts is replaced whole when given.
-    var next = {
-      art_style: (typeof body.art_style === 'string') ? body.art_style : (body.art_style === null ? null : cur.art_style),
-      narrative_style: (typeof body.narrative_style === 'string') ? body.narrative_style : (body.narrative_style === null ? null : cur.narrative_style),
-      layout_opts: (body.layout_opts && typeof body.layout_opts === 'object') ? body.layout_opts : cur.layout_opts
-    };
-    var json = JSON.stringify(next);
-    if (json.length > 20000) return res.status(413).json({ error: 'Preferences too large' });
-    await db.prepare(
-      'UPDATE campaign_members SET member_prefs = ? WHERE campaign_id = ? AND user_id = ?'
-    ).run(json, req.params.campaignId, targetId);
-    res.json({ success: true, prefs: next });
+    var patch = {};
+    if (typeof body.art_style === 'string' || body.art_style === null) patch.art_style = body.art_style;
+    if (typeof body.narrative_style === 'string' || body.narrative_style === null) patch.narrative_style = body.narrative_style;
+    if (body.layout_opts && typeof body.layout_opts === 'object') patch.layout_opts = body.layout_opts;
+    if (JSON.stringify(patch).length > 20000) return res.status(413).json({ error: 'Preferences too large' });
+    var merged = await setForkBookPrefs(db, targetId, targetId, req.params.campaignId, patch);
+    res.json({ success: true, prefs: {
+      art_style: (typeof merged.art_style === 'string') ? merged.art_style : null,
+      narrative_style: (typeof merged.narrative_style === 'string') ? merged.narrative_style : null,
+      layout_opts: (merged.layout_opts && typeof merged.layout_opts === 'object') ? merged.layout_opts : {}
+    } });
   } catch (e) {
     res.status(500).json({ error: 'Failed to save member prefs' });
   }
@@ -248,7 +252,7 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
 router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const owner = req.query.as_user ? Number(req.query.as_user) : req.session.userId;
-  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title, title_color FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(owner, req.params.campaignId)) || {};
+  const cur = await getForkBookPrefs(db, owner, owner, req.params.campaignId);
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(req.params.campaignId);
   res.json({
     cover_image_url: cur.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
@@ -263,25 +267,21 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
 router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const uid = req.session.userId, cid = req.params.campaignId, b = req.body || {};
-  const cur = (await db.prepare('SELECT cover_image_url, back_cover_image_url, title_image_url, book_title, title_color FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?').get(uid, cid)) || {};
-  const cover  = (b.cover_image_url !== undefined) ? (b.cover_image_url || null) : (cur.cover_image_url || null);
-  const back   = (b.back_cover_image_url !== undefined) ? (b.back_cover_image_url || null) : (cur.back_cover_image_url || null);
-  const title  = (b.title_image_url !== undefined) ? (b.title_image_url || null) : (cur.title_image_url || null);
-  const btitle = (b.book_title !== undefined) ? (b.book_title || null) : (cur.book_title || null);
-  const tcolor = (b.title_color !== undefined) ? (b.title_color || null) : (cur.title_color || null);
-  await db.prepare(
-    'INSERT INTO novel_book_meta (user_id, campaign_id, cover_image_url, back_cover_image_url, title_image_url, book_title, title_color, edited_at) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
-    'ON CONFLICT (user_id, campaign_id) DO UPDATE SET cover_image_url = EXCLUDED.cover_image_url, back_cover_image_url = EXCLUDED.back_cover_image_url, title_image_url = EXCLUDED.title_image_url, book_title = EXCLUDED.book_title, title_color = EXCLUDED.title_color, edited_at = CURRENT_TIMESTAMP'
-  ).run(uid, cid, cover, back, title, btitle, tcolor);
+  const patch = {};
+  if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
+  if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
+  if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
+  if (b.book_title !== undefined) patch.book_title = b.book_title || null;
+  if (b.title_color !== undefined) patch.title_color = b.title_color || null;
+  const merged = await setForkBookPrefs(db, uid, uid, cid, patch);
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
-    cover_image_url: cover || (camp ? camp.campaign_image_url : '') || '',
-    back_cover_image_url: back || '',
-    title_image_url: title || '',
-    book_title: btitle || '',
-    title_color: tcolor || '',
-    own_cover: cover || '', own_back: back || '', own_title: title || ''
+    cover_image_url: merged.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
+    back_cover_image_url: merged.back_cover_image_url || '',
+    title_image_url: merged.title_image_url || '',
+    book_title: merged.book_title || '',
+    title_color: merged.title_color || '',
+    own_cover: merged.cover_image_url || '', own_back: merged.back_cover_image_url || '', own_title: merged.title_image_url || ''
   });
 });
 

@@ -1437,10 +1437,14 @@ async function effectiveIncludeMap(db, campaignId, ownerUserId) {
 // values at render time; ownerUserId null = the SM canonical book (no override).
 async function effectiveBookMeta(db, campaignId, ownerUserId) {
   if (!ownerUserId) return null;
-  const row = await db.prepare(
-    'SELECT cover_image_url, back_cover_image_url, title_image_url, book_title FROM novel_book_meta WHERE user_id = ? AND campaign_id = ?'
-  ).get(ownerUserId, campaignId);
-  return row || null;
+  const p = await getForkBookPrefs(db, ownerUserId, ownerUserId, campaignId);
+  if (!p || (!p.cover_image_url && !p.back_cover_image_url && !p.title_image_url && !p.book_title)) return null;
+  return {
+    cover_image_url: p.cover_image_url || null,
+    back_cover_image_url: p.back_cover_image_url || null,
+    title_image_url: p.title_image_url || null,
+    book_title: p.book_title || null
+  };
 }
 
 // Fork-view book prefs helpers. get: returns the prefs JSON for (chooser, fork, campaign);
