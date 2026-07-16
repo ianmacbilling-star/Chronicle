@@ -14212,7 +14212,7 @@ function layoutAiCheckStatus() {
     .catch(function () {});
 }
 function finalizeBookQuery() {
-  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&') + '&nocover=1';
+  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&') + '&nocover=1&pane=1';
 }
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';

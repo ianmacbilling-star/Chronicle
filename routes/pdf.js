@@ -638,6 +638,17 @@ function coMedia(m, border) {
   }
 }
 
+// pdf.js 3.11.174 (the Finalize preview viewer) can't render fade-to-transparent gradient shadings
+// and falls back to a pink placeholder. In the preview PANES ONLY, swap those gradients for pdf.js-safe
+// solids: the caption fade -> a flat semi-transparent dark bar; the vignette edge-fade -> dropped.
+// The downloaded book keeps the true gradients -- this never runs for print (gated on ?pane=1).
+function paneSafeHtml(html) {
+  if (!html) return html;
+  return html
+    .split('linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0))').join('rgba(10,8,6,0.82)')
+    .split('linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.45) 45%,rgba(10,8,6,0))').join('rgba(10,8,6,0.82)')
+    .split('radial-gradient(ellipse at center, rgba(255,255,255,0) 46%, rgba(255,255,255,0.7) 76%, rgba(255,255,255,1) 92%)').join('transparent');
+}
 function coCaptionOverlay(m, caption) {
   if (!m.title) return '';
   if (caption === 'plate')
@@ -2946,6 +2957,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  if (req.query.pane === '1') html = paneSafeHtml(html);   // preview-safe gradients in the Finalize panes only
   if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
   if (req.query.format === 'pdf') {
     var nMember = '';
@@ -3869,6 +3881,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       _cco.campaignName = (packedC.campaign && packedC.campaign.name) || '';
       var body = composeBook(packedC.plan, packedC.beats, _cco);
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
+      if (req.query.pane === '1') rbuiltC.html = paneSafeHtml(rbuiltC.html);   // preview-safe gradients in the Finalize After pane only
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
       try { await spendTokens(req.session.userId, 1, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
       catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
