@@ -2249,7 +2249,7 @@ ${fCover ? `<!-- COVER PAGE -->
     <div class="cover-session">${session.name}</div>
     <div class="cover-date">${formatDate(session.session_date)}</div>
   </div>`}
-  ${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}
+  <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
 
 <!-- CONTENT PAGE -->
@@ -2269,7 +2269,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div>${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}</div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -2664,7 +2664,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
     <div class="cover-dates">${dateRange}</div>
   </div>`}
-  ${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}
+  <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
 ${(!paginated || pageOpts.page === 1) ? titlePageHTML : ''}
 ${(!paginated || pageOpts.page === 1) ? detailsPageHTML : ''}
@@ -2682,7 +2682,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && !paginated && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div>${fWmark ? '<div class="cover-watermark">CAMPAIGNIA.COM</div>' : ''}</div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -3747,9 +3747,11 @@ async function computePairedPack(req, campaignId, packOpts) {
     }
     return null;
   }
-  var packBeats = (mbuilt.beats || []).map(function (beat) {
+  var packBeats = (mbuilt.beats || []).map(function (beat, _mi) {
     if (beat.kind === 'section-header') {
-      return { idx: beat.idx, kind: 'section-header', headerH: beat.showDivider ? decoHeight('section-header', _lh) : 0, showDivider: !!beat.showDivider, pageBreak: !!beat.pageBreak, hasImage: false };
+      var _nb = (mbuilt.beats || [])[_mi + 1];   // the session's opening image beat (title / establishing)
+      var _nih = (_nb && _nb.hasImage) ? beatImageHeight(_nb, pageH) : 0;
+      return { idx: beat.idx, kind: 'section-header', headerH: beat.showDivider ? decoHeight('section-header', _lh) : 0, showDivider: !!beat.showDivider, pageBreak: !!beat.pageBreak, hasImage: false, nextImageH: _nih };
     }
     var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
     if (beat.before) { var _b1 = takeBlock(String(beat.before).length); tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; }
@@ -3831,7 +3833,7 @@ function composeBook(plan, beats, opts) {
             isCont = cs > 0;
           }
           if (seg) {
-            var rendered = coNarr(seg, opts, false).replace('margin:0.15in 0', 'margin:0');
+            var rendered = coNarr(seg, opts, (b.kind === 'intro' || b.kind === 'outro')).replace('margin:0.15in 0', 'margin:0');   // intro & outro italic (matches flow render); gives the drop cap a clean line
             if (isCont) rendered = rendered.replace('text-indent:0.3in', 'text-indent:0');   // continuation of a split paragraph: no indent
             if (opts.dropcap && b.kind === 'intro' && !isCont) rendered = coDropcap(rendered.replace('text-indent:0.3in', 'text-indent:0'));   // drop cap replaces the first-line indent on each session's opening paragraph
             inner += '<div style="margin-top:0.1in;">' + rendered + '</div>';

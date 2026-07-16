@@ -126,7 +126,11 @@ function packPaired(beats, opts) {
       if (b.pageBreak && cur().usedIn > 1e-6) newPage();
       var hH = (b.headerH > 0) ? b.headerH : 0;
       if (hH > 0) {
-        if (hH > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
+        // Keep the divider glued to the session's opening image: if the divider PLUS that image
+        // (down to its shrink floor ~0.72) would not fit here, move BOTH to a fresh page -- there
+        // must never be a page break between a session divider and its title picture.
+        var needWith = hH + (b.nextImageH || 0) * 0.72;
+        if (needWith > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
         place('section-header', b.idx, hH);
       } else {
         cur().placements.push({ beat: b.idx, kind: 'section-header', heightIn: 0 });
