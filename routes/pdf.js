@@ -2485,8 +2485,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         '<div class="page-header-campaign">' + campaign.name + '</div>' +
         '<div class="page-header-session">Session ' + (si+1) + ' &mdash; ' + s.name + '</div>' +
       '</div>') : '') +
-      chapterHeading +
-      titleImageHTML +
+      '<div style="break-inside:avoid;">' + chapterHeading + titleImageHTML + '</div>' +   // keep the session marker glued to its establishing image across ALL layouts
       panelsHTML +
       '</div>' +
     '</div>';
@@ -3954,8 +3953,15 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   for (var i = 0; i < bands.length; i++) {
     var h = bandH[i] || 0;
     if (h <= 0.001) continue;   // empty intro/outro band -- skip
-    var _forceBreak = (_markerBreak && bands[i].kind === 'session-header' && cur.length);
-    if (_forceBreak || (cur.length && (used + h) > pageH)) { pages.push(cur); cur = []; used = 0; }
+    var _kind = bands[i].kind;
+    // Keep the session marker glued to its title image: if a session-header PLUS the following
+    // title-image band would not fit together in the space left on this page, break FIRST so
+    // both land on the fresh page. (Mirrors Picture Book's divider+title-image rule -- there is
+    // never a page break between a session divider and its establishing picture.)
+    var _keepWith = 0;
+    if (_kind === 'session-header' && bands[i + 1] && bands[i + 1].kind === 'title-image') _keepWith = bandH[i + 1] || 0;
+    var _forceBreak = (_markerBreak && _kind === 'session-header' && cur.length);
+    if (_forceBreak || (cur.length && (used + h + _keepWith) > pageH + 1e-6)) { pages.push(cur); cur = []; used = 0; }
     cur.push({ band: i, heightIn: h }); used += h;
   }
   if (cur.length) pages.push(cur);
