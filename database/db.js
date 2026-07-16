@@ -904,6 +904,54 @@ function isPostgres() { return usePostgres; }
 //   4. GUARDED tighten to NOT NULL (only if zero orphan rows) + FK.
 // NOT in the swallow-all alterations[] loop on purpose: order matters
 // and a silent failure here must NOT pass unnoticed.
+// One-time backfill: seed fork_book_prefs (chooser = fork = the existing user) from the
+// two current stores -- novel_book_meta (covers) and campaign_members.member_prefs
+// (layout/art/narrative). Idempotent + guarded by an app_settings flag so it runs once.
+async function migrateForkBookPrefs(pool) {
+  try {
+    const done = await pool.query("SELECT value FROM app_settings WHERE setting_key = 'fork_book_prefs_v1'");
+    if (done.rows && done.rows.length) return;
+    const map = {};
+    const nbm = await pool.query('SELECT user_id, campaign_id, cover_image_url, back_cover_image_url, title_image_url, book_title, title_color FROM novel_book_meta');
+    for (const r of nbm.rows) {
+      const k = r.user_id + ':' + r.campaign_id;
+      if (!map[k]) map[k] = { u: r.user_id, c: r.campaign_id, p: {} };
+      const p = map[k].p;
+      if (r.cover_image_url) p.cover_image_url = r.cover_image_url;
+      if (r.back_cover_image_url) p.back_cover_image_url = r.back_cover_image_url;
+      if (r.title_image_url) p.title_image_url = r.title_image_url;
+      if (r.book_title) p.book_title = r.book_title;
+      if (r.title_color) p.title_color = r.title_color;
+    }
+    const cm = await pool.query("SELECT user_id, campaign_id, member_prefs FROM campaign_members WHERE member_prefs IS NOT NULL AND member_prefs <> ''");
+    for (const r of cm.rows) {
+      const k = r.user_id + ':' + r.campaign_id;
+      if (!map[k]) map[k] = { u: r.user_id, c: r.campaign_id, p: {} };
+      try {
+        const mp = JSON.parse(r.member_prefs) || {};
+        if (mp.art_style != null) map[k].p.art_style = mp.art_style;
+        if (mp.narrative_style != null) map[k].p.narrative_style = mp.narrative_style;
+        if (mp.layout_opts && typeof mp.layout_opts === 'object') map[k].p.layout_opts = mp.layout_opts;
+      } catch (e) {}
+    }
+    let n = 0;
+    for (const k in map) {
+      const e = map[k];
+      await pool.query(
+        'INSERT INTO fork_book_prefs (chooser_user_id, fork_user_id, campaign_id, prefs, updated_at) ' +
+        'VALUES ($1, $1, $2, $3, CURRENT_TIMESTAMP) ' +
+        'ON CONFLICT (chooser_user_id, fork_user_id, campaign_id) DO NOTHING',
+        [e.u, e.c, JSON.stringify(e.p)]
+      );
+      n++;
+    }
+    await pool.query("INSERT INTO app_settings (setting_key, value) VALUES ('fork_book_prefs_v1', '1') ON CONFLICT (setting_key) DO NOTHING");
+    console.log('  [migrateForkBookPrefs] backfilled ' + n + ' fork-view pref rows');
+  } catch (e) {
+    console.error('  [migrateForkBookPrefs] skipped:', e.message);
+  }
+}
+
 async function migrateForks(pool) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS session_forks (
@@ -968,6 +1016,27 @@ async function migrateForks(pool) {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_novel_book_meta_campaign ON novel_book_meta(campaign_id)');
+
+  // Fork-view book prefs (SM/member overlay): one JSON blob per (chooser, fork, campaign).
+  // chooser_user_id = who is making the choices; fork_user_id = whose fork content (the
+  // canonical fork = the SM's user id). A member's own book is (M, M, C); the SM's own
+  // overlay on member X's fork is (SM, X, C) -- a separate slot from X's own (X, X, C).
+  // prefs JSON = { cover_image_url, back_cover_image_url, title_image_url, book_title,
+  //   title_color, layout_opts:{...}, art_style, narrative_style }. New layout options
+  // just go in the JSON -- no schema change.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fork_book_prefs (
+      id SERIAL PRIMARY KEY,
+      chooser_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      fork_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      prefs TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (chooser_user_id, fork_user_id, campaign_id)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_fork_book_prefs_lookup ON fork_book_prefs(chooser_user_id, fork_user_id, campaign_id)');
+  await migrateForkBookPrefs(pool);
 
   // Pass 1 (narrative rework) — per-version narrative planning fields:
   //   narrative_outline    = JSON { intro, sections:[{panel_index,outline}], outro }
@@ -1374,6 +1443,35 @@ async function effectiveBookMeta(db, campaignId, ownerUserId) {
   return row || null;
 }
 
+// Fork-view book prefs helpers. get: returns the prefs JSON for (chooser, fork, campaign);
+// if empty and chooser != fork, inherit from the fork owner's own (fork, fork) slot so a
+// first-time overlay starts from the member's look. set: shallow-merges a patch (each
+// top-level key -- covers, title_color, layout_opts, etc. -- is written whole) and upserts.
+async function getForkBookPrefs(db, chooserId, forkId, campaignId, opts) {
+  opts = opts || {};
+  function parse(row) { if (row && row.prefs) { try { return JSON.parse(row.prefs) || {}; } catch (e) {} } return null; }
+  const own = await db.prepare('SELECT prefs FROM fork_book_prefs WHERE chooser_user_id = ? AND fork_user_id = ? AND campaign_id = ?').get(chooserId, forkId, campaignId);
+  const p = parse(own);
+  if (p) return p;
+  if (opts.inherit && chooserId !== forkId) {
+    const base = await db.prepare('SELECT prefs FROM fork_book_prefs WHERE chooser_user_id = ? AND fork_user_id = ? AND campaign_id = ?').get(forkId, forkId, campaignId);
+    const bp = parse(base);
+    if (bp) return bp;
+  }
+  return {};
+}
+async function setForkBookPrefs(db, chooserId, forkId, campaignId, patch) {
+  const cur = await getForkBookPrefs(db, chooserId, forkId, campaignId, { inherit: true });
+  const merged = Object.assign({}, cur, patch || {});
+  const json = JSON.stringify(merged);
+  await db.prepare(
+    'INSERT INTO fork_book_prefs (chooser_user_id, fork_user_id, campaign_id, prefs, updated_at) ' +
+    'VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
+    'ON CONFLICT (chooser_user_id, fork_user_id, campaign_id) DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = CURRENT_TIMESTAMP'
+  ).run(chooserId, forkId, campaignId, json);
+  return merged;
+}
+
 // Read an integer app_settings value by key, falling back to `def` on miss/error.
 async function getAppSettingInt(key, def) {
   try {
@@ -1384,4 +1482,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getAppSettingInt };
+module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt };
