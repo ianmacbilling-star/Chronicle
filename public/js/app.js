@@ -14212,7 +14212,7 @@ function layoutAiCheckStatus() {
     .catch(function () {});
 }
 function finalizeBookQuery() {
-  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&') + '&nocover=1&pane=1';
+  return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&') + '&nocover=1';   // pane=1 (paneSafeHtml) OFF for the viewer-upgrade spike -- real fade now renders in the panes
 }
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
@@ -14587,21 +14587,19 @@ function finalizeSetPdfTab(which) {
 
 // ---- Finalize: pdf.js render into scroll containers + synced scrolling ----
 var _pdfjsPromise = null;
+var PDFJS_VER = '6.1.200';   // upgraded viewer (SPIKE): renders fade-to-transparent gradients, so no more pink in the panes. ESM build via dynamic import; paneSafeHtml stays dormant in pdf.js as the rollback fallback.
 function ensurePdfJs() {
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
   if (_pdfjsPromise) return _pdfjsPromise;
-  _pdfjsPromise = new Promise(function (resolve, reject) {
-    var sc = document.createElement('script');
-    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    sc.onload = function () {
-      if (window.pdfjsLib) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        resolve(window.pdfjsLib);
-      } else { reject(new Error('pdf.js did not initialize')); }
-    };
-    sc.onerror = function () { reject(new Error('pdf.js CDN could not load')); };
-    document.head.appendChild(sc);
-  });
+  var base = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/';
+  _pdfjsPromise = import(base + 'pdf.min.mjs')
+    .then(function (mod) {
+      var lib = (mod && mod.getDocument) ? mod : ((mod && mod.default && mod.default.getDocument) ? mod.default : mod);
+      if (lib && lib.GlobalWorkerOptions) lib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.mjs';
+      window.pdfjsLib = lib;
+      return lib;
+    })
+    .catch(function (e) { _pdfjsPromise = null; throw new Error('pdf.js ' + PDFJS_VER + ' could not load: ' + (e && e.message)); });
   return _pdfjsPromise;
 }
 // Locked render width: capture the right pane's width once (when valid) and reuse it for
