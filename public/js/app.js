@@ -12018,6 +12018,17 @@ function clSyncMarkerBreak(){
   if(!on) mb.checked = false;
   if(mbl){ mbl.style.opacity = on ? '1' : '0.55'; }
 }
+// Prep-pane accordion (Preview & Export tab): independent open/close per panel.
+function togglePrepAcc(key){
+  var acc=document.getElementById('prep-acc-'+key); if(!acc) return;
+  var body=acc.querySelector('.prep-acc-body');
+  var head=acc.querySelector('.prep-acc-head');
+  if(!body) return;
+  var isOpen=body.style.display!=='none';
+  body.style.display=isOpen?'none':'';
+  if(head) head.setAttribute('aria-expanded', isOpen?'false':'true');
+  acc.classList.toggle('open', !isOpen);
+}
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
   var modal=document.getElementById('custom-layout-modal');
