@@ -888,7 +888,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
       // fills the box with NO crop. Tower width is derived from the real aspect at a ~9.2in
       // target height so it stands nearly full-page; tall shots keep the 7.0in target below.
       var pbW = pbTower
-        ? Math.min(6.8 - pbCol, 9.2 * momentAspect(m))
+        ? Math.min(6.8 - pbCol, 9.5 * momentAspect(m))
         : Math.min(6.8 - pbCol, 7.0 * shapeAspect(normShape(m)));
       pbW = pbW * _sc;
       var pbLeft = (pbN % 2 === 0); pbN += 1;
@@ -2055,7 +2055,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
     transform: translateX(-50%);
     font-family: 'Cinzel', serif;
     font-size: 8pt;
-    color: rgba(201,168,76,0.12);
+    color: rgba(201,168,76,0.2);
     letter-spacing: 0.15em;
     z-index: 1;
   }
@@ -2525,7 +2525,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-divider { width:80px;height:1px;background:rgba(201,168,76,0.5);margin:0.25in auto; }
   .cover-subtitle { font-family:'Crimson Text',serif;font-size:13pt;color:rgba(201,168,76,0.6);font-style:italic;margin-bottom:0.08in; }
   .cover-dates { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
-  .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:8pt;color:rgba(201,168,76,0.12);letter-spacing:0.15em;z-index:1; }
+  .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:8pt;color:rgba(201,168,76,0.2);letter-spacing:0.15em;z-index:1; }
   /* Cover-art layout: framed cover image fills the page; title, dates, and centered logo overlaid in the lower half. */
   .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in;text-align:center; }
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
@@ -3713,7 +3713,8 @@ function beatImageHeight(beat, pageH) {
   // Picture Book MAXIMIZES: the biggest the image can be while fitting the content width
   // (6.8in) and one page (9.3in). Joint sizing shrinks from here only when text needs room.
   var h = 6.8 / (aspect || 1);
-  return Math.min(9.3, Math.max(1.2, h));
+  var cap = (aspect <= 0.42) ? 9.5 : 9.3;
+  return Math.min(cap, Math.max(1.2, h));
 }
 // PHASE 3 (page-packer): measure a paired book's text, compute image heights, run the
 // packer, and return { plan, overrides }. Overrides carry the per-beat image scale the
