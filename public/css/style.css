@@ -2094,7 +2094,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-acc.open .prep-acc-chev { transform:rotate(180deg); }
 .prep-acc-body { padding:12px; }
 .pcl-fields { display:flex; flex-direction:column; gap:10px; }
-.pcl-toggles { display:flex; flex-direction:column; gap:7px; }
+.pcl-toggles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px 14px; align-items:start; }
 @media (max-width: 900px) { .novel-preview-layout { flex-direction:column; } .novel-prep-panel { flex:1 1 auto; width:100%; min-width:0; position:static; max-height:none; } }
 
 /* ===== Pre-Publish image picker (slots + modal) ===== */
