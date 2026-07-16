@@ -1551,8 +1551,13 @@ function magAside(m, i, opts, narrText, imgW){
   return '<div style="clear:both;display:flex;align-items:center;gap:0.26in;margin:0.14in 0;page-break-inside:avoid;">' +
     (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
 }
-function renderMagazine(moments, sections, intro, outro, opts) {
-  var html = coDropOrIntro(intro, opts);
+// Magazine band generator (shared by the flow render AND the deterministic packer).
+// Returns an ORDERED array of { kind, html } bands: an intro band, one band per panel
+// group (tower / feature / float / wide / pair), and an outro band. renderMagazine just
+// joins them (output byte-identical to before); the packer measures + paginates them.
+function magazineBands(moments, sections, intro, outro, opts) {
+  var bands = [];
+  bands.push({ kind: 'intro', html: coDropOrIntro(intro, opts) });
 
   // Intermixed flow: walk panels IN ORDER, anchor each image, build the full prose
   // around it. Wide images break the column full-width; others float so narrative
@@ -1584,22 +1589,42 @@ function renderMagazine(moments, sections, intro, outro, opts) {
         mzBeside += cgBesidePanel(mzNp.m, opts, mzNp.narr);
         mzAdv += 1; mzFill += 1;
       }
-      html += cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft); sideLeft = !sideLeft; i += mzAdv;
+      bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
-      html += cgFlowFeature(p.m, opts, p.narr, sideLeft); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
+      bands.push({ kind: 'feature', html: cgFlowFeature(p.m, opts, p.narr, sideLeft) }); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
-      html += cgFlowFloat(p.m, opts, p.narr, sideLeft, true); sideLeft = !sideLeft; i += 1;
+      bands.push({ kind: 'float', html: cgFlowFloat(p.m, opts, p.narr, sideLeft, true) }); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
-      html += cgFlowWide(p.m, opts, p.narr, sideLeft); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
+      bands.push({ kind: 'wide', html: cgFlowWide(p.m, opts, p.narr, sideLeft) }); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5 && normShape(panels[i + 1].m) !== 'tower') {
-      html += cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr); i += 2;
+      bands.push({ kind: 'pair', html: cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr) }); i += 2;
     } else {
-      html += cgFlowFloat(p.m, opts, p.narr, sideLeft); sideLeft = !sideLeft; i += 1;
+      bands.push({ kind: 'float', html: cgFlowFloat(p.m, opts, p.narr, sideLeft) }); sideLeft = !sideLeft; i += 1;
     }
   }
 
-  html += buildNarrativeHTML(outro, true);
-  return html;
+  bands.push({ kind: 'outro', html: buildNarrativeHTML(outro, true) });
+  return bands;
+}
+function renderMagazine(moments, sections, intro, outro, opts) {
+  if (opts && opts.measureMagazine) return buildMagazineMeasureBody(moments, sections, intro, outro, opts);
+  return magazineBands(moments, sections, intro, outro, opts).map(function (b) { return b.html; }).join('');
+}
+// --- Magazine/Gazette deterministic packer plumbing (Phase 1 groundwork) ---
+// Global band accumulator: buildNovelHTML renders each session separately, so band indices
+// must be unique ACROSS sessions. computeMagazinePack resets this, runs the measure (which
+// fills it via buildMagazineMeasureBody), then reads back the full ordered band list.
+var _mzBands = null;
+function buildMagazineMeasureBody(moments, sections, intro, outro, opts) {
+  var bands = magazineBands(moments, sections, intro, outro, opts);
+  var out = '';
+  for (var j = 0; j < bands.length; j++) {
+    var gi = _mzBands ? _mzBands.length : j;
+    if (_mzBands) _mzBands.push(bands[j]);
+    // display:flow-root contains each band's float so the measured height is complete.
+    out += '<div data-mblk="mzb:' + gi + '" data-mkind="' + bands[j].kind + '" style="display:flow-root;">' + bands[j].html + '</div>';
+  }
+  return out;
 }
 
 function _twoPassChildOpts(opts) {
@@ -3697,6 +3722,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
 
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
   if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.arrange = 'paired'; co.measurePaired = true; }
+  if (req.query.measureMagazine === '1') { co = co || {}; co.measureMagazine = true; if (co.arrange !== 'magazine' && co.arrange !== 'gazette') co.arrange = 'magazine'; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
@@ -3893,12 +3919,73 @@ function composeBook(plan, beats, opts) {
   return out;
 }
 
+// Magazine/Gazette deterministic pack (Phase 1: whole-band greedy pagination; no split/resize
+// yet). Measures every band's rendered height, then fills fixed-height pages in order -- a band
+// that would overflow the current page starts a new one. Isolated behind ?compose=1 + arrange,
+// so the flow render stays the safe fallback. NOTE: _mzBands is module-level, so two concurrent
+// magazine composes could interleave; acceptable for the deliberate one-shot Optimize action.
+async function computeMagazinePack(req, campaignId, packOpts) {
+  var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
+  _mzBands = [];
+  req.query.measureMagazine = '1';
+  var mbuilt = await assembleNovelHtml(req, campaignId, null);
+  var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
+  delete req.query.measureMagazine;
+  var bands = _mzBands || [];
+  _mzBands = null;
+  var bandH = {};
+  blocks.forEach(function (bk) {
+    var id = bk.id || '';
+    if (id.indexOf('mzb:') === 0) bandH[parseInt(id.slice(4), 10)] = bk.heightIn || 0;
+  });
+  var _hdrOn = (_co.header == null) ? true : !!_co.header;
+  var pageH = ((packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : 9.4) - (_hdrOn ? HEADER_BAND_IN : 0);
+  var pages = [], cur = [], used = 0;
+  for (var i = 0; i < bands.length; i++) {
+    var h = bandH[i] || 0;
+    if (h <= 0.001) continue;   // empty intro/outro band -- skip
+    if (cur.length && (used + h) > pageH) { pages.push(cur); cur = []; used = 0; }
+    cur.push({ band: i, heightIn: h }); used += h;
+  }
+  if (cur.length) pages.push(cur);
+  return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign };
+}
+// Literal composer: one fixed-height content-page per plan page, hard break after, so the
+// browser can't re-paginate. Mirrors composeBook's page shell.
+function composeMagazine(plan, bands, opts) {
+  var out = '';
+  var pages = (plan && plan.pages) || [];
+  pages.forEach(function (pg, pi) {
+    var inner = '';
+    pg.forEach(function (cell) {
+      var b = bands[cell.band];
+      if (b) inner += '<div style="display:flow-root;">' + b.html + '</div>';
+    });
+    var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
+    out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
+  });
+  return out;
+}
+
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
       // Optimize costs 1 token. Check up front; charge only after a successful compose (below).
       if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+      if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
+        var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+        _cco.campaignName = (packedM.campaign && packedM.campaign.name) || '';
+        var bodyM = composeMagazine(packedM.plan, packedM.bands, _cco);
+        var rbuiltM = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: bodyM });
+        if (req.query.pane === '1') rbuiltM.html = paneSafeHtml(rbuiltM.html);
+        var pdfM = await renderHtmlToPdf(rbuiltM.html, {});
+        try { await spendTokens(req.session.userId, 1, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
+        catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', 'inline; filename="composed-preview.pdf"');
+        return res.send(Buffer.isBuffer(pdfM) ? pdfM : Buffer.from(pdfM));
+      }
       // Per-image decoration overhead (frame + margins) is resolved from the decoration
       // registry inside computePairedPack, per beat -- no hand-coded per-style numbers here.
       var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
