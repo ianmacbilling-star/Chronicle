@@ -972,7 +972,7 @@ function coDropOrIntro(intro, opts) {
 // every band fills the full content width -- no holes, no black show-through.
 var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
 var CG_GAP = 0.12;  // gutter between panels (inches)
-var MZ_SHRINK = 0.9;  // global magazine density shrink for floated images (leaves more room per page; wides stay full-width)
+var MZ_SHRINK = 1.0;  // was 0.9 -- global shrink backfired (smaller pics = more white on image pages); reactive shrink-to-fit replaces it
 var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimension never renders below this
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
@@ -1137,8 +1137,8 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
     imgH = small ? ((asp < 0.85) ? 3.6 : 2.7) : ((asp < 0.85) ? 4.6 : 3.4);
     capW = small ? 3.3 : 4.2;
   } else {
-    imgH = small ? ((asp < 0.85) ? 2.2 : 1.7) : ((asp < 0.85) ? 3.5 : 2.7);
-    capW = small ? 2.1 : 3.3;
+    imgH = small ? ((asp < 0.85) ? 2.5 : 2.0) : ((asp < 0.85) ? 3.5 : 2.7);   // minimized tier raised (was 2.2/1.7) so low-prominence pics stay reasonable
+    capW = small ? 2.5 : 3.3;
   }
   imgH *= MZ_SHRINK; capW *= MZ_SHRINK;   // base density shrink (grow-to-fill can still enlarge from here)
   if (mul > 1) { imgH *= mul; capW = Math.min(6.4, capW * mul); }   // grow-to-fill: enlarge the floated image, raise its width cap toward the column (text still wraps beside)
@@ -4015,13 +4015,13 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     // pictures keep wrapping text instead of one ballooning to fill the white. Modest per-image
     // grows also keep each text reflow small, so pass 2's re-measure lands them cleanly (no clip).
     var sumH = 0; floats.forEach(function (bi) { sumH += (bandH[bi] || 0.001); });
-    var fill = slack * 0.8;
+    var fill = slack * 0.9;
     floats.forEach(function (bi) {
       var h = bandH[bi] || 1;
       var target = h + fill * (h / sumH);
       if (target > pageH - 0.15) target = pageH - 0.15;   // a lone grown band must still fit its own page
       var mul = target / h;
-      if (mul > 1.4) mul = 1.4;
+      if (mul > 1.8) mul = 1.8;
       if (mul > 1.03) grow[bi] = Math.round(mul * 100) / 100;
     });
   });
