@@ -976,7 +976,8 @@ var MZ_SHRINK = 1.0;  // was 0.9 -- global shrink backfired (smaller pics = more
 var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimension never renders below this
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
-var MZ_GAPFIT_FLOOR = 0.6;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
+var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
+var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
 var MZ_FEATURE_MAX_H = 5.5;  // portrait-feature height cap (was 8.4). At 8.4 (near full-page) a feature forced its own page and stranded the tail before it; the plan showed even 7in exceeds every stranded gap. 5.5in (still ~60% of the page, clearly featured) fits/splits into the ~6in gaps. Tunable.
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
@@ -4178,7 +4179,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var u = 0, floats = [];
     for (var c = 0; c < pg.length; c++) { u += (pg[c].heightIn != null ? pg[c].heightIn : (bandH[pg[c].band] || 0)); if (!pg[c].split && bands[pg[c].band] && bands[pg[c].band].regrow) floats.push(pg[c].band); }
     var slack = pageH - u;
-    if (slack < 0.6 || !floats.length) return;
+    if (!MZ_GROW_TO_FILL || slack < 0.6 || !floats.length) return;
     // Share the growth across EVERY floated image on the page (proportional to size) so several
     // pictures keep wrapping text instead of one ballooning to fill the white. Modest per-image
     // grows also keep each text reflow small, so pass 2's re-measure lands them cleanly (no clip).
@@ -4215,7 +4216,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     if (!band.sImgH || band.sImgH < h - 0.35) return;   // text extends below the image -> text-dominated, leave to the splitter
     if (h <= slack + 1e-6) return;                       // already fits (the packer would have placed it here)
     var mul = (slack - 0.1) / band.sImgH;
-    var _pfloor = (band.kind === 'feature') ? 0.85 : 0.78;   // features (Maximize) stay big -- only a gentle nudge when they nearly fit
+    var _pfloor = (band.kind === 'feature') ? 0.72 : 0.65;   // collapse-to-fit: let a near-fitting image give a little to drop into the gap (features stay a touch bigger)
     if (mul >= _pfloor && mul < 0.98) grow[nbi] = Math.round(mul * 100) / 100;   // pull it up onto this page
   });
 
@@ -4229,7 +4230,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var u = 0, sizedHere = false;
     for (var c = 0; c < pg.length; c++) { u += (pg[c].heightIn != null ? pg[c].heightIn : (bandH[pg[c].band] || 0)); if (grow[pg[c].band]) sizedHere = true; }
     var slack = pageH - u;
-    if (slack < 1.3 || sizedHere) return;
+    if (slack < 1.0 || sizedHere) return;
     var nxt = pages[pi + 1];
     if (!nxt || !nxt.length || nxt[0].split) return;
     var nbi = nxt[0].band, band = bands[nbi];
