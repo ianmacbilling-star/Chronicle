@@ -4162,21 +4162,41 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
 // positions are an estimate, but SPLIT_PAD buffers them and it turns "can't cut" into "can cut".
 function fillMissingMagazineLines(meas, bands) {
   if (!meas || !meas.lines || !meas.lineChars) return;
+  // Snap a char index to the nearest whitespace so a synthesized cut lands on a WORD boundary
+  // (never mid-word) and, because renderMzSlice trims, cleanly at a line-ish break.
+  function snapWord(t, c) {
+    if (c <= 1 || c >= t.length - 1) return c;
+    for (var d = 0; d <= 20; d++) {
+      if (/\s/.test(t.charAt(c + d))) return c + d;
+      if (/\s/.test(t.charAt(c - d))) return c - d;
+    }
+    return c;
+  }
   for (var i = 0; i < bands.length; i++) {
     var b = bands[i]; if (!b || b.stext == null) continue;
     var ln = meas.lines[i], lc = meas.lineChars[i];
     if (!ln || !lc || ln.length < 2 || ln.length !== lc.length) continue;
     var S = b.stext.length;
     if (lc[lc.length - 1] >= S - 24) continue;                       // already reaches the text end
-    var span = (ln[ln.length - 1] - ln[0]) / (ln.length - 1);        // in/line
-    var cps = (lc[lc.length - 1] - lc[0]) / (ln.length - 1);         // chars/line
-    if (!(span > 0.05) || !(cps > 5)) continue;
+    var span = (ln[ln.length - 1] - ln[0]) / (ln.length - 1);        // in/line (measured)
+    if (!(span > 0.05)) continue;
     var H = meas.h[i] || (ln[ln.length - 1] + span);
-    var y = ln[ln.length - 1], c = lc[lc.length - 1], guard = 0;
-    while (c < S - 4 && y + span <= H + 0.2 && guard++ < 400) {
-      c = Math.min(S, Math.round(c + cps));
-      y = Math.round((y + span) * 1000) / 1000;
-      ln.push(y); lc.push(c);
+    var lastY = ln[ln.length - 1], lastC = lc[lc.length - 1];
+    var afterH = H - lastY;                                          // real height the unmeasured tail occupies
+    if (afterH < span * 0.8) continue;
+    // Line COUNT comes from the true remaining height; chars-per-line from the true remaining chars.
+    // This is accurate for features (before/after both full-width) and for floats the after is full-
+    // width below the image, so it self-corrects instead of reusing the narrow before-column density.
+    var nAfter = Math.max(1, Math.round(afterH / span));
+    var remChars = S - lastC;
+    var cps = remChars / nAfter;
+    if (!(cps > 3)) continue;
+    for (var k = 1; k <= nAfter; k++) {
+      var y = Math.round((lastY + span * k) * 1000) / 1000;
+      var craw = Math.min(S, Math.round(lastC + cps * k));
+      var cs = snapWord(b.stext, craw);
+      if (cs <= lc[lc.length - 1]) cs = Math.min(S, lc[lc.length - 1] + 1);   // keep char offsets strictly increasing
+      ln.push(y); lc.push(cs);
     }
   }
 }
