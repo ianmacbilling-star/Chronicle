@@ -4123,7 +4123,7 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
       !(growMap && growMap[it.band] && !(splitAllow && splitAllow[it.band]));   // sized bands stay whole EXCEPT gap-fit shrinks, which were shrunk precisely so they CAN split into a gap
     // A float head must clear the floated image (sImgH) so the continuation re-wraps clean full-width;
     // pure text (intro/outro or a float TAIL, simg=false) can cut at any line past a small minimum.
-    var minB = it.simg ? (it.sImgH + ((splitAllow && splitAllow[it.band]) ? 0.05 : 0.4)) : 0.5;   // gap-fit shrinks cut right below the (now-small) image; normal floats keep 0.4in clearance
+    var minB = it.simg ? (it.sImgH + (((kind === 'wide' || kind === 'feature') || (splitAllow && splitAllow[it.band])) ? 0.05 : 0.4)) : 0.5;   // wide/feature narrative sits ENTIRELY below the image -> cut just under it (a full-page-tall image can still split instead of clipping); floats keep 0.4in clearance for their beside-text   // gap-fit shrinks cut right below the (now-small) image; normal floats keep 0.4in clearance
     function splitAt(room) { var Lx = -1; for (var q = 0; q < it.lines.length - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; } return Lx; }
     var R = pageH - used;
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
