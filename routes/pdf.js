@@ -1661,15 +1661,21 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
   }
   return build(1);
 }
-// A feature (Maximize) band: big image + narrative. Kept big on purpose; it carries regrow so the
-// GENTLE pull-up can nudge it up into a nearly-fitting gap (image-dominated features only), but it
-// is never made splittable, so it is never shrunk hard to fill white.
-function mzFeatureBand(m, opts, narr, sideLeft) {
+// A feature (Maximize) band: big image + narrative below. The image is kept big -- but the NARRATIVE
+// can split across a page break (image + text that fits on this page, the rest flows on), exactly like
+// the flow render does. That fills white WITHOUT shrinking the picture. Separately, regrow lets the
+// GENTLE pull-up nudge an image-dominated feature up when it nearly fits (a small shrink, not a hard one).
+function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'feature', html: cgFlowFeature(m, opts, narr, sideLeft, mul),
       regrow: function (mm) { return cgFlowFeature(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     band.sImgH = mul * cgFeatureImgH(m, opts);
+    if (mtext && !(opts && opts.enclose)) {
+      band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
+      band.sIntro = false; band.sDrop = false; band.simg = true;
+      band.renderHead = function (cEnd) { return cgFlowFeature(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft, mul); };
+    }
     return band;
   }
   return build(1);
@@ -1719,7 +1725,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
       }
       bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
-      bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
+      bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
       bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, true, p.mtext, p.mbound)); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
@@ -4112,7 +4118,7 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     var keepWith = (kind === 'session-header' && bands[it.band + 1] && bands[it.band + 1].kind === 'title-image') ? (bandH[it.band + 1] || 0) : 0;
     if (markerBreak && kind === 'session-header' && cur.length) flush();
     var canSplit = b.stext != null && it.lines && it.lineChars && it.lines.length >= 2 &&
-      it.lineChars.length === it.lines.length && (kind === 'intro' || kind === 'outro' || kind === 'float' || kind === 'wide') &&
+      it.lineChars.length === it.lines.length && (kind === 'intro' || kind === 'outro' || kind === 'float' || kind === 'wide' || kind === 'feature') &&
       !(growMap && growMap[it.band] && !(splitAllow && splitAllow[it.band]));   // sized bands stay whole EXCEPT gap-fit shrinks, which were shrunk precisely so they CAN split into a gap
     // A float head must clear the floated image (sImgH) so the continuation re-wraps clean full-width;
     // pure text (intro/outro or a float TAIL, simg=false) can cut at any line past a small minimum.
