@@ -4203,6 +4203,22 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   // reflowed bands and RE-PACKS with their true heights -- so a picture that grows past its page
   // simply moves to the next page instead of clipping at the break.
   var grow = {}, splitAllow = {};
+  // De-widow: a band only slightly taller than one page splits into a full head + a tiny orphan tail
+  // stranded on its own near-blank page (worst when a tower/full-page band follows and can't backfill).
+  // Shrink that band's image just enough to fit a single page, removing the split (and the blank) entirely.
+  pages.forEach(function (pg) {
+    if (pg.length !== 1) return;
+    var cell = pg[0];
+    if (!cell.split || cell.cEnd != null) return;                 // must be the tail (end) of a split
+    var u = (cell.heightIn != null) ? cell.heightIn : 0;
+    if (u > 2.0) return;                                          // only a TINY orphan tail
+    var bi = cell.band, band = bands[bi];
+    if (!band || !band.regrow || !band.sImgH || grow[bi]) return;
+    var full = bandH[bi] || 0;
+    if (full <= pageH || full > pageH + 1.3) return;             // only bands JUST over a page
+    var mul = 1 - (full - pageH + 0.1) / band.sImgH;             // shrink image so image+text fits one page
+    if (mul >= 0.7 && mul < 0.995) grow[bi] = Math.round(mul * 100) / 100;
+  });
   pages.forEach(function (pg) {
     var u = 0, floats = [];
     for (var c = 0; c < pg.length; c++) { u += (pg[c].heightIn != null ? pg[c].heightIn : (bandH[pg[c].band] || 0)); if (!pg[c].split && bands[pg[c].band] && bands[pg[c].band].regrow) floats.push(pg[c].band); }
