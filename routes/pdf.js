@@ -1202,8 +1202,9 @@ function cgFlowWide(m, opts, narrHtml, sideLeft) {
   // Full-width wide image at its NATURAL height -- no fixed-height box, no contain,
   // no #000 fill -- so the frame wraps the art exactly and a black void is impossible
   // even when the stored aspect and the real image disagree.
+  var aspW = Math.max(0.3, momentAspect(m));
   var media = m.image
-    ? '<img style="width:100%;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    ? '<img style="width:100%;aspect-ratio:' + aspW.toFixed(4) + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
   var box = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
@@ -1241,7 +1242,7 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft) {
     // Wide feature: full-width at its NATURAL height -- container = image size, so
     // no fixed box, no contain, no #000 void (same fix as cgFlowWide).
     var media = m.image
-      ? '<img style="width:100%;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+      ? '<img style="width:100%;aspect-ratio:' + asp.toFixed(4) + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
       : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
     var wbox = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
