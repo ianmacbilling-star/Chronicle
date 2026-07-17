@@ -1565,6 +1565,14 @@ function magAside(m, i, opts, narrText, imgW){
   return '<div style="clear:both;display:flex;align-items:center;gap:0.26in;margin:0.14in 0;page-break-inside:avoid;">' +
     (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
 }
+// Returns the raw text if it is flowing prose (line-splittable), or null for script-formatted
+// narrative (NAME: "..." speaker lines joined by single newlines) whose <br> structure would
+// break char-offset slicing. Prose may still contain blank-line paragraph breaks.
+function mzProseText(t) {
+  if (!t) return null;
+  if (t.indexOf('\n') < 0) return t;
+  return (t.split('\n\n').join(' ').indexOf('\n') < 0) ? t : null;
+}
 // A float band that carries a regrow(mul) closure so the deterministic packer can re-render
 // the SAME floated image larger to fill leftover page white (grow-to-fill). The closure
 // captures this panel's moment/side/small so it re-renders identically apart from size.
@@ -1578,7 +1586,7 @@ function mzFloatBand(m, opts, narr, sideLeft, small) {
 // joins them (output byte-identical to before); the packer measures + paginates them.
 function magazineBands(moments, sections, intro, outro, opts) {
   var bands = [];
-  bands.push({ kind: 'intro', html: coDropOrIntro(intro, opts) });
+  bands.push({ kind: 'intro', html: coDropOrIntro(intro, opts), stext: mzProseText(intro), sIntro: true, sDrop: !!(opts && opts.dropcap) });
 
   // Intermixed flow: walk panels IN ORDER, anchor each image, build the full prose
   // around it. Wide images break the column full-width; others float so narrative
@@ -1624,7 +1632,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
     }
   }
 
-  bands.push({ kind: 'outro', html: buildNarrativeHTML(outro, true) });
+  bands.push({ kind: 'outro', html: buildNarrativeHTML(outro, true), stext: mzProseText(outro), sIntro: true, sDrop: false });
   return bands;
 }
 function renderMagazine(moments, sections, intro, outro, opts) {
@@ -3960,29 +3968,71 @@ function composeBook(plan, beats, opts) {
 // so the flow render stays the safe fallback. NOTE: _mzBands is module-level, so two concurrent
 // magazine composes could interleave; acceptable for the deliberate one-shot Optimize action.
 // Extract band heights (keyed by global index) from a measureDocument() result.
-function magazineHeights(blocks) {
-  var bandH = {};
+function magazineMeasure(blocks) {
+  var m = { h: {}, lines: {}, lineChars: {} };
   (blocks || []).forEach(function (bk) {
     var id = bk.id || '';
-    if (id.indexOf('mzb:') === 0) bandH[parseInt(id.slice(4), 10)] = bk.heightIn || 0;
+    if (id.indexOf('mzb:') !== 0) return;
+    var idx = parseInt(id.slice(4), 10);
+    m.h[idx] = bk.heightIn || 0;
+    if (bk.lines && bk.lines.length) m.lines[idx] = bk.lines;
+    if (bk.lineChars && bk.lineChars.length) m.lineChars[idx] = bk.lineChars;
   });
-  return bandH;
+  return m;
 }
-// Greedy whole-band pagination with the session marker+title-image keep-together rule.
-function packMagazineBands(bands, bandH, pageH, markerBreak) {
+// Greedy pagination with the marker+title keep-together rule AND line-level splitting for pure-text
+// (intro/outro) bands: when such a band overflows the room left on a page, it is cut at the last
+// whole measured line that fits and the remainder continues -- full width, re-wrapping identically,
+// so the measured line data stays exact -- on the next page (and may split again). Placements carry
+// a char range {cStart,cEnd} that composeMagazine slices out of the band's raw text (b.stext).
+function packMagazineBands(bands, meas, pageH, markerBreak) {
+  var bandH = meas.h;
   var pages = [], cur = [], used = 0;
-  for (var i = 0; i < bands.length; i++) {
-    var h = bandH[i] || 0;
-    if (h <= 0.001) continue;   // empty intro/outro band -- skip
-    var kind = bands[i].kind;
-    // Never split a session divider from its establishing picture (Picture Book rule).
-    var keepWith = 0;
-    if (kind === 'session-header' && bands[i + 1] && bands[i + 1].kind === 'title-image') keepWith = bandH[i + 1] || 0;
-    var forceBreak = (markerBreak && kind === 'session-header' && cur.length);
-    if (forceBreak || (cur.length && (used + h + keepWith) > pageH + 1e-6)) { pages.push(cur); cur = []; used = 0; }
-    cur.push({ band: i, heightIn: h }); used += h;
+  var round3 = function (n) { return Math.round(n * 1000) / 1000; };
+  function flush() { if (cur.length) { pages.push(cur); cur = []; used = 0; } }
+  function placeWhole(it) {
+    cur.push({ band: it.band, heightIn: it.height, cStart: it.cStart, cEnd: it.cEnd, split: (it.cStart > 0 || it.cEnd != null) });
+    used += it.height;
   }
-  if (cur.length) pages.push(cur);
+  // Worklist so a split tail can be re-processed (and split again if it is still too tall).
+  var work = [];
+  for (var i = 0; i < bands.length; i++) {
+    var h0 = bandH[i] || 0;
+    if (h0 <= 0.001) continue;   // empty intro/outro band -- skip
+    work.push({ band: i, cStart: 0, cEnd: null, height: h0, lines: meas.lines[i] || null, lineChars: meas.lineChars[i] || null });
+  }
+  for (var w = 0; w < work.length; w++) {
+    var it = work[w];
+    var b = bands[it.band];
+    var kind = b.kind;
+    var keepWith = (kind === 'session-header' && bands[it.band + 1] && bands[it.band + 1].kind === 'title-image') ? (bandH[it.band + 1] || 0) : 0;
+    if (markerBreak && kind === 'session-header' && cur.length) flush();
+    var canSplit = b.stext != null && it.lines && it.lineChars && it.lines.length >= 2 &&
+      it.lineChars.length === it.lines.length && (kind === 'intro' || kind === 'outro');
+    var R = pageH - used;
+    // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
+    if (cur.length && (it.height + keepWith) > R + 1e-6) {
+      var canHere = false;
+      if (canSplit) { for (var a = 0; a < it.lines.length - 1; a++) { if (it.lines[a] <= R - 0.06) canHere = true; } }
+      if (!canHere) { flush(); R = pageH; }
+    }
+    if ((it.height + keepWith) <= R + 1e-6) { placeWhole(it); continue; }   // fits
+    if (canSplit) {
+      var L = -1;
+      for (var li = 0; li < it.lines.length - 1; li++) { if (it.lines[li] <= R - 0.06) L = li; }
+      if (L >= 0) {
+        var cEnd = it.cStart + it.lineChars[L + 1];
+        cur.push({ band: it.band, heightIn: it.lines[L], cStart: it.cStart, cEnd: cEnd, split: true });
+        used += it.lines[L]; flush();
+        var tLines = [], tChars = [];
+        for (var lj = L + 1; lj < it.lines.length; lj++) { tLines.push(round3(it.lines[lj] - it.lines[L])); tChars.push(it.lineChars[lj] - it.lineChars[L + 1]); }
+        work.splice(w + 1, 0, { band: it.band, cStart: cEnd, cEnd: null, height: round3(it.height - it.lines[L]), lines: tLines, lineChars: tChars });
+        continue;
+      }
+    }
+    placeWhole(it);   // not splittable (or not even one line fits) and taller than a page -> place whole (rare; may clip)
+  }
+  flush();
   return pages;
 }
 
@@ -3996,9 +4046,10 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   _mzGrow = null; _mzBands = [];
   req.query.measureMagazine = '1';
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
-  var bandH = magazineHeights((await measureDocument(mbuilt.html, {})).blocks || []);
+  var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
+  var bandH = meas.h;
   var bands = _mzBands || [];
-  var pages = packMagazineBands(bands, bandH, pageH, _markerBreak);
+  var pages = packMagazineBands(bands, meas, pageH, _markerBreak);
 
   // Grow-to-fill: for each page left noticeably under-full, enlarge its LAST growable floated
   // image toward the leftover white. Only floats carry regrow() (full-width bands are already at
@@ -4008,7 +4059,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   var grow = {};
   pages.forEach(function (pg) {
     var u = 0, floats = [];
-    for (var c = 0; c < pg.length; c++) { u += (bandH[pg[c].band] || 0); if (bands[pg[c].band] && bands[pg[c].band].regrow) floats.push(pg[c].band); }
+    for (var c = 0; c < pg.length; c++) { u += (pg[c].heightIn != null ? pg[c].heightIn : (bandH[pg[c].band] || 0)); if (!pg[c].split && bands[pg[c].band] && bands[pg[c].band].regrow) floats.push(pg[c].band); }
     var slack = pageH - u;
     if (slack < 0.6 || !floats.length) return;
     // Share the growth across EVERY floated image on the page (proportional to size) so several
@@ -4030,9 +4081,9 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   if (Object.keys(grow).length) {
     _mzGrow = grow; _mzBands = [];
     var mbuilt2 = await assembleNovelHtml(req, campaignId, null);
-    var bandH2 = magazineHeights((await measureDocument(mbuilt2.html, {})).blocks || []);
+    var meas2 = magazineMeasure((await measureDocument(mbuilt2.html, {})).blocks || []);
     var bands2 = _mzBands || [];
-    bands = bands2; pages = packMagazineBands(bands2, bandH2, pageH, _markerBreak);
+    bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak);
   }
   delete req.query.measureMagazine;
   _mzBands = null; _mzGrow = null;
@@ -4048,7 +4099,17 @@ function composeMagazine(plan, bands, opts) {
     var inner = '';
     pg.forEach(function (cell) {
       var b = bands[cell.band];
-      if (b) inner += '<div style="display:flow-root;">' + b.html + '</div>';
+      if (!b) return;
+      var html;
+      if (cell.split && b.stext != null) {
+        var cs = cell.cStart || 0;
+        var ce = (cell.cEnd != null) ? cell.cEnd : b.stext.length;
+        html = buildNarrativeHTML(b.stext.slice(cs, ce), b.sIntro);
+        if (cs === 0 && b.sDrop) html = coDropcap(html);   // drop cap only on the opening slice
+      } else {
+        html = b.html;
+      }
+      inner += '<div style="display:flow-root;">' + html + '</div>';
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
     out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
