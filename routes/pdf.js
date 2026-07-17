@@ -977,7 +977,7 @@ var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimens
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
-var MZ_SPILL_MIN_GAP = 1.8;   // leading-text spill only fires when the wasted gap is at least this tall
+var MZ_SPILL_MIN_GAP = 1.2;   // leading-text spill fires when the wasted gap is at least this tall (partial spill fills even smallish gaps)
 var MZ_SPILL_MIN_LINES = 2;   // and only if at least this many lines of the before-paragraph fill it
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
 var MZ_OPT_SHRINK_FEATURES = true;   // Optimize caps + floats portrait features (milder than before). Ian: keep the wrap, just don't shrink as hard as 5.5.
@@ -4118,7 +4118,7 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
   var round3 = function (n) { return Math.round(n * 1000) / 1000; };
   function flush() { if (cur.length) { pages.push(cur); cur = []; used = 0; } }
   function placeWhole(it) {
-    cur.push({ band: it.band, heightIn: it.height, cStart: it.cStart, cEnd: it.cEnd, split: (it.cStart > 0 || it.cEnd != null) });
+    cur.push({ band: it.band, heightIn: it.height, cStart: it.cStart, cEnd: it.cEnd, split: (it.cStart > 0 || it.cEnd != null), imgBody: !!it.imgBody });
     used += it.height;
   }
   // Worklist so a split tail can be re-processed (and split again if it is still too tall).
@@ -4139,24 +4139,41 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
   // a beat's text may sit right before its image). Estimates are full-width (widest measured line) and
   // conservative -- if the before won't cleanly fit the gap, or image+after won't fit one page, we bail
   // and fall back to today's behavior. No image is ever shrunk here.
+  function snapWordPack(t, c) {
+    if (c <= 1 || c >= t.length - 1) return c;
+    for (var d = 0; d <= 20; d++) { if (/\s/.test(t.charAt(c + d))) return c + d; if (/\s/.test(t.charAt(c - d))) return c - d; }
+    return c;
+  }
   function trySpill(it, R) {
     if (!it.simg || it.cStart !== 0 || !it.lines || !it.lineChars || it.lines.length < 2) return false;
     var bb = bands[it.band];
-    if (!bb || bb.mbound == null || R < MZ_SPILL_MIN_GAP) return false;
+    if (!bb || bb.mbound == null || bb.stext == null || R < MZ_SPILL_MIN_GAP) return false;
     var wideC = 0; for (var q = 1; q < it.lineChars.length; q++) { var dd = it.lineChars[q] - it.lineChars[q - 1]; if (dd > wideC) wideC = dd; }
     var lh = (it.lines[it.lines.length - 1] - it.lines[0]) / (it.lines.length - 1);
     if (!(wideC > 8) || !(lh > 0.05)) return false;
-    var beforeLines = Math.ceil(bb.mbound / wideC);
-    if (beforeLines < MZ_SPILL_MIN_LINES) return false;
-    var leadH = round3(beforeLines * lh + MZ_SPLIT_PAD);
-    if (leadH > R - 0.2) return false;                                   // before-text won't cleanly fit the gap
-    var afterLines = Math.ceil(Math.max(0, it.stextLen - bb.mbound) / wideC);
-    var bodyH = round3(it.sImgH + afterLines * lh + 0.2);
-    if (bodyH > pageH - 0.2) return false;                               // image + after won't fit one page -> keep it simple, bail
-    cur.push({ band: it.band, heightIn: leadH, cStart: 0, cEnd: bb.mbound, split: true, textLead: true });
+    // Spill only as much LEADING text as FITS the gap (partial before is fine), capped at the
+    // paragraph boundary so the after-text stays with the image. The image + the rest lead the next
+    // page and split there if needed -- the picture is never shrunk.
+    var fitLines = Math.floor((R - MZ_SPLIT_PAD - 0.1) / lh);
+    if (fitLines < MZ_SPILL_MIN_LINES) return false;
+    var k = fitLines * wideC;
+    if (k > bb.mbound) k = bb.mbound;                                    // don't spill past the before/after boundary
+    k = snapWordPack(bb.stext, k);
+    if (k < Math.round(MZ_SPILL_MIN_LINES * wideC * 0.6)) return false;  // too little text to be worth splitting a panel
+    var leadLines = Math.ceil(k / wideC);
+    var leadH = round3(leadLines * lh + MZ_SPLIT_PAD);
+    if (leadH > R - 0.15) return false;
+    // place the leading text into the gap on the CURRENT page
+    cur.push({ band: it.band, heightIn: leadH, cStart: 0, cEnd: k, split: true, textLead: true });
     used += leadH; flush();
-    cur.push({ band: it.band, heightIn: bodyH, cStart: bb.mbound, cEnd: null, split: true, imgBody: true });
-    used += bodyH;
+    // re-queue the image-body (image + text[k:end]) as a splittable item -- synthesize full-width line
+    // positions BELOW the image (conservative: errs toward extra room, never a clipped overflow).
+    var remChars = Math.max(0, it.stextLen - k);
+    var nb = Math.max(1, Math.ceil(remChars / wideC));
+    var bChars = [], bLines = [];
+    for (var bl2 = 0; bl2 <= nb; bl2++) { bChars.push(Math.min(remChars, bl2 * wideC)); bLines.push(round3(it.sImgH + 0.12 + bl2 * lh)); }
+    var bodyH = round3(it.sImgH + 0.12 + nb * lh + MZ_SPLIT_PAD);
+    work.splice(w + 1, 0, { band: it.band, cStart: k, cEnd: null, height: bodyH, lines: bLines, lineChars: bChars, simg: true, sImgH: it.sImgH, imgBody: true, stextLen: it.stextLen });
     return true;
   }
   for (var w = 0; w < work.length; w++) {
@@ -4186,7 +4203,7 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
       if (L >= 0) {
         var cEnd = it.cStart + it.lineChars[L + 1];
         var headH = round3(it.lines[L] + MZ_SPLIT_PAD);   // the rendered slice carries the paragraph's bottom margin beyond the last line
-        cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true });
+        cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true, imgBody: !!it.imgBody });
         used += headH; flush();
         var tLines = [], tChars = [];
         for (var lj = L + 1; lj < it.lines.length; lj++) { tLines.push(round3(it.lines[lj] - it.lines[L])); tChars.push(it.lineChars[lj] - it.lineChars[L + 1]); }
