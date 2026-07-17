@@ -1192,12 +1192,13 @@ function cgBesidePanel(m, opts, narrHtml) {
 }
 
 // A wide/panoramic image breaks the column full width; prose flows after it.
-function cgFlowWide(m, opts, narrHtml, sideLeft) {
+function cgFlowWide(m, opts, narrHtml, sideLeft, mul) {
+  mul = mul || 1;
   if (opts && opts.enclose) {
     // Gazette: wide image floated INSIDE its parchment panel (shrunk a little so the
     // narrative wraps beside it) -- the picture is the show, just enclosed.
     var aspW = Math.max(0.3, momentAspect(m));
-    var iwW = 4.4, ihW = iwW / aspW;
+    var iwW = 4.4 * mul, ihW = iwW / aspW;
     return gzFloatPanel(m, opts, narrHtml, iwW, ihW, sideLeft);
   }
   // Full-width wide image at its NATURAL height -- no fixed-height box, no contain,
@@ -1207,7 +1208,9 @@ function cgFlowWide(m, opts, narrHtml, sideLeft) {
   var media = m.image
     ? '<img style="width:100%;aspect-ratio:' + aspW.toFixed(4) + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
-  var box = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
+  var _ww = (mul < 0.999) ? (mul * 100).toFixed(1) + '%' : '100%';
+  var _wc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
+  var box = '<div style="' + cgBorder(opts) + 'width:' + _ww + ';' + _wc + 'position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
     media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
@@ -1230,13 +1233,25 @@ function cgFlowPair(a, b, opts, narrHtml) {
 
 // A featured (peak-prominence) image. A wide shot fills the width at half-page
 // height (cover-cropped via focal); anything else blows up toward full page.
-function cgFlowFeature(m, opts, narrHtml, sideLeft) {
+// Feature image height at mul=1 (for the pull-up image-dominance test).
+function cgFeatureImgH(m, opts) {
+  var asp = Math.max(0.3, momentAspect(m));
+  if (opts && opts.enclose) {
+    if (asp >= 1.5) return 4.8 / asp;
+    var ihE = Math.min(5.0, 3.8 / asp); if (ihE * asp > 4.4) ihE = 4.4 / asp; return ihE;
+  }
+  if (asp >= 1.5) return CG_W / asp;
+  return Math.min(8.4, CG_W / asp);
+}
+function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
+  mul = mul || 1;
   var asp = Math.max(0.3, momentAspect(m));
   if (opts && opts.enclose) {
     // Gazette: feature (peak) image floated inside its panel, kept large; text wraps.
     var iwF, ihF;
     if (asp >= 1.5) { iwF = 4.8; ihF = iwF / asp; }
     else { ihF = Math.min(5.0, 3.8 / asp); iwF = ihF * asp; if (iwF > 4.4) { iwF = 4.4; ihF = iwF / asp; } }
+    iwF *= mul; ihF *= mul;
     return gzFloatPanel(m, opts, narrHtml, iwF, ihF, sideLeft);
   }
   if (asp >= 1.5) {
@@ -1245,14 +1260,16 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft) {
     var media = m.image
       ? '<img style="width:100%;aspect-ratio:' + asp.toFixed(4) + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
       : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
-    var wbox = '<div style="' + cgBorder(opts) + 'width:100%;position:relative;line-height:0;' +
+    var _fw = (mul < 0.999) ? (mul * 100).toFixed(1) + '%' : '100%';
+    var _fc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
+    var wbox = '<div style="' + cgBorder(opts) + 'width:' + _fw + ';' + _fc + 'position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
       media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
     return wbox + gzNarrBox(narrHtml, opts);
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
   // fills via focal cover, so there is no void either.
-  var H = Math.min(8.4, CG_W / asp);
+  var H = Math.min(8.4, CG_W / asp) * mul;
   var W = Math.min(CG_W, H * asp);
   var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
   var img = m.image
@@ -1629,13 +1646,33 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
 // Non-enclose WIDE: full-width image with the narrative entirely BELOW it -> splittable like a
 // float, but any narrative line is a valid cut (all lines sit under the picture, so sImgH=0).
 function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
-  var band = { kind: 'wide', html: cgFlowWide(m, opts, narr, sideLeft) };
-  if (mtext && !(opts && opts.enclose)) {
-    band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
-    band.sIntro = false; band.sDrop = false; band.simg = true; band.sImgH = 0;
-    band.renderHead = function (cEnd) { return cgFlowWide(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft); };
+  function build(mul) {
+    var band = { kind: 'wide', html: cgFlowWide(m, opts, narr, sideLeft, mul),
+      regrow: function (mm) { return cgFlowWide(m, opts, narr, sideLeft, mm); },
+      remeta: function (mm) { return build(mm); } };
+    var _aspW = Math.max(0.3, momentAspect(m));
+    band.sImgH = mul * ((opts && opts.enclose) ? (4.4 / _aspW) : (CG_W / _aspW));   // full-width image height (narrative sits below): split cut point + pull-up / gap-fit
+    if (mtext && !(opts && opts.enclose)) {
+      band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
+      band.sIntro = false; band.sDrop = false; band.simg = true;
+      band.renderHead = function (cEnd) { return cgFlowWide(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft, mul); };
+    }
+    return band;
   }
-  return band;
+  return build(1);
+}
+// A feature (Maximize) band: big image + narrative. Kept big on purpose; it carries regrow so the
+// GENTLE pull-up can nudge it up into a nearly-fitting gap (image-dominated features only), but it
+// is never made splittable, so it is never shrunk hard to fill white.
+function mzFeatureBand(m, opts, narr, sideLeft) {
+  function build(mul) {
+    var band = { kind: 'feature', html: cgFlowFeature(m, opts, narr, sideLeft, mul),
+      regrow: function (mm) { return cgFlowFeature(m, opts, narr, sideLeft, mm); },
+      remeta: function (mm) { return build(mm); } };
+    band.sImgH = mul * cgFeatureImgH(m, opts);
+    return band;
+  }
+  return build(1);
 }
 // Magazine band generator (shared by the flow render AND the deterministic packer).
 // Returns an ORDERED array of { kind, html } bands: an intro band, one band per panel
@@ -1682,7 +1719,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
       }
       bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
-      bands.push({ kind: 'feature', html: cgFlowFeature(p.m, opts, p.narr, sideLeft) }); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
+      bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
       bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, true, p.mtext, p.mbound)); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
@@ -4148,10 +4185,10 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   });
 
   // Pull-up (shrink-to-fit): a page still left with white but with NO float of its own to grow can
-  // instead pull the NEXT page's opening image UP, shrinking it (down to 0.78x) to fit the gap. Only
-  // image-dominated floats qualify -- if text runs well below the picture, shrinking the picture
-  // wouldn't shorten the band, and the line-splitter already handles that case. Skips a picture that
-  // is already growing elsewhere, and continuations (a split tail is text, not a pullable image).
+  // instead pull the NEXT page's opening image UP, shrinking it to fit the gap. Image-dominated bands
+  // only (float, wide, or feature) -- if text runs well below the picture the band wouldn't shorten
+  // enough and the gap-fit splitter handles it instead. Features get a gentler floor (kept big). Skips
+  // a picture already growing elsewhere and continuations (a split tail is text, not a pullable image).
   pages.forEach(function (pg, pi) {
     var u = 0, growsHere = false;
     for (var c = 0; c < pg.length; c++) {
@@ -4168,7 +4205,8 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     if (!band.sImgH || band.sImgH < h - 0.35) return;   // text extends below the image -> text-dominated, leave to the splitter
     if (h <= slack + 1e-6) return;                       // already fits (the packer would have placed it here)
     var mul = (slack - 0.1) / band.sImgH;
-    if (mul >= 0.78 && mul < 0.98) grow[nbi] = Math.round(mul * 100) / 100;   // pull it up onto this page
+    var _pfloor = (band.kind === 'feature') ? 0.85 : 0.78;   // features (Maximize) stay big -- only a gentle nudge when they nearly fit
+    if (mul >= _pfloor && mul < 0.98) grow[nbi] = Math.round(mul * 100) / 100;   // pull it up onto this page
   });
 
   // Shrink-to-fit-the-gap: a page still under-full whose NEXT band is a splittable FLOAT whose image
