@@ -14390,6 +14390,7 @@ function finalizeClearScanState() {
   ['finalize-before-count', 'finalize-after-count'].forEach(function (id) { var e = document.getElementById(id); if (e) e.textContent = ''; });
   var af = document.getElementById('finalize-after-scroll'); if (af) { af.innerHTML = ''; af.style.display = 'none'; }
   var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
+  ['finalize-before-open', 'finalize-after-open'].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = 'none'; });
 }
 // Fetch the PDF ONCE, hold it as an in-memory blob, and point the iframe at the blob URL.
 // Page jumps then reload the blob locally (instant) instead of re-hitting the server (30s).
@@ -14795,6 +14796,16 @@ function finalizeCountLabel(total, fillPct) {
   if (fillPct != null) t += ' \u00b7 <span style="color:' + finalizeFillColor(fillPct) + ';font-weight:600;">' + fillPct + '% full</span>';
   return t;
 }
+// Open the already-fetched Before/After PDF in a new browser tab via its in-memory blob (native
+// PDF viewer -> viewable, savable). Reuses the blob so nothing is re-fetched and no token is spent.
+function finalizeOpenPdf(isBefore) {
+  var u = isBefore ? _finalizeBeforeBlob : _finalizeAfterBlob;
+  if (u) window.open(u, '_blank');
+}
+function finalizeShowOpenBtn(isBefore) {
+  var b = document.getElementById(isBefore ? 'finalize-before-open' : 'finalize-after-open');
+  if (b) b.style.display = '';
+}
 function renderPdfInto(url, containerId, isBefore) {
   var container = document.getElementById(containerId);
   if (!container) return;
@@ -14821,6 +14832,14 @@ function renderPdfInto(url, containerId, isBefore) {
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
       return r.arrayBuffer();
     }).then(function (buf) {
+      // Keep the raw PDF as an in-memory blob so "Open in new tab" reuses it -- no re-fetch, so the
+      // After pane (pack-render) never re-charges its token just to view the file.
+      try {
+        var _pdfBlobUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+        if (isBefore) { if (_finalizeBeforeBlob) URL.revokeObjectURL(_finalizeBeforeBlob); _finalizeBeforeBlob = _pdfBlobUrl; }
+        else { if (_finalizeAfterBlob) URL.revokeObjectURL(_finalizeAfterBlob); _finalizeAfterBlob = _pdfBlobUrl; }
+        finalizeShowOpenBtn(isBefore);
+      } catch (e) {}
       if (pm) pm.textContent = 'Preparing pages...';
       return pdfjsLib.getDocument({ data: buf }).promise;
     }).then(function (pdf) {
@@ -14910,6 +14929,7 @@ function resetPublishForCampaignSwitch() {
   var bi = document.getElementById('finalize-before-scroll'); if (bi) bi.innerHTML = '';
   var ai = document.getElementById('finalize-after-scroll'); if (ai) { ai.innerHTML = ''; ai.style.display = 'none'; }
   var ab = document.getElementById('finalize-after-body'); if (ab) ab.style.display = '';
+  ['finalize-before-open', 'finalize-after-open'].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = 'none'; });
   var _nv = document.getElementById('finalize-page-nav'); if (_nv) _nv.innerHTML = '';
   var lr = document.getElementById('layoutai-results'); if (lr) { lr.innerHTML = ''; lr.removeAttribute('data-mode'); }
   var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.innerHTML = '';
