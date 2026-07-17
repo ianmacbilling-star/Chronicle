@@ -14580,12 +14580,16 @@ function _runLayoutAiOptimize() {
         var _dEl = document.getElementById('layoutai-delta');
         if (_dEl) {
           var delta = bp - cnt;
-          var _wB = finalizeWhitePct(_finalizeFills, bp), _wA = finalizeWhitePct(_finalizeAfterFills, cnt);
-          var _html = 'Before: <strong>' + bp + '</strong> pages &nbsp;&rarr;&nbsp; After: <strong>' + cnt + '</strong> pages' +
+          var _fB = finalizeFillPct(_finalizeFills, bp), _fA = finalizeFillPct(_finalizeAfterFills, cnt);
+          var _html = 'Pages: <strong>' + bp + '</strong> &nbsp;&rarr;&nbsp; <strong>' + cnt + '</strong>' +
             (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
-          if (_wB != null && _wA != null) { var _dW = _wB - _wA;
-            _html += '<br>White space: <strong>' + _wB + '%</strong> &nbsp;&rarr;&nbsp; <strong>' + _wA + '%</strong>' +
-              (_dW > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + _dW + '</strong>)' : (_dW < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-_dW) + '</strong>)' : '')); }
+          if (_fB != null && _fA != null) {
+            _html += '<br>Density: <strong style="color:' + finalizeFillColor(_fB) + ';">' + _fB + '%</strong> &nbsp;&rarr;&nbsp; <strong style="color:' + finalizeFillColor(_fA) + ';">' + _fA + '% full</strong>';
+            // Total empty space = pages x white. Captures BOTH fewer pages AND denser pages in one number.
+            var _eB = bp * (100 - _fB), _eA = cnt * (100 - _fA);
+            if (_eB > 0) { var _cut = Math.round((_eB - _eA) / _eB * 100);
+              if (_cut > 0) _html += '<br><strong style="color:#8fd18f;">' + _cut + '% less empty space overall</strong>'; }
+          }
           _dEl.innerHTML = _html;
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // reflect the spent token
@@ -14783,9 +14787,12 @@ function finalizeWhitePct(fills, total) {
   var sum = 0; vals.forEach(function (v) { sum += v; });
   return Math.max(0, Math.round(100 - sum / vals.length));
 }
-function finalizeCountLabel(total, whitePct) {
+var FINALIZE_FILL_GREEN = 85;   // density % at/above which the score reads "as good as it gets" (green); tune once real books land
+function finalizeFillPct(fills, total) { var w = finalizeWhitePct(fills, total); return (w == null) ? null : (100 - w); }
+function finalizeFillColor(f) { return (f != null && f >= FINALIZE_FILL_GREEN) ? '#8fd18f' : '#e0a0a0'; }
+function finalizeCountLabel(total, fillPct) {
   var t = total + (total === 1 ? ' page' : ' pages');
-  if (whitePct != null) t += ' \u00b7 ' + whitePct + '% white';
+  if (fillPct != null) t += ' \u00b7 <span style="color:' + finalizeFillColor(fillPct) + ';font-weight:600;">' + fillPct + '% full</span>';
   return t;
 }
 function renderPdfInto(url, containerId, isBefore) {
@@ -14821,7 +14828,7 @@ function renderPdfInto(url, containerId, isBefore) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
       var _cntEl = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
-      if (_cntEl) _cntEl.textContent = total + (total === 1 ? ' page' : ' pages');
+      if (_cntEl) _cntEl.innerHTML = finalizeCountLabel(total, null);
       // Preview now includes covers (viewer upgraded): page 1 is the front cover, last is the back
       // cover, interior between -- show every page.
       var first = 1, last = total;
@@ -14854,9 +14861,9 @@ function renderPdfInto(url, containerId, isBefore) {
         var pw = document.getElementById(containerId + '-pw');
         if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
-        var _wpct = finalizeWhitePct(isBefore ? _finalizeFills : _finalizeAfterFills, total);
+        var _fpct = finalizeFillPct(isBefore ? _finalizeFills : _finalizeAfterFills, total);
         var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
-        if (_wcnt) _wcnt.textContent = finalizeCountLabel(total, _wpct);
+        if (_wcnt) _wcnt.innerHTML = finalizeCountLabel(total, _fpct);
         finalizeAttachSync();
       });
     });
