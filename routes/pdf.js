@@ -977,6 +977,8 @@ var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimens
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
+var MZ_SPILL_MIN_GAP = 1.8;   // leading-text spill only fires when the wasted gap is at least this tall
+var MZ_SPILL_MIN_LINES = 2;   // and only if at least this many lines of the before-paragraph fill it
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
 var MZ_OPT_SHRINK_FEATURES = true;   // Optimize caps + floats portrait features (milder than before). Ian: keep the wrap, just don't shrink as hard as 5.5.
 var MZ_FEATURE_MAX_H = 6.0;       // OPTIMIZE-ONLY portrait-feature cap (applied only when opts.mzCapFeatures). 6.0 keeps portraits clearly big (65% of the page) while still enabling the margin-float wrap on all of them. Tunable.
@@ -1653,7 +1655,7 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
       // the panel with the text truncated to the head slice at this image size.
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
-      band.renderHead = function (cEnd) { return cgFlowFloat(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft, small, mul); };
+      band.renderHead = function (cStart, cEnd) { return cgFlowFloat(m, opts, renderMzSlice(mtext, band.mbound, cStart, cEnd, opts), sideLeft, small, mul); };
     }
     return band;
   }
@@ -1672,7 +1674,7 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
     if (mtext && !(opts && opts.enclose)) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
-      band.renderHead = function (cEnd) { return cgFlowWide(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft, mul); };
+      band.renderHead = function (cStart, cEnd) { return cgFlowWide(m, opts, renderMzSlice(mtext, band.mbound, cStart, cEnd, opts), sideLeft, mul); };
     }
     return band;
   }
@@ -1692,7 +1694,7 @@ function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
     if (mtext && !(opts && opts.enclose)) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
-      band.renderHead = function (cEnd) { return cgFlowFeature(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft, mul); };
+      band.renderHead = function (cStart, cEnd) { return cgFlowFeature(m, opts, renderMzSlice(mtext, band.mbound, cStart, cEnd, opts), sideLeft, mul); };
     }
     return band;
   }
@@ -4129,7 +4131,33 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     // Alignment guard: char offsets must index within the band's raw text -- if a stray <p> ever
     // slipped into the measure, drop the line data so the band stays atomic (never corrupt text).
     if (bd.stext != null && lc && lc.length && lc[lc.length - 1] > bd.stext.length + 4) { lc = null; ln = null; }
-    work.push({ band: i, cStart: 0, cEnd: null, height: h0, lines: ln, lineChars: lc, simg: !!bd.simg, sImgH: bd.sImgH || 0 });
+    work.push({ band: i, cStart: 0, cEnd: null, height: h0, lines: ln, lineChars: lc, simg: !!bd.simg, sImgH: bd.sImgH || 0, stextLen: (bd.stext != null ? bd.stext.length : 0) });
+  }
+  // Leading-text spill: when a panel's IMAGE can't fit the leftover gap on the current page, the whole
+  // panel normally jumps to the next page and leaves that gap white. Instead, drop the panel's BEFORE
+  // paragraph into the gap as standalone text and let the image lead the next page at FULL size (Ian:
+  // a beat's text may sit right before its image). Estimates are full-width (widest measured line) and
+  // conservative -- if the before won't cleanly fit the gap, or image+after won't fit one page, we bail
+  // and fall back to today's behavior. No image is ever shrunk here.
+  function trySpill(it, R) {
+    if (!it.simg || it.cStart !== 0 || !it.lines || !it.lineChars || it.lines.length < 2) return false;
+    var bb = bands[it.band];
+    if (!bb || bb.mbound == null || R < MZ_SPILL_MIN_GAP) return false;
+    var wideC = 0; for (var q = 1; q < it.lineChars.length; q++) { var dd = it.lineChars[q] - it.lineChars[q - 1]; if (dd > wideC) wideC = dd; }
+    var lh = (it.lines[it.lines.length - 1] - it.lines[0]) / (it.lines.length - 1);
+    if (!(wideC > 8) || !(lh > 0.05)) return false;
+    var beforeLines = Math.ceil(bb.mbound / wideC);
+    if (beforeLines < MZ_SPILL_MIN_LINES) return false;
+    var leadH = round3(beforeLines * lh + MZ_SPLIT_PAD);
+    if (leadH > R - 0.2) return false;                                   // before-text won't cleanly fit the gap
+    var afterLines = Math.ceil(Math.max(0, it.stextLen - bb.mbound) / wideC);
+    var bodyH = round3(it.sImgH + afterLines * lh + 0.2);
+    if (bodyH > pageH - 0.2) return false;                               // image + after won't fit one page -> keep it simple, bail
+    cur.push({ band: it.band, heightIn: leadH, cStart: 0, cEnd: bb.mbound, split: true, textLead: true });
+    used += leadH; flush();
+    cur.push({ band: it.band, heightIn: bodyH, cStart: bb.mbound, cEnd: null, split: true, imgBody: true });
+    used += bodyH;
+    return true;
   }
   for (var w = 0; w < work.length; w++) {
     var it = work[w];
@@ -4147,7 +4175,10 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     var R = pageH - used;
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
     if (cur.length && (it.height + keepWith) > R + 1e-6) {
-      if (!(canSplit && splitAt(R) >= 0)) { flush(); R = pageH; }
+      if (!(canSplit && splitAt(R) >= 0)) {
+        if (trySpill(it, R)) continue;   // dropped the before-text into the gap; image + after queued on the next page
+        flush(); R = pageH;
+      }
     }
     if ((it.height + keepWith) <= R + 1e-6) { placeWhole(it); continue; }   // fits
     if (canSplit) {
@@ -4379,7 +4410,9 @@ function composeMagazine(plan, bands, opts) {
         var cs = cell.cStart || 0;
         var ce = (cell.cEnd != null) ? cell.cEnd : b.stext.length;
         if (b.simg) {
-          if (cs === 0 && b.renderHead) html = b.renderHead(ce);   // panel HEAD: image + text up to the cut
+          if (cell.textLead) html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // SPILL lead: leading text ONLY (image leads the next page)
+          else if (cell.imgBody && b.renderHead) html = b.renderHead(cs, ce);   // SPILL body: image + the text AFTER the spilled lead
+          else if (cs === 0 && b.renderHead) html = b.renderHead(0, ce);   // panel HEAD: image + text up to the cut
           else html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // continuation: full-width, boundary-aware
         } else {
           html = buildNarrativeHTML(b.stext.slice(cs, ce), b.sIntro);
