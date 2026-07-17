@@ -4154,6 +4154,33 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
   return pages;
 }
 
+// The browser measure sometimes captures only a panel's FIRST narrative paragraph (the `before`),
+// leaving the `after` half with no line positions -- so the packer can't cut there and the whole
+// `after` is stranded on the next page (big white). If a splittable band's line data stops well
+// short of its text, extend it: reuse the measured line-height and chars-per-line to lay out the
+// remaining characters below the last measured line, up to the band's true measured height. The
+// positions are an estimate, but SPLIT_PAD buffers them and it turns "can't cut" into "can cut".
+function fillMissingMagazineLines(meas, bands) {
+  if (!meas || !meas.lines || !meas.lineChars) return;
+  for (var i = 0; i < bands.length; i++) {
+    var b = bands[i]; if (!b || b.stext == null) continue;
+    var ln = meas.lines[i], lc = meas.lineChars[i];
+    if (!ln || !lc || ln.length < 2 || ln.length !== lc.length) continue;
+    var S = b.stext.length;
+    if (lc[lc.length - 1] >= S - 24) continue;                       // already reaches the text end
+    var span = (ln[ln.length - 1] - ln[0]) / (ln.length - 1);        // in/line
+    var cps = (lc[lc.length - 1] - lc[0]) / (ln.length - 1);         // chars/line
+    if (!(span > 0.05) || !(cps > 5)) continue;
+    var H = meas.h[i] || (ln[ln.length - 1] + span);
+    var y = ln[ln.length - 1], c = lc[lc.length - 1], guard = 0;
+    while (c < S - 4 && y + span <= H + 0.2 && guard++ < 400) {
+      c = Math.min(S, Math.round(c + cps));
+      y = Math.round((y + span) * 1000) / 1000;
+      ln.push(y); lc.push(c);
+    }
+  }
+}
+
 async function computeMagazinePack(req, campaignId, packOpts) {
   var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
   var _hdrOn = (_co.header == null) ? true : !!_co.header;
@@ -4167,6 +4194,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
   var bandH = meas.h;
   var bands = _mzBands || [];
+  fillMissingMagazineLines(meas, bands);
   var pages = packMagazineBands(bands, meas, pageH, _markerBreak, null, null);
 
   // Grow-to-fill: for each page left noticeably under-full, enlarge its LAST growable floated
@@ -4250,6 +4278,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var mbuilt2 = await assembleNovelHtml(req, campaignId, null);
     var meas2 = magazineMeasure((await measureDocument(mbuilt2.html, {})).blocks || []);
     var bands2 = _mzBands || [];
+    fillMissingMagazineLines(meas2, bands2);
     bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak, grow, splitAllow);
   }
   delete req.query.measureMagazine;
