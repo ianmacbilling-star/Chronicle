@@ -978,7 +978,8 @@ var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
-var MZ_FEATURE_MAX_H = 5.5;  // portrait-feature height cap (was 8.4). At 8.4 (near full-page) a feature forced its own page and stranded the tail before it; the plan showed even 7in exceeds every stranded gap. 5.5in (still ~60% of the page, clearly featured) fits/splits into the ~6in gaps. Tunable.
+var MZ_FEATURE_MAX_H = 5.5;       // OPTIMIZE-ONLY portrait-feature cap (applied only when opts.mzCapFeatures). Lets features share/split into ~6in gaps.
+var MZ_FEATURE_MAX_H_FLOW = 8.4;  // the flow (Before) render keeps the ORIGINAL cap, so the reference book never moves under us.
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
 // printable page height, or it overflows its page container (and the measure pass
@@ -1243,7 +1244,7 @@ function cgFeatureImgH(m, opts) {
     var ihE = Math.min(5.0, 3.8 / asp); if (ihE * asp > 4.4) ihE = 4.4 / asp; return ihE;
   }
   if (asp >= 1.5) return CG_W / asp;
-  return Math.min(MZ_FEATURE_MAX_H, CG_W / asp);
+  return Math.min((opts && opts.mzCapFeatures) ? MZ_FEATURE_MAX_H : MZ_FEATURE_MAX_H_FLOW, CG_W / asp);
 }
 function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
   mul = mul || 1;
@@ -1271,7 +1272,7 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
   // fills via focal cover, so there is no void either.
-  var H = Math.min(MZ_FEATURE_MAX_H, CG_W / asp) * mul;
+  var H = Math.min((opts && opts.mzCapFeatures) ? MZ_FEATURE_MAX_H : MZ_FEATURE_MAX_H_FLOW, CG_W / asp) * mul;
   var W = Math.min(CG_W, H * asp);
   var ctr = (W < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
   var img = m.image
@@ -3876,6 +3877,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
   if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.arrange = 'paired'; co.measurePaired = true; }
   if (req.query.measureMagazine === '1') { co = co || {}; co.measureMagazine = true; if (co.arrange !== 'magazine' && co.arrange !== 'gazette') co.arrange = 'magazine'; }
+  if (req.query.mzCapFeatures === '1') { co = co || {}; co.mzCapFeatures = true; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
@@ -4209,6 +4211,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   // Pass 1 -- default image sizes.
   _mzGrow = null; _mzBands = [];
   req.query.measureMagazine = '1';
+  req.query.mzCapFeatures = '1';   // OPTIMIZE-ONLY: cap portrait features to 5.5in for the packed book; the flow render never sets this
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
   var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
   var bandH = meas.h;
@@ -4317,6 +4320,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak, grow, splitAllow);
   }
   delete req.query.measureMagazine;
+  delete req.query.mzCapFeatures;
   _mzBands = null; _mzGrow = null;
 
   var _dbg = null;
