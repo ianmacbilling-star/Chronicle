@@ -4162,8 +4162,6 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
 // positions are an estimate, but SPLIT_PAD buffers them and it turns "can't cut" into "can cut".
 function fillMissingMagazineLines(meas, bands) {
   if (!meas || !meas.lines || !meas.lineChars) return;
-  // Snap a char index to the nearest whitespace so a synthesized cut lands on a WORD boundary
-  // (never mid-word) and, because renderMzSlice trims, cleanly at a line-ish break.
   function snapWord(t, c) {
     if (c <= 1 || c >= t.length - 1) return c;
     for (var d = 0; d <= 20; d++) {
@@ -4179,25 +4177,26 @@ function fillMissingMagazineLines(meas, bands) {
     var S = b.stext.length;
     if (lc[lc.length - 1] >= S - 24) continue;                       // already reaches the text end
     var span = (ln[ln.length - 1] - ln[0]) / (ln.length - 1);        // in/line (measured)
-    if (!(span > 0.05)) continue;
-    var H = meas.h[i] || (ln[ln.length - 1] + span);
-    var lastY = ln[ln.length - 1], lastC = lc[lc.length - 1];
-    var afterH = H - lastY;                                          // real height the unmeasured tail occupies
-    if (afterH < span * 0.8) continue;
-    // Line COUNT comes from the true remaining height; chars-per-line from the true remaining chars.
-    // This is accurate for features (before/after both full-width) and for floats the after is full-
-    // width below the image, so it self-corrects instead of reusing the narrow before-column density.
-    var nAfter = Math.max(1, Math.round(afterH / span));
-    var remChars = S - lastC;
-    var cps = remChars / nAfter;
-    if (!(cps > 3)) continue;
-    for (var k = 1; k <= nAfter; k++) {
-      var y = Math.round((lastY + span * k) * 1000) / 1000;
-      var craw = Math.min(S, Math.round(lastC + cps * k));
-      var cs = snapWord(b.stext, craw);
-      if (cs <= lc[lc.length - 1]) cs = Math.min(S, lc[lc.length - 1] + 1);   // keep char offsets strictly increasing
+    // FULL-WIDTH chars/line = the WIDEST measured line. The unmeasured `after` wraps full-width below
+    // the image, so its lines are this wide; using the widest measured line makes the synthesized line
+    // boundaries land on REAL line ends (not mid-line), so cuts never chop a line short.
+    var wide = 0; for (var q = 1; q < lc.length; q++) { var d = lc[q] - lc[q - 1]; if (d > wide) wide = d; }
+    if (!(span > 0.05) || !(wide > 8)) continue;
+    // Start the `after` at the true paragraph boundary (mbound) when we have it, so the first synthesized
+    // line begins where the after text actually begins -- not mid-way through the last `before` line.
+    var y = ln[ln.length - 1];
+    var c = (b.mbound != null && b.mbound > lc[lc.length - 1] + 2) ? b.mbound : (lc[lc.length - 1] + wide);
+    var guard = 0;
+    while (c < S && guard++ < 400) {
+      var cs = snapWord(b.stext, Math.min(S, c));
+      if (cs <= lc[lc.length - 1]) cs = Math.min(S, lc[lc.length - 1] + 1);
+      y = Math.round((y + span) * 1000) / 1000;
       ln.push(y); lc.push(cs);
+      if (cs >= S) break;
+      c = cs + wide;
     }
+    // ensure a cut point exists at the very end so the head can take the whole `after` when it fits
+    if (lc[lc.length - 1] < S) { ln.push(Math.round((y + span) * 1000) / 1000); lc.push(S); }
   }
 }
 
@@ -4386,7 +4385,7 @@ function magazinePlanText(packed) {
   var pad = function (v, n) { var t = String(v); while (t.length < n) t += ' '; return t; };
   var L = [];
   L.push('PACK PLAN  -  ' + (d.campaign || ''));
-  L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  pages=' + d.pages.length);
+  L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  content-pages=' + d.pages.length + '  (the PDF also adds front/back matter: cover, title, contents, cast -- so the viewer page count is higher)');
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   L.push('');
