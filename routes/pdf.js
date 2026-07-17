@@ -976,6 +976,7 @@ var MZ_SHRINK = 1.0;  // was 0.9 -- global shrink backfired (smaller pics = more
 var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimension never renders below this
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
+var MZ_GAPFIT_FLOOR = 0.6;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
 // printable page height, or it overflows its page container (and the measure pass
@@ -1608,18 +1609,22 @@ function renderMzSlice(text, bound, cs, ce, opts) {
   return out;
 }
 function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
-  var band = { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small),
-    regrow: function (mul) { return cgFlowFloat(m, opts, narr, sideLeft, small, mul); } };
-  band.sImgH = cgFloatDims(m, opts, small, 1).imgH;   // image height: split-below-image cut point + pull-up image-dominance test
-  if (mtext) {
-    // Splittable panel: image + one or two (before/after) prose paragraphs. The packer may cut the
-    // text BELOW the image (sImgH) and continue it full-width on the next page; renderHead re-draws
-    // the panel with the text truncated to the head slice (image size unchanged -- split floats aren't grown).
-    band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
-    band.sIntro = false; band.sDrop = false; band.simg = true;
-    band.renderHead = function (cEnd) { return cgFlowFloat(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft, small); };
+  function build(mul) {
+    var band = { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small, mul),
+      regrow: function (mm) { return cgFlowFloat(m, opts, narr, sideLeft, small, mm); },
+      remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
+    band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
+    if (mtext) {
+      // Splittable panel: image + one or two (before/after) prose paragraphs. The packer may cut the
+      // text BELOW the image (sImgH) and continue it full-width on the next page; renderHead re-draws
+      // the panel with the text truncated to the head slice at this image size.
+      band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
+      band.sIntro = false; band.sDrop = false; band.simg = true;
+      band.renderHead = function (cEnd) { return cgFlowFloat(m, opts, renderMzSlice(mtext, band.mbound, 0, cEnd, opts), sideLeft, small, mul); };
+    }
+    return band;
   }
-  return band;
+  return build(1);
 }
 // Non-enclose WIDE: full-width image with the narrative entirely BELOW it -> splittable like a
 // float, but any narrative line is a valid cut (all lines sit under the picture, so sImgH=0).
@@ -1711,7 +1716,7 @@ function buildMagazineMeasureBody(moments, sections, intro, outro, opts) {
   for (var j = 0; j < bands.length; j++) {
     var gi = _mzBands ? _mzBands.length : j;
     var bnd = bands[j];
-    if (_mzGrow && bnd.regrow && _mzGrow[gi] && _mzGrow[gi] !== 1) bnd = { kind: bnd.kind, html: bnd.regrow(_mzGrow[gi]), regrow: bnd.regrow };
+    if (_mzGrow && bnd.regrow && _mzGrow[gi] && _mzGrow[gi] !== 1) bnd = bnd.remeta ? bnd.remeta(_mzGrow[gi]) : { kind: bnd.kind, html: bnd.regrow(_mzGrow[gi]), regrow: bnd.regrow };
     if (_mzBands) _mzBands.push(bnd);
     // display:flow-root contains each band's float so the measured height is complete.
     out += '<div data-mblk="mzb:' + gi + '" data-mkind="' + bnd.kind + '" style="display:flow-root;">' + bnd.html + '</div>';
@@ -4042,7 +4047,7 @@ function magazineMeasure(blocks) {
 // whole measured line that fits and the remainder continues -- full width, re-wrapping identically,
 // so the measured line data stays exact -- on the next page (and may split again). Placements carry
 // a char range {cStart,cEnd} that composeMagazine slices out of the band's raw text (b.stext).
-function packMagazineBands(bands, meas, pageH, markerBreak, growMap) {
+function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow) {
   var bandH = meas.h;
   var pages = [], cur = [], used = 0;
   var round3 = function (n) { return Math.round(n * 1000) / 1000; };
@@ -4071,10 +4076,10 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap) {
     if (markerBreak && kind === 'session-header' && cur.length) flush();
     var canSplit = b.stext != null && it.lines && it.lineChars && it.lines.length >= 2 &&
       it.lineChars.length === it.lines.length && (kind === 'intro' || kind === 'outro' || kind === 'float' || kind === 'wide') &&
-      !(growMap && growMap[it.band]);   // a grown float fits its page -- don't split it (its stored sImgH is the un-grown height)
+      !(growMap && growMap[it.band] && !(splitAllow && splitAllow[it.band]));   // sized bands stay whole EXCEPT gap-fit shrinks, which were shrunk precisely so they CAN split into a gap
     // A float head must clear the floated image (sImgH) so the continuation re-wraps clean full-width;
     // pure text (intro/outro or a float TAIL, simg=false) can cut at any line past a small minimum.
-    var minB = it.simg ? (it.sImgH + 0.4) : 0.5;
+    var minB = it.simg ? (it.sImgH + ((splitAllow && splitAllow[it.band]) ? 0.05 : 0.4)) : 0.5;   // gap-fit shrinks cut right below the (now-small) image; normal floats keep 0.4in clearance
     function splitAt(room) { var Lx = -1; for (var q = 0; q < it.lines.length - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; } return Lx; }
     var R = pageH - used;
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
@@ -4114,14 +4119,14 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
   var bandH = meas.h;
   var bands = _mzBands || [];
-  var pages = packMagazineBands(bands, meas, pageH, _markerBreak, null);
+  var pages = packMagazineBands(bands, meas, pageH, _markerBreak, null, null);
 
   // Grow-to-fill: for each page left noticeably under-full, enlarge its LAST growable floated
   // image toward the leftover white. Only floats carry regrow() (full-width bands are already at
   // column width). We aim high (85% of slack) because the SECOND pass re-measures the grown,
   // reflowed bands and RE-PACKS with their true heights -- so a picture that grows past its page
   // simply moves to the next page instead of clipping at the break.
-  var grow = {};
+  var grow = {}, splitAllow = {};
   pages.forEach(function (pg) {
     var u = 0, floats = [];
     for (var c = 0; c < pg.length; c++) { u += (pg[c].heightIn != null ? pg[c].heightIn : (bandH[pg[c].band] || 0)); if (!pg[c].split && bands[pg[c].band] && bands[pg[c].band].regrow) floats.push(pg[c].band); }
@@ -4166,13 +4171,37 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     if (mul >= 0.78 && mul < 0.98) grow[nbi] = Math.round(mul * 100) / 100;   // pull it up onto this page
   });
 
-  // Pass 2 -- re-render grown floats, re-measure true heights, re-pack (exact pagination).
+  // Shrink-to-fit-the-gap: a page still under-full whose NEXT band is a splittable FLOAT whose image
+  // is too tall to cut into that gap -- shrink the image just enough that image + a couple text lines
+  // fit, then let the splitter flow the rest. This fills white while KEEPING the wrap (a smaller
+  // wrapped picture, its text continuing) instead of growing anything. Modest shrink only; if it would
+  // need to go below MZ_GAPFIT_FLOOR we leave the white and keep the picture full-size -- err toward
+  // the magazine wrap, never toward a Picture-Book blowup.
+  pages.forEach(function (pg, pi) {
+    var u = 0, sizedHere = false;
+    for (var c = 0; c < pg.length; c++) { u += (pg[c].heightIn != null ? pg[c].heightIn : (bandH[pg[c].band] || 0)); if (grow[pg[c].band]) sizedHere = true; }
+    var slack = pageH - u;
+    if (slack < 1.3 || sizedHere) return;
+    var nxt = pages[pi + 1];
+    if (!nxt || !nxt.length || nxt[0].split) return;
+    var nbi = nxt[0].band, band = bands[nbi];
+    if (!band || !band.remeta || !band.stext || !band.simg || grow[nbi]) return;   // a splittable FLOAT (image + prose), not already sized
+    var full = bandH[nbi] || 0;
+    if (full <= slack + 1e-6) return;                              // already fits whole -> packer would place it here
+    if (band.sImgH <= slack - MZ_SPLIT_PAD - 0.7) return;         // normal splitter already cuts this into the gap (line fits below the image) -> no shrink
+    var targetImgH = slack - MZ_SPLIT_PAD - 0.5;                  // shrink so image + a whole cut line clear the gap (window >= one line)
+    if (targetImgH < 1.2) return;                                 // gap too small to hold a legible image + text
+    var mul = targetImgH / band.sImgH;
+    if (mul >= MZ_GAPFIT_FLOOR && mul < 0.98) { grow[nbi] = Math.round(mul * 100) / 100; splitAllow[nbi] = true; }
+  });
+
+  // Pass 2 -- re-render grown/shrunk floats, re-measure true heights, re-pack (exact pagination).
   if (Object.keys(grow).length) {
     _mzGrow = grow; _mzBands = [];
     var mbuilt2 = await assembleNovelHtml(req, campaignId, null);
     var meas2 = magazineMeasure((await measureDocument(mbuilt2.html, {})).blocks || []);
     var bands2 = _mzBands || [];
-    bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak, grow);
+    bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak, grow, splitAllow);
   }
   delete req.query.measureMagazine;
   _mzBands = null; _mzGrow = null;
