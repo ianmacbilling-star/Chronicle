@@ -14369,6 +14369,7 @@ var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
 var _finalizeBeforeBlob = '';
 var _finalizeFills = {};
+var _finalizeAfterFills = {};   // per-page ink-fill % for the After pane (parallels _finalizeFills)
 var _finalizeAfterBlob = '';
 function loadFinalize() {
   if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
@@ -14579,8 +14580,13 @@ function _runLayoutAiOptimize() {
         var _dEl = document.getElementById('layoutai-delta');
         if (_dEl) {
           var delta = bp - cnt;
-          _dEl.innerHTML = 'Before: <strong>' + bp + '</strong> pages &nbsp;&rarr;&nbsp; After: <strong>' + cnt + '</strong> pages' +
+          var _wB = finalizeWhitePct(_finalizeFills, bp), _wA = finalizeWhitePct(_finalizeAfterFills, cnt);
+          var _html = 'Before: <strong>' + bp + '</strong> pages &nbsp;&rarr;&nbsp; After: <strong>' + cnt + '</strong> pages' +
             (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
+          if (_wB != null && _wA != null) { var _dW = _wB - _wA;
+            _html += '<br>White space: <strong>' + _wB + '%</strong> &nbsp;&rarr;&nbsp; <strong>' + _wA + '%</strong>' +
+              (_dW > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + _dW + '</strong>)' : (_dW < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-_dW) + '</strong>)' : '')); }
+          _dEl.innerHTML = _html;
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // reflect the spent token
       }
@@ -14764,6 +14770,24 @@ function finalizeRenderWidth(container) {
   return Math.max(400, (container ? container.clientWidth : 400) - 8);
 }
 var _pdfRenderTokens = {};
+// Whole-book white-space score from per-page ink-fill %. Average the interior pages (skip the
+// front/back cover, which are non-content) and return 100 - avgFill so higher = more white.
+function finalizeWhitePct(fills, total) {
+  var vals = [];
+  Object.keys(fills || {}).forEach(function (k) {
+    var pn = parseInt(k, 10);
+    if (pn === 1 || pn === total) return;   // exclude covers
+    if (typeof fills[k] === 'number') vals.push(fills[k]);
+  });
+  if (!vals.length) return null;
+  var sum = 0; vals.forEach(function (v) { sum += v; });
+  return Math.max(0, Math.round(100 - sum / vals.length));
+}
+function finalizeCountLabel(total, whitePct) {
+  var t = total + (total === 1 ? ' page' : ' pages');
+  if (whitePct != null) t += ' \u00b7 ' + whitePct + '% white';
+  return t;
+}
 function renderPdfInto(url, containerId, isBefore) {
   var container = document.getElementById(containerId);
   if (!container) return;
@@ -14778,7 +14802,7 @@ function renderPdfInto(url, containerId, isBefore) {
   var cv = document.getElementById(containerId + '-cv');
   var pf = document.getElementById(containerId + '-pf');
   var pm = document.getElementById(containerId + '-pm');
-  if (isBefore) _finalizeFills = {};
+  if (isBefore) _finalizeFills = {}; else _finalizeAfterFills = {};
   var flagged = [];
   // The server generates the whole PDF (~20s). Nothing to show real progress on during
   // that fetch, so creep the bar to ~45% so it's obviously working, not stuck.
@@ -14819,7 +14843,7 @@ function renderPdfInto(url, containerId, isBefore) {
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
-              if (isBefore) { var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); -- draws the scan's detected content-bottom line + culprit pixel on each Before page. Un-comment to debug the under-fill scan. */ if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); } }
+              { var fill = measureCanvasFill(canvas); if (fill != null) { var _fpct = Math.round(fill * 100); if (isBefore) { _finalizeFills[pageNum] = _fpct; /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); */ if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: _fpct }); } else { _finalizeAfterFills[pageNum] = _fpct; } } }
             });
           });
         });
@@ -14830,6 +14854,9 @@ function renderPdfInto(url, containerId, isBefore) {
         var pw = document.getElementById(containerId + '-pw');
         if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
+        var _wpct = finalizeWhitePct(isBefore ? _finalizeFills : _finalizeAfterFills, total);
+        var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
+        if (_wcnt) _wcnt.textContent = finalizeCountLabel(total, _wpct);
         finalizeAttachSync();
       });
     });
