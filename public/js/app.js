@@ -14368,6 +14368,7 @@ function finalizeBookQuery() {
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
 var _finalizeBeforeBlob = '';
+var _finalizeDebugUrl = '';   // admin easter egg: pack-plan text dump URL (double-click the After page count)
 var _finalizeFills = {};
 var _finalizeAfterFills = {};   // per-page ink-fill % for the After pane (parallels _finalizeFills)
 var _finalizeAfterBlob = '';
@@ -14562,6 +14563,14 @@ function _runLayoutAiOptimize() {
   // no async job, no tokens -- the packer composes the book page by page and returns the PDF,
   // rendered through the same styled shell as the Before pane so it's a true comparison.
   var composeUrl = '/api/pdf/pack-render/' + cid + '?compose=1' + finalizeBookQuery().replace('?', '&');
+  // Admin easter egg: double-click the After page count to open the pack-plan text dump in a new tab.
+  _finalizeDebugUrl = '/api/pdf/pack-debug/' + cid + finalizeBookQuery();
+  var _dbgCnt = document.getElementById('finalize-after-count');
+  if (_dbgCnt && state.user && state.user.is_admin) {
+    _dbgCnt.style.cursor = 'pointer';
+    _dbgCnt.title = 'Double-click: pack plan (admin)';
+    _dbgCnt.ondblclick = function () { if (_finalizeDebugUrl) window.open(_finalizeDebugUrl, '_blank'); };
+  }
   var afterBody = document.getElementById('finalize-after-body');
   if (afterBody) afterBody.style.display = 'none';
   var afterScroll = document.getElementById('finalize-after-scroll');

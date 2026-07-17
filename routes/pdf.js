@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, getAppSettingInt } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const { canAfford, spendTokens } = require('./tokens');
 const path = require('path');
@@ -977,7 +977,6 @@ var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimens
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.6;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
-var MZ_PACK_DEBUG = true;   // TEMP: overlay each band with kind/height/splittable/line-count so we can see why bands don't split
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
 // printable page height, or it overflows its page container (and the measure pass
@@ -1632,6 +1631,7 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
       regrow: function (mm) { return cgFlowFloat(m, opts, narr, sideLeft, small, mm); },
       remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
     band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
+    band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(momentAspect(m) * 100) / 100;
     if (mtext) {
       // Splittable panel: image + one or two (before/after) prose paragraphs. The packer may cut the
       // text BELOW the image (sImgH) and continue it full-width on the next page; renderHead re-draws
@@ -1653,6 +1653,7 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
       remeta: function (mm) { return build(mm); } };
     var _aspW = Math.max(0.3, momentAspect(m));
     band.sImgH = mul * ((opts && opts.enclose) ? (4.4 / _aspW) : (CG_W / _aspW));   // full-width image height (narrative sits below): split cut point + pull-up / gap-fit
+    band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(_aspW * 100) / 100;
     if (mtext && !(opts && opts.enclose)) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
@@ -1672,6 +1673,7 @@ function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
       regrow: function (mm) { return cgFlowFeature(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     band.sImgH = mul * cgFeatureImgH(m, opts);
+    band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(momentAspect(m) * 100) / 100;
     if (mtext && !(opts && opts.enclose)) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
@@ -4251,28 +4253,38 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   delete req.query.measureMagazine;
   _mzBands = null; _mzGrow = null;
 
-  var _finalMeas = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
-  for (var _bi = 0; _bi < bands.length; _bi++) { if (bands[_bi]) bands[_bi]._dbgN = ((_finalMeas.lines && _finalMeas.lines[_bi]) || []).length; }
+  var _dbg = null;
+  if (packOpts && packOpts.debug) {
+    var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
+    _dbg = {
+      arrange: (_co.arrange || 'magazine'), pageH: pageH, markerBreak: _markerBreak, grow: grow || {},
+      campaign: (mbuilt.campaign && mbuilt.campaign.name) || '',
+      bands: bands.map(function (b, bi) {
+        return { i: bi, kind: b.kind, h: Math.round((_fm.h[bi] || 0) * 1000) / 1000, simg: !!b.simg,
+          sImgH: Math.round((b.sImgH || 0) * 100) / 100, asp: (b.sAsp || 0), title: (b.sTitle || ''),
+          stext: (b.stext != null), slen: (b.stext != null ? b.stext.length : 0),
+          preview: (b.stext != null ? b.stext.slice(0, 60).split('\n').join(' ') : ''),
+          nlines: ((_fm.lines && _fm.lines[bi]) || []).length,
+          lines: ((_fm.lines && _fm.lines[bi]) || []), lineChars: ((_fm.lineChars && _fm.lineChars[bi]) || []),
+          mbound: (b.mbound != null ? b.mbound : null) };
+      }),
+      pages: pages.map(function (pg, pi) {
+        var u = 0; pg.forEach(function (c) { u += (c.heightIn != null ? c.heightIn : (_fm.h[c.band] || 0)); });
+        return { page: pi, used: Math.round(u * 1000) / 1000,
+          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn }; }) };
+      })
+    };
+  }
 
-  return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign };
+  return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
 // browser can't re-paginate. Mirrors composeBook's page shell.
 function composeMagazine(plan, bands, opts) {
   var out = '';
   var pages = (plan && plan.pages) || [];
-  var _dump = '';
   pages.forEach(function (pg, pi) {
     var inner = '';
-    if (MZ_PACK_DEBUG) {
-      var _u = 0; pg.forEach(function (c) { _u += (c.heightIn != null ? c.heightIn : 0); });
-      _dump += 'PAGE ' + pi + '  used ' + (Math.round(_u * 100) / 100) + '\n';
-      pg.forEach(function (c) {
-        var bb = bands[c.band] || {};
-        _dump += '   b' + c.band + ' ' + (bb.kind || '?') + ' h' + c.heightIn + (bb.stext != null ? ' S' : ' -') + ' L' + (bb._dbgN || 0) +
-          (c.split ? (' CUT ' + (c.cStart || 0) + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : '') + '\n';
-      });
-    }
     pg.forEach(function (cell) {
       var b = bands[cell.band];
       if (!b) return;
@@ -4296,12 +4308,64 @@ function composeMagazine(plan, bands, opts) {
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
     out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
   });
-  if (MZ_PACK_DEBUG) {
-    out = '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;page-break-after:always;background:#fff;"><pre style="font:12px/1.4 monospace;color:#000;white-space:pre-wrap;margin:0.3in;">PACK PLAN (' + pages.length + ' pages)\n' + _dump + '</pre></div>' + out;
-  }
   return out;
 }
+// Plain-text pack-plan dump for the admin easter egg (double-click the After page count). Everything
+// needed to debug a magazine/gazette layout: per-band kind/height/image/splittable/line-count, and
+// each page's fill with UNDERFULL flags and split char-ranges.
+function magazinePlanText(packed) {
+  var d = packed && packed.dbg;
+  if (!d) return 'no debug plan available';
+  var pad = function (v, n) { var t = String(v); while (t.length < n) t += ' '; return t; };
+  var L = [];
+  L.push('PACK PLAN  -  ' + (d.campaign || ''));
+  L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  pages=' + d.pages.length);
+  var gk = Object.keys(d.grow || {});
+  L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
+  L.push('');
+  L.push('BANDS');
+  d.bands.forEach(function (b) {
+    L.push('  ' + pad('b' + b.i, 5) + pad(b.kind, 15) + 'h' + pad(b.h.toFixed(2), 7) +
+      (b.simg ? ('img' + pad(b.sImgH.toFixed(2), 6) + 'a' + pad(b.asp, 5)) : pad('', 14)) + (b.stext ? ('S(' + b.slen + ')') : '-') +
+      '  L' + b.nlines + (b.mbound != null ? ('  mb' + b.mbound) : '') +
+      (b.title ? ('  "' + b.title + '"') : '') + (b.preview ? ('  | ' + b.preview) : ''));
+  });
+  L.push('');
+  L.push('PAGES  (* = underfull, used < ' + (d.pageH - 1).toFixed(1) + 'in)');
+  d.pages.forEach(function (pg) {
+    var white = Math.round((d.pageH - pg.used) * 100) / 100;
+    var flag = (pg.used < d.pageH - 1) ? '  *UNDERFULL' : '';
+    L.push('  PAGE ' + pad(pg.page, 3) + ' used ' + pad(pg.used.toFixed(2), 6) + '/ ' + d.pageH.toFixed(2) + '  white ' + pad(white.toFixed(2), 6) + flag);
+    pg.cells.forEach(function (c) {
+      L.push('      ' + pad('b' + c.band, 5) + pad(c.kind || '?', 15) + 'h' + pad((c.h != null ? c.h : '?'), 7) +
+        (c.split ? ('CUT ' + c.cStart + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : ''));
+    });
+  });
+  L.push('');
+  L.push('=== RAW JSON (kitchen sink) ===');
+  L.push(JSON.stringify(d, null, 2));
+  return L.join('\n');
+}
 
+// Admin-only easter egg: dump the pack plan as plain text (double-click the After page count).
+// Runs the same pack the compose does but returns the readable plan instead of a PDF -- no token spend.
+router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    var txt;
+    if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      txt = magazinePlanText(packedM);
+    } else {
+      txt = 'pack-debug: only magazine/gazette plans are dumped here (arrange=' + (_cco.arrange || 'paired') + ').';
+    }
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    return res.send(txt);
+  } catch (e) {
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    return res.status(500).send('pack-debug error:\n' + ((e && e.stack) || (e && e.message) || e));
+  }
+});
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
