@@ -973,6 +973,7 @@ function coDropOrIntro(intro, opts) {
 var CG_W = 6.8;     // content column width (inches), used for aspect-based heights
 var CG_GAP = 0.12;  // gutter between panels (inches)
 var MZ_SHRINK = 0.9;  // global magazine density shrink for floated images (leaves more room per page; wides stay full-width)
+var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimension never renders below this
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
 // printable page height, or it overflows its page container (and the measure pass
@@ -1143,6 +1144,11 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
   if (mul > 1) { imgH *= mul; capW = Math.min(6.4, capW * mul); }   // grow-to-fill: enlarge the floated image, raise its width cap toward the column (text still wraps beside)
   var imgW = imgH * asp;
   if (imgW > capW) { imgW = capW; imgH = imgW / asp; }
+  // Legibility floor: a minimized square (or any small float) was landing tiny because the
+  // small-tier height + density shrink + width cap stack up. Ensure the larger dimension of a
+  // small float is at least MZ_FLOAT_MIN in -- bumps squares most (both dims small), leaves
+  // landscapes (wide enough) and portraits (already tall enough) essentially untouched.
+  if (small && Math.max(imgW, imgH) < MZ_FLOAT_MIN) { var _fl = MZ_FLOAT_MIN / Math.max(imgW, imgH); imgW *= _fl; imgH *= _fl; }
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
   var box = gzImgBox(m, opts, fl, imgW, imgH);
