@@ -1128,7 +1128,7 @@ function gzFloatPanel(m, opts, narrHtml, iw, ih, sideLeft) {
   var box = gzImgBox(m, opts, fl, iw, ih);
   return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
 }
-function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
+function cgFloatDims(m, opts, small, mul) {
   mul = mul || 1;
   var asp = Math.max(0.3, momentAspect(m));
   var imgH, capW;
@@ -1141,7 +1141,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
     capW = small ? 2.5 : 3.3;
   }
   imgH *= MZ_SHRINK; capW *= MZ_SHRINK;   // base density shrink (grow-to-fill can still enlarge from here)
-  if (mul > 1) { imgH *= mul; capW = Math.min(6.4, capW * mul); }   // grow-to-fill: enlarge the floated image, raise its width cap toward the column (text still wraps beside)
+  if (mul !== 1) { imgH *= mul; capW = Math.min(6.4, capW * mul); }   // size multiplier: >1 grow-to-fill (enlarge toward the column), <1 pull-up shrink (fit a prior page's white)
   var imgW = imgH * asp;
   if (imgW > capW) { imgW = capW; imgH = imgW / asp; }
   // Legibility floor: a minimized square (or any small float) was landing tiny because the
@@ -1149,9 +1149,13 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
   // small float is at least MZ_FLOAT_MIN in -- bumps squares most (both dims small), leaves
   // landscapes (wide enough) and portraits (already tall enough) essentially untouched.
   if (small && Math.max(imgW, imgH) < MZ_FLOAT_MIN) { var _fl = MZ_FLOAT_MIN / Math.max(imgW, imgH); imgW *= _fl; imgH *= _fl; }
+  return { imgW: imgW, imgH: imgH, asp: asp };
+}
+function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
+  var d = cgFloatDims(m, opts, small, mul);
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
-  var box = gzImgBox(m, opts, fl, imgW, imgH);
+  var box = gzImgBox(m, opts, fl, d.imgW, d.imgH);
   return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
 }
 
@@ -1576,9 +1580,18 @@ function mzProseText(t) {
 // A float band that carries a regrow(mul) closure so the deterministic packer can re-render
 // the SAME floated image larger to fill leftover page white (grow-to-fill). The closure
 // captures this panel's moment/side/small so it re-renders identically apart from size.
-function mzFloatBand(m, opts, narr, sideLeft, small) {
-  return { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small),
+function mzFloatBand(m, opts, narr, sideLeft, small, mtext) {
+  var band = { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small),
     regrow: function (mul) { return cgFlowFloat(m, opts, narr, sideLeft, small, mul); } };
+  band.sImgH = cgFloatDims(m, opts, small, 1).imgH;   // image height: split-below-image cut point + pull-up image-dominance test
+  if (mtext) {
+    // Splittable panel: image + a single prose paragraph. The packer may cut the text BELOW the
+    // image (sImgH) and continue it full-width on the next page; renderHead re-draws the panel
+    // with the text truncated to the head slice (image size unchanged -- split floats aren't grown).
+    band.stext = mtext; band.sIntro = false; band.sDrop = false; band.simg = true;
+    band.renderHead = function (cEnd) { return cgFlowFloat(m, opts, coNarr(mtext.slice(0, cEnd), opts, false), sideLeft, small); };
+  }
+  return band;
 }
 // Magazine band generator (shared by the flow render AND the deterministic packer).
 // Returns an ORDERED array of { kind, html } bands: an intro band, one band per panel
@@ -1596,10 +1609,10 @@ function magazineBands(moments, sections, intro, outro, opts) {
   for (var k = 0; k < moments.length; k++) {
     var mm = moments[k];
     var sec = sections.find(function (s) { return s.panel_index === k; }) || {};
-    var parts = [];
-    if (sec.before) parts.push(coNarr(sec.before, opts, false));
-    if (sec.after) parts.push(coNarr(sec.after, opts, false));
-    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''), prom: lmProminence(mm), tier: lmSizeTier(mm), feature: false });
+    var parts = [], rawParts = [];
+    if (sec.before) { parts.push(coNarr(sec.before, opts, false)); rawParts.push(sec.before); }
+    if (sec.after) { parts.push(coNarr(sec.after, opts, false)); rawParts.push(sec.after); }
+    panels.push({ m: mm, asp: Math.max(0.3, momentAspect(mm)), narr: parts.join(''), mtext: (rawParts.length === 1 ? mzProseText(rawParts[0]) : null), prom: lmProminence(mm), tier: lmSizeTier(mm), feature: false });
   }
   // Maximize (prominence 4-5) blows the beat up to a feature. This is now a
   // deliberate 3-way control (Minimize / Default / Maximize), so no peak gate.
@@ -1622,13 +1635,13 @@ function magazineBands(moments, sections, intro, outro, opts) {
     } else if (p.feature) {
       bands.push({ kind: 'feature', html: cgFlowFeature(p.m, opts, p.narr, sideLeft) }); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
-      bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, true)); sideLeft = !sideLeft; i += 1;
+      bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, true, p.mtext)); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
       bands.push({ kind: 'wide', html: cgFlowWide(p.m, opts, p.narr, sideLeft) }); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5 && normShape(panels[i + 1].m) !== 'tower') {
       bands.push({ kind: 'pair', html: cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr) }); i += 2;
     } else {
-      bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, false)); sideLeft = !sideLeft; i += 1;
+      bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, false, p.mtext)); sideLeft = !sideLeft; i += 1;
     }
   }
 
@@ -1654,7 +1667,7 @@ function buildMagazineMeasureBody(moments, sections, intro, outro, opts) {
   for (var j = 0; j < bands.length; j++) {
     var gi = _mzBands ? _mzBands.length : j;
     var bnd = bands[j];
-    if (_mzGrow && bnd.regrow && _mzGrow[gi] && _mzGrow[gi] > 1) bnd = { kind: bnd.kind, html: bnd.regrow(_mzGrow[gi]), regrow: bnd.regrow };
+    if (_mzGrow && bnd.regrow && _mzGrow[gi] && _mzGrow[gi] !== 1) bnd = { kind: bnd.kind, html: bnd.regrow(_mzGrow[gi]), regrow: bnd.regrow };
     if (_mzBands) _mzBands.push(bnd);
     // display:flow-root contains each band's float so the measured height is complete.
     out += '<div data-mblk="mzb:' + gi + '" data-mkind="' + bnd.kind + '" style="display:flow-root;">' + bnd.html + '</div>';
@@ -3985,7 +3998,7 @@ function magazineMeasure(blocks) {
 // whole measured line that fits and the remainder continues -- full width, re-wrapping identically,
 // so the measured line data stays exact -- on the next page (and may split again). Placements carry
 // a char range {cStart,cEnd} that composeMagazine slices out of the band's raw text (b.stext).
-function packMagazineBands(bands, meas, pageH, markerBreak) {
+function packMagazineBands(bands, meas, pageH, markerBreak, growMap) {
   var bandH = meas.h;
   var pages = [], cur = [], used = 0;
   var round3 = function (n) { return Math.round(n * 1000) / 1000; };
@@ -3999,7 +4012,8 @@ function packMagazineBands(bands, meas, pageH, markerBreak) {
   for (var i = 0; i < bands.length; i++) {
     var h0 = bandH[i] || 0;
     if (h0 <= 0.001) continue;   // empty intro/outro band -- skip
-    work.push({ band: i, cStart: 0, cEnd: null, height: h0, lines: meas.lines[i] || null, lineChars: meas.lineChars[i] || null });
+    var bd = bands[i];
+    work.push({ band: i, cStart: 0, cEnd: null, height: h0, lines: meas.lines[i] || null, lineChars: meas.lineChars[i] || null, simg: !!bd.simg, sImgH: bd.sImgH || 0 });
   }
   for (var w = 0; w < work.length; w++) {
     var it = work[w];
@@ -4008,25 +4022,27 @@ function packMagazineBands(bands, meas, pageH, markerBreak) {
     var keepWith = (kind === 'session-header' && bands[it.band + 1] && bands[it.band + 1].kind === 'title-image') ? (bandH[it.band + 1] || 0) : 0;
     if (markerBreak && kind === 'session-header' && cur.length) flush();
     var canSplit = b.stext != null && it.lines && it.lineChars && it.lines.length >= 2 &&
-      it.lineChars.length === it.lines.length && (kind === 'intro' || kind === 'outro');
+      it.lineChars.length === it.lines.length && (kind === 'intro' || kind === 'outro' || kind === 'float') &&
+      !(growMap && growMap[it.band]);   // a grown float fits its page -- don't split it (its stored sImgH is the un-grown height)
+    // A float head must clear the floated image (sImgH) so the continuation re-wraps clean full-width;
+    // pure text (intro/outro or a float TAIL, simg=false) can cut at any line past a small minimum.
+    var minB = it.simg ? (it.sImgH + 0.4) : 0.5;
+    function splitAt(room) { var Lx = -1; for (var q = 0; q < it.lines.length - 1; q++) { if (it.lines[q] <= room - 0.06 && it.lines[q] >= minB) Lx = q; } return Lx; }
     var R = pageH - used;
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
     if (cur.length && (it.height + keepWith) > R + 1e-6) {
-      var canHere = false;
-      if (canSplit) { for (var a = 0; a < it.lines.length - 1; a++) { if (it.lines[a] <= R - 0.06) canHere = true; } }
-      if (!canHere) { flush(); R = pageH; }
+      if (!(canSplit && splitAt(R) >= 0)) { flush(); R = pageH; }
     }
     if ((it.height + keepWith) <= R + 1e-6) { placeWhole(it); continue; }   // fits
     if (canSplit) {
-      var L = -1;
-      for (var li = 0; li < it.lines.length - 1; li++) { if (it.lines[li] <= R - 0.06) L = li; }
+      var L = splitAt(R);
       if (L >= 0) {
         var cEnd = it.cStart + it.lineChars[L + 1];
         cur.push({ band: it.band, heightIn: it.lines[L], cStart: it.cStart, cEnd: cEnd, split: true });
         used += it.lines[L]; flush();
         var tLines = [], tChars = [];
         for (var lj = L + 1; lj < it.lines.length; lj++) { tLines.push(round3(it.lines[lj] - it.lines[L])); tChars.push(it.lineChars[lj] - it.lineChars[L + 1]); }
-        work.splice(w + 1, 0, { band: it.band, cStart: cEnd, cEnd: null, height: round3(it.height - it.lines[L]), lines: tLines, lineChars: tChars });
+        work.splice(w + 1, 0, { band: it.band, cStart: cEnd, cEnd: null, height: round3(it.height - it.lines[L]), lines: tLines, lineChars: tChars, simg: false, sImgH: 0 });
         continue;
       }
     }
@@ -4049,7 +4065,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
   var bandH = meas.h;
   var bands = _mzBands || [];
-  var pages = packMagazineBands(bands, meas, pageH, _markerBreak);
+  var pages = packMagazineBands(bands, meas, pageH, _markerBreak, null);
 
   // Grow-to-fill: for each page left noticeably under-full, enlarge its LAST growable floated
   // image toward the leftover white. Only floats carry regrow() (full-width bands are already at
@@ -4077,13 +4093,37 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     });
   });
 
+  // Pull-up (shrink-to-fit): a page still left with white but with NO float of its own to grow can
+  // instead pull the NEXT page's opening image UP, shrinking it (down to 0.78x) to fit the gap. Only
+  // image-dominated floats qualify -- if text runs well below the picture, shrinking the picture
+  // wouldn't shorten the band, and the line-splitter already handles that case. Skips a picture that
+  // is already growing elsewhere, and continuations (a split tail is text, not a pullable image).
+  pages.forEach(function (pg, pi) {
+    var u = 0, growsHere = false;
+    for (var c = 0; c < pg.length; c++) {
+      u += (pg[c].heightIn != null ? pg[c].heightIn : (bandH[pg[c].band] || 0));
+      if (grow[pg[c].band]) growsHere = true;
+    }
+    var slack = pageH - u;
+    if (slack < 0.6 || growsHere) return;
+    var nxt = pages[pi + 1];
+    if (!nxt || !nxt.length || nxt[0].split) return;
+    var nbi = nxt[0].band, band = bands[nbi];
+    if (!band || !band.regrow || grow[nbi]) return;
+    var h = bandH[nbi] || 0;
+    if (!band.sImgH || band.sImgH < h - 0.35) return;   // text extends below the image -> text-dominated, leave to the splitter
+    if (h <= slack + 1e-6) return;                       // already fits (the packer would have placed it here)
+    var mul = (slack - 0.1) / band.sImgH;
+    if (mul >= 0.78 && mul < 0.98) grow[nbi] = Math.round(mul * 100) / 100;   // pull it up onto this page
+  });
+
   // Pass 2 -- re-render grown floats, re-measure true heights, re-pack (exact pagination).
   if (Object.keys(grow).length) {
     _mzGrow = grow; _mzBands = [];
     var mbuilt2 = await assembleNovelHtml(req, campaignId, null);
     var meas2 = magazineMeasure((await measureDocument(mbuilt2.html, {})).blocks || []);
     var bands2 = _mzBands || [];
-    bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak);
+    bands = bands2; pages = packMagazineBands(bands2, meas2, pageH, _markerBreak, grow);
   }
   delete req.query.measureMagazine;
   _mzBands = null; _mzGrow = null;
@@ -4104,8 +4144,13 @@ function composeMagazine(plan, bands, opts) {
       if (cell.split && b.stext != null) {
         var cs = cell.cStart || 0;
         var ce = (cell.cEnd != null) ? cell.cEnd : b.stext.length;
-        html = buildNarrativeHTML(b.stext.slice(cs, ce), b.sIntro);
-        if (cs === 0 && b.sDrop) html = coDropcap(html);   // drop cap only on the opening slice
+        if (b.simg && cs === 0 && b.renderHead) {
+          html = b.renderHead(ce);   // float HEAD: image + text up to the cut
+        } else {
+          html = buildNarrativeHTML(b.stext.slice(cs, ce), b.sIntro);
+          if (cs > 0) html = html.replace('text-indent:0.3in', 'text-indent:0');   // continuation (float tail or intro/outro): no first-line indent
+          if (cs === 0 && b.sDrop) html = coDropcap(html);   // drop cap only on the opening slice
+        }
       } else {
         html = b.html;
       }
