@@ -4261,8 +4261,18 @@ async function computeMagazinePack(req, campaignId, packOpts) {
 function composeMagazine(plan, bands, opts) {
   var out = '';
   var pages = (plan && plan.pages) || [];
+  var _dump = '';
   pages.forEach(function (pg, pi) {
     var inner = '';
+    if (MZ_PACK_DEBUG) {
+      var _u = 0; pg.forEach(function (c) { _u += (c.heightIn != null ? c.heightIn : 0); });
+      _dump += 'PAGE ' + pi + '  used ' + (Math.round(_u * 100) / 100) + '\n';
+      pg.forEach(function (c) {
+        var bb = bands[c.band] || {};
+        _dump += '   b' + c.band + ' ' + (bb.kind || '?') + ' h' + c.heightIn + (bb.stext != null ? ' S' : ' -') + ' L' + (bb._dbgN || 0) +
+          (c.split ? (' CUT ' + (c.cStart || 0) + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : '') + '\n';
+      });
+    }
     pg.forEach(function (cell) {
       var b = bands[cell.band];
       if (!b) return;
@@ -4281,17 +4291,14 @@ function composeMagazine(plan, bands, opts) {
       } else {
         html = b.html;
       }
-      var _lbl = '';
-      if (MZ_PACK_DEBUG) {
-        _lbl = '<div style="position:absolute;right:2px;background:#b00020;color:#fff;font:8px/1.2 monospace;padding:1px 3px;opacity:0.85;">' +
-          cell.band + ':' + (b.kind || '?') + ' h' + (cell.heightIn != null ? cell.heightIn : '?') +
-          (b.stext != null ? ' S' : ' -') + ' L' + (b._dbgN || 0) + (cell.split ? ' CUT' : '') + '</div>';
-      }
-      inner += '<div style="display:flow-root;position:relative;">' + _lbl + html + '</div>';
+      inner += '<div style="display:flow-root;">' + html + '</div>';
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
     out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
   });
+  if (MZ_PACK_DEBUG) {
+    out = '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;page-break-after:always;background:#fff;"><pre style="font:12px/1.4 monospace;color:#000;white-space:pre-wrap;margin:0.3in;">PACK PLAN (' + pages.length + ' pages)\n' + _dump + '</pre></div>' + out;
+  }
   return out;
 }
 
