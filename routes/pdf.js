@@ -978,8 +978,8 @@ var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
-var MZ_OPT_SHRINK_FEATURES = false;  // master switch: when false, Optimize keeps full-size features (no 5.5 cap, no float). Ian: big images beat fewer-but-emptier pages.
-var MZ_FEATURE_MAX_H = 5.5;       // OPTIMIZE-ONLY portrait-feature cap (applied only when opts.mzCapFeatures). Lets features share/split into ~6in gaps.
+var MZ_OPT_SHRINK_FEATURES = true;   // Optimize caps + floats portrait features (milder than before). Ian: keep the wrap, just don't shrink as hard as 5.5.
+var MZ_FEATURE_MAX_H = 6.0;       // OPTIMIZE-ONLY portrait-feature cap (applied only when opts.mzCapFeatures). 6.0 keeps portraits clearly big (65% of the page) while still enabling the margin-float wrap on all of them. Tunable.
 var MZ_FEATURE_MAX_H_FLOW = 8.4;  // the flow (Before) render keeps the ORIGINAL cap, so the reference book never moves under us.
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
