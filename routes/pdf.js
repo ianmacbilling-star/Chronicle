@@ -1628,14 +1628,20 @@ function renderMagazine(moments, sections, intro, outro, opts) {
 // must be unique ACROSS sessions. computeMagazinePack resets this, runs the measure (which
 // fills it via buildMagazineMeasureBody), then reads back the full ordered band list.
 var _mzBands = null;
+// Grow-to-fill map for the SECOND measure pass: { globalBandIndex: sizeMultiplier }. Set by
+// computeMagazinePack between passes; buildMagazineMeasureBody re-renders the matching float
+// bands larger via their regrow() closure so the re-measure captures their true reflowed height.
+var _mzGrow = null;
 function buildMagazineMeasureBody(moments, sections, intro, outro, opts) {
   var bands = magazineBands(moments, sections, intro, outro, opts);
   var out = '';
   for (var j = 0; j < bands.length; j++) {
     var gi = _mzBands ? _mzBands.length : j;
-    if (_mzBands) _mzBands.push(bands[j]);
+    var bnd = bands[j];
+    if (_mzGrow && bnd.regrow && _mzGrow[gi] && _mzGrow[gi] > 1) bnd = { kind: bnd.kind, html: bnd.regrow(_mzGrow[gi]), regrow: bnd.regrow };
+    if (_mzBands) _mzBands.push(bnd);
     // display:flow-root contains each band's float so the measured height is complete.
-    out += '<div data-mblk="mzb:' + gi + '" data-mkind="' + bands[j].kind + '" style="display:flow-root;">' + bands[j].html + '</div>';
+    out += '<div data-mblk="mzb:' + gi + '" data-mkind="' + bnd.kind + '" style="display:flow-root;">' + bnd.html + '</div>';
   }
   return out;
 }
@@ -3945,60 +3951,74 @@ function composeBook(plan, beats, opts) {
 // that would overflow the current page starts a new one. Isolated behind ?compose=1 + arrange,
 // so the flow render stays the safe fallback. NOTE: _mzBands is module-level, so two concurrent
 // magazine composes could interleave; acceptable for the deliberate one-shot Optimize action.
-async function computeMagazinePack(req, campaignId, packOpts) {
-  var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
-  _mzBands = [];
-  req.query.measureMagazine = '1';
-  var mbuilt = await assembleNovelHtml(req, campaignId, null);
-  var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
-  delete req.query.measureMagazine;
-  var bands = _mzBands || [];
-  _mzBands = null;
+// Extract band heights (keyed by global index) from a measureDocument() result.
+function magazineHeights(blocks) {
   var bandH = {};
-  blocks.forEach(function (bk) {
+  (blocks || []).forEach(function (bk) {
     var id = bk.id || '';
     if (id.indexOf('mzb:') === 0) bandH[parseInt(id.slice(4), 10)] = bk.heightIn || 0;
   });
-  var _hdrOn = (_co.header == null) ? true : !!_co.header;
-  var pageH = ((packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : 9.4) - (_hdrOn ? HEADER_BAND_IN : 0);
-  var _markerBreak = !!_co.markerbreak;   // each session starts a fresh page when set
+  return bandH;
+}
+// Greedy whole-band pagination with the session marker+title-image keep-together rule.
+function packMagazineBands(bands, bandH, pageH, markerBreak) {
   var pages = [], cur = [], used = 0;
   for (var i = 0; i < bands.length; i++) {
     var h = bandH[i] || 0;
     if (h <= 0.001) continue;   // empty intro/outro band -- skip
-    var _kind = bands[i].kind;
-    // Keep the session marker glued to its title image: if a session-header PLUS the following
-    // title-image band would not fit together in the space left on this page, break FIRST so
-    // both land on the fresh page. (Mirrors Picture Book's divider+title-image rule -- there is
-    // never a page break between a session divider and its establishing picture.)
-    var _keepWith = 0;
-    if (_kind === 'session-header' && bands[i + 1] && bands[i + 1].kind === 'title-image') _keepWith = bandH[i + 1] || 0;
-    var _forceBreak = (_markerBreak && _kind === 'session-header' && cur.length);
-    if (_forceBreak || (cur.length && (used + h + _keepWith) > pageH + 1e-6)) { pages.push(cur); cur = []; used = 0; }
+    var kind = bands[i].kind;
+    // Never split a session divider from its establishing picture (Picture Book rule).
+    var keepWith = 0;
+    if (kind === 'session-header' && bands[i + 1] && bands[i + 1].kind === 'title-image') keepWith = bandH[i + 1] || 0;
+    var forceBreak = (markerBreak && kind === 'session-header' && cur.length);
+    if (forceBreak || (cur.length && (used + h + keepWith) > pageH + 1e-6)) { pages.push(cur); cur = []; used = 0; }
     cur.push({ band: i, heightIn: h }); used += h;
   }
   if (cur.length) pages.push(cur);
+  return pages;
+}
 
-  // Grow-to-fill (Phase 5, first cut): on any page left noticeably under-full, enlarge the LAST
-  // growable floated image to consume ~70% of the leftover white (leaving a buffer so a text
-  // reflow around the bigger image can't re-introduce clipping), capped at 1.5x. Only float
-  // bands carry a regrow() closure; full-width bands are already at column width and can't grow.
+async function computeMagazinePack(req, campaignId, packOpts) {
+  var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
+  var _hdrOn = (_co.header == null) ? true : !!_co.header;
+  var pageH = ((packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : 9.4) - (_hdrOn ? HEADER_BAND_IN : 0);
+  var _markerBreak = !!_co.markerbreak;   // each session starts a fresh page when set
+
+  // Pass 1 -- default image sizes.
+  _mzGrow = null; _mzBands = [];
+  req.query.measureMagazine = '1';
+  var mbuilt = await assembleNovelHtml(req, campaignId, null);
+  var bandH = magazineHeights((await measureDocument(mbuilt.html, {})).blocks || []);
+  var bands = _mzBands || [];
+  var pages = packMagazineBands(bands, bandH, pageH, _markerBreak);
+
+  // Grow-to-fill: for each page left noticeably under-full, enlarge its LAST growable floated
+  // image toward the leftover white. Only floats carry regrow() (full-width bands are already at
+  // column width). We aim high (85% of slack) because the SECOND pass re-measures the grown,
+  // reflowed bands and RE-PACKS with their true heights -- so a picture that grows past its page
+  // simply moves to the next page instead of clipping at the break.
+  var grow = {};
   pages.forEach(function (pg) {
-    var pgUsed = 0, lastGrow = -1;
-    for (var c = 0; c < pg.length; c++) {
-      pgUsed += (bandH[pg[c].band] || 0);
-      if (bands[pg[c].band] && bands[pg[c].band].regrow) lastGrow = c;
-    }
-    var slack = pageH - pgUsed;
-    if (slack < 0.8 || lastGrow < 0) return;
-    var gbi = pg[lastGrow].band;
-    var gh = bandH[gbi] || 1;
-    var mul = (gh + slack * 0.7) / gh;
-    if (mul > 1.5) mul = 1.5;
-    if (mul <= 1.03) return;
-    bands[gbi].html = bands[gbi].regrow(mul);   // composeMagazine renders bands[].html, so this grows the picture
-    pg[lastGrow].heightIn = gh * mul;           // best-effort height (compose uses fixed pages; this is for reference/inspection)
+    var u = 0, last = -1;
+    for (var c = 0; c < pg.length; c++) { u += (bandH[pg[c].band] || 0); if (bands[pg[c].band] && bands[pg[c].band].regrow) last = c; }
+    var slack = pageH - u;
+    if (slack < 0.7 || last < 0) return;
+    var bi = pg[last].band, gh = bandH[bi] || 1;
+    var mul = (gh + slack * 0.85) / gh;
+    if (mul > 1.6) mul = 1.6;
+    if (mul > 1.03) grow[bi] = Math.round(mul * 100) / 100;
   });
+
+  // Pass 2 -- re-render grown floats, re-measure true heights, re-pack (exact pagination).
+  if (Object.keys(grow).length) {
+    _mzGrow = grow; _mzBands = [];
+    var mbuilt2 = await assembleNovelHtml(req, campaignId, null);
+    var bandH2 = magazineHeights((await measureDocument(mbuilt2.html, {})).blocks || []);
+    var bands2 = _mzBands || [];
+    bands = bands2; pages = packMagazineBands(bands2, bandH2, pageH, _markerBreak);
+  }
+  delete req.query.measureMagazine;
+  _mzBands = null; _mzGrow = null;
 
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign };
 }
