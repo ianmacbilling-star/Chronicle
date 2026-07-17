@@ -977,6 +977,7 @@ var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimens
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.6;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
+var MZ_PACK_DEBUG = true;   // TEMP: overlay each band with kind/height/splittable/line-count so we can see why bands don't split
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
 // printable page height, or it overflows its page container (and the measure pass
@@ -4250,6 +4251,9 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   delete req.query.measureMagazine;
   _mzBands = null; _mzGrow = null;
 
+  var _finalMeas = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
+  for (var _bi = 0; _bi < bands.length; _bi++) { if (bands[_bi]) bands[_bi]._dbgN = ((_finalMeas.lines && _finalMeas.lines[_bi]) || []).length; }
+
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
@@ -4277,7 +4281,13 @@ function composeMagazine(plan, bands, opts) {
       } else {
         html = b.html;
       }
-      inner += '<div style="display:flow-root;">' + html + '</div>';
+      var _lbl = '';
+      if (MZ_PACK_DEBUG) {
+        _lbl = '<div style="position:absolute;right:2px;background:#b00020;color:#fff;font:8px/1.2 monospace;padding:1px 3px;opacity:0.85;">' +
+          cell.band + ':' + (b.kind || '?') + ' h' + (cell.heightIn != null ? cell.heightIn : '?') +
+          (b.stext != null ? ' S' : ' -') + ' L' + (b._dbgN || 0) + (cell.split ? ' CUT' : '') + '</div>';
+      }
+      inner += '<div style="display:flow-root;position:relative;">' + _lbl + html + '</div>';
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
     out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
