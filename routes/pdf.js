@@ -1126,7 +1126,8 @@ function gzFloatPanel(m, opts, narrHtml, iw, ih, sideLeft) {
   var box = gzImgBox(m, opts, fl, iw, ih);
   return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
 }
-function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
+function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
+  mul = mul || 1;
   var asp = Math.max(0.3, momentAspect(m));
   var imgH, capW;
   if (opts && opts.enclose) {
@@ -1137,6 +1138,7 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small) {
     imgH = small ? ((asp < 0.85) ? 2.2 : 1.7) : ((asp < 0.85) ? 3.5 : 2.7);
     capW = small ? 2.1 : 3.3;
   }
+  if (mul > 1) { imgH *= mul; capW = Math.min(6.4, capW * mul); }   // grow-to-fill: enlarge the floated image, raise its width cap toward the column (text still wraps beside)
   var imgW = imgH * asp;
   if (imgW > capW) { imgW = capW; imgH = imgW / asp; }
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
@@ -1555,6 +1557,13 @@ function magAside(m, i, opts, narrText, imgW){
   return '<div style="clear:both;display:flex;align-items:center;gap:0.26in;margin:0.14in 0;page-break-inside:avoid;">' +
     (imgLeft ? (imgCol + txtCol) : (txtCol + imgCol)) + '</div>';
 }
+// A float band that carries a regrow(mul) closure so the deterministic packer can re-render
+// the SAME floated image larger to fill leftover page white (grow-to-fill). The closure
+// captures this panel's moment/side/small so it re-renders identically apart from size.
+function mzFloatBand(m, opts, narr, sideLeft, small) {
+  return { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small),
+    regrow: function (mul) { return cgFlowFloat(m, opts, narr, sideLeft, small, mul); } };
+}
 // Magazine band generator (shared by the flow render AND the deterministic packer).
 // Returns an ORDERED array of { kind, html } bands: an intro band, one band per panel
 // group (tower / feature / float / wide / pair), and an outro band. renderMagazine just
@@ -1597,13 +1606,13 @@ function magazineBands(moments, sections, intro, outro, opts) {
     } else if (p.feature) {
       bands.push({ kind: 'feature', html: cgFlowFeature(p.m, opts, p.narr, sideLeft) }); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
-      bands.push({ kind: 'float', html: cgFlowFloat(p.m, opts, p.narr, sideLeft, true) }); sideLeft = !sideLeft; i += 1;
+      bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, true)); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
       bands.push({ kind: 'wide', html: cgFlowWide(p.m, opts, p.narr, sideLeft) }); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5 && normShape(panels[i + 1].m) !== 'tower') {
       bands.push({ kind: 'pair', html: cgFlowPair(p.m, panels[i + 1].m, opts, panels[i + 1].narr) }); i += 2;
     } else {
-      bands.push({ kind: 'float', html: cgFlowFloat(p.m, opts, p.narr, sideLeft) }); sideLeft = !sideLeft; i += 1;
+      bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, false)); sideLeft = !sideLeft; i += 1;
     }
   }
 
@@ -3969,6 +3978,28 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     cur.push({ band: i, heightIn: h }); used += h;
   }
   if (cur.length) pages.push(cur);
+
+  // Grow-to-fill (Phase 5, first cut): on any page left noticeably under-full, enlarge the LAST
+  // growable floated image to consume ~70% of the leftover white (leaving a buffer so a text
+  // reflow around the bigger image can't re-introduce clipping), capped at 1.5x. Only float
+  // bands carry a regrow() closure; full-width bands are already at column width and can't grow.
+  pages.forEach(function (pg) {
+    var pgUsed = 0, lastGrow = -1;
+    for (var c = 0; c < pg.length; c++) {
+      pgUsed += (bandH[pg[c].band] || 0);
+      if (bands[pg[c].band] && bands[pg[c].band].regrow) lastGrow = c;
+    }
+    var slack = pageH - pgUsed;
+    if (slack < 0.8 || lastGrow < 0) return;
+    var gbi = pg[lastGrow].band;
+    var gh = bandH[gbi] || 1;
+    var mul = (gh + slack * 0.7) / gh;
+    if (mul > 1.5) mul = 1.5;
+    if (mul <= 1.03) return;
+    bands[gbi].html = bands[gbi].regrow(mul);   // composeMagazine renders bands[].html, so this grows the picture
+    pg[lastGrow].heightIn = gh * mul;           // best-effort height (compose uses fixed pages; this is for reference/inspection)
+  });
+
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
