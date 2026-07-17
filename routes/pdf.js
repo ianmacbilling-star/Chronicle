@@ -1278,6 +1278,17 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
   var img = m.image
     ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+  // OPTIMIZE: a shrunk portrait that leaves room beside it floats to a margin so the narrative wraps
+  // alongside (fills the side-white the centered version wastes, and shortens the band). Split infra
+  // already handles floated images. sideLeft alternates L/R per panel. Flow (Before) never sets the flag.
+  if (opts && opts.mzFloatShrunk && W <= CG_W - 2.0) {
+    var _fside = sideLeft ? 'left' : 'right';
+    var _fmar = sideLeft ? '0 0.26in 0.06in 0' : '0 0 0.06in 0.26in';
+    var fbox = '<div style="' + cgBorder(opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
+      'in;position:relative;background:transparent;line-height:0;page-break-inside:avoid;break-inside:avoid;">' +
+      img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    return '<div style="display:flow-root;margin-bottom:0.10in;">' + fbox + gzNarrBox(narrHtml, opts) + '</div>';
+  }
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
     img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
@@ -3878,6 +3889,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.arrange = 'paired'; co.measurePaired = true; }
   if (req.query.measureMagazine === '1') { co = co || {}; co.measureMagazine = true; if (co.arrange !== 'magazine' && co.arrange !== 'gazette') co.arrange = 'magazine'; }
   if (req.query.mzCapFeatures === '1') { co = co || {}; co.mzCapFeatures = true; }
+  if (req.query.mzFloatShrunk === '1') { co = co || {}; co.mzFloatShrunk = true; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
@@ -4212,6 +4224,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   _mzGrow = null; _mzBands = [];
   req.query.measureMagazine = '1';
   req.query.mzCapFeatures = '1';   // OPTIMIZE-ONLY: cap portrait features to 5.5in for the packed book; the flow render never sets this
+  req.query.mzFloatShrunk = '1';   // OPTIMIZE-ONLY: float shrunk portraits to a margin so text wraps beside them
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
   var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
   var bandH = meas.h;
@@ -4321,6 +4334,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   }
   delete req.query.measureMagazine;
   delete req.query.mzCapFeatures;
+  delete req.query.mzFloatShrunk;
   _mzBands = null; _mzGrow = null;
 
   var _dbg = null;
