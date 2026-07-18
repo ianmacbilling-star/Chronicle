@@ -2657,7 +2657,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     // bands) or the deterministic composer drops them. Order: session-header, title-image,
     // then intro/panels/outro from buildLayout below.
     if (co && co.measureMagazine && _mzBands) {
-      if (chapterHeading) { var _mzhI = _mzBands.length; _mzBands.push({ kind: 'session-header', html: chapterHeading }); chapterHeading = '<div data-mblk="mzb:' + _mzhI + '" data-mkind="session-header" style="display:flow-root;">' + chapterHeading + '</div>'; }
+      if (chapterHeading) { var _mzhI = _mzBands.length; _mzBands.push({ kind: 'session-header', html: chapterHeading, sNum: (si + 1), sName: (s && s.name) || '', sCamp: (campaign && campaign.name) || '' }); chapterHeading = '<div data-mblk="mzb:' + _mzhI + '" data-mkind="session-header" style="display:flow-root;">' + chapterHeading + '</div>'; }
       if (titleImageHTML) { var _mztI = _mzBands.length; _mzBands.push({ kind: 'title-image', html: titleImageHTML }); titleImageHTML = '<div data-mblk="mzb:' + _mztI + '" data-mkind="title-image" style="display:flow-root;">' + titleImageHTML + '</div>'; }
     }
     var panelsHTML = buildLayout(layoutStyle, _storyMoments, _storySections, narrative.intro, narrative.outro, co);
@@ -4695,10 +4695,25 @@ function composePageInner(pg, bands, opts) {
 function composeMagazine(plan, bands, opts) {
   var out = '';
   var pages = (plan && plan.pages) || [];
+  // Running page header: the packer already reserves HEADER_BAND_IN on every page, but nothing was
+  // being drawn there -- the band was reserved and wasted. Emit the same running head the paired
+  // composer uses, tracking the current session as we walk the pages and suppressing it on a
+  // session-opening page (the chapter heading already announces the session there).
+  var _hdrOn = (opts && opts.header != null) ? !!opts.header : true;
+  var _cNum = null, _cName = '', _cCamp = '';
   pages.forEach(function (pg, pi) {
+    var opensSession = false;
+    pg.forEach(function (cell) {
+      var b = bands[cell.band];
+      if (b && b.kind === 'session-header') {
+        opensSession = true;
+        if (b.sNum != null) { _cNum = b.sNum; _cName = b.sName || ''; _cCamp = b.sCamp || _cCamp; }
+      }
+    });
+    var head = (_hdrOn && !opensSession && _cNum != null) ? runningHeaderHTML(_cCamp, _cNum, _cName) : '';
     var inner = composePageInner(pg, bands, opts);
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
-    out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
+    out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + head + inner + '</div>';
   });
   return out;
 }
