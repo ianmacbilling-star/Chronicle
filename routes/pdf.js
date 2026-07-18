@@ -984,7 +984,7 @@ var MZ_GROW_MAX_MUL = 3.0;    // hard ceiling on how much an image may be enlarg
 var MZ_GROW_ROUNDS = 3;       // refinement rounds (each costs one measure): aim at the analytic target, then bisect
 var MZ_LOOKBACK_PULLUP = true; // iterative optimizer: an underfull page pulls up a following single movable band that fits (gated on the real re-measure)
 var MZ_TOWER_MERGE = true;    // iterative optimizer: fold a stranded text-only tail into the following tower's beside-column (gated on the real re-measure)
-var MZ_TOWER_MERGE_MAX_IN = 9.55; // a merged page must still fit the physical content-page (9.65in) with margin
+var MZ_TOWER_MERGE_MAX_IN = 9.40; // a merged/grown page must fit the composed BODY area: 9.65in box minus the 0.24in running-head band
 var MZ_SPILL_MIN_GAP = 1.8;   // leading-text spill fires when the wasted gap is at least this tall
 var MZ_SPILL_MIN_LINES = 2;   // and only if at least this many lines of the before-paragraph fill it
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
@@ -2518,7 +2518,7 @@ function sessionMarkerHTML(num, name, date) {
 // inside the top margin, repeated on every page. Absolutely positioned so it never consumes
 // packed body space (the packer's page plan stays exact). Suppressed on session-opening pages.
 function runningHeaderHTML(campaignName, num, name) {
-  return '<div class="page-header" style="position:absolute;top:0.02in;left:0.85in;right:0.85in;margin:0;padding-bottom:0.03in;">' +
+  return '<div class="page-header" style="position:absolute;top:0.02in;left:0.85in;right:0.85in;margin:0;padding-bottom:0.03in;z-index:6;">' +
     '<div class="page-header-campaign">' + (campaignName || '') + '</div>' +
     '<div class="page-header-session">Session ' + num + ' &mdash; ' + (name || '') + '</div>' +
   '</div>';
@@ -4703,6 +4703,11 @@ function composeMagazine(plan, bands, opts) {
   // composer uses, tracking the current session as we walk the pages and suppressing it on a
   // session-opening page (the chapter heading already announces the session there).
   var _hdrOn = (opts && opts.header != null) ? !!opts.header : true;
+  // Carve the running-head band OUT of the page box rather than adding to it: total stays 9.65in, so
+  // the composed page still fits the printable area and never spills a blank page. The packer already
+  // budgeted for this band (its pageH is 9.4 - HEADER_BAND_IN), so the body plan is unchanged.
+  var _bandCss = _hdrOn ? ('padding-top:' + HEADER_BAND_IN + 'in;') : '';
+  var _boxH = (9.65 - (_hdrOn ? HEADER_BAND_IN : 0)).toFixed(3);
   var _cNum = null, _cName = '', _cCamp = '';
   pages.forEach(function (pg, pi) {
     var opensSession = false;
@@ -4716,7 +4721,7 @@ function composeMagazine(plan, bands, opts) {
     var head = (_hdrOn && !opensSession && _cNum != null) ? runningHeaderHTML(_cCamp, _cNum, _cName) : '';
     var inner = composePageInner(pg, bands, opts);
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
-    out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + head + inner + '</div>';
+    out += '<div class="content-page" style="height:' + _boxH + 'in;' + _bandCss + 'overflow:hidden;margin:0;' + brk + 'position:relative;">' + head + inner + '</div>';
   });
   return out;
 }
