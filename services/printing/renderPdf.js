@@ -64,6 +64,27 @@ async function renderHtmlToPdf(html, options) {
       preferCSSPageSize: true
     };
 
+    // NATIVE RUNNING HEAD (flow render only). Chromium repeats these templates on EVERY printed page,
+    // which CSS cannot do for a document whose page breaks it does not control. The composed paths
+    // (paired / magazine) draw their own session-aware head per page, so they must NOT pass this or
+    // the two would double up. Header/footer render inside the page margin box; templates get no page
+    // styles or web fonts, so everything is inlined with web-safe fonts.
+    if (options.runningHeader) {
+      var _rhCamp = String(options.runningHeader.campaign || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      var _rhCss = 'font-family:Georgia,serif;font-size:7.5pt;color:#8a6a2a;letter-spacing:0.08em;' +
+        'text-transform:uppercase;width:100%;padding:0 0.85in;margin:0;-webkit-print-color-adjust:exact;';
+      pdfOpts.displayHeaderFooter = true;
+      pdfOpts.headerTemplate =
+        '<div style="' + _rhCss + 'display:flex;justify-content:space-between;align-items:flex-end;">' +
+          '<span>' + _rhCamp + '</span>' +
+          '<span class="pageNumber" style="letter-spacing:0;"></span>' +
+        '</div>';
+      // An empty footer is required: with displayHeaderFooter on and no template, Chromium prints its
+      // own default footer (document URL + date).
+      pdfOpts.footerTemplate = '<span></span>';
+    }
+
     // Explicit size override. Phase 1 leaves this unset so the document's own
     // @page (8.5in x 11in trim) is used. Later phases can pass widthIn/heightIn
     // to render at the full-bleed 8.75 x 11.25 box.

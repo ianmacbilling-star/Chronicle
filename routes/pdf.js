@@ -2974,10 +2974,10 @@ function pdfFileName(parts) {
   return nm || 'preview';
 }
 
-async function sendHtmlAsPdf(res, html, name) {
+async function sendHtmlAsPdf(res, html, name, pdfOpts) {
   var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
   if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
-  var buf = await renderHtmlToPdf(html, {});
+  var buf = await renderHtmlToPdf(html, pdfOpts || {});
   res.set('Content-Type', 'application/pdf');
   res.set('Content-Disposition', 'inline; filename="' + (name || 'preview') + '.pdf"');
   res.send(buf);
@@ -3186,7 +3186,10 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   if (req.query.format === 'pdf') {
     var nMember = '';
     if (asUser) { var nu = await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser); if (nu && nu.name) nMember = nu.name; }
-    try { return await sendHtmlAsPdf(res, html, pdfFileName([campaign.name, nMember])); }
+    // Flow render: Chromium's native running head is the only way to repeat a header on pages whose
+    // breaks CSS decides. The composed routes draw their own, so they never pass this.
+    var _rh = (co && co.header === false) ? null : { campaign: campaign.name };
+    try { return await sendHtmlAsPdf(res, html, pdfFileName([campaign.name, nMember]), { runningHeader: _rh }); }
     catch (e) { return res.status(500).json({ error: 'PDF render failed', detail: friendlyError(e, '') }); }
   }
   res.send(html);
