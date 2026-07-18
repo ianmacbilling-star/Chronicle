@@ -4231,10 +4231,19 @@ function fillMissingMagazineLines(meas, bands) {
     // boundaries land on REAL line ends (not mid-line), so cuts never chop a line short.
     var wide = 0; for (var q = 1; q < lc.length; q++) { var d = lc[q] - lc[q - 1]; if (d > wide) wide = d; }
     if (!(span > 0.05) || !(wide > 8)) continue;
-    // Start the `after` at the true paragraph boundary (mbound) when we have it, so the first synthesized
-    // line begins where the after text actually begins -- not mid-way through the last `before` line.
+    // Start the `after` at the true paragraph boundary (mbound). Push mbound itself UN-snapped as the
+    // first synthesized line-start, so a split between the before and the after cuts cleanly ON the
+    // boundary -- never snapping forward past the after's first word and orphaning it onto the head.
     var y = ln[ln.length - 1];
-    var c = (b.mbound != null && b.mbound > lc[lc.length - 1] + 2) ? b.mbound : (lc[lc.length - 1] + wide);
+    var atMB = (b.mbound != null && b.mbound > lc[lc.length - 1] + 2 && b.mbound < S);
+    var c;
+    if (atMB) {
+      y = Math.round((y + span) * 1000) / 1000;
+      ln.push(y); lc.push(b.mbound);
+      c = b.mbound + wide;
+    } else {
+      c = lc[lc.length - 1] + wide;
+    }
     var guard = 0;
     while (c < S && guard++ < 400) {
       var cs = snapWord(b.stext, Math.min(S, c));
