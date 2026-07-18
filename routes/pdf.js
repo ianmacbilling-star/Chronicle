@@ -977,6 +977,7 @@ var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimens
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
+var MZ_LOOKBACK_PULLUP = true; // iterative optimizer: an underfull page pulls up a following single movable band that fits (gated on the real re-measure)
 var MZ_TOWER_MERGE = true;    // iterative optimizer: fold a stranded text-only tail into the following tower's beside-column (gated on the real re-measure)
 var MZ_TOWER_MERGE_MAX_IN = 9.55; // a merged page must still fit the physical content-page (9.65in) with margin
 var MZ_SPILL_MIN_GAP = 1.8;   // leading-text spill fires when the wasted gap is at least this tall
@@ -4341,6 +4342,35 @@ function towerMergeCandidate(pgs, bnds) {
   return null;
 }
 
+// Look-back pull-up candidate: find the FIRST underfull page whose NEXT page is a single WHOLE movable
+// band (feature/float/wide/pair -- not a split continuation, tower, or matter) that fits the underfull
+// page's room. Pull it up and drop the now-empty next page. Returns a NEW pages array or null.
+function lookBackPullUpCandidate(pgs, bnds, pageH, estH) {
+  function cellH(c) { return (c.heightIn != null ? c.heightIn : (estH[c.band] || 0)); }
+  var MOVABLE = { feature: 1, float: 1, wide: 1, pair: 1 };
+  for (var pi = 0; pi + 1 < pgs.length; pi++) {
+    var pg = pgs[pi];
+    var used = 0; pg.forEach(function (c) { used += cellH(c); });
+    var room = pageH - used;
+    if (room < 1.6) continue;                                  // not underfull enough to bother
+    var nb = pgs[pi + 1];
+    if (nb.length !== 1) continue;                             // must be a single-band page so pulling it up EMPTIES the page
+    var c = nb[0];
+    if (c.split || c.towerLead) continue;                      // whole band only (no continuation / no merged tower)
+    var b = bnds[c.band];
+    if (!b || !MOVABLE[b.kind]) continue;                      // movable image+text band only
+    if (cellH(c) > room - 0.12) continue;                      // must fit the real room
+    var out = [];
+    for (var k = 0; k < pgs.length; k++) {
+      if (k === pi + 1) continue;                              // drop the emptied page
+      if (k === pi) out.push(pg.concat([c]));                  // append the pulled band to the underfull page
+      else out.push(pgs[k]);
+    }
+    return { pages: out, filledIndex: pi };
+  }
+  return null;
+}
+
 async function computeMagazinePack(req, campaignId, packOpts) {
   var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
   var _hdrOn = (_co.header == null) ? true : !!_co.header;
@@ -4478,6 +4508,22 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       var _fits = true;
       for (var _k in _rc) { if (_k !== '_error' && _rc[_k] > MZ_TOWER_MERGE_MAX_IN) { _fits = false; break; } }
       if (_fits) pages = _cand.pages; else break;   // accept (a page dropped) or stop
+    }
+  }
+
+  // ITERATIVE OPTIMIZER, step 3: look-back pull-up. An underfull page pulls up a following single
+  // movable band that fits, removing the emptied page. Gated on the real re-measure (accept only if it
+  // fits, no clip); monotone -- can only remove pages. One token. (No-op on books without the pattern.)
+  if (MZ_LOOKBACK_PULLUP && (_co.arrange === 'magazine' || _co.arrange === 'gazette' || !_co.arrange)) {
+    var _lbGuard = 0;
+    while (_lbGuard++ < 12) {
+      var _lcand = lookBackPullUpCandidate(pages, bands, pageH, bandH);
+      if (!_lcand) break;
+      var _lrc = await remeasureComposedPages(req, campaignId, _lcand.pages, bands);
+      if (_lrc._error) break;
+      var _lfits = true;
+      for (var _lk in _lrc) { if (_lk !== '_error' && _lrc[_lk] > MZ_TOWER_MERGE_MAX_IN) { _lfits = false; break; } }
+      if (_lfits) pages = _lcand.pages; else break;
     }
   }
 
