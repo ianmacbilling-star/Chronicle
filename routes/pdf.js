@@ -975,6 +975,7 @@ var CG_GAP = 0.12;  // gutter between panels (inches)
 var MZ_SHRINK = 1.0;  // was 0.9 -- global shrink backfired (smaller pics = more white on image pages); reactive shrink-to-fit replaces it
 var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimension never renders below this
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
+var MZ_MIN_SLICE_LINES = 2;  // anti-sliver: a split slice must carry at least this many lines (classic orphan rule -- never one lonely line)
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
 var MZ_LOOKBACK_PULLUP = true; // iterative optimizer: an underfull page pulls up a following single movable band that fits (gated on the real re-measure)
@@ -4196,7 +4197,23 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     // A float head must clear the floated image (sImgH) so the continuation re-wraps clean full-width;
     // pure text (intro/outro or a float TAIL, simg=false) can cut at any line past a small minimum.
     var minB = it.simg ? (it.sImgH + (((kind === 'wide' || kind === 'feature') || (splitAllow && splitAllow[it.band])) ? 0.05 : 0.4)) : 0.5;   // wide/feature narrative sits ENTIRELY below the image -> cut just under it (a full-page-tall image can still split instead of clipping); floats keep 0.4in clearance for their beside-text   // gap-fit shrinks cut right below the (now-small) image; normal floats keep 0.4in clearance
-    function splitAt(room) { var Lx = -1; for (var q = 0; q < it.lines.length - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; } return Lx; }
+    // ANTI-SLIVER: never leave a single lonely line on a page. A cut is only allowed if BOTH the head
+    // and the tail carry >= MZ_MIN_SLICE_LINES lines; a sliver TAIL pulls the cut back (free -- same
+    // pages, just a better boundary), and a sliver HEAD rejects the cut entirely (-1), which makes the
+    // caller flush and move the whole band to the next page. A band TALLER than a page must still split
+    // (else it would clip), so the guard is skipped there.
+    function splitAt(room) {
+      var Lx = -1;
+      for (var q = 0; q < it.lines.length - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; }
+      if (Lx < 0 || it.height > pageH - 0.05) return Lx;              // must-split band: any cut beats a clip
+      var total = it.lines.length;
+      if (total - (Lx + 1) < MZ_MIN_SLICE_LINES) {                    // sliver TAIL -> pull the cut back
+        Lx = Math.min(Lx, total - MZ_MIN_SLICE_LINES - 1);
+        if (Lx < 0 || it.lines[Lx] < minB) return -1;
+      }
+      if (Lx + 1 < MZ_MIN_SLICE_LINES) return -1;                     // sliver HEAD -> don't split at all
+      return Lx;
+    }
     var R = pageH - used;
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
     if (cur.length && (it.height + keepWith) > R + 1e-6) {
