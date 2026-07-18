@@ -977,6 +977,8 @@ var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimens
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
+var MZ_TOWER_MERGE = true;    // iterative optimizer: fold a stranded text-only tail into the following tower's beside-column (gated on the real re-measure)
+var MZ_TOWER_MERGE_MAX_IN = 9.55; // a merged page must still fit the physical content-page (9.65in) with margin
 var MZ_SPILL_MIN_GAP = 1.8;   // leading-text spill fires when the wasted gap is at least this tall
 var MZ_SPILL_MIN_LINES = 2;   // and only if at least this many lines of the before-paragraph fill it
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
@@ -1743,7 +1745,8 @@ function magazineBands(moments, sections, intro, outro, opts) {
         mzBeside += cgBesidePanel(mzNp.m, opts, mzNp.narr);
         mzAdv += 1; mzFill += 1;
       }
-      bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
+      bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft),
+        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml) { return cgFlowTower(mm, oo, (leadHtml || '') + (nn || ''), bside, sl); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
@@ -4293,6 +4296,51 @@ function fillMissingMagazineLines(meas, bands) {
   }
 }
 
+// Re-measure the REAL composed pages: returns { pageIndex: realHeightIn } (plus ._error on failure).
+// Same machinery as the band measure, aimed at the composed output (measureComposed -> cp:N markers).
+async function remeasureComposedPages(req, campaignId, pgs, bnds) {
+  var realH = {};
+  try {
+    _mzComposed = { plan: { pages: pgs }, bands: bnds };
+    req.query.measureComposed = '1';
+    var cbuilt = await assembleNovelHtml(req, campaignId, null);
+    var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
+    cblocks.forEach(function (bl) { var mm = /^cp:(\d+)$/.exec(bl.id || ''); if (mm) realH[+mm[1]] = bl.heightIn; });
+  } catch (e) { realH._error = String((e && e.message) || e); }
+  delete req.query.measureComposed; _mzComposed = null;
+  return realH;
+}
+
+// Tower-column merge candidate: find the FIRST page that is a single text-only TAIL immediately
+// before a tower, and fold that tail into the tower's beside-column (which usually has room). Returns
+// a NEW pages array with the stranded page removed and the tower cell carrying the lead, plus the new
+// index of the merged tower page -- or null if there's nothing to merge.
+function towerMergeCandidate(pgs, bnds) {
+  for (var pi = 0; pi + 1 < pgs.length; pi++) {
+    var pg = pgs[pi];
+    if (pg.length !== 1) continue;
+    var c = pg[0];
+    if (!c.split || (c.cStart || 0) === 0 || c.imgBody || c.textLead) continue;   // must be a text-only tail
+    var nb = pgs[pi + 1];
+    if (!nb.length) continue;
+    var tc = nb[0];
+    var tband = bnds[tc.band];
+    if (!tband || tband.kind !== 'tower' || !tband.renderTowerLead || tc.towerLead) continue;
+    var out = [];
+    for (var k = 0; k < pgs.length; k++) {
+      if (k === pi) continue;                                  // drop the stranded page
+      if (k === pi + 1) {
+        var cells = nb.slice();
+        cells[0] = { band: tc.band, kind: 'tower', split: false, cStart: 0, cEnd: null,
+          towerLead: { band: c.band, cStart: (c.cStart || 0), cEnd: (c.cEnd != null ? c.cEnd : null) } };
+        out.push(cells);
+      } else out.push(pgs[k]);
+    }
+    return { pages: out, mergedIndex: (pi + 1) - 1 };           // the tower page shifts up by one (the removed page precedes it)
+  }
+  return null;
+}
+
 async function computeMagazinePack(req, campaignId, packOpts) {
   var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
   var _hdrOn = (_co.header == null) ? true : !!_co.header;
@@ -4417,6 +4465,22 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   delete req.query.mzFloatShrunk;
   _mzBands = null; _mzGrow = null;
 
+  // ITERATIVE OPTIMIZER, step 2: tower-column merge. Fold each stranded text-only tail into the
+  // following tower's beside-column, but ACCEPT only if the real re-measure confirms the merged page
+  // still fits (no clip). Gated + monotone: it can only remove pages, never overflow. One token.
+  if (MZ_TOWER_MERGE && (_co.arrange === 'magazine' || _co.arrange === 'gazette' || !_co.arrange)) {
+    var _tmGuard = 0;
+    while (_tmGuard++ < 12) {
+      var _cand = towerMergeCandidate(pages, bands);
+      if (!_cand) break;
+      var _rc = await remeasureComposedPages(req, campaignId, _cand.pages, bands);
+      if (_rc._error) break;
+      var _fits = true;
+      for (var _k in _rc) { if (_k !== '_error' && _rc[_k] > MZ_TOWER_MERGE_MAX_IN) { _fits = false; break; } }
+      if (_fits) pages = _cand.pages; else break;   // accept (a page dropped) or stop
+    }
+  }
+
   var _dbg = null;
   if (packOpts && packOpts.debug) {
     var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
@@ -4438,19 +4502,13 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn }; }) };
       })
     };
-    // ITERATIVE OPTIMIZER, step 1: re-measure the REAL composed output so the dump can show true
-    // per-page fills next to the estimates. Same request => still one token. Pagination unchanged.
+    // Re-measure the REAL composed output (after any tower-merge) so the dump shows true per-page
+    // fills next to the estimates. Same request => still one token.
     try {
-      _mzComposed = { plan: { pages: pages }, bands: bands };
-      req.query.measureComposed = '1';
-      var cbuilt = await assembleNovelHtml(req, campaignId, null);
-      var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
-      var realH = {};
-      cblocks.forEach(function (bl) { var mm = /^cp:(\d+)$/.exec(bl.id || ''); if (mm) realH[+mm[1]] = bl.heightIn; });
-      _dbg.pages.forEach(function (pg) { if (realH[pg.page] != null) pg.realUsed = realH[pg.page]; });
-      _dbg.remeasured = true;
+      var realH = await remeasureComposedPages(req, campaignId, pages, bands);
+      if (realH._error) { _dbg.remeasureError = realH._error; }
+      else { _dbg.pages.forEach(function (pg) { if (realH[pg.page] != null) pg.realUsed = realH[pg.page]; }); _dbg.remeasured = true; }
     } catch (e) { _dbg.remeasureError = String((e && e.message) || e); }
-    delete req.query.measureComposed; _mzComposed = null;
   }
 
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg };
@@ -4477,6 +4535,10 @@ function composePageInner(pg, bands, opts) {
         if (cs > 0) html = html.replace('text-indent:0.3in', 'text-indent:0');   // intro/outro continuation: no first-line indent
         if (cs === 0 && b.sDrop) html = coDropcap(html);   // drop cap only on the opening slice
       }
+    } else if (b.kind === 'tower' && cell.towerLead && b.renderTowerLead) {
+      var _lb = bands[cell.towerLead.band];
+      var _lead = (_lb && _lb.stext != null) ? renderMzSlice(_lb.stext, _lb.mbound, cell.towerLead.cStart || 0, (cell.towerLead.cEnd != null ? cell.towerLead.cEnd : _lb.stext.length), _lb.sOpts || opts) : '';
+      html = b.renderTowerLead(_lead ? ('<div style="margin-bottom:0.16in;">' + _lead + '</div>') : '');
     } else {
       html = b.html;
     }
