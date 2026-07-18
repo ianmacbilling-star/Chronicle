@@ -261,6 +261,7 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     title_image_url: cur.title_image_url || '',
     book_title: cur.book_title || '',
     title_color: cur.title_color || '',
+    layout_opts: cur.layout_opts || '',   // per (chooser, fork, campaign) layout choices -- stored beside the cover art
     own_cover: cur.cover_image_url || '', own_back: cur.back_cover_image_url || '', own_title: cur.title_image_url || ''
   });
 });
@@ -276,6 +277,9 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
   if (b.title_color !== undefined) patch.title_color = b.title_color || null;
+  // Layout choices (borders, paper, fonts, drop cap, narrative style, arrange...) ride in the SAME
+  // per-(chooser, fork, campaign) prefs blob as the cover art, so they follow the book, not the browser.
+  if (b.layout_opts !== undefined) patch.layout_opts = b.layout_opts || null;
   const merged = await setForkBookPrefs(db, uid, fork, cid, patch);
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
@@ -284,6 +288,7 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     title_image_url: merged.title_image_url || '',
     book_title: merged.book_title || '',
     title_color: merged.title_color || '',
+    layout_opts: merged.layout_opts || '',
     own_cover: merged.cover_image_url || '', own_back: merged.back_cover_image_url || '', own_title: merged.title_image_url || ''
   });
 });

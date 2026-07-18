@@ -6389,8 +6389,8 @@ function prepLoadBookMeta(cb) {
   if (!c || !forkUser) { state.bookMeta = _prepCampaignMeta(); if (cb) cb(); return; }
   fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser))
     .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(m){ state.bookMeta = m || _prepCampaignMeta(); if (cb) cb(); })
-    .catch(function(){ state.bookMeta = _prepCampaignMeta(); if (cb) cb(); });
+    .then(function(m){ state.bookMeta = m || _prepCampaignMeta(); applyCampaignLayoutOpts(m); finalizeClearStats(); if (cb) cb(); })
+    .catch(function(){ state.bookMeta = _prepCampaignMeta(); finalizeClearStats(); if (cb) cb(); });
 }
 function _prepMemberSetImage(kind, url) {
   var c = state.currentCampaign; if (!c) return;
@@ -12045,7 +12045,48 @@ function clMerge(saved){
   return r;
 }
 function saveCustomLayoutPrefs(){
+  // localStorage stays as a fallback for signed-out/first-paint, but the CAMPAIGN copy is authoritative:
+  // layout choices belong to the book, keyed by (logged-in user, fork, campaign) exactly like cover art.
   try { window.localStorage.setItem(CL_LS_KEY, JSON.stringify({ opts: customOpts, active: customActive })); } catch (e) {}
+  saveCampaignLayoutOpts();
+  finalizeClearStats();   // any layout change invalidates the Before/After comparison
+}
+// Persist this campaign's layout options into the same per-(user, fork, campaign) prefs blob the
+// cover art uses, so switching campaigns switches layouts and nothing leaks between books.
+function saveCampaignLayoutOpts(){
+  try {
+    var c = state.currentCampaign; if (!c || !state.user) return;
+    var body = { layout_opts: JSON.stringify({ opts: customOpts, active: customActive }) };
+    if (state.novelAsUser) body.fork_user = state.novelAsUser;
+    fetch('/api/campaigns/' + c.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function(){});
+  } catch (e) {}
+}
+// Apply the layout options saved on THIS campaign (called after book meta loads). Falls back to the
+// current in-memory values when a campaign has none saved yet, so existing books are unchanged.
+function applyCampaignLayoutOpts(meta){
+  try {
+    if (!meta || !meta.layout_opts) return false;
+    var saved = JSON.parse(meta.layout_opts);
+    if (saved && saved.opts) {
+      customOpts.session = clMerge(saved.opts.session);
+      customOpts.novel = clMerge(saved.opts.novel);
+    }
+    if (saved && saved.active) {
+      customActive.session = !!saved.active.session;
+      customActive.novel = !!saved.active.novel;
+    }
+    return true;
+  } catch (e) { return false; }
+}
+// Clear the Optimize Before/After readout. It describes one specific book + layout, so it must not
+// survive a campaign switch or a layout change -- a stale "35 -> 35 / 72% -> 70%" is worse than none.
+function finalizeClearStats(){
+  try {
+    var d = document.getElementById('layoutai-delta'); if (d) d.innerHTML = '';
+    var r = document.getElementById('layoutai-results'); if (r) { r.innerHTML = ''; r.removeAttribute('data-mode'); }
+    if (typeof _finalizeFills !== 'undefined') _finalizeFills = {};
+    if (typeof _finalizeAfterFills !== 'undefined') _finalizeAfterFills = {};
+  } catch (e) {}
 }
 (function loadCustomLayoutPrefs(){
   try {
