@@ -3292,7 +3292,38 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 
   var pageOpts = { noCover: true, bookTitle: req.query.bookTitle || '' }; // full book, never paginated for print
 
-  var html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  // PRINT INTERIOR = THE OPTIMIZED ("After") BOOK, minus the covers.
+  // The Finalize After pane and the Lulu interior must be the same artifact, so this runs the exact
+  // same pack + compose the After pane runs, then assembles it with nocover=1 (which suppresses BOTH
+  // the front cover and the back cover -- they are a publish-time artifact produced separately).
+  // Paper is forced to white here as always: the physical cream stock supplies the warmth.
+  // No token is charged -- the reader already paid to Optimize; printing must not re-charge.
+  var html = null;
+  if (co && (co.arrange === 'magazine' || co.arrange === 'gazette' || co.arrange === 'paired')) {
+    try {
+      var _pco = Object.assign({}, co, { paper: 'white' });
+      var _extra = { paper: 'white', arrange: co.arrange };
+      req.query.nocover = '1';
+      if (co.arrange === 'paired') {
+        var _packP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+        _pco.campaignName = (_packP.campaign && _packP.campaign.name) || '';
+        _extra.campaignName = _pco.campaignName;
+        _extra.packComposedBody = composeBook(_packP.plan, _packP.beats, _pco);
+      } else {
+        var _packM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+        _pco.campaignName = (_packM.campaign && _packM.campaign.name) || '';
+        _extra.campaignName = _pco.campaignName;
+        _extra.packComposedBody = composeMagazine(_packM.plan, _packM.bands, _pco);
+      }
+      var _builtP = await assembleNovelHtml(req, req.params.campaignId, null, _extra);
+      html = _builtP && _builtP.html;
+    } catch (e) {
+      console.error('[print-interior] composed build failed, falling back to flow render:', (e && e.message) || e);
+      html = null;
+    }
+  }
+  // Fallback: any layout without a composer (or a compose failure) prints the flow render as before.
+  if (!html) html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
 
   // Resolve any relative decorative asset URLs (textures/logo) against the live
   // site so Chromium can fetch them under setContent (which has no document base).
