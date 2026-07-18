@@ -1761,6 +1761,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
   return bands;
 }
 function renderMagazine(moments, sections, intro, outro, opts) {
+  if (opts && opts.measureComposed && _mzComposed) return buildComposedMeasureBody(opts);
   if (opts && opts.measureMagazine) return buildMagazineMeasureBody(moments, sections, intro, outro, opts);
   return magazineBands(moments, sections, intro, outro, opts).map(function (b) { return b.html; }).join('');
 }
@@ -1769,6 +1770,9 @@ function renderMagazine(moments, sections, intro, outro, opts) {
 // must be unique ACROSS sessions. computeMagazinePack resets this, runs the measure (which
 // fills it via buildMagazineMeasureBody), then reads back the full ordered band list.
 var _mzBands = null;
+// Iterative-optimizer re-measure state: { plan, bands } of the composed pages to RE-MEASURE (real
+// per-page/-line numbers). Set right before the composed measure pass, cleared right after.
+var _mzComposed = null;
 // Grow-to-fill map for the SECOND measure pass: { globalBandIndex: sizeMultiplier }. Set by
 // computeMagazinePack between passes; buildMagazineMeasureBody re-renders the matching float
 // bands larger via their regrow() closure so the re-measure captures their true reflowed height.
@@ -1784,6 +1788,19 @@ function buildMagazineMeasureBody(moments, sections, intro, outro, opts) {
     // display:flow-root contains each band's float so the measured height is complete.
     out += '<div data-mblk="mzb:' + gi + '" data-mkind="' + bnd.kind + '" style="display:flow-root;">' + bnd.html + '</div>';
   }
+  return out;
+}
+// RE-MEASURE body: the SAME composed pages, but each page's inner content is un-clipped, auto-height,
+// and wrapped in a [data-mblk="cp:N"] marker -- so measureDocument reports each page's TRUE content
+// height (and real line positions) instead of the synthesized estimates the band measure produced.
+function buildComposedMeasureBody(opts) {
+  var plan = _mzComposed && _mzComposed.plan, bands = _mzComposed && _mzComposed.bands;
+  if (!plan || !plan.pages || _mzComposed._emitted) return '';   // renderMagazine is called per session; emit the WHOLE composed body exactly once
+  _mzComposed._emitted = true;
+  var out = '';
+  plan.pages.forEach(function (pg, pi) {
+    out += '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="display:flow-root;margin-bottom:0.5in;">' + composePageInner(pg, bands, opts) + '</div>';
+  });
   return out;
 }
 
@@ -3891,6 +3908,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
   if (req.query.measurePaired === '1' || req.query.measurePaired === 'true') { co = co || {}; co.arrange = 'paired'; co.measurePaired = true; }
   if (req.query.measureMagazine === '1') { co = co || {}; co.measureMagazine = true; if (co.arrange !== 'magazine' && co.arrange !== 'gazette') co.arrange = 'magazine'; }
+  if (req.query.measureComposed === '1') { co = co || {}; co.measureComposed = true; if (co.arrange !== 'magazine' && co.arrange !== 'gazette') co.arrange = 'magazine'; }
   if (req.query.mzCapFeatures === '1') { co = co || {}; co.mzCapFeatures = true; }
   if (req.query.mzFloatShrunk === '1') { co = co || {}; co.mzFloatShrunk = true; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
@@ -4420,39 +4438,57 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn }; }) };
       })
     };
+    // ITERATIVE OPTIMIZER, step 1: re-measure the REAL composed output so the dump can show true
+    // per-page fills next to the estimates. Same request => still one token. Pagination unchanged.
+    try {
+      _mzComposed = { plan: { pages: pages }, bands: bands };
+      req.query.measureComposed = '1';
+      var cbuilt = await assembleNovelHtml(req, campaignId, null);
+      var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
+      var realH = {};
+      cblocks.forEach(function (bl) { var mm = /^cp:(\d+)$/.exec(bl.id || ''); if (mm) realH[+mm[1]] = bl.heightIn; });
+      _dbg.pages.forEach(function (pg) { if (realH[pg.page] != null) pg.realUsed = realH[pg.page]; });
+      _dbg.remeasured = true;
+    } catch (e) { _dbg.remeasureError = String((e && e.message) || e); }
+    delete req.query.measureComposed; _mzComposed = null;
   }
 
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
 // browser can't re-paginate. Mirrors composeBook's page shell.
+// Build ONE composed page's inner cells (shared by the final render and the re-measure body).
+function composePageInner(pg, bands, opts) {
+  var inner = '';
+  pg.forEach(function (cell) {
+    var b = bands[cell.band];
+    if (!b) return;
+    var html;
+    if (cell.split && b.stext != null) {
+      var cs = cell.cStart || 0;
+      var ce = (cell.cEnd != null) ? cell.cEnd : b.stext.length;
+      if (b.simg) {
+        if (cell.textLead) html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // SPILL lead: leading text ONLY (image leads the next page)
+        else if (cell.imgBody && b.renderHead) html = b.renderHead(cs, ce);   // SPILL body: image + the text AFTER the spilled lead
+        else if (cs === 0 && b.renderHead) html = b.renderHead(0, ce);   // panel HEAD: image + text up to the cut
+        else html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // continuation: full-width, boundary-aware
+      } else {
+        html = buildNarrativeHTML(b.stext.slice(cs, ce), b.sIntro);
+        if (cs > 0) html = html.replace('text-indent:0.3in', 'text-indent:0');   // intro/outro continuation: no first-line indent
+        if (cs === 0 && b.sDrop) html = coDropcap(html);   // drop cap only on the opening slice
+      }
+    } else {
+      html = b.html;
+    }
+    inner += '<div style="display:flow-root;">' + html + '</div>';
+  });
+  return inner;
+}
 function composeMagazine(plan, bands, opts) {
   var out = '';
   var pages = (plan && plan.pages) || [];
   pages.forEach(function (pg, pi) {
-    var inner = '';
-    pg.forEach(function (cell) {
-      var b = bands[cell.band];
-      if (!b) return;
-      var html;
-      if (cell.split && b.stext != null) {
-        var cs = cell.cStart || 0;
-        var ce = (cell.cEnd != null) ? cell.cEnd : b.stext.length;
-        if (b.simg) {
-          if (cell.textLead) html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // SPILL lead: leading text ONLY (image leads the next page)
-          else if (cell.imgBody && b.renderHead) html = b.renderHead(cs, ce);   // SPILL body: image + the text AFTER the spilled lead
-          else if (cs === 0 && b.renderHead) html = b.renderHead(0, ce);   // panel HEAD: image + text up to the cut
-          else html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // continuation: full-width, boundary-aware
-        } else {
-          html = buildNarrativeHTML(b.stext.slice(cs, ce), b.sIntro);
-          if (cs > 0) html = html.replace('text-indent:0.3in', 'text-indent:0');   // intro/outro continuation: no first-line indent
-          if (cs === 0 && b.sDrop) html = coDropcap(html);   // drop cap only on the opening slice
-        }
-      } else {
-        html = b.html;
-      }
-      inner += '<div style="display:flow-root;">' + html + '</div>';
-    });
+    var inner = composePageInner(pg, bands, opts);
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
     out += '<div class="content-page" style="height:9.65in;overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
   });
@@ -4470,6 +4506,8 @@ function magazinePlanText(packed) {
   L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  content-pages=' + d.pages.length + '  (the PDF also adds front/back matter: cover, title, contents, cast -- so the viewer page count is higher)');
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
+  if (d.remeasured) L.push('RE-MEASURED composed pages: each PAGE line shows REAL fill vs the single-pass estimate.');
+  else if (d.remeasureError) L.push('re-measure error: ' + d.remeasureError);
   L.push('');
   L.push('BANDS');
   d.bands.forEach(function (b) {
@@ -4483,7 +4521,8 @@ function magazinePlanText(packed) {
   d.pages.forEach(function (pg) {
     var white = Math.round((d.pageH - pg.used) * 100) / 100;
     var flag = (pg.used < d.pageH - 1) ? '  *UNDERFULL' : '';
-    L.push('  PAGE ' + pad(pg.page, 3) + ' used ' + pad(pg.used.toFixed(2), 6) + '/ ' + d.pageH.toFixed(2) + '  white ' + pad(white.toFixed(2), 6) + flag);
+    var realStr = (pg.realUsed != null) ? ('  REAL ' + pg.realUsed.toFixed(2) + ' (est ' + pg.used.toFixed(2) + ', ' + ((pg.realUsed - pg.used) >= 0 ? '+' : '') + (pg.realUsed - pg.used).toFixed(2) + ')') : '';
+    L.push('  PAGE ' + pad(pg.page, 3) + ' used ' + pad(pg.used.toFixed(2), 6) + '/ ' + d.pageH.toFixed(2) + '  white ' + pad(white.toFixed(2), 6) + flag + realStr);
     pg.cells.forEach(function (c) {
       L.push('      ' + pad('b' + c.band, 5) + pad(c.kind || '?', 15) + 'h' + pad((c.h != null ? c.h : '?'), 7) +
         (c.split ? ('CUT ' + c.cStart + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : ''));
