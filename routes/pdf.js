@@ -2771,7 +2771,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .tp-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#2c1810;letter-spacing:0.04em;line-height:1.15;text-transform:uppercase;margin-bottom:0.4in; }
   .tp-image-wrap { margin:0 auto;max-width:100%; }
   .tp-image-border { display:inline-block;position:relative;line-height:0;border-radius:4px;overflow:hidden; }
-  .tp-image { display:block;max-width:4.6in;max-height:5in;width:auto;height:auto; }
+  .tp-image { display:block;max-width:6.5in;max-height:6.5in;width:auto;height:auto;margin:0 auto; }
   .tp-logo { width:0.95in;height:auto;object-fit:contain;margin-top:0.5in;opacity:0.9; }
   .detailspage { width:8.5in;min-height:9.4in;padding:1in 1.1in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
   .dp-title { font-family:'Cinzel',serif;font-size:20pt;font-weight:700;color:#2c1810;letter-spacing:0.03em;margin-bottom:0.08in; }
