@@ -980,7 +980,8 @@ var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the p
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
 var MZ_PAGE_GROW = true;      // iterative optimizer: grow the image on an underfull page so the text re-wraps around it and fills the white (nothing leaves the page)
 var MZ_GROW_MIN_WHITE = 0.6;  // (in) only grow a page with at least this much white
-var MZ_GROW_STEPS = [1.15, 1.35, 1.6, 1.9];   // escalating size multipliers tried against the real re-measure (each rung costs one measure)
+var MZ_GROW_MAX_MUL = 3.0;    // hard ceiling on how much an image may be enlarged to fill a page
+var MZ_GROW_ROUNDS = 3;       // refinement rounds (each costs one measure): aim at the analytic target, then bisect
 var MZ_LOOKBACK_PULLUP = true; // iterative optimizer: an underfull page pulls up a following single movable band that fits (gated on the real re-measure)
 var MZ_TOWER_MERGE = true;    // iterative optimizer: fold a stranded text-only tail into the following tower's beside-column (gated on the real re-measure)
 var MZ_TOWER_MERGE_MAX_IN = 9.55; // a merged page must still fit the physical content-page (9.65in) with margin
@@ -4557,7 +4558,10 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var _growCell = function (pg) {
       for (var ci = 0; ci < pg.length; ci++) {
         var c = pg[ci], bb = bands[c.band];
-        if (!bb || !bb.remeta || !bb.simg) continue;                       // band must be re-renderable AND carry an image
+        // A band is growable if it can be re-rendered at a new size AND actually carries a picture.
+        // NOTE: bb.simg means "splittable image band WITH prose text" -- it is FALSE for script/dialogue
+        // panels, which still have images. Testing simg here skipped every image on a Comic-Dialogue book.
+        if (!bb || !bb.remeta || !(bb.sImgH > 0)) continue;
         if (c.textLead || c.towerLead) continue;                          // text-only cells
         if (c.split && (c.cStart || 0) > 0 && !c.imgBody) continue;       // text-only continuation tail
         return ci;
@@ -4578,23 +4582,41 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     try {
       var _gr0 = await remeasureComposedPages(req, campaignId, pages, bands);
       if (!_gr0._error) {
-        var _fac = {}, _act = [];
+        // Aim straight at the white instead of climbing a fixed ladder: the extra height an image
+        // contributes is roughly proportional to its own height, so target = 1 + white/imgHeight. Then
+        // refine by bisection -- an overshoot pulls back, a comfortable fit reaches higher. Far more
+        // accurate than a ladder for pages whose image is small relative to the white (a 1.9x cap could
+        // never fill a 4in gap left by a 1.9in image).
+        var _fac = {}, _lo = {}, _hi = {}, _try = {}, _act = [];
         pages.forEach(function (pg, pi) {
           if (_gr0[pi] == null || _gr0[pi] > pageH - MZ_GROW_MIN_WHITE) return;   // not underfull enough to bother
-          if (_growCell(pg) < 0) return;                                          // no growable image on this page
-          _fac[pi] = 1; _act.push(pi);
+          var ci = _growCell(pg);
+          if (ci < 0) return;                                                     // no growable image on this page
+          var _bb = bands[pg[ci].band];
+          var _ih = Math.max(0.5, (_bb && _bb.sImgH) || 0.5);
+          var _t = 1 + (pageH - _gr0[pi]) / _ih;
+          if (_t > MZ_GROW_MAX_MUL) _t = MZ_GROW_MAX_MUL;
+          if (_t < 1.05) return;
+          _fac[pi] = 1; _lo[pi] = 1; _hi[pi] = _t; _try[pi] = _t; _act.push(pi);
         });
-        for (var _si = 0; _si < MZ_GROW_STEPS.length && _act.length; _si++) {
-          var _trial = _applyGrow(pages, (function (st) {
+        for (var _rd = 0; _rd < MZ_GROW_ROUNDS && _act.length; _rd++) {
+          var _trial = _applyGrow(pages, (function () {
             var m = {}; for (var k in _fac) m[k] = _fac[k];
-            _act.forEach(function (pi) { m[pi] = st; });
+            _act.forEach(function (pi) { m[pi] = _try[pi]; });
             return m;
-          })(MZ_GROW_STEPS[_si]));
+          })());
           var _grc = await remeasureComposedPages(req, campaignId, _trial, bands);
           if (_grc._error) break;
           var _next = [];
           _act.forEach(function (pi) {
-            if (_grc[pi] != null && _grc[pi] <= MZ_TOWER_MERGE_MAX_IN) { _fac[pi] = MZ_GROW_STEPS[_si]; _next.push(pi); }
+            if (_grc[pi] != null && _grc[pi] <= MZ_TOWER_MERGE_MAX_IN) {
+              _fac[pi] = _try[pi]; _lo[pi] = _try[pi];
+              if (_hi[pi] <= _try[pi] + 1e-6) _hi[pi] = Math.min(MZ_GROW_MAX_MUL, _try[pi] * 1.5);   // it fit -- reach higher
+            } else {
+              _hi[pi] = _try[pi];                                                                    // overshoot -- pull back
+            }
+            var _nt = (_lo[pi] + _hi[pi]) / 2;
+            if (_hi[pi] - _lo[pi] > 0.12 && _nt > 1.02) { _try[pi] = _nt; _next.push(pi); }
           });
           _act = _next;
         }
@@ -4621,7 +4643,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       pages: pages.map(function (pg, pi) {
         var u = 0; pg.forEach(function (c) { u += (c.heightIn != null ? c.heightIn : (_fm.h[c.band] || 0)); });
         return { page: pi, used: Math.round(u * 1000) / 1000,
-          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn }; }) };
+          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null) }; }) };
       })
     };
     // Re-measure the REAL composed output (after any tower-merge) so the dump shows true per-page
@@ -4711,7 +4733,9 @@ function magazinePlanText(packed) {
     L.push('  PAGE ' + pad(pg.page, 3) + ' used ' + pad(pg.used.toFixed(2), 6) + '/ ' + d.pageH.toFixed(2) + '  white ' + pad(white.toFixed(2), 6) + flag + realStr);
     pg.cells.forEach(function (c) {
       L.push('      ' + pad('b' + c.band, 5) + pad(c.kind || '?', 15) + 'h' + pad((c.h != null ? c.h : '?'), 7) +
-        (c.split ? ('CUT ' + c.cStart + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : ''));
+        (c.split ? ('CUT ' + c.cStart + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : '') +
+        (c.growMul ? ('  GROWN x' + (Math.round(c.growMul * 100) / 100)) : '') +
+        (c.towerLead ? ('  +TOWER-LEAD b' + c.towerLead.band) : ''));
     });
   });
   L.push('');
