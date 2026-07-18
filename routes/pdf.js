@@ -4189,11 +4189,28 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
       if (L >= 0) {
         var cEnd = it.cStart + it.lineChars[L + 1];
         var headH = round3(it.lines[L] + MZ_SPLIT_PAD);   // the rendered slice carries the paragraph's bottom margin beyond the last line
+        // The `after` region's line positions are synthesized estimates, so a raw cut there can end a
+        // slice mid-sentence (a word or two orphaned on the last line). Pull the cut back to the nearest
+        // sentence end so a slice always finishes a whole sentence. Head keeps its reserved height (a
+        // little extra white is fine); the tail gets the pulled-back text and re-derives its lines.
+        var _sb = bands[it.band];
+        if (_sb && _sb.mbound != null && _sb.stext != null && cEnd > _sb.mbound + 8 && cEnd < _sb.stext.length - 2) {
+          var _t = _sb.stext, _snap = -1;
+          for (var _dd = 2; _dd < 160 && (cEnd - _dd) > it.cStart + 45; _dd++) {
+            var _ch = _t.charAt(cEnd - _dd);
+            if ((_ch === '.' || _ch === '!' || _ch === '?') && /\s/.test(_t.charAt(cEnd - _dd + 1))) { _snap = cEnd - _dd + 1; break; }
+          }
+          if (_snap > it.cStart + 45 && _snap < cEnd) cEnd = _snap;
+        }
         cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true, imgBody: !!it.imgBody });
         used += headH; flush();
+        var _rel = cEnd - it.cStart;
         var tLines = [], tChars = [];
-        for (var lj = L + 1; lj < it.lines.length; lj++) { tLines.push(round3(it.lines[lj] - it.lines[L])); tChars.push(it.lineChars[lj] - it.lineChars[L + 1]); }
-        work.splice(w + 1, 0, { band: it.band, cStart: cEnd, cEnd: null, height: round3(it.height - it.lines[L] + MZ_SPLIT_PAD), lines: tLines, lineChars: tChars, simg: false, sImgH: 0 });
+        for (var lj = 0; lj < it.lineChars.length; lj++) {
+          if (it.lineChars[lj] >= _rel) { tChars.push(it.lineChars[lj] - _rel); tLines.push(round3(it.lines[lj] - it.lines[L])); }
+        }
+        if (!tChars.length || tChars[0] > 0) { tChars.unshift(0); tLines.unshift(0); }
+        work.splice(w + 1, 0, { band: it.band, cStart: cEnd, cEnd: null, height: round3(it.height - it.lines[L] + MZ_SPLIT_PAD + 0.32), lines: tLines, lineChars: tChars, simg: false, sImgH: 0, stextLen: it.stextLen });
         continue;
       }
     }
