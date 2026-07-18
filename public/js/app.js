@@ -1628,6 +1628,7 @@ function setCampaignElements() {
   if (ct) ct.textContent = state.currentCampaign.name;
   if (cs) cs.textContent = state.currentCampaign.description || '';
   if (state.currentCampaign) loadTierInfo(state.currentCampaign.id);
+  if (state.currentCampaign && typeof loadCampaignLayoutOpts === 'function') loadCampaignLayoutOpts();   // layout options follow the campaign, pulled fresh from the DB
 }
 
 function selectCampaign(id) {
@@ -8770,6 +8771,7 @@ function setCampaignElements() {
   if (ct) ct.textContent = state.currentCampaign.name;
   if (cs) cs.textContent = state.currentCampaign.description || '';
   if (state.currentCampaign) loadTierInfo(state.currentCampaign.id);
+  if (state.currentCampaign && typeof loadCampaignLayoutOpts === 'function') loadCampaignLayoutOpts();   // layout options follow the campaign, pulled fresh from the DB
 }
 
 function selectCampaign(id) {
@@ -12064,19 +12066,52 @@ function saveCampaignLayoutOpts(){
 // Apply the layout options saved on THIS campaign (called after book meta loads). Falls back to the
 // current in-memory values when a campaign has none saved yet, so existing books are unchanged.
 function applyCampaignLayoutOpts(meta){
+  var saved = null;
+  try { if (meta && meta.layout_opts) saved = JSON.parse(meta.layout_opts); } catch (e) { saved = null; }
+  // ALWAYS set state. A campaign with nothing saved must fall back to DEFAULTS, never keep whatever
+  // the previously-open campaign was using -- inheriting was the bug (open A with drop shadow, open
+  // B, B showed drop shadow).
+  if (saved && saved.opts) {
+    customOpts.session = clMerge(saved.opts.session);
+    customOpts.novel = clMerge(saved.opts.novel);
+  } else {
+    customOpts.session = clClone(CUSTOM_LAYOUT_DEFAULTS);
+    customOpts.novel = clClone(CUSTOM_LAYOUT_DEFAULTS);
+  }
+  if (saved && saved.active) {
+    customActive.session = !!saved.active.session;
+    customActive.novel = !!saved.active.novel;
+  } else {
+    customActive.session = false;
+    customActive.novel = false;
+  }
+  // Repaint anything that displays the options: the Finalize header summary ("Borders: ...") and the
+  // Custom Layout panel if it happens to be open. Without this the values change but the UI lies.
+  try { if (typeof finalizeUpdateHeader === 'function') finalizeUpdateHeader(); } catch (e) {}
   try {
-    if (!meta || !meta.layout_opts) return false;
-    var saved = JSON.parse(meta.layout_opts);
-    if (saved && saved.opts) {
-      customOpts.session = clMerge(saved.opts.session);
-      customOpts.novel = clMerge(saved.opts.novel);
-    }
-    if (saved && saved.active) {
-      customActive.session = !!saved.active.session;
-      customActive.novel = !!saved.active.novel;
-    }
-    return true;
-  } catch (e) { return false; }
+    var _pn = document.getElementById('custom-layout-modal');
+    if (_pn && _pn.style && _pn.style.display && _pn.style.display !== 'none' && typeof openCustomLayout === 'function' && typeof _clCtx !== 'undefined') openCustomLayout(_clCtx);
+  } catch (e) {}
+  return !!saved;
+}
+// Pull this campaign's layout options straight from the DB on every switch. Deliberately no cache
+// and no localStorage read: the stored options ARE the truth, so a stale browser copy can never
+// leak one campaign's look into another. Called from setCampaignElements, which every campaign-
+// switch path funnels through.
+var _clLoadSeq = 0;
+function loadCampaignLayoutOpts(){
+  try {
+    var c = state.currentCampaign;
+    if (!c) return;
+    var forkUser = state.novelAsUser || (state.user && state.user.id);
+    if (!forkUser) return;
+    var seq = ++_clLoadSeq;
+    finalizeClearStats();   // the Before/After numbers belong to the campaign we just left
+    fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser), { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(m){ if (seq !== _clLoadSeq) return; applyCampaignLayoutOpts(m); })   // ignore a slow reply for a campaign we already left
+      .catch(function(){});
+  } catch (e) {}
 }
 // Clear the Optimize Before/After readout. It describes one specific book + layout, so it must not
 // survive a campaign switch or a layout change -- a stale "35 -> 35 / 72% -> 70%" is worse than none.
