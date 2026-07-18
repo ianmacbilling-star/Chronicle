@@ -1129,7 +1129,12 @@ function gzNarrBox(narrHtml, opts) {
 // off (the "border bigger than the picture"). For those, the frame HUGS the image's
 // true height (width fixed, height:auto) so the border can never exceed the picture.
 function gzImgBox(m, opts, fl, w, h) {
-  if ((opts && opts.enclose) && !lmCropSafe(m) && m.image) {
+  // A non-crop-safe image renders object-fit:contain, which LETTERBOXES inside a fixed-height box.
+  // The box background is transparent, so those bands showed the page through and the border stood
+  // off the picture ("the border should come down to meet the picture's edge"). Letting the box hug
+  // the image removes the bands entirely. This was already the Gazette behaviour; it now applies in
+  // every layout, since the letterbox gap was never Gazette-specific.
+  if (!lmCropSafe(m) && m.image) {
     // Full uncropped image (height:auto). min-height reserves the computed height so the box
     // does NOT collapse when image loads are aborted during the magazine measure pass -- without
     // this the band measures short and the deterministic composer clips its overflow. When the
@@ -1201,8 +1206,14 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
   var imgW = imgH * ta;
   var fl = sideLeft ? 'float:left;margin:0 0.20in 0.10in 0;'
                     : 'float:right;margin:0 0 0.10in 0.20in;';
-  var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  // Same letterbox fix as gzImgBox: a contain image would leave transparent bands inside the border.
+  var box = (!lmCropSafe(m) && m.image)
+    ? ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;min-height:' + imgH.toFixed(2) +
+       'in;position:relative;background:transparent;line-height:0;">' +
+       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
+       picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>')
+    : ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
+       'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>');
   var col = '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
   // Keep the tower + its beside-column narrative as ONE unbreakable unit. Without this the
   // short narrative fills the scrap at a page bottom while the 9.2in tower bumps to the next
@@ -1789,6 +1800,37 @@ function renderMagazine(moments, sections, intro, outro, opts) {
 // Global band accumulator: buildNovelHTML renders each session separately, so band indices
 // must be unique ACROSS sessions. computeMagazinePack resets this, runs the measure (which
 // fills it via buildMagazineMeasureBody), then reads back the full ordered band list.
+// Composed-body cache. Optimize (pack-render) already does the expensive work -- measure, pack,
+// transform, compose -- so the print interior reuses that result instead of redoing every measure
+// pass. Keyed by campaign + the options that change layout, with a short TTL so an interior built
+// after new art or edited narrative recomposes rather than printing something stale. A miss simply
+// recomputes, so the cache can never make the interior wrong -- only slower.
+var _composedCache = new Map();
+var COMPOSED_CACHE_TTL_MS = 30 * 60 * 1000;
+var COMPOSED_CACHE_MAX = 24;
+function composedCacheKey(campaignId, req) {
+  var q = req && req.query ? req.query : {};
+  return [campaignId, q.co || '', q.layout || '', q.as_user || '', q.bookTitle || ''].join('|');
+}
+function composedCachePut(campaignId, req, arrange, body, campaignName) {
+  try {
+    if (!body) return;
+    if (_composedCache.size >= COMPOSED_CACHE_MAX) {   // simple FIFO trim, oldest key first
+      var it = _composedCache.keys().next();
+      if (!it.done) _composedCache.delete(it.value);
+    }
+    _composedCache.set(composedCacheKey(campaignId, req), { at: Date.now(), arrange: arrange, body: body, campaignName: campaignName || '' });
+  } catch (e) { /* cache is best-effort */ }
+}
+function composedCacheGet(campaignId, req) {
+  try {
+    var k = composedCacheKey(campaignId, req);
+    var v = _composedCache.get(k);
+    if (!v) return null;
+    if (Date.now() - v.at > COMPOSED_CACHE_TTL_MS) { _composedCache.delete(k); return null; }
+    return v;
+  } catch (e) { return null; }
+}
 var _mzBands = null;
 // Iterative-optimizer re-measure state: { plan, bands } of the composed pages to RE-MEASURE (real
 // per-page/-line numbers). Set right before the composed measure pass, cleared right after.
@@ -3304,7 +3346,13 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
       var _pco = Object.assign({}, co, { paper: 'white' });
       var _extra = { paper: 'white', arrange: co.arrange };
       req.query.nocover = '1';
-      if (co.arrange === 'paired') {
+      var _hit = composedCacheGet(req.params.campaignId, req);
+      if (_hit && _hit.arrange === co.arrange && _hit.body) {
+        // Optimize already measured, packed and composed this exact book -- reuse it verbatim so the
+        // interior is byte-identical to the After pane and no measure pass runs again.
+        _extra.campaignName = _hit.campaignName || '';
+        _extra.packComposedBody = _hit.body;
+      } else if (co.arrange === 'paired') {
         var _packP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
         _pco.campaignName = (_packP.campaign && _packP.campaign.name) || '';
         _extra.campaignName = _pco.campaignName;
@@ -4838,6 +4886,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
         var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
         _cco.campaignName = (packedM.campaign && packedM.campaign.name) || '';
         var bodyM = composeMagazine(packedM.plan, packedM.bands, _cco);
+        composedCachePut(req.params.campaignId, req, _cco.arrange, bodyM, _cco.campaignName);   // the print interior reuses this
         var rbuiltM = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: bodyM });
         if (req.query.pane === '1') rbuiltM.html = paneSafeHtml(rbuiltM.html);
         var pdfM = await renderHtmlToPdf(rbuiltM.html, {});
@@ -4852,6 +4901,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
       _cco.campaignName = (packedC.campaign && packedC.campaign.name) || '';
       var body = composeBook(packedC.plan, packedC.beats, _cco);
+      composedCachePut(req.params.campaignId, req, 'paired', body, _cco.campaignName);   // the print interior reuses this
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       if (req.query.pane === '1') rbuiltC.html = paneSafeHtml(rbuiltC.html);   // preview-safe gradients in the Finalize After pane only
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
