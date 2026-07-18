@@ -14643,19 +14643,34 @@ function measureCanvasFill(canvas) {
     for (var yy = cy0; yy < cy1; yy++) { for (var xx = cx0; xx < cx1; xx++) { var k = (yy * W + xx) * 4; if (data[k + 3] < 10) continue; sr += data[k]; sg += data[k + 1]; sb += data[k + 2]; sn++; } }
     if (sn > 0) { bgR = Math.round(sr / sn); bgG = Math.round(sg / sn); bgB = Math.round(sb / sn); }
     var TOL = 34;
-    var lastContent = 0, pxDbg = null;
-    var yMax = Math.floor(H * 0.94);
-    for (var y = 0; y < yMax; y += 3) {
-      var rowHas = false;
-      for (var x = 0; x < W; x += 7) {
+    // GRID OCCUPANCY (v3.0.116): the old metric returned how far DOWN the page ink reached, so it was
+    // blind to SIDE-white -- a narrow image with an empty column beside it still scored ~full. That is
+    // exactly the white the optimizer's image-grow removes, so improvements never showed up. Now the
+    // printable area (margins + footer excluded) is divided into a coarse grid and a cell counts as
+    // used if ANY ink falls in it. Cells are ~one text-line pitch tall, so normal line spacing still
+    // reads as full, while genuine white -- beside a narrow image or below short content -- reads empty.
+    var gx0 = Math.floor(W * 0.07), gx1 = Math.floor(W * 0.93);
+    var gy0 = Math.floor(H * 0.03), gy1 = Math.floor(H * 0.94);
+    var COLS = 20, ROWS = 30;
+    var cw = (gx1 - gx0) / COLS, chh = (gy1 - gy0) / ROWS;
+    if (!(cw > 0) || !(chh > 0)) return null;
+    var cells = new Uint8Array(COLS * ROWS), pxDbg = null;
+    for (var y = gy0; y < gy1; y += 2) {
+      var ry = Math.floor((y - gy0) / chh); if (ry < 0 || ry >= ROWS) continue;
+      for (var x = gx0; x < gx1; x += 4) {
         var i = (y * W + x) * 4;
         if (data[i + 3] < 10) continue;
-        if (Math.abs(data[i] - bgR) > TOL || Math.abs(data[i + 1] - bgG) > TOL || Math.abs(data[i + 2] - bgB) > TOL) { rowHas = true; if (y >= lastContent) pxDbg = [x, data[i], data[i + 1], data[i + 2]]; break; }
+        if (Math.abs(data[i] - bgR) > TOL || Math.abs(data[i + 1] - bgG) > TOL || Math.abs(data[i + 2] - bgB) > TOL) {
+          var rx = Math.floor((x - gx0) / cw); if (rx < 0 || rx >= COLS) continue;
+          cells[ry * COLS + rx] = 1;
+          if (!pxDbg) pxDbg = [x, data[i], data[i + 1], data[i + 2]];
+        }
       }
-      if (rowHas) lastContent = y;
     }
-    canvas.__scanDbg = { bg: [bgR, bgG, bgB], px: pxDbg };
-    return lastContent / H;
+    var usedCells = 0;
+    for (var ci = 0; ci < cells.length; ci++) { if (cells[ci]) usedCells++; }
+    canvas.__scanDbg = { bg: [bgR, bgG, bgB], px: pxDbg, cells: usedCells + '/' + cells.length };
+    return usedCells / cells.length;
   } catch (e) { return null; }
 }
 function finalizeFreeAnalysis() {
@@ -14797,7 +14812,7 @@ function finalizeWhitePct(fills, total) {
   var sum = 0; vals.forEach(function (v) { sum += v; });
   return Math.max(0, Math.round(100 - sum / vals.length));
 }
-var FINALIZE_FILL_GREEN = 85;   // density % at/above which the score reads "as good as it gets" (green); tune once real books land
+var FINALIZE_FILL_GREEN = 78;   // density % at/above which the score reads "as good as it gets" (green). Rescaled for the v3.0.116 grid-occupancy metric, which counts side-white the old depth metric ignored, so equivalent books read a little lower.
 function finalizeFillPct(fills, total) { var w = finalizeWhitePct(fills, total); return (w == null) ? null : (100 - w); }
 function finalizeFillColor(f) { return (f != null && f >= FINALIZE_FILL_GREEN) ? '#8fd18f' : '#e0a0a0'; }
 function finalizeCountLabel(total, fillPct) {
