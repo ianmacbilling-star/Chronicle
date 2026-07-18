@@ -1172,12 +1172,23 @@ function cgFloatDims(m, opts, small, mul) {
   if (imgW > _maxW) { imgW = _maxW; imgH = imgW / asp; }
   return { imgW: imgW, imgH: imgH, asp: asp };
 }
+// Align the first line of a WRAPPED narrative with the TOP of the picture it sits beside.
+// A narrative <p> carries margin:0.15in 0, but a floated image box starts at 0 - 0.04in, so the
+// text sat 0.11 - 0.15in lower than the picture. Invisible with no border; obvious against a hard
+// comic/bronze edge, and it differed per band type (hence the "sometimes" reports). Strip ONLY the
+// first paragraph's TOP margin -- its bottom spacing and every later paragraph are untouched -- so
+// picture and prose share one origin AND the reclaimed 0.15in goes back to the page.
+// Only used for side-by-side (float/tower) layouts; text BELOW an image keeps its top margin.
+function cgAlignFirstPara(html) {
+  if (!html) return html;
+  return html.replace('margin:0.15in 0;', 'margin:0 0 0.15in;');
+}
 function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
   var d = cgFloatDims(m, opts, small, mul);
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
                     : 'float:right;margin:0.04in 0 0.10in 0.20in;';
   var box = gzImgBox(m, opts, fl, d.imgW, d.imgH);
-  return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + (narrHtml || '') + '</div>';
+  return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + cgAlignFirstPara(narrHtml || '') + '</div>';
 }
 
 function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
@@ -1192,7 +1203,7 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
                     : 'float:right;margin:0 0 0.10in 0.20in;';
   var box = '<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
     'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-  var col = '<div style="display:flow-root;">' + (narrHtml || '') + (besideHtml || '') + '</div>';
+  var col = '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
   // Keep the tower + its beside-column narrative as ONE unbreakable unit. Without this the
   // short narrative fills the scrap at a page bottom while the 9.2in tower bumps to the next
   // page, stranding the text and leaving the tower's side column empty. (Rollback: remove
@@ -1298,7 +1309,7 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
     var fbox = '<div style="' + cgBorder(opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
       'in;position:relative;background:transparent;line-height:0;page-break-inside:avoid;break-inside:avoid;">' +
       img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
-    return '<div style="display:flow-root;margin-bottom:0.10in;">' + fbox + gzNarrBox(narrHtml, opts) + '</div>';
+    return '<div style="display:flow-root;margin-bottom:0.10in;">' + fbox + gzNarrBox(cgAlignFirstPara(narrHtml), opts) + '</div>';
   }
   var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
