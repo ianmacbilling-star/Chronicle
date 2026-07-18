@@ -978,6 +978,9 @@ var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a
 var MZ_MIN_SLICE_LINES = 2;  // anti-sliver: a split slice must carry at least this many lines (classic orphan rule -- never one lonely line)
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
+var MZ_PAGE_GROW = true;      // iterative optimizer: grow the image on an underfull page so the text re-wraps around it and fills the white (nothing leaves the page)
+var MZ_GROW_MIN_WHITE = 0.6;  // (in) only grow a page with at least this much white
+var MZ_GROW_STEPS = [1.15, 1.35, 1.6, 1.9];   // escalating size multipliers tried against the real re-measure (each rung costs one measure)
 var MZ_LOOKBACK_PULLUP = true; // iterative optimizer: an underfull page pulls up a following single movable band that fits (gated on the real re-measure)
 var MZ_TOWER_MERGE = true;    // iterative optimizer: fold a stranded text-only tail into the following tower's beside-column (gated on the real re-measure)
 var MZ_TOWER_MERGE_MAX_IN = 9.55; // a merged page must still fit the physical content-page (9.65in) with margin
@@ -4544,6 +4547,62 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     }
   }
 
+  // ITERATIVE OPTIMIZER, step 4: PAGE-LOCAL IMAGE GROW. For every underfull page, grow that page's
+  // image so the text re-wraps around a bigger picture and fills the white. NOTHING leaves the page --
+  // the text slice is untouched, only the image multiplier changes. Escalating ladder, each rung
+  // verified against the REAL re-measure: a page keeps the largest multiplier that still fits the
+  // physical content page. Monotone (a page can only end at a size that measured OK) and page-count
+  // neutral by construction. One token for the whole run.
+  if (MZ_PAGE_GROW && (_co.arrange === 'magazine' || _co.arrange === 'gazette' || !_co.arrange)) {
+    var _growCell = function (pg) {
+      for (var ci = 0; ci < pg.length; ci++) {
+        var c = pg[ci], bb = bands[c.band];
+        if (!bb || !bb.remeta || !bb.simg) continue;                       // band must be re-renderable AND carry an image
+        if (c.textLead || c.towerLead) continue;                          // text-only cells
+        if (c.split && (c.cStart || 0) > 0 && !c.imgBody) continue;       // text-only continuation tail
+        return ci;
+      }
+      return -1;
+    };
+    var _applyGrow = function (pgs, fmap) {
+      return pgs.map(function (pg, pi) {
+        var f = fmap[pi];
+        if (!f || f === 1) return pg;
+        var ci = _growCell(pg);
+        if (ci < 0) return pg;
+        var np = pg.slice();
+        np[ci] = Object.assign({}, np[ci], { growMul: f });
+        return np;
+      });
+    };
+    try {
+      var _gr0 = await remeasureComposedPages(req, campaignId, pages, bands);
+      if (!_gr0._error) {
+        var _fac = {}, _act = [];
+        pages.forEach(function (pg, pi) {
+          if (_gr0[pi] == null || _gr0[pi] > pageH - MZ_GROW_MIN_WHITE) return;   // not underfull enough to bother
+          if (_growCell(pg) < 0) return;                                          // no growable image on this page
+          _fac[pi] = 1; _act.push(pi);
+        });
+        for (var _si = 0; _si < MZ_GROW_STEPS.length && _act.length; _si++) {
+          var _trial = _applyGrow(pages, (function (st) {
+            var m = {}; for (var k in _fac) m[k] = _fac[k];
+            _act.forEach(function (pi) { m[pi] = st; });
+            return m;
+          })(MZ_GROW_STEPS[_si]));
+          var _grc = await remeasureComposedPages(req, campaignId, _trial, bands);
+          if (_grc._error) break;
+          var _next = [];
+          _act.forEach(function (pi) {
+            if (_grc[pi] != null && _grc[pi] <= MZ_TOWER_MERGE_MAX_IN) { _fac[pi] = MZ_GROW_STEPS[_si]; _next.push(pi); }
+          });
+          _act = _next;
+        }
+        pages = _applyGrow(pages, _fac);
+      }
+    } catch (e) { /* grow is best-effort: on any failure keep the ungrown pages */ }
+  }
+
   var _dbg = null;
   if (packOpts && packOpts.debug) {
     var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
@@ -4584,6 +4643,8 @@ function composePageInner(pg, bands, opts) {
   pg.forEach(function (cell) {
     var b = bands[cell.band];
     if (!b) return;
+    // PAGE-LOCAL GROW: re-render this band with a bigger image; the SAME text slice re-wraps around it.
+    if (cell.growMul && cell.growMul !== 1 && b.remeta) { try { b = b.remeta(cell.growMul) || b; } catch (e) { /* keep original */ } }
     var html;
     if (cell.split && b.stext != null) {
       var cs = cell.cStart || 0;
