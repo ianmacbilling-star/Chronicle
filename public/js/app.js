@@ -14649,8 +14649,13 @@ function measureCanvasFill(canvas) {
     // printable area (margins + footer excluded) is divided into a coarse grid and a cell counts as
     // used if ANY ink falls in it. Cells are ~one text-line pitch tall, so normal line spacing still
     // reads as full, while genuine white -- beside a narrow image or below short content -- reads empty.
-    var gx0 = Math.floor(W * 0.07), gx1 = Math.floor(W * 0.93);
-    var gy0 = Math.floor(H * 0.03), gy1 = Math.floor(H * 0.94);
+    // Denominator = the TRUE printable box, so permanent margin white never counts against a page.
+    // Interior geometry: @page 8.5x11in with margin 0.65in top/bottom and .content-page padding 0.85in
+    // left/right (top/bottom padding is zeroed in print). Margins are symmetric -- no mirrored gutter --
+    // so one box is valid for both odd and even pages. The running-header band (HEADER_BAND_IN 0.24in)
+    // is skipped too, so the score reflects BODY content only.
+    var gx0 = Math.floor(W * 0.100), gx1 = Math.floor(W * 0.900);   // 0.85in / 8.5in
+    var gy0 = Math.floor(H * 0.081), gy1 = Math.floor(H * 0.941);   // (0.65 + 0.24)in / 11in .. (11 - 0.65)in / 11in
     var COLS = 20, ROWS = 30;
     var cw = (gx1 - gx0) / COLS, chh = (gy1 - gy0) / ROWS;
     if (!(cw > 0) || !(chh > 0)) return null;
