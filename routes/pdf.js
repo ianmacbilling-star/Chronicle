@@ -1235,6 +1235,10 @@ function cgFlowWide(m, opts, narrHtml, sideLeft, mul) {
     // narrative wraps beside it) -- the picture is the show, just enclosed.
     var aspW = Math.max(0.3, momentAspect(m));
     var iwW = 4.4 * mul, ihW = iwW / aspW;
+    // CLAMP: grow-to-fill (mul>1) must never push the floated image past the column, or it
+    // bleeds over the margin. Cap width to CG_W - MZ_MIN_TEXT_COL and recompute height to keep aspect.
+    var _maxWe = CG_W - MZ_MIN_TEXT_COL;
+    if (iwW > _maxWe) { iwW = _maxWe; ihW = iwW / aspW; }
     return gzFloatPanel(m, opts, narrHtml, iwW, ihW, sideLeft);
   }
   // Full-width wide image at its NATURAL height -- no fixed-height box, no contain,
@@ -1288,6 +1292,9 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
     if (asp >= 1.5) { iwF = 4.8; ihF = iwF / asp; }
     else { ihF = Math.min(5.0, 3.8 / asp); iwF = ihF * asp; if (iwF > 4.4) { iwF = 4.4; ihF = iwF / asp; } }
     iwF *= mul; ihF *= mul;
+    // CLAMP: same as cgFlowWide -- a grown feature image must stay inside the column, never bleed.
+    var _maxWe = CG_W - MZ_MIN_TEXT_COL;
+    if (iwF > _maxWe) { iwF = _maxWe; ihF = iwF / asp; }
     return gzFloatPanel(m, opts, narrHtml, iwF, ihF, sideLeft);
   }
   if (asp >= 1.5) {
