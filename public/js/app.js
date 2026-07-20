@@ -12076,6 +12076,20 @@ function saveCampaignLayoutOpts(){
     fetch('/api/campaigns/' + c.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function(){});
   } catch (e) {}
 }
+// Keep the two layout UIs in lockstep with the customOpts store: the inline Preview & Export panel
+// (pcl-* fields) and the pop-up Layout modal (cl-* fields). Both read/write the same customOpts,
+// but neither repaints the OTHER when the data changes -- so after a campaign switch or an edit in
+// one UI the other could show stale values, and a later commit would write those stale values back
+// (this was the cross-campaign leak). Programmatic .value/.checked sets do NOT fire 'change', so
+// this never triggers a save. The modal is repainted ONLY when it is actually open (no 'hidden'
+// class), so this can never pop a closed modal into view.
+function _syncLayoutPanels(){
+  try { if (typeof prepLayoutLoad === 'function') prepLayoutLoad(); } catch (e) {}
+  try {
+    var _pn = document.getElementById('custom-layout-modal');
+    if (_pn && !_pn.classList.contains('hidden') && typeof openCustomLayout === 'function' && typeof _clCtx !== 'undefined') openCustomLayout(_clCtx);
+  } catch (e) {}
+}
 // Apply the layout options saved on THIS campaign (called after book meta loads). Falls back to the
 // current in-memory values when a campaign has none saved yet, so existing books are unchanged.
 function applyCampaignLayoutOpts(meta){
@@ -12109,10 +12123,7 @@ function applyCampaignLayoutOpts(meta){
   // Repaint anything that displays the options: the Finalize header summary ("Borders: ...") and the
   // Custom Layout panel if it happens to be open. Without this the values change but the UI lies.
   try { if (typeof finalizeUpdateHeader === 'function') finalizeUpdateHeader(); } catch (e) {}
-  try {
-    var _pn = document.getElementById('custom-layout-modal');
-    if (_pn && _pn.style && _pn.style.display && _pn.style.display !== 'none' && typeof openCustomLayout === 'function' && typeof _clCtx !== 'undefined') openCustomLayout(_clCtx);
-  } catch (e) {}
+  try { _syncLayoutPanels(); } catch (e) {}   // re-sync BOTH the inline pcl-* panel and the modal to this campaign
   return !!saved;
 }
 // Pull this campaign's layout options straight from the DB on every switch. Deliberately no cache
@@ -12254,6 +12265,7 @@ function prepLayoutCommit(){
   if(typeof mpSave==='function') mpSave('novel', { layout_opts: o });
   saveCustomLayoutPrefs();
   if(typeof refreshLayoutStyleButtons==='function') refreshLayoutStyleButtons();
+  try { _syncLayoutPanels(); } catch (e) {}   // inline edit -> mirror into the Layout modal if it's open
   return true;
 }
 function prepLayoutApply(){
@@ -12290,6 +12302,7 @@ function applyCustomLayout(){
   saveCustomLayoutPrefs();
   closeCustomLayout();
   refreshLayoutStyleButtons();
+  try { _syncLayoutPanels(); } catch (e) {}   // modal edit -> mirror into the inline pcl-* panel
   if(_clCtx==='novel'){ if(typeof loadNovelPreview==='function') loadNovelPreview(novelLayoutStyle); }
   else { if(typeof loadPreview==='function') loadPreview(state.layoutStyle || 'Classic'); }
 }
