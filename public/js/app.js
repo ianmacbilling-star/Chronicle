@@ -3655,8 +3655,8 @@ function selectStyleCard(kind, id) {
     closeStylePicker();
   } else if (kind === 'layout') {
     state.layoutStyle = id;
-    customActive.session = false;
-    saveCustomLayoutPrefs();
+    customActive = false;
+    saveCustomLayoutPrefs('session');
     if (state.currentSession && state.currentCampaign) {
       fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
         method: 'PUT',
@@ -3669,8 +3669,8 @@ function selectStyleCard(kind, id) {
     closeStylePicker();
   } else if (kind === 'novel-layout') {
     novelLayoutStyle = id;
-    customActive.novel = false;
-    saveCustomLayoutPrefs();
+    customActive = false;
+    saveCustomLayoutPrefs('novel');
     if (typeof loadNovelPreview === 'function') loadNovelPreview(id);
     refreshLayoutStyleButtons();
     closeStylePicker();
@@ -6107,7 +6107,7 @@ function loadNovelPreview(layout) {
 }
 
 // Re-render the novel preview iframe IFF the Preview sub-tab is currently showing. On a
-// campaign switch the preview src is built from customOpts.novel + the current campaign, but
+// campaign switch the preview src is built from the unified customOpts + the current campaign, but
 // loadNovelPreview only fires on an explicit tab switch -- so a same-tab campaign change would
 // otherwise leave the previous campaign's render on screen (the reported bug). Idempotent:
 // safe to call more than once; each call just rebuilds the iframe from current state.
@@ -11528,6 +11528,7 @@ function onForkChange(forkId) {
   // Apply this member's saved layout first; the per-fork reload then overrides
   // art/narrative with any session-specific value.
   mpLoadAndApply('session', function(){ reloadSessionForFork(); });
+  if (typeof loadCampaignLayoutOpts === 'function') loadCampaignLayoutOpts('session');   // unified layout follows the viewed fork
 }
 
 function updateNotesBox(data) {
@@ -12031,9 +12032,9 @@ function refreshLayoutStyleButtons() {
   var _clCO = (typeof customOpts !== 'undefined') ? customOpts : {};
   var _clAc = (typeof customActive !== 'undefined') ? customActive : {};
   var scb = document.getElementById('session-custom-btn');
-  if (scb) scb.textContent = _clAc.session ? ('Layout: ' + ((_clCO.session && CL_ARRANGE_LABEL[_clCO.session.arrange]) || 'Custom')) : 'Layout';
+  if (scb) scb.textContent = _clAc ? ('Layout: ' + ((_clCO && CL_ARRANGE_LABEL[_clCO.arrange]) || 'Custom')) : 'Layout';
   var ncb = document.getElementById('novel-custom-btn');
-  if (ncb) ncb.textContent = _clAc.novel ? ('Layout: ' + ((_clCO.novel && CL_ARRANGE_LABEL[_clCO.novel.arrange]) || 'Custom')) : 'Layout';
+  if (ncb) ncb.textContent = _clAc ? ('Layout: ' + ((_clCO && CL_ARRANGE_LABEL[_clCO.arrange]) || 'Custom')) : 'Layout';
 }
 
 // ===== Custom (a-la-carte) layout =====
@@ -12045,8 +12046,8 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   hidelogo:0
 };
 function clClone(o){ var r={}; for (var k in o) { if (o.hasOwnProperty(k)) r[k]=o[k]; } return r; }
-var customOpts = { session: clClone(CUSTOM_LAYOUT_DEFAULTS), novel: clClone(CUSTOM_LAYOUT_DEFAULTS) };
-var customActive = { session:false, novel:false };
+var customOpts = clClone(CUSTOM_LAYOUT_DEFAULTS);   // ONE unified layout (session & novel share it); stored per (user, fork, campaign)
+var customActive = false;
 var _clCtx = 'novel';
 var CL_LS_KEY = 'campaignia.customLayout';
 var CL_CONDITION_VALUES = { smoke:1, dirt:1, wrinkle:1, blood:1 };
@@ -12059,20 +12060,37 @@ function clMerge(saved){
   if (r.paper === 'grey' || r.paper === 'lightgrey') { r.paper = 'white'; }
   return r;
 }
-function saveCustomLayoutPrefs(){
-  // localStorage stays as a fallback for signed-out/first-paint, but the CAMPAIGN copy is authoritative:
-  // layout choices belong to the book, keyed by (logged-in user, fork, campaign) exactly like cover art.
+// Normalize a stored layout blob into the UNIFIED shape { opts:<layout>, active:<bool> }.
+// Accepts the new single format AND the legacy { opts:{session,novel}, active:{session,novel} }
+// format (folds the book/novel slot in, falling back to session), so existing books still load.
+function _normalizeLayoutBlob(saved){
+  if (!saved || typeof saved !== 'object') return null;
+  var o = saved.opts, a = saved.active;
+  if (o && typeof o === 'object' && (o.session || o.novel)){
+    var src = o.novel || o.session || {};
+    var act = (a && typeof a === 'object') ? !!(a.novel || a.session) : !!a;
+    return { opts: clMerge(src), active: act };
+  }
+  return { opts: clMerge(o || {}), active: !!a };
+}
+function saveCustomLayoutPrefs(ctx){
+  // localStorage is only a signed-out/first-paint fallback; the authoritative copy is the per-
+  // (user, fork, campaign) fork_book_prefs blob. 'ctx' ('session'|'novel') picks WHICH fork to save to.
   try { window.localStorage.setItem(CL_LS_KEY, JSON.stringify({ opts: customOpts, active: customActive })); } catch (e) {}
-  saveCampaignLayoutOpts();
+  saveCampaignLayoutOpts(ctx);
   finalizeClearStats();   // any layout change invalidates the Before/After comparison
 }
-// Persist this campaign's layout options into the same per-(user, fork, campaign) prefs blob the
-// cover art uses, so switching campaigns switches layouts and nothing leaks between books.
-function saveCampaignLayoutOpts(){
+// Persist the ONE unified layout into fork_book_prefs, keyed by (logged-in user, fork, campaign) --
+// the same blob the cover art uses. The fork is resolved from ctx: the session screen saves to the
+// fork being viewed; the book/novel screen saves to the version-picker fork. This is the single
+// source of truth; the campaign_members layout write is gone.
+function saveCampaignLayoutOpts(ctx){
   try {
     var c = state.currentCampaign; if (!c || !state.user) return;
+    var fork = null;
+    try { var m = (typeof mpMemberFor === 'function') ? mpMemberFor(ctx === 'session' ? 'session' : 'novel') : null; fork = (m && m.userId) ? m.userId : null; } catch (e) {}
     var body = { layout_opts: JSON.stringify({ opts: customOpts, active: customActive }) };
-    if (state.novelAsUser) body.fork_user = state.novelAsUser;
+    if (fork) body.fork_user = fork;
     fetch('/api/campaigns/' + c.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function(){});
   } catch (e) {}
 }
@@ -12106,20 +12124,9 @@ function applyCampaignLayoutOpts(meta){
   // ALWAYS set state. A campaign with nothing saved must fall back to DEFAULTS, never keep whatever
   // the previously-open campaign was using -- inheriting was the bug (open A with drop shadow, open
   // B, B showed drop shadow).
-  if (saved && saved.opts) {
-    customOpts.session = clMerge(saved.opts.session);
-    customOpts.novel = clMerge(saved.opts.novel);
-  } else {
-    customOpts.session = clClone(CUSTOM_LAYOUT_DEFAULTS);
-    customOpts.novel = clClone(CUSTOM_LAYOUT_DEFAULTS);
-  }
-  if (saved && saved.active) {
-    customActive.session = !!saved.active.session;
-    customActive.novel = !!saved.active.novel;
-  } else {
-    customActive.session = false;
-    customActive.novel = false;
-  }
+  var _norm = _normalizeLayoutBlob(saved);
+  if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
+  else { customOpts = clClone(CUSTOM_LAYOUT_DEFAULTS); customActive = false; }
   // Repaint anything that displays the options: the Finalize header summary ("Borders: ...") and the
   // Custom Layout panel if it happens to be open. Without this the values change but the UI lies.
   try { if (typeof finalizeUpdateHeader === 'function') finalizeUpdateHeader(); } catch (e) {}
@@ -12131,11 +12138,12 @@ function applyCampaignLayoutOpts(meta){
 // leak one campaign's look into another. Called from setCampaignElements, which every campaign-
 // switch path funnels through.
 var _clLoadSeq = 0;
-function loadCampaignLayoutOpts(){
+function loadCampaignLayoutOpts(ctx){
   try {
     var c = state.currentCampaign;
     if (!c) return;
-    var forkUser = state.novelAsUser || (state.user && state.user.id);
+    var forkUser = null;
+    try { var m = (typeof mpMemberFor === 'function') ? mpMemberFor(ctx === 'session' ? 'session' : 'novel') : null; forkUser = (m && m.userId) ? m.userId : ((state.user && state.user.id) || null); } catch (e) { forkUser = (state.user && state.user.id) || null; }
     if (!forkUser) return;
     var seq = ++_clLoadSeq;
     finalizeClearStats();   // the Before/After numbers belong to the campaign we just left
@@ -12160,14 +12168,8 @@ function finalizeClearStats(){
     var raw = window.localStorage.getItem(CL_LS_KEY);
     if (!raw) return;
     var saved = JSON.parse(raw);
-    if (saved && saved.opts) {
-      customOpts.session = clMerge(saved.opts.session);
-      customOpts.novel = clMerge(saved.opts.novel);
-    }
-    if (saved && saved.active) {
-      customActive.session = !!saved.active.session;
-      customActive.novel = !!saved.active.novel;
-    }
+    var _norm = _normalizeLayoutBlob(saved);
+    if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
   } catch (e) {}
 })();
 var CL_SELECTS = ['arrange','border','caption','paper','narr','font'];
@@ -12229,7 +12231,7 @@ function togglePrepAcc(key){
   if(key==='layout' && !isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open
 }
 // Inline layout panel (Preview & Export tab, Panel 2): mirrors the Layout modal for the 'novel'
-// context using pcl-* controls, wired to the same customOpts.novel store. Storyboard modal untouched.
+// context using pcl-* controls, wired to the same unified customOpts store. Storyboard modal untouched.
 function prepSyncMarkerBreak(){
   var mk=document.getElementById('pcl-markers');
   var mb=document.getElementById('pcl-markerbreak');
@@ -12241,29 +12243,28 @@ function prepSyncMarkerBreak(){
   if(mbl){ mbl.style.opacity = on ? '1' : '0.55'; }
 }
 function prepLayoutLoad(){
-  var o = (typeof customOpts !== 'undefined' && customOpts.novel) ? customOpts.novel : CUSTOM_LAYOUT_DEFAULTS;
+  var o = (typeof customOpts !== 'undefined' && customOpts) ? customOpts : CUSTOM_LAYOUT_DEFAULTS;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!o[k]; });
   prepSyncMarkerBreak();
   var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);
   var _hl=document.getElementById('pcl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; }
   var _hll=document.getElementById('pcl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; }
-  // Commit panel selections to customOpts.novel the moment any control changes, so a plain
+  // Commit panel selections to the unified customOpts the moment any control changes, so a plain
   // Refresh (not just Apply) reflects the chosen arrangement. Programmatic .value sets above
   // don't fire 'change', so this never clobbers on load.
   var _lp = document.getElementById('prep-acc-layout');
   if (_lp && !_lp._commitWired) { _lp._commitWired = true; _lp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
 }
-// Read the layout panel (pcl-*) into customOpts.novel + mark it active, WITHOUT rendering.
+// Read the layout panel (pcl-*) into the unified customOpts + mark it active, WITHOUT rendering.
 function prepLayoutCommit(){
   if(typeof blockLayoutChangeIfOrdering==='function' && blockLayoutChangeIfOrdering()) return false;
   var o={};
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
-  customOpts.novel=o;
-  customActive.novel=true;
-  if(typeof mpSave==='function') mpSave('novel', { layout_opts: o });
-  saveCustomLayoutPrefs();
+  customOpts=o;
+  customActive=true;
+  saveCustomLayoutPrefs('novel');
   if(typeof refreshLayoutStyleButtons==='function') refreshLayoutStyleButtons();
   try { _syncLayoutPanels(); } catch (e) {}   // inline edit -> mirror into the Layout modal if it's open
   return true;
@@ -12280,7 +12281,7 @@ function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
   var modal=document.getElementById('custom-layout-modal');
   if(modal){ modal.style.display=''; modal.classList.remove('hidden'); }
-  var o = customOpts[_clCtx] || CUSTOM_LAYOUT_DEFAULTS;
+  var o = customOpts || CUSTOM_LAYOUT_DEFAULTS;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.checked=!!o[k]; });
   clSyncMarkerBreak();
@@ -12290,16 +12291,15 @@ function openCustomLayout(ctx){
   for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }
 }
 function closeCustomLayout(){ var m=document.getElementById('custom-layout-modal'); if(m) m.classList.add('hidden'); }
-function resetCustomLayout(){ customOpts[_clCtx]=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(); openCustomLayout(_clCtx); }
+function resetCustomLayout(){ customOpts=clClone(CUSTOM_LAYOUT_DEFAULTS); saveCustomLayoutPrefs(_clCtx); openCustomLayout(_clCtx); }
 function applyCustomLayout(){
   if(_clCtx==='novel' && blockLayoutChangeIfOrdering()) return;
   var o={};
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= el ? el.value : CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); o[k]= (el && el.checked) ? 1 : 0; });
-  customOpts[_clCtx]=o;
-  customActive[_clCtx]=true;
-  mpSave(_clCtx, { layout_opts: o });   // persist to the active member (own fork only)
-  saveCustomLayoutPrefs();
+  customOpts=o;
+  customActive=true;
+  saveCustomLayoutPrefs(_clCtx);
   closeCustomLayout();
   refreshLayoutStyleButtons();
   try { _syncLayoutPanels(); } catch (e) {}   // modal edit -> mirror into the inline pcl-* panel
@@ -12312,8 +12312,9 @@ function serializeCustomOpts(o){
   return parts.join(',');
 }
 function customOptsQ(ctx, prefix){
-  if(!customActive[ctx]) return '';
-  return (prefix||'&')+'co='+encodeURIComponent(serializeCustomOpts(customOpts[ctx]));
+  // ctx is accepted for call-site compatibility but ignored: there is ONE unified layout now.
+  if(!customActive) return '';
+  return (prefix||'&')+'co='+encodeURIComponent(serializeCustomOpts(customOpts));
 }
 
 // ---- Per-member layout/style prefs (server-persisted on campaign_members) ----
@@ -12336,19 +12337,8 @@ function mpMemberFor(ctx){
 }
 function mpApplyPrefs(ctx, p){
   if (!p) return;
-  if (p.layout_opts && typeof p.layout_opts === 'object'){
-    var keys = 0; for (var k in p.layout_opts){ if (p.layout_opts.hasOwnProperty(k)) keys++; }
-    if (keys){
-      customOpts[ctx] = clMerge(p.layout_opts);   // clMerge fills any newly-added params with defaults
-      customActive[ctx] = true;
-      if (p.layout_opts.arrange){
-        if (ctx === 'novel') novelLayoutStyle = p.layout_opts.arrange;
-        else state.layoutStyle = p.layout_opts.arrange;
-      }
-      saveCustomLayoutPrefs();
-      if (typeof refreshLayoutStyleButtons === 'function') refreshLayoutStyleButtons();
-    }
-  }
+  // Layout is NO LONGER stored per-member. It lives in fork_book_prefs as ONE unified layout
+  // (loaded via loadCampaignLayoutOpts / applyCampaignLayoutOpts), keyed by (user, fork, campaign).
   // Seed art/narrative. In the session view the per-fork loader (reloadSessionForFork)
   // runs AFTER this and overrides with the session-specific value when present, so the
   // member value only fills a gap; in the book view there is no competing loader.
@@ -14586,8 +14576,8 @@ function finalizeUpdateHeader() {
   // Effective layout the Optimizer will actually run: the custom arrange when custom layout is
   // active, otherwise the main layout selection. (Previously read the modal's cl-arrange, which
   // defaulted to Picture Book and ignored the real selection.)
-  var o = (typeof customActive !== 'undefined' && customActive.novel && typeof customOpts !== 'undefined' && customOpts.novel)
-    ? customOpts.novel
+  var o = (typeof customActive !== 'undefined' && customActive && typeof customOpts !== 'undefined' && customOpts)
+    ? customOpts
     : (typeof CUSTOM_LAYOUT_DEFAULTS !== 'undefined' ? CUSTOM_LAYOUT_DEFAULTS : {});
   var arrange = o.arrange || 'paired';
   var layout = (typeof CL_ARRANGE_LABEL !== 'undefined' && CL_ARRANGE_LABEL[arrange]) ? CL_ARRANGE_LABEL[arrange] : 'Picture Book';
