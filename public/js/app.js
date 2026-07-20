@@ -1576,7 +1576,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(); }
+  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(_novelRefreshPreviewIfOpen); }
   if (section === 'assets') loadAssets();
   if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
@@ -6106,6 +6106,19 @@ function loadNovelPreview(layout) {
   iframe.src = url;
 }
 
+// Re-render the novel preview iframe IFF the Preview sub-tab is currently showing. On a
+// campaign switch the preview src is built from customOpts.novel + the current campaign, but
+// loadNovelPreview only fires on an explicit tab switch -- so a same-tab campaign change would
+// otherwise leave the previous campaign's render on screen (the reported bug). Idempotent:
+// safe to call more than once; each call just rebuilds the iframe from current state.
+function _novelRefreshPreviewIfOpen(){
+  try {
+    var pane = document.getElementById('novel-tab-preview');
+    if (!pane || pane.style.display === 'none') return;   // only when Preview is the open sub-tab
+    if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
+  } catch (e) {}
+}
+
 // ---- Novel preview pager ----
 var novelPreviewPage = 1;
 
@@ -8719,7 +8732,7 @@ function showCampaignSection(section) {
 
   if (section === 'sessions') loadSessions();
   if (section === 'characters') { loadCharacters(); renderCampaignLockBanner(); }
-  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(); }
+  if (section === 'novel') { if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch(); loadNovelPeople(); loadNovelSummary(_novelRefreshPreviewIfOpen); }
   if (section === 'assets') loadAssets();
   if (section === 'archives') loadArchives();
   if (section === 'members') loadMembersTab();
@@ -12117,7 +12130,7 @@ function loadCampaignLayoutOpts(){
     finalizeClearStats();   // the Before/After numbers belong to the campaign we just left
     fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser), { cache: 'no-store' })
       .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(m){ if (seq !== _clLoadSeq) return; applyCampaignLayoutOpts(m); })   // ignore a slow reply for a campaign we already left
+      .then(function(m){ if (seq !== _clLoadSeq) return; applyCampaignLayoutOpts(m); _novelRefreshPreviewIfOpen(); })   // ignore a slow reply for a campaign we already left; repaint the preview if it is the open sub-tab
       .catch(function(){});
   } catch (e) {}
 }
