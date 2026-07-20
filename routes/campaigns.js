@@ -256,6 +256,7 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   const cur = await getForkBookPrefs(db, req.session.userId, fork, req.params.campaignId, { inherit: true });
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(req.params.campaignId);
   res.json({
+    campaign_id: Number(req.params.campaignId),
     cover_image_url: cur.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
@@ -283,6 +284,7 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   const merged = await setForkBookPrefs(db, uid, fork, cid, patch);
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
+    campaign_id: Number(cid),
     cover_image_url: merged.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
     back_cover_image_url: merged.back_cover_image_url || '',
     title_image_url: merged.title_image_url || '',

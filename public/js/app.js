@@ -6388,7 +6388,7 @@ function prepLoadBookMeta(cb) {
   var c = state.currentCampaign;
   var forkUser = state.novelAsUser || (state.user && state.user.id);
   if (!c || !forkUser) { state.bookMeta = _prepCampaignMeta(); if (cb) cb(); return; }
-  fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser))
+  fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser), { cache: 'no-store' })
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(m){ state.bookMeta = m || _prepCampaignMeta(); applyCampaignLayoutOpts(m); finalizeClearStats(); if (cb) cb(); })
     .catch(function(){ state.bookMeta = _prepCampaignMeta(); finalizeClearStats(); if (cb) cb(); });
@@ -12066,6 +12066,14 @@ function saveCampaignLayoutOpts(){
 // Apply the layout options saved on THIS campaign (called after book meta loads). Falls back to the
 // current in-memory values when a campaign has none saved yet, so existing books are unchanged.
 function applyCampaignLayoutOpts(meta){
+  // HARD GUARD: prep-meta and layout-opts fetches race on a campaign switch and only one path
+  // is sequence-guarded, so a late reply for a campaign we've already left could apply its
+  // options over the new campaign's (open A with drop shadow, open B, B showed drop shadow).
+  // The response now echoes campaign_id; drop any meta that isn't for the campaign on screen.
+  try {
+    var _cc = state.currentCampaign;
+    if (meta && meta.campaign_id != null && _cc && String(meta.campaign_id) !== String(_cc.id)) return false;
+  } catch (e) {}
   var saved = null;
   try { if (meta && meta.layout_opts) saved = JSON.parse(meta.layout_opts); } catch (e) { saved = null; }
   // ALWAYS set state. A campaign with nothing saved must fall back to DEFAULTS, never keep whatever
