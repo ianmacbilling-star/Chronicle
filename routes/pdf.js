@@ -1686,7 +1686,7 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
       remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
     band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
     band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(momentAspect(m) * 100) / 100;
-    if (mtext && !(opts && opts.enclose)) {   // Gazette (enclose) floats are NON-splittable like its features/wides -- a bordered box can't be sliced across a page; Magazine still splits
+    if (mtext) {
       // Splittable panel: image + one or two (before/after) prose paragraphs. The packer may cut the
       // text BELOW the image (sImgH) and continue it full-width on the next page; renderHead re-draws
       // the panel with the text truncated to the head slice at this image size.
