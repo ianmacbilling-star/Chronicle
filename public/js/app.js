@@ -12222,13 +12222,14 @@ function novelSplitInit(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', novelSplitInit); } else { novelSplitInit(); }
 // Prep-pane accordion (Preview & Export tab): independent open/close per panel.
 var PREP_ACC_KEY = 'campaignia.prepAcc';   // remember which Prep panel was last open
-var PREP_ACC_KEYS = ['cover', 'layout', 'publish'];
+var PREP_ACC_KEYS = ['cover', 'layout'];   // 'publish' moved to the Order & Publish tab (v3.0.137)
 // Re-open the panel the user last worked in when they come back to Prep & Preview, instead of
 // always resetting to Title & Cover. Exactly one panel is open (the remembered one).
 function prepAccRestore(){
   var want = null;
   try { want = window.localStorage.getItem(PREP_ACC_KEY); } catch (e) {}
-  if (!want || PREP_ACC_KEYS.indexOf(want) < 0) return;
+  if (!want) return;
+  if (PREP_ACC_KEYS.indexOf(want) < 0) { want = PREP_ACC_KEYS[0]; try { window.localStorage.setItem(PREP_ACC_KEY, want); } catch (e) {} }   // e.g. a saved 'publish' from before it moved tabs
   PREP_ACC_KEYS.forEach(function(k){
     var acc = document.getElementById('prep-acc-' + k); if (!acc) return;
     var body = acc.querySelector('.prep-acc-body');

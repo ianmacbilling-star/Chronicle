@@ -328,17 +328,6 @@
             </div>
           </div>
 
-          <div class="prep-acc" id="prep-acc-publish">
-            <button class="prep-acc-head" type="button" onclick="togglePrepAcc('publish')" aria-expanded="false"><span>Publish to Library</span><span class="prep-acc-chev">&#9662;</span></button>
-            <div class="prep-acc-body" style="display:none;">
-              <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).</span></label>
-              <div class="prep-field-label">Blurb for your Library page (optional)</div>
-              <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
-              <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
-              <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
-              <div class="prep-hint">You can manage published content on your Account page.</div>
-            </div>
-          </div>
         </aside>
         </div><!-- /novel-preview-layout -->
       </div>
@@ -382,93 +371,137 @@
         </div>
       </div>
 
-      <!-- Order Printed Copy tab -->
+      <!-- Order & Publish tab -->
       <div id="novel-tab-order" style="display:none;">
-        <div style="max-width:640px;">
-          <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Order a printed copy</div>
-          <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:14px;">Printed and shipped on demand. Pricing is live from the printer; the final price is confirmed at checkout.</div>
+        <div class="ord-wrap">
           <div id="print-msg" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--radius);font-size:12px;"></div>
 
-          <!-- What to print -->
-          <div style="margin-bottom:6px;color:var(--gold);font-size:12px;font-family:var(--font-display);letter-spacing:0.05em;">WHAT TO PRINT</div>
-          <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Book title <span style="color:rgba(245,232,200,0.4);">(set on the Preview &amp; Export tab)</span></label>
-          <input id="print-book-title" type="text" readonly maxlength="200" placeholder="Set on the Preview &amp; Export tab" style="width:100%;margin-bottom:10px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;opacity:0.7;cursor:not-allowed;">
-          <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Order name <span style="color:rgba(245,232,200,0.4);">(your label for this order)</span></label>
-          <input id="print-order-name" type="text" maxlength="200" placeholder="e.g. Session 1-5, Hardcover gift copy" style="width:100%;margin-bottom:10px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-          <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Version (set with the selector at the top of this page)</label>
-          <input id="print-version-display" type="text" readonly style="width:100%;margin-bottom:10px;background:rgba(20,12,4,0.55);color:var(--cream);border:1px solid rgba(201,168,76,0.25);border-radius:var(--radius);padding:8px 10px;font-size:13px;cursor:not-allowed;">
-          <div id="print-page-est" style="font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:14px;"></div>
+          <!-- ============================ CARD 1: PRINT ORDER ============================ -->
+          <section class="ord-card">
+            <div class="ord-card-title">Order a printed copy</div>
+            <div class="ord-card-sub">Printed and shipped on demand. Pricing is live from the printer; the final price is confirmed at checkout.</div>
 
-          <!-- Format -->
-          <div style="margin-bottom:6px;color:var(--gold);font-size:12px;font-family:var(--font-display);letter-spacing:0.05em;">FORMAT</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-            <div style="flex:1;min-width:160px;">
-              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Binding</label>
-              <select id="print-binding" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
-            </div>
-            <div style="flex:1;min-width:120px;">
-              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Color</label>
-              <select id="print-color" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
-            </div>
-            <div style="flex:1;min-width:120px;">
-              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Paper</label>
-              <select id="print-paper" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
-              <div style="font-size:10px;color:rgba(245,232,200,0.5);margin-top:3px;line-height:1.3;">Cream is only recommended for black &amp; white books.</div>
-            </div>
-            <div style="flex:1;min-width:100px;">
-              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Cover finish</label>
-              <select id="print-finish" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;"></select>
-            </div>
-            <div style="width:90px;">
-              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Qty</label>
-              <input id="print-qty" type="number" min="1" value="1" onchange="quotePrintOrder()" style="width:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            </div>
-          </div>
+            <div class="ord-cols">
+              <!-- LEFT COLUMN: what to print + format -->
+              <div class="ord-col">
+                <div class="ord-sec">WHAT TO PRINT</div>
+                <label class="ord-lbl">Book title <span class="ord-lbl-dim">(set on the Prep &amp; Preview tab)</span></label>
+                <input id="print-book-title" type="text" readonly maxlength="200" placeholder="Set on the Prep &amp; Preview tab" class="ord-in ord-in-ro">
+                <label class="ord-lbl">Order name <span class="ord-lbl-dim">(your label for this order)</span></label>
+                <input id="print-order-name" type="text" maxlength="200" placeholder="e.g. Session 1-5, Hardcover gift copy" class="ord-in">
+                <label class="ord-lbl">Version <span class="ord-lbl-dim">(set with the selector at the top of this page)</span></label>
+                <input id="print-version-display" type="text" readonly class="ord-in ord-in-ro">
+                <div id="print-page-est" style="font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:4px;"></div>
 
-          <!-- Shipping -->
-          <div style="margin-bottom:6px;color:var(--gold);font-size:12px;font-family:var(--font-display);letter-spacing:0.05em;">SHIP TO</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-            <input id="print-ship-name" type="text" placeholder="Full name" style="flex:1;min-width:200px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <input id="print-ship-phone" type="text" placeholder="Phone" style="flex:1;min-width:140px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <input id="print-ship-street1" type="text" placeholder="Street address" style="flex-basis:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <input id="print-ship-street2" type="text" placeholder="Apt, suite (optional)" style="flex-basis:100%;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <input id="print-ship-city" type="text" placeholder="City" style="flex:1;min-width:140px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <input id="print-ship-state" type="text" placeholder="State/Province code" style="width:140px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <input id="print-ship-postcode" type="text" placeholder="Postal code" style="width:120px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <input id="print-ship-country" type="text" placeholder="Country (US)" value="US" maxlength="2" style="width:100px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-            <div style="flex-basis:100%;">
-              <label style="display:block;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:3px;">Shipping speed</label>
-              <select id="print-ship-level" onchange="quotePrintOrder()" style="width:220px;background:rgba(20,12,4,0.8);color:var(--cream);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:13px;">
-                <option value="cheapest">Standard (cheapest)</option>
-                <option value="expedited">Expedited</option>
-                <option value="express">Express</option>
-              </select>
+                <div class="ord-sec ord-sec-gap">FORMAT</div>
+                <div class="ord-row">
+                  <div class="ord-f1">
+                    <label class="ord-lbl">Binding</label>
+                    <select id="print-binding" onchange="quotePrintOrder()" class="ord-in"></select>
+                  </div>
+                  <div class="ord-f2">
+                    <label class="ord-lbl">Color</label>
+                    <select id="print-color" onchange="quotePrintOrder()" class="ord-in"></select>
+                  </div>
+                </div>
+                <div class="ord-row">
+                  <div class="ord-f1">
+                    <label class="ord-lbl">Paper</label>
+                    <select id="print-paper" onchange="quotePrintOrder()" class="ord-in"></select>
+                    <div class="ord-hint">Cream is only recommended for black &amp; white books.</div>
+                  </div>
+                  <div class="ord-f2">
+                    <label class="ord-lbl">Cover finish</label>
+                    <select id="print-finish" onchange="quotePrintOrder()" class="ord-in"></select>
+                  </div>
+                  <div class="ord-f3">
+                    <label class="ord-lbl">Qty</label>
+                    <input id="print-qty" type="number" min="1" value="1" onchange="quotePrintOrder()" class="ord-in">
+                  </div>
+                </div>
+              </div>
+
+              <!-- RIGHT COLUMN: ship to -->
+              <div class="ord-col">
+                <div class="ord-sec">SHIP TO</div>
+                <div class="ord-row">
+                  <div class="ord-f1">
+                    <label class="ord-lbl">Full name</label>
+                    <input id="print-ship-name" type="text" placeholder="Full name" class="ord-in">
+                  </div>
+                  <div class="ord-f2">
+                    <label class="ord-lbl">Phone</label>
+                    <input id="print-ship-phone" type="text" placeholder="Phone" class="ord-in">
+                  </div>
+                </div>
+                <label class="ord-lbl">Street address</label>
+                <input id="print-ship-street1" type="text" placeholder="Street address" class="ord-in">
+                <input id="print-ship-street2" type="text" placeholder="Apt, suite (optional)" class="ord-in">
+                <div class="ord-row">
+                  <div class="ord-f1">
+                    <label class="ord-lbl">City</label>
+                    <input id="print-ship-city" type="text" placeholder="City" class="ord-in">
+                  </div>
+                  <div class="ord-f2">
+                    <label class="ord-lbl">State/Province</label>
+                    <input id="print-ship-state" type="text" placeholder="State/Province code" class="ord-in">
+                  </div>
+                </div>
+                <div class="ord-row">
+                  <div class="ord-f2">
+                    <label class="ord-lbl">Postal code</label>
+                    <input id="print-ship-postcode" type="text" placeholder="Postal code" class="ord-in">
+                  </div>
+                  <div class="ord-f3">
+                    <label class="ord-lbl">Country</label>
+                    <input id="print-ship-country" type="text" placeholder="US" value="US" maxlength="2" class="ord-in">
+                  </div>
+                </div>
+                <label class="ord-lbl">Shipping speed</label>
+                <select id="print-ship-level" onchange="quotePrintOrder()" class="ord-in">
+                  <option value="cheapest">Standard (cheapest)</option>
+                  <option value="expedited">Expedited</option>
+                  <option value="express">Express</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-          <!-- Price + place -->
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
-            <button class="btn btn-sm" onclick="quotePrintOrder()">Get price</button>
-            <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
-          </div>
-
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
-            <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
-          </div>
-          <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(201,168,76,0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>
-          <div id="print-trial-notice" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);color:rgba(245,232,200,0.9);"></div>
-
-          <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(201,168,76,0.4);border-radius:var(--radius);background:rgba(20,12,4,0.5);">
-            <div style="font-weight:600;color:var(--gold);margin-bottom:10px;">Review your order</div>
-            <div id="print-review-summary" style="font-size:13px;margin-bottom:12px;"></div>
-            <a id="print-review-preview" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px;font-size:13px;color:#7fb0e0;text-decoration:underline;">Preview your book (opens the PDF in a new tab)</a>
-            <label id="print-attest-label" style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:12px;cursor:pointer;"><input type="checkbox" id="print-attest" onchange="updatePrintConfirmGate()" style="margin-top:2px;flex:0 0 auto;" /><span>I have reviewed both the interior and cover PDFs and agree they are ready for print.</span></label>
-            <div style="display:flex;gap:10px;">
-              <button class="btn btn-primary" id="print-confirm-btn" onclick="submitPrintOrder()" disabled>Continue to secure payment</button>
-              <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
+            <!-- Actions span the full card width: the review panel below is wide. -->
+            <div class="ord-divider"></div>
+            <div class="ord-actions" style="margin-bottom:10px;">
+              <button class="btn btn-sm" onclick="quotePrintOrder()">Get price</button>
+              <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
             </div>
-          </div>
+            <div class="ord-actions">
+              <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
+              <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
+            </div>
+            <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(201,168,76,0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>
+            <div id="print-trial-notice" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);color:rgba(245,232,200,0.9);"></div>
+
+            <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(201,168,76,0.4);border-radius:var(--radius);background:rgba(20,12,4,0.5);">
+              <div style="font-weight:600;color:var(--gold);margin-bottom:10px;">Review your order</div>
+              <div id="print-review-summary" style="font-size:13px;margin-bottom:12px;"></div>
+              <a id="print-review-preview" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px;font-size:13px;color:#7fb0e0;text-decoration:underline;">Preview your book (opens the PDF in a new tab)</a>
+              <label id="print-attest-label" style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:12px;cursor:pointer;"><input type="checkbox" id="print-attest" onchange="updatePrintConfirmGate()" style="margin-top:2px;flex:0 0 auto;" /><span>I have reviewed both the interior and cover PDFs and agree they are ready for print.</span></label>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-primary" id="print-confirm-btn" onclick="submitPrintOrder()" disabled>Continue to secure payment</button>
+                <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================= CARD 2: PUBLISH TO LIBRARY ========================= -->
+          <section class="ord-card">
+            <div class="ord-card-title">Publish to the Library</div>
+            <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from your Account page.</div>
+            <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).</span></label>
+            <div class="prep-field-label">Blurb for your Library page (optional)</div>
+            <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
+            <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
+            <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
+            <div class="prep-hint">You can manage published content on your Account page.</div>
+          </section>
         </div>
       </div>
     </div>
