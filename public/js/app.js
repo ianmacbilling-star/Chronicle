@@ -14521,34 +14521,33 @@ function finalizeVerdictHtml(bp, cnt, fB, fA) {
   var g = function (s) { return '<strong style="color:#8fd18f;">' + s + '</strong>'; };
   var w = function (s) { return '<strong style="color:#e0a0a0;">' + s + '</strong>'; };
   var pg = function (n) { return n + (n === 1 ? ' page' : ' pages'); };
-  var head;
-  if (saved > 0 && denser != null && denser >= 2) {
-    head = 'The optimized version is ' + g(pg(saved) + ' shorter') + ' and its pages are fuller (' + fB + '% to ' + fA + '% covered). Less blank paper, and a shorter book costs less to print.';
-  } else if (saved > 0) {
-    head = 'The optimized version is ' + g(pg(saved) + ' shorter') + ', with pages about as full as before. A shorter book costs less to print.';
-  } else if (saved === 0 && denser != null && denser >= 2) {
-    head = 'Both come out at ' + pg(bp) + ', but the optimized version fills its pages better (' + fB + '% to ' + fA + '% covered) -- less blank paper between the pictures.';
-  } else if (saved < 0) {
-    head = 'The optimized version came out ' + w(pg(-saved) + ' longer') + ' this time, so the original is probably your better choice here.';
-  } else {
-    head = 'The two came out almost identical (' + pg(bp) + ' either way, similar page coverage).';
-  }
-  // Only spell out the trade-off when optimizing actually gained something; otherwise it is noise.
   var gained = (saved > 0 || (denser != null && denser >= 2));
-  var tail = gained
-    ? ' The trade is that optimizing moves some pictures and paragraphs onto different pages than the natural flow. Scroll both panes above side by side: if each picture still sits near the text that describes it, the optimized version is usually the better book.'
-    : ' Scroll both panes above side by side and pick whichever reads better to you.';
-  // A straight recommendation, with an honest account of what this measurement CANNOT see. It
-  // counts pages and how much ink covers each one -- it has no idea whether a picture drifted away
-  // from the paragraph it belongs to, which is exactly the kind of thing that decides a good book.
+  // 1. What the two measurements actually found -- facts only, no advice here.
+  var facts;
+  if (saved > 0 && denser != null && denser >= 2) {
+    facts = 'The optimized version is ' + g(pg(saved) + ' shorter') + ' and its pages are fuller (' + fB + '% to ' + fA + '% covered) -- less blank paper, and a shorter book costs less to print.';
+  } else if (saved > 0) {
+    facts = 'The optimized version is ' + g(pg(saved) + ' shorter') + ', with pages about as full as before. A shorter book costs less to print.';
+  } else if (saved === 0 && denser != null && denser >= 2) {
+    facts = 'Both come out at ' + pg(bp) + ', but the optimized version fills its pages better (' + fB + '% to ' + fA + '% covered) -- less blank paper between the pictures.';
+  } else if (saved < 0) {
+    facts = 'The optimized version came out ' + w(pg(-saved) + ' longer') + ' this time.';
+  } else {
+    facts = 'The two came out almost identical (' + pg(bp) + ' either way, similar page coverage).';
+  }
+  // 2. The cost of optimizing, only when it actually gained something -- otherwise it is noise.
+  var trade = gained ? ' The trade is that optimizing moves some pictures and paragraphs onto different pages than the natural flow.' : '';
+  // 3. ONE recommendation, said once, with the honest limit of what was measured. Page counts and
+  //    ink coverage say nothing about whether a picture drifted away from the paragraph it belongs
+  //    to -- which is exactly what decides whether a spread reads well.
   var pick;
   if (saved < 0) pick = 'the <strong>original</strong> layout';
   else if (gained) pick = 'the <strong>optimized</strong> layout';
-  else pick = 'either one -- there is nothing meaningful between them';
-  var rec = '<div style="margin-top:7px;padding-top:7px;border-top:1px solid rgba(201,168,76,0.22);">' +
-    'My read is that you want ' + pick + '. Please be the judge though: I am comparing page counts and how much of each page is covered, ' +
-    'which tells me nothing about whether a picture ended up away from the words it belongs to. Trust your eyes over my numbers.</div>';
-  return head + tail + rec;
+  else pick = 'either one, since there is nothing meaningful between them';
+  var rec = ' My read is that you want ' + pick + ' -- but be the judge yourself. Scroll both panes above side by side: ' +
+    'I am only comparing page counts and how much of each page is covered, which tells me nothing about whether a picture ' +
+    'ended up away from the words it belongs to. Trust your eyes over my numbers.';
+  return facts + trade + rec;
 }
 function pickPublishSource(src) {
   _publishSource = (src === 'composed') ? 'composed' : 'flow';
