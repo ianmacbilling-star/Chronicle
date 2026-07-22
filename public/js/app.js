@@ -14945,6 +14945,24 @@ var PDFJS_VER = '6.1.200';   // upgraded viewer (SPIKE): renders fade-to-transpa
 // Yield to the event loop between page renders. MessageChannel is a macrotask that background
 // throttling does not clamp to 1s the way it clamps setTimeout, so this keeps the UI responsive in
 // the foreground AND lets a hidden-tab render keep running at full speed.
+// DIAGNOSTIC (admin only): one line per rendered page so we can tell WHY a pane appears to pause --
+// whether the chain genuinely stops (no lines while away, resuming on return), RESTARTS (page numbers
+// go back to 1 with a new token), or keeps running and only the paint was hidden. Logs the gap since
+// the previous page, the document visibility, and whether the pane is actually displayed.
+var _pdfDbgLast = {};
+function _pdfDbg(pane, pageNum, token, paneEl) {
+  try {
+    if (!(state && state.user && state.user.is_admin)) return;
+    var now = Date.now();
+    var prev = _pdfDbgLast[pane] || 0;
+    var gap = prev ? (now - prev) : 0;
+    _pdfDbgLast[pane] = now;
+    var shown = 'n/a';
+    try { var el = document.getElementById(paneEl); shown = (el && el.offsetParent !== null) ? 'shown' : 'hidden'; } catch (e) {}
+    console.log('[pdfrender] ' + pane + ' page ' + pageNum + '  +' + gap + 'ms  doc=' + (document.visibilityState || '?') +
+      '  pane=' + shown + '  tok=' + String(token).slice(-6));
+  } catch (e) {}
+}
 function _pdfYield(v) {
   return new Promise(function (resolve) {
     try {
@@ -15074,6 +15092,7 @@ function renderPdfInto(url, containerId, isBefore) {
             canvas.setAttribute('data-page', pageNum);
             if (cv) cv.appendChild(canvas);
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, intent: 'print' }).promise.then(_pdfYield).then(function () {
+              _pdfDbg(isBefore ? 'BEFORE' : 'AFTER ', pageNum, myToken, containerId);
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
               { var fill = measureCanvasFill(canvas); if (fill != null) { var _fpct = Math.round(fill * 100); if (isBefore) { _finalizeFills[pageNum] = _fpct; /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); */ if (finalizeIsContentPage(pageNum, total) && fill < 0.62) flagged.push({ page: pageNum, fill: _fpct }); } else { _finalizeAfterFills[pageNum] = _fpct; } } }
