@@ -2248,3 +2248,9 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
   .ord-card { padding: 12px; }
   .ord-cols { gap: 0; }
 }
+
+/* The 'New page per session' toggle only means anything when Session dividers is on, so it must sit
+   directly beneath it. .pcl-toggles is an auto-fit grid, which otherwise pushes the dependent toggle
+   into the next CELL (the adjacent column), where its indent made it read as a child of the toggle
+   above. Span the full row and stack the pair, matching the Layout modal. */
+.pcl-toggle-pair { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
