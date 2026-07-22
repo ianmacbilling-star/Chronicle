@@ -2254,3 +2254,9 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    into the next CELL (the adjacent column), where its indent made it read as a child of the toggle
    above. Span the full row and stack the pair, matching the Layout modal. */
 .pcl-toggle-pair { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+
+/* Order & Publish: the print order and the Library publish are SIBLING cards, each with its own
+   border -- publishing is not part of the order, so it must not sit inside the order's frame.
+   The order card takes the greater share; both collapse to a single stack on narrow screens. */
+.ord-col-main { flex: 2 1 460px; }
+.ord-col-side { flex: 1 1 300px; }

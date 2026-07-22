@@ -388,13 +388,14 @@
           <div id="print-msg" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--radius);font-size:12px;"></div>
 
           <!-- ============================ CARD 1: PRINT ORDER ============================ -->
-          <section class="ord-card">
-            <div class="ord-card-title">Order a printed copy</div>
-            <div class="ord-card-sub">Printed and shipped on demand. Pricing is live from the printer; the final price is confirmed at checkout.</div>
-
-            <div class="ord-cols">
+          <div class="ord-cols">
+            <!-- LEFT: the print order, its own card. RIGHT: publishing, its own card beside the
+                 address rather than nested inside the order border. -->
+            <div class="ord-col ord-col-main">
+              <section class="ord-card" style="margin-bottom:0;">
+                <div class="ord-card-title">Order a printed copy</div>
+                <div class="ord-card-sub">Printed and shipped on demand. Pricing is live from the printer; the final price is confirmed at checkout.</div>
               <!-- LEFT COLUMN: what to print + format -->
-              <div class="ord-col">
                 <div class="ord-sec">WHAT TO PRINT</div>
                 <label class="ord-lbl">Book title <span class="ord-lbl-dim">(set on the Prep &amp; Preview tab)</span></label>
                 <input id="print-book-title" type="text" readonly maxlength="200" placeholder="Set on the Prep &amp; Preview tab" class="ord-in ord-in-ro">
@@ -430,10 +431,8 @@
                     <input id="print-qty" type="number" min="1" value="1" onchange="quotePrintOrder()" class="ord-in">
                   </div>
                 </div>
-              </div>
 
               <!-- RIGHT COLUMN: ship to -->
-              <div class="ord-col">
                 <div class="ord-sec">SHIP TO</div>
                 <div class="ord-row">
                   <div class="ord-f1">
@@ -474,23 +473,6 @@
                   <option value="expedited">Expedited</option>
                   <option value="express">Express</option>
                 </select>
-                <!-- Publish sits BESIDE the address, in its own border, so the tab reads as two
-                     things you can do with the finished book rather than one long column. -->
-                <section class="ord-card" style="margin-top:16px;margin-bottom:0;">
-                <div class="ord-card-title">Publish to the Library</div>
-                <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from your Account page.</div>
-                <div style="font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:10px;">Publishing the <strong id="publish-source-label" style="color:var(--gold);">original layout</strong> &middot; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:#7fb0e0;text-decoration:underline;">change on the Optimize tab</a></div>
-                <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).</span></label>
-                <div class="prep-field-label">Blurb for your Library page (optional)</div>
-                <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
-                <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
-                <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
-                <div class="prep-hint">You can manage published content on your Account page.</div>
-                          </section>
-              </div>
-            </div>
-
-            <!-- Actions span the full card width: the review panel below is wide. -->
             <div class="ord-divider"></div>
             <div class="ord-actions" style="margin-bottom:10px;">
               <button class="btn btn-sm" onclick="quotePrintOrder()">Get price</button>
@@ -513,7 +495,22 @@
                 <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
               </div>
             </div>
-          </section>
+              </section>
+            </div>
+            <div class="ord-col ord-col-side">
+              <section class="ord-card" style="margin-bottom:0;">
+            <div class="ord-card-title">Publish to the Library</div>
+            <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from your Account page.</div>
+            <div style="font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:10px;">Publishing the <strong id="publish-source-label" style="color:var(--gold);">original layout</strong> &middot; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:#7fb0e0;text-decoration:underline;">change on the Optimize tab</a></div>
+            <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).</span></label>
+            <div class="prep-field-label">Blurb for your Library page (optional)</div>
+            <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
+            <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
+            <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
+            <div class="prep-hint">You can manage published content on your Account page.</div>
+              </section>
+            </div>
+          </div>
         </div>
       </div>
     </div>
