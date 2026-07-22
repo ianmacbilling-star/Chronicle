@@ -992,6 +992,13 @@ var MZ_OPT_SHRINK_FEATURES = true;   // Optimize caps + floats portrait features
 var MZ_FEATURE_MAX_H = 6.0;       // OPTIMIZE-ONLY portrait-feature cap (applied only when opts.mzCapFeatures). 6.0 keeps portraits clearly big (65% of the page) while still enabling the margin-float wrap on all of them. Tunable.
 var MZ_FEATURE_MAX_H_FLOW = 8.4;  // the flow (Before) render keeps the ORIGINAL cap, so the reference book never moves under us.
 var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always run this tall
+// GAZETTE ONLY: the enclose panel wraps the tower in parchment (padding 0.13in x2) plus margin and
+// borders, so the measured BAND runs 0.48in taller than the image -- 9.68in against a 9.40in composed
+// body. That overflowed the page AND, because the tower-merge is gated on the real re-measure fitting
+// under MZ_TOWER_MERGE_MAX_IN, it rejected the very first merge candidate and broke the loop, so the
+// merge could never fire on any book. Trim the Gazette tower image by this much so the band fits.
+// Magazine towers are unaffected: gzPanelCss adds no padding when !enclose (band ~9.32in, already fits).
+var CO_TOWER_ENCLOSE_TRIM = 0.56;   // 9.2 - 0.56 + 0.48 overhead = 9.12in band (fits 9.16 page, 0.28in under the 9.40 merge ceiling)
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
 // printable page height, or it overflows its page container (and the measure pass
 // would mis-budget it). Normal single-pass render is untouched (returns h as-is).
@@ -1202,7 +1209,7 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
   // context is shortened to fit alongside the float -- filling the tall column instead of
   // leaving white space next to the thin tower.
   var ta = momentAspect(m);
-  var imgH = CO_TOWER_H;
+  var imgH = CO_TOWER_H - ((opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0);   // see CO_TOWER_ENCLOSE_TRIM: keeps the Gazette tower BAND inside the page and the merge ceiling
   var imgW = imgH * ta;
   var fl = sideLeft ? 'float:left;margin:0 0.20in 0.10in 0;'
                     : 'float:right;margin:0 0 0.10in 0.20in;';
