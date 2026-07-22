@@ -14510,6 +14510,13 @@ var _finalizeAfterBase = '';
 var _finalizeBeforeBlob = '';
 var _finalizeDebugUrl = '';   // admin easter egg: pack-plan text dump URL (double-click the After page count)
 var _finalizeFills = {};
+// AUTHORITATIVE render results per pane. The Optimize delta used to poll the DOM -- counting
+// <canvas> elements every 500ms and calling the render 'done' once the count held still for 3
+// ticks. But renderPdfInto appends each page's canvas BEFORE rasterising it, so any page slower
+// than ~1.5s (page 1 is the full-bleed cover) froze the count and the delta reported 1 page.
+// These are set from pdf.numPages and flipped when the render chain actually resolves.
+var _finalizeBeforePages = 0, _finalizeAfterPages = 0;
+var _finalizeBeforeDone = false, _finalizeAfterDone = false;
 var _finalizeAfterFills = {};   // per-page ink-fill % for the After pane (parallels _finalizeFills)
 var _finalizeAfterBlob = '';
 function loadFinalize() {
@@ -14717,16 +14724,13 @@ function _runLayoutAiOptimize() {
   if (afterScroll) afterScroll.style.display = '';
   if (pmsg) pmsg.textContent = 'Composing the book page by page (this can take up to a minute)...';
   renderPdfInto(composeUrl, 'finalize-after-scroll', false);
-  var _afterCount = 0, _stable = 0;
   var _composeWatch = setInterval(function () {
-    var sc = document.getElementById('finalize-after-scroll');
-    var cnt = sc ? sc.querySelectorAll('canvas').length : 0;
-    if (cnt > 0) {
-      if (cnt === _afterCount) { _stable++; } else { _stable = 0; _afterCount = cnt; }
-      if (_stable >= 3) {   // page count stable for ~1.5s -> render finished
+    if (_finalizeAfterDone) {   // the render chain resolved -- counts are exact, no polling guess
         clearInterval(_composeWatch);
         finish();
-        var bp = document.querySelectorAll('#finalize-before-scroll canvas').length;
+        var cnt = _finalizeAfterPages;
+        var bp = _finalizeBeforePages || document.querySelectorAll('#finalize-before-scroll canvas').length;
+        if (!cnt) return;   // render failed -- leave the readout blank rather than print a wrong delta
         var _dEl = document.getElementById('layoutai-delta');
         if (_dEl) {
           var delta = bp - cnt;
@@ -14743,7 +14747,6 @@ function _runLayoutAiOptimize() {
           _dEl.innerHTML = _html;
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // reflect the spent token
-      }
     }
   }, 500);
   setTimeout(function () { clearInterval(_composeWatch); finish(); }, 180000);
@@ -14990,6 +14993,8 @@ function renderPdfInto(url, containerId, isBefore) {
   var pf = document.getElementById(containerId + '-pf');
   var pm = document.getElementById(containerId + '-pm');
   if (isBefore) _finalizeFills = {}; else _finalizeAfterFills = {};
+  if (isBefore) { _finalizeBeforePages = 0; _finalizeBeforeDone = false; }
+  else { _finalizeAfterPages = 0; _finalizeAfterDone = false; }
   var flagged = [];
   // The server generates the whole PDF (~20s). Nothing to show real progress on during
   // that fetch, so creep the bar to ~45% so it's obviously working, not stuck.
@@ -15015,6 +15020,7 @@ function renderPdfInto(url, containerId, isBefore) {
       clearInterval(creepTimer);
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
+      if (isBefore) _finalizeBeforePages = total; else _finalizeAfterPages = total;   // truth, not a DOM guess
       var _cntEl = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
       if (_cntEl) _cntEl.innerHTML = finalizeCountLabel(total, null);
       // Preview now includes covers (viewer upgraded): page 1 is the front cover, last is the back
@@ -15059,10 +15065,13 @@ function renderPdfInto(url, containerId, isBefore) {
           _wcnt.ondblclick = function () { window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery() + '&flow=1', '_blank'); };
         }
         finalizeAttachSync();
+        if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;   // every page rasterised
       });
     });
   }).catch(function (e) {
     clearInterval(creepTimer);
+    // Mark done on failure too, or anything waiting on this pane would spin forever.
+    if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;
     if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
   });
 }
