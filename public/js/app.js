@@ -5879,6 +5879,7 @@ function switchNovelTab(tab) {
   if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
   if (tab === 'finalize' && typeof loadFinalize === 'function') { loadFinalize(); }
   if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
+  if (tab === 'order' && typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // keep the 'publishing X' label honest
   ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -6524,8 +6525,8 @@ async function publishStory() {
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
   if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
-  var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&');
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: _title, blurb: _blurb, attested: _attested }) })
+  var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&') + '&source=' + encodeURIComponent(_publishSource);
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: _publishSource, title: _title, blurb: _blurb, attested: _attested }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (btn) btn.disabled = false;
@@ -6533,6 +6534,9 @@ async function publishStory() {
         if (st) st.textContent = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
         setStoryPublishedUI(true, d.url);
         var _pt = document.getElementById('print-book-title'); if (_pt && _title) _pt.value = _title;
+      } else if (d && d.error === 'optimize_required') {
+        if (btn) btn.textContent = 'Publish to Library';
+        if (st) { st.style.display = 'block'; st.textContent = d.message || 'Run Optimize on this book first, then publish the optimized layout.'; }
       } else if (d && d.code === 'publish_requires_subscription') {
         if (btn) btn.textContent = 'Publish to Library';
         if (st) st.style.display = 'none';
@@ -9756,6 +9760,7 @@ function switchNovelTab(tab) {
   if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
   if (tab === 'finalize' && typeof loadFinalize === 'function') { loadFinalize(); }
   if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
+  if (tab === 'order' && typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // keep the 'publishing X' label honest
   ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -14502,6 +14507,30 @@ function finalizeIsContentPage(pageNum, totalPages) {
   if (totalPages && pageNum >= totalPages) return false;   // back cover renders last
   return true;
 }
+// Which rendering the reader chose to publish: 'flow' = the original (Before) book, 'composed' =
+// the optimized (After) book. 'composed' is only selectable once Optimize has run, because
+// publishing it reuses that run's composed body server-side.
+var _publishSource = 'flow';
+function pickPublishSource(src) {
+  _publishSource = (src === 'composed') ? 'composed' : 'flow';
+  finalizeUpdatePublishPick();
+  if (typeof switchNovelTab === 'function') switchNovelTab('order');
+}
+// Enable the optimized choice only after a successful Optimize, and show the current choice on
+// the Publish card so it is visible at the moment of committing, not remembered from another tab.
+function finalizeUpdatePublishPick() {
+  var wrap = document.getElementById('layoutai-publish-pick');
+  var after = document.getElementById('pub-pick-after');
+  var ready = !!(_finalizeAfterDone && _finalizeAfterPages > 0);
+  if (wrap) wrap.style.display = '';
+  if (after) {
+    after.disabled = !ready;
+    after.title = ready ? 'Publish the optimized layout' : 'Run Optimize first';
+  }
+  if (!ready && _publishSource === 'composed') _publishSource = 'flow';   // never leave a stale choice armed
+  var lbl = document.getElementById('publish-source-label');
+  if (lbl) lbl.textContent = (_publishSource === 'composed') ? 'optimized layout' : 'original layout';
+}
 function finalizeBookQuery() {
   return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');   // covers now render in the panes (viewer upgraded to pdf.js 6.x, which handles the cover/caption gradients)
 }
@@ -14761,6 +14790,7 @@ function _runLayoutAiOptimize() {
           _dEl.innerHTML = _html;
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // reflect the spent token
+        if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // the optimized choice is now available
     }
   }
   _finalizeAfterOnDone = _writeOptimizeStats;   // primary path: fires the moment the render resolves
@@ -15106,6 +15136,7 @@ function renderPdfInto(url, containerId, isBefore) {
         var pw = document.getElementById(containerId + '-pw');
         if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
+        if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();
         var _fpct = finalizeFillPct(isBefore ? _finalizeFills : _finalizeAfterFills, total);
         var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
         if (_wcnt) _wcnt.innerHTML = finalizeCountLabel(total, _fpct);

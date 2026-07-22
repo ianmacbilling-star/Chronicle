@@ -3731,11 +3731,39 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // and lose their legacy preset). publicMode + default back cover ride on
   // pageOpts, so masking works whether or not co is present.
   var co = req.query.co ? parseCustomOpts(req.query.co) : null;
-  if (co) co.cover = 1; // a published book always shows its cover page
   var bookTitle = (req.body && req.body.title && String(req.body.title).trim()) ? String(req.body.title).trim() : '';
-  var pageOpts = { publicMode: true, bookTitle: bookTitle };
+  // Cover pages are a SEPARATE artifact (the print order needs its own cover PDF, and the Library
+  // listing carries its own cover image), so the published book is interior-only -- same stripping
+  // the print interior does via nocover.
+  var pageOpts = { publicMode: true, bookTitle: bookTitle, noCover: true };
 
-  var html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  // Which render the reader chose on the Optimize tab: 'composed' = the optimized (After) book,
+  // anything else = the original flow (Before) book. The optimized option is only offered once
+  // Optimize has run, so its composed body is already cached -- we reuse it verbatim (byte-identical
+  // to the After pane, no re-pack, no extra token) rather than recomputing it here.
+  var _pubSrc = String((req.body && req.body.source) || req.query.source || 'flow');
+  var html = null;
+  if (_pubSrc === 'composed') {
+    req.query.nocover = '1';
+    req.query.publicMode = '1';
+    if (bookTitle) req.query.bookTitle = bookTitle;
+    var _pubHit = composedCacheGet(req.params.campaignId, req);
+    if (!(_pubHit && _pubHit.body)) {
+      return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize on this book first, then publish the optimized layout.' });
+    }
+    try {
+      var _pubBuilt = await assembleNovelHtml(req, req.params.campaignId, null, {
+        arrange: _pubHit.arrange, packComposedBody: _pubHit.body, campaignName: _pubHit.campaignName || ''
+      });
+      html = _pubBuilt && _pubBuilt.html;
+    } catch (e) {
+      console.error('[publish-story] composed build failed:', (e && e.message) || e);
+      html = null;
+    }
+    if (!html) return res.status(500).json({ error: 'Could not build the optimized layout. Re-run Optimize and try again.' });
+  } else {
+    html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  }
   var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
   if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
 
@@ -3987,6 +4015,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   const layoutStyle = req.query.layout || 'Classic';
   var pageOpts = {};
   if (req.query.nocover === '1') pageOpts.noCover = true;   // optimize/interior renders never include covers
+  if (req.query.publicMode === '1') pageOpts.publicMode = true;   // published books mask real names to pen names
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
 
