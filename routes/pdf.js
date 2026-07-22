@@ -4690,8 +4690,14 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       if (!_cand) break;
       var _rc = await remeasureComposedPages(req, campaignId, _cand.pages, bands);
       if (_rc._error) break;
-      var _fits = true;
-      for (var _k in _rc) { if (_k !== '_error' && _rc[_k] > MZ_TOWER_MERGE_MAX_IN) { _fits = false; break; } }
+      // Judge ONLY the page this merge produced. This used to scan EVERY page in the book, so a page
+      // that was already over the ceiling before we touched anything -- a malformed band somewhere
+      // else entirely -- vetoed the very first candidate and broke the loop, meaning no merge could
+      // ever succeed anywhere in that book. Seen on a 49-page Gazette: four textbook candidates, each
+      // with 3.5-7.7in of white before a tower, and zero merges, because one unrelated page measured
+      // over. Pre-existing oversize elsewhere is not this merge's doing and must not block it.
+      var _mh = (_cand.mergedIndex != null) ? _rc[_cand.mergedIndex] : null;
+      var _fits = (_mh != null && _mh <= MZ_TOWER_MERGE_MAX_IN);
       if (_fits) pages = _cand.pages; else break;   // accept (a page dropped) or stop
     }
   }
