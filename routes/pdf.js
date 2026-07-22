@@ -3262,7 +3262,17 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     if (asUser) { var nu = await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser); if (nu && nu.name) nMember = nu.name; }
     // Flow render: Chromium's native running head is the only way to repeat a header on pages whose
     // breaks CSS decides. The composed routes draw their own, so they never pass this.
-    var _rh = (co && co.header === false) ? null : { campaign: campaign.name };
+    // The running head belongs on INTERIOR pages only. Front matter is emitted in this order (see
+    // the assembly below): [cover?] title, details, [cast?], [toc?]; a back cover, when present,
+    // is the final page. Tell the renderer how many pages at each end are matter so it can leave
+    // the head off them. Defaults mirror fCover/fCast/fToc exactly.
+    var _rhPublic = !!(pageOpts && pageOpts.publicMode);
+    var _rhCover = (pageOpts && pageOpts.noCover) ? false : (co ? !!co.cover : true);
+    var _rhCast  = (co ? !!co.cast : true);
+    var _rhToc   = (co ? !!co.toc  : false);
+    var _rhFront = (_rhCover ? 1 : 0) + 1 + 1 + (_rhCast ? 1 : 0) + (_rhToc ? 1 : 0);   // cover? + title + details + cast? + toc?
+    var _rhBack  = (_rhCover && (campaign.back_cover_image_url || _rhPublic)) ? 1 : 0;
+    var _rh = (co && co.header === false) ? null : { campaign: campaign.name, skipPages: _rhFront, skipLastPages: _rhBack };
     try { return await sendHtmlAsPdf(res, html, pdfFileName([campaign.name, nMember]), { runningHeader: _rh }); }
     catch (e) { return res.status(500).json({ error: 'PDF render failed', detail: friendlyError(e, '') }); }
   }

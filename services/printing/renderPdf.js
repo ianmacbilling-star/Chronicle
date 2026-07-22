@@ -94,6 +94,46 @@ async function renderHtmlToPdf(html, options) {
       pdfOpts.preferCSSPageSize = false;
     }
 
+    // FRONT/BACK MATTER MUST NOT CARRY THE RUNNING HEAD. Chromium stamps header/footer on EVERY
+    // printed page and has no 'start at page N', and zeroing the @page margin does not suppress it
+    // (verified: the head still printed on the cover). So when the caller says how many pages are
+    // matter, export the SAME loaded page twice -- once plain, once with the head -- and stitch:
+    // matter pages come from the plain copy, interior pages from the headed one. Layout is already
+    // computed, so the second export re-serialises paint only; no reload, no image refetch. Both
+    // exports are the full document, so Chromium's page numbering stays physical and correct
+    // (pageRanges would have renumbered the interior from 1).
+    var _skipHead = Math.max(0, (options.runningHeader && options.runningHeader.skipPages) || 0);
+    var _skipTail = Math.max(0, (options.runningHeader && options.runningHeader.skipLastPages) || 0);
+    if (pdfOpts.displayHeaderFooter && (_skipHead > 0 || _skipTail > 0)) {
+      try {
+        var plainOpts = Object.assign({}, pdfOpts);
+        delete plainOpts.displayHeaderFooter;
+        delete plainOpts.headerTemplate;
+        delete plainOpts.footerTemplate;
+        var headedBuf = await page.pdf(pdfOpts);
+        var plainBuf = await page.pdf(plainOpts);
+        var PDFDocument = require('pdf-lib').PDFDocument;
+        var dHead = await PDFDocument.load(headedBuf);
+        var dPlain = await PDFDocument.load(plainBuf);
+        var total = dPlain.getPageCount();
+        var head = Math.min(_skipHead, total);
+        var tail = Math.min(_skipTail, Math.max(0, total - head));
+        var bodyEnd = total - tail;   // interior is [head, bodyEnd)
+        if (head <= 0 && tail <= 0) return Buffer.from(headedBuf);
+        var out = await PDFDocument.create();
+        var i, idx, cp;
+        idx = []; for (i = 0; i < head; i++) idx.push(i);
+        if (idx.length) { cp = await out.copyPages(dPlain, idx); cp.forEach(function (pg) { out.addPage(pg); }); }
+        idx = []; for (i = head; i < bodyEnd; i++) idx.push(i);
+        if (idx.length) { cp = await out.copyPages(dHead, idx); cp.forEach(function (pg) { out.addPage(pg); }); }
+        idx = []; for (i = bodyEnd; i < total; i++) idx.push(i);
+        if (idx.length) { cp = await out.copyPages(dPlain, idx); cp.forEach(function (pg) { out.addPage(pg); }); }
+        return Buffer.from(await out.save());
+      } catch (e) {
+        // Never fail a render over the running head: fall through to the normal single export.
+        try { console.error('[renderPdf] matter-page head split failed, using plain export:', (e && e.message) || e); } catch (e2) {}
+      }
+    }
     const buf = await page.pdf(pdfOpts);
     // page.pdf returns a Uint8Array on newer Puppeteer; normalize to Buffer
     // so downstream (R2 uploadFile, res.send) always gets a Buffer.
