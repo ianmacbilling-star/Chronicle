@@ -233,8 +233,10 @@
         </div><!-- /novel-preview-col -->
         <div id="novel-splitter" onmousedown="novelSplitStart(event)" title="Drag to resize the panes"><div class="novel-splitter-bar"></div></div>
         <aside class="novel-prep-panel" id="novel-prep-panel">
-          <div class="prep-h">Prepare to Publish</div>
-          <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()" style="width:100%;margin-bottom:12px;">&#8635; Refresh preview</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+            <div class="prep-h" style="margin-bottom:0;">Prepare to Publish</div>
+            <button class="btn btn-primary btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()" style="flex:0 0 auto;">&#8635; Refresh preview</button>
+          </div>
 
           <div class="prep-acc open" id="prep-acc-cover">
             <button class="prep-acc-head" type="button" onclick="togglePrepAcc('cover')" aria-expanded="true"><span>Title &amp; Cover</span><span class="prep-acc-chev">&#9662;</span></button>
@@ -352,8 +354,8 @@
             <div id="layoutai-publish-pick" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);">
               <div style="font-size:12px;color:rgba(245,232,200,0.7);margin-bottom:7px;">Publish one of these to the Library:</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-sm" id="pub-pick-before" onclick="pickPublishSource('flow')">Publish the original layout</button>
-                <button class="btn btn-sm" id="pub-pick-after" onclick="pickPublishSource('composed')" disabled title="Run Optimize first">Publish the optimized layout</button>
+                <button class="btn btn-primary btn-sm" id="pub-pick-before" onclick="pickPublishSource('flow')">Publish the original layout</button>
+                <button class="btn btn-primary btn-sm" id="pub-pick-after" onclick="pickPublishSource('composed')" disabled title="Run Optimize first">Publish the optimized layout</button>
               </div>
             </div>
             <div id="layoutai-free" style="margin-top:12px;max-height:540px;overflow-y:auto;padding-right:6px;"></div>
