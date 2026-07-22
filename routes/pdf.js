@@ -4758,6 +4758,9 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
     _dbg = {
       arrange: (_co.arrange || 'magazine'), pageH: pageH, markerBreak: _markerBreak, grow: grow || {},
+      co: _co,   // the FULL layout option set this plan was built from -- printed at the top of the dump
+                 // so two dumps can be compared with certainty (a font change silently made two dumps
+                 // describe different books once, and nothing on the page said so).
       campaign: (mbuilt.campaign && mbuilt.campaign.name) || '',
       bands: bands.map(function (b, bi) {
         return { i: bi, kind: b.kind, h: Math.round((_fm.h[bi] || 0) * 1000) / 1000, simg: !!b.simg,
@@ -4862,6 +4865,12 @@ function magazinePlanText(packed) {
   L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  content-pages=' + d.pages.length + '  (the PDF also adds front/back matter: cover, title, contents, cast -- so the viewer page count is higher)');
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
+  // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
+  // the page counts are not comparable no matter how similar the books look.
+  if (d.co) {
+    var _ck = Object.keys(d.co).sort();
+    L.push('layout options: ' + (_ck.length ? _ck.map(function (k) { return k + '=' + d.co[k]; }).join('  ') : '(none -- preset defaults, no custom layout active)'));
+  }
   if (d.remeasured) L.push('RE-MEASURED composed pages: each PAGE line shows REAL fill vs the single-pass estimate.');
   else if (d.remeasureError) L.push('re-measure error: ' + d.remeasureError);
   L.push('');

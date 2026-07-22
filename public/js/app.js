@@ -14508,7 +14508,6 @@ function finalizeBookQuery() {
 var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
 var _finalizeBeforeBlob = '';
-var _finalizeDebugUrl = '';   // admin easter egg: pack-plan text dump URL (double-click the After page count)
 var _finalizeFills = {};
 // AUTHORITATIVE render results per pane. The Optimize delta used to poll the DOM -- counting
 // <canvas> elements every 500ms and calling the render 'done' once the count held still for 3
@@ -14571,7 +14570,7 @@ function finalizeMeasureBlob(blob) {
               var vp = page.getViewport({ scale: 0.5 });
               var canvas = document.createElement('canvas');
               canvas.width = vp.width; canvas.height = vp.height;
-              return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
+              return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, intent: 'print' }).promise.then(_pdfYield).then(function () {
                 var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (finalizeIsContentPage(pageNum, pdf.numPages) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
               });
             });
@@ -14711,12 +14710,17 @@ function _runLayoutAiOptimize() {
   // rendered through the same styled shell as the Before pane so it's a true comparison.
   var composeUrl = '/api/pdf/pack-render/' + cid + '?compose=1' + finalizeBookQuery().replace('?', '&');
   // Admin easter egg: double-click the After page count to open the pack-plan text dump in a new tab.
-  _finalizeDebugUrl = '/api/pdf/pack-debug/' + cid + finalizeBookQuery();
+  // Built FRESH inside the handler (like the Before dump), never snapshotted here: a URL captured at
+  // Optimize time goes stale the moment a layout option changes, which silently produced Before/After
+  // dumps of two DIFFERENT books -- same text, different fonts, uncomparable numbers.
   var _dbgCnt = document.getElementById('finalize-after-count');
   if (_dbgCnt && state.user && state.user.is_admin) {
     _dbgCnt.style.cursor = 'pointer';
     _dbgCnt.title = 'Double-click: pack plan (admin)';
-    _dbgCnt.ondblclick = function () { if (_finalizeDebugUrl) window.open(_finalizeDebugUrl, '_blank'); };
+    _dbgCnt.ondblclick = function () {
+      if (!state.currentCampaign) return;
+      window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery(), '_blank');
+    };
   }
   var afterBody = document.getElementById('finalize-after-body');
   if (afterBody) afterBody.style.display = 'none';
@@ -14922,6 +14926,18 @@ function finalizeSetPdfTab(which) {
 // ---- Finalize: pdf.js render into scroll containers + synced scrolling ----
 var _pdfjsPromise = null;
 var PDFJS_VER = '6.1.200';   // upgraded viewer (SPIKE): renders fade-to-transparent gradients, so no more pink in the panes. ESM build via dynamic import; paneSafeHtml stays dormant in pdf.js as the rollback fallback.
+// Yield to the event loop between page renders. MessageChannel is a macrotask that background
+// throttling does not clamp to 1s the way it clamps setTimeout, so this keeps the UI responsive in
+// the foreground AND lets a hidden-tab render keep running at full speed.
+function _pdfYield(v) {
+  return new Promise(function (resolve) {
+    try {
+      var ch = new MessageChannel();
+      ch.port1.onmessage = function () { ch.port1.close(); resolve(v); };
+      ch.port2.postMessage(0);
+    } catch (e) { setTimeout(function () { resolve(v); }, 0); }
+  });
+}
 function ensurePdfJs() {
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
   if (_pdfjsPromise) return _pdfjsPromise;
@@ -15041,7 +15057,7 @@ function renderPdfInto(url, containerId, isBefore) {
             canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.display = 'block'; canvas.style.marginBottom = '6px'; canvas.style.borderRadius = '3px';
             canvas.setAttribute('data-page', pageNum);
             if (cv) cv.appendChild(canvas);
-            return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
+            return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, intent: 'print' }).promise.then(_pdfYield).then(function () {
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
               { var fill = measureCanvasFill(canvas); if (fill != null) { var _fpct = Math.round(fill * 100); if (isBefore) { _finalizeFills[pageNum] = _fpct; /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); */ if (finalizeIsContentPage(pageNum, total) && fill < 0.62) flagged.push({ page: pageNum, fill: _fpct }); } else { _finalizeAfterFills[pageNum] = _fpct; } } }
