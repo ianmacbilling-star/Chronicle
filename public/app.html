@@ -352,7 +352,9 @@
             <!-- Choose which rendering goes to the Library. The optimized option stays disabled until
                  Optimize has run, because publishing it reuses that run's composed book. -->
             <div id="layoutai-publish-pick" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);">
-              <div style="font-size:12px;color:rgba(245,232,200,0.7);margin-bottom:7px;">Publish one of these to the Library:</div>
+              <div style="font-size:12px;color:rgba(245,232,200,0.7);margin-bottom:7px;">Carefully review both options and select the one that you feel is best.</div>
+              <!-- Plain-language read on the two versions, filled in once Optimize has run. -->
+              <div id="pub-pick-verdict" style="display:none;font-size:12px;color:rgba(245,232,200,0.85);line-height:1.5;margin-bottom:9px;padding:8px 10px;border-left:2px solid rgba(201,168,76,0.5);background:rgba(201,168,76,0.06);border-radius:0 var(--radius) var(--radius) 0;"></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="pub-pick-before" onclick="pickPublishSource('flow')">Publish the original layout</button>
                 <button class="btn btn-primary btn-sm" id="pub-pick-after" onclick="pickPublishSource('composed')" disabled title="Run Optimize first">Publish the optimized layout</button>
