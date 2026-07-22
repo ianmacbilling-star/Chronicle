@@ -1708,7 +1708,7 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
     var _aspW = Math.max(0.3, momentAspect(m));
     band.sImgH = mul * ((opts && opts.enclose) ? (4.4 / _aspW) : (CG_W / _aspW));   // full-width image height (narrative sits below): split cut point + pull-up / gap-fit
     band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(_aspW * 100) / 100;
-    if (mtext && !(opts && opts.enclose)) {
+    if (mtext && (_mzFlowSim || !(opts && opts.enclose))) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
       band.renderHead = function (cStart, cEnd) { return cgFlowWide(m, opts, renderMzSlice(mtext, band.mbound, cStart, cEnd, opts), sideLeft, mul); };
@@ -1728,7 +1728,7 @@ function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
       remeta: function (mm) { return build(mm); } };
     band.sImgH = mul * cgFeatureImgH(m, opts);
     band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(momentAspect(m) * 100) / 100;
-    if (mtext && !(opts && opts.enclose)) {
+    if (mtext && (_mzFlowSim || !(opts && opts.enclose))) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
       band.renderHead = function (cStart, cEnd) { return cgFlowFeature(m, opts, renderMzSlice(mtext, band.mbound, cStart, cEnd, opts), sideLeft, mul); };
@@ -1846,6 +1846,8 @@ var _mzComposed = null;
 // computeMagazinePack between passes; buildMagazineMeasureBody re-renders the matching float
 // bands larger via their regrow() closure so the re-measure captures their true reflowed height.
 var _mzGrow = null;
+var _mzFlowSim = false;   // when true, band-building makes enclose (Gazette) boxes splittable so the
+                          // pack mimics the browser's box-splitting flow (used by the Before dump).
 function buildMagazineMeasureBody(moments, sections, intro, outro, opts) {
   var bands = magazineBands(moments, sections, intro, outro, opts);
   var out = '';
@@ -4500,16 +4502,19 @@ async function computeMagazinePack(req, campaignId, packOpts) {
 
   // Pass 1 -- default image sizes.
   _mzGrow = null; _mzBands = [];
+  _mzFlowSim = !!(packOpts && packOpts.flowSim);   // Before-dump: split enclose boxes like the flow does
   req.query.measureMagazine = '1';
   // Feature shrinking is OFF: Ian wants full-size hero images in Optimize (same as the flow), not
   // smaller-image-more-white. Set MZ_OPT_SHRINK_FEATURES=true to re-enable the 5.5in cap + float.
   if (MZ_OPT_SHRINK_FEATURES) { req.query.mzCapFeatures = '1'; req.query.mzFloatShrunk = '1'; }
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
+  _mzFlowSim = false;   // bands are built; do not leak the flag past band construction
   var meas = magazineMeasure((await measureDocument(mbuilt.html, {})).blocks || []);
   var bandH = meas.h;
   var bands = _mzBands || [];
   fillMissingMagazineLines(meas, bands);
   var pages = packMagazineBands(bands, meas, pageH, _markerBreak, null, null);
+  if (!(packOpts && packOpts.flowSim)) {   // FLOW-SIM (Before dump): skip ALL optimization transforms; keep the raw greedy pack
 
   // Grow-to-fill: for each page left noticeably under-full, enlarge its LAST growable floated
   // image toward the leftover white. Only floats carry regrow() (full-width bands are already at
@@ -4725,6 +4730,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     } catch (e) { /* grow is best-effort: on any failure keep the ungrown pages */ }
   }
 
+  }   // end optimization transforms (skipped for the Before flow-sim dump)
   var _dbg = null;
   if (packOpts && packOpts.debug) {
     var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
@@ -4871,8 +4877,9 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     var txt;
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
-      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
-      txt = magazinePlanText(packedM);
+      var _flow = !!req.query.flow;
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true, flowSim: _flow });
+      txt = (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
     } else {
       txt = 'pack-debug: only magazine/gazette plans are dumped here (arrange=' + (_cco.arrange || 'paired') + ').';
     }

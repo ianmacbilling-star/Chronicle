@@ -15012,6 +15012,12 @@ function renderPdfInto(url, containerId, isBefore) {
         var _fpct = finalizeFillPct(isBefore ? _finalizeFills : _finalizeAfterFills, total);
         var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
         if (_wcnt) _wcnt.innerHTML = finalizeCountLabel(total, _fpct);
+        // Admin: double-click the BEFORE page count for the flow-plan text dump (mirrors the After).
+        if (isBefore && _wcnt && state.user && state.user.is_admin && state.currentCampaign) {
+          _wcnt.style.cursor = 'pointer';
+          _wcnt.title = 'Double-click: flow plan (admin)';
+          _wcnt.ondblclick = function () { window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery() + '&flow=1', '_blank'); };
+        }
         finalizeAttachSync();
       });
     });
