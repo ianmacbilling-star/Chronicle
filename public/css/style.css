@@ -2224,7 +2224,9 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    left, ship-to on the right) and Publish to the Library beneath it. Mobile-first: .ord-col uses
    flex-basis with wrap, so the columns collapse to a single stack on narrow screens with no media
    query needed, and every field is width:100% inside its column. */
-.ord-wrap { max-width: 1040px; }
+/* Three columns need real room. 1040px was sized for two and left a wide dead strip on the right;
+   1600px lets all three breathe while still capping line length on an ultrawide monitor. */
+.ord-wrap { max-width: 1600px; }
 .ord-card { border: 1px solid rgba(201,168,76,0.35); border-radius: var(--radius); background: rgba(20,12,4,0.35); padding: 16px; margin-bottom: 16px; }
 .ord-card-title { font-family: var(--font-display); color: var(--gold); font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
 .ord-card-sub { color: rgba(245,232,200,0.6); font-size: 12px; margin-bottom: 14px; line-height: 1.4; }
@@ -2262,7 +2264,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    live inside the order card (one border); publishing is its own card beside them. Basis values are
    what drive the collapse order on the way down: publishing drops under the order card first, then
    the address drops under what-to-print. */
-.ord-col-main { flex: 3 1 620px; }
-.ord-col-side { flex: 1 1 280px; }
+.ord-col-main { flex: 5 1 640px; }
+.ord-col-side { flex: 2 1 330px; }
 .ord-cols-inner { gap: 16px; }
 .ord-cols-inner > .ord-col { flex: 1 1 250px; }
