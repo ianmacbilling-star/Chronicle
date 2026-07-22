@@ -4502,7 +4502,13 @@ async function computeMagazinePack(req, campaignId, packOpts) {
 
   // Pass 1 -- default image sizes.
   _mzGrow = null; _mzBands = [];
-  _mzFlowSim = !!(packOpts && packOpts.flowSim);   // Before-dump: split enclose boxes like the flow does
+  // GAZETTE: the flow (Before) beats the packer precisely because it splits bordered boxes cleanly
+  // via box-decoration-break:clone -- 36 pages at 86 percent fill vs the packer's 41 at 73 percent.
+  // So for Gazette we pack FLOW-STYLE (enclose boxes splittable) and then run ONLY the tower-column
+  // merge, skipping the rest of the optimizer. That is the one transform Gazette actually needs:
+  // it folds a stranded text-only tail into the following tower's near-empty beside column.
+  var _gzOnly = (_co.arrange === 'gazette');
+  _mzFlowSim = !!(packOpts && packOpts.flowSim) || _gzOnly;   // split enclose boxes like the flow does
   req.query.measureMagazine = '1';
   // Feature shrinking is OFF: Ian wants full-size hero images in Optimize (same as the flow), not
   // smaller-image-more-white. Set MZ_OPT_SHRINK_FEATURES=true to re-enable the 5.5in cap + float.
@@ -4522,6 +4528,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   // reflowed bands and RE-PACKS with their true heights -- so a picture that grows past its page
   // simply moves to the next page instead of clipping at the break.
   var grow = {}, splitAllow = {};
+  if (!_gzOnly) {   // Gazette runs tower-merge ONLY: no de-widow, no grow-to-fill, no gap-fit
   // De-widow: a band only slightly taller than one page splits into a full head + a tiny orphan tail
   // stranded on its own near-blank page (worst when a tower/full-page band follows and can't backfill).
   // Shrink that band's image just enough to fit a single page, removing the split (and the blank) entirely.
@@ -4606,6 +4613,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var mul = targetImgH / band.sImgH;
     if (mul >= MZ_GAPFIT_FLOOR && mul < 0.98) { grow[nbi] = Math.round(mul * 100) / 100; splitAllow[nbi] = true; }
   });
+  }   // end de-widow / grow-to-fill / gap-fit (skipped for Gazette; grow stays empty so Pass 2 self-skips)
 
   // Pass 2 -- re-render grown/shrunk floats, re-measure true heights, re-pack (exact pagination).
   if (Object.keys(grow).length) {
@@ -4637,6 +4645,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     }
   }
 
+  if (!_gzOnly) {   // Gazette: stop after the tower-merge -- no pull-up, no page-local grow
   // ITERATIVE OPTIMIZER, step 3: look-back pull-up. An underfull page pulls up a following single
   // movable band that fits, removing the emptied page. Gated on the real re-measure (accept only if it
   // fits, no clip); monotone -- can only remove pages. One token. (No-op on books without the pattern.)
@@ -4730,6 +4739,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     } catch (e) { /* grow is best-effort: on any failure keep the ungrown pages */ }
   }
 
+  }   // end look-back pull-up + page-local grow (skipped for Gazette)
   }   // end optimization transforms (skipped for the Before flow-sim dump)
   var _dbg = null;
   if (packOpts && packOpts.debug) {
@@ -4778,10 +4788,10 @@ function composePageInner(pg, bands, opts) {
       var cs = cell.cStart || 0;
       var ce = (cell.cEnd != null) ? cell.cEnd : b.stext.length;
       if (b.simg) {
-        if (cell.textLead) html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // SPILL lead: leading text ONLY (image leads the next page)
+        if (cell.textLead) html = gzNarrBox(renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts), b.sOpts || opts);   // SPILL lead: leading text ONLY (image leads the next page)
         else if (cell.imgBody && b.renderHead) html = b.renderHead(cs, ce);   // SPILL body: image + the text AFTER the spilled lead
         else if (cs === 0 && b.renderHead) html = b.renderHead(0, ce);   // panel HEAD: image + text up to the cut
-        else html = renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts);   // continuation: full-width, boundary-aware
+        else html = gzNarrBox(renderMzSlice(b.stext, b.mbound, cs, ce, b.sOpts || opts), b.sOpts || opts);   // continuation: full-width, boundary-aware. gzNarrBox re-boxes the slice for Gazette (no-op for Magazine) so a split panel's TAIL keeps its parchment border -- matching what box-decoration-break:clone does in the flow.
       } else {
         html = buildNarrativeHTML(b.stext.slice(cs, ce), b.sIntro);
         if (cs > 0) html = html.replace('text-indent:0.3in', 'text-indent:0');   // intro/outro continuation: no first-line indent
