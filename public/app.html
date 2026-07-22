@@ -398,83 +398,92 @@
                 <div class="ord-card-title">Order a printed copy</div>
                 <div class="ord-card-sub">Printed and shipped on demand. Pricing is live from the printer; the final price is confirmed at checkout.</div>
               <!-- LEFT COLUMN: what to print + format -->
-                <div class="ord-sec">WHAT TO PRINT</div>
-                <label class="ord-lbl">Book title <span class="ord-lbl-dim">(set on the Prep &amp; Preview tab)</span></label>
-                <input id="print-book-title" type="text" readonly maxlength="200" placeholder="Set on the Prep &amp; Preview tab" class="ord-in ord-in-ro">
-                <label class="ord-lbl">Order name <span class="ord-lbl-dim">(your label for this order)</span></label>
-                <input id="print-order-name" type="text" maxlength="200" placeholder="e.g. Session 1-5, Hardcover gift copy" class="ord-in">
-                <label class="ord-lbl">Version <span class="ord-lbl-dim">(set with the selector at the top of this page)</span></label>
-                <input id="print-version-display" type="text" readonly class="ord-in ord-in-ro">
-                <div id="print-page-est" style="font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:4px;"></div>
+                <!-- Inside the order card: what-to-print/format on the left, the address in its own
+                     column on the right. Publishing is a third column outside this card. -->
+                <div class="ord-cols ord-cols-inner">
+                  <div class="ord-col">
+                  <div class="ord-sec">WHAT TO PRINT</div>
+                  <label class="ord-lbl">Book title <span class="ord-lbl-dim">(set on the Prep &amp; Preview tab)</span></label>
+                  <input id="print-book-title" type="text" readonly maxlength="200" placeholder="Set on the Prep &amp; Preview tab" class="ord-in ord-in-ro">
+                  <label class="ord-lbl">Order name <span class="ord-lbl-dim">(your label for this order)</span></label>
+                  <input id="print-order-name" type="text" maxlength="200" placeholder="e.g. Session 1-5, Hardcover gift copy" class="ord-in">
+                  <label class="ord-lbl">Version <span class="ord-lbl-dim">(set with the selector at the top of this page)</span></label>
+                  <input id="print-version-display" type="text" readonly class="ord-in ord-in-ro">
+                  <div id="print-page-est" style="font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:4px;"></div>
 
-                <div class="ord-sec ord-sec-gap">FORMAT</div>
-                <div class="ord-row">
-                  <div class="ord-f1">
-                    <label class="ord-lbl">Binding</label>
-                    <select id="print-binding" onchange="quotePrintOrder()" class="ord-in"></select>
+                  <div class="ord-sec ord-sec-gap">FORMAT</div>
+                  <div class="ord-row">
+                    <div class="ord-f1">
+                      <label class="ord-lbl">Binding</label>
+                      <select id="print-binding" onchange="quotePrintOrder()" class="ord-in"></select>
+                    </div>
+                    <div class="ord-f2">
+                      <label class="ord-lbl">Color</label>
+                      <select id="print-color" onchange="quotePrintOrder()" class="ord-in"></select>
+                    </div>
                   </div>
-                  <div class="ord-f2">
-                    <label class="ord-lbl">Color</label>
-                    <select id="print-color" onchange="quotePrintOrder()" class="ord-in"></select>
+                  <div class="ord-row">
+                    <div class="ord-f1">
+                      <label class="ord-lbl">Paper</label>
+                      <select id="print-paper" onchange="quotePrintOrder()" class="ord-in"></select>
+                      <div class="ord-hint">Cream is only recommended for black &amp; white books.</div>
+                    </div>
+                    <div class="ord-f2">
+                      <label class="ord-lbl">Cover finish</label>
+                      <select id="print-finish" onchange="quotePrintOrder()" class="ord-in"></select>
+                    </div>
+                    <div class="ord-f3">
+                      <label class="ord-lbl">Qty</label>
+                      <input id="print-qty" type="number" min="1" value="1" onchange="quotePrintOrder()" class="ord-in">
+                    </div>
                   </div>
-                </div>
-                <div class="ord-row">
-                  <div class="ord-f1">
-                    <label class="ord-lbl">Paper</label>
-                    <select id="print-paper" onchange="quotePrintOrder()" class="ord-in"></select>
-                    <div class="ord-hint">Cream is only recommended for black &amp; white books.</div>
+
+                <!-- RIGHT COLUMN: ship to -->
                   </div>
-                  <div class="ord-f2">
-                    <label class="ord-lbl">Cover finish</label>
-                    <select id="print-finish" onchange="quotePrintOrder()" class="ord-in"></select>
+                  <div class="ord-col">
+                  <div class="ord-sec">SHIP TO</div>
+                  <div class="ord-row">
+                    <div class="ord-f1">
+                      <label class="ord-lbl">Full name</label>
+                      <input id="print-ship-name" type="text" placeholder="Full name" class="ord-in">
+                    </div>
+                    <div class="ord-f2">
+                      <label class="ord-lbl">Phone</label>
+                      <input id="print-ship-phone" type="text" placeholder="Phone" class="ord-in">
+                    </div>
                   </div>
-                  <div class="ord-f3">
-                    <label class="ord-lbl">Qty</label>
-                    <input id="print-qty" type="number" min="1" value="1" onchange="quotePrintOrder()" class="ord-in">
+                  <label class="ord-lbl">Street address</label>
+                  <input id="print-ship-street1" type="text" placeholder="Street address" class="ord-in">
+                  <input id="print-ship-street2" type="text" placeholder="Apt, suite (optional)" class="ord-in">
+                  <div class="ord-row">
+                    <div class="ord-f1">
+                      <label class="ord-lbl">City</label>
+                      <input id="print-ship-city" type="text" placeholder="City" class="ord-in">
+                    </div>
+                    <div class="ord-f2">
+                      <label class="ord-lbl">State/Province</label>
+                      <input id="print-ship-state" type="text" placeholder="State/Province code" class="ord-in">
+                    </div>
+                  </div>
+                  <div class="ord-row">
+                    <div class="ord-f2">
+                      <label class="ord-lbl">Postal code</label>
+                      <input id="print-ship-postcode" type="text" placeholder="Postal code" class="ord-in">
+                    </div>
+                    <div class="ord-f3">
+                      <label class="ord-lbl">Country</label>
+                      <input id="print-ship-country" type="text" placeholder="US" value="US" maxlength="2" class="ord-in">
+                    </div>
+                  </div>
+                  <label class="ord-lbl">Shipping speed</label>
+                  <select id="print-ship-level" onchange="quotePrintOrder()" class="ord-in">
+                    <option value="cheapest">Standard (cheapest)</option>
+                    <option value="expedited">Expedited</option>
+                    <option value="express">Express</option>
+                  </select>
                   </div>
                 </div>
 
-              <!-- RIGHT COLUMN: ship to -->
-                <div class="ord-sec">SHIP TO</div>
-                <div class="ord-row">
-                  <div class="ord-f1">
-                    <label class="ord-lbl">Full name</label>
-                    <input id="print-ship-name" type="text" placeholder="Full name" class="ord-in">
-                  </div>
-                  <div class="ord-f2">
-                    <label class="ord-lbl">Phone</label>
-                    <input id="print-ship-phone" type="text" placeholder="Phone" class="ord-in">
-                  </div>
-                </div>
-                <label class="ord-lbl">Street address</label>
-                <input id="print-ship-street1" type="text" placeholder="Street address" class="ord-in">
-                <input id="print-ship-street2" type="text" placeholder="Apt, suite (optional)" class="ord-in">
-                <div class="ord-row">
-                  <div class="ord-f1">
-                    <label class="ord-lbl">City</label>
-                    <input id="print-ship-city" type="text" placeholder="City" class="ord-in">
-                  </div>
-                  <div class="ord-f2">
-                    <label class="ord-lbl">State/Province</label>
-                    <input id="print-ship-state" type="text" placeholder="State/Province code" class="ord-in">
-                  </div>
-                </div>
-                <div class="ord-row">
-                  <div class="ord-f2">
-                    <label class="ord-lbl">Postal code</label>
-                    <input id="print-ship-postcode" type="text" placeholder="Postal code" class="ord-in">
-                  </div>
-                  <div class="ord-f3">
-                    <label class="ord-lbl">Country</label>
-                    <input id="print-ship-country" type="text" placeholder="US" value="US" maxlength="2" class="ord-in">
-                  </div>
-                </div>
-                <label class="ord-lbl">Shipping speed</label>
-                <select id="print-ship-level" onchange="quotePrintOrder()" class="ord-in">
-                  <option value="cheapest">Standard (cheapest)</option>
-                  <option value="expedited">Expedited</option>
-                  <option value="express">Express</option>
-                </select>
             <div class="ord-divider"></div>
             <div class="ord-actions" style="margin-bottom:10px;">
               <button class="btn btn-sm" onclick="quotePrintOrder()">Get price</button>

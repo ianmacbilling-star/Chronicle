@@ -2258,5 +2258,11 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 /* Order & Publish: the print order and the Library publish are SIBLING cards, each with its own
    border -- publishing is not part of the order, so it must not sit inside the order's frame.
    The order card takes the greater share; both collapse to a single stack on narrow screens. */
-.ord-col-main { flex: 2 1 460px; }
-.ord-col-side { flex: 1 1 300px; }
+/* Three columns across the page: what-to-print/format, the address, then publishing. The first two
+   live inside the order card (one border); publishing is its own card beside them. Basis values are
+   what drive the collapse order on the way down: publishing drops under the order card first, then
+   the address drops under what-to-print. */
+.ord-col-main { flex: 3 1 620px; }
+.ord-col-side { flex: 1 1 280px; }
+.ord-cols-inner { gap: 16px; }
+.ord-cols-inner > .ord-col { flex: 1 1 250px; }
