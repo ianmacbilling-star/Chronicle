@@ -1022,6 +1022,11 @@ function picBorderCss(opts){
   }
 }
 function cgBorder(opts){ return picBorderCss(opts) + 'overflow:hidden;'; }
+// Gazette PROSE panels take a fixed hairline, never the picture-frame option. The border choice is
+// about pictures: a 5px comic edge or a 3px gold frame drawn around a block of body text reads as a
+// mistake, and it was showing up on the parchment boxes in the Preview, the Before and the After.
+// Every IMAGE box still goes through cgBorder(), so the user's frame choice is untouched there.
+var GZ_TEXT_BORDER = 'border:1px solid rgba(120,90,30,0.35);';   // same hairline as the 'keyline' preset
 function vignetteOverlayHtml(){
   // Strong fade so the rectangular edge is fully gone -- image looks drawn on the page.
   return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.45in 0.4in #ffffff;"></div>' +
@@ -1119,12 +1124,12 @@ function cgImgMedia(m, opts) {
 // gives each fragment a clean closed border when a tall panel crosses a page break.
 // No-op for Magazine (enclose falsy) -> those code paths stay byte-identical.
 function gzPanelCss(opts) {
-  return (opts && opts.enclose) ? (picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;-webkit-box-decoration-break:clone;box-decoration-break:clone;') : '';
+  return (opts && opts.enclose) ? (GZ_TEXT_BORDER + 'background:#fbf3cf;padding:0.13in 0.15in;-webkit-box-decoration-break:clone;box-decoration-break:clone;') : '';
 }
 function gzNarrBox(narrHtml, opts) {
   if (!narrHtml) return '';
   if (!(opts && opts.enclose)) return narrHtml;
-  return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;margin-bottom:0.10in;-webkit-box-decoration-break:clone;box-decoration-break:clone;">' + narrHtml + '</div>';
+  return '<div style="' + GZ_TEXT_BORDER + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;margin-bottom:0.10in;-webkit-box-decoration-break:clone;box-decoration-break:clone;">' + narrHtml + '</div>';
 }
 
 // Gazette shared builder: an image floated INSIDE a parchment panel at an explicit
@@ -1401,13 +1406,13 @@ function cgFullWidthNarr(text, opts) {
   var n = (text || '').length;
   var cols = (n >= 640) ? 3 : ((n >= 300) ? 2 : 1);
   var oneBox = function () {
-    return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(text, false) + '</div>';
+    return '<div style="' + GZ_TEXT_BORDER + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:1.2in;align-self:start;break-inside:avoid;page-break-inside:avoid;grid-column:span 2;">' + buildNarrativeHTML(text, false) + '</div>';
   };
   if (cols <= 1) return oneBox();
   var parts = cgBalanceCols(text, cols);
   if (parts.length <= 1) return oneBox();
   var boxes = parts.map(function (pt) {
-    return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;flex:1 1 0;min-width:0;">' + buildNarrativeHTML(pt, false) + '</div>';
+    return '<div style="' + GZ_TEXT_BORDER + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;flex:1 1 0;min-width:0;">' + buildNarrativeHTML(pt, false) + '</div>';
   }).join('');
   return '<div style="grid-column:span 2;display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;">' + boxes + '</div>';
 }
@@ -1416,7 +1421,7 @@ function cgFullWidthNarr(text, opts) {
 // height (this is what makes spill impossible). Width is set by the parent cell;
 // the box fills it. No min-height / flex / grid here -- that is layout context.
 function cgNarrBox(text, opts) {
-  return '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;break-inside:avoid;page-break-inside:avoid;">' + buildNarrativeHTML(text, false) + '</div>';
+  return '<div style="' + GZ_TEXT_BORDER + 'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;break-inside:avoid;page-break-inside:avoid;">' + buildNarrativeHTML(text, false) + '</div>';
 }
 
 // Column widths the renderer can choose from (inches): 1-col full, 2-col half,
@@ -1491,7 +1496,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var twNarr = '';
       if (sec.before) twNarr += buildNarrativeHTML(sec.before, false);
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
-      var twText = '<div style="' + picBorderCss(opts) + 'background:#fbf3cf;flex:1 1 auto;min-width:0;padding:0.16in 0.18in;line-height:1.4;overflow:hidden;">' + twNarr + '</div>';
+      var twText = '<div style="' + GZ_TEXT_BORDER + 'background:#fbf3cf;flex:1 1 auto;min-width:0;padding:0.16in 0.18in;line-height:1.4;overflow:hidden;">' + twNarr + '</div>';
       var twLeft = (towerN % 2 === 0); towerN += 1;
       cells.push({ kind: 'block', slots: 2, moment: i, mkind: 'image', html: '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:stretch;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + (twLeft ? (twBox + twText) : (twText + twBox)) + '</div>' });
       continue;
@@ -1582,7 +1587,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     for (; qi < nchunks.length; qi++) restTxt += (restTxt ? ' ' : '') + nchunks[qi];
     if (besideTxt) {
       var bspan = (besideRows > 1) ? ('grid-row:span ' + besideRows + ';') : '';
-      cells.push({ slots: besideRows, moment: i, mkind: 'narr', split: true, html: '<div style="' + picBorderCss(opts) +
+      cells.push({ slots: besideRows, moment: i, mkind: 'narr', split: true, html: '<div style="' + GZ_TEXT_BORDER +
         'background:#fbf3cf;padding:0.13in 0.15in;line-height:1.4;min-height:' + imgH.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' + bspan + '">' + buildNarrativeHTML(besideTxt, false) + '</div>' });
     }
     if (restTxt) {
