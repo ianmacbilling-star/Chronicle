@@ -2268,3 +2268,30 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .ord-col-side { flex: 2 1 330px; }
 .ord-cols-inner { gap: 16px; }
 .ord-cols-inner > .ord-col { flex: 1 1 250px; }
+
+/* ==================== Optimize tab on small screens ====================
+   Two page-previews side by side is meaningless on a phone -- each pane ends up a couple of
+   hundred pixels wide and you cannot judge a layout at that size. So below 900px the whole tab
+   becomes a single column: the controls first, then Before, then After, each full width. The
+   drag splitter is hidden (there is nothing to drag when nothing is side by side) and the
+   vertical page rail turns into a horizontal strip between the two panes, so tapping a page
+   still jumps both. Heights move from a fixed 680px to a share of the viewport so the panes fit
+   the screen the reader actually has. !important is needed throughout: the sizes are inline
+   styles on the elements, and inline beats a stylesheet rule. */
+@media (max-width: 900px) {
+  #finalize-split { flex-direction: column; }
+  #finalize-left { flex: 1 1 auto !important; width: 100%; padding-right: 0 !important; margin-bottom: 14px; }
+  #finalize-splitter { display: none !important; }
+  #finalize-right { padding-left: 0 !important; min-width: 0 !important; }
+  #finalize-pdf-panes { flex-direction: column; gap: 12px !important; }
+  #finalize-before-wrap, #finalize-after-wrap { flex: 1 1 auto !important; width: 100%; }
+  #finalize-before-scroll, #finalize-after-scroll, #finalize-after-body { height: 62vh !important; }
+  /* page rail: vertical column -> horizontal scroll strip */
+  #finalize-page-nav-wrap { flex: 1 1 auto !important; width: 100%; flex-direction: row !important; align-items: center; gap: 8px; }
+  #finalize-page-nav { flex-direction: row !important; height: auto !important; max-height: none !important;
+                       width: 100%; overflow-x: auto; overflow-y: hidden; padding: 4px 0; gap: 4px !important; }
+  #finalize-page-nav > * { flex: 0 0 auto; }
+}
+@media (max-width: 560px) {
+  #finalize-before-scroll, #finalize-after-scroll, #finalize-after-body { height: 55vh !important; }
+}
