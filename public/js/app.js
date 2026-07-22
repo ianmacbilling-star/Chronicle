@@ -5895,6 +5895,7 @@ function switchNovelTab(tab) {
     if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
+    if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
   }
 }
 
@@ -9771,6 +9772,7 @@ function switchNovelTab(tab) {
     if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle);
     if (typeof refreshStoryStatus === 'function') refreshStoryStatus();
     if (typeof prepPanelSync === 'function') prepPanelSync();
+    if (typeof prepAccRestore === 'function') prepAccRestore();   // reopen the panel they used last
   }
 }
 
@@ -12219,6 +12221,25 @@ function novelSplitInit(){
 }
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', novelSplitInit); } else { novelSplitInit(); }
 // Prep-pane accordion (Preview & Export tab): independent open/close per panel.
+var PREP_ACC_KEY = 'campaignia.prepAcc';   // remember which Prep panel was last open
+var PREP_ACC_KEYS = ['cover', 'layout', 'publish'];
+// Re-open the panel the user last worked in when they come back to Prep & Preview, instead of
+// always resetting to Title & Cover. Exactly one panel is open (the remembered one).
+function prepAccRestore(){
+  var want = null;
+  try { want = window.localStorage.getItem(PREP_ACC_KEY); } catch (e) {}
+  if (!want || PREP_ACC_KEYS.indexOf(want) < 0) return;
+  PREP_ACC_KEYS.forEach(function(k){
+    var acc = document.getElementById('prep-acc-' + k); if (!acc) return;
+    var body = acc.querySelector('.prep-acc-body');
+    var head = acc.querySelector('.prep-acc-head');
+    var open = (k === want);
+    if (body) body.style.display = open ? '' : 'none';
+    if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    acc.classList.toggle('open', open);
+  });
+  if (want === 'layout' && typeof prepLayoutLoad === 'function') prepLayoutLoad();   // same population the open transition does
+}
 function togglePrepAcc(key){
   var acc=document.getElementById('prep-acc-'+key); if(!acc) return;
   var body=acc.querySelector('.prep-acc-body');
@@ -12228,6 +12249,7 @@ function togglePrepAcc(key){
   body.style.display=isOpen?'none':'';
   if(head) head.setAttribute('aria-expanded', isOpen?'false':'true');
   acc.classList.toggle('open', !isOpen);
+  if(!isOpen){ try { window.localStorage.setItem(PREP_ACC_KEY, key); } catch (e) {} }   // remember the panel just OPENED
   if(key==='layout' && !isOpen && typeof prepLayoutLoad==='function') prepLayoutLoad();   // populate from saved novel layout on open
 }
 // Inline layout panel (Preview & Export tab, Panel 2): mirrors the Layout modal for the 'novel'
@@ -14462,6 +14484,23 @@ function layoutAiCheckStatus() {
     .then(function (j) { if (j && j.enabled) { var t = document.getElementById('ntab-finalize'); if (t) t.style.display = ''; } })
     .catch(function () {});
 }
+// The free under-fill scan must not flag FRONT MATTER -- those pages are meant to be sparse.
+// Mirrors the PDF's assembly order in routes/pdf.js: [cover?] title, details, [cast?], [toc?].
+// cover/cast/toc are layout options; when no custom layout is active the render defaults are
+// cover ON, cast ON, toc OFF (see fCover/fCast/fToc in pdf.js), so mirror exactly that.
+function finalizeFrontMatterPages() {
+  var o = (typeof customActive !== 'undefined' && customActive && typeof customOpts !== 'undefined' && customOpts) ? customOpts : null;
+  var cover = o ? !!o.cover : true;
+  var cast  = o ? !!o.cast  : true;
+  var toc   = o ? !!o.toc   : false;
+  return (cover ? 1 : 0) + 1 + 1 + (cast ? 1 : 0) + (toc ? 1 : 0);   // cover? + title + details + cast? + toc?
+}
+// True only for real content pages: skips the front matter above and the trailing back cover.
+function finalizeIsContentPage(pageNum, totalPages) {
+  if (pageNum <= finalizeFrontMatterPages()) return false;
+  if (totalPages && pageNum >= totalPages) return false;   // back cover renders last
+  return true;
+}
 function finalizeBookQuery() {
   return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');   // covers now render in the panes (viewer upgraded to pdf.js 6.x, which handles the cover/caption gradients)
 }
@@ -14525,7 +14564,7 @@ function finalizeMeasureBlob(blob) {
               var canvas = document.createElement('canvas');
               canvas.width = vp.width; canvas.height = vp.height;
               return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
-                var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
+                var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (finalizeIsContentPage(pageNum, pdf.numPages) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
               });
             });
           });
@@ -14787,7 +14826,7 @@ function finalizeFreeAnalysis() {
   if (!canvases.length) return;
   var flagged = [];
   for (var n = 0; n < canvases.length; n++) {
-    if (n < 5) continue;   // skip front matter (cover/title/credits/roster/contents)
+    if (!finalizeIsContentPage(n + 1, canvases.length)) continue;   // skip front matter + back cover (computed from the layout options, not hard-coded)
     var fill = measureCanvasFill(canvases[n]);
     if (fill != null && fill < 0.62) flagged.push({ page: n + 1, fill: Math.round(fill * 100) });
   }
@@ -14998,7 +15037,7 @@ function renderPdfInto(url, containerId, isBefore) {
             return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
-              { var fill = measureCanvasFill(canvas); if (fill != null) { var _fpct = Math.round(fill * 100); if (isBefore) { _finalizeFills[pageNum] = _fpct; /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); */ if ((pageNum === 2 || pageNum > 5) && fill < 0.62) flagged.push({ page: pageNum, fill: _fpct }); } else { _finalizeAfterFills[pageNum] = _fpct; } } }
+              { var fill = measureCanvasFill(canvas); if (fill != null) { var _fpct = Math.round(fill * 100); if (isBefore) { _finalizeFills[pageNum] = _fpct; /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); */ if (finalizeIsContentPage(pageNum, total) && fill < 0.62) flagged.push({ page: pageNum, fill: _fpct }); } else { _finalizeAfterFills[pageNum] = _fpct; } } }
             });
           });
         });
