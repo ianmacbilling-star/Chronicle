@@ -14516,6 +14516,9 @@ var _finalizeFills = {};
 // These are set from pdf.numPages and flipped when the render chain actually resolves.
 var _finalizeBeforePages = 0, _finalizeAfterPages = 0;
 var _finalizeBeforeDone = false, _finalizeAfterDone = false;
+var _finalizeAfterOnDone = null;   // Optimize registers a callback here; renderPdfInto fires it the
+                                   // instant the After render resolves, so the stats no longer depend
+                                   // on a polling interval surviving a background tab.
 var _finalizeAfterFills = {};   // per-page ink-fill % for the After pane (parallels _finalizeFills)
 var _finalizeAfterBlob = '';
 function loadFinalize() {
@@ -14728,8 +14731,15 @@ function _runLayoutAiOptimize() {
   if (afterScroll) afterScroll.style.display = '';
   if (pmsg) pmsg.textContent = 'Composing the book page by page (this can take up to a minute)...';
   renderPdfInto(composeUrl, 'finalize-after-scroll', false);
-  var _composeWatch = setInterval(function () {
-    if (_finalizeAfterDone) {   // the render chain resolved -- counts are exact, no polling guess
+  var _statsWritten = false;
+  // Idempotent: called by the render-completion hook (primary) and by the interval / long stop as
+  // fallbacks. Previously a 3-minute setInterval race owned this, so if the render was still going
+  // when the timer gave up -- exactly what happens when a background tab slows the render down --
+  // the button was re-enabled and the stats were silently never written.
+  function _writeOptimizeStats() {
+    if (_statsWritten) return;
+    _statsWritten = true;
+    {
         clearInterval(_composeWatch);
         finish();
         var cnt = _finalizeAfterPages;
@@ -14752,8 +14762,14 @@ function _runLayoutAiOptimize() {
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // reflect the spent token
     }
-  }, 500);
-  setTimeout(function () { clearInterval(_composeWatch); finish(); }, 180000);
+  }
+  _finalizeAfterOnDone = _writeOptimizeStats;   // primary path: fires the moment the render resolves
+  var _composeWatch = setInterval(function () { if (_finalizeAfterDone) _writeOptimizeStats(); }, 500);
+  // Long stop only. If the render really did finish, still write the stats rather than discarding them.
+  setTimeout(function () {
+    if (_finalizeAfterDone) { _writeOptimizeStats(); return; }
+    clearInterval(_composeWatch); _finalizeAfterOnDone = null; finish();
+  }, 900000);
 }
 // DIAGNOSTIC (temporary): draw a line on the preview canvas at the scan's detected content
 // bottom, labeled with fill %, so we can see whether pages are truly full or a stray element
@@ -15082,12 +15098,14 @@ function renderPdfInto(url, containerId, isBefore) {
         }
         finalizeAttachSync();
         if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;   // every page rasterised
+        if (!isBefore && typeof _finalizeAfterOnDone === 'function') { var _cb = _finalizeAfterOnDone; _finalizeAfterOnDone = null; try { _cb(); } catch (e) {} }
       });
     });
   }).catch(function (e) {
     clearInterval(creepTimer);
     // Mark done on failure too, or anything waiting on this pane would spin forever.
     if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;
+    if (!isBefore && typeof _finalizeAfterOnDone === 'function') { var _cbE = _finalizeAfterOnDone; _finalizeAfterOnDone = null; try { _cbE(); } catch (e2) {} }
     if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
   });
 }
