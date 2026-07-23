@@ -1208,13 +1208,19 @@ function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
   return '<div style="display:flow-root;margin-bottom:0.10in;' + gzPanelCss(opts) + '">' + box + cgAlignFirstPara(narrHtml || '') + '</div>';
 }
 
-function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
+// shrink: 0..0.20, trims the tower image as an absolute LAST resort when absorbing a stranded page.
+// wrapBelow: drop the beside-column's flow-root so the prose wraps alongside the image AND continues
+// full width beneath it. That is a large capacity gain at NO cost to the picture, which is why it is
+// tried before any shrinking. Only safe when nothing was absorbed into the column (besideHtml), since
+// those panels are meant to stack beside the tower, not run under it.
+function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow) {
   // Tower: full-page-height image flush to a margin. Its narrative PLUS any absorbed small
   // panels (besideHtml) stack in a block that sits BESIDE the tower -- a new block-formatting
   // context is shortened to fit alongside the float -- filling the tall column instead of
   // leaving white space next to the thin tower.
   var ta = momentAspect(m);
-  var imgH = CO_TOWER_H - ((opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0);   // see CO_TOWER_ENCLOSE_TRIM: keeps the Gazette tower BAND inside the page and the merge ceiling
+  var _shr = Math.max(0, Math.min(0.20, shrink || 0));   // hard cap: never trim a tower by more than 20%
+  var imgH = (CO_TOWER_H - ((opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0)) * (1 - _shr);   // see CO_TOWER_ENCLOSE_TRIM
   var imgW = imgH * ta;
   var fl = sideLeft ? 'float:left;margin:0 0.20in 0.10in 0;'
                     : 'float:right;margin:0 0 0.10in 0.20in;';
@@ -1226,7 +1232,9 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft) {
        picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>')
     : ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>');
-  var col = '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
+  var col = (wrapBelow && !besideHtml)
+    ? cgAlignFirstPara(narrHtml || '')                                      // wraps beside the float, then continues below it
+    : '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
   // Keep the tower + its beside-column narrative as ONE unbreakable unit. Without this the
   // short narrative fills the scrap at a page bottom while the 9.2in tower bumps to the next
   // page, stranding the text and leaving the tower's side column empty. (Rollback: remove
@@ -1793,7 +1801,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
         mzAdv += 1; mzFill += 1;
       }
       bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft),
-        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml) { return cgFlowTower(mm, oo, (leadHtml || '') + (nn || ''), bside, sl); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
+        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml, shrink, wrapBelow) { return cgFlowTower(mm, oo, (leadHtml || '') + (nn || ''), bside, sl, shrink, wrapBelow); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
@@ -4520,6 +4528,15 @@ function towerMergeCandidate(pgs, bnds, skip) {
   return null;
 }
 
+// Stamp a merge attempt's settings onto the merged tower cell without disturbing the other pages.
+function towerApplyRung(pgs, mi, rung) {
+  var out = pgs.slice();
+  var pg = out[mi].slice();
+  pg[0] = Object.assign({}, pg[0], { towerShrink: rung.s, towerWrap: rung.w });
+  out[mi] = pg;
+  return out;
+}
+
 // Look-back pull-up candidate: find the FIRST underfull page whose NEXT page is a single WHOLE movable
 // band (feature/float/wide/pair -- not a split continuation, tower, or matter) that fits the underfull
 // page's room. Pull it up and drop the now-empty next page. Returns a NEW pages array or null.
@@ -4689,27 +4706,38 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   // still fits (no clip). Gated + monotone: it can only remove pages, never overflow. One token.
   var _tmLog = [];   // admin dump: what the tower-column merge tried, and why each attempt landed
   if (MZ_TOWER_MERGE && (_co.arrange === 'magazine' || _co.arrange === 'gazette' || !_co.arrange)) {
+    // Absorb a stranded page cheapest-first. The tower keeps its full height for as long as possible:
+    // first the neat beside-column, then letting the prose also run under the image (free, no shrink),
+    // and only then trimming the picture -- 10%, and 20% as the absolute last resort.
+    var _RUNGS = [ { s: 0, w: false, n: 'beside column' }, { s: 0, w: true, n: 'wrapping below' },
+                   { s: 0.10, w: true, n: 'tower -10%' }, { s: 0.20, w: true, n: 'tower -20%' } ];
     var _tmGuard = 0, _tmSkip = {};
-    while (_tmGuard++ < 12) {
+    while (_tmGuard < 24) {
       var _cand = towerMergeCandidate(pages, bands, _tmSkip);
       if (!_cand) break;
-      var _rc = await remeasureComposedPages(req, campaignId, _cand.pages, bands);
-      if (_rc._error) break;
-      // Judge ONLY the page this merge produced. This used to scan EVERY page in the book, so a page
-      // that was already over the ceiling before we touched anything -- a malformed band somewhere
-      // else entirely -- vetoed the very first candidate and broke the loop, meaning no merge could
-      // ever succeed anywhere in that book. Seen on a 49-page Gazette: four textbook candidates, each
-      // with 3.5-7.7in of white before a tower, and zero merges, because one unrelated page measured
-      // over. Pre-existing oversize elsewhere is not this merge's doing and must not block it.
-      var _mh = (_cand.mergedIndex != null) ? _rc[_cand.mergedIndex] : null;
-      var _fits = (_mh != null && _mh <= MZ_TOWER_MERGE_MAX_IN);
-      _tmLog.push('page ' + _cand.srcPage + ' -> tower: merged page measures ' +
-        (_mh != null ? _mh.toFixed(2) + 'in' : '?') + ' vs ceiling ' + MZ_TOWER_MERGE_MAX_IN + 'in -- ' + (_fits ? 'MERGED' : 'too tall, skipped'));
-      // A tail that will not fit must not stop the ones that would. This used to break out of the
-      // loop entirely, so a single fat tail early in the book (4in of prose reflowing into a 2.3in
-      // column) blocked every later candidate -- including one-line tails that fit trivially.
-      if (_fits) { pages = _cand.pages; _tmSkip = {}; }   // indices shifted; re-evaluate everything
-      else _tmSkip[_cand.key] = 1;                        // this tail cannot fit -- try the NEXT one
+      var _accepted = false, _err = false;
+      for (var _r = 0; _r < _RUNGS.length; _r++) {
+        if (_tmGuard++ >= 24) break;
+        var _try = towerApplyRung(_cand.pages, _cand.mergedIndex, _RUNGS[_r]);
+        var _rc = await remeasureComposedPages(req, campaignId, _try, bands);
+        if (_rc._error) { _err = true; break; }
+        // Judge ONLY the page this merge produced. This used to scan EVERY page in the book, so a page
+        // that was already over the ceiling before we touched anything -- a malformed band somewhere
+        // else entirely -- vetoed the very first candidate and broke the loop, meaning no merge could
+        // ever succeed anywhere in that book. Seen on a 49-page Gazette: four textbook candidates, each
+        // with 3.5-7.7in of white before a tower, and zero merges, because one unrelated page measured
+        // over. Pre-existing oversize elsewhere is not this merge's doing and must not block it.
+        var _mh = (_cand.mergedIndex != null) ? _rc[_cand.mergedIndex] : null;
+        var _fits = (_mh != null && _mh <= MZ_TOWER_MERGE_MAX_IN);
+        _tmLog.push('page ' + _cand.srcPage + ' -> tower (' + _RUNGS[_r].n + '): ' +
+          (_mh != null ? _mh.toFixed(2) + 'in' : '?') + ' vs ceiling ' + MZ_TOWER_MERGE_MAX_IN + 'in -- ' + (_fits ? 'MERGED' : 'too tall'));
+        if (_fits) { pages = _try; _tmSkip = {}; _accepted = true; break; }
+      }
+      if (_err) break;
+      // A tail that will not fit even at the last rung must not stop the ones that would. This used to
+      // break out entirely, so one fat tail early in the book blocked every later candidate --
+      // including one-line tails that fit trivially.
+      if (!_accepted) _tmSkip[_cand.key] = 1;
     }
   }
 
@@ -4872,7 +4900,7 @@ function composePageInner(pg, bands, opts) {
     } else if (b.kind === 'tower' && cell.towerLead && b.renderTowerLead) {
       var _lb = bands[cell.towerLead.band];
       var _lead = (_lb && _lb.stext != null) ? renderMzSlice(_lb.stext, _lb.mbound, cell.towerLead.cStart || 0, (cell.towerLead.cEnd != null ? cell.towerLead.cEnd : _lb.stext.length), _lb.sOpts || opts) : '';
-      html = b.renderTowerLead(_lead ? ('<div style="margin-bottom:0.16in;">' + _lead + '</div>') : '');
+      html = b.renderTowerLead(_lead ? ('<div style="margin-bottom:0.16in;">' + _lead + '</div>') : '', cell.towerShrink, cell.towerWrap);
     } else {
       html = b.html;
     }
