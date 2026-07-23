@@ -4490,12 +4490,16 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
 // before a tower, and fold that tail into the tower's beside-column (which usually has room). Returns
 // a NEW pages array with the stranded page removed and the tower cell carrying the lead, plus the new
 // index of the merged tower page -- or null if there's nothing to merge.
-function towerMergeCandidate(pgs, bnds) {
+function towerMergeCandidate(pgs, bnds, skip) {
   for (var pi = 0; pi + 1 < pgs.length; pi++) {
     var pg = pgs[pi];
     if (pg.length !== 1) continue;
     var c = pg[0];
     if (!c.split || (c.cStart || 0) === 0 || c.imgBody || c.textLead) continue;   // must be a text-only tail
+    // Skip tails a previous round already proved will not fit. Keyed by band + start offset rather
+    // than page index, because accepting a merge shifts every later page up by one.
+    var _key = c.band + ':' + (c.cStart || 0);
+    if (skip && skip[_key]) continue;
     var nb = pgs[pi + 1];
     if (!nb.length) continue;
     var tc = nb[0];
@@ -4511,7 +4515,7 @@ function towerMergeCandidate(pgs, bnds) {
         out.push(cells);
       } else out.push(pgs[k]);
     }
-    return { pages: out, mergedIndex: (pi + 1) - 1 };           // the tower page shifts up by one (the removed page precedes it)
+    return { pages: out, mergedIndex: (pi + 1) - 1, key: _key, srcPage: pi };   // the tower page shifts up by one (the removed page precedes it)
   }
   return null;
 }
@@ -4683,10 +4687,11 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   // ITERATIVE OPTIMIZER, step 2: tower-column merge. Fold each stranded text-only tail into the
   // following tower's beside-column, but ACCEPT only if the real re-measure confirms the merged page
   // still fits (no clip). Gated + monotone: it can only remove pages, never overflow. One token.
+  var _tmLog = [];   // admin dump: what the tower-column merge tried, and why each attempt landed
   if (MZ_TOWER_MERGE && (_co.arrange === 'magazine' || _co.arrange === 'gazette' || !_co.arrange)) {
-    var _tmGuard = 0;
+    var _tmGuard = 0, _tmSkip = {};
     while (_tmGuard++ < 12) {
-      var _cand = towerMergeCandidate(pages, bands);
+      var _cand = towerMergeCandidate(pages, bands, _tmSkip);
       if (!_cand) break;
       var _rc = await remeasureComposedPages(req, campaignId, _cand.pages, bands);
       if (_rc._error) break;
@@ -4698,7 +4703,13 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       // over. Pre-existing oversize elsewhere is not this merge's doing and must not block it.
       var _mh = (_cand.mergedIndex != null) ? _rc[_cand.mergedIndex] : null;
       var _fits = (_mh != null && _mh <= MZ_TOWER_MERGE_MAX_IN);
-      if (_fits) pages = _cand.pages; else break;   // accept (a page dropped) or stop
+      _tmLog.push('page ' + _cand.srcPage + ' -> tower: merged page measures ' +
+        (_mh != null ? _mh.toFixed(2) + 'in' : '?') + ' vs ceiling ' + MZ_TOWER_MERGE_MAX_IN + 'in -- ' + (_fits ? 'MERGED' : 'too tall, skipped'));
+      // A tail that will not fit must not stop the ones that would. This used to break out of the
+      // loop entirely, so a single fat tail early in the book (4in of prose reflowing into a 2.3in
+      // column) blocked every later candidate -- including one-line tails that fit trivially.
+      if (_fits) { pages = _cand.pages; _tmSkip = {}; }   // indices shifted; re-evaluate everything
+      else _tmSkip[_cand.key] = 1;                        // this tail cannot fit -- try the NEXT one
     }
   }
 
@@ -4803,6 +4814,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
     _dbg = {
       arrange: (_co.arrange || 'magazine'), pageH: pageH, markerBreak: _markerBreak, grow: grow || {},
+      towerMerge: _tmLog,   // per-attempt record of the tower-column merge (printed under the header)
       co: _co,   // the FULL layout option set this plan was built from -- printed at the top of the dump
                  // so two dumps can be compared with certainty (a font change silently made two dumps
                  // describe different books once, and nothing on the page said so).
@@ -4912,6 +4924,12 @@ function magazinePlanText(packed) {
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
   // the page counts are not comparable no matter how similar the books look.
+  if (d.towerMerge && d.towerMerge.length) {
+    L.push('tower merge: ' + d.towerMerge.length + ' attempt(s)');
+    d.towerMerge.forEach(function (s) { L.push('  ' + s); });
+  } else if (d.towerMerge) {
+    L.push('tower merge: no candidates (no single text-only tail sits directly before a tower)');
+  }
   if (d.co) {
     var _ck = Object.keys(d.co).sort();
     L.push('layout options: ' + (_ck.length ? _ck.map(function (k) { return k + '=' + d.co[k]; }).join('  ') : '(none -- preset defaults, no custom layout active)'));
