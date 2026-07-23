@@ -15118,8 +15118,24 @@ function renderPdfInto(url, containerId, isBefore) {
   var pf = document.getElementById(containerId + '-pf');
   var pm = document.getElementById(containerId + '-pm');
   if (isBefore) _finalizeFills = {}; else _finalizeAfterFills = {};
-  if (isBefore) { _finalizeBeforePages = 0; _finalizeBeforeDone = false; }
-  else { _finalizeAfterPages = 0; _finalizeAfterDone = false; }
+  if (isBefore) {
+    _finalizeBeforePages = 0; _finalizeBeforeDone = false;
+    // A fresh Before render means the book itself changed (layout option, version, campaign), so any
+    // Optimize result still on screen describes a book that no longer exists. Clear the comparison and
+    // re-arm the picker -- same discipline as the page/density stats. The server would refuse a
+    // 'publish the optimized layout' request anyway (its composed cache is keyed by these settings),
+    // so leaving the button armed would only offer a choice that cannot be honoured.
+    _finalizeAfterPages = 0; _finalizeAfterDone = false;
+    _publishSource = 'flow';
+    try {
+      var _pv = document.getElementById('pub-pick-verdict');
+      if (_pv) { _pv.innerHTML = ''; _pv.style.display = 'none'; }
+      var _pw = document.getElementById('layoutai-publish-pick');
+      if (_pw) _pw.style.display = 'none';
+      var _pl = document.getElementById('publish-source-label');
+      if (_pl) _pl.textContent = 'original layout';
+    } catch (e) {}
+  } else { _finalizeAfterPages = 0; _finalizeAfterDone = false; }
   var flagged = [];
   // The server generates the whole PDF (~20s). Nothing to show real progress on during
   // that fetch, so creep the bar to ~45% so it's obviously working, not stuck.
