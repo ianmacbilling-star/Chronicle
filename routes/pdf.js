@@ -1233,7 +1233,12 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
                     : 'float:right;margin:0 0 0.10in 0.20in;';
   // Same letterbox fix as gzImgBox: a contain image would leave transparent bands inside the border.
   var box = (!lmCropSafe(m) && m.image)
-    ? ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;min-height:' + imgH.toFixed(2) +
+    // NO min-height here: the image is sized by WIDTH with height:auto, so if its real aspect makes
+    // it shorter than the reserved height, a min-height would hold the border open and leave a band
+    // of dead space between the picture and the frame. Letting the box hug the image keeps the
+    // frame tight to the art; the packer's estimate stays on the high side, which is the safe way
+    // to be wrong (a slightly short page, never a clipped one).
+    ? ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) +
        'in;position:relative;background:transparent;line-height:0;">' +
        '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
        picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>')
