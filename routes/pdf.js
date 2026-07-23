@@ -4400,8 +4400,20 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     function splitAt(room) {
       var Lx = -1;
       for (var q = 0; q < it.lines.length - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; }
-      if (Lx < 0 || it.height > pageH - 0.05) return Lx;              // must-split band: any cut beats a clip
+      if (Lx < 0) return Lx;
       var total = it.lines.length;
+      // A band taller than a page MUST split (a refusal would clip it), but that is no reason to
+      // accept a bad boundary: this used to return immediately, so the last cut of a long text band
+      // could strand a single line -- famously just the closing full stop, which then rendered as a
+      // whole empty parchment box of its own. Still always return a cut; just prefer one that leaves
+      // the tail at least MZ_MIN_SLICE_LINES lines when the geometry allows it.
+      if (it.height > pageH - 0.05) {
+        if (total - (Lx + 1) < MZ_MIN_SLICE_LINES) {
+          var _Lb = Math.min(Lx, total - MZ_MIN_SLICE_LINES - 1);
+          if (_Lb >= 0 && it.lines[_Lb] >= minB) Lx = _Lb;   // pull back only if the head still clears its image
+        }
+        return Lx;
+      }
       if (total - (Lx + 1) < MZ_MIN_SLICE_LINES) {                    // sliver TAIL -> pull the cut back
         Lx = Math.min(Lx, total - MZ_MIN_SLICE_LINES - 1);
         if (Lx < 0 || it.lines[Lx] < minB) return -1;
