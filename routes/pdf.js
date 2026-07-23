@@ -1248,6 +1248,14 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
   // `break-inside:avoid;page-break-inside:avoid;` from the wrapper below.)
   return '<div style="display:flow-root;margin-bottom:0.10in;break-inside:avoid;page-break-inside:avoid;' + gzPanelCss(opts) + '">' + box + col + '</div>';
 }
+// Rough height of prose set in a narrow column, for band-build-time budgeting only (no measurement
+// is available this early). About 11 characters per inch at the body size, 0.19in per line.
+function mzColTextH(html, colW) {
+  var txt = String(html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!txt) return 0;
+  var perLine = Math.max(8, colW * 11);
+  return Math.ceil(txt.length / perLine) * 0.19;
+}
 function cgBesidePanel(m, opts, narrHtml) {
   // A small panel rendered to STACK in the column beside a full-height tower (NOT floated).
   var box = '<div style="' + cgBorder(opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:transparent;line-height:0;margin-bottom:0.06in;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
@@ -1801,9 +1809,24 @@ function magazineBands(moments, sections, intro, outro, opts) {
     var p = panels[i];
     if (normShape(p.m) === 'tower') {
       var mzBeside = '', mzAdv = 1, mzFill = 0;
+      // BUDGET the tower's beside-column. This used to absorb up to three panels with no height
+      // check at all, so image + prose + panel + prose could stack to 13.7in on a 9.16in page and
+      // the overflow was silently clipped -- cutting a line of the book in half. Absorb only while
+      // the column stays inside the tower image's own height, which is what keeps the band on one
+      // page. Estimates are deliberately conservative: erring high costs a page, erring low loses text.
+      var _tta = Math.max(0.3, momentAspect(p.m));
+      var _ttImgH = CO_TOWER_H - ((opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0);
+      var _ttImgW = _ttImgH * _tta;
+      var _ttMaxW = CG_W - MZ_MIN_TEXT_COL;
+      if (_ttImgW > _ttMaxW) { _ttImgW = _ttMaxW; _ttImgH = _ttImgW / _tta; }
+      var _ttColW = Math.max(1.2, CG_W - _ttImgW - 0.20);
+      var _ttUsed = mzColTextH(p.narr, _ttColW);   // the tower's own prose is already in the column
       while ((i + mzAdv) < panels.length && mzFill < 3) {
         var mzNp = panels[i + mzAdv];
         if (normShape(mzNp.m) === 'tower' || mzNp.feature || mzNp.asp >= 1.5) break;
+        var _ttCost = (_ttColW / Math.max(0.3, mzNp.asp || 1)) + mzColTextH(mzNp.narr, _ttColW) + 0.18;
+        if (_ttUsed + _ttCost > _ttImgH) break;   // absorbing this would push the band off the page
+        _ttUsed += _ttCost;
         mzBeside += cgBesidePanel(mzNp.m, opts, mzNp.narr);
         mzAdv += 1; mzFill += 1;
       }
