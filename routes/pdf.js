@@ -2835,7 +2835,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   ${fontRule}
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Crimson Text', Georgia, serif; background: #fff; color: #1a1410; width: 8.5in; margin: 0 auto; }
+  body { font-family: 'Crimson Text', Georgia, serif; background: #fff; color: #1a1410; width: 8.5in; margin: 0 auto;  orphans: 2; widows: 2; }
 
   .cover-page { width:8.5in;height:11in;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1a0f08;page-break-after:always;position:relative;overflow:hidden; }
   .cover-bg { position:absolute;inset:0;background:radial-gradient(ellipse at center, #3a2010 0%, #0a0604 70%); }
