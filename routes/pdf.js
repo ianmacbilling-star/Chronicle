@@ -1222,6 +1222,13 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
   var _shr = Math.max(0, Math.min(0.20, shrink || 0));   // hard cap: never trim a tower by more than 20%
   var imgH = (CO_TOWER_H - ((opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0)) * (1 - _shr);   // see CO_TOWER_ENCLOSE_TRIM
   var imgW = imgH * ta;
+  // CLAMP: a tower sizes by HEIGHT and derives width from the aspect, so a portrait-ish moment can
+  // come out wider than the column (9.2in x 0.75 = 6.9in against a 6.8in column). The float then
+  // takes the full width, the narrative cannot sit beside it and wraps BELOW, and the band runs off
+  // the page -- clipping the prose mid-line in the printed book. Keep the image narrow enough to
+  // leave a legible text column, trading height for width exactly as the Gazette float clamp does.
+  var _maxTW = CG_W - MZ_MIN_TEXT_COL;
+  if (imgW > _maxTW) { imgW = _maxTW; imgH = imgW / Math.max(0.3, ta); }
   var fl = sideLeft ? 'float:left;margin:0 0.20in 0.10in 0;'
                     : 'float:right;margin:0 0 0.10in 0.20in;';
   // Same letterbox fix as gzImgBox: a contain image would leave transparent bands inside the border.
