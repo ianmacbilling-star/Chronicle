@@ -976,6 +976,8 @@ var MZ_SHRINK = 1.0;  // was 0.9 -- global shrink backfired (smaller pics = more
 var MZ_FLOAT_MIN = 2.0;  // legibility floor (in): a small float's larger dimension never renders below this
 var MZ_MIN_TEXT_COL = 1.9;  // (in) keep at least this much text column beside a floated image -- caps image width
 var MZ_MIN_SLICE_LINES = 2;  // anti-sliver: a split slice must carry at least this many lines (classic orphan rule -- never one lonely line)
+var MZ_MIN_TAIL_CHARS = 60;  // anti-fragment: a split TAIL must carry at least this many characters. The line-count rule above cannot see that a "line" holds a single full stop -- this can. Below it the cut steps back a whole line; if none survives, the band is not split at all.
+var MZ_TAIL_DEADZONE = 24;   // (chars) fillMissingMagazineLines stops synthesizing line boundaries this close to the end of the text. snapWord returns the RAW offset once it is within one character of the end, which is exactly how a cut point landed between a word and its closing full stop.
 var MZ_SPLIT_PAD = 0.25;    // (in) headroom reserved on a split slice for the paragraph's own top/bottom margin, so a cut band never overflows the page and clips
 var MZ_GAPFIT_FLOOR = 0.5;  // shrink-to-fit-the-gap won't shrink a stranded float's image below this (keeps the wrap legible; bigger shrinks are skipped, leaving the white)
 var MZ_PAGE_GROW = true;      // iterative optimizer: grow the image on an underfull page so the text re-wraps around it and fills the white (nothing leaves the page)
@@ -1699,6 +1701,52 @@ function mzProseText(t) {
 // A float band that carries a regrow(mul) closure so the deterministic packer can re-render
 // the SAME floated image larger to fill leftover page white (grow-to-fill). The closure
 // captures this panel's moment/side/small so it re-renders identically apart from size.
+// CUT-POINT SANITIZER. Every magazine/gazette text cut is passed through this before it is used.
+// A cut offset is the index where the TAIL begins, so a good cut sits on a word boundary with a
+// real word after it. Two rules, both learned from real books: never cut inside a word, and never
+// cut between a word and the punctuation that closes it -- that is what stranded a lone full stop
+// in its own parchment box on a Gazette page. The offsets cannot be trusted to be boundaries: for
+// a float band the `after` paragraph is usually unmeasured, so its line starts are SYNTHESIZED
+// arithmetically and snapWord hands back the raw offset near the end of the text.
+var MZ_CUT_PUNCT = '.,;:!?)]}\u2019\u201d';   // CLOSING punctuation only -- a tail may legitimately open on a quote or a dash, never on a comma or a full stop
+function mzSafeCut(text, idx) {
+  if (!text || idx == null) return idx;
+  var n = text.length;
+  if (idx <= 0 || idx >= n) return idx;
+  var i = idx;
+  // A cut already sitting on whitespace is a clean boundary (the sentence snap below produces
+  // exactly that) -- open the tail at the next word rather than retreating into the word before
+  // the gap, which would undo the snap. Anything else is mid-word: retreat to this word's start.
+  if (/\s/.test(text.charAt(i))) { while (i < n && /\s/.test(text.charAt(i))) i++; }
+  else { while (i > 0 && !/\s/.test(text.charAt(i - 1))) i--; }
+  var guard = 0;
+  while (i > 0 && guard++ < 200) {
+    var ch = text.charAt(i);
+    // Accept once the tail opens on a real word AND still contains one. Reject a tail that opens on
+    // a stranded closer, or that is nothing but punctuation and space (the lone-full-stop case).
+    if (MZ_CUT_PUNCT.indexOf(ch) < 0 && /[A-Za-z0-9]/.test(text.slice(i))) return i;
+    i--;                                                   // step off onto the gap
+    while (i > 0 && /\s/.test(text.charAt(i))) i--;         // consume the gap
+    while (i > 0 && !/\s/.test(text.charAt(i - 1))) i--;    // land on the previous word's start
+  }
+  return i;
+}
+// Pull a cut back to the nearest sentence end so a slice finishes a whole sentence. Applies only
+// PAST `mbound` -- the second paragraph, whose line positions are synthesized estimates. Line starts
+// before mbound are real browser measurements, and cutting mid-sentence there is ordinary
+// typography. This used to be gated on `cEnd < stext.length - 2`, which excluded the one case that
+// needed it most: a cut one character from the end of the text.
+function mzSnapSentence(stext, mbound, lo, cEnd) {
+  if (stext == null || mbound == null || !(cEnd > mbound + 8)) return cEnd;
+  for (var d = 2; d < 160 && (cEnd - d) > lo + 45; d++) {
+    var ch = stext.charAt(cEnd - d);
+    if ((ch === '.' || ch === '!' || ch === '?') && /\s/.test(stext.charAt(cEnd - d + 1))) {
+      var s = cEnd - d + 1;
+      return (s > lo + 45 && s < cEnd) ? s : cEnd;
+    }
+  }
+  return cEnd;
+}
 // Render text.slice(cs,ce) as narrative <p>(s), preserving the before|after paragraph break at
 // `bound` (a char offset into the concatenated panel text) and dropping the first-line indent when
 // the slice opens mid-paragraph (a continuation). bound==null => a single-paragraph panel.
@@ -4402,11 +4450,18 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     // pages, just a better boundary), and a sliver HEAD rejects the cut entirely (-1), which makes the
     // caller flush and move the whole band to the next page. A band TALLER than a page must still split
     // (else it would clip), so the guard is skipped there.
+    // The synthesized line array ends with a TERMINAL MARKER at stextLen -- pushed by
+    // fillMissingMagazineLines so a head can claim the whole text when it fits. It is not a line
+    // of type. Counting it as one is what let a tail carrying a single real line slip past the
+    // anti-sliver rule below, and cutting AT the marker leaves an empty tail cell.
+    var _termIdx = (it.lineChars && it.lineChars.length && it.stextLen &&
+      (it.cStart + it.lineChars[it.lineChars.length - 1]) >= it.stextLen) ? (it.lineChars.length - 1) : -1;
+    var _realTotal = (_termIdx >= 0) ? it.lines.length - 1 : it.lines.length;
     function splitAt(room) {
       var Lx = -1;
-      for (var q = 0; q < it.lines.length - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; }
+      for (var q = 0; q < _realTotal - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; }
       if (Lx < 0) return Lx;
-      var total = it.lines.length;
+      var total = _realTotal;
       // A band taller than a page MUST split (a refusal would clip it), but that is no reason to
       // accept a bad boundary: this used to return immediately, so the last cut of a long text band
       // could strand a single line -- famously just the closing full stop, which then rendered as a
@@ -4426,33 +4481,46 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
       if (Lx + 1 < MZ_MIN_SLICE_LINES) return -1;                     // sliver HEAD -> don't split at all
       return Lx;
     }
+    // Pick a cut for `room`, then SANITIZE it: never mid-word, never between a word and the
+    // punctuation that closes it, and never leaving a tail too small to deserve a page of its own
+    // (in Gazette, a parchment box of its own). Steps the cut back a whole line at a time until
+    // the tail is substantial, and returns null when nothing acceptable exists -- the caller then
+    // moves the band whole. Used as BOTH the can-we-split predicate and the actual cut, so the
+    // two can never disagree. A band taller than a page must still split (refusing would clip
+    // it), so it falls back to the best sanitized cut available.
+    function chooseCut(room) {
+      var _must = (it.height > pageH - 0.05);
+      var _fb = null, _L = splitAt(room);
+      while (_L >= 0) {
+        var _c = mzSnapSentence(b.stext, b.mbound, it.cStart, it.cStart + it.lineChars[_L + 1]);
+        _c = mzSafeCut(b.stext, _c);
+        if (_c > it.cStart + 45 && _c < it.stextLen) {
+          if (_fb == null) _fb = { L: _L, cEnd: _c };
+          if ((it.stextLen - _c) >= MZ_MIN_TAIL_CHARS) return { L: _L, cEnd: _c };
+        }
+        _L--;
+        if (_L >= 0 && (it.lines[_L] < minB || _L + 1 < MZ_MIN_SLICE_LINES)) break;   // stepping back further would leave the head below its image, or a sliver head
+      }
+      return _must ? _fb : null;
+    }
     var R = pageH - used;
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
     if (cur.length && (it.height + keepWith) > R + 1e-6) {
-      if (!(canSplit && splitAt(R) >= 0)) {
+      if (!(canSplit && chooseCut(R))) {
         if (trySpill(it, R)) continue;   // dropped the before-text into the gap; image + after queued on the next page
         flush(); R = pageH;
       }
     }
     if ((it.height + keepWith) <= R + 1e-6) { placeWhole(it); continue; }   // fits
     if (canSplit) {
-      var L = splitAt(R);
+      var _cut = chooseCut(R);
+      var L = _cut ? _cut.L : -1;
       if (L >= 0) {
-        var cEnd = it.cStart + it.lineChars[L + 1];
+        var cEnd = _cut.cEnd;
         var headH = round3(it.lines[L] + MZ_SPLIT_PAD);   // the rendered slice carries the paragraph's bottom margin beyond the last line
-        // The `after` region's line positions are synthesized estimates, so a raw cut there can end a
-        // slice mid-sentence (a word or two orphaned on the last line). Pull the cut back to the nearest
-        // sentence end so a slice always finishes a whole sentence. Head keeps its reserved height (a
-        // little extra white is fine); the tail gets the pulled-back text and re-derives its lines.
-        var _sb = bands[it.band];
-        if (_sb && _sb.mbound != null && _sb.stext != null && cEnd > _sb.mbound + 8 && cEnd < _sb.stext.length - 2) {
-          var _t = _sb.stext, _snap = -1;
-          for (var _dd = 2; _dd < 160 && (cEnd - _dd) > it.cStart + 45; _dd++) {
-            var _ch = _t.charAt(cEnd - _dd);
-            if ((_ch === '.' || _ch === '!' || _ch === '?') && /\s/.test(_t.charAt(cEnd - _dd + 1))) { _snap = cEnd - _dd + 1; break; }
-          }
-          if (_snap > it.cStart + 45 && _snap < cEnd) cEnd = _snap;
-        }
+        // The sentence snap and the word/punctuation sanitizer both ran inside chooseCut above, so
+        // cEnd is already a clean boundary here. Head keeps its reserved height (a little extra
+        // white is fine); the tail gets the pulled-back text and re-derives its lines.
         cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true, imgBody: !!it.imgBody });
         used += headH; flush();
         var _rel = cEnd - it.cStart;
@@ -4516,6 +4584,12 @@ function fillMissingMagazineLines(meas, bands) {
     while (c < S && guard++ < 400) {
       var cs = snapWord(b.stext, Math.min(S, c));
       if (cs <= lc[lc.length - 1]) cs = Math.min(S, lc[lc.length - 1] + 1);
+      // END DEAD ZONE: a synthesized boundary this close to the end of the text is never a
+      // useful cut -- it can only strand a word or a lone full stop in a box of its own. It is
+      // also the one place snapWord gives up and returns the offset unsnapped (its own
+      // `c >= t.length - 1` early return), so these were the only boundaries in the array that
+      // could sit mid-word. Stop short and let the terminal marker below be the sole end entry.
+      if (cs > S - MZ_TAIL_DEADZONE) break;
       y = Math.round((y + span) * 1000) / 1000;
       ln.push(y); lc.push(cs);
       if (cs >= S) break;
