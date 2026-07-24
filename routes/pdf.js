@@ -4454,9 +4454,12 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     // fillMissingMagazineLines so a head can claim the whole text when it fits. It is not a line
     // of type. Counting it as one is what let a tail carrying a single real line slip past the
     // anti-sliver rule below, and cutting AT the marker leaves an empty tail cell.
+    // NOTE: this runs for EVERY band, including image-only ones (session headers, title images,
+    // towers) whose line data is null -- so it must not dereference it.lines unguarded.
+    var _lineN = (it.lines && it.lines.length) ? it.lines.length : 0;
     var _termIdx = (it.lineChars && it.lineChars.length && it.stextLen &&
       (it.cStart + it.lineChars[it.lineChars.length - 1]) >= it.stextLen) ? (it.lineChars.length - 1) : -1;
-    var _realTotal = (_termIdx >= 0) ? it.lines.length - 1 : it.lines.length;
+    var _realTotal = (_termIdx >= 0) ? _lineN - 1 : _lineN;
     function splitAt(room) {
       var Lx = -1;
       for (var q = 0; q < _realTotal - 1; q++) { if (it.lines[q] <= room - MZ_SPLIT_PAD && it.lines[q] >= minB) Lx = q; }
