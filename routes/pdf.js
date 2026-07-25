@@ -1001,6 +1001,20 @@ var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always r
 // merge could never fire on any book. Trim the Gazette tower image by this much so the band fits.
 // Magazine towers are unaffected: gzPanelCss adds no padding when !enclose (band ~9.32in, already fits).
 var CO_TOWER_ENCLOSE_TRIM = 0.56;   // 9.2 - 0.56 + 0.48 overhead = 9.12in band (fits 9.16 page, 0.28in under the 9.40 merge ceiling)
+// The tower image's target height, AFTER every reservation carved out of the page box. Towers are
+// sized to fill a page, but the composed page reserves HEADER_BAND_IN at the top for the running
+// head (padding-top) -- so a full 9.2in tower on a header-bearing page runs 0.24in past the content
+// area and clips its own bottom AND the last line of the prose column beside it. (This is exactly
+// the lone-line-clip seen on Magazine tower pages: the page's FLOW height measured fine, because a
+// float's height is taken from its own top, not from the padded page top.) Subtract the band here,
+// once, so both the renderer and the beside-column budget agree. Gazette's enclose trim still
+// applies on top. header defaults ON (matches the composer), so a book with headers off keeps the
+// full-height tower.
+function towerImgTargetH(opts) {
+  var _encl = (opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0;
+  var _hdr  = (opts && opts.header === false) ? 0 : HEADER_BAND_IN;   // header on unless explicitly false
+  return CO_TOWER_H - _encl - _hdr;
+}
 // Two-pass / measure cap: in the paginated path NO single image may exceed the
 // printable page height, or it overflows its page container (and the measure pass
 // would mis-budget it). Normal single-pass render is untouched (returns h as-is).
@@ -1222,7 +1236,7 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
   // leaving white space next to the thin tower.
   var ta = momentAspect(m);
   var _shr = Math.max(0, Math.min(0.20, shrink || 0));   // hard cap: never trim a tower by more than 20%
-  var imgH = (CO_TOWER_H - ((opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0)) * (1 - _shr);   // see CO_TOWER_ENCLOSE_TRIM
+  var imgH = towerImgTargetH(opts) * (1 - _shr);   // see towerImgTargetH: page box minus header band (and enclose trim)
   var imgW = imgH * ta;
   // CLAMP: a tower sizes by HEIGHT and derives width from the aspect, so a portrait-ish moment can
   // come out wider than the column (9.2in x 0.75 = 6.9in against a 6.8in column). The float then
@@ -1868,7 +1882,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
       // the column stays inside the tower image's own height, which is what keeps the band on one
       // page. Estimates are deliberately conservative: erring high costs a page, erring low loses text.
       var _tta = Math.max(0.3, momentAspect(p.m));
-      var _ttImgH = CO_TOWER_H - ((opts && opts.enclose) ? CO_TOWER_ENCLOSE_TRIM : 0);
+      var _ttImgH = towerImgTargetH(opts);   // MUST match cgFlowTower's imgH, or the column budget over-estimates the room
       var _ttImgW = _ttImgH * _tta;
       var _ttMaxW = CG_W - MZ_MIN_TEXT_COL;
       if (_ttImgW > _ttMaxW) { _ttImgW = _ttMaxW; _ttImgH = _ttImgW / _tta; }
