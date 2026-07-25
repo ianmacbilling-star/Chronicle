@@ -5149,7 +5149,7 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
       var _flow = !!req.query.flow;
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true, flowSim: _flow });
       txt = (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
-      _dlName = ((packedM && packedM.campaign) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
+      _dlName = String((packedM && packedM.campaign && packedM.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     } else {
       txt = 'pack-debug: only magazine/gazette plans are dumped here (arrange=' + (_cco.arrange || 'paired') + ').';
     }
