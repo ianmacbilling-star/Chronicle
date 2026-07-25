@@ -1973,7 +1973,15 @@ function buildComposedMeasureBody(opts) {
   _mzComposed._emitted = true;
   var out = '';
   plan.pages.forEach(function (pg, pi) {
-    out += '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="display:flow-root;margin-bottom:0.5in;">' + composePageInner(pg, bands, opts) + '</div>';
+    // Per-CELL markers (cc:pi:ci) in addition to the per-page cp:N. composePageInner emits its
+    // cells in order, each as a top-level <div style="display:flow-root;">, so we can tag each one
+    // from outside by walking the same page array and stamping data-mblk onto the Nth flow-root.
+    var _cellHtml = pg.map(function (cell, ci) {
+      var _one = composePageInner([cell], bands, opts);   // render this ONE cell exactly as the page composer would
+      return _one.replace('<div style="display:flow-root;">',
+        '<div data-mblk="cc:' + pi + ':' + ci + '" data-mkind="ccell" style="display:flow-root;">');
+    }).join('');
+    out += '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="display:flow-root;margin-bottom:0.5in;">' + _cellHtml + '</div>';
   });
   return out;
 }
@@ -4612,7 +4620,12 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     req.query.measureComposed = '1';
     var cbuilt = await assembleNovelHtml(req, campaignId, null);
     var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
-    cblocks.forEach(function (bl) { var mm = /^cp:(\d+)$/.exec(bl.id || ''); if (mm) realH[+mm[1]] = bl.heightIn; });
+    cblocks.forEach(function (bl) {
+      var mm = /^cp:(\d+)$/.exec(bl.id || '');
+      if (mm) { realH[+mm[1]] = bl.heightIn; return; }
+      var mc = /^cc:(\d+):(\d+)$/.exec(bl.id || '');
+      if (mc) { (realH._cells || (realH._cells = {}))[mc[1] + ':' + mc[2]] = bl.heightIn; }
+    });
   } catch (e) { realH._error = String((e && e.message) || e); }
   delete req.query.measureComposed; _mzComposed = null;
   return realH;
@@ -4991,7 +5004,16 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     try {
       var realH = await remeasureComposedPages(req, campaignId, pages, bands);
       if (realH._error) { _dbg.remeasureError = realH._error; }
-      else { _dbg.pages.forEach(function (pg) { if (realH[pg.page] != null) pg.realUsed = realH[pg.page]; }); _dbg.remeasured = true; }
+      else {
+        _dbg.pages.forEach(function (pg, _pi) {
+          if (realH[pg.page] != null) pg.realUsed = realH[pg.page];
+          if (realH._cells) pg.cells.forEach(function (c, _ci) {
+            var rv = realH._cells[_pi + ':' + _ci];
+            if (rv != null) c.realH = rv;
+          });
+        });
+        _dbg.remeasured = true;
+      }
     } catch (e) { _dbg.remeasureError = String((e && e.message) || e); }
   }
 
@@ -5107,7 +5129,8 @@ function magazinePlanText(packed) {
       L.push('      ' + pad('b' + c.band, 5) + pad(c.kind || '?', 15) + 'h' + pad((c.h != null ? c.h : '?'), 7) +
         (c.split ? ('CUT ' + c.cStart + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : '') +
         (c.growMul ? ('  GROWN x' + (Math.round(c.growMul * 100) / 100)) : '') +
-        (c.towerLead ? ('  +TOWER-LEAD b' + c.towerLead.band) : ''));
+        (c.towerLead ? ('  +TOWER-LEAD b' + c.towerLead.band) : '') +
+        (c.realH != null ? ('  [REAL-CELL ' + c.realH.toFixed(2) + 'in]') : ''));
     });
   });
   L.push('');
@@ -5121,15 +5144,18 @@ function magazinePlanText(packed) {
 router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   try {
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
-    var txt;
+    var txt, _dlName = 'campaign';
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var _flow = !!req.query.flow;
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true, flowSim: _flow });
       txt = (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
+      _dlName = ((packedM && packedM.campaign) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     } else {
       txt = 'pack-debug: only magazine/gazette plans are dumped here (arrange=' + (_cco.arrange || 'paired') + ').';
     }
     res.set('Content-Type', 'text/plain; charset=utf-8');
+    // Download rather than open inline: saves the round trip of File > Save in a new tab.
+    res.set('Content-Disposition', 'attachment; filename="' + _dlName + (_flow ? '_Before' : '_After') + '_pack.txt"');
     return res.send(txt);
   } catch (e) {
     res.set('Content-Type', 'text/plain; charset=utf-8');
