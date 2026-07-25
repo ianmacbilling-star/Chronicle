@@ -986,7 +986,12 @@ var MZ_GROW_MAX_MUL = 3.0;    // hard ceiling on how much an image may be enlarg
 var MZ_GROW_ROUNDS = 3;       // refinement rounds (each costs one measure): aim at the analytic target, then bisect
 var MZ_LOOKBACK_PULLUP = true; // iterative optimizer: an underfull page pulls up a following single movable band that fits (gated on the real re-measure)
 var MZ_TOWER_MERGE = true;    // iterative optimizer: fold a stranded text-only tail into the following tower's beside-column (gated on the real re-measure)
-var MZ_TOWER_MERGE_MAX_IN = 9.40; // a merged/grown page must fit the composed BODY area: 9.65in box minus the 0.24in running-head band
+var MZ_TOWER_MERGE_MAX_IN = 9.16; // a merged/grown page must fit the composed CONTENT area, and
+// that area is the 9.65in box MINUS the 0.24in header padding-top AND a further ~0.25in bottom
+// safety (the header band is carved from the top with padding, so usable height is ~9.17in, not
+// 9.41). The old 9.40 let a page measuring 9.2-9.4 pass the gate and then clip its last line under
+// overflow:hidden -- the tower-lead beside-column overflow. 9.16 matches the packer's own body
+// budget (pageHeightIn 9.4 - HEADER_BAND_IN), so the merge gate and the packer now agree.
 var MZ_SPILL_MIN_GAP = 1.8;   // leading-text spill fires when the wasted gap is at least this tall
 var MZ_SPILL_MIN_LINES = 2;   // and only if at least this many lines of the before-paragraph fill it
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
@@ -1000,7 +1005,7 @@ var CO_TOWER_H = 9.2; // tower full-page-height target (inches): towers always r
 // under MZ_TOWER_MERGE_MAX_IN, it rejected the very first merge candidate and broke the loop, so the
 // merge could never fire on any book. Trim the Gazette tower image by this much so the band fits.
 // Magazine towers are unaffected: gzPanelCss adds no padding when !enclose (band ~9.32in, already fits).
-var CO_TOWER_ENCLOSE_TRIM = 0.56;   // 9.2 - 0.56 + 0.48 overhead = 9.12in band (fits 9.16 page, 0.28in under the 9.40 merge ceiling)
+var CO_TOWER_ENCLOSE_TRIM = 0.56;   // Gazette enclose overhead trim. With the header-band trim now in towerImgTargetH, the enclose band is 9.2-0.56-0.24+0.48 = 8.88in, under the 9.16 content area and merge ceiling.
 // The tower image's target height, AFTER every reservation carved out of the page box. Towers are
 // sized to fill a page, but the composed page reserves HEADER_BAND_IN at the top for the running
 // head (padding-top) -- so a full 9.2in tower on a header-bearing page runs 0.24in past the content
@@ -1995,7 +2000,12 @@ function buildComposedMeasureBody(opts) {
       return _one.replace('<div style="display:flow-root;">',
         '<div data-mblk="cc:' + pi + ':' + ci + '" data-mkind="ccell" style="display:flow-root;">');
     }).join('');
-    out += '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="display:flow-root;margin-bottom:0.5in;">' + _cellHtml + '</div>';
+    // Measure at the REAL page geometry: width:8.5in + padding:0.5in 0.85in (=> 6.8in text column)
+    // plus the composer's header band (padding-top). Auto-height, NO overflow:hidden, so the marker
+    // reports the content's TRUE height -- a value ABOVE the box height is exactly what clips in the
+    // real PDF. Measuring at the bare body width (8.5in) under-reported every page and hid the clip.
+    var _hdrPad = ((opts && opts.header === false) ? '' : ('padding-top:' + HEADER_BAND_IN + 'in;'));
+    out += '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="box-sizing:border-box;width:8.5in;padding:0.5in 0.85in;' + _hdrPad + 'margin-bottom:0.5in;">' + _cellHtml + '</div>';
   });
   return out;
 }
