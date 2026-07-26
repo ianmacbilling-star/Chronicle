@@ -110,14 +110,21 @@ async function measureDocument(html, options) {
       // rendered height of the image box that immediately follows each probe -- so we can see the
       // PLANNED tower image height vs the box's REAL rendered height (the auto-height divergence).
       var probes = Array.prototype.slice.call(document.querySelectorAll('[data-twprobe]')).map(function (pn) {
-        var boxH = null, capH = null;
-        var boxEl = pn.nextElementSibling;   // the image box div follows the probe
+        var boxH = null, capH = null, imgRealH = null;
+        var boxEl = pn.nextElementSibling;   // the float box that holds the image (probe's sibling)
+        // If the immediate sibling isn't the box (or collapsed), search the parent for the first
+        // element containing an <img> -- robust to wrapper differences between render paths.
+        if (!boxEl || !boxEl.querySelector || !boxEl.querySelector('img')) {
+          var _p = pn.parentElement;
+          if (_p) { var _imgs = _p.querySelectorAll('img'); if (_imgs.length) boxEl = _imgs[0].parentElement; }
+        }
         if (boxEl) { boxH = Math.round((boxEl.getBoundingClientRect().height / 96) * 1000) / 1000;
+          var _im = boxEl.querySelector('img'); if (_im) { var _ir = _im.getBoundingClientRect(); imgRealH = Math.round((_ir.height / 96) * 1000) / 1000; }
           var capEl = boxEl.querySelector('div[style*="position:absolute"]');
           if (capEl) capH = Math.round((capEl.getBoundingClientRect().height / 96) * 1000) / 1000; }
         return { imgW: parseFloat(pn.getAttribute('data-tw-imgw')), imgH: parseFloat(pn.getAttribute('data-tw-imgh')),
           asp: parseFloat(pn.getAttribute('data-tw-asp')), cap: pn.getAttribute('data-tw-cap'),
-          cropsafe: pn.getAttribute('data-tw-cropsafe'), boxRealH: boxH, capRealH: capH };
+          cropsafe: pn.getAttribute('data-tw-cropsafe'), boxRealH: boxH, imgRealH: imgRealH, capRealH: capH };
       });
       // Universal per-image geometry (AI input contract): every image carries a data-imgprobe with
       // its fit/crop/focal/intrinsic-aspect/shape. Here we read the IMG's own rendered rect and its

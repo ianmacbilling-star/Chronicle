@@ -1317,6 +1317,15 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
   var ta = momentAspect(m);
   var _shr = Math.max(0, Math.min(0.20, shrink || 0));   // hard cap: never trim a tower by more than 20%
   var imgH = towerImgTargetH(opts) * (1 - _shr);   // see towerImgTargetH: page box minus header band (and enclose trim)
+  // TARGET-HEIGHT OVERRIDE: when a tower shares a page with content ABOVE it (a split text tail, a
+  // preceding feature), it can't be full page height or its bottom -- image AND the absolute caption --
+  // clips at the frame's overflow:hidden. The composer passes the height the packer actually budgeted
+  // for the tower cell via opts._towerTargetH; honor it (reserving the caption band) so the whole
+  // framed tower fits the space it was given. Falls back to the full-height behavior when unset.
+  if (opts && opts._towerTargetH != null && opts._towerTargetH > 1) {
+    var _capReserve = (m.title && opts.caption && opts.caption !== 'none') ? 0.1 : 0;   // gradient/plate captions overlay; a small reserve keeps the art off the very edge
+    imgH = Math.max(1.5, opts._towerTargetH - _capReserve);
+  }
   var imgW = imgH * ta;
   // CLAMP: a tower sizes by HEIGHT and derives width from the aspect, so a portrait-ish moment can
   // come out wider than the column (9.2in x 0.75 = 6.9in against a 6.8in column). The float then
@@ -1989,7 +1998,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
         mzAdv += 1; mzFill += 1;
       }
       bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft),
-        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml, shrink, wrapBelow) { return cgFlowTower(mm, oo, (leadHtml || '') + (nn || ''), bside, sl, shrink, wrapBelow); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
+        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml, shrink, wrapBelow, targetH) { var _oo = (targetH != null && targetH > 1) ? Object.assign({}, oo, { _towerTargetH: targetH }) : oo; return cgFlowTower(mm, _oo, (leadHtml || '') + (nn || ''), bside, sl, shrink, wrapBelow); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
@@ -5293,9 +5302,15 @@ async function computeMagazinePack(req, campaignId, packOpts) {
 // Build ONE composed page's inner cells (shared by the final render and the re-measure body).
 function composePageInner(pg, bands, opts) {
   var inner = '';
-  pg.forEach(function (cell) {
+  // Running total of the cells placed ABOVE the current one on this page (from the plan's budgeted
+  // heights). A tower that isn't first on its page must fit pageBox - aboveHeight, or its bottom
+  // (image + the absolutely-positioned caption) clips at the frame. MZ_TOWER_MERGE_MAX_IN is the
+  // usable content box (9.16in).
+  var _above = 0;
+  pg.forEach(function (cell, _ci) {
     var b = bands[cell.band];
-    if (!b) return;
+    if (!b) { return; }
+    var _cellH = (cell.heightIn != null) ? cell.heightIn : ((bands[cell.band] && bands[cell.band].h) || 0);
     // PAGE-LOCAL GROW: re-render this band with a bigger image; the SAME text slice re-wraps around it.
     if (cell.growMul && cell.growMul !== 1 && b.remeta) { try { b = b.remeta(cell.growMul) || b; } catch (e) { /* keep original */ } }
     var html;
@@ -5316,10 +5331,17 @@ function composePageInner(pg, bands, opts) {
       var _lb = bands[cell.towerLead.band];
       var _lead = (_lb && _lb.stext != null) ? renderMzSlice(_lb.stext, _lb.mbound, cell.towerLead.cStart || 0, (cell.towerLead.cEnd != null ? cell.towerLead.cEnd : _lb.stext.length), _lb.sOpts || opts) : '';
       html = b.renderTowerLead(_lead ? ('<div style="margin-bottom:0.16in;">' + _lead + '</div>') : '', cell.towerShrink, cell.towerWrap);
+    } else if (b.kind === 'tower' && _above > 0.3 && b.renderTowerLead) {
+      // A plain tower that is NOT first on its page: content sits above it, so it cannot be full
+      // page height or its bottom (image + absolute caption) clips at the frame. Re-render it capped
+      // to the space that actually remains below the content above (with a small bottom safety gap).
+      var _remain = MZ_TOWER_MERGE_MAX_IN - _above - 0.12;
+      html = b.renderTowerLead('', 0, false, _remain);
     } else {
       html = b.html;
     }
     inner += '<div style="display:flow-root;">' + html + '</div>';
+    _above += _cellH;
   });
   return inner;
 }
@@ -5537,7 +5559,7 @@ function magazinePlanText(packed) {
       var _diff = (t.boxRealH != null && t.imgH != null) ? (t.boxRealH - t.imgH) : null;
       L.push('  tower#' + i + '  planned imgW' + (t.imgW != null ? t.imgW.toFixed(2) : '?') + ' imgH' + (t.imgH != null ? t.imgH.toFixed(2) : '?') + ' asp' + (t.asp != null ? t.asp : '?') +
         '  cap=' + (t.cap || '?') + ' cropsafe=' + (t.cropsafe || '?') +
-        '  REAL-BOX' + (t.boxRealH != null ? t.boxRealH.toFixed(2) : '?') + (_diff != null ? ('  (box ' + (_diff >= 0 ? '+' : '') + _diff.toFixed(2) + ' vs planned)') : '') +
+        '  REAL-BOX' + (t.boxRealH != null ? t.boxRealH.toFixed(2) : '?') + (t.imgRealH != null ? (' img-real' + t.imgRealH.toFixed(2)) : '') + (_diff != null ? ('  (box ' + (_diff >= 0 ? '+' : '') + _diff.toFixed(2) + ' vs planned)') : '') +
         (t.capRealH != null ? ('  capH' + t.capRealH.toFixed(2)) : '  cap-not-in-flow') +
         ((_diff != null && Math.abs(_diff) > 0.2) ? '  <== BOX DIVERGES FROM PLAN' : ''));
     });
