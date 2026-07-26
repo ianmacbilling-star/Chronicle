@@ -6199,6 +6199,16 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     try { await spendTokens(req.session.userId, 1, { source: 'layout_apply', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-apply spend failed:', e && e.message); }
     try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 1, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
 
+    // If pdf=1, stream the rendered PDF so the After pane can display the applied book directly
+    // (the double-click flow uses this: advisor -> apply -> render the result in place). The applied
+    // op report is returned in a header so the caller can still show what changed.
+    if (req.query.pdf === '1' || req.query.pdf === 'true') {
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
+      try { res.set('X-Apply-Report', JSON.stringify({ appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length })); } catch (e) {}
+      return res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
+    }
+
     // Return JSON report (not the PDF) so the caller sees what applied; the cached body means the next
     // After render shows the result.
     return res.json({

@@ -14861,75 +14861,43 @@ function _runLayoutAiOptimize() {
     _revLbl.title = 'Double-click: AI layout review (admin, 1 token)';
     _revLbl.ondblclick = function () {
       if (!state.currentCampaign) return;
-      _revLbl.textContent = 'After (reviewing...)';
+      _revLbl.textContent = 'After (AI reviewing...)';
       var _cid = state.currentCampaign.id;
       var _q = finalizeBookQuery();
+      // One click does everything: run the advisor, apply its scale ops for real (re-measured + clip-
+      // gated on the server), and render the applied book straight into the After pane.
       fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .then(function (j) {
-          // Chain into the dry-run apply preview: POST the proposed ops so we see, per op, whether the
-          // apply-and-re-measure gate would KEEP or REJECT it (models the cascade, persists nothing).
           var _ops = (j && j.ops) || [];
-          var _pre = fetch('/api/pdf/layout-apply-preview/' + _cid + _q, {
+          if (!_ops.length) { _revLbl.textContent = 'After (optimized)'; alert('AI review found nothing to change.'); return; }
+          _revLbl.textContent = 'After (applying ' + _ops.length + ' ops...)';
+          // POST the ops to the real apply endpoint, asking for the rendered PDF back, then render it
+          // into the After pane via a blob URL (renderPdfInto fetches a URL; a blob URL works).
+          return fetch('/api/pdf/layout-apply/' + _cid + (_q ? (_q + '&pdf=1') : '?pdf=1'), {
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ops: _ops })
-          }).then(function (r) { return r.json(); }).catch(function () { return null; });
-          return Promise.all([j, _pre]);
-        })
-        .then(function (pair) {
-          var j = pair[0], sim = pair[1];
-          _revLbl.textContent = 'After (optimized)';
-          var w = window.open('', '_blank');
-          if (!w) { alert('Popup blocked -- allow popups to see the AI review.'); return; }
-          w.document.title = 'AI Layout Review -- ' + ((j && j.campaign) || 'campaign');
-          w.document.body.style.cssText = 'margin:0;background:#14100a;color:#f5e8c8;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:20px;';
-          var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
-          var head = '<div style="color:#c9a84c;font-size:15px;margin-bottom:4px;">AI Layout Review + Apply Simulation (read-only)</div>' +
-            '<div style="color:rgba(245,232,200,0.6);margin-bottom:14px;">' +
-            'ops: ' + ((j && j.opCount) || 0) +
-            (sim ? ('  |  simulated apply: ' + (sim.keptCount || 0) + ' of ' + (sim.opCount || 0) + ' KEPT (nothing persisted)') : '  |  (apply sim unavailable)') +
-            (j && j.parseError ? ('  |  parseError: ' + j.parseError) : '') + '</div>';
-          // A compact per-op KEEP/REJECT table from the simulation, then the raw JSON below.
-          var simTable = '';
-          if (sim && sim.results && sim.results.length) {
-            simTable = '<div style="color:#c9a84c;margin:6px 0;">Apply simulation (clip line ' + sim.clipLine + 'in):</div>';
-            sim.results.forEach(function (r) {
-              var color = r.result === 'KEEP' ? '#7bd88f' : (r.result === 'REJECT' ? '#e0685a' : '#c9a84c');
-              simTable += '<div style="margin:2px 0;"><span style="color:' + color + ';font-weight:bold;">' + esc(r.result) + '</span> ' +
-                esc(r.op) + ' viewer p.' + esc(r.viewerPage != null ? r.viewerPage : '?') +
-                (r.detail ? (' -- ' + esc(r.detail)) : '') + (r.reason ? (' -- ' + esc(r.reason)) : '') + '</div>';
-            });
-            simTable += '<div style="height:14px;"></div>';
-          }
-          // A real-apply button (Picture Book scale ops only). Deliberate action -- applies for real,
-          // re-measures, caches the improved book. Wired via a global the popup can call.
-          var _applyBtn = '<div style="margin:10px 0 16px 0;"><button id="__doApply" style="background:#c9a84c;color:#14100a;border:none;border-radius:6px;padding:7px 14px;font:bold 12px ui-monospace,monospace;cursor:pointer;">Apply scale ops (real, 1 token)</button> <span id="__applyMsg" style="color:rgba(245,232,200,0.7);margin-left:10px;"></span></div>';
-          w.document.body.innerHTML = head + simTable + _applyBtn +
-            '<div style="color:#c9a84c;margin:6px 0;">Full advisor JSON:</div>' +
-            '<pre style="white-space:pre-wrap;word-break:break-word;margin:0;">' +
-            esc(JSON.stringify(j, null, 2)) + '</pre>';
-          var _btn = w.document.getElementById('__doApply');
-          var _msg = w.document.getElementById('__applyMsg');
-          if (_btn) _btn.onclick = function () {
-            _btn.disabled = true; _msg.textContent = 'Applying + re-measuring...';
-            fetch('/api/pdf/layout-apply/' + _cid + _q, {
-              method: 'POST', credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ops: (j && j.ops) || [] })
-            }).then(function (r) { return r.json(); }).then(function (ap) {
-              if (ap && ap.error) { _msg.textContent = 'Error: ' + ap.error; _btn.disabled = false; return; }
-              _msg.innerHTML = '<span style="color:#7bd88f;">Applied ' + (ap.appliedCount || 0) + ', rejected ' + (ap.rejectedCount || 0) + ', deferred ' + (ap.deferredCount || 0) + '. Re-open the After view to see it.</span>';
-              var pre = w.document.createElement('pre');
-              pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;margin:10px 0;color:#f5e8c8;';
-              pre.textContent = JSON.stringify(ap, null, 2);
-              _msg.parentNode.appendChild(pre);
-            }).catch(function (e) { _msg.textContent = 'Apply failed: ' + ((e && e.message) || e); _btn.disabled = false; });
-          };
+          }).then(function (r) {
+            if (!r.ok) { return r.json().then(function (e) { throw new Error((e && e.error) || ('apply failed ' + r.status)); }); }
+            var _rep = r.headers.get('X-Apply-Report');
+            return r.blob().then(function (b) { return { blob: b, report: _rep }; });
+          }).then(function (res) {
+            _revLbl.textContent = 'After (optimized)';
+            var url = URL.createObjectURL(res.blob);
+            renderPdfInto(url, 'finalize-after-scroll', false);   // show the applied book in place
+            var rep = null; try { rep = res.report ? JSON.parse(res.report) : null; } catch (e) {}
+            if (rep) {
+              var pmsg = document.getElementById('finalize-progress-msg') || document.getElementById('pmsg');
+              if (pmsg) pmsg.textContent = 'AI applied ' + (rep.appliedCount || 0) + ' change(s)' +
+                (rep.rejectedCount ? (', ' + rep.rejectedCount + ' rejected') : '') +
+                (rep.deferredCount ? (', ' + rep.deferredCount + ' text-move(s) deferred') : '') + '.';
+            }
+          });
         })
         .catch(function (e) {
           _revLbl.textContent = 'After (optimized)';
-          alert('Layout review failed: ' + ((e && e.message) || e));
+          alert('AI apply failed: ' + ((e && e.message) || e));
         });
     };
   }
