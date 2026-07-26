@@ -14862,21 +14862,50 @@ function _runLayoutAiOptimize() {
     _revLbl.ondblclick = function () {
       if (!state.currentCampaign) return;
       _revLbl.textContent = 'After (reviewing...)';
-      fetch('/api/pdf/layout-review/' + state.currentCampaign.id + finalizeBookQuery(), { credentials: 'same-origin' })
+      var _cid = state.currentCampaign.id;
+      var _q = finalizeBookQuery();
+      fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .then(function (j) {
+          // Chain into the dry-run apply preview: POST the proposed ops so we see, per op, whether the
+          // apply-and-re-measure gate would KEEP or REJECT it (models the cascade, persists nothing).
+          var _ops = (j && j.ops) || [];
+          var _pre = fetch('/api/pdf/layout-apply-preview/' + _cid + _q, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ops: _ops })
+          }).then(function (r) { return r.json(); }).catch(function () { return null; });
+          return Promise.all([j, _pre]);
+        })
+        .then(function (pair) {
+          var j = pair[0], sim = pair[1];
           _revLbl.textContent = 'After (optimized)';
           var w = window.open('', '_blank');
           if (!w) { alert('Popup blocked -- allow popups to see the AI review.'); return; }
-          var pretty = JSON.stringify(j, null, 2);
           w.document.title = 'AI Layout Review -- ' + ((j && j.campaign) || 'campaign');
           w.document.body.style.cssText = 'margin:0;background:#14100a;color:#f5e8c8;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:20px;';
-          var head = '<div style="color:#c9a84c;font-size:15px;margin-bottom:4px;">AI Layout Review (read-only advisor)</div>' +
+          var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+          var head = '<div style="color:#c9a84c;font-size:15px;margin-bottom:4px;">AI Layout Review + Apply Simulation (read-only)</div>' +
             '<div style="color:rgba(245,232,200,0.6);margin-bottom:14px;">' +
-            ((j && j.applied === false) ? 'Proposed ops -- APPLIES NOTHING. ' : '') +
-            'ops: ' + ((j && j.opCount) || 0) + (j && j.parseError ? ('  |  parseError: ' + j.parseError) : '') + '</div>';
-          w.document.body.innerHTML = head + '<pre style="white-space:pre-wrap;word-break:break-word;margin:0;">' +
-            pretty.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+            'ops: ' + ((j && j.opCount) || 0) +
+            (sim ? ('  |  simulated apply: ' + (sim.keptCount || 0) + ' of ' + (sim.opCount || 0) + ' KEPT (nothing persisted)') : '  |  (apply sim unavailable)') +
+            (j && j.parseError ? ('  |  parseError: ' + j.parseError) : '') + '</div>';
+          // A compact per-op KEEP/REJECT table from the simulation, then the raw JSON below.
+          var simTable = '';
+          if (sim && sim.results && sim.results.length) {
+            simTable = '<div style="color:#c9a84c;margin:6px 0;">Apply simulation (clip line ' + sim.clipLine + 'in):</div>';
+            sim.results.forEach(function (r) {
+              var color = r.result === 'KEEP' ? '#7bd88f' : (r.result === 'REJECT' ? '#e0685a' : '#c9a84c');
+              simTable += '<div style="margin:2px 0;"><span style="color:' + color + ';font-weight:bold;">' + esc(r.result) + '</span> ' +
+                esc(r.op) + ' viewer p.' + esc(r.viewerPage != null ? r.viewerPage : '?') +
+                (r.detail ? (' -- ' + esc(r.detail)) : '') + (r.reason ? (' -- ' + esc(r.reason)) : '') + '</div>';
+            });
+            simTable += '<div style="height:14px;"></div>';
+          }
+          w.document.body.innerHTML = head + simTable +
+            '<div style="color:#c9a84c;margin:6px 0;">Full advisor JSON:</div>' +
+            '<pre style="white-space:pre-wrap;word-break:break-word;margin:0;">' +
+            esc(JSON.stringify(j, null, 2)) + '</pre>';
         })
         .catch(function (e) {
           _revLbl.textContent = 'After (optimized)';

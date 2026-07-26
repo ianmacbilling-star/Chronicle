@@ -5974,6 +5974,120 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
     return res.status(500).json({ error: (e && e.message) || 'layout-review failed' });
   }
 });
+
+// ===== PASS 3 (apply) -- DRY-RUN SIMULATOR =====================================================
+// Takes a list of ops (POST body { ops:[...] }, e.g. the exact JSON the advisor produced) and
+// SIMULATES applying them in order against the book's real measured heights, reporting for each op
+// whether it would be KEPT (improves fill / fixes a clip without overflowing the 9.41 box) or
+// REJECTED (would clip, or has no effect). PERSISTS NOTHING and renders nothing new -- it models the
+// apply-and-re-measure loop analytically from the pack dump so we can validate the apply LOGIC and the
+// re-measure gate on a real book with zero risk before wiring real persistence.
+//
+// Ops are applied SEQUENTIALLY with a running per-page height model, because the advisor's cascades are
+// dependent (a growImage only has room AFTER its paired pullLines ran). Each op sees the state left by
+// the previous one -- exactly how the real pass-3 loop will behave.
+//
+// Scale ops (growImage / shrinkImage) are modeled precisely: a paired image's rendered height is
+// fullH*scale, so changing scale changes the page height by fullH*(newScale-oldScale). Text moves
+// (pullLines / pushLines) are modeled from the dump's average line height. This is a SIMULATION; the
+// real apply (next build) will persist the scale/split and re-render to confirm.
+var CLIP_LINE_IN = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in true content box
+
+router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    var ops = (req.body && Array.isArray(req.body.ops)) ? req.body.ops : null;
+    if (!ops) return res.status(400).json({ error: 'POST a JSON body { "ops": [ ... ] } (e.g. the advisor output).' });
+
+    // Build the pack with real measured heights (same as the dump).
+    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    var isMag = (_cco.arrange === 'magazine' || _cco.arrange === 'gazette');
+    var packed = isMag
+      ? await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true })
+      : await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+    var dbg = packed.dbg || {};
+    var dumpPages = dbg.pages || [];
+
+    // Running height model: real height per page (indexed by dump page number). Prefer realUsed.
+    var H = {};                     // page -> current modeled real height (in)
+    var imgByPage = {};             // page -> the primary image placement { beat, scale, realH, fullH }
+    dumpPages.forEach(function (pg, pi) {
+      var idx = (pg.page != null) ? pg.page : pi;
+      H[idx] = (pg.realUsed != null) ? pg.realUsed : (pg.used || 0);
+      var pls = pg.placements || pg.cells || [];
+      var img = pls.filter(function (p) { return (p.kind === 'image' || p.kind === 'tower') && (p.fullH != null || p.realH != null); })[0];
+      if (img) imgByPage[idx] = { beat: img.beat, scale: (img.scale != null ? img.scale : 1), realH: img.realH, fullH: (img.fullH != null ? img.fullH : img.realH) };
+    });
+
+    var _avgLH = 0.30;              // in/line for modeling text moves (paired body line height)
+
+    var results = [];
+    ops.forEach(function (op) {
+      var page = op.page;
+      var before = (H[page] != null) ? H[page] : null;
+      var r = { op: op.op, page: page, viewerPage: op.viewerPage, before: (before != null ? Math.round(before * 100) / 100 : null) };
+
+      if (op.op === 'growImage') {
+        var im = imgByPage[page];
+        if (!im) { r.result = 'REJECT'; r.reason = 'no growable image on page'; results.push(r); return; }
+        if (im.realH != null && im.fullH != null && (im.fullH - im.realH) <= 0.1) { r.result = 'REJECT'; r.reason = 'image already at natural full size (would crop)'; results.push(r); return; }
+        var headroom = CLIP_LINE_IN - before;
+        var curScale = im.scale || (im.realH / (im.fullH || im.realH)) || 1;
+        var maxByBox = curScale + (headroom / (im.fullH || 1));
+        var newScale = Math.min(1.0, maxByBox);
+        if (newScale <= curScale + 0.02) { r.result = 'REJECT'; r.reason = 'no room to grow (page near box)'; results.push(r); return; }
+        var deltaH = (im.fullH || 0) * (newScale - curScale);
+        var after = before + deltaH;
+        if (after > CLIP_LINE_IN + 0.03) { r.result = 'REJECT'; r.reason = 'grow would overflow box'; results.push(r); return; }
+        H[page] = after; im.scale = newScale; im.realH = (im.fullH || 0) * newScale;
+        r.result = 'KEEP'; r.detail = 'scale ' + curScale.toFixed(2) + ' -> ' + newScale.toFixed(2) + ', image ' + ((im.fullH || 0) * newScale).toFixed(2) + 'in'; r.after = Math.round(after * 100) / 100;
+        results.push(r); return;
+      }
+
+      if (op.op === 'shrinkImage') {
+        var im2 = imgByPage[page];
+        if (!im2) { r.result = 'REJECT'; r.reason = 'no image on page'; results.push(r); return; }
+        var over = before - CLIP_LINE_IN;
+        if (over <= 0.03) { r.result = 'REJECT'; r.reason = 'page already fits (' + before.toFixed(2) + ' <= ' + CLIP_LINE_IN + '), no clip to fix'; results.push(r); return; }
+        var need = over + 0.02;
+        var ns = Math.max(0.3, (im2.scale || 1) - (need / (im2.fullH || im2.realH || 1)));
+        H[page] = before - need; im2.scale = ns; im2.realH = (im2.realH || 0) - need;
+        r.result = 'KEEP'; r.detail = 'shrink image by ' + need.toFixed(2) + 'in to fit box'; r.after = Math.round((before - need) * 100) / 100;
+        results.push(r); return;
+      }
+
+      if (op.op === 'pullLines' || op.op === 'pushLines') {
+        var lines = op.lines || 1;
+        var moveH = lines * _avgLH;
+        var from = (op.op === 'pullLines') ? op.fromPage : page;
+        var to = (op.op === 'pullLines') ? page : (op.page + 1);
+        if (H[from] == null || H[to] == null) { r.result = 'REJECT'; r.reason = 'source or target page not found'; results.push(r); return; }
+        var toAfter = H[to] + moveH;
+        if (toAfter > CLIP_LINE_IN + 0.03) { r.result = 'REJECT'; r.reason = 'moving ' + lines + ' line(s) would overflow the target page'; results.push(r); return; }
+        H[from] = Math.max(0, H[from] - moveH); H[to] = toAfter;
+        r.result = 'KEEP'; r.detail = 'move ' + lines + ' line(s) (~' + moveH.toFixed(2) + 'in) from p' + from + ' to p' + to; r.fromPage = from; r.toPage = to;
+        r.fromAfter = Math.round(H[from] * 100) / 100; r.toAfter = Math.round(H[to] * 100) / 100;
+        results.push(r); return;
+      }
+
+      r.result = 'SKIP'; r.reason = 'op type "' + op.op + '" not yet simulated (recognized, deferred)';
+      results.push(r);
+    });
+
+    var kept = results.filter(function (r) { return r.result === 'KEEP'; }).length;
+    return res.json({
+      campaign: (packed.campaign && packed.campaign.name) || 'campaign',
+      arrange: (isMag ? _cco.arrange : 'paired'),
+      clipLine: CLIP_LINE_IN,
+      applied: false,          // DRY-RUN: nothing persisted
+      simulated: true,
+      opCount: ops.length,
+      keptCount: kept,
+      results: results
+    });
+  } catch (e) {
+    return res.status(500).json({ error: (e && e.message) || 'layout-apply-preview failed' });
+  }
+});
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
