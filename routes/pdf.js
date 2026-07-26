@@ -4,7 +4,9 @@ const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBoo
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
-const { canAfford, spendTokens } = require('./tokens');
+const { canAfford, spendTokens, recordGeneration } = require('./tokens');
+const { TEXT_MODEL } = require('../config/models');
+const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
 const { uploadFile, deleteFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
@@ -5725,6 +5727,100 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
   } catch (e) {
     res.set('Content-Type', 'text/plain; charset=utf-8');
     return res.status(500).send('pack-debug error:\n' + ((e && e.stack) || (e && e.message) || e));
+  }
+});
+
+// ===== AI LAYOUT-REVIEW ADVISOR (read-only, pass 2) ==============================================
+// Reads the SAME pack+dump the pack-debug route produces, sends the structured ISSUES + geometry to
+// Sonnet with the fixed op vocabulary, and returns the AI's PROPOSED ops as JSON. This is the
+// read-only advisor: it APPLIES NOTHING -- it exists so we can see whether the AI reads the dump and
+// proposes sensible ops before wiring pass 3 (apply). Charges 1 token per call (per Ian: 1 token per
+// AI call, so a future 3-pass loop = 3 tokens). Admin-gated for now.
+// NOTE: the Anthropic call mirrors the exact pattern in routes/artStyles.js (fetch to /v1/messages,
+// x-api-key, TEXT_MODEL). If a shared client helper is preferred, swap the fetch block for it.
+var LAYOUT_REVIEW_SYSTEM = [
+  'You are a book-layout reviewer for a print-on-demand graphic-novel tool. You are given a plain-text',
+  'DUMP describing ONE already-rendered book: per-page real vs planned fill, per-cell real heights,',
+  'per-image geometry (fit/crop/caption), and an ISSUES section of pre-computed signals. Every page is',
+  'a fixed 9.16in content box; content past it is clipped.',
+  '',
+  'Your job: return ONLY a JSON array of layout ops that would improve the book, ranked by reader-visible',
+  'impact (fix clips first, then large white gaps, then polish). Return NOTHING but the JSON array.',
+  '',
+  'Allowed ops (use ONLY these; name targets by the page and band/beat ids in the dump):',
+  '  { "op":"growImage", "page":N, "band":N, "target":"fill", "why":"..." }',
+  '  { "op":"shrinkImage", "page":N, "band":N, "to":"fit", "why":"..." }',
+  '  { "op":"pullLines", "page":N, "fromPage":N, "lines":N, "why":"..." }',
+  '  { "op":"pushLines", "page":N, "band":N, "lines":N, "why":"..." }',
+  '  { "op":"mergeTowerLead", "page":N, "towerBand":N, "textBand":N, "why":"..." }',
+  '  { "op":"keepWhole", "band":N, "why":"..." }',
+  '  { "op":"containImage", "page":N, "band":N, "why":"..." }',
+  '  { "op":"reflowCaption", "page":N, "band":N, "why":"..." }',
+  '',
+  'Rules: prefer the FEWEST ops that resolve real issues. Do not invent ops or fields. Do not propose an',
+  'op that fights another (never both grow and shrink the same cell). The ISSUES lines already suggest',
+  'ops -- use them as strong hints but apply judgment. If the book looks good, return [].'
+].join('\n');
+
+router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    var key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return res.status(500).json({ error: 'Layout review is not configured (no ANTHROPIC_API_KEY).' });
+    if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
+
+    // Build the same dump the pack-debug route uses.
+    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    var dump, campaignName = 'campaign';
+    if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      dump = magazinePlanText(packedM);
+      campaignName = (packedM && packedM.campaign && packedM.campaign.name) || 'campaign';
+    } else {
+      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      dump = pairedPlanText(packedP);
+      campaignName = (packedP && packedP.campaign && packedP.campaign.name) || 'campaign';
+    }
+
+    // Send the dump to Sonnet. Mirrors the artStyles.js call pattern exactly.
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: TEXT_MODEL,
+        max_tokens: 2000,
+        system: LAYOUT_REVIEW_SYSTEM,
+        messages: [{ role: 'user', content: 'Here is the layout dump for "' + campaignName + '". Return the JSON array of ops.\n\n' + dump }]
+      })
+    });
+    var data = await response.json();
+    if (data.error) return res.status(502).json({ error: friendlyAnthropicError(data.error) });
+    var raw = (data.content || []).map(function (b) { return b.text || ''; }).join('').trim();
+
+    // Parse the JSON array defensively (strip any accidental fences / prose).
+    var ops = null, parseError = null;
+    try {
+      var jtxt = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+      var _s = jtxt.indexOf('['), _e = jtxt.lastIndexOf(']');
+      if (_s >= 0 && _e > _s) jtxt = jtxt.slice(_s, _e + 1);
+      ops = JSON.parse(jtxt);
+    } catch (e) { parseError = String((e && e.message) || e); }
+
+    // Charge 1 token per AI call (only after a successful call).
+    try { await spendTokens(req.session.userId, 1, { source: 'layout_review', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-review spend failed:', e && e.message); }
+    try { await recordGeneration(req.session.userId, { event_type: 'layout_review', tokens_redeemed: 1, quantity: 1, unit: 'review', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
+
+    // Read-only: return the proposed ops (and the raw text if it didn't parse) -- APPLY NOTHING.
+    return res.json({
+      campaign: campaignName,
+      arrange: (_cco.arrange || 'paired'),
+      applied: false,   // this is the read-only advisor; pass 3 (apply) is not wired yet
+      opCount: (ops && ops.length) || 0,
+      ops: ops || [],
+      parseError: parseError,
+      rawIfUnparsed: ops ? undefined : raw
+    });
+  } catch (e) {
+    return res.status(500).json({ error: (e && e.message) || 'layout-review failed' });
   }
 });
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
