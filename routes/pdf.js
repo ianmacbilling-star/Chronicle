@@ -5470,7 +5470,22 @@ function pairedPlanText(packed) {
     });
     var real = (dp.realUsed != null) ? dp.realUsed : (dp.used || 0);
     if (real > 0 && real < (9.16 - 1.5)) {
-      _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16  -> op: growImage / pullLines');
+      // Decide whether the image on this page CAN actually grow. An image scaled below its natural
+      // full height (realH < fullH) has room to grow into the white. But a full-width image already at
+      // its natural height (realH ~= fullH) is maxed -- "growing" it would mean cropping the art, which
+      // in a picture book is wrong (the picture is the show; see the whole illustration). For those,
+      // the white below is STRUCTURAL (a wide image just doesn't fill a tall page), so do not suggest
+      // growImage; only text moves can help, if anything.
+      var _imgPl = (dp.placements || []).filter(function (pl) { return pl.kind === 'image' && pl.fullH != null && pl.realH != null; })
+                    .sort(function (a, b) { return (b.fullH - b.realH) - (a.fullH - a.realH); })[0];
+      var _canGrow = _imgPl && (_imgPl.fullH - _imgPl.realH) > 0.25;   // >0.25in of unused natural height
+      if (_canGrow) {
+        _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16; image can grow (real ' + _imgPl.realH.toFixed(2) + ' -> fullH ' + _imgPl.fullH.toFixed(2) + ')  -> op: growImage');
+      } else if (_imgPl) {
+        _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16; image already at natural full size (real ' + _imgPl.realH.toFixed(2) + ' ~= fullH ' + _imgPl.fullH.toFixed(2) + ') -- white is STRUCTURAL, do NOT grow (would crop). Only pullLines could help.');
+      } else {
+        _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16  -> op: pullLines (no growable image on page)');
+      }
     }
   });
   L.push('');
@@ -5776,6 +5791,13 @@ var LAYOUT_REVIEW_SYSTEM = [
   'stranded? The ISSUES section is a set of HINTS from automated checks -- it is NOT the complete list.',
   'A page can need work even if it is absent from ISSUES, and an image that was already grown can often',
   'grow further if the page still has real white. Judge every page on its own REAL numbers.',
+  '',
+  'IMPORTANT about growing images: an image can only grow if it is currently SMALLER than its natural',
+  'full size. The dump shows each image as REAL-CELL (current height) and fullH (its natural height at',
+  'full page width). If REAL-CELL is already about equal to fullH, the image is a full-width image at',
+  'its natural size -- it CANNOT grow without cropping the art, so do NOT propose growImage for it. The',
+  'white on such a page is structural (a wide image simply does not fill a tall page); leave it, or use',
+  'text moves if appropriate. Only propose growImage when REAL-CELL is meaningfully less than fullH.',
   '',
   'Your job: return ONLY a JSON array of layout ops that would improve the book. Return NOTHING but the',
   'JSON array. Rank the ops by this PRIORITY (highest first):',
