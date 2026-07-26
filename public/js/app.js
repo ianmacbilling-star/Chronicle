@@ -3834,28 +3834,17 @@ function generateNarrativeAndImages() {
   // Ease toward ~90% (write time is unknown), snap to 100% + fade out on done.
   var _nbc = document.getElementById('narr-bar-cell'); if (_nbc) _nbc.style.display = 'block';
   var _nfill = document.getElementById('narr-progress-fill'); if (_nfill) _nfill.style.width = '0%';
-  var _npct = 0;
-  // Progress creep. The narrative is ONE Claude call (no per-panel progress to report), so this
-  // is an honest-feeling fake: its only job is to always look like it is MOVING. A previous
-  // version eased toward a ceiling and the step shrank below what the eye registers on a dark
-  // bar, so it read as frozen even though the number crept. Fix: a VISIBLE minimum step every
-  // tick. It advances a fraction of the gap early (quick ramp) but never less than ~0.7%/tick,
-  // so the fill keeps perceptibly marching until the real job completes and _narrEnd snaps 100.
-  // Two-phase so it is ALWAYS visibly moving yet NEVER parks:
-  //   phase 1 (<=88%): quick ease-in, a fast-feeling ramp.
-  //   phase 2 (>88%):  a steady, clearly-visible fixed crawl of ~0.4%/tick that keeps stepping
-  //                    past 88 without a ceiling to stall against, capped just shy of 100 so it
-  //                    never looks 'done' before it is. Real completion snaps to 100 in _narrEnd.
-  // On a 500ms tick, 0.4% per step is above the perception floor on the dark bar, so the fill
-  // reads as continuously advancing for as long as generation runs.
+  var _npct = 8;
+  // Progress creep. The narrative is ONE Claude call (write time unknown), so this is a fake bar
+  // whose only job is to keep visibly MOVING. Matches the WYSIWYG render creep (startPreviewProgress):
+  // a gentle ease from a low start on a fast 300ms tick, so it crawls slowly and smoothly the
+  // whole way rather than sprinting then parking. Ease 0.04 keeps it slow from the beginning;
+  // the 0.4 floor keeps every tick perceptible; caps at 90 and _narrEnd snaps to 100 on finish.
   var _nticker = setInterval(function() {
-    if (_npct < 88) {
-      _npct = Math.min(88, _npct + Math.max(0.8, (88 - _npct) * 0.08));
-    } else if (_npct < 99) {
-      _npct = Math.min(99, _npct + 0.4);
-    }
+    _npct += Math.max(0.4, (90 - _npct) * 0.04);
+    if (_npct > 90) _npct = 90;
     if (_nfill) _nfill.style.width = _npct.toFixed(1) + '%';
-  }, 500);
+  }, 300);
 
   function _narrEnd(ok) {
     if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
