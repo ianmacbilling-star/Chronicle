@@ -1082,6 +1082,31 @@ function cgFocalPos(focal) {
   return 'center';
 }
 
+// ============================================================================================
+// IMAGE-PANEL PRIMITIVE (roadmap #1). The SINGLE place the moment-image fit decision is made.
+// Every layout's image emitter should route its inner <img> through here so cover-vs-contain,
+// focal position, and the sub-pixel overscan are decided once, consistently, instead of in 23
+// hand-written copies that drift and produce the crop / cut-border / letterbox bugs.
+//
+// This is the INNER MEDIA only (the <img> that fills a box the CALLER sizes and borders). Box
+// sizing and edge treatment stay with the caller/adapter for now; later migration steps fold the
+// box concerns in too. The fit contract:
+//   - not crop-safe  -> object-fit:contain, exact (caller must let the box HUG the image so there
+//                        is no framed letterbox void -- INV-2).
+//   - crop-safe       -> object-fit:cover with focal position, OVERSCANNED 1px each side so a
+//                        sub-pixel rounding gap can't reveal the box background as a hairline.
+// mopts.forceContain forces contain regardless of crop_safe (rarely needed: a caller that already
+// sized its box to auto-height for a non-crop-safe image emits its own <img> and skips this).
+function momentImgMedia(m, mopts) {
+  mopts = mopts || {};
+  if (!m || !m.image) return '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+  var _cropSafe = (mopts.forceContain === true) ? false : lmCropSafe(m);
+  var _fit = _cropSafe
+    ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;')
+    : 'object-fit:contain;width:100%;height:100%;';
+  return '<img style="' + _fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+}
+
 function cgImgCell(m, opts, heightIn, widthPct) {
   var w = (widthPct != null) ? ('flex:0 0 ' + widthPct + '%;max-width:' + widthPct + '%;') : 'flex:1 1 0;min-width:0;';
   var h = (heightIn != null) ? ('height:' + heightIn.toFixed(2) + 'in;') : 'height:100%;';
@@ -1128,15 +1153,9 @@ function cgCaptionTier(inner) {
 // ---- Comic (intermixed flow): full prose always, images woven INTO the text ----
 // The inner media of one comic image: cover-cropped, focal-aware, crop_safe honored.
 function cgImgMedia(m, opts) {
-  // Cover images OVERSCAN the box by 1px on every side so a sub-pixel rounding gap at certain
-  // browser-zoom levels can't reveal the dark box background as a thin black hairline at the
-  // edge (the overflow:hidden box clips the overscan). Contain (letterbox) images stay exact.
-  var fit = lmCropSafe(m)
-    ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;')
-    : 'object-fit:contain;width:100%;height:100%;';
-  return m.image
-    ? '<img style="' + fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
-    : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
+  // Now a thin wrapper over the shared primitive (roadmap #1). Output is byte-identical to the
+  // former inline version -- same cover/contain/focal/overscan decision, just centralized.
+  return momentImgMedia(m, {});
 }
 
 // A floated image with the panel's full narrative flowing around and below it.
