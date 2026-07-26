@@ -5629,13 +5629,19 @@ function magazinePlanText(packed) {
     }
   }
 
-  // (3) GROW HEADROOM: an underfull page carrying a growable floated image -> how much it could grow.
+  // (3) GROW HEADROOM: a page with a growable floated image AND meaningful REAL white left -> the
+  // image could grow (further). An already-grown image is NOT excluded: if it was grown x1.25 but the
+  // page still has 2in of real white, growing it MORE is the right move. We report the current growMul
+  // so the AI/pass-3 know they are asking for additional growth, not initial. Only pages that are
+  // genuinely near-full (little real white) are skipped -- there is nothing to grow into there.
   d.pages.forEach(function (pg) {
     var white = _pageH - (pg.realUsed != null ? pg.realUsed : pg.used);
-    if (white < 0.6) return;
-    var growable = (pg.cells || []).filter(function (c) { var b = _band(c.band); return b.simg && !c.growMul && (b.kind === 'float' || b.kind === 'feature' || b.kind === 'wide'); });
+    if (white < 0.6) return;   // near-full: no room to grow into
+    var growable = (pg.cells || []).filter(function (c) { var b = _band(c.band); return b.simg && (b.kind === 'float' || b.kind === 'feature' || b.kind === 'wide'); });
     if (!growable.length) return;
-    _issues.push('  GROW-HEADROOM  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  ' + white.toFixed(2) + 'in white, growable image b' + growable[0].band + '  -> op: growImage page ' + pg.page + ' band ' + growable[0].band + ' target fill');
+    var g = growable[0];
+    var _cur = (g.growMul && g.growMul !== 1) ? ('  (already grown x' + g.growMul + ', can grow further)') : '';
+    _issues.push('  GROW-HEADROOM  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  ' + white.toFixed(2) + 'in real white, growable image b' + g.band + _cur + '  -> op: growImage page ' + pg.page + ' band ' + g.band + ' target fill');
   });
 
   // (4) OVERSIZED CELL: a cell whose REAL rendered height exceeds its packed height enough to risk a
@@ -5744,6 +5750,14 @@ var LAYOUT_REVIEW_SYSTEM = [
   'per-image geometry (fit/crop/caption), and an ISSUES section of pre-computed signals. Every page is',
   'a fixed 9.16in content box; content past it is clipped.',
   '',
+  'REVIEW EVERY PAGE in the PAGES section -- go through them one by one, not just the flagged ones. The',
+  'DUMP contains only content pages; the front matter (cover, title, details, table of contents, and',
+  'characters) is already excluded, so you never need to consider it. For each content page ask: is',
+  'anything clipped? is there wasted white? is an image smaller than it could be? is a line or word',
+  'stranded? The ISSUES section is a set of HINTS from automated checks -- it is NOT the complete list.',
+  'A page can need work even if it is absent from ISSUES, and an image that was already grown can often',
+  'grow further if the page still has real white. Judge every page on its own REAL numbers.',
+  '',
   'Your job: return ONLY a JSON array of layout ops that would improve the book, ranked by reader-visible',
   'impact (fix clips first, then large white gaps, then polish). Return NOTHING but the JSON array.',
   '',
@@ -5840,6 +5854,19 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
       ops = JSON.parse(jtxt);
     } catch (e) { parseError = String((e && e.message) || e); }
 
+    // Translate the AI's internal dump page numbers to the VIEWER page numbers Ian sees. The dump text
+    // states the offset ("a dump PAGE n is viewer page n+M"); parse M and apply it. The ops keep their
+    // internal `page` (correct for pass 3, which operates on internal indices) and gain `viewerPage`
+    // and `fromViewerPage` for readability.
+    var _offMatch = dump.match(/dump PAGE n is (?:~)?viewer page n\+(\d+)/);
+    var _off = _offMatch ? parseInt(_offMatch[1], 10) : 0;
+    if (ops && Array.isArray(ops) && _off) {
+      ops.forEach(function (o) {
+        if (o && typeof o.page === 'number') o.viewerPage = o.page + _off;
+        if (o && typeof o.fromPage === 'number') o.fromViewerPage = o.fromPage + _off;
+      });
+    }
+
     // Charge 1 token per AI call (only after a successful call).
     try { await spendTokens(req.session.userId, 1, { source: 'layout_review', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-review spend failed:', e && e.message); }
     try { await recordGeneration(req.session.userId, { event_type: 'layout_review', tokens_redeemed: 1, quantity: 1, unit: 'review', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
@@ -5847,7 +5874,8 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
     // Read-only: return the proposed ops (and the raw text if it didn't parse) -- APPLY NOTHING.
     return res.json({
       campaign: campaignName,
-      arrange: (_cco.arrange || 'paired'),
+      arrange: (_arrange || 'paired'),
+      viewerPageOffset: _off,   // viewerPage = page + this offset (front matter: cover/title/toc/cast)
       applied: false,   // this is the read-only advisor; pass 3 (apply) is not wired yet
       opCount: (ops && ops.length) || 0,
       ops: ops || [],
