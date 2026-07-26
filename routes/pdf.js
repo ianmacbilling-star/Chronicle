@@ -4450,12 +4450,18 @@ async function computePairedPack(req, campaignId, packOpts) {
         placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null) }; }) });
     });
     _pdbg.overflows = _realP._overflows || [];
+    // AT-RISK: a page renders taller than the packer ESTIMATED and is also close enough to the real
+    // clip box (9.41in) that the overrun could push it over. Rendering taller than the estimate is only
+    // a risk when the page is near the box -- a page at 8.56in real has 0.85in of headroom and is fine,
+    // even if it beat its estimate by 0.7in. Gating on proximity to 9.41 (not just est->real gap) stops
+    // the false AT-RISK flags that produced needless pushLines ops on pages that fit comfortably.
     var _riskGap = 0.4;
+    var _riskNearBox = (9.65 - HEADER_BAND_IN) - 0.4;   // 9.01in: only pages within 0.4in of the box are at risk
     _pdbg.pages.forEach(function (pg) {
       if (pg.realUsed == null) return;
       var gap = pg.realUsed - pg.used;
       var over = _pdbg.overflows.some(function (o) { return o.page === pg.page; });
-      if (!over && gap > _riskGap) _pdbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
+      if (!over && gap > _riskGap && pg.realUsed > _riskNearBox) _pdbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
     });
   }
   _imgProbeOn = false;   // clear probe flag so it never leaks into a normal render
@@ -5280,6 +5286,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
         // stacked cell overflows INSIDE the page even though the page total squeaks under box -- the
         // page-24 case (est 8.13, real 8.86) the page-total check alone misses. Threshold 0.4in.
         var _riskGap = 0.4;
+        var _riskNearBox = (9.65 - HEADER_BAND_IN) - 0.4;   // 9.01in: rendering taller than the estimate is only a risk when the page is near the real 9.41 box
         _dbg.atRisk = [];
         _dbg.pages.forEach(function (pg) {
           if (pg.realUsed == null) return;
@@ -5290,7 +5297,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           if (_hasGrown) return;
           var gap = pg.realUsed - pg.used;
           var alreadyOver = _dbg.overflows.some(function (o) { return o.page === pg.page; });
-          if (!alreadyOver && gap > _riskGap) _dbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
+          if (!alreadyOver && gap > _riskGap && pg.realUsed > _riskNearBox) _dbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
         });
         _dbg.remeasured = true;
       }
@@ -5450,6 +5457,12 @@ function pairedPlanText(packed) {
   });
   pages.forEach(function (pg, pi) {
     var dp = _byPage[pi] || {};
+    // OVERSIZED is only a concern if the PAGE is near the real clip box (9.41in). A beat rendering
+    // taller than its estimate on a page that still fits comfortably (e.g. real 8.56) is not a problem
+    // -- flagging it produced needless shrink/push ops. Gate on the page's real total.
+    var _pgReal = (dp.realUsed != null) ? dp.realUsed : (dp.used || 0);
+    var _nearBox = (9.65 - HEADER_BAND_IN) - 0.4;   // 9.01in
+    if (_pgReal <= _nearBox) return;   // page fits with headroom -> no oversized risk
     (dp.placements || []).forEach(function (pl) {
       if (pl.realH != null && pl.heightIn != null && (pl.realH - pl.heightIn) > 0.3) {
         _pIssues.push('  OVERSIZED  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  beat ' + pl.beat + ' ' + (pl.kind || '') + ' renders ' + (pl.realH - pl.heightIn).toFixed(2) + 'in taller than packed  -> op: shrinkImage / pushLines');
@@ -5650,6 +5663,10 @@ function magazinePlanText(packed) {
   // cells are EXCLUDED: the optimizer grew them on purpose, so real >> packed is intentional, not a
   // clip risk (flagging them would hand the AI a shrink op that fights its own grow op).
   d.pages.forEach(function (pg) {
+    // Only a concern if the PAGE is near the real 9.41 clip box; a cell taller than its estimate on a
+    // page that still fits comfortably is not a problem (see paired OVERSIZED note).
+    var _pgReal = (pg.realUsed != null) ? pg.realUsed : (pg.used || 0);
+    if (_pgReal <= ((9.65 - HEADER_BAND_IN) - 0.4)) return;   // 9.01in: fits with headroom
     (pg.cells || []).forEach(function (c) {
       if (c.growMul && c.growMul !== 1) return;   // intentional grow, not oversized-risk
       if (c.realH != null && c.h != null && (c.realH - c.h) > 0.3) {
