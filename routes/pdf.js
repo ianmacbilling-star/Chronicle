@@ -6144,9 +6144,56 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     if (real0._error) return res.status(500).json({ error: 'baseline re-measure failed: ' + real0._error });
 
     var applied = [], rejected = [], deferred = [];
+
+    // Move a whole leading narr placement from one page to an adjacent page. This is the robust,
+    // high-value text move: it is what unlocks the cascade (pull the text off an image's page so the
+    // page becomes image-only and the image can then grow). Returns true if the move was applied and
+    // both affected pages still fit the box after a REAL re-measure; otherwise rolls back.
+    async function moveLeadingNarr(fromPageIdx, toPageIdx) {
+      var fromPg = plan.pages[fromPageIdx], toPg = plan.pages[toPageIdx];
+      if (!fromPg || !toPg) return { ok: false, reason: 'page not found' };
+      var pls = fromPg.placements || [];
+      // The leading narr placement on the source page (index 0 if it's a narr).
+      if (!pls.length || pls[0].kind !== 'narr') return { ok: false, reason: 'no leading text to move on source page' };
+      var moving = pls[0];
+      // Append to the target page (text moves to the END of the earlier page / START of the later one
+      // depending on direction; for a pull-up the earlier page gets it appended after its content).
+      var toBefore = (toPg.placements || []).slice();
+      var fromBefore = pls.slice();
+      if (toPageIdx < fromPageIdx) { toPg.placements = toBefore.concat([moving]); }   // pull up: append to earlier page
+      else { toPg.placements = [moving].concat(toBefore); }                            // push down: prepend to later page
+      fromPg.placements = fromBefore.slice(1);
+      // Re-measure the whole book; both affected pages must fit.
+      var _r = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
+      var okFrom = (_r && _r[fromPageIdx] != null) ? (_r[fromPageIdx] <= CLIP + 0.02) : true;
+      var okTo = (_r && _r[toPageIdx] != null) ? (_r[toPageIdx] <= CLIP + 0.02) : false;
+      if (_r && !_r._error && okTo && okFrom) {
+        return { ok: true, toReal: _r[toPageIdx], fromReal: _r[fromPageIdx] };
+      }
+      // roll back
+      toPg.placements = toBefore; fromPg.placements = fromBefore;
+      return { ok: false, reason: 'move would overflow the target page' };
+    }
+
     for (var oi = 0; oi < ops.length; oi++) {
       var op = ops[oi];
-      if (op.op !== 'growImage' && op.op !== 'shrinkImage') { deferred.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'text-move ops deferred to the next build' }); continue; }
+
+      // ---- Text moves: pullLines (fromPage -> page) / pushLines (page -> page+1) ----
+      if (op.op === 'pullLines' || op.op === 'pushLines') {
+        var srcIdx, dstIdx;
+        if (op.op === 'pullLines') { srcIdx = op.fromPage; dstIdx = op.page; }
+        else { srcIdx = op.page; dstIdx = (op.page != null ? op.page + 1 : null); }
+        if (srcIdx == null || dstIdx == null) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'missing page reference' }); continue; }
+        var mv = await moveLeadingNarr(srcIdx, dstIdx);
+        if (mv.ok) {
+          applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, movedFrom: srcIdx, movedTo: dstIdx, toReal: Math.round((mv.toReal || 0) * 100) / 100, fromReal: Math.round((mv.fromReal || 0) * 100) / 100 });
+        } else {
+          rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: mv.reason });
+        }
+        continue;
+      }
+
+      if (op.op !== 'growImage' && op.op !== 'shrinkImage') { deferred.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'op type not yet applied' }); continue; }
       var pl = imgPlacementOnPage(op.page);
       if (!pl) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no image placement on page' }); continue; }
 
