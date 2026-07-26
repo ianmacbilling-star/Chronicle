@@ -5637,9 +5637,12 @@ function magazinePlanText(packed) {
   });
 
   // (4) OVERSIZED CELL: a cell whose REAL rendered height exceeds its packed height enough to risk a
-  // clip inside the page (even if the page total fits) -- the beside-column / tall-cell case.
+  // clip inside the page (even if the page total fits) -- the beside-column / tall-cell case. GROWN
+  // cells are EXCLUDED: the optimizer grew them on purpose, so real >> packed is intentional, not a
+  // clip risk (flagging them would hand the AI a shrink op that fights its own grow op).
   d.pages.forEach(function (pg) {
     (pg.cells || []).forEach(function (c) {
+      if (c.growMul && c.growMul !== 1) return;   // intentional grow, not oversized-risk
       if (c.realH != null && c.h != null && (c.realH - c.h) > 0.3) {
         _issues.push('  OVERSIZED  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  b' + c.band + ' renders ' + (c.realH - c.h).toFixed(2) + 'in taller than packed (real ' + c.realH.toFixed(2) + ' vs ' + c.h.toFixed(2) + ')  -> op: shrinkImage/pushLines');
       }
