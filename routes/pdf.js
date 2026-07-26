@@ -4462,8 +4462,12 @@ function composeBook(plan, beats, opts) {
         if (b.showDivider) inner += sessionMarkerHTML(b.num, b.title, b.date);
       } else if (pl.kind === 'tower' && m && m.image) {
         var asp = momentAspect(m) || 1;
-        var _twCap = (m.title && (opts.caption === 'bar' || opts.caption === 'engraved')) ? 8.8 : 9.3;   // titled tower: shrink ~0.5in so the below title bar isn't clipped
-        var tw = Math.min(6.8 - 2.6, Math.min(9.2, _twCap) * asp);
+        // The tower height cap must fit the USABLE box (9.16in), not 9.3/9.2 -- a full-height tower
+        // at the old caps rendered ~0.3in past the box and clipped. Reserve the below-title bar and
+        // the wrapper's 0.1in bottom margin so the whole tower cell (image + caption) stays in box.
+        var _twBelow = (m.title && (opts.caption === 'bar' || opts.caption === 'engraved')) ? 0.5 : 0;
+        var _twCap = 9.16 - 0.1 - _twBelow;   // box - wrapper bottom margin - below-title bar
+        var tw = Math.min(6.8 - 2.6, _twCap * asp);
         if ((tw / asp) > _twCap) tw = _twCap * asp;
         var _tpi = panelN; panelN += 1;
         inner += '<div style="display:flow-root;margin-bottom:0.1in;break-inside:avoid;page-break-inside:avoid;">' +
