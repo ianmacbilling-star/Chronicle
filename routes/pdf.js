@@ -4346,7 +4346,37 @@ async function computePairedPack(req, campaignId, packOpts) {
   plan.pages.forEach(function (pg) { pg.placements.forEach(function (pl) {
     if (pl.kind === 'image' && pl.scale != null && pl.scale < 0.999) overrides[pl.beat] = { scale: pl.scale };
   }); });
-  return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length, beats: mbuilt.beats };
+  // Optional diagnostics: re-measure the composed paired book for real per-page heights + the
+  // never-clip check (parallel to the magazine dbg). Only when debug is requested, so normal
+  // renders pay nothing.
+  var _pdbg = null;
+  if (packOpts && packOpts.debug) {
+    var _pco = Object.assign({}, _dco, { paper: 'white', campaignName: (mbuilt.campaign && mbuilt.campaign.name) || '' });
+    var _realP = await remeasureComposedPaired(req, campaignId, plan, mbuilt.beats, _pco);
+    _pdbg = { pages: [], overflows: [], atRisk: [], remeasured: !_realP._error, remeasureError: _realP._error || null };
+    (plan.pages || []).forEach(function (pg, pi) {
+      var est = 0;
+      (pg.placements || []).forEach(function (pl) {
+        var b = null; for (var _bi = 0; _bi < packBeats.length; _bi++) { if (packBeats[_bi].idx === pl.beat) { b = packBeats[_bi]; break; } }
+        if (!b) return;
+        if (pl.kind === 'image' || pl.kind === 'tower') est += (b.imageH || 0) + (b.imgOver || 0) + (b.capBelowH || 0);
+        else if (pl.kind === 'narr') est += (pl.part === 'after') ? (b.textAfterH || 0) : (b.textBeforeH || 0);
+        else if (pl.kind === 'section-header') est += (b.headerH || 0);
+      });
+      var real = (_realP[pi] != null) ? _realP[pi] : null;
+      _pdbg.pages.push({ page: pi, used: Math.round(est * 100) / 100, realUsed: real,
+        placements: (pg.placements || []).map(function (pl) { return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null) }; }) });
+    });
+    _pdbg.overflows = _realP._overflows || [];
+    var _riskGap = 0.4;
+    _pdbg.pages.forEach(function (pg) {
+      if (pg.realUsed == null) return;
+      var gap = pg.realUsed - pg.used;
+      var over = _pdbg.overflows.some(function (o) { return o.page === pg.page; });
+      if (!over && gap > _riskGap) _pdbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
+    });
+  }
+  return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length, beats: mbuilt.beats, dbg: _pdbg };
 }
 // PHASE 3 (page-packer) render: apply the packer's chosen image scales through the normal
 // override render path and return the packed PDF. Chromium flows text + splits paragraphs;
@@ -4424,7 +4454,12 @@ function composeBook(plan, beats, opts) {
       }
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
-    out += '<div class="content-page" style="height:9.65in;' + bandCss + 'overflow:hidden;margin:0;' + brk + 'position:relative;">' + inner + '</div>';
+    // When measuring the composed output, tag each page's content with a cp: marker so the shared
+    // re-measure can read true paired page heights (same mechanism the magazine composer uses).
+    var _pgInner = (opts && opts.measureComposed)
+      ? '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="display:flow-root;">' + inner + '</div>'
+      : inner;
+    out += '<div class="content-page" style="height:9.65in;' + bandCss + 'overflow:hidden;margin:0;' + brk + 'position:relative;">' + _pgInner + '</div>';
   });
   return out;
 }
@@ -4711,6 +4746,37 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     }
   } catch (e) { realH._error = String((e && e.message) || e); }
   delete req.query.measureComposed; _mzComposed = null;
+  return realH;
+}
+
+// Re-measure a composed PAIRED (Picture Book) book, so it gets the same real per-page heights and
+// never-clip check magazine/gazette have. composeBook emits cp: markers under measureComposed; we
+// inject that body via packComposedBody and read the cp: heights back. Mirrors the magazine path's
+// overflow detection (same 9.16in usable box, same tolerance).
+async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
+  var realH = {};
+  try {
+    var _body = composeBook(plan, beats, Object.assign({}, cOpts || {}, { measureComposed: true }));
+        var _extra = { packComposedBody: _body, arrange: 'paired' };
+    var cbuilt = await assembleNovelHtml(req, campaignId, null, _extra);
+    var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
+    cblocks.forEach(function (bl) {
+      var mm = /^cp:(\d+)$/.exec(bl.id || '');
+      if (mm) { realH[+mm[1]] = bl.heightIn; }
+    });
+    var _clipBox = MZ_TOWER_MERGE_MAX_IN;   // 9.16in usable content area (same as magazine)
+    var _clipTol = 0.03;
+    realH._overflows = [];
+    Object.keys(realH).forEach(function (k) {
+      if (k[0] === '_') return;
+      var over = realH[k] - _clipBox;
+      if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000, kind: 'over-box' });
+    });
+    if (realH._overflows.length) {
+      try { console.warn('[NEVER-CLIP] (paired) ' + realH._overflows.length + ' page(s) over box (' + _clipBox.toFixed(2) + 'in) for campaign ' + campaignId + ': ' +
+        realH._overflows.map(function (o) { return 'p' + o.page + ' +' + o.overIn + 'in'; }).join(', ')); } catch (_e) {}
+    }
+  } catch (e) { realH._error = String((e && e.message) || e); }
   return realH;
 }
 
@@ -5183,6 +5249,56 @@ function composeMagazine(plan, bands, opts) {
 // Plain-text pack-plan dump for the admin easter egg (double-click the After page count). Everything
 // needed to debug a magazine/gazette layout: per-band kind/height/image/splittable/line-count, and
 // each page's fill with UNDERFULL flags and split char-ranges.
+function pairedPlanText(packed) {
+  var plan = (packed && packed.plan) || {};
+  var pages = (plan.pages) || [];
+  var d = packed.dbg || {};
+  var beats = {};
+  (packed.beats || []).forEach(function (b) { beats[b.idx] = b; });
+  var L = [];
+  L.push('PACK PLAN (paired / Picture Book)  -  ' + ((packed.campaign && packed.campaign.name) || 'campaign'));
+  L.push('arrange=paired  content-pages=' + pages.length + '  (the PDF also adds front/back matter, so viewer page numbers are higher)');
+  // Front matter offset: cover + title + details + (cast) -- paired always has title+details.
+  var _fm = 4;
+  var _viewer = function (contentPage) { return contentPage + _fm + 1; };
+  L.push('front-matter offset: ~' + _fm + ' page(s) before content -> a dump PAGE n is ~viewer page n+' + (_fm + 1) + ' (approximate)');
+  var _ovf = (d.overflows || []);
+  if (_ovf.length) {
+    L.push('');
+    L.push('!!! NEVER-CLIP: ' + _ovf.length + ' PAGE(S) OVERFLOW THE BOX (content is clipped here) !!!');
+    _ovf.forEach(function (o) {
+      L.push('    PAGE ' + o.page + ' (viewer ~p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  vs box ' + o.boxIn.toFixed(2) + 'in  -> OVER by ' + o.overIn.toFixed(2) + 'in');
+    });
+  }
+  var _risk = (d.atRisk || []);
+  if (_risk.length) {
+    L.push('');
+    L.push('!! NEVER-CLIP AT-RISK: ' + _risk.length + ' page(s) fit the box TOTAL but render far taller than planned:');
+    _risk.forEach(function (o) {
+      L.push('    PAGE ' + o.page + ' (viewer ~p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  est ' + o.estIn.toFixed(2) + 'in  -> under-planned by ' + o.gapIn.toFixed(2) + 'in');
+    });
+  }
+  if (!_ovf.length && !_risk.length && d.remeasured) L.push('NEVER-CLIP: no page overflows or at-risk gaps (nothing clipped). [OK]');
+  if (d.remeasureError) L.push('(re-measure error: ' + d.remeasureError + ')');
+  L.push('');
+  L.push('PAGES  (REAL = true composed fill; est = packer estimate)');
+  var _byPage = {};
+  (d.pages || []).forEach(function (pg) { _byPage[pg.page] = pg; });
+  pages.forEach(function (pg, pi) {
+    var dp = _byPage[pi] || {};
+    var realStr = (dp.realUsed != null) ? ('  REAL ' + dp.realUsed.toFixed(2) + ' (est ' + (dp.used != null ? dp.used.toFixed(2) : '?') + ', ' + ((dp.realUsed - (dp.used || 0)) >= 0 ? '+' : '') + (dp.realUsed - (dp.used || 0)).toFixed(2) + ')') : '';
+    L.push('  PAGE ' + pi + '  (viewer ~p.' + _viewer(pi) + ')  est ' + (dp.used != null ? dp.used.toFixed(2) : '?') + ' / 9.16' + realStr);
+    (pg.placements || []).forEach(function (pl) {
+      var b = beats[pl.beat] || {};
+      var lbl = pl.kind;
+      if (pl.kind === 'narr') lbl += ' ' + (pl.part || 'before') + (pl.charStart != null ? (' CUT ' + pl.charStart + '..' + (pl.charEnd != null ? pl.charEnd : 'end')) : '');
+      if (pl.kind === 'image' || pl.kind === 'tower') { lbl += (pl.scale != null && pl.scale < 0.999) ? (' scale' + pl.scale.toFixed(2)) : ''; if (b.moment && b.moment.title) lbl += '  "' + b.moment.title + '"'; }
+      L.push('      beat ' + pl.beat + '  ' + lbl);
+    });
+  });
+  return L.join('\n');
+}
+
 function magazinePlanText(packed) {
   var d = packed && packed.dbg;
   if (!d) return 'no debug plan available';
@@ -5285,7 +5401,11 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
       txt = (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
       _dlName = String((packedM && packedM.campaign && packedM.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     } else {
-      txt = 'pack-debug: only magazine/gazette plans are dumped here (arrange=' + (_cco.arrange || 'paired') + ').';
+      // Paired (Picture Book) now dumps too: compute with debug so it re-measures the composed
+      // book and runs the never-clip check, then format with the paired dumper.
+      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      txt = pairedPlanText(packedP);
+      _dlName = String((packedP && packedP.campaign && packedP.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     }
     res.set('Content-Type', 'text/plain; charset=utf-8');
     // Download rather than open inline: saves the round trip of File > Save in a new tab.
