@@ -5758,8 +5758,20 @@ var LAYOUT_REVIEW_SYSTEM = [
   'A page can need work even if it is absent from ISSUES, and an image that was already grown can often',
   'grow further if the page still has real white. Judge every page on its own REAL numbers.',
   '',
-  'Your job: return ONLY a JSON array of layout ops that would improve the book, ranked by reader-visible',
-  'impact (fix clips first, then large white gaps, then polish). Return NOTHING but the JSON array.',
+  'Your job: return ONLY a JSON array of layout ops that would improve the book. Return NOTHING but the',
+  'JSON array. Rank the ops by this PRIORITY (highest first):',
+  '',
+  'TIER 1 -- CORRECTNESS (always first, before any density work). These are bugs; a book with them is',
+  'broken. In any order among themselves: clipped/cut-off text, cropped or clipped images, a tower or',
+  'caption cut off, and stranded orphans (a lone word or short line alone at a page boundary). Fix every',
+  'one of these before moving on.',
+  '',
+  'TIER 2 -- FILL underfull pages, worked from the page with the MOST real white space down to the least.',
+  'HOW you fill depends on the layout (see the LAYOUT GOALS block at the top -- it defines the first move',
+  'for this book). The images are the show and have NO ceiling except the page margins, so an image can',
+  'always grow to fill space. When a fill would move text between pages, respect the neighbor: never pull',
+  'text off a page that is already full/dense just to fill another -- a small remaining gap is better than',
+  'un-densing a good page. If text cannot be moved without hurting a neighbor, grow the image instead.',
   '',
   'Allowed ops (use ONLY these; name targets by the page and band/beat ids in the dump):',
   '  { "op":"growImage", "page":N, "band":N, "target":"fill", "why":"..." }',
@@ -5782,22 +5794,26 @@ var LAYOUT_REVIEW_SYSTEM = [
 // on the book's arrange. Tune these against real advisor output -- they are taste, not geometry.
 var LAYOUT_GOALS = {
   paired: [
-    'LAYOUT GOALS (Picture Book): this is a generous, image-forward picture-book layout.',
-    '- Images full size wherever possible -- prefer growing an image to fill available space; a small image with white around it is a missed opportunity, not a virtue.',
-    '- White space is acceptable for rhythm, but a large gap next to a growable image should be closed by growing the image.',
-    '- One beat per spread; do not cram unrelated content together to save pages.',
-    '- Fix clips and orphans first, then make images as large as the page safely allows.'
+    'LAYOUT GOALS (Picture Book) -- the FIRST MOVE for filling white on this book is: GROW THE IMAGE.',
+    'The picture is the show. To fill an underfull page, grow its image to fill the space -- images have',
+    'no ceiling but the page margins, so this is nearly always available and is the preferred fix.',
+    '- Do NOT pull text between pages to densify a picture book -- that makes it read like a magazine.',
+    '  Fill white by enlarging the art, not by cramming words.',
+    '- A picture book should feel generous and image-forward; big images are the goal, not a side effect.'
   ].join('\n'),
   magazine: [
-    'LAYOUT GOALS (Magazine): this is a dense, editorial layout.',
-    '- Large white space is wasted -- prioritize filling it: grow images and pull text up so pages read full and tight.',
-    '- Aim for full pages; an underfull page is a problem to solve, not a resting point.',
-    '- Fix clips and orphans first, then maximize density and polish.'
+    'LAYOUT GOALS (Magazine) -- the FIRST MOVE for filling white on this book is: DENSIFY (pack more in).',
+    'This is a dense editorial layout; pages should read full and tight.',
+    '- To fill an underfull page, first PULL TEXT UP from the following page (densify) -- unless that page',
+    '  is already full/dense, in which case do not un-dense it; leave the small gap instead.',
+    '- Grow an image only when densifying will not fill the gap (no text can be pulled without hurting a',
+    '  neighbor). Growing the image is the fallback here, not the first move -- keep the magazine feel.'
   ].join('\n'),
   gazette: [
-    'LAYOUT GOALS (Gazette): a dense parchment/column layout, like a period newspaper.',
-    '- Fill columns; avoid large gaps. Grow images and pull text up to keep pages full.',
-    '- Fix clips and orphans first, then density.'
+    'LAYOUT GOALS (Gazette) -- the FIRST MOVE for filling white on this book is: DENSIFY.',
+    'A dense parchment/column layout, like a period newspaper. Fill columns and avoid large gaps.',
+    '- First pull text up to densify (unless the source page is already full -- then leave the gap).',
+    '- Grow an image only when densifying cannot fill the space. Density is the priority, not image size.'
   ].join('\n'),
   comic: [
     'LAYOUT GOALS (Comic): panel sequence and pacing matter most.',
