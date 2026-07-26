@@ -4687,6 +4687,28 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
       var mc = /^cc:(\d+):(\d+)$/.exec(bl.id || '');
       if (mc) { (realH._cells || (realH._cells = {}))[mc[1] + ':' + mc[2]] = bl.heightIn; }
     });
+    // NEVER-CLIP instrumentation (step 1): flag any page whose REAL measured height exceeds the
+    // clip box, for every layout. This is the exact condition that causes overflow:hidden to chop
+    // an image or a line of text. Instrumentation only -- records the overflows so we can see
+    // which pages/books clip and by how much, before the composer is made fit-verified. The box is
+    // the composed content area: 9.65in minus the header band; a small tolerance absorbs sub-pixel
+    // rounding so only a REAL overflow (a line/image genuinely past the edge) is flagged.
+    // The composed page box is 9.65in with padding-top:HEADER_BAND_IN, so the USABLE content area
+    // (what the cp: marker measures against) is 9.65 - 2*header-ish; empirically the content clips
+    // at ~9.16in (the same figure the tower-merge ceiling uses). Use that as the clip line so the
+    // instrument agrees with the real overflow:hidden behavior rather than the raw box height.
+    var _clipBox = MZ_TOWER_MERGE_MAX_IN;   // 9.16in usable content area (validated via the tower fix)
+    var _clipTol = 0.03;                    // ~3 hundredths of an inch of rounding slack
+    realH._overflows = [];
+    Object.keys(realH).forEach(function (k) {
+      if (k[0] === '_') return;             // skip _cells / _error / _overflows
+      var over = realH[k] - _clipBox;
+      if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000 });
+    });
+    if (realH._overflows.length) {
+      try { console.warn('[NEVER-CLIP] ' + realH._overflows.length + ' page(s) over box (' + _clipBox.toFixed(2) + 'in) for campaign ' + campaignId + ': ' +
+        realH._overflows.map(function (o) { return 'p' + o.page + ' +' + o.overIn + 'in'; }).join(', ')); } catch (_e) {}
+    }
   } catch (e) { realH._error = String((e && e.message) || e); }
   delete req.query.measureComposed; _mzComposed = null;
   return realH;
@@ -5073,6 +5095,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
             if (rv != null) c.realH = rv;
           });
         });
+        _dbg.overflows = realH._overflows || [];   // NEVER-CLIP: pages whose real height clips the box
         _dbg.remeasured = true;
       }
     } catch (e) { _dbg.remeasureError = String((e && e.message) || e); }
@@ -5171,6 +5194,18 @@ function magazinePlanText(packed) {
   L.push('PACK PLAN  -  ' + (d.campaign || ''));
   L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  content-pages=' + d.pages.length + '  (the PDF also adds front/back matter: cover, title, contents, cast -- so the viewer page count is higher)');
   L.push('front-matter offset: ' + _fm + ' page(s) before content -> a dump PAGE n is viewer page n+' + (_fm + 1) + ' (cover=' + _has('cover', true) + ' cast=' + _has('cast', true) + ' toc=' + _has('toc', false) + ', title+details always)');
+  // NEVER-CLIP: pages whose REAL measured height exceeds the clip box -- these are the exact pages
+  // where overflow:hidden chops an image or a line of text. Printed up top so it is impossible to miss.
+  var _ovf = (d.overflows || []);
+  if (_ovf.length) {
+    L.push('');
+    L.push('!!! NEVER-CLIP: ' + _ovf.length + ' PAGE(S) OVERFLOW THE BOX (content is clipped here) !!!');
+    _ovf.forEach(function (o) {
+      L.push('    PAGE ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  vs box ' + o.boxIn.toFixed(2) + 'in  -> OVER by ' + o.overIn.toFixed(2) + 'in');
+    });
+  } else if (d.remeasured) {
+    L.push('NEVER-CLIP: no page overflows the box (nothing clipped). [OK]');
+  }
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
