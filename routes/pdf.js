@@ -4455,7 +4455,7 @@ function composeBook(plan, beats, opts) {
         // setting width = height*asp yields the intended height; the column cap can only make it
         // SHORTER (never taller), so the page can never clip.
         var _visH = (pl.fullH != null ? pl.fullH : beatImageHeight(b, 9.16)) * (pl.scale != null ? pl.scale : 1);
-        var w = Math.min(6.8, round3(_visH * asp));
+        var w = Math.min(6.8, Math.round(_visH * asp * 1000) / 1000);   // inline round (round3 is not in this scope)
         var _ipi = panelN; panelN += 1;
         inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _ipi, opts.caption) + '</div>';
