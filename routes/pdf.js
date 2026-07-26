@@ -4373,7 +4373,20 @@ async function computePairedPack(req, campaignId, packOpts) {
   if (packOpts && packOpts.debug) {
     var _pco = Object.assign({}, _dco, { paper: 'white', campaignName: (mbuilt.campaign && mbuilt.campaign.name) || '' });
     var _realP = await remeasureComposedPaired(req, campaignId, plan, mbuilt.beats, _pco);
-    _pdbg = { pages: [], overflows: [], atRisk: [], remeasured: !_realP._error, remeasureError: _realP._error || null };
+    _pdbg = { pages: [], overflows: [], atRisk: [], remeasured: !_realP._error, remeasureError: _realP._error || null, beatText: [] };
+    // Per-beat text measurement diagnostic: shows whether the split-slice heights have real line
+    // data or fell back to estTextH, and the measured lines-per-char, so a compressed/bad measure
+    // is visible directly.
+    packBeats.forEach(function (bt) {
+      if (!bt || (!bt.beforeLen && !bt.afterLen)) return;
+      var _bl = bt.beforeLines || null, _al = bt.afterLines || null;
+      var _blc = bt.beforeLineChars || null, _alc = bt.afterLineChars || null;
+      _pdbg.beatText.push({ idx: bt.idx,
+        beforeLen: bt.beforeLen || 0, beforeLines: (_bl ? _bl.length : 0), beforeH: Math.round((bt.textBeforeH || 0) * 100) / 100, beforeSpan: (_bl && _bl.length ? Math.round(_bl[_bl.length - 1] * 100) / 100 : null), beforeFallback: !_bl,
+        beforeYs: (_bl ? _bl.map(function (y) { return Math.round(y * 100) / 100; }) : null), beforeChars: (_blc ? _blc.slice() : null),
+        afterLen: bt.afterLen || 0, afterLines: (_al ? _al.length : 0), afterH: Math.round((bt.textAfterH || 0) * 100) / 100, afterSpan: (_al && _al.length ? Math.round(_al[_al.length - 1] * 100) / 100 : null), afterFallback: !_al,
+        afterYs: (_al ? _al.map(function (y) { return Math.round(y * 100) / 100; }) : null), afterChars: (_alc ? _alc.slice() : null) });
+    });
     (plan.pages || []).forEach(function (pg, pi) {
       var est = 0;
       (pg.placements || []).forEach(function (pl) {
@@ -4385,7 +4398,7 @@ async function computePairedPack(req, campaignId, packOpts) {
       });
       var real = (_realP[pi] != null) ? _realP[pi] : null;
       _pdbg.pages.push({ page: pi, used: Math.round(est * 100) / 100, realUsed: real,
-        placements: (pg.placements || []).map(function (pl) { return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null) }; }) });
+        placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null) }; }) });
     });
     _pdbg.overflows = _realP._overflows || [];
     var _riskGap = 0.4;
@@ -4427,10 +4440,13 @@ function composeBook(plan, beats, opts) {
     var inner = '';
     // Suppress the running header only where a visible divider already announces the session.
     if (headerOn && !hasDivider && curNum != null) inner += runningHeaderHTML(campName, curNum, curTitle);
+    var _ci = -1;
     (pg.placements || []).forEach(function (pl) {
+      _ci += 1;
       var b = byIdx[pl.beat];
       if (!b) return;
       var m = b.moment;
+      var _phStart = inner.length;   // remember where this placement's html begins (to wrap it when measuring)
       if (pl.kind === 'section-header') {
         if (b.showDivider) inner += sessionMarkerHTML(b.num, b.title, b.date);
       } else if (pl.kind === 'tower' && m && m.image) {
@@ -4477,6 +4493,12 @@ function composeBook(plan, beats, opts) {
             inner += '<div style="margin-top:0.1in;">' + rendered + '</div>';
           }
         }
+      }
+      // Per-placement cc: marker (measure pass only): wrap exactly the html this placement added,
+      // so the re-measure reports each cell's true rendered height -- the definitive per-slice data.
+      if (opts && opts.measureComposed && inner.length > _phStart) {
+        var _phHtml = inner.slice(_phStart);
+        inner = inner.slice(0, _phStart) + '<div data-mblk="cc:' + pi + ':' + _ci + '" data-mkind="ccell">' + _phHtml + '</div>';
       }
     });
     var brk = (pi < pages.length - 1) ? 'page-break-after:always;' : '';
@@ -4788,7 +4810,9 @@ async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
     var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
     cblocks.forEach(function (bl) {
       var mm = /^cp:(\d+)$/.exec(bl.id || '');
-      if (mm) { realH[+mm[1]] = bl.heightIn; }
+      if (mm) { realH[+mm[1]] = bl.heightIn; return; }
+      var mc = /^cc:(\d+):(\d+)$/.exec(bl.id || '');
+      if (mc) { (realH._cells || (realH._cells = {}))[mc[1] + ':' + mc[2]] = bl.heightIn; }
     });
     var _clipBox = MZ_TOWER_MERGE_MAX_IN;   // 9.16in usable content area (same as magazine)
     var _clipTol = 0.03;
@@ -5325,11 +5349,28 @@ function pairedPlanText(packed) {
       if (pl.kind === 'image' || pl.kind === 'tower') { lbl += (pl.scale != null && pl.scale < 0.999) ? (' scale' + pl.scale.toFixed(2)) : ''; if (b.moment && b.moment.title) lbl += '  "' + b.moment.title + '"'; }
       var _h = (pl.heightIn != null) ? pl.heightIn : null;
       if (_h != null) _cum = Math.round((_cum + _h) * 100) / 100;
-      var _hstr = (_h != null) ? ('  h' + _h.toFixed(2) + '  cum' + _cum.toFixed(2)) : '';
-      var _flag = (_h != null && _cum > 9.16) ? '  <-- OVER 9.16' : '';
-      L.push('      beat ' + pl.beat + '  ' + lbl + _hstr + _flag);
+      var _hstr = (_h != null) ? ('  packed' + _h.toFixed(2) + '  cum' + _cum.toFixed(2)) : '';
+      var _rcH = (pl.realH != null) ? pl.realH : null;
+      var _rcStr = (_rcH != null) ? ('  REAL-CELL' + _rcH.toFixed(2) + ((_h != null && Math.abs(_rcH - _h) > 0.1) ? ('  (diff ' + ((_rcH - _h) >= 0 ? '+' : '') + (_rcH - _h).toFixed(2) + ')') : '')) : '';
+      var _fhStr = (pl.fullH != null) ? ('  fullH' + pl.fullH.toFixed(2)) : '';
+      var _flag = (_h != null && _cum > 9.16) ? '  <== OVER 9.16' : '';
+      var _dflag = (_rcH != null && _h != null && (_rcH - _h) > 0.3) ? '  <== RENDERS TALLER THAN PACKED' : '';
+      L.push('      beat ' + pl.beat + '  ' + lbl + _hstr + _rcStr + _fhStr + _flag + _dflag);
     });
   });
+  var _bt = (d.beatText || []);
+  if (_bt.length) {
+    L.push('');
+    L.push('TEXT MEASURE (per beat: len=chars, lines=measured line count, H=packer height, span=last-line Y, FALLBACK=no line data)');
+    _bt.forEach(function (t) {
+      if (t.beforeLen) { L.push('  beat ' + t.idx + ' before  len' + t.beforeLen + '  lines' + t.beforeLines + '  H' + t.beforeH.toFixed(2) + '  span' + (t.beforeSpan != null ? t.beforeSpan.toFixed(2) : '?') + (t.beforeFallback ? '  <== FALLBACK (estTextH, no line data)' : '') + ((t.beforeLines && t.beforeLen / t.beforeLines > 90) ? '  <== SUSPECT ' + Math.round(t.beforeLen / t.beforeLines) + ' chars/line' : '') + ((t.beforeLines && t.beforeSpan != null && (t.beforeSpan / t.beforeLines) < 0.14) ? '  <== COMPRESSED ' + (t.beforeSpan / t.beforeLines).toFixed(3) + 'in/line' : ''));
+        if (t.beforeYs) L.push('       Ys: [' + t.beforeYs.join(', ') + ']');
+        if (t.beforeChars) L.push('       chars: [' + t.beforeChars.join(', ') + ']'); }
+      if (t.afterLen) { L.push('  beat ' + t.idx + ' after   len' + t.afterLen + '  lines' + t.afterLines + '  H' + t.afterH.toFixed(2) + '  span' + (t.afterSpan != null ? t.afterSpan.toFixed(2) : '?') + (t.afterFallback ? '  <== FALLBACK (estTextH, no line data)' : '') + ((t.afterLines && t.afterLen / t.afterLines > 90) ? '  <== SUSPECT ' + Math.round(t.afterLen / t.afterLines) + ' chars/line' : '') + ((t.afterLines && t.afterSpan != null && (t.afterSpan / t.afterLines) < 0.14) ? '  <== COMPRESSED ' + (t.afterSpan / t.afterLines).toFixed(3) + 'in/line' : ''));
+        if (t.afterYs) L.push('       Ys: [' + t.afterYs.join(', ') + ']');
+        if (t.afterChars) L.push('       chars: [' + t.afterChars.join(', ') + ']'); }
+    });
+  }
   return L.join('\n');
 }
 
