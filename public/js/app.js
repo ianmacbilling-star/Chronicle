@@ -3835,19 +3835,25 @@ function generateNarrativeAndImages() {
   var _nbc = document.getElementById('narr-bar-cell'); if (_nbc) _nbc.style.display = 'block';
   var _nfill = document.getElementById('narr-progress-fill'); if (_nfill) _nfill.style.width = '0%';
   var _npct = 0;
-  // Steady creep that NEVER stalls before completion. The old curve eased 10% of the gap to 90
-  // every tick, so it sprinted to ~85 in seconds then sat pinned at 90 -- reading as 'stopped'.
-  // Instead: advance a small fixed step that TAPERS with height but always stays >= a floor, so
-  // the bar keeps visibly moving the whole time and only reaches 100% when the job actually ends.
-  // ~0.9%/tick near the start, easing to a ~0.18%/tick floor up high; approaches but never hits 95.
+  // Progress creep. The narrative is ONE Claude call (no per-panel progress to report), so this
+  // is an honest-feeling fake: its only job is to always look like it is MOVING. A previous
+  // version eased toward a ceiling and the step shrank below what the eye registers on a dark
+  // bar, so it read as frozen even though the number crept. Fix: a VISIBLE minimum step every
+  // tick. It advances a fraction of the gap early (quick ramp) but never less than ~0.7%/tick,
+  // so the fill keeps perceptibly marching until the real job completes and _narrEnd snaps 100.
+  // Two-phase so it is ALWAYS visibly moving yet NEVER parks:
+  //   phase 1 (<=88%): quick ease-in, a fast-feeling ramp.
+  //   phase 2 (>88%):  a steady, clearly-visible fixed crawl of ~0.4%/tick that keeps stepping
+  //                    past 88 without a ceiling to stall against, capped just shy of 100 so it
+  //                    never looks 'done' before it is. Real completion snaps to 100 in _narrEnd.
+  // On a 500ms tick, 0.4% per step is above the perception floor on the dark bar, so the fill
+  // reads as continuously advancing for as long as generation runs.
   var _nticker = setInterval(function() {
-    // Asymptotic creep: always advance a fraction of the remaining gap to 99, with a tiny floor
-    // so the step never rounds to zero. Fast-ish early, ever slower near the top, but ALWAYS
-    // moving -- there is no plateau to read as 'stopped' even on a long generation. Snaps to 100
-    // only in _narrEnd when the job truly finishes.
-    var _gap = 99 - _npct;
-    _npct = _npct + Math.max(0.05, _gap * 0.015);
-    if (_npct > 98.8) _npct = 98.8;
+    if (_npct < 88) {
+      _npct = Math.min(88, _npct + Math.max(0.8, (88 - _npct) * 0.08));
+    } else if (_npct < 99) {
+      _npct = Math.min(99, _npct + 0.4);
+    }
     if (_nfill) _nfill.style.width = _npct.toFixed(1) + '%';
   }, 500);
 
