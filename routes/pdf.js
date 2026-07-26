@@ -190,6 +190,17 @@ function panelCaption(m, i) {
   '</div>';
 }
 
+// True when narrative text is script/dialogue formatted (NAME: "..." lines). Such text renders
+// with <br> line breaks and must NOT be split across a page mid-block -- the char-offset split
+// misaligns with the <br> structure and cuts a word across the page (the 'Twi|ce' bug).
+function isScriptText(text) {
+  if (!text || text.indexOf('\n') < 0) return false;
+  var _l = String(text).split('\n');
+  for (var _i = 0; _i < _l.length; _i++) {
+    if (/^\s*[A-Za-z][A-Za-z0-9 ._'\-]{0,24}:\s+["\u201c\u2018']/.test(_l[_i])) return true;
+  }
+  return false;
+}
 function buildNarrativeHTML(text, isIntro) {
   if (!text) return '';
   // Script-formatted narrative (Comic Dialogue) arrives as newline-separated speaker
@@ -4354,7 +4365,7 @@ async function computePairedPack(req, campaignId, packOpts) {
     var tb = 0, ta = 0, bl = null, al = null, blc = null, alc = null;
     if (beat.before) { var _b1 = takeBlock(String(beat.before).length); tb = (_b1 && _b1.heightIn) || estTextH(String(beat.before).length); bl = _b1 && _b1.lines; blc = _b1 && _b1.lineChars; }
     if (beat.after) { var _b2 = takeBlock(String(beat.after).length); ta = (_b2 && _b2.heightIn) || estTextH(String(beat.after).length); al = _b2 && _b2.lines; alc = _b2 && _b2.lineChars; }
-    return { idx: beat.idx, shape: beat.shape, aspect: (beat.aspect || 1), hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, imgOver: beat.hasImage ? (_imgOver + ((beat.moment && beat.moment.title) ? _capBelowH : 0)) : 0, capBelowH: (beat.hasImage && ((beat.aspect || 1) <= 0.42) && beat.moment && beat.moment.title) ? _capBelowH : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42) };
+    return { idx: beat.idx, shape: beat.shape, aspect: (beat.aspect || 1), hasImage: beat.hasImage, imageH: beat.hasImage ? beatImageHeight(beat, pageH) : 0, imgOver: beat.hasImage ? (_imgOver + ((beat.moment && beat.moment.title) ? _capBelowH : 0)) : 0, capBelowH: (beat.hasImage && ((beat.aspect || 1) <= 0.42) && beat.moment && beat.moment.title) ? _capBelowH : 0, textBeforeH: tb, textAfterH: ta, beforeLines: bl, afterLines: al, beforeLineChars: blc, afterLineChars: alc, beforeLen: (beat.before || '').length, afterLen: (beat.after || '').length, isTower: ((beat.aspect || 1) <= 0.42), beforeNoSplit: isScriptText(beat.before), afterNoSplit: isScriptText(beat.after) };
   });
   // Reserve a top band for the per-page running header (when on) by lowering the packer's usable
   // page height, leaving the existing bottom safety buffer intact so nothing clips. The header

@@ -52,10 +52,10 @@ function packPaired(beats, opts) {
   }
 
   // Text flows: fill the remaining space, then continue on fresh pages.
-  function placeText(beatIdx, part, h, lines, lineChars, textLen) {
+  function placeText(beatIdx, part, h, lines, lineChars, textLen, noSplit) {
     if (!(h > 0)) return;
     var nLines = (lines && lines.length) || 0;
-    var canSplit = !opts.noSplit && nLines >= 2 && lineChars && lineChars.length >= 2;
+    var canSplit = !opts.noSplit && !noSplit && nLines >= 2 && lineChars && lineChars.length >= 2;
     if (!canSplit) {
       // Whole block: won't fit? start a fresh page and place it there.
       if (h > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
@@ -64,15 +64,20 @@ function packPaired(beats, opts) {
     }
     // Split at whole measured lines; each slice carries the exact character range so the
     // composer renders it as a normal paragraph (no clip tricks).
+    // The composer wraps each narr slice in a div with a 0.1in top margin that the measured
+    // `lines` (text-only line bottoms) do NOT include. Reserve it so the fit test and the placed
+    // height match the real render -- otherwise the packer fits one extra line and the composed
+    // page renders ~0.1in taller per slice, slicing the last line horizontally at the box edge.
+    var TEXT_MARGIN = 0.1;
     var lineIdx = 0;
     while (lineIdx < nLines) {
-      var rem = remaining();
-      if (rem < minLeftForText && cur().usedIn > 1e-6) { newPage(); rem = remaining(); }
+      var rem = remaining() - TEXT_MARGIN;   // the slice's own top margin eats into the room
+      if (rem < minLeftForText && cur().usedIn > 1e-6) { newPage(); rem = remaining() - TEXT_MARGIN; }
       var startY = lineIdx > 0 ? lines[lineIdx - 1] : 0;
       var endLine = -1;
       for (var k = lineIdx; k < nLines; k++) { if ((lines[k] - startY) <= rem + 0.03) endLine = k; else break; }
       if (endLine < lineIdx) { newPage(); continue; }   // not even one line fits here
-      var segH = round3(lines[endLine] - startY);
+      var segH = round3(lines[endLine] - startY + TEXT_MARGIN);   // include the top margin the composer adds
       var cStart = (lineChars[lineIdx] != null) ? lineChars[lineIdx] : 0;
       var cEnd = (endLine + 1 < nLines && lineChars[endLine + 1] != null) ? lineChars[endLine + 1] : textLen;
       place('narr', beatIdx, segH, { part: part, split: (lineIdx > 0 || endLine + 1 < nLines), charStart: cStart, charEnd: cEnd });
@@ -153,12 +158,12 @@ function packPaired(beats, opts) {
       place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
       return;
     }
-    if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines, b.beforeLineChars, b.beforeLen);
+    if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines, b.beforeLineChars, b.beforeLen, b.beforeNoSplit);
     if (b.hasImage && b.imageH > 0) {
       placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0, b.imgOver);
-      if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen);
+      if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen, b.afterNoSplit);
     } else if (b.textAfterH > 0) {
-      placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen);
+      placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen, b.afterNoSplit);
     }
   });
 
