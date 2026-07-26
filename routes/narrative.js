@@ -128,7 +128,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   let directorNotes = session.session_notes || '';
   let gapDirections = {};
   let gapOutlines = {};
-  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions, narrative_outlines, narrative_style FROM session_forks WHERE id = ?').get(targetForkId);
+  const fkSteer = await db.prepare('SELECT fork_notes, narrative_directions, narrative_outlines, narrative_style, narrative_verbosity FROM session_forks WHERE id = ?').get(targetForkId);
   if (fkSteer) {
     if (callerRole !== 'dm') directorNotes = fkSteer.fork_notes || '';
     if (fkSteer.narrative_directions) {
@@ -144,6 +144,12 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const narrStyleId = (fkSteer && fkSteer.narrative_style) ? fkSteer.narrative_style : 'classic';
   const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
   const isDialogue = (narrStyleId === 'dialogue');
+  // Verbosity dial: 'low' | 'med' | 'high' (default high = original behavior). Length only --
+  // never changes voice, tense, or person, so it composes with every narrative style.
+  const _vraw = (fkSteer && typeof fkSteer.narrative_verbosity === 'string') ? fkSteer.narrative_verbosity.toLowerCase() : 'high';
+  const narrVerbosity = (_vraw === 'low' || _vraw === 'med') ? _vraw : 'high';
+  const _vBlock = (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-4 sentences';
+  const _vEnds  = (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-3 sentences';
 
   // Get moments in order (from the caller's version)
   const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(targetForkId);
@@ -259,7 +265,11 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
         '- Narrate what the panel shows in short prose, and weave in the characters\' spoken lines so the two are about even\n' +
         '- Put each spoken line on its OWN line, led by the speaker\'s name and a colon, e.g.  GARRICK: "Hold the line."\n' +
         '- Keep narration lines on their own lines between the dialogue\n'
-      : '- Roughly 2-4 sentences per block — punchy, not bloated\n'
+      : (narrVerbosity === 'low'
+          ? '- ONE crisp sentence per block — caption length, no more\n'
+          : narrVerbosity === 'med'
+            ? '- Roughly 1-2 sentences per block — tight and economical\n'
+            : '- Roughly 2-4 sentences per block — punchy, not bloated\n')
     ) +
     '- Reference characters by name when relevant\n\n' +
     'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise, and never invent a new name lifted from a real franchise (do not borrow a same-named character\'s known allies, sidekicks, or places). Tell only the user\'s own story, in your own original words.\n\n' +
@@ -275,18 +285,18 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     ' entries (one per panel), in order, with panel_index 0 through ' + (moments.length - 1) + ':\n' +
     'IMPORTANT: panel_index is ZERO-BASED \u2014 PANEL 1 above is panel_index 0, PANEL 2 is panel_index 1, and so on. List the sections in panel order, PANEL 1 first.\n' +
     '{\n' +
-    '  "intro": "Opening paragraph that sets the scene BEFORE panel 1 (2-3 sentences)",\n' +
+    '  "intro": "Opening paragraph that sets the scene BEFORE panel 1 (' + _vEnds + ')",\n' +
     '  "intro_summary": "A terse outline of the opening — what the reader needs to know. Maximum 25 words; aim shorter.",\n' +
     '  "sections": [\n' +
     '    {\n' +
     '      "panel_index": 0,\n' +
-    '      "before": "MOMENT prose: narrate what panel 1\'s image depicts and how it comes about, picking up from the intro (2-4 sentences). REQUIRED and non-empty.",\n' +
+    '      "before": "MOMENT prose: narrate what panel 1\'s image depicts and how it comes about, picking up from the intro (' + _vBlock + '). REQUIRED and non-empty.",\n' +
     '      "before_summary": "A terse outline of the moment block. Maximum 25 words; aim shorter. Do NOT pad to length.",\n' +
-    '      "after": "BRIDGE prose: carry the story from panel 1\'s moment forward to just before panel 2 (2-4 sentences).",\n' +
+    '      "after": "BRIDGE prose: carry the story from panel 1\'s moment forward to just before panel 2 (' + _vBlock + ').",\n' +
     '      "after_summary": "A terse outline of the bridge. Maximum 25 words; aim shorter. Do NOT pad to length."\n' +
     '    }\n' +
     '  ],\n' +
-    '  "outro": "Closing paragraph after the final panel (2-3 sentences)",\n' +
+    '  "outro": "Closing paragraph after the final panel (' + _vEnds + ')",\n' +
     '  "outro_summary": "A terse outline of the closing. Maximum 25 words; aim shorter."\n' +
     '}';
 
@@ -601,6 +611,36 @@ router.put('/style/:campaignId/:sessionId', requireAuth, async function(req, res
     .run(styleId, now, req.session.userId, targetForkId);
 
   res.json({ success: true, style: styleId });
+});
+
+// ============================================================
+// SAVE this version's narrative VERBOSITY (length dial)
+// Body: { verbosity: 'low' | 'med' | 'high' }. Owner-scoped exactly like /style, but with NO
+// tier gate -- verbosity is available on every plan. Remembered per-fork; applied at generation.
+// ============================================================
+router.put('/verbosity/:campaignId/:sessionId', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const session = await db.prepare(
+    'SELECT s.id FROM sessions s JOIN campaigns c ON s.campaign_id = c.id ' +
+    'JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+  ).get(req.params.sessionId, req.session.userId);
+  if (!session) return res.status(403).json({ error: 'Access denied' });
+
+  const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
+  if (!callerRole) return res.status(403).json({ error: 'Access denied' });
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+
+  var _v = (req.body && typeof req.body.verbosity === 'string') ? req.body.verbosity.trim().toLowerCase() : '';
+  if (_v !== 'low' && _v !== 'med' && _v !== 'high') {
+    return res.json({ error: 'Unknown verbosity (expected low, med, or high)' });
+  }
+
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE session_forks SET narrative_verbosity = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+    .run(_v, now, req.session.userId, targetForkId);
+
+  res.json({ success: true, verbosity: _v });
 });
 
 module.exports = router;

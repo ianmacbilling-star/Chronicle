@@ -1972,6 +1972,7 @@ function selectSession(id) {
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
+      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'high';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -3613,8 +3614,44 @@ function openStylePicker(kind) {
     grid.innerHTML += _renderCustGroup('My Custom Styles', _mine);
     grid.innerHTML += _renderCustGroup('Campaign Styles (SM)', _sm);
   }
+  // Verbosity dial: narrative-only. Show it and highlight the saved level.
+  var _vd = document.getElementById('verbosity-dial');
+  if (_vd) {
+    if (STYLE_PICKER_KIND === 'narrative') {
+      _vd.classList.remove('hidden');
+      highlightVerbosity(state.narrativeVerbosity || 'high');
+    } else {
+      _vd.classList.add('hidden');
+    }
+  }
   var modal = document.getElementById('style-picker-modal');
   if (modal) modal.classList.remove('hidden');
+}
+
+function highlightVerbosity(v) {
+  var btns = document.querySelectorAll('#verbosity-dial .vseg-btn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle('is-on', btns[i].getAttribute('data-v') === v);
+  }
+}
+
+function setVerbosity(v) {
+  if (v !== 'low' && v !== 'med' && v !== 'high') return;
+  if (!state.currentCampaign || !state.currentSession) return;
+  var _prev = state.narrativeVerbosity || 'high';
+  highlightVerbosity(v);   // optimistic
+  fetch('/api/narrative/verbosity/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ verbosity: v })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showAlert('Could not set narrative length: ' + data.error); highlightVerbosity(_prev); return; }
+    state.narrativeVerbosity = data.verbosity || v;
+    mpSave('session', { narrative_verbosity: state.narrativeVerbosity });
+  })
+  .catch(function(e) { showAlert('Could not set narrative length: ' + e.message); highlightVerbosity(_prev); });
 }
 
 function closeStylePicker() {
@@ -9045,6 +9082,7 @@ function selectSession(id) {
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
+      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'high';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -11639,6 +11677,7 @@ function reloadSessionForFork() {
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
+      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'high';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       // Art style is per-fork too: re-apply from the viewed fork's data so a member
       // sees their own art style, not the SM's set by the initial no-fork load.

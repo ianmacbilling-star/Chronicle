@@ -1058,6 +1058,10 @@ async function migrateForks(pool) {
   // generated (stamped at generation). Lets each narrative panel show the true
   // voice it was written in, independent of the current dropdown selection.
   await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_style_used TEXT');
+  // narrative_verbosity = per-fork length dial for generated prose: 'low' | 'med' | 'high'.
+  // NULL/absent means 'high' (the original, most verbose behavior), so existing books are unchanged.
+  // Remembered and inherited like narrative_style; applied at Generate Narrative.
+  await pool.query("ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS narrative_verbosity TEXT");
 
   // Backfill: one DM fork per session, owned by the campaign's DM.
   await pool.query(`

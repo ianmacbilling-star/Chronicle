@@ -165,7 +165,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
-  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used, art_style_override FROM session_forks WHERE id=?').get(viewForkId);
+  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used, narrative_verbosity, art_style_override FROM session_forks WHERE id=?').get(viewForkId);
   // Set-and-forget defaults: when this user has not chosen a style for THIS session
   // yet, inherit their most recent prior choice in this campaign (per-user; DM forks
   // carry the DM's user_id, so one lookup covers DM and players). Falls back to the
@@ -207,6 +207,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null,
     narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || 'classic',
     narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
+    narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'high',
     art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
   }));
 });
