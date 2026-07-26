@@ -133,6 +133,18 @@ function dispRatioCSS(m) {
   }
   return shapeRatioCSS(s);
 }
+// Numeric aspect (w/h) matching dispRatioCSS -- the ratio coMedia's aspect-box actually renders
+// with. The composer must size images with THIS (not momentAspect, the raw pixel ratio) or its
+// width->height math disagrees with the rendered box and the page clips.
+function dispAspect(m) {
+  var s = normShape(m);
+  if (s === 'tower' || s === 'towerthin') {
+    var w = m && Number(m.img_w), h = m && Number(m.img_h);
+    if (w > 0 && h > 0) return w / h;
+    return 0.25;
+  }
+  return shapeAspect(s);
+}
 function normShape(m) {
   var s = (m && m.shape) || '';
   return (['wide', 'tall', 'square', 'panoramic', 'tower', 'towerthin', 'fullpage'].indexOf(s) >= 0) ? s : 'standard';
@@ -4284,7 +4296,11 @@ router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
 // Portraits float narrow (~4.6in wide); non-portraits sit ~full content width. Height is
 // width / aspect, capped to a page. (Float text-beside footprint is a Phase 3 refinement.)
 function beatImageHeight(beat, pageH) {
-  var aspect = (beat && beat.aspect) || 1;   // width / height
+  // Use the DISPLAY aspect (the ratio the image is actually rendered with by coMedia), not the
+  // raw pixel aspect. The composer sizes the rendered box by dispAspect; if the packer computed
+  // height from a different (pixel) aspect, the two disagree and the page clips. Prefer the
+  // moment's display aspect; fall back to the stored beat.aspect only when no moment is present.
+  var aspect = (beat && beat.moment) ? dispAspect(beat.moment) : ((beat && beat.aspect) || 1);   // width / height (display)
   // Picture Book MAXIMIZES: the biggest the image can be while fitting the content width
   // (6.8in) and one page. The height cap must be the USABLE box, never taller -- a full-height
   // image at the old 9.3/9.5 caps already exceeded the 9.16in content box (header band eats the
@@ -4431,9 +4447,15 @@ function composeBook(plan, beats, opts) {
             (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
           '</div></div>';
       } else if (pl.kind === 'image' && m && m.image) {
-        var asp = momentAspect(m) || 1;
-        var _visH = beatImageHeight(b, 9.16) * (pl.scale != null ? pl.scale : 1);   // true image height, capped at the usable box (matches the packer)
-        var w = Math.min(6.8, _visH * asp);
+        // Size with the DISPLAY aspect (what coMedia's aspect-box actually renders with), so the
+        // width we set produces exactly the packer's intended height. Using momentAspect (raw pixel
+        // ratio) here diverged from the rendered dispRatioCSS box and the page clipped by 1-3in.
+        var asp = dispAspect(m) || 1;
+        // Honor the PACKER'S height (fullH*scale). coMedia derives height from width via aspect, so
+        // setting width = height*asp yields the intended height; the column cap can only make it
+        // SHORTER (never taller), so the page can never clip.
+        var _visH = (pl.fullH != null ? pl.fullH : beatImageHeight(b, 9.16)) * (pl.scale != null ? pl.scale : 1);
+        var w = Math.min(6.8, round3(_visH * asp));
         var _ipi = panelN; panelN += 1;
         inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' +
           '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _ipi, opts.caption) + '</div>';
