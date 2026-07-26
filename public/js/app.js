@@ -14851,6 +14851,39 @@ function _runLayoutAiOptimize() {
       window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery(), '_blank');
     };
   }
+  // Admin easter egg #2: double-click the "After (optimized)" label to run the AI layout-review
+  // advisor (pass 2) and show the JSON ops it proposes. Read-only -- proposes, applies nothing.
+  // Built fresh in the handler (same rationale as the dump: a snapshotted URL goes stale when a
+  // layout option changes). Costs 1 token per call, so it only fires on an explicit double-click.
+  var _revLbl = document.getElementById('finalize-after-label');
+  if (_revLbl && state.user && state.user.is_admin) {
+    _revLbl.style.cursor = 'pointer';
+    _revLbl.title = 'Double-click: AI layout review (admin, 1 token)';
+    _revLbl.ondblclick = function () {
+      if (!state.currentCampaign) return;
+      _revLbl.textContent = 'After (reviewing...)';
+      fetch('/api/pdf/layout-review/' + state.currentCampaign.id + finalizeBookQuery(), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          _revLbl.textContent = 'After (optimized)';
+          var w = window.open('', '_blank');
+          if (!w) { alert('Popup blocked -- allow popups to see the AI review.'); return; }
+          var pretty = JSON.stringify(j, null, 2);
+          w.document.title = 'AI Layout Review -- ' + ((j && j.campaign) || 'campaign');
+          w.document.body.style.cssText = 'margin:0;background:#14100a;color:#f5e8c8;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:20px;';
+          var head = '<div style="color:#c9a84c;font-size:15px;margin-bottom:4px;">AI Layout Review (read-only advisor)</div>' +
+            '<div style="color:rgba(245,232,200,0.6);margin-bottom:14px;">' +
+            ((j && j.applied === false) ? 'Proposed ops -- APPLIES NOTHING. ' : '') +
+            'ops: ' + ((j && j.opCount) || 0) + (j && j.parseError ? ('  |  parseError: ' + j.parseError) : '') + '</div>';
+          w.document.body.innerHTML = head + '<pre style="white-space:pre-wrap;word-break:break-word;margin:0;">' +
+            pretty.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+        })
+        .catch(function (e) {
+          _revLbl.textContent = 'After (optimized)';
+          alert('Layout review failed: ' + ((e && e.message) || e));
+        });
+    };
+  }
   var afterBody = document.getElementById('finalize-after-body');
   if (afterBody) afterBody.style.display = 'none';
   var afterScroll = document.getElementById('finalize-after-scroll');
