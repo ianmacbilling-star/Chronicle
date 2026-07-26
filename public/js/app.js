@@ -1972,7 +1972,7 @@ function selectSession(id) {
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
-      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'high';
+      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -3619,7 +3619,7 @@ function openStylePicker(kind) {
   if (_vd) {
     if (STYLE_PICKER_KIND === 'narrative') {
       _vd.classList.remove('hidden');
-      highlightVerbosity(state.narrativeVerbosity || 'high');
+      highlightVerbosity(state.narrativeVerbosity || 'med');
     } else {
       _vd.classList.add('hidden');
     }
@@ -3835,9 +3835,20 @@ function generateNarrativeAndImages() {
   var _nbc = document.getElementById('narr-bar-cell'); if (_nbc) _nbc.style.display = 'block';
   var _nfill = document.getElementById('narr-progress-fill'); if (_nfill) _nfill.style.width = '0%';
   var _npct = 0;
+  // Steady creep that NEVER stalls before completion. The old curve eased 10% of the gap to 90
+  // every tick, so it sprinted to ~85 in seconds then sat pinned at 90 -- reading as 'stopped'.
+  // Instead: advance a small fixed step that TAPERS with height but always stays >= a floor, so
+  // the bar keeps visibly moving the whole time and only reaches 100% when the job actually ends.
+  // ~0.9%/tick near the start, easing to a ~0.18%/tick floor up high; approaches but never hits 95.
   var _nticker = setInterval(function() {
-    _npct = Math.min(90, _npct + Math.max(1, (90 - _npct) * 0.10));
-    if (_nfill) _nfill.style.width = _npct.toFixed(0) + '%';
+    // Asymptotic creep: always advance a fraction of the remaining gap to 99, with a tiny floor
+    // so the step never rounds to zero. Fast-ish early, ever slower near the top, but ALWAYS
+    // moving -- there is no plateau to read as 'stopped' even on a long generation. Snaps to 100
+    // only in _narrEnd when the job truly finishes.
+    var _gap = 99 - _npct;
+    _npct = _npct + Math.max(0.05, _gap * 0.015);
+    if (_npct > 98.8) _npct = 98.8;
+    if (_nfill) _nfill.style.width = _npct.toFixed(1) + '%';
   }, 500);
 
   function _narrEnd(ok) {
@@ -9082,7 +9093,7 @@ function selectSession(id) {
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
-      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'high';
+      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
 
       if (state.moments.length) renderStoryboard();
@@ -11677,7 +11688,7 @@ function reloadSessionForFork() {
       // Narrative Styles: this version's narrative voice preset (defaults to 'classic').
       state.narrativeStyle = (data && data.narrative_style) ? data.narrative_style : 'classic';
       state.narrativeStyleUsed = (data && data.narrative_style_used) ? data.narrative_style_used : state.narrativeStyle;
-      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'high';
+      state.narrativeVerbosity = (data && typeof data.narrative_verbosity === 'string') ? data.narrative_verbosity : 'med';
       if (typeof refreshNarrStyleButtons === 'function') refreshNarrStyleButtons();
       // Art style is per-fork too: re-apply from the viewed fork's data so a member
       // sees their own art style, not the SM's set by the initial no-fork load.

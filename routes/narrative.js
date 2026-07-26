@@ -144,9 +144,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   const narrStyleId = (fkSteer && fkSteer.narrative_style) ? fkSteer.narrative_style : 'classic';
   const styleBundle = NARRATIVE_STYLES[narrStyleId] || NARRATIVE_STYLES['classic'];
   const isDialogue = (narrStyleId === 'dialogue');
-  // Verbosity dial: 'low' | 'med' | 'high' (default high = original behavior). Length only --
+  // Verbosity dial: 'low' | 'med' | 'high' (default med for new forks; existing books backfilled to high). Length only --
   // never changes voice, tense, or person, so it composes with every narrative style.
-  const _vraw = (fkSteer && typeof fkSteer.narrative_verbosity === 'string') ? fkSteer.narrative_verbosity.toLowerCase() : 'high';
+  const _vraw = (fkSteer && typeof fkSteer.narrative_verbosity === 'string') ? fkSteer.narrative_verbosity.toLowerCase() : 'med';
   const narrVerbosity = (_vraw === 'low' || _vraw === 'med') ? _vraw : 'high';
   const _vBlock = (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-4 sentences';
   const _vEnds  = (narrVerbosity === 'low') ? '1 sentence' : (narrVerbosity === 'med') ? '1-2 sentences' : '2-3 sentences';

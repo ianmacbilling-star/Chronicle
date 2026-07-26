@@ -207,7 +207,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
     narrative_directions: viewForkRow ? (viewForkRow.narrative_directions || null) : null,
     narrative_style: (viewForkRow && viewForkRow.narrative_style) || _inhNarr || 'classic',
     narrative_style_used: viewForkRow ? (viewForkRow.narrative_style_used || null) : null,
-    narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'high',
+    narrative_verbosity: (viewForkRow && viewForkRow.narrative_verbosity) ? viewForkRow.narrative_verbosity : 'med',
     art_style_override: viewForkRow ? (viewForkRow.art_style_override || null) : null
   }));
 });
