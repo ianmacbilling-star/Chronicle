@@ -106,7 +106,20 @@ async function measureDocument(html, options) {
           heightIn: round3(r.height / PX)
         };
       });
-      return { blocks: blocks };
+      // Tower geometry probes: hidden markers cgFlowTower emits in the measure pass, plus the
+      // rendered height of the image box that immediately follows each probe -- so we can see the
+      // PLANNED tower image height vs the box's REAL rendered height (the auto-height divergence).
+      var probes = Array.prototype.slice.call(document.querySelectorAll('[data-twprobe]')).map(function (pn) {
+        var boxH = null, capH = null;
+        var boxEl = pn.nextElementSibling;   // the image box div follows the probe
+        if (boxEl) { boxH = Math.round((boxEl.getBoundingClientRect().height / 96) * 1000) / 1000;
+          var capEl = boxEl.querySelector('div[style*="position:absolute"]');
+          if (capEl) capH = Math.round((capEl.getBoundingClientRect().height / 96) * 1000) / 1000; }
+        return { imgW: parseFloat(pn.getAttribute('data-tw-imgw')), imgH: parseFloat(pn.getAttribute('data-tw-imgh')),
+          asp: parseFloat(pn.getAttribute('data-tw-asp')), cap: pn.getAttribute('data-tw-cap'),
+          cropsafe: pn.getAttribute('data-tw-cropsafe'), boxRealH: boxH, capRealH: capH };
+      });
+      return { blocks: blocks, towerProbes: probes };
     });
 
     var total = 0;

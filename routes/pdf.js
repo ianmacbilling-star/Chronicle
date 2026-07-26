@@ -1332,7 +1332,14 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
   // short narrative fills the scrap at a page bottom while the 9.2in tower bumps to the next
   // page, stranding the text and leaving the tower's side column empty. (Rollback: remove
   // `break-inside:avoid;page-break-inside:avoid;` from the wrapper below.)
-  return '<div style="display:flow-root;margin-bottom:0.10in;break-inside:avoid;page-break-inside:avoid;' + gzPanelCss(opts) + '">' + box + col + '</div>';
+  // Tower geometry probe (measure pass only): a hidden marker carrying the PLANNED image width/height/
+  // aspect and the caption mode, so the dump can compare the planned tower height against the box's
+  // REAL rendered height and see whether the auto-height box diverged from momentAspect, and whether
+  // the (absolutely-positioned) caption is being counted. Zero-height, never affects layout.
+  var _twProbe = (opts && opts._towerProbe)
+    ? ('<div data-twprobe="1" data-tw-imgw="' + imgW.toFixed(2) + '" data-tw-imgh="' + imgH.toFixed(2) + '" data-tw-asp="' + (Math.round(ta * 1000) / 1000) + '" data-tw-cap="' + ((opts.caption || 'none')) + '" data-tw-cropsafe="' + (lmCropSafe(m) ? '1' : '0') + '" style="height:0;overflow:hidden;"></div>')
+    : '';
+  return '<div style="display:flow-root;margin-bottom:0.10in;break-inside:avoid;page-break-inside:avoid;' + gzPanelCss(opts) + '">' + _twProbe + box + col + '</div>';
 }
 // Rough height of prose set in a narrow column, for band-build-time budgeting only (no measurement
 // is available this early). About 11 characters per inch at the body size, 0.19in per line.
@@ -4778,7 +4785,9 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     _mzComposed = { plan: { pages: pgs }, bands: bnds };
     req.query.measureComposed = '1';
     var cbuilt = await assembleNovelHtml(req, campaignId, null);
-    var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
+    var _cmeas = await measureDocument(cbuilt.html, {});
+    var cblocks = _cmeas.blocks || [];
+    if (_cmeas.towerProbes && _cmeas.towerProbes.length) realH._towerProbes = _cmeas.towerProbes;
     cblocks.forEach(function (bl) {
       var mm = /^cp:(\d+)$/.exec(bl.id || '');
       if (mm) { realH[+mm[1]] = bl.heightIn; return; }
@@ -4919,6 +4928,7 @@ function lookBackPullUpCandidate(pgs, bnds, pageH, estH) {
 
 async function computeMagazinePack(req, campaignId, packOpts) {
   var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
+  if (packOpts && packOpts.debug) { _co._towerProbe = true; req.query._towerProbe = '1'; }   // emit tower geometry probes for the dump
   var _hdrOn = (_co.header == null) ? true : !!_co.header;
   var pageH = ((packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : 9.4) - (_hdrOn ? HEADER_BAND_IN : 0);
   var _markerBreak = !!_co.markerbreak;   // each session starts a fresh page when set
@@ -5227,6 +5237,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           });
         });
         _dbg.overflows = realH._overflows || [];   // NEVER-CLIP: pages whose real height clips the box
+        if (realH._towerProbes) _dbg.towerProbes = realH._towerProbes;   // tower geometry: planned vs real box height
         // NEVER-CLIP (at-risk): also flag pages that fit the box TOTAL but render much taller than
         // the packer estimated (large est->real gap). These are where a tower beside-column or a
         // stacked cell overflows INSIDE the page even though the page total squeaks under box -- the
@@ -5478,6 +5489,19 @@ function magazinePlanText(packed) {
         (c.realH != null ? ('  [REAL-CELL ' + c.realH.toFixed(2) + 'in]') : ''));
     });
   });
+  var _tps = (d.towerProbes || []);
+  if (_tps.length) {
+    L.push('');
+    L.push('TOWER GEOMETRY (planned vs REAL rendered box -- reveals the auto-height / caption clip)');
+    _tps.forEach(function (t, i) {
+      var _diff = (t.boxRealH != null && t.imgH != null) ? (t.boxRealH - t.imgH) : null;
+      L.push('  tower#' + i + '  planned imgW' + (t.imgW != null ? t.imgW.toFixed(2) : '?') + ' imgH' + (t.imgH != null ? t.imgH.toFixed(2) : '?') + ' asp' + (t.asp != null ? t.asp : '?') +
+        '  cap=' + (t.cap || '?') + ' cropsafe=' + (t.cropsafe || '?') +
+        '  REAL-BOX' + (t.boxRealH != null ? t.boxRealH.toFixed(2) : '?') + (_diff != null ? ('  (box ' + (_diff >= 0 ? '+' : '') + _diff.toFixed(2) + ' vs planned)') : '') +
+        (t.capRealH != null ? ('  capH' + t.capRealH.toFixed(2)) : '  cap-not-in-flow') +
+        ((_diff != null && Math.abs(_diff) > 0.2) ? '  <== BOX DIVERGES FROM PLAN' : ''));
+    });
+  }
   L.push('');
   L.push('=== RAW JSON (kitchen sink) ===');
   L.push(JSON.stringify(d, null, 2));
