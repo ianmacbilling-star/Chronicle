@@ -5469,23 +5469,34 @@ function pairedPlanText(packed) {
       }
     });
     var real = (dp.realUsed != null) ? dp.realUsed : (dp.used || 0);
+    var _imgPl = (dp.placements || []).filter(function (pl) { return pl.kind === 'image' && pl.fullH != null && pl.realH != null; })
+                  .sort(function (a, b) { return (b.fullH - b.realH) - (a.fullH - a.realH); })[0];
+    var _hasImg = (dp.placements || []).some(function (pl) { return pl.kind === 'image'; });
+    // TEXT-ONLY page: Picture Book ideally wants an image on every page. A page of pure narration is
+    // flagged. A SHORT text-only page (a stranded fragment) should be consolidated onto an adjacent
+    // page that has an image (pull it up/down) -- that both removes the text-only page and fills space.
+    // A FULL text-only page can't be consolidated (no room on neighbors) and no layout op can add art,
+    // so it is an advisory flag only (the real fix is content-side: re-split narration or add an image).
+    if (!_hasImg) {
+      if (real < 3.5) {
+        _pIssues.push('  TEXT-ONLY-SHORT  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16, no image -- a stranded text page  -> op: pullLines to consolidate onto an adjacent page that has an image (Picture Book wants an image per page)');
+      } else {
+        _pIssues.push('  TEXT-ONLY-FULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16, no image -- a full page of narration. Picture Book ideally wants an image per page, but no layout op can add one; ADVISORY (content-side fix: re-split narration or generate art). Do not force a layout op here.');
+      }
+      return;
+    }
     if (real > 0 && real < (9.16 - 1.5)) {
-      // Decide whether the image on this page CAN actually grow. An image scaled below its natural
-      // full height (realH < fullH) has room to grow into the white. But a full-width image already at
-      // its natural height (realH ~= fullH) is maxed -- "growing" it would mean cropping the art, which
-      // in a picture book is wrong (the picture is the show; see the whole illustration). For those,
-      // the white below is STRUCTURAL (a wide image just doesn't fill a tall page), so do not suggest
-      // growImage; only text moves can help, if anything.
-      var _imgPl = (dp.placements || []).filter(function (pl) { return pl.kind === 'image' && pl.fullH != null && pl.realH != null; })
-                    .sort(function (a, b) { return (b.fullH - b.realH) - (a.fullH - a.realH); })[0];
+      // The page has an image and real white. Decide whether the image CAN grow: an image scaled below
+      // its natural full height (realH < fullH) has room. A full-width image already at natural height
+      // (realH ~= fullH) is maxed -- growing = cropping the art, wrong for a picture book. In that case
+      // the white below is STRUCTURAL and ACCEPTABLE: a full-width image with some white below it is a
+      // FINISHED picture-book page. Leave it -- do NOT propose growImage (would crop) or pullLines
+      // (cramming text under the art is un-picture-book). Some white space is fine here.
       var _canGrow = _imgPl && (_imgPl.fullH - _imgPl.realH) > 0.25;   // >0.25in of unused natural height
       if (_canGrow) {
         _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16; image can grow (real ' + _imgPl.realH.toFixed(2) + ' -> fullH ' + _imgPl.fullH.toFixed(2) + ')  -> op: growImage');
-      } else if (_imgPl) {
-        _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16; image already at natural full size (real ' + _imgPl.realH.toFixed(2) + ' ~= fullH ' + _imgPl.fullH.toFixed(2) + ') -- white is STRUCTURAL, do NOT grow (would crop). Only pullLines could help.');
-      } else {
-        _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16  -> op: pullLines (no growable image on page)');
       }
+      // else: image is at natural full size -> acceptable structural white, leave the page alone (no op).
     }
   });
   L.push('');
@@ -5814,6 +5825,21 @@ var LAYOUT_REVIEW_SYSTEM = [
   'text off a page that is already full/dense just to fill another -- a small remaining gap is better than',
   'un-densing a good page. If text cannot be moved without hurting a neighbor, grow the image instead.',
   '',
+  'LOOK FOR CROSS-PAGE CASCADES -- the highest-value moves are often not on the underfull page itself.',
+  'Do not judge each page in isolation; look at how a move on one page changes its NEIGHBORS. Examples:',
+  '- A shrunk image (its REAL-CELL is below its fullH, e.g. scale 0.70) is shrunk because it had to',
+  '  share its page with text. If you PULL that text onto an adjacent page that has room, the image can',
+  '  then GROW toward its fullH. So an underfull page can be the place to pull TEXT TO, so that a shrunk',
+  '  image on the neighbor can grow. The white you want to fix may be on a DIFFERENT page than the image',
+  '  that should grow.',
+  '- A text-heavy or text-only page next to an underfull page: pulling/reflowing text can let an image',
+  '  land on the text-heavy page (a picture book wants an image per page).',
+  '- When you see a shrunk image (REAL-CELL < fullH) AND white space anywhere on an adjacent page, that',
+  '  is a cascade candidate: propose the text move that frees the image, then the grow.',
+  'You will not always be able to see the full multi-step effect from one dump -- that is expected. The',
+  'system applies your ops and re-measures, then asks you again, so propose the first move of a cascade',
+  'even when you cannot see every downstream step; the next round will reveal what opened up.',
+  '',
   'Allowed ops (use ONLY these; name targets by the page and band/beat ids in the dump):',
   '  { "op":"growImage", "page":N, "band":N, "target":"fill", "why":"..." }',
   '  { "op":"shrinkImage", "page":N, "band":N, "to":"fit", "why":"..." }',
@@ -5836,11 +5862,16 @@ var LAYOUT_REVIEW_SYSTEM = [
 var LAYOUT_GOALS = {
   paired: [
     'LAYOUT GOALS (Picture Book) -- the FIRST MOVE for filling white on this book is: GROW THE IMAGE.',
-    'The picture is the show. To fill an underfull page, grow its image to fill the space -- images have',
-    'no ceiling but the page margins, so this is nearly always available and is the preferred fix.',
-    '- Do NOT pull text between pages to densify a picture book -- that makes it read like a magazine.',
-    '  Fill white by enlarging the art, not by cramming words.',
-    '- A picture book should feel generous and image-forward; big images are the goal, not a side effect.'
+    'The picture is the show. To fill an underfull page, grow its image to fill the space -- but ONLY if',
+    'the image is currently smaller than its natural full size (REAL-CELL < fullH). A full-width image',
+    'already at natural size cannot grow without cropping the art -- do NOT grow it.',
+    '- SOME WHITE SPACE IS ACCEPTABLE. A full-width image with some white below it is a FINISHED page.',
+    '  Leave it alone -- do not grow (would crop) and do not pull text to densify (un-picture-book).',
+    '- Do NOT pull text between pages to densify a picture book -- fill white by enlarging the art, not',
+    '  by cramming words. A little white beats a crammed page.',
+    '- Prefer an IMAGE ON EVERY PAGE. A short text-only page (a stranded fragment) should be consolidated',
+    '  onto an adjacent page that has an image. A full page of pure narration is not ideal, but no layout',
+    '  op can add an image, so flag it and move on -- do not force text moves that make it worse.'
   ].join('\n'),
   magazine: [
     'LAYOUT GOALS (Magazine) -- the FIRST MOVE for filling white on this book is: DENSIFY (pack more in).',
