@@ -5437,6 +5437,30 @@ function pairedPlanText(packed) {
       L.push('      beat ' + pl.beat + '  ' + lbl + _hstr + _rcStr + _fhStr + _flag + _dflag);
     });
   });
+
+  // ===== ISSUES (AI signals) -- paired ===========================================================
+  // Same structured signals the magazine dump emits, computed from the paired plan: over-box clips,
+  // oversized cells (real >> packed), and underfull pages. Maps to the op vocabulary in the spec.
+  var _pIssues = [];
+  (d.overflows || []).forEach(function (o) {
+    _pIssues.push('  CLIP  page ' + o.page + ' (viewer ~p.' + _viewer(o.page) + ')  over box by ' + o.overIn.toFixed(2) + 'in  -> op: shrinkImage / pushLines');
+  });
+  pages.forEach(function (pg, pi) {
+    var dp = _byPage[pi] || {};
+    (dp.placements || []).forEach(function (pl) {
+      if (pl.realH != null && pl.heightIn != null && (pl.realH - pl.heightIn) > 0.3) {
+        _pIssues.push('  OVERSIZED  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  beat ' + pl.beat + ' ' + (pl.kind || '') + ' renders ' + (pl.realH - pl.heightIn).toFixed(2) + 'in taller than packed  -> op: shrinkImage / pushLines');
+      }
+    });
+    var real = (dp.realUsed != null) ? dp.realUsed : (dp.used || 0);
+    if (real > 0 && real < (9.16 - 1.5)) {
+      _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16  -> op: growImage / pullLines');
+    }
+  });
+  L.push('');
+  L.push('ISSUES (AI signals -- structured, map to ops in AI_LAYOUT_REVIEW_SPEC)');
+  if (_pIssues.length) { _pIssues.forEach(function (s) { L.push(s); }); }
+  else L.push('  (none detected)');
   var _bt = (d.beatText || []);
   if (_bt.length) {
     L.push('');
@@ -5551,6 +5575,95 @@ function magazinePlanText(packed) {
         (c.realH != null ? ('  [REAL-CELL ' + c.realH.toFixed(2) + 'in]') : ''));
     });
   });
+
+  // ===== ISSUES (AI signals) =====================================================================
+  // Computed signals the AI reviewer consumes, derived from the page/cell/band data above. Each is a
+  // structured, machine-readable line the AI can map to an op (see AI_LAYOUT_REVIEW_SPEC). This is the
+  // "build A" contract: orphans, cross-page pullability, grow headroom, and oversized cells -- the
+  // things a human spots by eye, made explicit so the AI does not have to infer them.
+  var _band = function (bi) { return (d.bands || [])[bi] || {}; };
+  var _pageH = d.pageH;
+  var _issues = [];
+  // avg line height across all measured bands, for converting white space -> line counts
+  var _lhSum = 0, _lhN = 0;
+  (d.bands || []).forEach(function (b) {
+    if (b.lines && b.lines.length >= 2) { _lhSum += (b.lines[b.lines.length - 1] - b.lines[0]) / (b.lines.length - 1); _lhN++; }
+  });
+  var _avgLH = _lhN ? (_lhSum / _lhN) : 0.19;
+
+  // (1) ORPHANS: a split cell carrying only a tiny tail (<= 2 lines' worth of chars) that sits ALONE
+  // or as the last cell on a page -- the stranded "it." case. Flag with the pullable target.
+  d.pages.forEach(function (pg) {
+    (pg.cells || []).forEach(function (c, ci) {
+      if (!c.split || c.cEnd == null) {
+        // a tail slice (cEnd null means "to end") that is short:
+      }
+      var b = _band(c.band);
+      if (b.slen == null) return;
+      var spanChars = (c.cEnd != null ? c.cEnd : (b.slen || 0)) - (c.cStart || 0);
+      var isTail = (c.cStart > 0);   // a continuation slice
+      var isLastOnPage = (ci === (pg.cells.length - 1));
+      // orphan = short continuation tail, alone-ish on the page
+      if (isTail && spanChars > 0 && spanChars <= 120) {
+        _issues.push('  ORPHAN  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  b' + c.band + '  tail ' + spanChars + ' chars (~' + Math.max(1, Math.round(spanChars / 80)) + ' line)  -> op: pullLines back to the page that holds b' + c.band + "'s head");
+      }
+    });
+  });
+
+  // (2) CROSS-PAGE PULLABLE: an underfull page immediately followed by a page whose FIRST cell is a
+  // splittable text/feature band -- how many of that text's lines would fit in the leftover white.
+  for (var pi = 0; pi + 1 < d.pages.length; pi++) {
+    var pgA = d.pages[pi], pgB = d.pages[pi + 1];
+    var whiteA = _pageH - (pgA.realUsed != null ? pgA.realUsed : pgA.used);
+    if (whiteA < 0.5) continue;                       // not enough room to bother
+    var first = (pgB.cells || [])[0];
+    if (!first) continue;
+    var fb = _band(first.band);
+    var splittable = (fb.stext && fb.nlines >= 2 && !first.growMul);
+    if (!splittable) continue;
+    var fitLines = Math.max(0, Math.floor((whiteA - 0.12) / _avgLH));   // reserve a small gap
+    if (fitLines >= 1) {
+      _issues.push('  PULLABLE  page ' + pgA.page + ' (viewer p.' + _viewer(pgA.page) + ') has ' + whiteA.toFixed(2) + 'in white; next page b' + first.band + ' is text -> ~' + fitLines + ' line(s) could pull up  -> op: pullLines page ' + pgA.page + ' fromPage ' + pgB.page + ' lines ' + fitLines);
+    }
+  }
+
+  // (3) GROW HEADROOM: an underfull page carrying a growable floated image -> how much it could grow.
+  d.pages.forEach(function (pg) {
+    var white = _pageH - (pg.realUsed != null ? pg.realUsed : pg.used);
+    if (white < 0.6) return;
+    var growable = (pg.cells || []).filter(function (c) { var b = _band(c.band); return b.simg && !c.growMul && (b.kind === 'float' || b.kind === 'feature' || b.kind === 'wide'); });
+    if (!growable.length) return;
+    _issues.push('  GROW-HEADROOM  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  ' + white.toFixed(2) + 'in white, growable image b' + growable[0].band + '  -> op: growImage page ' + pg.page + ' band ' + growable[0].band + ' target fill');
+  });
+
+  // (4) OVERSIZED CELL: a cell whose REAL rendered height exceeds its packed height enough to risk a
+  // clip inside the page (even if the page total fits) -- the beside-column / tall-cell case.
+  d.pages.forEach(function (pg) {
+    (pg.cells || []).forEach(function (c) {
+      if (c.realH != null && c.h != null && (c.realH - c.h) > 0.3) {
+        _issues.push('  OVERSIZED  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  b' + c.band + ' renders ' + (c.realH - c.h).toFixed(2) + 'in taller than packed (real ' + c.realH.toFixed(2) + ' vs ' + c.h.toFixed(2) + ')  -> op: shrinkImage/pushLines');
+      }
+    });
+  });
+
+  L.push('');
+  L.push('ISSUES (AI signals -- structured, map to ops in AI_LAYOUT_REVIEW_SPEC)');
+  if (_issues.length) { _issues.forEach(function (s) { L.push(s); }); }
+  else L.push('  (none detected)');
+
+  // ===== TEXT MEASURE (magazine parity with paired) ==============================================
+  // Per text-bearing band: measured line count, span, chars-per-line, and the raw line Y + char
+  // arrays -- the same signal paired dumps, so the AI has equal text vision in both layouts.
+  var _textBands = (d.bands || []).filter(function (b) { return b.stext && b.nlines; });
+  if (_textBands.length) {
+    L.push('');
+    L.push('TEXT MEASURE (per band: len=chars, lines=measured line count, span=last-line Y)');
+    _textBands.forEach(function (b) {
+      var span = (b.lines && b.lines.length) ? (b.lines[b.lines.length - 1] - b.lines[0]) : 0;
+      var cpl = b.nlines ? Math.round(b.slen / b.nlines) : 0;
+      L.push('  b' + b.i + '  len' + b.slen + '  lines' + b.nlines + '  span' + span.toFixed(2) + '  ~' + cpl + ' chars/line' + ((cpl > 95) ? '  <== SUSPECT' : ''));
+    });
+  }
   var _tps = (d.towerProbes || []);
   if (_tps.length) {
     L.push('');
