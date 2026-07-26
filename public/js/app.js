@@ -3839,12 +3839,13 @@ function generateNarrativeAndImages() {
   // whose only job is to keep visibly MOVING. Matches the WYSIWYG render creep (startPreviewProgress):
   // a gentle ease from a low start on a fast 300ms tick, so it crawls slowly and smoothly the
   // whole way rather than sprinting then parking. Ease 0.04 keeps it slow from the beginning;
-  // the 0.4 floor keeps every tick perceptible; caps at 90 and _narrEnd snaps to 100 on finish.
+  // tiny 0.10 floor keeps every 750ms tick perceptible but small; crawls slowly toward 98 (never
+  // parks at 90) and _narrEnd snaps to 100 on finish.
   var _nticker = setInterval(function() {
-    _npct += Math.max(0.15, (90 - _npct) * 0.02);
-    if (_npct > 90) _npct = 90;
+    _npct += Math.max(0.10, (98 - _npct) * 0.015);
+    if (_npct > 98) _npct = 98;
     if (_nfill) _nfill.style.width = _npct.toFixed(1) + '%';
-  }, 250);
+  }, 750);
 
   function _narrEnd(ok) {
     if (ok && typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -3934,15 +3935,15 @@ function generateNarrativeOnly() {
   var _nctl = new AbortController();
   state.abortNarrOnly = _nctl;
   var _cb = document.getElementById('sb-narr-cancel-btn'); if (_cb) _cb.style.display = 'inline-block';
-  // Gentle creep matched to the WYSIWYG render bar (startPreviewProgress): slow ease (0.04) from a
-  // low start on a 300ms tick, 0.4 floor so it always visibly moves, cap 90, snap 100 on done.
+  // Gentle creep: slow ease from a low start on a 750ms tick, tiny 0.10 floor so each nudge is
+  // small but always moving; crawls slowly toward 98 (never parks at 90), snaps 100 on done.
   // (The old curve eased 12%/tick of the gap at 400ms -- it sprinted to ~85 then parked, which
   // read as stalled.)
   var ticker = setInterval(function () {
-    pct += Math.max(0.15, (90 - pct) * 0.02);
-    if (pct > 90) pct = 90;
+    pct += Math.max(0.10, (98 - pct) * 0.015);
+    if (pct > 98) pct = 98;
     if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 250);
+  }, 750);
   function endBar(done) {
     clearInterval(ticker);
     clearGenLock();
@@ -7143,14 +7144,14 @@ function generateNarrative() {
   if (progress) progress.style.display = 'block';
 
   var pct = 8;
-  // Gentle creep matched to the render bar: slow ease from a low start, 0.4 floor, 300ms tick,
-  // cap 90. Replaces a random-jump-to-88 that sprinted then parked. (Duplicated function -- both
-  // copies patched identically.)
+  // Gentle creep: slow ease from a low start, tiny 0.10 floor, 750ms tick; small nudges that keep
+  // crawling slowly toward 98 (never parks at 90). Replaces a random-jump-to-88 that sprinted then
+  // parked. (Duplicated function -- both copies patched identically.)
   var ticker = setInterval(function() {
-    pct += Math.max(0.15, (90 - pct) * 0.02);
-    if (pct > 90) pct = 90;
+    pct += Math.max(0.10, (98 - pct) * 0.015);
+    if (pct > 98) pct = 98;
     if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 250);
+  }, 750);
 
   if (msg) msg.textContent = 'Writing your story narrative...';
 
@@ -10558,14 +10559,14 @@ function generateNarrative() {
   if (progress) progress.style.display = 'block';
 
   var pct = 8;
-  // Gentle creep matched to the render bar: slow ease from a low start, 0.4 floor, 300ms tick,
-  // cap 90. Replaces a random-jump-to-88 that sprinted then parked. (Duplicated function -- both
-  // copies patched identically.)
+  // Gentle creep: slow ease from a low start, tiny 0.10 floor, 750ms tick; small nudges that keep
+  // crawling slowly toward 98 (never parks at 90). Replaces a random-jump-to-88 that sprinted then
+  // parked. (Duplicated function -- both copies patched identically.)
   var ticker = setInterval(function() {
-    pct += Math.max(0.15, (90 - pct) * 0.02);
-    if (pct > 90) pct = 90;
+    pct += Math.max(0.10, (98 - pct) * 0.015);
+    if (pct > 98) pct = 98;
     if (fill) fill.style.width = pct.toFixed(1) + '%';
-  }, 250);
+  }, 750);
 
   if (msg) msg.textContent = 'Writing your story narrative...';
 
