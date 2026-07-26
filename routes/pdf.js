@@ -5762,6 +5762,36 @@ var LAYOUT_REVIEW_SYSTEM = [
   'ops -- use them as strong hints but apply judgment. If the book looks good, return [].'
 ].join('\n');
 
+// Per-layout GOALS preamble. The op vocabulary is universal, but the priorities differ by layout:
+// a magazine wants density (white space is wasted); a picture book wants generous, image-forward
+// pages (white space is often intentional). The right block is prepended to the system prompt based
+// on the book's arrange. Tune these against real advisor output -- they are taste, not geometry.
+var LAYOUT_GOALS = {
+  paired: [
+    'LAYOUT GOALS (Picture Book): this is a generous, image-forward picture-book layout.',
+    '- Images full size wherever possible -- prefer growing an image to fill available space; a small image with white around it is a missed opportunity, not a virtue.',
+    '- White space is acceptable for rhythm, but a large gap next to a growable image should be closed by growing the image.',
+    '- One beat per spread; do not cram unrelated content together to save pages.',
+    '- Fix clips and orphans first, then make images as large as the page safely allows.'
+  ].join('\n'),
+  magazine: [
+    'LAYOUT GOALS (Magazine): this is a dense, editorial layout.',
+    '- Large white space is wasted -- prioritize filling it: grow images and pull text up so pages read full and tight.',
+    '- Aim for full pages; an underfull page is a problem to solve, not a resting point.',
+    '- Fix clips and orphans first, then maximize density and polish.'
+  ].join('\n'),
+  gazette: [
+    'LAYOUT GOALS (Gazette): a dense parchment/column layout, like a period newspaper.',
+    '- Fill columns; avoid large gaps. Grow images and pull text up to keep pages full.',
+    '- Fix clips and orphans first, then density.'
+  ].join('\n'),
+  comic: [
+    'LAYOUT GOALS (Comic): panel sequence and pacing matter most.',
+    '- Preserve intentional splash/hero panels -- do not shrink them just to fill space.',
+    '- Fix clips and broken panel flow first; fill-ratio is secondary to reading rhythm.'
+  ].join('\n')
+};
+
 router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   try {
     var key = process.env.ANTHROPIC_API_KEY;
@@ -5770,16 +5800,21 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
 
     // Build the same dump the pack-debug route uses.
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
-    var dump, campaignName = 'campaign';
+    var dump, campaignName = 'campaign', _arrange;
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
       dump = magazinePlanText(packedM);
       campaignName = (packedM && packedM.campaign && packedM.campaign.name) || 'campaign';
+      _arrange = _cco.arrange;
     } else {
       var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
       dump = pairedPlanText(packedP);
       campaignName = (packedP && packedP.campaign && packedP.campaign.name) || 'campaign';
+      _arrange = 'paired';
     }
+    // Prepend the per-layout goals so the AI optimizes for the RIGHT thing (density vs image-forward).
+    var _goals = LAYOUT_GOALS[_arrange] || LAYOUT_GOALS.paired;
+    var _system = _goals + '\n\n' + LAYOUT_REVIEW_SYSTEM;
 
     // Send the dump to Sonnet. Mirrors the artStyles.js call pattern exactly.
     var response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -5788,7 +5823,7 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
       body: JSON.stringify({
         model: TEXT_MODEL,
         max_tokens: 2000,
-        system: LAYOUT_REVIEW_SYSTEM,
+        system: _system,
         messages: [{ role: 'user', content: 'Here is the layout dump for "' + campaignName + '". Return the JSON array of ops.\n\n' + dump }]
       })
     });
