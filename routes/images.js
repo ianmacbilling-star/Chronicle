@@ -97,12 +97,18 @@ var IP_GUARD_IMG = ' ORIGINAL CONTENT ONLY: depict ONLY the user\'s own original
 // this, so reference-image generation stays posed.
 var COMPOSITION_IMG = ' COMPOSITION AND EYELINES (IMPORTANT): stage each panel as a candid scene the reader observes from the outside, NEVER a posed photo. Characters MUST engage the action and the focal point WITHIN the frame, with their gaze, faces, and body directed at what is happening in the scene and at each other. Do NOT have characters face forward toward the viewer, look into the camera, make eye contact with the viewer, or point or gesture outward toward the lens. Show characters from three-quarter, side, or profile angles, or from behind, with eyelines that follow the action inside the frame. This is a firm default; the ONLY exception is a rare, deliberate dramatic beat that truly demands a direct-to-camera look (such as a cold villain staring down the lens or a single triumphant hero shot) -- reserve camera-facing framing for those uncommon moments only.';
 
+// Ranged-attack framing for STORY PANELS ONLY (appended to the panel `hint`). The image model
+// tends to stage every fight at melee range, so an archer, gunner, or spellcaster ends up drawn
+// nose-to-nose with the target. Push ranged/projectile attacks apart across the frame. Fires off
+// scene-text cues only (the extraction prose must name the ranged action); melee stays close.
+var RANGED_ATTACK_IMG = ' RANGED ATTACKS: when the scene shows a character or creature making a ranged or projectile attack \u2014 bow, crossbow, thrown spear or knife, sling, firearm, or a ranged spell such as a fireball, lightning bolt, magic missile, or eldritch blast \u2014 stage the attacker and the target SEPARATED BY A CLEAR DISTANCE across the frame, with open ground, air, or terrain between them, and show the projectile, bolt, or spell effect travelling across that gap. Do NOT place a ranged attacker and their target at melee/hand-to-hand range as if trading blows, UNLESS the scene text specifically says they are in close range (a rare, deliberate case). Melee attacks (swords, claws, fists) stay close; ranged attacks read at range.';
+
 function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
   var _fade = (isFadeOverride === true || isFadeOverride === false) ? isFadeOverride : isFadeStyle(style);
   var edgeDirective = _fade ? FADE_WHITE : NO_BORDER;
-  var hint = COMPOSITION_IMG + shapeCompHint(shape) + edgeDirective;
+  var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective;
 
   // charBlock is { text, refs } (refs may include assets) from the
   // route. Tolerate a plain string or null for safety.
