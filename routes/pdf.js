@@ -1123,6 +1123,24 @@ function cgFocalPos(focal) {
 //                        sub-pixel rounding gap can't reveal the box background as a hairline.
 // mopts.forceContain forces contain regardless of crop_safe (rarely needed: a caller that already
 // sized its box to auto-height for a non-crop-safe image emits its own <img> and skips this).
+// AI INPUT CONTRACT -- universal per-image geometry probe. When _imgProbeOn is set (measure pass
+// only), every image emitted through the primitive is wrapped in a zero-footprint marker carrying
+// what the emitter knows: fit mode (cover crops / contain letterboxes), whether cropping is allowed,
+// the focal anchor, the image's intrinsic pixel aspect, and its shape. The measure pass then reads
+// the ENCLOSING box's real rendered width/height and any caption sibling, giving the AI a complete
+// picture of every image in every layout from one choke point. Inert in normal rendering.
+var _imgProbeOn = false;
+function _imgProbeAttrs(m, fit, cropSafe) {
+  var iw = m && Number(m.img_w), ih = m && Number(m.img_h);
+  var intrinsic = (iw > 0 && ih > 0) ? Math.round((iw / ih) * 1000) / 1000 : '';
+  return ' data-imgprobe="1"' +
+    ' data-ip-fit="' + fit + '"' +
+    ' data-ip-cropsafe="' + (cropSafe ? '1' : '0') + '"' +
+    ' data-ip-focal="' + (lmFocal(m) || 'center') + '"' +
+    ' data-ip-intrinsic="' + intrinsic + '"' +
+    ' data-ip-shape="' + (normShape(m) || 'standard') + '"' +
+    ' data-ip-title="' + (m && m.title ? '1' : '0') + '"';
+}
 function momentImgMedia(m, mopts) {
   mopts = mopts || {};
   if (!m || !m.image) return '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
@@ -1130,7 +1148,8 @@ function momentImgMedia(m, mopts) {
   var _fit = _cropSafe
     ? ('object-fit:cover;object-position:' + cgFocalPos(lmFocal(m)) + ';width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;')
     : 'object-fit:contain;width:100%;height:100%;';
-  return '<img style="' + _fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+  var _probe = _imgProbeOn ? _imgProbeAttrs(m, _cropSafe ? 'cover' : 'contain', _cropSafe) : '';
+  return '<img' + _probe + ' style="' + _fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
 }
 
 // Aspect-ratio box wrapper around momentImgMedia, for layouts that size images by ASPECT rather
@@ -1336,7 +1355,7 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
   // aspect and the caption mode, so the dump can compare the planned tower height against the box's
   // REAL rendered height and see whether the auto-height box diverged from momentAspect, and whether
   // the (absolutely-positioned) caption is being counted. Zero-height, never affects layout.
-  var _twProbe = (opts && opts._towerProbe)
+  var _twProbe = (_imgProbeOn || (opts && opts._towerProbe))
     ? ('<div data-twprobe="1" data-tw-imgw="' + imgW.toFixed(2) + '" data-tw-imgh="' + imgH.toFixed(2) + '" data-tw-asp="' + (Math.round(ta * 1000) / 1000) + '" data-tw-cap="' + ((opts.caption || 'none')) + '" data-tw-cropsafe="' + (lmCropSafe(m) ? '1' : '0') + '" style="height:0;overflow:hidden;"></div>')
     : '';
   return '<div style="display:flow-root;margin-bottom:0.10in;break-inside:avoid;page-break-inside:avoid;' + gzPanelCss(opts) + '">' + _twProbe + box + col + '</div>';
@@ -4333,6 +4352,7 @@ function beatImageHeight(beat, pageH) {
 // packer, and return { plan, overrides }. Overrides carry the per-beat image scale the
 // packer chose, ready to apply through the normal override render path.
 async function computePairedPack(req, campaignId, packOpts) {
+  if (packOpts && packOpts.debug) _imgProbeOn = true;   // emit per-image geometry probes for the dump (AI input contract)
   req.query.measurePaired = '1';
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
   var blocks = (await measureDocument(mbuilt.html, {})).blocks || [];
@@ -4391,7 +4411,7 @@ async function computePairedPack(req, campaignId, packOpts) {
   if (packOpts && packOpts.debug) {
     var _pco = Object.assign({}, _dco, { paper: 'white', campaignName: (mbuilt.campaign && mbuilt.campaign.name) || '' });
     var _realP = await remeasureComposedPaired(req, campaignId, plan, mbuilt.beats, _pco);
-    _pdbg = { pages: [], overflows: [], atRisk: [], remeasured: !_realP._error, remeasureError: _realP._error || null, beatText: [] };
+    _pdbg = { pages: [], overflows: [], atRisk: [], remeasured: !_realP._error, remeasureError: _realP._error || null, beatText: [], imgProbes: (_realP._imgProbes || []) };
     // Per-beat text measurement diagnostic: shows whether the split-slice heights have real line
     // data or fell back to estTextH, and the measured lines-per-char, so a compressed/bad measure
     // is visible directly.
@@ -4427,6 +4447,7 @@ async function computePairedPack(req, campaignId, packOpts) {
       if (!over && gap > _riskGap) _pdbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
     });
   }
+  _imgProbeOn = false;   // clear probe flag so it never leaks into a normal render
   return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length, beats: mbuilt.beats, dbg: _pdbg };
 }
 // PHASE 3 (page-packer) render: apply the packer's chosen image scales through the normal
@@ -4788,6 +4809,7 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     var _cmeas = await measureDocument(cbuilt.html, {});
     var cblocks = _cmeas.blocks || [];
     if (_cmeas.towerProbes && _cmeas.towerProbes.length) realH._towerProbes = _cmeas.towerProbes;
+    if (_cmeas.imgProbes && _cmeas.imgProbes.length) realH._imgProbes = _cmeas.imgProbes;
     cblocks.forEach(function (bl) {
       var mm = /^cp:(\d+)$/.exec(bl.id || '');
       if (mm) { realH[+mm[1]] = bl.heightIn; return; }
@@ -4831,7 +4853,9 @@ async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
     var _body = composeBook(plan, beats, Object.assign({}, cOpts || {}, { measureComposed: true }));
         var _extra = { packComposedBody: _body, arrange: 'paired' };
     var cbuilt = await assembleNovelHtml(req, campaignId, null, _extra);
-    var cblocks = (await measureDocument(cbuilt.html, {})).blocks || [];
+    var _cmeasP = await measureDocument(cbuilt.html, {});
+    var cblocks = _cmeasP.blocks || [];
+    if (_cmeasP.imgProbes && _cmeasP.imgProbes.length) realH._imgProbes = _cmeasP.imgProbes;
     cblocks.forEach(function (bl) {
       var mm = /^cp:(\d+)$/.exec(bl.id || '');
       if (mm) { realH[+mm[1]] = bl.heightIn; return; }
@@ -4928,7 +4952,7 @@ function lookBackPullUpCandidate(pgs, bnds, pageH, estH) {
 
 async function computeMagazinePack(req, campaignId, packOpts) {
   var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
-  if (packOpts && packOpts.debug) { _co._towerProbe = true; req.query._towerProbe = '1'; }   // emit tower geometry probes for the dump
+  if (packOpts && packOpts.debug) { _imgProbeOn = true; _co._towerProbe = true; req.query._towerProbe = '1'; }   // module-level flags survive the fresh opts re-parse inside assembleNovelHtml (the mutated _co does not)
   var _hdrOn = (_co.header == null) ? true : !!_co.header;
   var pageH = ((packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : 9.4) - (_hdrOn ? HEADER_BAND_IN : 0);
   var _markerBreak = !!_co.markerbreak;   // each session starts a fresh page when set
@@ -5238,6 +5262,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
         });
         _dbg.overflows = realH._overflows || [];   // NEVER-CLIP: pages whose real height clips the box
         if (realH._towerProbes) _dbg.towerProbes = realH._towerProbes;   // tower geometry: planned vs real box height
+        if (realH._imgProbes) _dbg.imgProbes = realH._imgProbes;         // universal per-image geometry (AI input contract)
         // NEVER-CLIP (at-risk): also flag pages that fit the box TOTAL but render much taller than
         // the packer estimated (large est->real gap). These are where a tower beside-column or a
         // stacked cell overflows INSIDE the page even though the page total squeaks under box -- the
@@ -5260,6 +5285,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     } catch (e) { _dbg.remeasureError = String((e && e.message) || e); }
   }
 
+  _imgProbeOn = false;   // clear the probe flag so it never leaks into a subsequent normal render
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
@@ -5402,6 +5428,20 @@ function pairedPlanText(packed) {
         if (t.afterChars) L.push('       chars: [' + t.afterChars.join(', ') + ']'); }
     });
   }
+  var _ips = (d.imgProbes || []);
+  if (_ips.length) {
+    L.push('');
+    L.push('IMAGE GEOMETRY (AI input contract: every image, all layouts. fit=cover crops / contain letterboxes)');
+    _ips.forEach(function (p, i) {
+      var _cropFlag = p.cropAxis ? ('  <== CROPS ' + p.cropAxis + ' (intrinsic ' + (p.intrinsicAsp || '?') + ' vs box ' + (p.boxAsp || '?') + ')') : '';
+      var _capFlag = (p.hasTitle && p.capInFlow === 0) ? '  cap-absolute(clippable)' : (p.hasTitle ? '  cap-in-flow' : '');
+      L.push('  img#' + i + '  ' + (p.shape || '?') + '  fit=' + (p.fit || '?') + ' cropsafe=' + (p.cropsafe || '?') + ' focal=' + (p.focal || '?') +
+        '  box ' + (p.boxWin != null ? p.boxWin.toFixed(2) : '?') + 'x' + (p.boxHin != null ? p.boxHin.toFixed(2) : '?') + 'in' +
+        '  img ' + (p.imgWin != null ? p.imgWin.toFixed(2) : '?') + 'x' + (p.imgHin != null ? p.imgHin.toFixed(2) : '?') + 'in' +
+        (p.intrinsicAsp ? ('  intrinsic-asp' + p.intrinsicAsp) : '') +
+        (p.capRealH != null ? ('  capH' + p.capRealH.toFixed(2)) : '') + _capFlag + _cropFlag);
+    });
+  }
   return L.join('\n');
 }
 
@@ -5500,6 +5540,20 @@ function magazinePlanText(packed) {
         '  REAL-BOX' + (t.boxRealH != null ? t.boxRealH.toFixed(2) : '?') + (_diff != null ? ('  (box ' + (_diff >= 0 ? '+' : '') + _diff.toFixed(2) + ' vs planned)') : '') +
         (t.capRealH != null ? ('  capH' + t.capRealH.toFixed(2)) : '  cap-not-in-flow') +
         ((_diff != null && Math.abs(_diff) > 0.2) ? '  <== BOX DIVERGES FROM PLAN' : ''));
+    });
+  }
+  var _ips = (d.imgProbes || []);
+  if (_ips.length) {
+    L.push('');
+    L.push('IMAGE GEOMETRY (AI input contract: every image, all layouts. fit=cover crops / contain letterboxes)');
+    _ips.forEach(function (p, i) {
+      var _cropFlag = p.cropAxis ? ('  <== CROPS ' + p.cropAxis + ' (intrinsic ' + (p.intrinsicAsp || '?') + ' vs box ' + (p.boxAsp || '?') + ')') : '';
+      var _capFlag = (p.hasTitle && p.capInFlow === 0) ? '  cap-absolute(clippable)' : (p.hasTitle ? '  cap-in-flow' : '');
+      L.push('  img#' + i + '  ' + (p.shape || '?') + '  fit=' + (p.fit || '?') + ' cropsafe=' + (p.cropsafe || '?') + ' focal=' + (p.focal || '?') +
+        '  box ' + (p.boxWin != null ? p.boxWin.toFixed(2) : '?') + 'x' + (p.boxHin != null ? p.boxHin.toFixed(2) : '?') + 'in' +
+        '  img ' + (p.imgWin != null ? p.imgWin.toFixed(2) : '?') + 'x' + (p.imgHin != null ? p.imgHin.toFixed(2) : '?') + 'in' +
+        (p.intrinsicAsp ? ('  intrinsic-asp' + p.intrinsicAsp) : '') +
+        (p.capRealH != null ? ('  capH' + p.capRealH.toFixed(2)) : '') + _capFlag + _cropFlag);
     });
   }
   L.push('');

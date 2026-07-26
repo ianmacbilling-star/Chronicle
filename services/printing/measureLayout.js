@@ -119,7 +119,45 @@ async function measureDocument(html, options) {
           asp: parseFloat(pn.getAttribute('data-tw-asp')), cap: pn.getAttribute('data-tw-cap'),
           cropsafe: pn.getAttribute('data-tw-cropsafe'), boxRealH: boxH, capRealH: capH };
       });
-      return { blocks: blocks, towerProbes: probes };
+      // Universal per-image geometry (AI input contract): every image carries a data-imgprobe with
+      // its fit/crop/focal/intrinsic-aspect/shape. Here we read the IMG's own rendered rect and its
+      // enclosing box's rect (the box is what the layout sized), plus any caption sibling and whether
+      // that caption is in normal flow or absolutely positioned (an absolute caption adds no height
+      // and can be clipped by the box's overflow:hidden). This gives the AI, for every picture in
+      // every layout, planned-vs-real geometry and a crop/clip signal from one place.
+      var PX2 = 96;
+      var imgProbes = Array.prototype.slice.call(document.querySelectorAll('img[data-imgprobe]')).map(function (im) {
+        var ir = im.getBoundingClientRect();
+        var box = im.parentElement;
+        var br = box ? box.getBoundingClientRect() : ir;
+        // caption: a sibling/descendant of the box positioned absolutely (overlay) or in flow (below)
+        var capEl = box ? box.querySelector('[style*="position:absolute"]') : null;
+        var capInFlow = 1, capRealH = null;
+        if (capEl) {
+          var cs = window.getComputedStyle(capEl);
+          capInFlow = (cs && cs.position === 'absolute') ? 0 : 1;
+          capRealH = Math.round((capEl.getBoundingClientRect().height / PX2) * 1000) / 1000;
+        }
+        var boxAsp = (br.height > 0) ? Math.round((br.width / br.height) * 1000) / 1000 : null;
+        var intrinsic = parseFloat(im.getAttribute('data-ip-intrinsic')) || null;
+        var fit = im.getAttribute('data-ip-fit');
+        // crop estimate: a cover image whose intrinsic aspect != the box aspect is cropped on one axis
+        var cropAxis = null;
+        if (fit === 'cover' && intrinsic && boxAsp) {
+          if (intrinsic > boxAsp + 0.02) cropAxis = 'sides';       // image wider than box -> left/right cropped
+          else if (intrinsic < boxAsp - 0.02) cropAxis = 'topbottom'; // image taller than box -> top/bottom cropped
+        }
+        return {
+          shape: im.getAttribute('data-ip-shape'), fit: fit,
+          cropsafe: im.getAttribute('data-ip-cropsafe'), focal: im.getAttribute('data-ip-focal'),
+          hasTitle: im.getAttribute('data-ip-title') === '1',
+          intrinsicAsp: intrinsic, boxAsp: boxAsp,
+          boxWin: Math.round((br.width / PX2) * 1000) / 1000, boxHin: Math.round((br.height / PX2) * 1000) / 1000,
+          imgWin: Math.round((ir.width / PX2) * 1000) / 1000, imgHin: Math.round((ir.height / PX2) * 1000) / 1000,
+          cropAxis: cropAxis, capInFlow: capInFlow, capRealH: capRealH
+        };
+      });
+      return { blocks: blocks, towerProbes: probes, imgProbes: imgProbes };
     });
 
     var total = 0;
