@@ -362,7 +362,8 @@ function portraitMedia(m, kind) {
   if (kind === 'frame') return framedMedia(m);
   var ratio = dispRatioCSS(m);
   if (!m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);"></div>';
-  var img = '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+  // Base media through the primitive: crop-safe cover+focal, non-crop-safe contain. (Step 3)
+  var img = momentImgAspectBox(m, ratio, '', '');
   if (kind === 'comic') {
     return '<div style="width:100%;box-sizing:border-box;border:5px solid #0a0806;background:#160e06;overflow:hidden;">' + img + '</div>';
   }
@@ -373,12 +374,12 @@ function portraitMedia(m, kind) {
     '</div>';
   }
   if (kind === 'gallery') {
-    return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+    return momentImgAspectBox(m, ratio, 'box-shadow:' + CO_IMG_SHADOW + ';', '');
   }
   if (kind === 'bleed') {
     return img;
   }
-  return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border:1px solid rgba(201,168,76,0.25);border-radius:3px;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+  return momentImgAspectBox(m, ratio, 'border:1px solid rgba(201,168,76,0.25);border-radius:3px;', '');
 }
 
 function asideText(m, sectionAfter) {
@@ -617,9 +618,9 @@ function coMedia(m, border) {
   // Overscan the image 1px past a clipping wrapper so a sub-pixel rounding gap at some zoom
   // levels can't show a thin hairline at the edge (covers the dark-bg peek AND a dark image
   // edge row). Applies to the default/comic/vignette border treatments below.
-  var img = m.image
-    ? '<div style="overflow:hidden;line-height:0;"><img style="width:calc(100% + 2px);aspect-ratio:' + ratio + ';object-fit:cover;display:block;margin:-1px;" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
-    : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;"></div>';
+  // Through the primitive now: crop-safe images cover+overscan (as before), non-crop-safe get
+  // contain instead of being force-cropped, and focal position is honored. (roadmap #1, Step 3)
+  var img = momentImgAspectBox(m, ratio, '', '');
   switch (border) {
     case 'frame': return '<div style="padding:2px 0;line-height:0;">' + framedMedia(m) + '</div>';
     case 'comic': return '<div style="position:relative;line-height:0;">' + img + '<div style="position:absolute;inset:0;border:5px solid #0a0806;pointer-events:none;"></div></div>';   // B: full-size image + INSET border (was 'border:5px solid' on the wrapper, which carved ~0.1in of width)
@@ -627,9 +628,8 @@ function coMedia(m, border) {
       return '<div style="position:relative;line-height:0;">' + img + vignetteOverlayHtml() + '</div>';
     case 'gallery':
       // B: full-size image; drop-shadow bleeds outward (was 'padding:0 0.26in 0.26in 0', which carved ~0.26in of width -> ~1in short on towers)
-      return m.image
-        ? '<div style="line-height:0;padding-bottom:0.14in;"><img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" /></div>'
-        : img;
+      return '<div style="line-height:0;padding-bottom:0.14in;">' +
+        momentImgAspectBox(m, ratio, 'border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';', '') + '</div>';
     case 'keyline':
       return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px') + '</div>';
     case 'none':
@@ -1107,6 +1107,17 @@ function momentImgMedia(m, mopts) {
   return '<img style="' + _fit + 'display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />';
 }
 
+// Aspect-ratio box wrapper around momentImgMedia, for layouts that size images by ASPECT rather
+// than a fixed pixel box (Picture Book). The box owns overflow:hidden so a crop-safe cover image
+// clips to the aspect; a non-crop-safe image gets contain and the box background stays dark. This
+// gives Picture Book the crop-safe + focal handling it never had (it hard-cropped everything).
+// extraImgCss is appended to the media wrapper (e.g. a shadow); boxCss to the outer box (border).
+function momentImgAspectBox(m, ratio, boxCss, extraImgCss) {
+  if (!m || !m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;' + (boxCss || '') + '"></div>';
+  return '<div style="width:100%;aspect-ratio:' + ratio + ';overflow:hidden;line-height:0;position:relative;' + (boxCss || '') + (extraImgCss || '') + '">' +
+    momentImgMedia(m, {}) + '</div>';
+}
+
 function cgImgCell(m, opts, heightIn, widthPct) {
   var w = (widthPct != null) ? ('flex:0 0 ' + widthPct + '%;max-width:' + widthPct + '%;') : 'flex:1 1 0;min-width:0;';
   var h = (heightIn != null) ? ('height:' + heightIn.toFixed(2) + 'in;') : 'height:100%;';
@@ -1280,6 +1291,10 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
     // to be wrong (a slightly short page, never a clipped one).
     ? ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) +
        'in;position:relative;background:transparent;line-height:0;">' +
+       // Tower box is WIDTH-driven with no fixed height, so the image must use height:auto (the box
+       // grows to the image). The primitive's contain path uses height:100%, which behaves
+       // differently in an auto-height box -- so the tower keeps its own emit here. (Its cover
+       // branch below DOES go through the primitive via cgImgMedia.)
        '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
        picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>')
     : ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
