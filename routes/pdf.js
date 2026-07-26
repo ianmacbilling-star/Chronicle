@@ -166,7 +166,7 @@ function shapedImage(m, border, radius) {
   var b = border || '';
   var rad = (radius == null) ? '3px' : radius;
   if (m.image) {
-    return '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;border-radius:' + rad + ';' + b + '" src="' + m.image + '" alt="' + (m.title || '') + '" />';
+    return momentImgAspectBox(m, ratio, 'border-radius:' + rad + ';' + b, '');
   }
   return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:' + rad + ';display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
 }
@@ -260,7 +260,7 @@ function bleedMedia(m) {
   var ratio = dispRatioCSS(m);
   if (m.image) {
     return '<div style="position:relative;width:100%;margin-bottom:0.12in;page-break-inside:avoid;">' +
-      '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
+      momentImgAspectBox(m, ratio, '', '') +
       (m.title ? '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.5in 0.3in 0.16in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.45) 45%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:11pt;font-weight:600;letter-spacing:0.03em;">' + m.title + '</div>' : '') +
     '</div>';
   }
@@ -273,7 +273,7 @@ function vignetteMedia(m) {
   var widthPct = isLandscape(shape) ? 100 : (shape === 'square' ? 64 : 54);
   if (m.image) {
     return '<div style="position:relative;width:' + widthPct + '%;margin:0.3in auto 0.1in;page-break-inside:avoid;">' +
-      '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
+      momentImgAspectBox(m, ratio, '', '') +
       '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.6in 0.36in #ffffff;"></div>' +
       '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 80%, rgba(255,255,255,1) 100%);"></div>' +
     '</div>';
@@ -286,7 +286,7 @@ function galleryMedia(m) {
   var ratio = dispRatioCSS(m);
   var widthPct = isLandscape(shape) ? 92 : (shape === 'square' ? 60 : 52);
   var img = m.image
-    ? '<img style="width:100%;aspect-ratio:' + ratio + ';object-fit:cover;display:block;box-shadow:' + CO_IMG_SHADOW + ';" src="' + m.image + '" alt="' + (m.title || '') + '" />'
+    ? momentImgAspectBox(m, ratio, 'box-shadow:' + CO_IMG_SHADOW + ';', '')
     : '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;"></div>';
   return '<div style="margin:0.55in auto;width:' + widthPct + '%;page-break-inside:avoid;">' + img +
     (m.title ? '<div style="text-align:center;margin-top:0.14in;font-family:Cinzel,serif;font-size:9.5pt;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a2a;">' + m.title + '</div>' : '') +
@@ -338,6 +338,9 @@ function bronzeFrame(inner, inline, scale, ratio) {
 }
 function framedMedia(m) {
   var ratio = dispRatioCSS(m);
+  // NOTE: bronzeFrame has no overflow:hidden, so the primitive's 1px overscan would bleed past the
+  // gold border. This emitter keeps its own exact height:100% cover img (no overscan) -- a genuine
+  // special case left out of the primitive on purpose.
   var inner = m.image
     ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#160e06;"></div>';
