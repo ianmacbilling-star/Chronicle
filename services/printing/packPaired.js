@@ -36,7 +36,13 @@ function packPaired(beats, opts) {
   function newPage() { pages.push({ index: pages.length, usedIn: 0, hasImage: false, placements: [] }); return pages[pages.length - 1]; }
   function cur() { return pages[pages.length - 1] || newPage(); }
   function remaining() { return round3(pageH - cur().usedIn); }
+  // HARD PAGE-BUDGET CAP (universal never-clip rule): no page's content may exceed the box. If a
+  // piece will not fit the space left on the current page, break to a fresh page BEFORE placing it.
+  // A single piece taller than a whole page is the caller's job to split/shrink first (text splits
+  // by line; images shrink to a floor); this guard is the final backstop so usedIn can never run
+  // past pageH by stacking. Applies to every layout that packs through here.
   function place(kind, beatIdx, h, extra) {
+    if (h > remaining() + 1e-6 && cur().usedIn > 1e-6 && h <= pageH + 1e-6) newPage();
     var p = cur();
     var pl = { beat: beatIdx, kind: kind, heightIn: round3(h) };
     if (extra) { for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) pl[k] = extra[k]; } }
@@ -142,6 +148,7 @@ function packPaired(beats, opts) {
       // the image or its narration -- not the sum. Place it as one block.
       var textH = (b.textBeforeH || 0) + (b.textAfterH || 0);
       var blockH = Math.max(b.imageH + (b.capBelowH || 0), textH);   // reserve a below-image caption so it can't clip past the page
+      if (blockH > pageH) blockH = round3(pageH);   // HARD CAP: a tower block can never exceed the usable box
       if (blockH > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
       place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
       return;

@@ -4286,9 +4286,13 @@ router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
 function beatImageHeight(beat, pageH) {
   var aspect = (beat && beat.aspect) || 1;   // width / height
   // Picture Book MAXIMIZES: the biggest the image can be while fitting the content width
-  // (6.8in) and one page (9.3in). Joint sizing shrinks from here only when text needs room.
+  // (6.8in) and one page. The height cap must be the USABLE box, never taller -- a full-height
+  // image at the old 9.3/9.5 caps already exceeded the 9.16in content box (header band eats the
+  // rest) and clipped on its own. Cap at the passed page budget (pageH is the packer's usable
+  // height ~9.16) so no single image can be taller than the box. Falls back to 9.16 if unknown.
   var h = 6.8 / (aspect || 1);
-  var cap = (aspect <= 0.42) ? 9.5 : 9.3;
+  var _box = (pageH && pageH > 1) ? pageH : 9.16;
+  var cap = Math.min((aspect <= 0.42) ? 9.5 : 9.3, _box);
   return Math.min(cap, Math.max(1.2, h));
 }
 // PHASE 3 (page-packer): measure a paired book's text, compute image heights, run the
@@ -4365,7 +4369,7 @@ async function computePairedPack(req, campaignId, packOpts) {
       });
       var real = (_realP[pi] != null) ? _realP[pi] : null;
       _pdbg.pages.push({ page: pi, used: Math.round(est * 100) / 100, realUsed: real,
-        placements: (pg.placements || []).map(function (pl) { return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null) }; }) });
+        placements: (pg.placements || []).map(function (pl) { return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null) }; }) });
     });
     _pdbg.overflows = _realP._overflows || [];
     var _riskGap = 0.4;
@@ -4428,7 +4432,7 @@ function composeBook(plan, beats, opts) {
           '</div></div>';
       } else if (pl.kind === 'image' && m && m.image) {
         var asp = momentAspect(m) || 1;
-        var _visH = beatImageHeight(b, 9.3) * (pl.scale != null ? pl.scale : 1);   // true image height (placement height includes border/margin overhead)
+        var _visH = beatImageHeight(b, 9.16) * (pl.scale != null ? pl.scale : 1);   // true image height, capped at the usable box (matches the packer)
         var w = Math.min(6.8, _visH * asp);
         var _ipi = panelN; panelN += 1;
         inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' +
@@ -5288,12 +5292,20 @@ function pairedPlanText(packed) {
     var dp = _byPage[pi] || {};
     var realStr = (dp.realUsed != null) ? ('  REAL ' + dp.realUsed.toFixed(2) + ' (est ' + (dp.used != null ? dp.used.toFixed(2) : '?') + ', ' + ((dp.realUsed - (dp.used || 0)) >= 0 ? '+' : '') + (dp.realUsed - (dp.used || 0)).toFixed(2) + ')') : '';
     L.push('  PAGE ' + pi + '  (viewer ~p.' + _viewer(pi) + ')  est ' + (dp.used != null ? dp.used.toFixed(2) : '?') + ' / 9.16' + realStr);
-    (pg.placements || []).forEach(function (pl) {
+    // Per-placement heights + running cumulative, so an over-budget stack is visible line by line.
+    // Prefer the dbg placements (they carry the packer's real heightIn); fall back to plan order.
+    var _pls = (dp.placements && dp.placements.length) ? dp.placements : (pg.placements || []);
+    var _cum = 0;
+    _pls.forEach(function (pl) {
       var b = beats[pl.beat] || {};
       var lbl = pl.kind;
       if (pl.kind === 'narr') lbl += ' ' + (pl.part || 'before') + (pl.charStart != null ? (' CUT ' + pl.charStart + '..' + (pl.charEnd != null ? pl.charEnd : 'end')) : '');
       if (pl.kind === 'image' || pl.kind === 'tower') { lbl += (pl.scale != null && pl.scale < 0.999) ? (' scale' + pl.scale.toFixed(2)) : ''; if (b.moment && b.moment.title) lbl += '  "' + b.moment.title + '"'; }
-      L.push('      beat ' + pl.beat + '  ' + lbl);
+      var _h = (pl.heightIn != null) ? pl.heightIn : null;
+      if (_h != null) _cum = Math.round((_cum + _h) * 100) / 100;
+      var _hstr = (_h != null) ? ('  h' + _h.toFixed(2) + '  cum' + _cum.toFixed(2)) : '';
+      var _flag = (_h != null && _cum > 9.16) ? '  <-- OVER 9.16' : '';
+      L.push('      beat ' + pl.beat + '  ' + lbl + _hstr + _flag);
     });
   });
   return L.join('\n');
