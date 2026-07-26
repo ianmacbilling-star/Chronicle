@@ -261,8 +261,12 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
     (isDialogue
-      ? '- Balance each block ROUGHLY 50/50 between character dialogue and narrative prose\n' +
-        '- Narrate what the panel shows in short prose, and weave in the characters\' spoken lines so the two are about even\n' +
+      ? '- Keep the characters\' spoken lines intact; verbosity below controls only the NARRATION prose woven around them, never which lines are spoken\n' +
+        (narrVerbosity === 'low'
+          ? '- Narration is MINIMAL: at most a single short line of prose between spoken lines, only when needed to show the scene; let the dialogue carry the block\n'
+          : narrVerbosity === 'med'
+            ? '- Narration is LIGHT: a sentence or two of prose around the dialogue; roughly even with the spoken lines\n'
+            : '- Balance each block ROUGHLY 50/50 between character dialogue and fuller narrative prose that sets scene, action, and mood\n') +
         '- Put each spoken line on its OWN line, led by the speaker\'s name and a colon, e.g.  GARRICK: "Hold the line."\n' +
         '- Keep narration lines on their own lines between the dialogue\n'
       : (narrVerbosity === 'low'
@@ -271,8 +275,8 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
             ? '- Roughly 1-2 sentences per block — tight and economical\n'
             : '- Roughly 2-4 sentences per block — punchy, not bloated\n')
     ) +
-    (isDialogue || narrVerbosity === 'high' ? '' :
-      '- COMPLETENESS: brevity controls how TERSELY you write, never WHICH events you include. Still cover every key beat and moment in order; compress the prose, do not drop story content.\n'
+    (narrVerbosity === 'high' ? '' :
+      '- COMPLETENESS: brevity controls how TERSELY you write, never WHICH events (or, in dialogue, which spoken lines) you include. Still cover every key beat and moment in order; compress the prose, do not drop story content.\n'
     ) +
     '- Reference characters by name when relevant\n\n' +
     'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise, and never invent a new name lifted from a real franchise (do not borrow a same-named character\'s known allies, sidekicks, or places). Tell only the user\'s own story, in your own original words.\n\n' +
