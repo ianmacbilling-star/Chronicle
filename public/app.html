@@ -2042,14 +2042,14 @@
       <button class="modal-close" onclick="closeStylePicker()">&times;</button>
     </div>
     <p id="style-picker-sub" style="margin:0 0 12px;font-size:12px;color:var(--gold-dim);line-height:1.45;">Choose a style.</p>
-    <div id="verbosity-dial" class="hidden" style="margin:4px 0 14px;">
-      <div style="font-size:12px;color:var(--gold-dim);margin:0 0 6px;">Narrative length</div>
+    <div id="verbosity-dial" class="hidden" style="margin:2px 0 8px;">
+      <div style="font-size:11px;color:var(--gold-dim);margin:0 0 4px;">Narrative length</div>
       <div class="verbosity-seg" role="group" aria-label="Narrative length">
         <button type="button" class="vseg-btn" data-v="low"  onclick="setVerbosity('low')">Low</button>
         <button type="button" class="vseg-btn" data-v="med"  onclick="setVerbosity('med')">Med</button>
         <button type="button" class="vseg-btn" data-v="high" onclick="setVerbosity('high')">High</button>
       </div>
-      <div style="font-size:11px;color:var(--gold-dim);margin:6px 0 0;line-height:1.4;">Applies when the narrative is generated or regenerated. High is the most detailed.</div>
+      <div style="font-size:10px;color:var(--gold-dim);margin:4px 0 0;line-height:1.4;">Applies when the narrative is generated or regenerated. High is the most verbose. Every setting still tells the complete story &mdash; this only changes how tersely it is written, never which events are included.</div>
     </div>
     <div id="style-picker-grid" class="style-card-grid"></div>
   </div>

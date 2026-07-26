@@ -271,6 +271,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
             ? '- Roughly 1-2 sentences per block — tight and economical\n'
             : '- Roughly 2-4 sentences per block — punchy, not bloated\n')
     ) +
+    (isDialogue || narrVerbosity === 'high' ? '' :
+      '- COMPLETENESS: brevity controls how TERSELY you write, never WHICH events you include. Still cover every key beat and moment in order; compress the prose, do not drop story content.\n'
+    ) +
     '- Reference characters by name when relevant\n\n' +
     'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise, and never invent a new name lifted from a real franchise (do not borrow a same-named character\'s known allies, sidekicks, or places). Tell only the user\'s own story, in your own original words.\n\n' +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
