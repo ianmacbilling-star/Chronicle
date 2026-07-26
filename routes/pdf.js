@@ -2000,12 +2000,12 @@ function buildComposedMeasureBody(opts) {
       return _one.replace('<div style="display:flow-root;">',
         '<div data-mblk="cc:' + pi + ':' + ci + '" data-mkind="ccell" style="display:flow-root;">');
     }).join('');
-    // Measure at the REAL page geometry: width:8.5in + padding:0.5in 0.85in (=> 6.8in text column)
-    // plus the composer's header band (padding-top). Auto-height, NO overflow:hidden, so the marker
-    // reports the content's TRUE height -- a value ABOVE the box height is exactly what clips in the
-    // real PDF. Measuring at the bare body width (8.5in) under-reported every page and hid the clip.
-    var _hdrPad = ((opts && opts.header === false) ? '' : ('padding-top:' + HEADER_BAND_IN + 'in;'));
-    out += '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="box-sizing:border-box;width:8.5in;padding:0.5in 0.85in;' + _hdrPad + 'margin-bottom:0.5in;">' + _cellHtml + '</div>';
+    // This whole body is emitted INSIDE buildNovelHTML's <div class="content-page"> (width:8.5in,
+    // padding:0.5in 0.85in => a 6.8in text column), exactly like the band measure. So the cell
+    // markers already wrap text at the true column width; the page marker just needs to be a plain
+    // flow-root that sums them. Adding width/padding here double-counts the content-page box and
+    // inflates the height by ~1in (the v3.0.168 regression). Keep it bare.
+    out += '<div data-mblk="cp:' + pi + '" data-mkind="cpage" style="display:flow-root;margin-bottom:0.5in;">' + _cellHtml + '</div>';
   });
   return out;
 }
@@ -5116,8 +5116,24 @@ function magazinePlanText(packed) {
   if (!d) return 'no debug plan available';
   var pad = function (v, n) { var t = String(v); while (t.length < n) t += ' '; return t; };
   var L = [];
+  // FRONT-MATTER OFFSET: the pack dump numbers CONTENT pages from 0, but the viewer/PDF renders
+  // front matter first, so a viewer page = content page + this offset + 1 (the +1 is the 0->1 shift).
+  // Defaults mirror the renderer: cover on, cast on, toc off; title + details pages always present.
+  // A viewer number is APPROXIMATE for cast/toc (a long cast list or wrapped TOC can span >1 page),
+  // but exact for the fixed cover/title/details -- close enough to map a page at a glance.
+  var _co = d.co || {};
+  var _has = function (k, dflt) { return (_co && Object.prototype.hasOwnProperty.call(_co, k)) ? !!_co[k] : dflt; };
+  var _fm = 0;
+  if (_has('cover', true)) _fm += 1;   // cover
+  _fm += 1;                            // title page (always)
+  _fm += 1;                            // details page (always)
+  if (_has('cast', true))  _fm += 1;   // cast / The Company
+  if (_has('toc', false))  _fm += 1;   // table of contents
+  var _viewer = function (contentPage) { return contentPage + _fm + 1; };   // 0-based content -> 1-based viewer
+  var L = [];
   L.push('PACK PLAN  -  ' + (d.campaign || ''));
   L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  content-pages=' + d.pages.length + '  (the PDF also adds front/back matter: cover, title, contents, cast -- so the viewer page count is higher)');
+  L.push('front-matter offset: ' + _fm + ' page(s) before content -> a dump PAGE n is viewer page n+' + (_fm + 1) + ' (cover=' + _has('cover', true) + ' cast=' + _has('cast', true) + ' toc=' + _has('toc', false) + ', title+details always)');
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
@@ -5148,7 +5164,7 @@ function magazinePlanText(packed) {
     var white = Math.round((d.pageH - pg.used) * 100) / 100;
     var flag = (pg.used < d.pageH - 1) ? '  *UNDERFULL' : '';
     var realStr = (pg.realUsed != null) ? ('  REAL ' + pg.realUsed.toFixed(2) + ' (est ' + pg.used.toFixed(2) + ', ' + ((pg.realUsed - pg.used) >= 0 ? '+' : '') + (pg.realUsed - pg.used).toFixed(2) + ')') : '';
-    L.push('  PAGE ' + pad(pg.page, 3) + ' used ' + pad(pg.used.toFixed(2), 6) + '/ ' + d.pageH.toFixed(2) + '  white ' + pad(white.toFixed(2), 6) + flag + realStr);
+    L.push('  PAGE ' + pad(pg.page, 3) + ' (viewer p.' + pad(_viewer(pg.page), 3) + ') used ' + pad(pg.used.toFixed(2), 6) + '/ ' + d.pageH.toFixed(2) + '  white ' + pad(white.toFixed(2), 6) + flag + realStr);
     pg.cells.forEach(function (c) {
       L.push('      ' + pad('b' + c.band, 5) + pad(c.kind || '?', 15) + 'h' + pad((c.h != null ? c.h : '?'), 7) +
         (c.split ? ('CUT ' + c.cStart + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : '') +
