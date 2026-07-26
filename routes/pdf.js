@@ -4703,7 +4703,7 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     Object.keys(realH).forEach(function (k) {
       if (k[0] === '_') return;             // skip _cells / _error / _overflows
       var over = realH[k] - _clipBox;
-      if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000 });
+      if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000, kind: 'over-box' });
     });
     if (realH._overflows.length) {
       try { console.warn('[NEVER-CLIP] ' + realH._overflows.length + ' page(s) over box (' + _clipBox.toFixed(2) + 'in) for campaign ' + campaignId + ': ' +
@@ -5096,6 +5096,18 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           });
         });
         _dbg.overflows = realH._overflows || [];   // NEVER-CLIP: pages whose real height clips the box
+        // NEVER-CLIP (at-risk): also flag pages that fit the box TOTAL but render much taller than
+        // the packer estimated (large est->real gap). These are where a tower beside-column or a
+        // stacked cell overflows INSIDE the page even though the page total squeaks under box -- the
+        // page-24 case (est 8.13, real 8.86) the page-total check alone misses. Threshold 0.4in.
+        var _riskGap = 0.4;
+        _dbg.atRisk = [];
+        _dbg.pages.forEach(function (pg) {
+          if (pg.realUsed == null) return;
+          var gap = pg.realUsed - pg.used;
+          var alreadyOver = _dbg.overflows.some(function (o) { return o.page === pg.page; });
+          if (!alreadyOver && gap > _riskGap) _dbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
+        });
         _dbg.remeasured = true;
       }
     } catch (e) { _dbg.remeasureError = String((e && e.message) || e); }
@@ -5203,8 +5215,18 @@ function magazinePlanText(packed) {
     _ovf.forEach(function (o) {
       L.push('    PAGE ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  vs box ' + o.boxIn.toFixed(2) + 'in  -> OVER by ' + o.overIn.toFixed(2) + 'in');
     });
-  } else if (d.remeasured) {
-    L.push('NEVER-CLIP: no page overflows the box (nothing clipped). [OK]');
+  }
+  var _risk = (d.atRisk || []);
+  if (_risk.length) {
+    L.push('');
+    L.push('!! NEVER-CLIP AT-RISK: ' + _risk.length + ' page(s) fit the box TOTAL but render far taller than planned');
+    L.push('   (a tower beside-column or stacked cell can clip INSIDE these even though the page total is under box):');
+    _risk.forEach(function (o) {
+      L.push('    PAGE ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  est ' + o.estIn.toFixed(2) + 'in  -> under-planned by ' + o.gapIn.toFixed(2) + 'in');
+    });
+  }
+  if (!_ovf.length && !_risk.length && d.remeasured) {
+    L.push('NEVER-CLIP: no page overflows or at-risk gaps (nothing clipped). [OK]');
   }
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
