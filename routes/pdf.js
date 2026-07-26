@@ -5235,6 +5235,11 @@ async function computeMagazinePack(req, campaignId, packOpts) {
         _dbg.atRisk = [];
         _dbg.pages.forEach(function (pg) {
           if (pg.realUsed == null) return;
+          // A GROWN cell is INTENTIONALLY taller than its estimate (the optimizer grew the image to
+          // fill white), so its est->real gap is not a clip risk -- skip these or the AT-RISK list
+          // fills with false positives (a grown page reads as +1-3in 'under-planned' when it's fine).
+          var _hasGrown = (pg.cells || []).some(function (c) { return c.growMul && c.growMul !== 1; });
+          if (_hasGrown) return;
           var gap = pg.realUsed - pg.used;
           var alreadyOver = _dbg.overflows.some(function (o) { return o.page === pg.page; });
           if (!alreadyOver && gap > _riskGap) _dbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
