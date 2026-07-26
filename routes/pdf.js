@@ -4465,7 +4465,7 @@ async function computePairedPack(req, campaignId, packOpts) {
     });
   }
   _imgProbeOn = false;   // clear probe flag so it never leaks into a normal render
-  return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length, beats: mbuilt.beats, dbg: _pdbg };
+  return { plan: plan, overrides: overrides, campaign: mbuilt.campaign, beatCount: packBeats.length, beats: mbuilt.beats, dbg: _pdbg, co: _dco };
 }
 // PHASE 3 (page-packer) render: apply the packer's chosen image scales through the normal
 // override render path and return the packed PDF. Chromium flows text + splits paragraphs;
@@ -5397,10 +5397,20 @@ function pairedPlanText(packed) {
   var L = [];
   L.push('PACK PLAN (paired / Picture Book)  -  ' + ((packed.campaign && packed.campaign.name) || 'campaign'));
   L.push('arrange=paired  content-pages=' + pages.length + '  (the PDF also adds front/back matter, so viewer page numbers are higher)');
-  // Front matter offset: cover + title + details + (cast) -- paired always has title+details.
-  var _fm = 4;
+  // Front matter offset: count the pages the PDF prepends before content, the same way the magazine
+  // dumper does, instead of assuming a flat 4. cover (if on) + title (always) + details (always) +
+  // cast/characters (if on) + toc (if on). This makes "viewer p.X" EXACT rather than approximate, so
+  // the numbers match what the reader sees in the viewer.
+  var _co = packed.co || {};
+  var _has = function (k, dflt) { return (_co && Object.prototype.hasOwnProperty.call(_co, k)) ? !!_co[k] : dflt; };
+  var _fm = 0;
+  if (_has('cover', true)) _fm += 1;   // cover
+  _fm += 1;                            // title page (always)
+  _fm += 1;                            // details page (always)
+  if (_has('cast', true))  _fm += 1;   // cast / characters
+  if (_has('toc', false))  _fm += 1;   // table of contents
   var _viewer = function (contentPage) { return contentPage + _fm + 1; };
-  L.push('front-matter offset: ~' + _fm + ' page(s) before content -> a dump PAGE n is ~viewer page n+' + (_fm + 1) + ' (approximate)');
+  L.push('front-matter offset: ' + _fm + ' page(s) before content -> a dump PAGE n is viewer page n+' + (_fm + 1) + ' (cover=' + _has('cover', true) + ' cast=' + _has('cast', true) + ' toc=' + _has('toc', false) + ', title+details always)');
   var _ovf = (d.overflows || []);
   if (_ovf.length) {
     L.push('');
@@ -6086,6 +6096,119 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
     });
   } catch (e) {
     return res.status(500).json({ error: (e && e.message) || 'layout-apply-preview failed' });
+  }
+});
+
+// ===== PASS 3 (apply) -- REAL APPLY (scale ops) =================================================
+// The real counterpart to layout-apply-preview: applies the AI's SCALE ops (growImage / shrinkImage)
+// to the paired plan for REAL, re-measures the actual composed render (not a model), keeps ONLY the
+// ops that leave the page within the 9.41 box, then caches + renders the improved book. Text-move ops
+// (pullLines / pushLines) are recognized but DEFERRED here -- they need a re-pack across pages, which
+// is the next build; this endpoint proves the apply->re-measure->keep/reject loop on the scale ops,
+// which map cleanly to a placement's scale (rendered image height = fullH*scale).
+//
+// SAFETY: every kept op is confirmed by a REAL re-measure. An op that would push its page over the box
+// is rejected and rolled back, so the applied book can never clip. Admin-only. Charges 1 token (the
+// re-measures + render). Paired (Picture Book) only for now.
+router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    var ops = (req.body && Array.isArray(req.body.ops)) ? req.body.ops : null;
+    if (!ops) return res.status(400).json({ error: 'POST a JSON body { "ops": [ ... ] }.' });
+    if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
+
+    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
+      return res.status(400).json({ error: 'layout-apply currently supports Picture Book (paired) only.' });
+    }
+
+    var packed = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+    var plan = packed.plan;
+    var beats = packed.beats;
+    var campaignName = (packed.campaign && packed.campaign.name) || 'campaign';
+    var CLIP = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in
+
+    // Index image placements by dump page so an op's { page } targets the right placement.
+    function imgPlacementOnPage(pageIdx) {
+      var pg = plan.pages[pageIdx];
+      if (!pg) return null;
+      var pls = pg.placements || [];
+      for (var i = 0; i < pls.length; i++) {
+        if ((pls[i].kind === 'image' || pls[i].kind === 'tower') && pls[i].fullH != null) return pls[i];
+      }
+      return null;
+    }
+
+    // Baseline real heights before any change.
+    var _pco0 = Object.assign({}, _cco, { arrange: 'paired' });
+    var real0 = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
+    if (real0._error) return res.status(500).json({ error: 'baseline re-measure failed: ' + real0._error });
+
+    var applied = [], rejected = [], deferred = [];
+    for (var oi = 0; oi < ops.length; oi++) {
+      var op = ops[oi];
+      if (op.op !== 'growImage' && op.op !== 'shrinkImage') { deferred.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'text-move ops deferred to the next build' }); continue; }
+      var pl = imgPlacementOnPage(op.page);
+      if (!pl) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no image placement on page' }); continue; }
+
+      var oldScale = (pl.scale != null) ? pl.scale : 1;
+      var newScale;
+      if (op.op === 'growImage') {
+        if (oldScale >= 0.999) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'image already at full size' }); continue; }
+        newScale = 1.0;   // try full; the re-measure will reject if it overflows, then we bisect down
+      } else {   // shrinkImage
+        newScale = Math.max(0.3, oldScale - 0.1);   // initial nudge; refined below
+      }
+
+      // Apply, re-measure the REAL render, and bisect to the largest fitting scale (grow) or the
+      // smallest scale that clears the box (shrink).
+      var lo = op.op === 'growImage' ? oldScale : 0.3;
+      var hi = op.op === 'growImage' ? 1.0 : oldScale;
+      var best = null, bestReal = null;
+      for (var rd = 0; rd < 4; rd++) {
+        var tryScale = (op.op === 'growImage') ? hi : ((lo + hi) / 2);
+        if (op.op === 'growImage') tryScale = (lo + hi) / 2;
+        pl.scale = Math.round(tryScale * 1000) / 1000;
+        var _r = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
+        var ph = (_r && _r[op.page] != null) ? _r[op.page] : null;
+        if (ph == null) break;
+        if (ph <= CLIP + 0.02) {
+          best = pl.scale; bestReal = ph;
+          if (op.op === 'growImage') lo = pl.scale; else hi = pl.scale;   // grow: reach higher; shrink: it cleared, try less shrink
+        } else {
+          if (op.op === 'growImage') hi = pl.scale; else lo = pl.scale;   // overshoot: pull back
+        }
+        if (hi - lo < 0.03) break;
+      }
+
+      if (best != null && ((op.op === 'growImage' && best > oldScale + 0.01) || (op.op === 'shrinkImage' && best < oldScale - 0.001))) {
+        pl.scale = best;
+        applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, scaleFrom: oldScale, scaleTo: best, pageReal: Math.round(bestReal * 100) / 100, imageIn: Math.round((pl.fullH || 0) * best * 100) / 100 });
+      } else {
+        pl.scale = oldScale;   // roll back
+        rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: (op.op === 'growImage' ? 'no room to grow within box' : 'could not clear box by shrinking') });
+      }
+    }
+
+    // Compose the improved book from the mutated plan, cache it (so the render + print interior use
+    // it), and render the PDF. Only persists the composed body cache -- same mechanism Optimize uses.
+    var body = composeBook(plan, beats, _pco0);
+    composedCachePut(req.params.campaignId, req, 'paired', body, campaignName);
+    var rbuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
+    if (req.query.pane === '1') rbuilt.html = paneSafeHtml(rbuilt.html);
+    var pdf = await renderHtmlToPdf(rbuilt.html, {});
+    try { await spendTokens(req.session.userId, 1, { source: 'layout_apply', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-apply spend failed:', e && e.message); }
+    try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 1, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
+
+    // Return JSON report (not the PDF) so the caller sees what applied; the cached body means the next
+    // After render shows the result.
+    return res.json({
+      campaign: campaignName, arrange: 'paired', applied: true, clipLine: CLIP,
+      appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
+      appliedOps: applied, rejectedOps: rejected, deferredOps: deferred,
+      note: 'Scale ops applied and confirmed by real re-measure; the composed book is cached. Re-open the After view to see it. Text-move ops are deferred to the next build.'
+    });
+  } catch (e) {
+    return res.status(500).json({ error: (e && e.message) || 'layout-apply failed' });
   }
 });
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {

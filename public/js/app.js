@@ -14902,10 +14902,30 @@ function _runLayoutAiOptimize() {
             });
             simTable += '<div style="height:14px;"></div>';
           }
-          w.document.body.innerHTML = head + simTable +
+          // A real-apply button (Picture Book scale ops only). Deliberate action -- applies for real,
+          // re-measures, caches the improved book. Wired via a global the popup can call.
+          var _applyBtn = '<div style="margin:10px 0 16px 0;"><button id="__doApply" style="background:#c9a84c;color:#14100a;border:none;border-radius:6px;padding:7px 14px;font:bold 12px ui-monospace,monospace;cursor:pointer;">Apply scale ops (real, 1 token)</button> <span id="__applyMsg" style="color:rgba(245,232,200,0.7);margin-left:10px;"></span></div>';
+          w.document.body.innerHTML = head + simTable + _applyBtn +
             '<div style="color:#c9a84c;margin:6px 0;">Full advisor JSON:</div>' +
             '<pre style="white-space:pre-wrap;word-break:break-word;margin:0;">' +
             esc(JSON.stringify(j, null, 2)) + '</pre>';
+          var _btn = w.document.getElementById('__doApply');
+          var _msg = w.document.getElementById('__applyMsg');
+          if (_btn) _btn.onclick = function () {
+            _btn.disabled = true; _msg.textContent = 'Applying + re-measuring...';
+            fetch('/api/pdf/layout-apply/' + _cid + _q, {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ops: (j && j.ops) || [] })
+            }).then(function (r) { return r.json(); }).then(function (ap) {
+              if (ap && ap.error) { _msg.textContent = 'Error: ' + ap.error; _btn.disabled = false; return; }
+              _msg.innerHTML = '<span style="color:#7bd88f;">Applied ' + (ap.appliedCount || 0) + ', rejected ' + (ap.rejectedCount || 0) + ', deferred ' + (ap.deferredCount || 0) + '. Re-open the After view to see it.</span>';
+              var pre = w.document.createElement('pre');
+              pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;margin:10px 0;color:#f5e8c8;';
+              pre.textContent = JSON.stringify(ap, null, 2);
+              _msg.parentNode.appendChild(pre);
+            }).catch(function (e) { _msg.textContent = 'Apply failed: ' + ((e && e.message) || e); _btn.disabled = false; });
+          };
         })
         .catch(function (e) {
           _revLbl.textContent = 'After (optimized)';
