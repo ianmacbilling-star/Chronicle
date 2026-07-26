@@ -4858,7 +4858,7 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
 // Re-measure a composed PAIRED (Picture Book) book, so it gets the same real per-page heights and
 // never-clip check magazine/gazette have. composeBook emits cp: markers under measureComposed; we
 // inject that body via packComposedBody and read the cp: heights back. Mirrors the magazine path's
-// overflow detection (same 9.16in usable box, same tolerance).
+// overflow detection (same true 9.41in clip box, same tolerance).
 async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
   var realH = {};
   try {
@@ -5749,7 +5749,8 @@ var LAYOUT_REVIEW_SYSTEM = [
   'You are a book-layout reviewer for a print-on-demand graphic-novel tool. You are given a plain-text',
   'DUMP describing ONE already-rendered book: per-page real vs planned fill, per-cell real heights,',
   'per-image geometry (fit/crop/caption), and an ISSUES section of pre-computed signals. Every page is',
-  'a fixed 9.16in content box; content past it is clipped.',
+  'a fixed content box about 9.41in tall; content past it is clipped. (Small overflows under ~9.44in do',
+  'not actually clip -- do not propose shrinking an image unless the dump flags a real CLIP.)',
   '',
   'REVIEW EVERY PAGE in the PAGES section -- go through them one by one, not just the flagged ones. The',
   'DUMP contains only content pages; the front matter (cover, title, details, table of contents, and',
