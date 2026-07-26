@@ -4833,11 +4833,12 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     // which pages/books clip and by how much, before the composer is made fit-verified. The box is
     // the composed content area: 9.65in minus the header band; a small tolerance absorbs sub-pixel
     // rounding so only a REAL overflow (a line/image genuinely past the edge) is flagged.
-    // The composed page box is 9.65in with padding-top:HEADER_BAND_IN, so the USABLE content area
-    // (what the cp: marker measures against) is 9.65 - 2*header-ish; empirically the content clips
-    // at ~9.16in (the same figure the tower-merge ceiling uses). Use that as the clip line so the
-    // instrument agrees with the real overflow:hidden behavior rather than the raw box height.
-    var _clipBox = MZ_TOWER_MERGE_MAX_IN;   // 9.16in usable content area (validated via the tower fix)
+    // CLIP LINE: the real render wraps each page in height:9.65in; padding-top:HEADER_BAND_IN;
+    // overflow:hidden -- so content is actually clipped at (9.65 - HEADER_BAND_IN) = 9.41in, NOT 9.16.
+    // 9.16 is the PACKER'S conservative budget (a target to aim for), not the render's clip boundary.
+    // Using 9.16 here flagged pages at 9.20-9.34 as "overflow" when they render perfectly inside the
+    // 9.41 box -- false positives that produced bogus shrinkImage ops. Compare against the true line.
+    var _clipBox = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in true content clip boundary
     var _clipTol = 0.03;                    // ~3 hundredths of an inch of rounding slack
     realH._overflows = [];
     Object.keys(realH).forEach(function (k) {
@@ -4873,7 +4874,7 @@ async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
       var mc = /^cc:(\d+):(\d+)$/.exec(bl.id || '');
       if (mc) { (realH._cells || (realH._cells = {}))[mc[1] + ':' + mc[2]] = bl.heightIn; }
     });
-    var _clipBox = MZ_TOWER_MERGE_MAX_IN;   // 9.16in usable content area (same as magazine)
+    var _clipBox = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in true content clip boundary (9.65 box - header band), not the 9.16 packer budget
     var _clipTol = 0.03;
     realH._overflows = [];
     Object.keys(realH).forEach(function (k) {
