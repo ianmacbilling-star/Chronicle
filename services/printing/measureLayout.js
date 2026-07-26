@@ -60,33 +60,37 @@ async function measureDocument(html, options) {
         var lineStartChars = [];
         try {
           var pEl = n.querySelector('p') || n;
-          var tnode = pEl.firstChild;
-          if (tnode && tnode.nodeType === 3) {
-            // One walk over the words: whenever the line's top jumps, we've started a new line,
-            // so record BOTH the previous line's bottom and this line's start char -- from the
-            // same source, so line bottoms and char offsets can never disagree.
-            var full = tnode.textContent;
-            var rng2 = document.createRange();
-            var prevTop = null, pos = 0, curBottom = 0;
+          // Walk EVERY text node in the paragraph (not just firstChild): a paragraph with inline
+          // markup (<em>, <strong>, spans from em-dashes/emphasis) has multiple text nodes, and
+          // measuring only the first one truncated the line data -- the packer then split long
+          // paragraphs as if they were 1-2 lines and the composed page clipped by inches. Track a
+          // GLOBAL char position across all text nodes so line-start offsets index the full text,
+          // and detect a new line whenever a word's top jumps -- across node boundaries too.
+          var _tw = document.createTreeWalker(pEl, NodeFilter.SHOW_TEXT, null, false);
+          var rng2 = document.createRange();
+          var prevTop = null, gpos = 0, curBottom = 0, _tn;
+          while ((_tn = _tw.nextNode())) {
+            var full = _tn.textContent;
             var parts = full.split(/(\s+)/);
+            var lpos = 0;
             for (var wi = 0; wi < parts.length; wi++) {
               var wlen = parts[wi].length;
               if (wlen === 0) continue;
-              if (/^\s+$/.test(parts[wi])) { pos += wlen; continue; }
-              rng2.setStart(tnode, pos);
-              rng2.setEnd(tnode, Math.min(pos + wlen, full.length));
+              if (/^\s+$/.test(parts[wi])) { lpos += wlen; gpos += wlen; continue; }
+              rng2.setStart(_tn, lpos);
+              rng2.setEnd(_tn, Math.min(lpos + wlen, full.length));
               var wr = rng2.getBoundingClientRect();
               if (prevTop === null) { lineStartChars.push(0); prevTop = wr.top; }
               else if (wr.top > prevTop + 2) {
                 lineBottoms.push(Math.round(((curBottom - r.top) / PX) * 1000) / 1000);
-                lineStartChars.push(pos);
+                lineStartChars.push(gpos);
                 prevTop = wr.top;
               }
               curBottom = wr.bottom;
-              pos += wlen;
+              lpos += wlen; gpos += wlen;
             }
-            if (prevTop !== null) lineBottoms.push(Math.round(((curBottom - r.top) / PX) * 1000) / 1000);
           }
+          if (prevTop !== null) lineBottoms.push(Math.round(((curBottom - r.top) / PX) * 1000) / 1000);
         } catch (e) { lineBottoms = []; lineStartChars = []; }
         return {
           id: n.getAttribute('data-mblk'),
