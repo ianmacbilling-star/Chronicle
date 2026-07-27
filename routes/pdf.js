@@ -5305,7 +5305,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   }
 
   _imgProbeOn = false;   // clear the probe flag so it never leaks into a subsequent normal render
-  return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg };
+  return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg, measure: (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
 // browser can't re-paginate. Mirrors composeBook's page shell.
@@ -5888,8 +5888,14 @@ var LAYOUT_GOALS = {
     'This is a dense editorial layout; pages should read full and tight.',
     '- To fill an underfull page, first PULL TEXT UP from the following page (densify) -- unless that page',
     '  is already full/dense, in which case do not un-dense it; leave the small gap instead.',
-    '- Grow an image only when densifying will not fill the gap (no text can be pulled without hurting a',
-    '  neighbor). Growing the image is the fallback here, not the first move -- keep the magazine feel.'
+    '- IMPORTANT: a pullLines can only move PURE TEXT (an intro/outro paragraph, or a split text tail like',
+    '  a stranded line). Most magazine bands are IMAGE bands (a picture with text wrapping around it) --',
+    '  their text cannot be pulled off the picture. If the band at the top of the following page has an',
+    '  image (feature / float / wide / tower / a band the dump shows with an image), do NOT propose',
+    '  pullLines for it; GROW that image instead to fill the white. Only propose pullLines when the',
+    '  movable text is a plain paragraph or a stranded text-only line.',
+    '- Grow an image when densifying will not fill the gap (or the following band is an image band).',
+    '  Growing the image keeps the magazine feel and is the right move for image-dominated pages.'
   ].join('\n'),
   gazette: [
     'LAYOUT GOALS (Gazette) -- the FIRST MOVE for filling white on this book is: DENSIFY.',
@@ -6146,7 +6152,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     // ===== MAGAZINE / GAZETTE apply (growMul on cells + text-cell moves) =====
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
-      var mplan = packedM.plan, mbands = packedM.bands;
+      var mplan = packedM.plan, mbands = packedM.bands, mMeasure = packedM.measure || { lines: {}, lineChars: {} };
       var mName = (packedM.campaign && packedM.campaign.name) || 'campaign';
       var MCLIP = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in
 
@@ -6213,8 +6219,64 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           // be the same band, split (head has cEnd set, tail has cStart == head.cEnd).
           var headCell = headPg[headPg.length - 1];
           var tailCell = tailPg[0];
-          if (!headCell || !tailCell || headCell.band !== tailCell.band || headCell.cEnd == null) {
-            mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'no split band at the page boundary to pull from' }); continue;
+          // CASE A: an existing split straddles the boundary (head's last cell and tail's first cell are
+          // the same band, head has cEnd) -> shift the boundary (handled below). CASE B: the tail page's
+          // first cell is a WHOLE text band -> split it, moving the first N lines up onto the head page.
+          var isSplitBoundary = headCell && tailCell && headCell.band === tailCell.band && headCell.cEnd != null;
+          if (!isSplitBoundary) {
+            // CASE B -- whole-band pull. The leading cell on the tail page must be a PURE TEXT band
+            // with line data. Image/feature bands (b.simg / sImgH>0) cannot be line-split here without
+            // dropping or orphaning their picture -- the image anchors the band to one page -- so we
+            // skip them (a grow op fills those pages instead).
+            var wb = tailCell ? mbands[tailCell.band] : null;
+            var wLines = (mMeasure.lines && tailCell) ? mMeasure.lines[tailCell.band] : null;
+            var wChars = (mMeasure.lineChars && tailCell) ? mMeasure.lineChars[tailCell.band] : null;
+            var tcStart = tailCell ? (tailCell.cStart || 0) : 0;
+            var wIsImage = wb && (wb.simg || (wb.sImgH > 0));
+            if (!tailCell || !wb || wIsImage || !wLines || !wChars || !wLines.length || tailCell.towerLead || wb.stext == null) {
+              mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: wIsImage ? 'leading band has an image (cannot line-split; grow fills this page instead)' : 'leading band is not splittable text' }); continue;
+            }
+            // Move the first N lines (from the band's current start) up. Find the char offset N lines in.
+            var wantNb = Math.max(1, mop.lines || 1);
+            // Line indices are relative to the whole band; the tail cell starts at tcStart chars in.
+            var startLine = 0; for (; startLine < wChars.length; startLine++) { if (wChars[startLine] >= tcStart) break; }
+            var cutLine = Math.min(wChars.length - 1, startLine + wantNb);
+            var cutChar = wChars[cutLine];
+            var wEnd = (tailCell.cEnd != null) ? tailCell.cEnd : (wb.stext != null ? wb.stext.length : null);
+            if (cutChar == null || (wEnd != null && cutChar >= wEnd - 2)) {
+              // Would move (nearly) the whole band -> move the WHOLE cell up instead (no leftover sliver).
+              var _tailSaveW = tailPg.slice();
+              var _movedCell = Object.assign({}, tailCell);
+              headPg.push(_movedCell);
+              tailPg.shift();
+              var _mrWB = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+              var okH2 = (_mrWB && _mrWB[headIdx] != null) ? (_mrWB[headIdx] <= MCLIP + 0.02) : false;
+              var okT2 = (_mrWB && _mrWB[tailIdx] != null) ? (_mrWB[tailIdx] <= MCLIP + 0.02) : true;
+              if (_mrWB && !_mrWB._error && okH2 && okT2) {
+                if (tailPg.length === 0) mplan.pages.splice(tailIdx, 1);
+                mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: 'whole band', headReal: Math.round((_mrWB[headIdx] || 0) * 100) / 100, wholeBand: true });
+              } else {
+                tailPg.length = 0; Array.prototype.push.apply(tailPg, _tailSaveW); headPg.pop();
+                mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'whole-band move would overflow the head page' });
+              }
+              continue;
+            }
+            // Partial split: head gets a NEW cell [tcStart..cutChar]; tail cell becomes [cutChar..wEnd].
+            var _tailSaveP = tailPg.slice();
+            var headNew = { band: tailCell.band, cStart: tcStart, cEnd: cutChar, split: true, heightIn: null };
+            var tailNew = Object.assign({}, tailCell, { cStart: cutChar, split: true });
+            headPg.push(headNew);
+            tailPg[0] = tailNew;
+            var _mrP = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+            var okHp = (_mrP && _mrP[headIdx] != null) ? (_mrP[headIdx] <= MCLIP + 0.02) : false;
+            var okTp = (_mrP && _mrP[tailIdx] != null) ? (_mrP[tailIdx] <= MCLIP + 0.02) : true;
+            if (_mrP && !_mrP._error && okHp && okTp) {
+              mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: (cutLine - startLine), splitBand: true, headReal: Math.round((_mrP[headIdx] || 0) * 100) / 100 });
+            } else {
+              tailPg.length = 0; Array.prototype.push.apply(tailPg, _tailSaveP); headPg.pop();
+              mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'split-pull would overflow the head page' });
+            }
+            continue;
           }
           var mband = mbands[headCell.band];
           var lineChars = (mband && mband.lineChars) || [];
