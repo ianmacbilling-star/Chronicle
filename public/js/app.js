@@ -14675,6 +14675,7 @@ function loadFinalize() {
     if (_sl) _sl.style.display = 'none';
   }
   renderPdfInto(url, 'finalize-before-scroll', true);
+  finalizeLoadLastOptimized();   // AFTER clearScanState: restore the saved optimized PDF into the After pane (user view)
 }
 
 // The optimize tab has two faces. Regular users (and admins by default) see ONLY the After pane -- the
@@ -14704,6 +14705,10 @@ function applyOptimizeViewMode() {
   if (delta) delta.style.display = showDiag ? '' : 'none';
   if (publishPick) publishPick.style.display = showDiag ? '' : 'none';
   if (afterWrap) afterWrap.style.flex = showDiag ? '1 1 auto' : '1 1 100%';   // After fills the row in user view
+  var afterZoom = document.getElementById('finalize-after-zoom');
+  var afterNav = document.getElementById('finalize-after-nav-wrap');
+  if (afterZoom) afterZoom.style.display = showDiag ? 'none' : 'inline-flex';   // zoom + right spine are the user-view viewing aids
+  if (afterNav) afterNav.style.display = showDiag ? 'none' : 'flex';
   // Reflect the state on the pill for the admin (subtle), and keep the label honest.
   var pill = document.getElementById('optimize-preview-pill');
   if (pill) pill.style.opacity = showDiag ? '1' : '';
@@ -14802,12 +14807,98 @@ function finalizeMeasureBlob(blob) {
 }
 function finalizeBuildNav(first, last) {
   var nav = document.getElementById('finalize-page-nav');
+  if (nav) {
+    var h = '';
+    for (var n = first; n <= last; n++) {
+      h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
+    }
+    nav.innerHTML = h;
+  }
+  finalizeBuildAfterNav(first, last);   // user-view spine on the right of the After pane
+}
+// The user-view page spine sits to the RIGHT of the After pane and jumps only that pane.
+function finalizeBuildAfterNav(first, last) {
+  var nav = document.getElementById('finalize-after-nav');
   if (!nav) return;
   var h = '';
   for (var n = first; n <= last; n++) {
-    h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
+    h += '<div data-page="' + n + '" onclick="finalizeAfterGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
   }
   nav.innerHTML = h;
+}
+function finalizeAfterGoToPage(n) {
+  var after = document.getElementById('finalize-after-scroll');
+  if (after && after.style.display !== 'none') {
+    var canvas = after.querySelector('canvas[data-page="' + n + '"]');
+    if (canvas) after.scrollTop = canvas.offsetTop - (after.firstChild ? after.firstChild.offsetTop : 0) - 2;
+  }
+  var nav = document.getElementById('finalize-after-nav');
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
+}
+// After-pane zoom: scales the rendered PDF canvases. 'Fit' (default) lets them fill the pane width.
+var _finalizeAfterZoom = 0;   // 0 = Fit; otherwise a scale factor
+function finalizeApplyAfterZoom() {
+  var scroll = document.getElementById('finalize-after-scroll');
+  var lbl = document.getElementById('finalize-after-zoom-label');
+  if (lbl) lbl.textContent = _finalizeAfterZoom ? (Math.round(_finalizeAfterZoom * 100) + '%') : 'Fit';
+  if (!scroll) return;
+  var canvases = scroll.querySelectorAll('canvas');
+  for (var i = 0; i < canvases.length; i++) {
+    var cv = canvases[i];
+    if (_finalizeAfterZoom) { cv.style.width = (_finalizeAfterZoom * 100) + '%'; cv.style.maxWidth = 'none'; cv.style.height = 'auto'; }
+    else { cv.style.width = '100%'; cv.style.maxWidth = '100%'; cv.style.height = 'auto'; }
+  }
+}
+function finalizeAfterZoomStep(dir) {
+  var base = _finalizeAfterZoom || 1;
+  if (dir < 0 && !_finalizeAfterZoom) { _finalizeAfterZoom = 0.9; }   // first '-' from Fit dips just below
+  else { _finalizeAfterZoom = Math.max(0.4, Math.min(3, Math.round((base + dir * 0.1) * 100) / 100)); }
+  if (Math.abs(_finalizeAfterZoom - 1) < 0.001 && dir > 0 && base >= 1) { /* keep climbing */ }
+  finalizeApplyAfterZoom();
+}
+
+// Save the just-optimized book so it's there when the user returns (Phase 2). Called when the loop
+// finishes. Renders from the composed cache server-side (no token) and stores the PDF per layout.
+function finalizeSaveOptimized() {
+  if (!state.currentCampaign) return;
+  try {
+    var q = finalizeBookQuery();
+    var body = {};
+    var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) body.bookTitle = _pt.value.trim();
+    fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.ok) finalizeShowOptimizedNote(j.at, false);
+    }).catch(function () {});
+  } catch (e) {}
+}
+// Show the "already optimized" note (either freshly saved, or restored from a previous session).
+function finalizeShowOptimizedNote(at, fromPrevious) {
+  var note = document.getElementById('finalize-optimized-note');
+  if (!note) return;
+  var when = '';
+  try { if (at) { var d = new Date(at); if (!isNaN(d)) when = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } } catch (e) {}
+  note.textContent = fromPrevious ? ('From a previous session \u2014 already optimized' + (when ? (' \u00b7 ' + when) : '')) : ('Saved \u2014 will be here when you return' + (when ? (' \u00b7 ' + when) : ''));
+  note.style.display = '';
+}
+// On opening the Optimize tab, load the saved optimized PDF (if any) so the user sees their finished
+// book without re-running. Only in the clean user view; the admin diagnostic view runs its own flow.
+function finalizeLoadLastOptimized() {
+  if (!state.currentCampaign) return;
+  if (optimizeIsAdmin() && window._optimizeAdminView) return;   // admin view uses Before/After compare
+  try {
+    var q = finalizeBookQuery();
+    fetch('/api/pdf/last-optimized/' + state.currentCampaign.id + q + '&_=' + Date.now())
+      .then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.found && j.pdfUrl) {
+          finalizeShowOptimizedNote(j.at, true);
+          renderPdfInto(j.pdfUrl, 'finalize-after-scroll', false);
+          var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
+          var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.style.display = '';
+          _publishSource = 'composed';   // the restored optimized book is what publishes
+        }
+      }).catch(function () {});
+  } catch (e) {}
 }
 function finalizeGoToPage(n) {
   var before = document.getElementById('finalize-before-scroll');
@@ -15155,6 +15246,7 @@ function _runLayoutAiOptimize() {
           _publishSource = 'composed';
           optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
           optimizeProgressDone();
+          finalizeSaveOptimized();   // persist the optimized PDF (per fork/campaign/layout) so it's there when they return
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
@@ -15624,6 +15716,7 @@ function renderPdfInto(url, containerId, isBefore) {
         var pw = document.getElementById(containerId + '-pw');
         if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
+        else { finalizeBuildAfterNav(first, last); finalizeApplyAfterZoom(); }   // user-view right spine + zoom follow the After render
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();
         var _fpct = finalizeFillPct(isBefore ? _finalizeFills : _finalizeAfterFills, total);
         var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');

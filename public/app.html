@@ -379,9 +379,29 @@
                 <div id="finalize-page-nav" title="Jump both panes to a page" style="height:680px;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
               </div>
               <div id="finalize-after-wrap" style="flex:1 1 auto;min-width:0;">
-                <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;"><span id="finalize-after-label">After (optimized)</span><span style="display:flex;gap:8px;align-items:baseline;"><button id="finalize-after-open" onclick="finalizeOpenPdf(false)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Open in new tab</button><span id="finalize-after-count" style="color:var(--gold);letter-spacing:0.03em;"></span></span></div>
-                <div id="finalize-after-scroll" style="height:680px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
-                <div id="finalize-after-body" style="width:100%;height:680px;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
+                <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+                  <span style="display:flex;gap:10px;align-items:baseline;min-width:0;">
+                    <span id="finalize-after-label">After (optimized)</span>
+                    <span id="finalize-optimized-note" style="display:none;text-transform:none;letter-spacing:0.02em;font-size:11px;color:rgba(201,168,76,0.85);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+                  </span>
+                  <span style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
+                    <span id="finalize-after-zoom" style="display:none;align-items:center;gap:3px;" title="Fit / zoom the optimized book">
+                      <button type="button" onclick="finalizeAfterZoomStep(-1)" style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">&minus;</button>
+                      <span id="finalize-after-zoom-label" style="font-size:10px;color:var(--gold);min-width:34px;text-align:center;letter-spacing:0.02em;">Fit</span>
+                      <button type="button" onclick="finalizeAfterZoomStep(1)" style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">+</button>
+                    </span>
+                    <button id="finalize-after-open" onclick="finalizeOpenPdf(false)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Open in new tab</button>
+                    <span id="finalize-after-count" style="color:var(--gold);letter-spacing:0.03em;"></span>
+                  </span>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start;">
+                  <div id="finalize-after-scroll" style="flex:1 1 auto;min-width:0;height:680px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
+                  <div id="finalize-after-body" style="flex:1 1 auto;height:680px;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
+                  <div id="finalize-after-nav-wrap" style="display:none;flex:0 0 36px;flex-direction:column;">
+                    <div style="font-size:11px;color:rgba(245,232,200,0.4);margin-bottom:4px;text-align:center;">Pg</div>
+                    <div id="finalize-after-nav" title="Jump to a page" style="height:660px;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2215,7 +2235,7 @@
 
 <style>
   #layoutai-run-btn { text-align:center; line-height:1.15; }
-  #layoutai-run-btn.has-token::after { content:'1 Token'; display:block; font-size:9px; font-weight:400; opacity:0.72; letter-spacing:0.06em; margin-top:1px; text-transform:none; }
+  #layoutai-run-btn.has-token::after { content:'~1 token / 10 pages'; display:block; font-size:9px; font-weight:400; opacity:0.72; letter-spacing:0.04em; margin-top:1px; text-transform:none; }
   .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--gold);font-family:var(--font-display);letter-spacing:0.02em; }
   .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:6px 8px;font-size:12px;font-family:var(--font-display);width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }

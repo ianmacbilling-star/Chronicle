@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, getAppSettingInt } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -6833,6 +6833,65 @@ router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async functi
     return res.status(500).json({ error: (e && e.message) || 'layout-reset failed' });
   }
 });
+
+// PHASE 2 -- persist the last optimized PDF per (chooser x fork x campaign x LAYOUT) so it survives a
+// refresh / logout / campaign switch. The client calls this once the Optimize loop finishes; we render
+// the already-composed (optimized) body from cache -- no re-pack, no token -- upload it to R2, and store
+// { pdfUrl, at, pages } under prefs.lastOptimized[arrange]. Keyed per layout because the same images are
+// framed differently in magazine vs picture-book, so each layout remembers its own optimized result.
+router.post('/save-optimized/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var campaignId = req.params.campaignId;
+    req.query.nocover = '1'; req.query.publicMode = '1';
+    var bookTitle = (req.body && req.body.bookTitle) || req.query.bookTitle || '';
+    if (bookTitle) req.query.bookTitle = bookTitle;
+    var hit = composedCacheGet(campaignId, req);
+    if (!(hit && hit.body)) return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize first.' });
+    var arrange = hit.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
+    var built = await assembleNovelHtml(req, campaignId, null, { arrange: arrange, packComposedBody: hit.body, campaignName: hit.campaignName || '' });
+    var html = built && built.html;
+    if (!html) return res.status(500).json({ error: 'Could not build the optimized layout.' });
+    var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+    var pdfBuffer = await renderHtmlToPdf(html, {});
+    var pages = 0; try { pages = await countPdfPages(pdfBuffer); } catch (e) {}
+    var fname = 'optimized-' + campaignId + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
+    var pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'optimized');
+
+    var db = await getDb();
+    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
+    var chooser = req.session.userId || fork;
+    var prev = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    var lastOpt = (prev && prev.lastOptimized && typeof prev.lastOptimized === 'object') ? Object.assign({}, prev.lastOptimized) : {};
+    // Best-effort cleanup of the PREVIOUS optimized PDF for THIS layout (avoid orphan accumulation in R2).
+    try { if (lastOpt[arrange] && lastOpt[arrange].pdfUrl && lastOpt[arrange].pdfUrl !== pdfUrl) await deleteFile(lastOpt[arrange].pdfUrl); } catch (e) {}
+    lastOpt[arrange] = { pdfUrl: pdfUrl, at: new Date().toISOString(), pages: pages, bookTitle: bookTitle || '' };
+    await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt });
+    return res.json({ ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at });
+  } catch (e) {
+    console.error('[save-optimized] failed:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: (e && e.message) || 'save-optimized failed' });
+  }
+});
+
+// Return the saved last-optimized entry for the current layout (or null), so the Optimize tab can show
+// the already-optimized PDF on load without re-running.
+router.get('/last-optimized/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var campaignId = req.params.campaignId;
+    var arrange = req.query.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
+    var db = await getDb();
+    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
+    var chooser = req.session.userId || fork;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    var lastOpt = prefs && prefs.lastOptimized && prefs.lastOptimized[arrange];
+    if (!lastOpt || !lastOpt.pdfUrl) return res.json({ found: false });
+    return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null });
+  } catch (e) {
+    return res.status(500).json({ error: (e && e.message) || 'last-optimized failed' });
+  }
+});
+
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
     if (req.query.compose === '1' || req.query.compose === 'true') {
