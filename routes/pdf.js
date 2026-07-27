@@ -1869,7 +1869,13 @@ function mzSafeCut(text, idx) {
 // typography. This used to be gated on `cEnd < stext.length - 2`, which excluded the one case that
 // needed it most: a cut one character from the end of the text.
 function mzSnapSentence(stext, mbound, lo, cEnd) {
-  if (stext == null || mbound == null || !(cEnd > mbound + 8)) return cEnd;
+  if (stext == null) return cEnd;
+  // DE-WIDOW: if the cut lands just SHORT of the paragraph boundary, it orphans the last few words of
+  // the first paragraph onto the next page (e.g. "...written on" | "it."). Snap the cut FORWARD to the
+  // boundary so the whole first paragraph stays together and the tail opens cleanly with paragraph two.
+  // Only do this for a small gap (the orphan is genuinely a fragment, not a real chunk of text).
+  if (mbound != null && cEnd < mbound && (mbound - cEnd) <= 40 && mbound > lo + 45) return mbound;
+  if (mbound == null || !(cEnd > mbound + 8)) return cEnd;
   for (var d = 2; d < 160 && (cEnd - d) > lo + 45; d++) {
     var ch = stext.charAt(cEnd - d);
     if ((ch === '.' || ch === '!' || ch === '?') && /\s/.test(stext.charAt(cEnd - d + 1))) {
@@ -1877,6 +1883,11 @@ function mzSnapSentence(stext, mbound, lo, cEnd) {
       return (s > lo + 45 && s < cEnd) ? s : cEnd;
     }
   }
+  // No sentence boundary between the paragraph break and the cut: the head would end mid-sentence in
+  // paragraph two (e.g. "...said nothing, because words for" | "this did not yet exist..."). If the
+  // cut is only a little past the paragraph boundary, snap BACK to it so the head ends cleanly at the
+  // end of paragraph one and all of paragraph two flows to the tail -- no mid-sentence dangle.
+  if (mbound > lo + 45 && (cEnd - mbound) <= 60) return mbound;
   return cEnd;
 }
 // Render text.slice(cs,ce) as narrative <p>(s), preserving the before|after paragraph break at
@@ -5733,11 +5744,16 @@ function magazinePlanText(packed) {
     var growable = (pg.cells || []).filter(function (c) { var b = _band(c.band); return b.simg && (b.kind === 'float' || b.kind === 'feature' || b.kind === 'wide'); });
     if (!growable.length) return;
     var g = growable[0];
-    // Skip if the image is already at/near its grow cap (3.0): there is essentially no room left, so a
-    // growImage would just be rejected by the apply ("no room to grow within box"). Without this, the AI
-    // re-proposes the same maxed-out pages every pass and the proposal list never shrinks even though the
-    // book has converged. A near-cap image on a page with residual white is treated as structurally full.
-    if (g.growMul && g.growMul >= 2.85) return;
+    // Skip if the image is already at/near its real grow ceiling -- there is no room left, so a grow
+    // would just be rejected. The ceiling is the SMALLER of the near-cap heuristic (2.85) and the
+    // image's own crop-safe max (a square/wide image maxes near 1.0, not 3.0). Without this the AI keeps
+    // re-proposing maxed-out pages whose remaining white is structural (the page simply lacks content to
+    // fill), and the proposal list never shrinks.
+    var _gMom = _band(g.band);
+    var _cropMax = 3.0;
+    try { if (_gMom && _gMom.mzMoment && typeof cgFeatureCropSafeMaxMul === 'function') _cropMax = cgFeatureCropSafeMaxMul(_gMom.mzMoment, d.opts || {}); } catch (e) {}
+    var _ceil = Math.min(2.85, _cropMax);
+    if (g.growMul && g.growMul >= _ceil - 0.03) return;
     var _cur = (g.growMul && g.growMul !== 1) ? ('  (already grown x' + g.growMul + ', can grow further)') : '';
     _issues.push('  GROW-HEADROOM  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  ' + white.toFixed(2) + 'in real white, growable image b' + g.band + _cur + '  -> op: growImage page ' + pg.page + ' band ' + g.band + ' target fill');
   });
