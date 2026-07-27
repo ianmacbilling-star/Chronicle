@@ -14658,8 +14658,19 @@ function loadFinalize() {
   if (loadFinalize._lastUrl === url) return;
   loadFinalize._lastUrl = url;
   finalizeClearScanState();   // fresh initial scan -> drop stale counts / under-fill list / optimized pane
-  var _rb = document.getElementById('layoutai-run-btn'); if (_rb) _rb.style.display = 'none';
-  var _sl = document.getElementById('layoutai-scan-label'); if (_sl) _sl.style.display = '';
+  var _rb = document.getElementById('layoutai-run-btn');
+  var _sl = document.getElementById('layoutai-scan-label');
+  if (optimizeIsAdmin() && window._optimizeAdminView) {
+    // Admin diagnostic view: keep the original behavior -- hide the button until the Before scan
+    // finishes and finalizeShowFreeAnalysis reveals it alongside the free findings.
+    if (_rb) _rb.style.display = 'none';
+    if (_sl) _sl.style.display = '';
+  } else {
+    // User view (and admin default): the Before scan is hidden, so don't gate the button on it --
+    // show Optimize right away.
+    if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; _rb.classList.add('has-token'); _rb.style.display = ''; }
+    if (_sl) _sl.style.display = 'none';
+  }
   renderPdfInto(url, 'finalize-before-scroll', true);
 }
 
@@ -14680,6 +14691,7 @@ function applyOptimizeViewMode() {
   var freeList = document.getElementById('layoutai-free');
   var results = document.getElementById('layoutai-results');
   var delta = document.getElementById('layoutai-delta');   // before->after stats: meaningless to a user who can't see the Before
+  var publishPick = document.getElementById('layoutai-publish-pick');   // dual publish buttons: users only ever publish the optimized version
   var afterWrap = document.getElementById('finalize-after-wrap');
   if (beforeWrap) beforeWrap.style.display = showDiag ? '' : 'none';
   if (pageNav) pageNav.style.display = showDiag ? '' : 'none';
@@ -14687,6 +14699,7 @@ function applyOptimizeViewMode() {
   if (freeList) freeList.style.display = showDiag ? '' : 'none';
   if (results) results.style.display = showDiag ? '' : 'none';
   if (delta) delta.style.display = showDiag ? '' : 'none';
+  if (publishPick) publishPick.style.display = showDiag ? '' : 'none';
   if (afterWrap) afterWrap.style.flex = showDiag ? '1 1 auto' : '1 1 100%';   // After fills the row in user view
   // Reflect the state on the pill for the admin (subtle), and keep the label honest.
   var pill = document.getElementById('optimize-preview-pill');
@@ -15126,6 +15139,10 @@ function _runLayoutAiOptimize() {
           if (!converged && roundNum >= MAX_ROUNDS) aiLog('Reached the ' + MAX_ROUNDS + '-pass limit -- stopping.', 'stop');
           _revLbl.textContent = 'After (optimized)';
           aiLog('Done: ' + totalApplied + ' total change(s) across ' + roundNum + ' pass(es).', 'stop');
+          // Users only ever publish the optimized version -- arm it automatically now that Optimize has
+          // completed (the publish-pick buttons are hidden for them). finalizeUpdatePublishPick() gates
+          // this on _finalizeAfterDone/_finalizeAfterPages, so it sticks once the After render lands.
+          _publishSource = 'composed';
           optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
           optimizeProgressDone();
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
