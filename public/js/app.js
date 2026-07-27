@@ -14902,6 +14902,28 @@ function _runLayoutAiOptimize() {
       aiLogReset();
 
       // One round: review the CURRENT (persisted) book, apply the ops, return the report + rendered PDF
+      // Open a side tab that shows the raw advisor JSON for every pass, so the proposals are visible
+      // (the loop otherwise only shows the summarized log). Appended to across passes.
+      var _jsonWin = null;
+      function showPassJson(roundNum, j) {
+        try {
+          if (!_jsonWin || _jsonWin.closed) {
+            _jsonWin = window.open('', 'ai_layout_json_' + _cid);
+            if (_jsonWin) {
+              _jsonWin.document.title = 'AI Layout Review JSON';
+              _jsonWin.document.body.style.cssText = 'margin:0;background:#14100a;color:#f5e8c8;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:18px;';
+              _jsonWin.document.body.innerHTML = '<div style="color:#c9a84c;font-size:14px;margin-bottom:10px;">AI Layout Review -- raw proposals per pass (applies nothing here; the loop applies)</div>';
+            }
+          }
+          if (_jsonWin && !_jsonWin.closed) {
+            var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+            var block = '<div style="margin:10px 0 4px 0;color:#c9a84c;">Pass ' + roundNum + '  (ops: ' + ((j && j.opCount) || 0) + (j && j.parseError ? (', parseError: ' + esc(j.parseError)) : '') + ')</div>' +
+              '<pre style="white-space:pre-wrap;word-break:break-word;margin:0 0 8px 0;border-left:2px solid rgba(201,168,76,0.3);padding-left:10px;">' + esc(JSON.stringify(j, null, 2)) + '</pre>';
+            _jsonWin.document.body.insertAdjacentHTML('beforeend', block);
+          }
+        } catch (e) {}
+      }
+
       // blob. Because scale ops persist to layout_meta, each round's review sees the prior round's state.
       function runRound(roundNum) {
         loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
@@ -14909,8 +14931,15 @@ function _runLayoutAiOptimize() {
         return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
+            showPassJson(roundNum, j);   // surface the raw proposals in the side tab
             var _ops = (j && j.ops) || [];
-            if (!_ops.length) { aiLog('Pass ' + roundNum + ': AI proposed no changes.', 'stop'); return { done: true, applied: 0, blob: null, report: null }; }
+            if (!_ops.length) {
+              // Distinguish a genuine "nothing to do" from a silent failure: surface parseError / API error.
+              if (j && j.parseError) aiLog('Pass ' + roundNum + ': AI response could not be parsed (' + j.parseError + ').', 'reject');
+              else if (j && j.error) aiLog('Pass ' + roundNum + ': review error -- ' + j.error, 'reject');
+              else aiLog('Pass ' + roundNum + ': AI proposed no changes (opCount ' + ((j && j.opCount) || 0) + ').', 'stop');
+              return { done: true, applied: 0, blob: null, report: null };
+            }
             aiLog('Pass ' + roundNum + ': AI proposed ' + _ops.length + ' op(s) -- applying...');
             loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- applying ' + _ops.length + ' op(s)...');
             return fetch('/api/pdf/layout-apply/' + _cid + (_q ? (_q + '&pdf=1') : '?pdf=1'), {
