@@ -6200,9 +6200,73 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           continue;
         }
 
-        // Text moves + tower merges on magazine are deferred for now: magazine already auto-pulls via
-        // its look-back transform in pass 1, so the marginal value is lower and the mechanics differ.
-        mDeferred.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'magazine text/tower moves deferred (pass 1 already densifies magazine)' });
+        // Text move: partial N-line pull-up. The AI's pullLines wants N lines of a split band's tail
+        // (on fromPage) moved up onto the head (on page). We shift the char boundary between the two
+        // slices of that band by N lines using the band's per-line char offsets, re-measure the real
+        // render, and keep only if BOTH pages still fit the box.
+        if (mop.op === 'pullLines') {
+          var headIdx = (mop.page != null) ? mop.page : (mop.fromPage != null ? mop.fromPage - 1 : -1);
+          var tailIdx = (mop.fromPage != null) ? mop.fromPage : (mop.page != null ? mop.page + 1 : -1);
+          var headPg = mplan.pages[headIdx], tailPg = mplan.pages[tailIdx];
+          if (!headPg || !tailPg) { mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'pages not found' }); continue; }
+          // Find the split band shared across the boundary: head's LAST cell and tail's FIRST cell must
+          // be the same band, split (head has cEnd set, tail has cStart == head.cEnd).
+          var headCell = headPg[headPg.length - 1];
+          var tailCell = tailPg[0];
+          if (!headCell || !tailCell || headCell.band !== tailCell.band || headCell.cEnd == null) {
+            mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'no split band at the page boundary to pull from' }); continue;
+          }
+          var mband = mbands[headCell.band];
+          var lineChars = (mband && mband.lineChars) || [];
+          if (!lineChars.length) { mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'no line data to re-slice' }); continue; }
+          // Current boundary char = headCell.cEnd. Find its line index, advance N lines.
+          var curBound = headCell.cEnd;
+          var li = 0; for (; li < lineChars.length; li++) { if (lineChars[li] >= curBound) break; }
+          var wantN = Math.max(1, mop.lines || 1);
+          var newLi = Math.min(lineChars.length - 1, li + wantN);
+          var newBound = (newLi < lineChars.length) ? lineChars[newLi] : null;   // null -> would consume whole tail
+          var tailEnd = (tailCell.cEnd != null) ? tailCell.cEnd : (mband.stext != null ? mband.stext.length : null);
+          // If pulling N lines would consume (nearly) the whole tail, pull the ENTIRE tail up instead
+          // and remove the split -- this is the lone-orphan case (e.g. a single "it." stranded on its
+          // own). Move the whole tail onto the head, drop the tail cell, re-measure, keep if it fits.
+          if (newBound == null || (tailEnd != null && newBound >= tailEnd - 2)) {
+            var _hSaveW = headCell.cEnd;
+            var _tailCellsSave = tailPg.slice();
+            headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: tailEnd });   // head absorbs the whole tail range
+            tailPg.shift();   // remove the tail slice cell from the next page
+            var _mrW = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+            var okHeadW = (_mrW && _mrW[headIdx] != null) ? (_mrW[headIdx] <= MCLIP + 0.02) : false;
+            var okTailW = (_mrW && _mrW[tailIdx] != null) ? (_mrW[tailIdx] <= MCLIP + 0.02) : true;
+            if (_mrW && !_mrW._error && okHeadW && okTailW) {
+              // If the tail page is now empty (the pulled tail was its only content), drop the page.
+              if (tailPg.length === 0) { mplan.pages.splice(tailIdx, 1); }
+              mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: 'whole tail', boundaryFrom: _hSaveW, boundaryTo: tailEnd, headReal: Math.round((_mrW[headIdx] || 0) * 100) / 100, removedSplit: true });
+            } else {
+              headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: _hSaveW });
+              tailPg.length = 0; Array.prototype.push.apply(tailPg, _tailCellsSave);   // restore
+              mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'orphan pull would overflow the head page' });
+            }
+            continue;
+          }
+          // Snapshot for rollback, then move the boundary.
+          var _hSave = headCell.cEnd, _tSave = tailCell.cStart;
+          headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: newBound });
+          tailPg[0] = Object.assign({}, tailCell, { cStart: newBound });
+          var _mr2 = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+          var okHead = (_mr2 && _mr2[headIdx] != null) ? (_mr2[headIdx] <= MCLIP + 0.02) : false;
+          var okTail = (_mr2 && _mr2[tailIdx] != null) ? (_mr2[tailIdx] <= MCLIP + 0.02) : true;
+          if (_mr2 && !_mr2._error && okHead && okTail) {
+            mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: (newLi - li), boundaryFrom: _hSave, boundaryTo: newBound, headReal: Math.round((_mr2[headIdx] || 0) * 100) / 100 });
+          } else {
+            headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: _hSave });
+            tailPg[0] = Object.assign({}, tailCell, { cStart: _tSave });
+            mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'pull would overflow the head page' });
+          }
+          continue;
+        }
+
+        // Other text/tower moves (pushLines, tower merges) still deferred on magazine.
+        mDeferred.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'magazine ' + mop.op + ' deferred (pass 1 already densifies magazine)' });
       }
 
       var mBody = composeMagazine(mplan, mbands, _cco);
