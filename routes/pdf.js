@@ -5866,7 +5866,13 @@ var LAYOUT_REVIEW_SYSTEM = [
   '',
   'Rules: prefer the FEWEST ops that resolve real issues. Do not invent ops or fields. Do not propose an',
   'op that fights another (never both grow and shrink the same cell). The ISSUES lines already suggest',
-  'ops -- use them as strong hints but apply judgment. If the book looks good, return [].'
+  'ops -- use them as strong hints but apply judgment. If the book looks good, return [].',
+  '',
+  'OUTPUT FORMAT -- CRITICAL: respond with ONLY the raw JSON array and NOTHING else. No prose, no',
+  'explanation, no reasoning, no markdown code fences, no "Looking at the dump" preamble. Your entire',
+  'response must start with [ and end with ]. Put all reasoning inside each op\'s "why" field. Writing any',
+  'text before the array wastes your output budget and can truncate the JSON, which discards ALL of your',
+  'work for this pass. Start your response with the [ character immediately.'
 ].join('\n');
 
 // Per-layout GOALS preamble. The op vocabulary is universal, but the priorities differ by layout:
@@ -5923,7 +5929,7 @@ async function _aiReviewOps(dump, arrange, campaignName, key) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
-      model: TEXT_MODEL, max_tokens: 2000, system: _system,
+      model: TEXT_MODEL, max_tokens: 4000, system: _system,
       messages: [{ role: 'user', content: 'Here is the layout dump for "' + campaignName + '". Return the JSON array of ops.\n\n' + dump }]
     })
   });
@@ -5932,12 +5938,35 @@ async function _aiReviewOps(dump, arrange, campaignName, key) {
   var raw = (data.content || []).map(function (b) { return b.text || ''; }).join('').trim();
   var ops = null, parseError = null;
   try {
-    var jtxt = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-    var _s = jtxt.indexOf('['), _e = jtxt.lastIndexOf(']');
-    if (_s >= 0 && _e > _s) jtxt = jtxt.slice(_s, _e + 1);
-    ops = JSON.parse(jtxt);
+    ops = _parseOpsArray(raw);
   } catch (e) { parseError = String((e && e.message) || e); }
   return { ops: ops, parseError: parseError };
+}
+
+// Robustly extract the ops array from a model response that may contain prose, code fences, or a
+// truncated tail. Tries: (1) direct parse of the bracketed slice; (2) if that fails (e.g. the array
+// was cut off by the token limit), salvage every COMPLETE {...} object before the break.
+function _parseOpsArray(raw) {
+  var jtxt = String(raw || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  var _s = jtxt.indexOf('['), _e = jtxt.lastIndexOf(']');
+  if (_s >= 0 && _e > _s) {
+    try { return JSON.parse(jtxt.slice(_s, _e + 1)); } catch (e) { /* fall through to salvage */ }
+  }
+  // Salvage: scan from the first '[' and collect balanced top-level {...} objects, tolerating a
+  // truncated final object. This rescues a pass whose JSON was cut off mid-array by max_tokens.
+  if (_s < 0) throw new Error('no JSON array found in response');
+  var body = jtxt.slice(_s + 1);
+  var objs = [], depth = 0, start = -1, inStr = false, esc = false;
+  for (var i = 0; i < body.length; i++) {
+    var ch = body[i];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') { if (depth === 0) start = i; depth++; }
+    else if (ch === '}') { depth--; if (depth === 0 && start >= 0) { var frag = body.slice(start, i + 1); try { objs.push(JSON.parse(frag)); } catch (e2) {} start = -1; } }
+    else if (ch === ']' && depth === 0) break;
+  }
+  if (!objs.length) throw new Error('no complete ops recovered from response');
+  return objs;
 }
 
 router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async function (req, res) {
@@ -5970,7 +5999,7 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: TEXT_MODEL,
-        max_tokens: 2000,
+        max_tokens: 4000,
         system: _system,
         messages: [{ role: 'user', content: 'Here is the layout dump for "' + campaignName + '". Return the JSON array of ops.\n\n' + dump }]
       })
@@ -5982,10 +6011,7 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
     // Parse the JSON array defensively (strip any accidental fences / prose).
     var ops = null, parseError = null;
     try {
-      var jtxt = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-      var _s = jtxt.indexOf('['), _e = jtxt.lastIndexOf(']');
-      if (_s >= 0 && _e > _s) jtxt = jtxt.slice(_s, _e + 1);
-      ops = JSON.parse(jtxt);
+      ops = _parseOpsArray(raw);
     } catch (e) { parseError = String((e && e.message) || e); }
 
     // Translate the AI's internal dump page numbers to the VIEWER page numbers Ian sees. The dump text
