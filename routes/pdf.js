@@ -6117,8 +6117,85 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
 
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    // ===== MAGAZINE / GAZETTE apply (growMul on cells + text-cell moves) =====
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
-      return res.status(400).json({ error: 'layout-apply currently supports Picture Book (paired) only.' });
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      var mplan = packedM.plan, mbands = packedM.bands;
+      var mName = (packedM.campaign && packedM.campaign.name) || 'campaign';
+      var MCLIP = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in
+
+      // Find the growable image cell on a page (same test the optimizer uses: re-renderable + carries
+      // a picture). Returns the cell index or -1.
+      function mGrowCellIdx(pgCells) {
+        for (var ci = 0; ci < pgCells.length; ci++) {
+          var c = pgCells[ci], bb = mbands[c.band];
+          if (!bb || !bb.remeta || !(bb.sImgH > 0)) continue;
+          if (c.textLead || c.towerLead) continue;
+          if (c.split && (c.cStart || 0) > 0 && !c.imgBody) continue;
+          return ci;
+        }
+        return -1;
+      }
+
+      var mReal0 = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+      if (mReal0._error) return res.status(500).json({ error: 'baseline re-measure failed: ' + mReal0._error });
+
+      var mApplied = [], mRejected = [], mDeferred = [];
+      for (var mi = 0; mi < ops.length; mi++) {
+        var mop = ops[mi];
+        var mpg = mplan.pages[mop.page];
+        if (!mpg) { mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'page not found' }); continue; }
+
+        if (mop.op === 'growImage' || mop.op === 'shrinkImage') {
+          var mci = mGrowCellIdx(mpg);
+          if (mci < 0) { mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'no growable image on page' }); continue; }
+          var curMul = mpg[mci].growMul || 1;
+          // Bisect the grow factor: grow reaches up (cap 3.0), shrink pulls down (floor ~0.5), gated on box.
+          var mlo = mop.op === 'growImage' ? curMul : 0.5;
+          var mhi = mop.op === 'growImage' ? 3.0 : curMul;
+          var mBest = null, mBestReal = null;
+          for (var mrd = 0; mrd < 4; mrd++) {
+            var mTry = (mlo + mhi) / 2;
+            mpg[mci] = Object.assign({}, mpg[mci], { growMul: Math.round(mTry * 1000) / 1000 });
+            var _mr = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+            var mph = (_mr && _mr[mop.page] != null) ? _mr[mop.page] : null;
+            if (mph == null) break;
+            if (mph <= MCLIP + 0.02) { mBest = mpg[mci].growMul; mBestReal = mph; if (mop.op === 'growImage') mlo = mTry; else mhi = mTry; }
+            else { if (mop.op === 'growImage') mhi = mTry; else mlo = mTry; }
+            if (mhi - mlo < 0.05) break;
+          }
+          if (mBest != null && ((mop.op === 'growImage' && mBest > curMul + 0.02) || (mop.op === 'shrinkImage' && mBest < curMul - 0.02))) {
+            mpg[mci] = Object.assign({}, mpg[mci], { growMul: mBest });
+            mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, growFrom: curMul, growTo: mBest, pageReal: Math.round((mBestReal || 0) * 100) / 100 });
+          } else {
+            mpg[mci] = Object.assign({}, mpg[mci], { growMul: curMul });
+            mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: (mop.op === 'growImage' ? 'no room to grow within box' : 'could not shrink usefully') });
+          }
+          continue;
+        }
+
+        // Text moves + tower merges on magazine are deferred for now: magazine already auto-pulls via
+        // its look-back transform in pass 1, so the marginal value is lower and the mechanics differ.
+        mDeferred.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'magazine text/tower moves deferred (pass 1 already densifies magazine)' });
+      }
+
+      var mBody = composeMagazine(mplan, mbands, _cco);
+      composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName);
+      var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
+      if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
+      var mPdf = await renderHtmlToPdf(mBuilt.html, {});
+      try { await spendTokens(req.session.userId, 1, { source: 'layout_apply', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-apply spend failed:', e && e.message); }
+      try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 1, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
+      if (req.query.pdf === '1' || req.query.pdf === 'true') {
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
+        try { res.set('X-Apply-Report', JSON.stringify({ appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length })); } catch (e) {}
+        return res.send(Buffer.isBuffer(mPdf) ? mPdf : Buffer.from(mPdf));
+      }
+      return res.json({ campaign: mName, arrange: _cco.arrange, applied: true, clipLine: MCLIP,
+        appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
+        appliedOps: mApplied, rejectedOps: mRejected, deferredOps: mDeferred,
+        note: 'Magazine grow/shrink applied and confirmed by real re-measure. Text/tower moves deferred (pass 1 already densifies magazine).' });
     }
 
     var packed = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
