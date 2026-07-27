@@ -5671,11 +5671,15 @@ function magazinePlanText(packed) {
     var first = (pgB.cells || [])[0];
     if (!first) continue;
     var fb = _band(first.band);
-    var splittable = (fb.stext && fb.nlines >= 2 && !first.growMul);
+    // A band is text-pullable ONLY if it is PURE TEXT: an image/feature band has its text wrapped
+    // around a picture that anchors it to the page, so its lines cannot be pulled off (the apply would
+    // decline it). Exclude those here so we do not suggest an un-appliable pull.
+    var fbIsImage = (fb.simg || (fb.sImgH > 0));
+    var splittable = (fb.stext && fb.nlines >= 2 && !first.growMul && !fbIsImage);
     if (!splittable) continue;
     var fitLines = Math.max(0, Math.floor((whiteA - 0.12) / _avgLH));   // reserve a small gap
     if (fitLines >= 1) {
-      _issues.push('  PULLABLE  page ' + pgA.page + ' (viewer p.' + _viewer(pgA.page) + ') has ' + whiteA.toFixed(2) + 'in white; next page b' + first.band + ' is text -> ~' + fitLines + ' line(s) could pull up  -> op: pullLines page ' + pgA.page + ' fromPage ' + pgB.page + ' lines ' + fitLines);
+      _issues.push('  PULLABLE  page ' + pgA.page + ' (viewer p.' + _viewer(pgA.page) + ') has ' + whiteA.toFixed(2) + 'in white; next page b' + first.band + ' is pure text -> ~' + fitLines + ' line(s) could pull up  -> op: pullLines page ' + pgA.page + ' fromPage ' + pgB.page + ' lines ' + fitLines);
     }
   }
 
@@ -6186,14 +6190,21 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           var mlo = mop.op === 'growImage' ? curMul : 0.5;
           var mhi = mop.op === 'growImage' ? 3.0 : curMul;
           var mBest = null, mBestReal = null;
-          for (var mrd = 0; mrd < 4; mrd++) {
+          for (var mrd = 0; mrd < 6; mrd++) {
             var mTry = (mlo + mhi) / 2;
             mpg[mci] = Object.assign({}, mpg[mci], { growMul: Math.round(mTry * 1000) / 1000 });
             var _mr = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
             var mph = (_mr && _mr[mop.page] != null) ? _mr[mop.page] : null;
             if (mph == null) break;
-            if (mph <= MCLIP + 0.02) { mBest = mpg[mci].growMul; mBestReal = mph; if (mop.op === 'growImage') mlo = mTry; else mhi = mTry; }
-            else { if (mop.op === 'growImage') mhi = mTry; else mlo = mTry; }
+            if (mph <= MCLIP + 0.02) {
+              // This mul FITS. For grow, record it and reach higher. For shrink, this is a candidate --
+              // record it and try LESS shrink (a higher mul) to keep the image as large as possible.
+              mBest = mpg[mci].growMul; mBestReal = mph;
+              if (mop.op === 'growImage') mlo = mTry; else mlo = mTry;
+            } else {
+              // This mul CLIPS. For grow, back off (lower). For shrink, shrink MORE (lower the ceiling).
+              if (mop.op === 'growImage') mhi = mTry; else mhi = mTry;
+            }
             if (mhi - mlo < 0.05) break;
           }
           if (mBest != null && ((mop.op === 'growImage' && mBest > curMul + 0.02) || (mop.op === 'shrinkImage' && mBest < curMul - 0.02))) {
