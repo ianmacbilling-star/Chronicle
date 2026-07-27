@@ -5718,6 +5718,11 @@ function magazinePlanText(packed) {
     var growable = (pg.cells || []).filter(function (c) { var b = _band(c.band); return b.simg && (b.kind === 'float' || b.kind === 'feature' || b.kind === 'wide'); });
     if (!growable.length) return;
     var g = growable[0];
+    // Skip if the image is already at/near its grow cap (3.0): there is essentially no room left, so a
+    // growImage would just be rejected by the apply ("no room to grow within box"). Without this, the AI
+    // re-proposes the same maxed-out pages every pass and the proposal list never shrinks even though the
+    // book has converged. A near-cap image on a page with residual white is treated as structurally full.
+    if (g.growMul && g.growMul >= 2.85) return;
     var _cur = (g.growMul && g.growMul !== 1) ? ('  (already grown x' + g.growMul + ', can grow further)') : '';
     _issues.push('  GROW-HEADROOM  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  ' + white.toFixed(2) + 'in real white, growable image b' + g.band + _cur + '  -> op: growImage page ' + pg.page + ' band ' + g.band + ' target fill');
   });
@@ -5891,6 +5896,9 @@ var LAYOUT_REVIEW_SYSTEM = [
   'Rules: prefer the FEWEST ops that resolve real issues. Do not invent ops or fields. Do not propose an',
   'op that fights another (never both grow and shrink the same cell). The ISSUES lines already suggest',
   'ops -- use them as strong hints but apply judgment. If the book looks good, return [].',
+  'CONVERGENCE: an image already grown to about x2.85 or more is essentially at its maximum -- do NOT',
+  'propose growImage for it even if the page still shows a little white; that residual white is',
+  'structural and the grow would be rejected. Only propose a grow when the image has real room left.',
   '',
   'OUTPUT FORMAT -- CRITICAL: respond with ONLY the raw JSON array and NOTHING else. No prose, no',
   'explanation, no reasoning, no markdown code fences, no "Looking at the dump" preamble. Your entire',
