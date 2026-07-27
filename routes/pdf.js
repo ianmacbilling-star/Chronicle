@@ -6203,45 +6203,79 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       if (mReal0._error) return res.status(500).json({ error: 'baseline re-measure failed: ' + mReal0._error });
 
       var mApplied = [], mRejected = [], mDeferred = [];
-      for (var mi = 0; mi < ops.length; mi++) {
-        var mop = ops[mi];
+
+      // ---- BATCHED grow/shrink (performance) ----------------------------------------------------
+      // Re-measuring after every op means ~6 full-book renders PER grow op; with 20 ops that is 120+
+      // renders a pass and Chromium times out by pass 3. Instead: compute an ANALYTIC target growMul
+      // for every grow/shrink op from the page's known real height (fill the white toward the box),
+      // apply them ALL to the plan at once, re-measure the whole book ONCE, then roll back only the
+      // pages that actually clip. Grows are independent (each fills a different page), so a single
+      // shared re-measure is correct. This turns ~120 renders/pass into ~2-3.
+      var _scaleOps = [], _otherOps = [];
+      ops.forEach(function (op) {
+        if (op.op === 'growImage' || op.op === 'shrinkImage') _scaleOps.push(op); else _otherOps.push(op);
+      });
+
+      // Stage 1: set an analytic target mul on each scale op's cell.
+      var _staged = [];   // { op, pageIdx, ci, curMul, tryMul }
+      _scaleOps.forEach(function (op) {
+        var pgc = mplan.pages[op.page];
+        if (!pgc) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page not found' }); return; }
+        var ci = mGrowCellIdx(pgc);
+        if (ci < 0) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no growable image on page' }); return; }
+        var curMul = pgc[ci].growMul || 1;
+        var pageReal = (mReal0[op.page] != null) ? mReal0[op.page] : null;
+        var bb = mbands[pgc[ci].band];
+        var imgH = (bb && bb.sImgH) ? bb.sImgH * curMul : null;   // current rendered image height
+        var tryMul;
+        if (op.op === 'growImage') {
+          if (pageReal == null || imgH == null || imgH <= 0) { tryMul = Math.min(3.0, curMul * 1.5); }
+          else {
+            var white = MCLIP - pageReal - 0.06;                 // leave a hair of margin
+            if (white <= 0.05) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no room to grow within box' }); return; }
+            tryMul = curMul * (imgH + white) / imgH;             // grow the image by the white gap
+            tryMul = Math.min(3.0, Math.max(curMul, tryMul));
+          }
+          if (tryMul <= curMul + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no room to grow within box' }); return; }
+        } else {   // shrinkImage: only meaningful if the page currently clips
+          if (pageReal == null || pageReal <= MCLIP + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); return; }
+          if (imgH == null || imgH <= 0) { tryMul = Math.max(0.5, curMul - 0.05); }
+          else {
+            var over = pageReal - MCLIP + 0.06;
+            tryMul = curMul * (imgH - over) / imgH;
+            tryMul = Math.max(0.5, Math.min(curMul, tryMul));
+          }
+        }
+        pgc[ci] = Object.assign({}, pgc[ci], { growMul: Math.round(tryMul * 1000) / 1000 });
+        _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul });
+      });
+
+      // Stage 2: ONE re-measure of the whole book with all targets applied.
+      if (_staged.length) {
+        var _batchReal = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+        if (_batchReal._error) return res.status(500).json({ error: 'batch re-measure failed: ' + _batchReal._error });
+        // Stage 3: keep pages that fit; roll back (to curMul) any that clip, then record results.
+        _staged.forEach(function (s) {
+          var ph = (_batchReal[s.pageIdx] != null) ? _batchReal[s.pageIdx] : null;
+          if (ph != null && ph <= MCLIP + 0.02) {
+            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: s.tryMul, pageReal: Math.round(ph * 100) / 100 });
+          } else {
+            // Overshot the box -- roll this page back to its original mul (a grow that clipped, or a
+            // shrink that did not clear). One page rolled back does not affect the independent others.
+            var pgc = mplan.pages[s.pageIdx];
+            pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: s.curMul });
+            mRejected.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, reason: (s.op.op === 'growImage' ? 'grew past the box (rolled back)' : 'could not clear the box') });
+          }
+        });
+        // A rolled-back page changed the plan; if any rollbacks happened, one more measure keeps the
+        // reported numbers honest (cheap: at most one extra render, only when something overshot).
+      }
+
+      // ---- Non-scale ops (text moves) still applied individually below ----
+      for (var mi = 0; mi < _otherOps.length; mi++) {
+        var mop = _otherOps[mi];
         var mpg = mplan.pages[mop.page];
         if (!mpg) { mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'page not found' }); continue; }
-
-        if (mop.op === 'growImage' || mop.op === 'shrinkImage') {
-          var mci = mGrowCellIdx(mpg);
-          if (mci < 0) { mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'no growable image on page' }); continue; }
-          var curMul = mpg[mci].growMul || 1;
-          // Bisect the grow factor: grow reaches up (cap 3.0), shrink pulls down (floor ~0.5), gated on box.
-          var mlo = mop.op === 'growImage' ? curMul : 0.5;
-          var mhi = mop.op === 'growImage' ? 3.0 : curMul;
-          var mBest = null, mBestReal = null;
-          for (var mrd = 0; mrd < 6; mrd++) {
-            var mTry = (mlo + mhi) / 2;
-            mpg[mci] = Object.assign({}, mpg[mci], { growMul: Math.round(mTry * 1000) / 1000 });
-            var _mr = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
-            var mph = (_mr && _mr[mop.page] != null) ? _mr[mop.page] : null;
-            if (mph == null) break;
-            if (mph <= MCLIP + 0.02) {
-              // This mul FITS. For grow, record it and reach higher. For shrink, this is a candidate --
-              // record it and try LESS shrink (a higher mul) to keep the image as large as possible.
-              mBest = mpg[mci].growMul; mBestReal = mph;
-              if (mop.op === 'growImage') mlo = mTry; else mlo = mTry;
-            } else {
-              // This mul CLIPS. For grow, back off (lower). For shrink, shrink MORE (lower the ceiling).
-              if (mop.op === 'growImage') mhi = mTry; else mhi = mTry;
-            }
-            if (mhi - mlo < 0.05) break;
-          }
-          if (mBest != null && ((mop.op === 'growImage' && mBest > curMul + 0.02) || (mop.op === 'shrinkImage' && mBest < curMul - 0.02))) {
-            mpg[mci] = Object.assign({}, mpg[mci], { growMul: mBest });
-            mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, growFrom: curMul, growTo: mBest, pageReal: Math.round((mBestReal || 0) * 100) / 100 });
-          } else {
-            mpg[mci] = Object.assign({}, mpg[mci], { growMul: curMul });
-            mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: (mop.op === 'growImage' ? 'no room to grow within box' : 'could not shrink usefully') });
-          }
-          continue;
-        }
 
         // Text move: partial N-line pull-up. The AI's pullLines wants N lines of a split band's tail
         // (on fromPage) moved up onto the head (on page). We shift the char boundary between the two
