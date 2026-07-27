@@ -340,7 +340,7 @@
       <div id="novel-tab-finalize" style="display:none;">
         <div id="finalize-split" style="display:flex;align-items:stretch;gap:0;">
           <div id="finalize-left" style="flex:0 0 33%;min-width:220px;overflow:hidden;padding-right:8px;">
-            <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span style="font-size:10px;background:rgba(201,168,76,0.18);border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
+            <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span id="optimize-preview-pill" style="font-size:10px;background:rgba(201,168,76,0.18);border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
             <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
             <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -349,6 +349,8 @@
               <div id="layoutai-delta" style="font-size:13px;color:#d8c9a8;line-height:1.5;flex:1 1 auto;min-width:0;"></div>
             </div>
             <div id="layoutai-status" style="color:rgba(245,232,200,0.55);font-size:12px;margin-top:8px;"></div>
+            <!-- Plain-language progress shown to everyone while Optimize runs (admins also get the diagnostics below). -->
+            <div id="optimize-progress" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.18);border-radius:var(--radius);font-size:13px;color:var(--cream);line-height:1.7;max-height:420px;overflow-y:auto;"></div>
             <!-- Choose which rendering goes to the Library. The optimized option stays disabled until
                  Optimize has run, because publishing it reuses that run's composed book. -->
             <div id="layoutai-publish-pick" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);">

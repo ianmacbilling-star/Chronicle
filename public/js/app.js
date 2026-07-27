@@ -14650,6 +14650,7 @@ var _finalizeRunAiLoop = null;  // set by the finalize view to the AI loop; Opti
 var _finalizeAfterBlob = '';
 function loadFinalize() {
   if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
+  applyOptimizeViewMode();   // clean user view by default; admin diagnostics only when toggled on
   finalizeUpdateHeader();   // show the layout + attributes immediately, before the scan finishes
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
@@ -14660,6 +14661,78 @@ function loadFinalize() {
   var _rb = document.getElementById('layoutai-run-btn'); if (_rb) _rb.style.display = 'none';
   var _sl = document.getElementById('layoutai-scan-label'); if (_sl) _sl.style.display = '';
   renderPdfInto(url, 'finalize-before-scroll', true);
+}
+
+// The optimize tab has two faces. Regular users (and admins by default) see ONLY the After pane -- the
+// finished, optimized book -- with a plain-language progress readout while it builds. The Before pane,
+// the Before "open in new tab" button, and the raw findings list were only ever there for development,
+// so they are hidden. An admin can double-click the "PREVIEW" pill to toggle the full diagnostic view
+// (Before + After side by side, the findings list, the raw log). The toggle is admin-only; a normal
+// user double-clicking the pill does nothing.
+window._optimizeAdminView = false;
+function optimizeIsAdmin() { return !!(typeof state !== 'undefined' && state.user && state.user.is_admin); }
+function applyOptimizeViewMode() {
+  var admin = optimizeIsAdmin();
+  var showDiag = admin && window._optimizeAdminView;   // diagnostics only for an admin who toggled them on
+  var beforeWrap = document.getElementById('finalize-before-wrap');
+  var pageNav = document.getElementById('finalize-page-nav-wrap');
+  var beforeOpen = document.getElementById('finalize-before-open');
+  var freeList = document.getElementById('layoutai-free');
+  var results = document.getElementById('layoutai-results');
+  var delta = document.getElementById('layoutai-delta');   // before->after stats: meaningless to a user who can't see the Before
+  var afterWrap = document.getElementById('finalize-after-wrap');
+  if (beforeWrap) beforeWrap.style.display = showDiag ? '' : 'none';
+  if (pageNav) pageNav.style.display = showDiag ? '' : 'none';
+  if (beforeOpen) beforeOpen.style.display = showDiag ? '' : 'none';   // never expose the Before PDF to users
+  if (freeList) freeList.style.display = showDiag ? '' : 'none';
+  if (results) results.style.display = showDiag ? '' : 'none';
+  if (delta) delta.style.display = showDiag ? '' : 'none';
+  if (afterWrap) afterWrap.style.flex = showDiag ? '1 1 auto' : '1 1 100%';   // After fills the row in user view
+  // Reflect the state on the pill for the admin (subtle), and keep the label honest.
+  var pill = document.getElementById('optimize-preview-pill');
+  if (pill) pill.style.opacity = showDiag ? '1' : '';
+}
+// Wire the admin easter egg once the DOM is ready.
+(function () {
+  function wirePill() {
+    var pill = document.getElementById('optimize-preview-pill');
+    if (!pill || pill._wired) return;
+    pill._wired = true;
+    pill.style.userSelect = 'none';
+    pill.addEventListener('dblclick', function () {
+      if (!optimizeIsAdmin()) return;   // admin-only easter egg
+      window._optimizeAdminView = !window._optimizeAdminView;
+      applyOptimizeViewMode();
+      // If turning diagnostics ON and the Before pane is empty, load it now.
+      if (window._optimizeAdminView) {
+        var bs = document.getElementById('finalize-before-scroll');
+        if (bs && !bs.getAttribute('data-loaded') && typeof loadFinalize === 'function') { loadFinalize._lastUrl = null; loadFinalize(); }
+      }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wirePill);
+  else wirePill();
+  // Also try after a tick in case the element mounts later.
+  setTimeout(wirePill, 1500);
+})();
+
+// Plain-language progress log shown to everyone during Optimize. Each call appends a line.
+function optimizeProgress(msg, opts) {
+  var box = document.getElementById('optimize-progress');
+  if (!box) return;
+  opts = opts || {};
+  if (opts.reset) { box.innerHTML = ''; box.style.display = 'block'; }
+  if (msg == null) return;
+  var line = document.createElement('div');
+  line.style.cssText = 'opacity:0;transition:opacity 0.3s;';
+  line.innerHTML = (opts.done ? '&#10003; ' : '&#8226; ') + msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  requestAnimationFrame(function () { line.style.opacity = opts.dim ? '0.55' : '1'; });
+}
+function optimizeProgressDone() {
+  var box = document.getElementById('optimize-progress');
+  if (box) { setTimeout(function () { box.style.display = 'none'; }, 2500); }
 }
 // Clear everything a prior optimize/scan left behind so a fresh initial scan starts clean.
 function finalizeClearScanState() {
@@ -14829,6 +14902,9 @@ function _runLayoutAiOptimize() {
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
   var _d0 = document.getElementById('layoutai-delta'); if (_d0) _d0.innerHTML = '';
+  // Plain-language progress for everyone (the friendly readout in the left pane).
+  optimizeProgress('Analyzing your book&hellip;', { reset: true });
+  optimizeProgress('Composing the pages&hellip;');
   // Composer is deterministic and fast -- a lightweight status line, no progress bar.
   if (status) status.textContent = 'Composing the book page by page...';
   function finish() {
@@ -14979,6 +15055,7 @@ function _runLayoutAiOptimize() {
       function runRound(roundNum) {
         loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
         aiLog('Pass ' + roundNum + ': reviewing the layout...');
+        optimizeProgress('AI Loop ' + roundNum + ': reviewing the layout&hellip;');
         return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
@@ -15009,6 +15086,14 @@ function _runLayoutAiOptimize() {
                           : a.growTo != null ? ('grow ' + (a.growFrom != null ? a.growFrom.toFixed(2) : '?') + ' -> ' + a.growTo.toFixed(2))
                           : a.movedTo != null ? ('moved text p' + a.movedFrom + ' -> p' + a.movedTo) : 'applied';
                     aiLog('   OK ' + a.op + ' viewer p.' + (a.viewerPage != null ? a.viewerPage : '?') + ' (' + d + ')', 'applied');
+                    // Friendly translation for the user-facing progress log.
+                    var _pg = (a.viewerPage != null ? (' on page ' + a.viewerPage) : '');
+                    var _friendly = (a.op === 'growImage') ? ('Enlarging an image' + _pg + ' to fill the page')
+                                  : (a.op === 'shrinkImage') ? ('Fitting an image' + _pg + ' to its space')
+                                  : (a.op === 'scaleImage') ? ('Resizing an image' + _pg)
+                                  : (a.op === 'pullLines' || a.movedTo != null) ? ('Reflowing text' + _pg + ' to close a gap')
+                                  : ('Adjusting the layout' + _pg);
+                    optimizeProgress(_friendly, { dim: true });
                   });
                   (rep.rejected || []).forEach(function (r2) {
                     aiLog('   skipped ' + r2.op + ' viewer p.' + (r2.viewerPage != null ? r2.viewerPage : '?') + ' -- ' + (r2.reason || 'rejected'), 'reject');
@@ -15041,6 +15126,8 @@ function _runLayoutAiOptimize() {
           if (!converged && roundNum >= MAX_ROUNDS) aiLog('Reached the ' + MAX_ROUNDS + '-pass limit -- stopping.', 'stop');
           _revLbl.textContent = 'After (optimized)';
           aiLog('Done: ' + totalApplied + ' total change(s) across ' + roundNum + ' pass(es).', 'stop');
+          optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
+          optimizeProgressDone();
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
@@ -15144,6 +15231,7 @@ function _runLayoutAiOptimize() {
         // through the loop because each loop render re-shows it.
         try {
           if (typeof _finalizeRunAiLoop === 'function' && !window._aiLoopRunning) {
+            optimizeProgress('Arranging the pages for the best fit&hellip;', { done: true });
             setTimeout(function () { try { _finalizeRunAiLoop(); } catch (e) {} }, 150);
           }
         } catch (e) {}
