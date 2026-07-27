@@ -14619,7 +14619,10 @@ function finalizeUpdatePublishPick() {
   var wrap = document.getElementById('layoutai-publish-pick');
   var after = document.getElementById('pub-pick-after');
   var ready = !!(_finalizeAfterDone && _finalizeAfterPages > 0);
-  if (wrap) wrap.style.display = '';
+  // Only the admin diagnostic view shows the dual publish-pick buttons; users publish the optimized
+  // version automatically, so keep the block hidden for them (it must not re-show mid-Optimize).
+  var _showPick = !!(optimizeIsAdmin() && window._optimizeAdminView);
+  if (wrap) wrap.style.display = _showPick ? '' : 'none';
   if (after) {
     after.disabled = !ready;
     after.title = ready ? 'Publish the optimized layout' : 'Run Optimize first';
@@ -14744,8 +14747,8 @@ function optimizeProgress(msg, opts) {
   requestAnimationFrame(function () { line.style.opacity = opts.dim ? '0.55' : '1'; });
 }
 function optimizeProgressDone() {
-  var box = document.getElementById('optimize-progress');
-  if (box) { setTimeout(function () { box.style.display = 'none'; }, 2500); }
+  // Leave the finished progress log on screen -- hiding it made a fast convergence look like the
+  // process quit early. The log persists until the next Optimize run resets it.
 }
 // Clear everything a prior optimize/scan left behind so a fresh initial scan starts clean.
 function finalizeClearScanState() {
@@ -15019,6 +15022,8 @@ function _runLayoutAiOptimize() {
       // writes what it proposed, what applied, and what was rejected (with reasons). Persists on screen
       // until the next run.
       function aiLog(txt, kind) {
+        // The raw per-op log is a diagnostic -- admin easter-egg view only.
+        if (!(optimizeIsAdmin() && window._optimizeAdminView)) return;
         var host = document.getElementById('finalize-after-scroll');
         if (!host || !host.parentNode) return;
         var panel = document.getElementById('__aiLoopLog');
@@ -15046,6 +15051,8 @@ function _runLayoutAiOptimize() {
       // (the loop otherwise only shows the summarized log). Appended to across passes.
       var _jsonWin = null;
       function showPassJson(roundNum, j) {
+        // Raw proposals window is a diagnostic -- admin easter-egg view only.
+        if (!(optimizeIsAdmin() && window._optimizeAdminView)) return;
         try {
           if (!_jsonWin || _jsonWin.closed) {
             _jsonWin = window.open('', 'ai_layout_json_' + _cid);
@@ -15079,6 +15086,7 @@ function _runLayoutAiOptimize() {
               if (j && j.parseError) aiLog('Pass ' + roundNum + ': AI response could not be parsed (' + j.parseError + ').', 'reject');
               else if (j && j.error) aiLog('Pass ' + roundNum + ': review error -- ' + j.error, 'reject');
               else aiLog('Pass ' + roundNum + ': AI proposed no changes (opCount ' + ((j && j.opCount) || 0) + ').', 'stop');
+              optimizeProgress('Reviewed &mdash; the pages already fit well.', { dim: true });
               return { done: true, applied: 0, blob: null, report: null };
             }
             aiLog('Pass ' + roundNum + ': AI proposed ' + _ops.length + ' op(s) -- applying...');
@@ -15112,6 +15120,8 @@ function _runLayoutAiOptimize() {
                     aiLog('   skipped ' + r2.op + ' viewer p.' + (r2.viewerPage != null ? r2.viewerPage : '?') + ' -- ' + (r2.reason || 'rejected'), 'reject');
                   });
                   aiLog('Pass ' + roundNum + ': applied ' + (rep.appliedCount || 0) + ', skipped ' + (rep.rejectedCount || 0) + (rep.deferredCount ? (', deferred ' + rep.deferredCount) : '') + '.');
+                  // Friendly note when a pass changed nothing, so the user-facing log doesn't dead-end on "reviewing".
+                  if ((rep.appliedCount || 0) === 0) optimizeProgress('Reviewed &mdash; the pages already fit well.', { dim: true });
                 }
                 return { done: false, applied: (rep && rep.appliedCount) || 0, blob: b, report: rep };
               });
@@ -15181,7 +15191,7 @@ function _runLayoutAiOptimize() {
           }
           _dEl.innerHTML = _html;
           var _vEl = document.getElementById('pub-pick-verdict');
-          if (_vEl) { var _vh = finalizeVerdictHtml(bp, cnt, _fB, _fA); _vEl.innerHTML = _vh; _vEl.style.display = _vh ? '' : 'none'; }
+          if (_vEl) { var _showV = !!(optimizeIsAdmin() && window._optimizeAdminView); var _vh = _showV ? finalizeVerdictHtml(bp, cnt, _fB, _fA) : ''; _vEl.innerHTML = _vh; _vEl.style.display = _vh ? '' : 'none'; }
         } catch (e) {}
       }
 
@@ -15238,7 +15248,8 @@ function _runLayoutAiOptimize() {
         try {
           var _vEl = document.getElementById('pub-pick-verdict');
           if (_vEl) {
-            var _vh = finalizeVerdictHtml(bp, cnt, _fB, _fA);
+            var _showV = !!(optimizeIsAdmin() && window._optimizeAdminView);
+            var _vh = _showV ? finalizeVerdictHtml(bp, cnt, _fB, _fA) : '';
             _vEl.innerHTML = _vh; _vEl.style.display = _vh ? '' : 'none';
           }
         } catch (e) {}
