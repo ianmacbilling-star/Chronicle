@@ -14709,6 +14709,9 @@ function applyOptimizeViewMode() {
   var afterNav = document.getElementById('finalize-after-nav-wrap');
   if (afterZoom) afterZoom.style.display = showDiag ? 'none' : 'inline-flex';   // zoom + right spine are the user-view viewing aids
   if (afterNav) afterNav.style.display = showDiag ? 'none' : 'flex';
+  var estNote = document.getElementById('layoutai-est-note');
+  if (estNote) estNote.style.display = showDiag ? 'none' : '';
+  if (typeof finalizeUpdateEstimateBadge === 'function') finalizeUpdateEstimateBadge();
   // Reflect the state on the pill for the admin (subtle), and keep the label honest.
   var pill = document.getElementById('optimize-preview-pill');
   if (pill) pill.style.opacity = showDiag ? '1' : '';
@@ -14836,7 +14839,9 @@ function finalizeAfterGoToPage(n) {
   if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
 }
 // After-pane zoom: scales the rendered PDF canvases. 'Fit' (default) lets them fill the pane width.
+// Persisted across refreshes so the user's choice sticks.
 var _finalizeAfterZoom = 0;   // 0 = Fit; otherwise a scale factor
+try { var _fz0 = localStorage.getItem('finalizeAfterZoom'); if (_fz0 != null) { var _fzn = parseFloat(_fz0); _finalizeAfterZoom = (_fz0 === '0' || _fzn === 0) ? 0 : Math.max(0.4, Math.min(3, _fzn || 0)); } } catch (_e) {}
 function finalizeApplyAfterZoom() {
   var scroll = document.getElementById('finalize-after-scroll');
   var lbl = document.getElementById('finalize-after-zoom-label');
@@ -14853,8 +14858,50 @@ function finalizeAfterZoomStep(dir) {
   var base = _finalizeAfterZoom || 1;
   if (dir < 0 && !_finalizeAfterZoom) { _finalizeAfterZoom = 0.9; }   // first '-' from Fit dips just below
   else { _finalizeAfterZoom = Math.max(0.4, Math.min(3, Math.round((base + dir * 0.1) * 100) / 100)); }
-  if (Math.abs(_finalizeAfterZoom - 1) < 0.001 && dir > 0 && base >= 1) { /* keep climbing */ }
+  try { localStorage.setItem('finalizeAfterZoom', String(_finalizeAfterZoom)); } catch (_e) {}
   finalizeApplyAfterZoom();
+}
+
+// Download a combined diagnostics text file: the pack dump (fresh) + this session's AI proposals (JSON)
+// and log, if the loop ran. Admin easter egg from the clean user view (double-click the After count).
+function finalizeDownloadDiagnostics() {
+  if (!state.currentCampaign) return;
+  var cid = state.currentCampaign.id;
+  var q = finalizeBookQuery();
+  var cap = window._optimizeCapture || null;
+  fetch('/api/pdf/pack-debug/' + cid + q, { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.text() : ('[dump fetch failed: HTTP ' + r.status + ']'); })
+    .catch(function (e) { return '[dump fetch error: ' + (e && e.message) + ']'; })
+    .then(function (dumpText) {
+      var name = (state.currentCampaign.name || 'campaign').replace(/[^a-z0-9]+/gi, '_');
+      var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      var parts = [];
+      parts.push('===== CAMPAIGNIA DIAGNOSTICS BUNDLE =====');
+      parts.push('campaign: ' + (state.currentCampaign.name || cid));
+      parts.push('generated: ' + new Date().toISOString());
+      parts.push('run diagnostics: ' + (cap ? ('captured ' + cap.at) : 'no Optimize run this session (JSON/log unavailable)'));
+      parts.push('');
+      parts.push('===== PACK DUMP =====');
+      parts.push(dumpText || '[empty]');
+      parts.push('');
+      parts.push('===== AI PROPOSALS (JSON) =====');
+      if (cap && cap.json && cap.json.length) {
+        cap.json.forEach(function (p) {
+          parts.push('--- pass ' + p.pass + ' ---');
+          try { parts.push(JSON.stringify(p.data, null, 2)); } catch (e) { parts.push('[unserializable]'); }
+        });
+      } else { parts.push('(no AI proposals captured this session -- run Optimize, then download to include them)'); }
+      parts.push('');
+      parts.push('===== AI OPTIMIZE LOG =====');
+      if (cap && cap.log && cap.log.length) { parts.push(cap.log.join('\n')); }
+      else { parts.push('(no log captured this session)'); }
+      var blob = new Blob([parts.join('\n')], { type: 'text/plain' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name + '_diagnostics_' + stamp + '.txt';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
+    });
 }
 
 // Save the just-optimized book so it's there when the user returns (Phase 2). Called when the loop
@@ -14978,17 +15025,35 @@ function finalizeShowFreeAnalysis(flagged, numPages) {
   }
   out.innerHTML = h;
 }
+// Estimated optimize cost from the known page count: ~1 token / 10 pages, min 1. Uses whatever page
+// count we have (restored/last-optimized, or the initial render); 0 until a count is known.
+function finalizeKnownPages() {
+  return _finalizeAfterPages || _finalizeBeforePages || 0;
+}
+function finalizeOptimizeEstimate() {
+  var p = finalizeKnownPages();
+  return p > 0 ? Math.max(1, Math.ceil(p / 10)) : 0;
+}
+// Reflect the estimate on the button badge once we know the page count.
+function finalizeUpdateEstimateBadge() {
+  var btn = document.getElementById('layoutai-run-btn');
+  if (!btn) return;
+  var est = finalizeOptimizeEstimate();
+  btn.setAttribute('data-est', est ? String(est) : '');
+  var lbl = document.getElementById('layoutai-est-note');
+  if (lbl) lbl.textContent = est ? ('Estimated cost: ' + est + ' token' + (est === 1 ? '' : 's') + ' (~1 / 10 pages)') : 'Roughly 1 token for every 10 pages';
+}
 function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
-  // Optimize costs 1 token -- gate on the balance first (the server also enforces).
   var _gb = document.getElementById('layoutai-run-btn'); if (_gb) _gb.disabled = true;
+  var est = finalizeOptimizeEstimate() || 1;   // fall back to 1 if page count not yet known
   fetch('/api/tokens/balance', { credentials: 'same-origin' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) {
-      var bal = (j && typeof j.total === 'number') ? j.total : 1;   // unreadable -> let the server decide
-      if (bal < 1) {
+      var bal = (j && typeof j.total === 'number') ? j.total : est;   // unreadable -> let the server decide
+      if (bal < est) {
         if (_gb) _gb.disabled = false;
-        if (typeof billingToast === 'function') billingToast('You need at least 1 token to optimize the layout.', 'error');
+        if (typeof billingToast === 'function') billingToast('This book needs about ' + est + ' token' + (est === 1 ? '' : 's') + ' to optimize (about 1 per 10 pages), and you have ' + bal + '.', 'error');
         return;
       }
       _runLayoutAiOptimize();
@@ -15022,17 +15087,18 @@ function _runLayoutAiOptimize() {
   // no async job, no tokens -- the packer composes the book page by page and returns the PDF,
   // rendered through the same styled shell as the Before pane so it's a true comparison.
   var composeUrl = '/api/pdf/pack-render/' + cid + '?compose=1' + finalizeBookQuery().replace('?', '&');
-  // Admin easter egg: double-click the After page count to open the pack-plan text dump in a new tab.
-  // Built FRESH inside the handler (like the Before dump), never snapshotted here: a URL captured at
-  // Optimize time goes stale the moment a layout option changes, which silently produced Before/After
-  // dumps of two DIFFERENT books -- same text, different fonts, uncomparable numbers.
+  // Admin easter egg: double-click the After page count to DOWNLOAD a combined diagnostics bundle --
+  // the pack-plan dump (fetched fresh) plus this session's AI proposals (JSON) and log, if the loop ran.
+  // Lets an admin grab everything from the clean user view without re-running. The dump is always
+  // available; the JSON/log sections are only populated if Optimize ran this session (they're client
+  // state, not saved), and are clearly labelled as empty otherwise.
   var _dbgCnt = document.getElementById('finalize-after-count');
   if (_dbgCnt && state.user && state.user.is_admin) {
     _dbgCnt.style.cursor = 'pointer';
-    _dbgCnt.title = 'Double-click: pack plan (admin)';
+    _dbgCnt.title = 'Double-click: download diagnostics bundle (dump + JSON + log)';
     _dbgCnt.ondblclick = function () {
       if (!state.currentCampaign) return;
-      window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery(), '_blank');
+      finalizeDownloadDiagnostics();
     };
   }
   // Admin easter egg #2: double-click the "After (optimized)" label to run the AI layout-review
@@ -15071,6 +15137,9 @@ function _runLayoutAiOptimize() {
       if (!state.currentCampaign) return;
       if (window._aiLoopRunning) return;   // guard against double-firing (dblclick + auto)
       window._aiLoopRunning = true;
+      // Capture the run's diagnostics (JSON proposals + log) so an admin can download them from the
+      // clean user view without re-running. Reset each run.
+      window._optimizeCapture = { json: [], log: [], at: new Date().toISOString() };
       var _cid = state.currentCampaign.id;
       var _q = finalizeBookQuery();
       var MAX_ROUNDS = 4;   // safety cap; the loop also stops early when a round changes nothing
@@ -15081,13 +15150,14 @@ function _runLayoutAiOptimize() {
       // removes its own bar after each pass's render, leaving gaps during the AI review calls, so this
       // ensures the user always sees it working.
       function ensureLoopBar() {
-        var host = document.getElementById('finalize-after-scroll');
+        var host = document.getElementById('finalize-after-progress') || document.getElementById('finalize-after-scroll');
         if (!host) return;
+        if (host.id === 'finalize-after-progress') host.style.display = '';
         var bar = document.getElementById('__aiLoopBar');
         if (!bar) {
           bar = document.createElement('div');
           bar.id = '__aiLoopBar';
-          bar.style.cssText = 'margin:6px 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(201,168,76,0.18);';
+          bar.style.cssText = 'margin:0 0 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(201,168,76,0.18);';
           bar.innerHTML = '<div id="__aiLoopBarFill" style="height:100%;width:35%;border-radius:3px;background:#c9a84c;animation:aiLoopSlide 1.2s ease-in-out infinite;"></div>';
           if (!document.getElementById('__aiLoopBarStyle')) {
             var st = document.createElement('style');
@@ -15099,7 +15169,7 @@ function _runLayoutAiOptimize() {
         }
         bar.style.display = '';
       }
-      function removeLoopBar() { var b = document.getElementById('__aiLoopBar'); if (b && b.parentNode) b.parentNode.removeChild(b); }
+      function removeLoopBar() { var b = document.getElementById('__aiLoopBar'); if (b && b.parentNode) b.parentNode.removeChild(b); var h = document.getElementById('finalize-after-progress'); if (h && !h.querySelector('.progress-wrap')) h.style.display = 'none'; }
       function loopStatus(txt) {
         _revLbl.textContent = 'After (' + txt + ')';
         ensureLoopBar();
@@ -15113,7 +15183,9 @@ function _runLayoutAiOptimize() {
       // writes what it proposed, what applied, and what was rejected (with reasons). Persists on screen
       // until the next run.
       function aiLog(txt, kind) {
-        // The raw per-op log is a diagnostic -- admin easter-egg view only.
+        // Always capture for the downloadable bundle...
+        try { if (window._optimizeCapture) window._optimizeCapture.log.push(txt); } catch (e) {}
+        // ...but only RENDER the panel in the admin easter-egg view.
         if (!(optimizeIsAdmin() && window._optimizeAdminView)) return;
         var host = document.getElementById('finalize-after-scroll');
         if (!host || !host.parentNode) return;
@@ -15142,7 +15214,9 @@ function _runLayoutAiOptimize() {
       // (the loop otherwise only shows the summarized log). Appended to across passes.
       var _jsonWin = null;
       function showPassJson(roundNum, j) {
-        // Raw proposals window is a diagnostic -- admin easter-egg view only.
+        // Always capture for the downloadable bundle...
+        try { if (window._optimizeCapture) window._optimizeCapture.json.push({ pass: roundNum, data: j }); } catch (e) {}
+        // ...but only open the raw window in the admin easter-egg view.
         if (!(optimizeIsAdmin() && window._optimizeAdminView)) return;
         try {
           if (!_jsonWin || _jsonWin.closed) {
@@ -15633,6 +15707,13 @@ function renderPdfInto(url, containerId, isBefore) {
       '<div class="progress-msg" id="' + containerId + '-pm">Rendering preview...</div>' +
     '</div>' +
     '<div id="' + containerId + '-cv"></div>';
+  // For the After pane, lift the render progress bar OUT of the scroll container into the fixed strip
+  // above the viewer, so it stays visible while the user scrolls the preview.
+  if (containerId === 'finalize-after-scroll') {
+    var _strip = document.getElementById('finalize-after-progress');
+    var _pwEl = document.getElementById(containerId + '-pw');
+    if (_strip && _pwEl) { _pwEl.style.padding = '0 0 4px'; _strip.style.display = ''; _strip.insertBefore(_pwEl, _strip.firstChild); }
+  }
   var cv = document.getElementById(containerId + '-cv');
   var pf = document.getElementById(containerId + '-pf');
   var pm = document.getElementById(containerId + '-pm');
@@ -15681,6 +15762,7 @@ function renderPdfInto(url, containerId, isBefore) {
       if (_pdfRenderTokens[containerId] !== myToken) return;
       var total = pdf.numPages;
       if (isBefore) _finalizeBeforePages = total; else _finalizeAfterPages = total;   // truth, not a DOM guess
+      if (typeof finalizeUpdateEstimateBadge === 'function') finalizeUpdateEstimateBadge();
       var _cntEl = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
       if (_cntEl) _cntEl.innerHTML = finalizeCountLabel(total, null);
       // Preview now includes covers (viewer upgraded): page 1 is the front cover, last is the back
@@ -15715,6 +15797,7 @@ function renderPdfInto(url, containerId, isBefore) {
         if (_pdfRenderTokens[containerId] !== myToken) return;
         var pw = document.getElementById(containerId + '-pw');
         if (pw && pw.parentNode) pw.parentNode.removeChild(pw);
+        if (containerId === 'finalize-after-scroll') { var _st = document.getElementById('finalize-after-progress'); if (_st && !_st.querySelector('#__aiLoopBar')) _st.style.display = 'none'; }
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
         else { finalizeBuildAfterNav(first, last); finalizeApplyAfterZoom(); }   // user-view right spine + zoom follow the After render
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();

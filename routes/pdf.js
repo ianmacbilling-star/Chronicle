@@ -6155,9 +6155,9 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
       });
     }
 
-    // Charge 1 token per AI call (only after a successful call).
-    try { await spendTokens(req.session.userId, 1, { source: 'layout_review', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-review spend failed:', e && e.message); }
-    try { await recordGeneration(req.session.userId, { event_type: 'layout_review', tokens_redeemed: 1, quantity: 1, unit: 'review', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
+    // NOTE: no per-pass charge. The whole optimize run is charged once up front at compose
+    // (ceil(pages/10) tokens); the loop's review/apply passes are part of that paid operation.
+    try { await recordGeneration(req.session.userId, { event_type: 'layout_review', tokens_redeemed: 0, quantity: 1, unit: 'review', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
 
     // Read-only: return the proposed ops (and the raw text if it didn't parse) -- APPLY NOTHING.
     return res.json({
@@ -6611,8 +6611,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
       if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
       var mPdf = await renderHtmlToPdf(mBuilt.html, {});
-      try { await spendTokens(req.session.userId, 1, { source: 'layout_apply', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-apply spend failed:', e && e.message); }
-      try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 1, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
+      // No per-pass charge -- the run was charged once at compose (ceil(pages/10)).
+      try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 0, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
       if (req.query.pdf === '1' || req.query.pdf === 'true') {
         res.set('Content-Type', 'application/pdf');
         res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
@@ -6771,8 +6771,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     var rbuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
     if (req.query.pane === '1') rbuilt.html = paneSafeHtml(rbuilt.html);
     var pdf = await renderHtmlToPdf(rbuilt.html, {});
-    try { await spendTokens(req.session.userId, 1, { source: 'layout_apply', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('layout-apply spend failed:', e && e.message); }
-    try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 1, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
+    // No per-pass charge -- the run was charged once at compose (ceil(pages/10)).
+    try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 0, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
 
     // If pdf=1, stream the rendered PDF so the After pane can display the applied book directly
     // (the double-click flow uses this: advisor -> apply -> render the result in place). The applied
@@ -6910,7 +6910,9 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
         var rbuiltM = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: bodyM });
         if (req.query.pane === '1') rbuiltM.html = paneSafeHtml(rbuiltM.html);
         var pdfM = await renderHtmlToPdf(rbuiltM.html, {});
-        try { await spendTokens(req.session.userId, 1, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
+        var _mPages = 0; try { _mPages = await countPdfPages(pdfM); } catch (e) {}
+        var _mCost = Math.max(1, Math.ceil((_mPages || 0) / 10));   // ~1 token per 10 pages, min 1
+        try { await spendTokens(req.session.userId, _mCost, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
         catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
         res.set('Content-Type', 'application/pdf');
         res.set('Content-Disposition', 'inline; filename="composed-preview.pdf"');
@@ -6925,7 +6927,9 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       var rbuiltC = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
       if (req.query.pane === '1') rbuiltC.html = paneSafeHtml(rbuiltC.html);   // preview-safe gradients in the Finalize After pane only
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
-      try { await spendTokens(req.session.userId, 1, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
+      var _cPages = 0; try { _cPages = await countPdfPages(pdfC); } catch (e) {}
+      var _cCost = Math.max(1, Math.ceil((_cPages || 0) / 10));   // ~1 token per 10 pages, min 1
+      try { await spendTokens(req.session.userId, _cCost, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
       catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
       res.set('Content-Type', 'application/pdf');
       res.set('Content-Disposition', 'inline; filename="composed-preview.pdf"');
