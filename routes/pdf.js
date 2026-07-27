@@ -6254,21 +6254,48 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       if (_staged.length) {
         var _batchReal = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
         if (_batchReal._error) return res.status(500).json({ error: 'batch re-measure failed: ' + _batchReal._error });
-        // Stage 3: keep pages that fit; roll back (to curMul) any that clip, then record results.
+        // Stage 3: keep pages that fit at their analytic target; collect the ones that overshot so we
+        // can BACK THEM DOWN to the largest fitting grow (rather than rolling all the way back to no
+        // grow -- that was too lossy and left pages visibly ungrown).
+        var _overshot = [];
         _staged.forEach(function (s) {
           var ph = (_batchReal[s.pageIdx] != null) ? _batchReal[s.pageIdx] : null;
           if (ph != null && ph <= MCLIP + 0.02) {
             mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: s.tryMul, pageReal: Math.round(ph * 100) / 100 });
           } else {
-            // Overshot the box -- roll this page back to its original mul (a grow that clipped, or a
-            // shrink that did not clear). One page rolled back does not affect the independent others.
-            var pgc = mplan.pages[s.pageIdx];
-            pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: s.curMul });
-            mRejected.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, reason: (s.op.op === 'growImage' ? 'grew past the box (rolled back)' : 'could not clear the box') });
+            _overshot.push(s);
           }
         });
-        // A rolled-back page changed the plan; if any rollbacks happened, one more measure keeps the
-        // reported numbers honest (cheap: at most one extra render, only when something overshot).
+
+        // Stage 4: for each overshooting page, bisect between its original mul and its (too-big) target
+        // to find the largest mul that fits. These re-measures only happen for pages that overshot
+        // (usually few), so the batch stays fast while nothing is left needlessly ungrown. For a grow,
+        // the search is [curMul, tryMul]; for a shrink that did not clear, [0.5, curMul].
+        for (var _oi = 0; _oi < _overshot.length; _oi++) {
+          var s = _overshot[_oi];
+          var pgc = mplan.pages[s.pageIdx];
+          var isGrow = (s.op.op === 'growImage');
+          var lo = isGrow ? s.curMul : 0.5;
+          var hi = isGrow ? s.tryMul : s.curMul;
+          var best = null, bestReal = null;
+          for (var _br = 0; _br < 5; _br++) {
+            var mid = Math.round(((lo + hi) / 2) * 1000) / 1000;
+            pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: mid });
+            var _rr = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+            var rph = (_rr && _rr[s.pageIdx] != null) ? _rr[s.pageIdx] : null;
+            if (rph == null) break;
+            if (rph <= MCLIP + 0.02) { best = mid; bestReal = rph; lo = mid; }   // fits -> reach higher (less shrink / more grow)
+            else { hi = mid; }                                                   // clips -> back off
+            if (hi - lo < 0.04) break;
+          }
+          if (best != null && ((isGrow && best > s.curMul + 0.02) || (!isGrow && best < s.curMul - 0.02))) {
+            pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: best });
+            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: best, pageReal: Math.round((bestReal || 0) * 100) / 100 });
+          } else {
+            pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: s.curMul });
+            mRejected.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, reason: (isGrow ? 'no room to grow within box' : 'could not clear the box') });
+          }
+        }
       }
 
       // ---- Non-scale ops (text moves) still applied individually below ----
