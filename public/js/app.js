@@ -14861,44 +14861,72 @@ function _runLayoutAiOptimize() {
     _revLbl.title = 'Double-click: AI layout review (admin, 1 token)';
     _revLbl.ondblclick = function () {
       if (!state.currentCampaign) return;
-      _revLbl.textContent = 'After (AI reviewing...)';
       var _cid = state.currentCampaign.id;
       var _q = finalizeBookQuery();
-      // One click does everything: run the advisor, apply its scale ops for real (re-measured + clip-
-      // gated on the server), and render the applied book straight into the After pane.
-      fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          var _ops = (j && j.ops) || [];
-          if (!_ops.length) { _revLbl.textContent = 'After (optimized)'; alert('AI review found nothing to change.'); return; }
-          _revLbl.textContent = 'After (applying ' + _ops.length + ' ops...)';
-          // POST the ops to the real apply endpoint, asking for the rendered PDF back, then render it
-          // into the After pane via a blob URL (renderPdfInto fetches a URL; a blob URL works).
-          return fetch('/api/pdf/layout-apply/' + _cid + (_q ? (_q + '&pdf=1') : '?pdf=1'), {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ops: _ops })
-          }).then(function (r) {
-            if (!r.ok) { return r.json().then(function (e) { throw new Error((e && e.error) || ('apply failed ' + r.status)); }); }
-            var _rep = r.headers.get('X-Apply-Report');
-            return r.blob().then(function (b) { return { blob: b, report: _rep }; });
-          }).then(function (res) {
-            _revLbl.textContent = 'After (optimized)';
-            var url = URL.createObjectURL(res.blob);
-            renderPdfInto(url, 'finalize-after-scroll', false);   // show the applied book in place
-            var rep = null; try { rep = res.report ? JSON.parse(res.report) : null; } catch (e) {}
-            if (rep) {
-              var pmsg = document.getElementById('finalize-progress-msg') || document.getElementById('pmsg');
-              if (pmsg) pmsg.textContent = 'AI applied ' + (rep.appliedCount || 0) + ' change(s)' +
-                (rep.rejectedCount ? (', ' + rep.rejectedCount + ' rejected') : '') +
-                (rep.deferredCount ? (', ' + rep.deferredCount + ' text-move(s) deferred') : '') + '.';
-            }
+      var MAX_ROUNDS = 4;   // safety cap; the loop also stops early when a round changes nothing
+
+      // Write the current loop status above the progress bar (the message element renderPdfInto builds
+      // inside the After pane), and mirror it on the label so it's visible even before the pane renders.
+      function loopStatus(txt) {
+        _revLbl.textContent = 'After (' + txt + ')';
+        var pm = document.getElementById('finalize-after-scroll-pm');
+        if (pm) pm.textContent = txt;
+      }
+
+      var totalApplied = 0;
+      // One round: review the CURRENT (persisted) book, apply the ops, return the report + rendered PDF
+      // blob. Because scale ops persist to layout_meta, each round's review sees the prior round's state.
+      function runRound(roundNum) {
+        loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
+        return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            var _ops = (j && j.ops) || [];
+            if (!_ops.length) return { done: true, applied: 0, blob: null, report: null };
+            loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- applying ' + _ops.length + ' op(s)...');
+            return fetch('/api/pdf/layout-apply/' + _cid + (_q ? (_q + '&pdf=1') : '?pdf=1'), {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ops: _ops })
+            }).then(function (r) {
+              if (!r.ok) { return r.json().then(function (e) { throw new Error((e && e.error) || ('apply failed ' + r.status)); }); }
+              var _rep = r.headers.get('X-Apply-Report');
+              return r.blob().then(function (b) {
+                var rep = null; try { rep = _rep ? JSON.parse(_rep) : null; } catch (e) {}
+                return { done: false, applied: (rep && rep.appliedCount) || 0, blob: b, report: rep };
+              });
+            });
           });
-        })
-        .catch(function (e) {
+      }
+
+      // Iterate: run a round, render its result, and if it applied something and we're under the cap,
+      // run another. Stop when a round applies 0 ops (converged) or the cap is reached.
+      function iterate(roundNum, lastBlob) {
+        return runRound(roundNum).then(function (res) {
+          if (res.blob) {
+            totalApplied += res.applied;
+            lastBlob = res.blob;
+            var url = URL.createObjectURL(res.blob);
+            renderPdfInto(url, 'finalize-after-scroll', false);   // show this round's result in place
+          }
+          var converged = res.done || res.applied === 0;
+          if (!converged && roundNum < MAX_ROUNDS) {
+            // Give the render a moment, then run the next round.
+            return new Promise(function (resolve) { setTimeout(resolve, 400); }).then(function () { return iterate(roundNum + 1, lastBlob); });
+          }
+          // Finished.
           _revLbl.textContent = 'After (optimized)';
-          alert('AI apply failed: ' + ((e && e.message) || e));
+          var pm = document.getElementById('finalize-after-scroll-pm');
+          var summary = 'AI optimize complete -- ' + totalApplied + ' change(s) across ' + roundNum + ' pass(es)' + (converged && roundNum < MAX_ROUNDS ? ' (converged)' : '') + '.';
+          if (pm) pm.textContent = summary;
+          return lastBlob;
         });
+      }
+
+      iterate(1, null).catch(function (e) {
+        _revLbl.textContent = 'After (optimized)';
+        alert('AI optimize failed: ' + ((e && e.message) || e));
+      });
     };
   }
   var afterBody = document.getElementById('finalize-after-body');
