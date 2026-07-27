@@ -14658,7 +14658,7 @@ function loadFinalize() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
-  if (loadFinalize._lastUrl === url) return;
+  if (loadFinalize._lastUrl === url) { finalizeLoadLastOptimized(); return; }   // came back to the same book -> just re-restore the saved optimized PDF
   loadFinalize._lastUrl = url;
   finalizeClearScanState();   // fresh initial scan -> drop stale counts / under-fill list / optimized pane
   var _rb = document.getElementById('layoutai-run-btn');
@@ -14675,7 +14675,7 @@ function loadFinalize() {
     if (_sl) _sl.style.display = 'none';
   }
   renderPdfInto(url, 'finalize-before-scroll', true);
-  finalizeLoadLastOptimized();   // AFTER clearScanState: restore the saved optimized PDF into the After pane (user view)
+  finalizeLoadLastOptimized();   // fresh load: restore AFTER clearScanState (which wiped the After pane) so the saved optimized PDF shows
 }
 
 // The optimize tab has two faces. Regular users (and admins by default) see ONLY the After pane -- the
