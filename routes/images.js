@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth, getCampaignRole } = require('../middleware/auth');
+const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
@@ -1543,11 +1543,9 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
 // saved as 4:3) -- which crops them via object-fit:cover. This measures each image's real
 // bytes and stores true img_w/img_h so every box fits its image. Admin-only; batched and
 // resumable via ?limit= and ?onlyNull=1 (default measures ALL to correct synthetic values too).
-router.post('/backfill-dims', requireAuth, async function (req, res) {
+router.post('/backfill-dims', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
-    const me = await db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
-    if (!me || !me.is_admin) return res.status(403).json({ error: 'admin only' });
     const limit = Math.max(1, Math.min(500, parseInt(req.query.limit, 10) || 200));
     const onlyNull = (req.query.onlyNull === '1' || req.query.onlyNull === 'true');
     const where = onlyNull ? 'image IS NOT NULL AND (img_w IS NULL OR img_h IS NULL)' : 'image IS NOT NULL';
