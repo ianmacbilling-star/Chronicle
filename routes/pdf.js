@@ -4744,6 +4744,12 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
       while (_L >= 0) {
         var _c = mzSnapSentence(b.stext, b.mbound, it.cStart, it.cStart + it.lineChars[_L + 1]);
         _c = mzSafeCut(b.stext, _c);
+        // FINAL de-widow: if the sanitized cut still lands just short of the paragraph boundary, it
+        // would orphan the last few words of paragraph one onto the next page ("...written on" | "it.").
+        // Snap forward to the boundary as the last step so nothing (mzSafeCut, line-stepping) undoes it.
+        if (b.mbound != null && _c < b.mbound && (b.mbound - _c) <= 40 && b.mbound > it.cStart + 45 && b.mbound < it.stextLen) {
+          _c = b.mbound;
+        }
         if (_c > it.cStart + 45 && _c < it.stextLen) {
           if (_fb == null) _fb = { L: _L, cEnd: _c };
           if ((it.stextLen - _c) >= MZ_MIN_TAIL_CHARS) return { L: _L, cEnd: _c };
@@ -5848,16 +5854,19 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
   try {
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     var txt, _dlName = 'campaign';
+    var _ver = ''; try { _ver = (require('../version-info.json') || {}).version || ''; } catch (e) {}
+    var _stamp = 'CAMPAIGNIA PACK DUMP  v' + (_ver || '?') + '  ' + new Date().toISOString() + '\n' +
+                 'arrange=' + (_cco.arrange || 'paired') + '\n\n';
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var _flow = !!req.query.flow;
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true, flowSim: _flow });
-      txt = (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
+      txt = _stamp + (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
       _dlName = String((packedM && packedM.campaign && packedM.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     } else {
       // Paired (Picture Book) now dumps too: compute with debug so it re-measures the composed
       // book and runs the never-clip check, then format with the paired dumper.
       var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
-      txt = pairedPlanText(packedP);
+      txt = _stamp + pairedPlanText(packedP);
       _dlName = String((packedP && packedP.campaign && packedP.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     }
     res.set('Content-Type', 'text/plain; charset=utf-8');
