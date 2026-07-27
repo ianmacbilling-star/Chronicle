@@ -6215,7 +6215,11 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       if (req.query.pdf === '1' || req.query.pdf === 'true') {
         res.set('Content-Type', 'application/pdf');
         res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
-        try { res.set('X-Apply-Report', JSON.stringify({ appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length })); } catch (e) {}
+        try { res.set('X-Apply-Report', JSON.stringify({
+          appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
+          applied: mApplied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, growFrom: a.growFrom, growTo: a.growTo }; }),
+          rejected: mRejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
+        })); } catch (e) {}
         return res.send(Buffer.isBuffer(mPdf) ? mPdf : Buffer.from(mPdf));
       }
       return res.json({ campaign: mName, arrange: _cco.arrange, applied: true, clipLine: MCLIP,
@@ -6378,7 +6382,11 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     if (req.query.pdf === '1' || req.query.pdf === 'true') {
       res.set('Content-Type', 'application/pdf');
       res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
-      try { res.set('X-Apply-Report', JSON.stringify({ appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length })); } catch (e) {}
+      try { res.set('X-Apply-Report', JSON.stringify({
+        appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
+        applied: applied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, scaleFrom: a.scaleFrom, scaleTo: a.scaleTo, movedFrom: a.movedFrom, movedTo: a.movedTo }; }),
+        rejected: rejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
+      })); } catch (e) {}
       return res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
     }
 

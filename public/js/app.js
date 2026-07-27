@@ -14874,15 +14874,44 @@ function _runLayoutAiOptimize() {
       }
 
       var totalApplied = 0;
+
+      // A visible log panel so Ian can SEE what each pass does. Appended below the After pane; each pass
+      // writes what it proposed, what applied, and what was rejected (with reasons). Persists on screen
+      // until the next run.
+      function aiLog(txt, kind) {
+        var host = document.getElementById('finalize-after-scroll');
+        if (!host || !host.parentNode) return;
+        var panel = document.getElementById('__aiLoopLog');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.id = '__aiLoopLog';
+          panel.style.cssText = 'margin:8px 4px 0 4px;padding:8px 10px;max-height:180px;overflow-y:auto;background:#0c0805;border:1px solid rgba(201,168,76,0.3);border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#d8c79a;';
+          var title = document.createElement('div');
+          title.style.cssText = 'color:#c9a84c;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;';
+          title.textContent = 'AI optimize log';
+          panel.appendChild(title);
+          host.parentNode.insertBefore(panel, host.nextSibling);
+        }
+        var line = document.createElement('div');
+        line.style.color = (kind === 'applied') ? '#7bd88f' : (kind === 'reject') ? '#e0a05a' : (kind === 'stop') ? '#c9a84c' : '#d8c79a';
+        line.textContent = txt;
+        panel.appendChild(line);
+        panel.scrollTop = panel.scrollHeight;
+      }
+      function aiLogReset() { var p = document.getElementById('__aiLoopLog'); if (p && p.parentNode) p.parentNode.removeChild(p); }
+      aiLogReset();
+
       // One round: review the CURRENT (persisted) book, apply the ops, return the report + rendered PDF
       // blob. Because scale ops persist to layout_meta, each round's review sees the prior round's state.
       function runRound(roundNum) {
         loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
+        aiLog('Pass ' + roundNum + ': reviewing the layout...');
         return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
             var _ops = (j && j.ops) || [];
-            if (!_ops.length) return { done: true, applied: 0, blob: null, report: null };
+            if (!_ops.length) { aiLog('Pass ' + roundNum + ': AI proposed no changes.', 'stop'); return { done: true, applied: 0, blob: null, report: null }; }
+            aiLog('Pass ' + roundNum + ': AI proposed ' + _ops.length + ' op(s) -- applying...');
             loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- applying ' + _ops.length + ' op(s)...');
             return fetch('/api/pdf/layout-apply/' + _cid + (_q ? (_q + '&pdf=1') : '?pdf=1'), {
               method: 'POST', credentials: 'same-origin',
@@ -14893,6 +14922,19 @@ function _runLayoutAiOptimize() {
               var _rep = r.headers.get('X-Apply-Report');
               return r.blob().then(function (b) {
                 var rep = null; try { rep = _rep ? JSON.parse(_rep) : null; } catch (e) {}
+                // Log the detail of what actually happened this pass.
+                if (rep) {
+                  (rep.applied || []).forEach(function (a) {
+                    var d = a.scaleTo != null ? ('scale ' + (a.scaleFrom != null ? a.scaleFrom.toFixed(2) : '?') + ' -> ' + a.scaleTo.toFixed(2))
+                          : a.growTo != null ? ('grow ' + (a.growFrom != null ? a.growFrom.toFixed(2) : '?') + ' -> ' + a.growTo.toFixed(2))
+                          : a.movedTo != null ? ('moved text p' + a.movedFrom + ' -> p' + a.movedTo) : 'applied';
+                    aiLog('   OK ' + a.op + ' viewer p.' + (a.viewerPage != null ? a.viewerPage : '?') + ' (' + d + ')', 'applied');
+                  });
+                  (rep.rejected || []).forEach(function (r2) {
+                    aiLog('   skipped ' + r2.op + ' viewer p.' + (r2.viewerPage != null ? r2.viewerPage : '?') + ' -- ' + (r2.reason || 'rejected'), 'reject');
+                  });
+                  aiLog('Pass ' + roundNum + ': applied ' + (rep.appliedCount || 0) + ', skipped ' + (rep.rejectedCount || 0) + (rep.deferredCount ? (', deferred ' + rep.deferredCount) : '') + '.');
+                }
                 return { done: false, applied: (rep && rep.appliedCount) || 0, blob: b, report: rep };
               });
             });
@@ -14900,7 +14942,7 @@ function _runLayoutAiOptimize() {
       }
 
       // Iterate: run a round, render its result, and if it applied something and we're under the cap,
-      // run another. Stop when a round applies 0 ops (converged) or the cap is reached.
+      // run another. Stop the moment a round applies 0 ops (converged) or the cap is reached.
       function iterate(roundNum, lastBlob) {
         return runRound(roundNum).then(function (res) {
           if (res.blob) {
@@ -14910,15 +14952,15 @@ function _runLayoutAiOptimize() {
             renderPdfInto(url, 'finalize-after-scroll', false);   // show this round's result in place
           }
           var converged = res.done || res.applied === 0;
+          if (converged) {
+            aiLog(res.applied === 0 && !res.done ? ('Pass ' + roundNum + ' changed nothing -- stopping.') : 'Converged -- nothing left to improve.', 'stop');
+          }
           if (!converged && roundNum < MAX_ROUNDS) {
-            // Give the render a moment, then run the next round.
             return new Promise(function (resolve) { setTimeout(resolve, 400); }).then(function () { return iterate(roundNum + 1, lastBlob); });
           }
-          // Finished.
+          if (!converged && roundNum >= MAX_ROUNDS) aiLog('Reached the ' + MAX_ROUNDS + '-pass limit -- stopping.', 'stop');
           _revLbl.textContent = 'After (optimized)';
-          var pm = document.getElementById('finalize-after-scroll-pm');
-          var summary = 'AI optimize complete -- ' + totalApplied + ' change(s) across ' + roundNum + ' pass(es)' + (converged && roundNum < MAX_ROUNDS ? ' (converged)' : '') + '.';
-          if (pm) pm.textContent = summary;
+          aiLog('Done: ' + totalApplied + ' total change(s) across ' + roundNum + ' pass(es).', 'stop');
           return lastBlob;
         });
       }
