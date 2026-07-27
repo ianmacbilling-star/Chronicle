@@ -6318,11 +6318,12 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         var bb = mbands[pgc[ci].band];
         var imgH = (bb && bb.sImgH) ? bb.sImgH * curMul : null;   // current rendered image height
         // Crop-safe grow ceiling: a feature/float image grown past the point where its width fills the
-        // column starts CROPPING the composition (object-fit:cover). Cap the grow there so filling white
-        // never eats the picture. This applies to EVERY image by default (Ian's rule: images essentially
-        // never crop). An image explicitly flagged crop_safe (safe to trim) is the only exception -- it
-        // keeps the full 3.0 cap. We look the moment up for its aspect + flag; fall back to 3.0 only if
-        // the moment is unavailable.
+        // column starts CROPPING the composition (object-fit:cover). Cap the grow there for EVERY image
+        // (Ian's rule: images essentially never crop, <10 percent at most). NOTE: the moment's crop_safe
+        // flag is NOT consulted here -- it governs cover-vs-contain display fit at natural size and is set
+        // true on almost every image at extraction, so honoring it would disable this cap universally
+        // (that was the bug that let Ori grow to x1.6 and crop). Growing an image into a heavy crop is
+        // wrong regardless of the flag.
         var _growCap = 3.0;
         try {
           if (bb && bb.momId != null) {
@@ -6332,8 +6333,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
               _mm = await _dbc.prepare('SELECT id, image, img_w, img_h, shape, layout_meta FROM moments WHERE id = ?').get(bb.momId);
               if (typeof _cropMomCache !== 'undefined' && _mm) _cropMomCache[bb.momId] = _mm;
             }
-            // Apply the cap unless the image is explicitly marked safe to crop.
-            if (_mm && lmMeta(_mm).crop_safe !== true) {
+            if (_mm) {
               var _csMul = cgFeatureCropSafeMaxMul(_mm, _cco);
               if (_csMul > 0) _growCap = _csMul;
             }
