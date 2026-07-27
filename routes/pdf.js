@@ -120,6 +120,7 @@ function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function lmFlow(m) { return lmMeta(m).flow === true; }   // text-flow: pull next beat's intro up
 function lmScale(m) { var n = Number(lmMeta(m).scale); return (n >= 0.3 && n <= 1) ? n : 1; }   // measured shrink-to-fit
+function lmGrow(m) { var n = Number(lmMeta(m).imgGrow); return (n >= 1 && n <= 3) ? n : 1; }   // persisted magazine image grow (AI/loop), applied at pack time so grows carry across passes
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 // Display aspect for the IMG box. Towers are GENERATED tall (1:4) but their nominal shape
 // ratio is 9:16 (Picture Book's towerthin is 2:5), so a cover-fit box at the nominal ratio
@@ -1886,6 +1887,7 @@ function renderMzSlice(text, bound, cs, ce, opts) {
 function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small, mul),
+      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m),
       regrow: function (mm) { return cgFlowFloat(m, opts, narr, sideLeft, small, mm); },
       remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
     band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
@@ -1907,6 +1909,7 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
 function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'wide', html: cgFlowWide(m, opts, narr, sideLeft, mul),
+      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m),
       regrow: function (mm) { return cgFlowWide(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     var _aspW = Math.max(0.3, momentAspect(m));
@@ -1928,6 +1931,7 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
 function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'feature', html: cgFlowFeature(m, opts, narr, sideLeft, mul),
+      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m),
       regrow: function (mm) { return cgFlowFeature(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     band.sImgH = mul * cgFeatureImgH(m, opts);
@@ -5305,6 +5309,21 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   }
 
   _imgProbeOn = false;   // clear the probe flag so it never leaks into a subsequent normal render
+  // PERMANENT AI GROWS: seed each growable cell's growMul from its band's persisted grow (lmGrow, read
+  // at band-build time into band.persistGrow). Applied as a FLOOR -- a cell already grown further by
+  // the optimizer keeps the larger value; a cell with no grow picks up the persisted one. This makes
+  // AI-loop grows part of the saved layout, so a re-pack (the next review pass, or a later Optimize)
+  // sees the grown book and the loop converges instead of re-proposing the same grows every pass.
+  pages.forEach(function (pg) {
+    pg.forEach(function (c, ci) {
+      var bb = bands[c.band];
+      if (!bb || !(bb.persistGrow > 1) || !(bb.sImgH > 0) || !bb.remeta) return;
+      if (c.textLead || c.towerLead) return;
+      if (c.split && (c.cStart || 0) > 0 && !c.imgBody) return;   // text-only continuation tail
+      var cur = c.growMul || 1;
+      if (bb.persistGrow > cur) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
+    });
+  });
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg, measure: (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
@@ -6428,6 +6447,40 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         // Other text/tower moves (pushLines, tower merges) still deferred on magazine.
         mDeferred.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'magazine ' + mop.op + ' deferred (pass 1 already densifies magazine)' });
       }
+
+      // PERMANENT AI GROWS (Option B): persist each growable cell's final growMul to its moment's
+      // layout_meta.imgGrow, keyed by the band's momId. The next pack seeds from this via lmGrow ->
+      // band.persistGrow, so the grown book carries forward and the loop converges instead of re-
+      // proposing the same grows every pass. Mirrors the paired scale-persistence block. We persist the
+      // final state of every growable cell (not just this batch's ops) so a shrink that lowered a grow
+      // is saved too; one write per moment.
+      try {
+        var _dbm = await getDb();
+        var _seenM = {}, _persistCount = 0;
+        for (var _pi = 0; _pi < mplan.pages.length; _pi++) {
+          var _pg = mplan.pages[_pi];
+          for (var _ci = 0; _ci < _pg.length; _ci++) {
+            var _c = _pg[_ci], _bb = mbands[_c.band];
+            if (!_bb || _bb.momId == null || !(_bb.sImgH > 0)) continue;
+            if (_c.textLead || _c.towerLead) continue;
+            if (_c.split && (_c.cStart || 0) > 0 && !_c.imgBody) continue;
+            if (_seenM[_bb.momId]) continue;
+            _seenM[_bb.momId] = true;
+            var _gm = _c.growMul || 1;
+            // Only persist a real grow (>1). Clamp to the sane 1..3 range lmGrow accepts.
+            if (!(_gm > 1.01)) continue;
+            _gm = Math.round(Math.max(1, Math.min(3, _gm)) * 1000) / 1000;
+            var _mrow = null;
+            try { _mrow = await _dbm.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(_bb.momId); } catch (e) {}
+            var _lm = {};
+            try { _lm = (_mrow && _mrow.layout_meta) ? JSON.parse(_mrow.layout_meta) : {}; } catch (e) { _lm = {}; }
+            if (!_lm || typeof _lm !== 'object') _lm = {};
+            _lm.imgGrow = _gm;
+            try { await _dbm.prepare('UPDATE moments SET layout_meta = ?, edited_at = ? WHERE id = ?').run(JSON.stringify(_lm), new Date().toISOString(), _bb.momId); _persistCount++; } catch (e) { console.error('persist magazine grow failed for moment ' + _bb.momId + ':', e && e.message); }
+          }
+        }
+        if (_persistCount) console.log('[layout-apply] persisted ' + _persistCount + ' magazine image grow(s) to layout_meta');
+      } catch (e) { console.error('magazine grow persistence pass failed:', e && e.message); }
 
       var mBody = composeMagazine(mplan, mbands, _cco);
       composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName);
