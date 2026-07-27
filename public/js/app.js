@@ -14857,6 +14857,28 @@ function _runLayoutAiOptimize() {
   // Built fresh in the handler (same rationale as the dump: a snapshotted URL goes stale when a
   // layout option changes). Costs 1 token per call, so it only fires on an explicit double-click.
   var _revLbl = document.getElementById('finalize-after-label');
+  // Admin: double-click the BEFORE page count to reset persisted AI image grows for this book (recovers
+  // a book that was over-grown before the crop-safe cap; the next Optimize rebuilds from natural sizes).
+  var _befLbl = document.getElementById('finalize-before-count');
+  if (_befLbl && state.user && state.user.is_admin && state.currentCampaign) {
+    _befLbl.style.cursor = 'pointer';
+    _befLbl.title = 'Double-click: reset AI image grows for this book (admin)';
+    _befLbl.ondblclick = function () {
+      if (!state.currentCampaign) return;
+      if (!confirm('Reset AI image grows for this book?\n\nThis clears the saved grow on every image so the next Optimize rebuilds from the natural sizes (with the current no-crop limits). Use this to recover images that were over-grown / cropped by earlier runs.')) return;
+      var _cid = state.currentCampaign.id;
+      var _txt0 = _befLbl.textContent;
+      _befLbl.textContent = 'resetting...';
+      fetch('/api/pdf/layout-reset/' + _cid + finalizeBookQuery(), { method: 'POST', credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          _befLbl.textContent = _txt0;
+          if (j && j.error) { alert('Reset failed: ' + j.error); return; }
+          alert('Reset ' + ((j && j.cleared) || 0) + ' image grow(s). Run Optimize again to rebuild the book from natural sizes.');
+        })
+        .catch(function (e) { _befLbl.textContent = _txt0; alert('Reset failed: ' + ((e && e.message) || e)); });
+    };
+  }
   if (_revLbl && state.user && state.user.is_admin) {
     _revLbl.style.cursor = 'pointer';
     _revLbl.title = 'Double-click: AI layout review (admin, 1 token)';

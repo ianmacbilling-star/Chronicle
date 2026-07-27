@@ -1453,9 +1453,14 @@ function cgFeatureCropSafeMaxMul(m, opts) {
   if (asp >= 1.5) return 3.0;   // wide images are width-bound already; handled elsewhere, keep normal cap
   var baseH = Math.min((opts && opts.mzCapFeatures) ? MZ_FEATURE_MAX_H : MZ_FEATURE_MAX_H_FLOW, CG_W / asp);
   if (!(baseH > 0)) return 3.0;
-  var safe = (CG_W / asp) / baseH;   // mul where W reaches the column width (no crop yet)
-  // A tiny margin so we stop just before the crop point; never below 1.0 (that would force a shrink).
-  return Math.max(1.0, Math.round((safe * 0.98) * 1000) / 1000);
+  var safe = (CG_W / asp) / baseH;   // mul where W reaches the column width (0 percent crop)
+  // Ian's rule: an image should essentially never crop; if unavoidable, keep it small (under ~10 percent).
+  // So allow the grow to go a little past the zero-crop point -- up to where about 10 percent of the
+  // image height would be cropped -- but never more. This fills a bit more white without visibly eating
+  // the composition. (At the zero-crop mul the box just fits the image; growing height ~10 percent more
+  // crops ~10 percent, so the 10-percent-crop ceiling is about safe * 1.10.)
+  var maxCrop = safe * 1.10;
+  return Math.max(1.0, Math.round(maxCrop * 1000) / 1000);
 }
 function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
   mul = mul || 1;
@@ -1913,7 +1918,7 @@ function renderMzSlice(text, bound, cs, ce, opts) {
 function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small, mul),
-      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m),
+      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFeatureCropSafeMaxMul(m, opts),
       regrow: function (mm) { return cgFlowFloat(m, opts, narr, sideLeft, small, mm); },
       remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
     band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
@@ -1935,7 +1940,7 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
 function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'wide', html: cgFlowWide(m, opts, narr, sideLeft, mul),
-      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m),
+      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFeatureCropSafeMaxMul(m, opts),
       regrow: function (mm) { return cgFlowWide(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     var _aspW = Math.max(0.3, momentAspect(m));
@@ -1957,7 +1962,7 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
 function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'feature', html: cgFlowFeature(m, opts, narr, sideLeft, mul),
-      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m),
+      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFeatureCropSafeMaxMul(m, opts),
       regrow: function (mm) { return cgFlowFeature(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     band.sImgH = mul * cgFeatureImgH(m, opts);
@@ -5217,8 +5222,13 @@ async function computeMagazinePack(req, campaignId, packOpts) {
         if (!f || f === 1) return pg;
         var ci = _growCell(pg);
         if (ci < 0) return pg;
+        // Never grow past the image's crop-safe ceiling -- cropping the artwork is worse than leaving
+        // white. cropMax is the largest mul that does not crop (per image, from band-build time).
+        var _bb = bands[pg[ci].band];
+        if (_bb && _bb.cropMax != null && _bb.cropMax >= 1 && f > _bb.cropMax) f = _bb.cropMax;
+        if (f <= 1.001) return pg;
         var np = pg.slice();
-        np[ci] = Object.assign({}, np[ci], { growMul: f });
+        np[ci] = Object.assign({}, np[ci], { growMul: Math.round(f * 1000) / 1000 });
         return np;
       });
     };
@@ -5283,10 +5293,16 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       if (c.textLead || c.towerLead) return;
       if (c.split && (c.cStart || 0) > 0 && !c.imgBody) return;   // text-only continuation tail
       var cur = c.growMul || 1;
+      // Clamp the persisted grow to the image's crop-safe ceiling: a grow saved BEFORE the crop-safe cap
+      // existed could be large enough to crop the picture, and it must not re-seed that crop. cropMax is
+      // the largest mul that does not crop (computed per image at band-build time). Never let the seed
+      // push an image past it, even if a bigger grow is on file.
+      var _pg = bb.persistGrow;
+      if (bb.cropMax != null && bb.cropMax >= 1 && _pg > bb.cropMax) _pg = bb.cropMax;
       // A persisted GROW (>1) is a floor -- only apply if larger than what the optimizer already did.
       // A persisted SHRINK (<1, a clip fix) is applied whenever the cell is not already at/below it.
-      if (bb.persistGrow > 1 && bb.persistGrow > cur) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
-      else if (bb.persistGrow < 1 && cur > bb.persistGrow) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
+      if (_pg > 1 && _pg > cur) pg[ci] = Object.assign({}, c, { growMul: Math.round(_pg * 1000) / 1000 });
+      else if (_pg < 1 && cur > _pg) pg[ci] = Object.assign({}, c, { growMul: Math.round(_pg * 1000) / 1000 });
     });
   });
 
@@ -6742,6 +6758,39 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     });
   } catch (e) {
     return res.status(500).json({ error: (e && e.message) || 'layout-apply failed' });
+  }
+});
+// Reset persisted AI grows/shrinks for a campaign: clears layout_meta.imgGrow from every moment so the
+// next Optimize starts from the natural (ungrown) layout and the current crop-safe rules apply. This is
+// how a book that was over-grown before the crop-safe cap existed recovers -- the permanent grows are
+// what keep re-seeding the crop, so they must be cleared explicitly.
+router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    // Pack the book so we can enumerate exactly the moments that carry image grows (via band momId).
+    var packedR = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+    var _rbands = packedR.bands || [];
+    var _db = await getDb();
+    var _seen = {}, _cleared = 0;
+    for (var bi = 0; bi < _rbands.length; bi++) {
+      var _rb = _rbands[bi];
+      if (!_rb || _rb.momId == null || _seen[_rb.momId]) continue;
+      _seen[_rb.momId] = true;
+      var _row = null;
+      try { _row = await _db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(_rb.momId); } catch (e) {}
+      var _lm = {};
+      try { _lm = (_row && _row.layout_meta) ? JSON.parse(_row.layout_meta) : {}; } catch (e) { _lm = {}; }
+      if (!_lm || typeof _lm !== 'object' || _lm.imgGrow == null) continue;   // nothing to clear
+      delete _lm.imgGrow;
+      try { await _db.prepare('UPDATE moments SET layout_meta = ?, edited_at = ? WHERE id = ?').run(JSON.stringify(_lm), new Date().toISOString(), _rb.momId); _cleared++; } catch (e) { console.error('reset grow failed for moment ' + _rb.momId + ':', e && e.message); }
+    }
+    // Drop any cached composed body so the next render re-packs from the cleared (natural) state. The
+    // cache key includes request params, so we clear the whole (small, in-memory) cache -- it rebuilds
+    // on the next render.
+    try { _composedCache.clear(); } catch (e) {}
+    return res.json({ campaign: (packedR.campaign && packedR.campaign.name) || 'campaign', cleared: _cleared, note: 'Persisted image grows cleared. Re-run Optimize to rebuild from the natural layout with the current crop-safe limits.' });
+  } catch (e) {
+    return res.status(500).json({ error: (e && e.message) || 'layout-reset failed' });
   }
 });
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
