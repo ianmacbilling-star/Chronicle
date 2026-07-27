@@ -14646,6 +14646,7 @@ var _finalizeAfterOnDone = null;   // Optimize registers a callback here; render
                                    // instant the After render resolves, so the stats no longer depend
                                    // on a polling interval surviving a background tab.
 var _finalizeAfterFills = {};   // per-page ink-fill % for the After pane (parallels _finalizeFills)
+var _finalizeRunAiLoop = null;  // set by the finalize view to the AI loop; Optimize fires it once the After pane first renders (one-click AI optimize)
 var _finalizeAfterBlob = '';
 function loadFinalize() {
   if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
@@ -14859,16 +14860,44 @@ function _runLayoutAiOptimize() {
   if (_revLbl && state.user && state.user.is_admin) {
     _revLbl.style.cursor = 'pointer';
     _revLbl.title = 'Double-click: AI layout review (admin, 1 token)';
-    _revLbl.ondblclick = function () {
+    // The AI optimize loop, extracted so it can be fired both by the manual double-click AND
+    // automatically right after Optimize finishes rendering the After pane (one-click flow).
+    function runAiOptimizeLoop() {
       if (!state.currentCampaign) return;
+      if (window._aiLoopRunning) return;   // guard against double-firing (dblclick + auto)
+      window._aiLoopRunning = true;
       var _cid = state.currentCampaign.id;
       var _q = finalizeBookQuery();
       var MAX_ROUNDS = 4;   // safety cap; the loop also stops early when a round changes nothing
 
       // Write the current loop status above the progress bar (the message element renderPdfInto builds
       // inside the After pane), and mirror it on the label so it's visible even before the pane renders.
+      // Also keep a PERSISTENT animated progress bar up the entire time the loop runs -- renderPdfInto
+      // removes its own bar after each pass's render, leaving gaps during the AI review calls, so this
+      // ensures the user always sees it working.
+      function ensureLoopBar() {
+        var host = document.getElementById('finalize-after-scroll');
+        if (!host) return;
+        var bar = document.getElementById('__aiLoopBar');
+        if (!bar) {
+          bar = document.createElement('div');
+          bar.id = '__aiLoopBar';
+          bar.style.cssText = 'margin:6px 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(201,168,76,0.18);';
+          bar.innerHTML = '<div id="__aiLoopBarFill" style="height:100%;width:35%;border-radius:3px;background:#c9a84c;animation:aiLoopSlide 1.2s ease-in-out infinite;"></div>';
+          if (!document.getElementById('__aiLoopBarStyle')) {
+            var st = document.createElement('style');
+            st.id = '__aiLoopBarStyle';
+            st.textContent = '@keyframes aiLoopSlide { 0%{margin-left:-35%;} 100%{margin-left:100%;} }';
+            document.head.appendChild(st);
+          }
+          host.insertBefore(bar, host.firstChild);
+        }
+        bar.style.display = '';
+      }
+      function removeLoopBar() { var b = document.getElementById('__aiLoopBar'); if (b && b.parentNode) b.parentNode.removeChild(b); }
       function loopStatus(txt) {
         _revLbl.textContent = 'After (' + txt + ')';
+        ensureLoopBar();
         var pm = document.getElementById('finalize-after-scroll-pm');
         if (pm) pm.textContent = txt;
       }
@@ -15030,11 +15059,18 @@ function _runLayoutAiOptimize() {
         } catch (e) {}
       }
 
-      iterate(1, null).catch(function (e) {
+      iterate(1, null).then(function () {
+        window._aiLoopRunning = false;
+        removeLoopBar();
+      }).catch(function (e) {
+        window._aiLoopRunning = false;
+        removeLoopBar();
         _revLbl.textContent = 'After (optimized)';
         alert('AI optimize failed: ' + ((e && e.message) || e));
       });
-    };
+    }
+    _revLbl.ondblclick = runAiOptimizeLoop;   // manual trigger still available
+    _finalizeRunAiLoop = runAiOptimizeLoop;    // Optimize completion fires this automatically (one-click)
   }
   var afterBody = document.getElementById('finalize-after-body');
   if (afterBody) afterBody.style.display = 'none';
@@ -15078,6 +15114,15 @@ function _runLayoutAiOptimize() {
           if (_vEl) {
             var _vh = finalizeVerdictHtml(bp, cnt, _fB, _fA);
             _vEl.innerHTML = _vh; _vEl.style.display = _vh ? '' : 'none';
+          }
+        } catch (e) {}
+        // ONE-CLICK: now that Optimize has rendered the After pane, automatically run the AI optimize
+        // loop (review -> apply -> re-render, iterating). Fires once per Optimize; the loop's own guard
+        // prevents a double-run if the user also double-clicks. The After progress bar keeps running
+        // through the loop because each loop render re-shows it.
+        try {
+          if (typeof _finalizeRunAiLoop === 'function' && !window._aiLoopRunning) {
+            setTimeout(function () { try { _finalizeRunAiLoop(); } catch (e) {} }, 150);
           }
         } catch (e) {}
     }
