@@ -14990,8 +14990,44 @@ function _runLayoutAiOptimize() {
           if (!converged && roundNum >= MAX_ROUNDS) aiLog('Reached the ' + MAX_ROUNDS + '-pass limit -- stopping.', 'stop');
           _revLbl.textContent = 'After (optimized)';
           aiLog('Done: ' + totalApplied + ' total change(s) across ' + roundNum + ' pass(es).', 'stop');
+          // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
+          // change from the original to the AI-optimized book is visible. The loop's renders already
+          // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
+          // rasterising, then rewrite #layoutai-delta from the current numbers.
+          if (totalApplied > 0) {
+            (function waitAndRefresh(tries) {
+              if (typeof _finalizeAfterDone !== 'undefined' && _finalizeAfterDone) { refreshAfterStatsFromLoop(); return; }
+              if (tries <= 0) { refreshAfterStatsFromLoop(); return; }
+              setTimeout(function () { waitAndRefresh(tries - 1); }, 300);
+            })(20);
+          }
           return lastBlob;
         });
+      }
+
+      // Rewrite the Optimize delta readout (#layoutai-delta) from the CURRENT before/after measurements
+      // after an AI loop. Mirrors the format _writeOptimizeStats uses, so the AI-optimized result reads
+      // the same way a plain Optimize does -- pages, density, and total empty-space reduction.
+      function refreshAfterStatsFromLoop() {
+        try {
+          var cnt = _finalizeAfterPages || document.querySelectorAll('#finalize-after-scroll canvas').length;
+          var bp = _finalizeBeforePages || document.querySelectorAll('#finalize-before-scroll canvas').length;
+          if (!cnt || !bp) return;
+          var _dEl = document.getElementById('layoutai-delta');
+          if (!_dEl) return;
+          var delta = bp - cnt;
+          var _fB = finalizeFillPct(_finalizeFills, bp), _fA = finalizeFillPct(_finalizeAfterFills, cnt);
+          var _html = 'Pages: <strong>' + bp + '</strong> &nbsp;&rarr;&nbsp; <strong>' + cnt + '</strong>' +
+            (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
+          if (_fB != null && _fA != null) {
+            _html += '<br>Density: <strong style="color:' + finalizeFillColor(_fB) + ';">' + _fB + '%</strong> &nbsp;&rarr;&nbsp; <strong style="color:' + finalizeFillColor(_fA) + ';">' + _fA + '% full</strong>';
+            var _eB = bp * (100 - _fB), _eA = cnt * (100 - _fA);
+            if (_eB > 0) { var _cut = Math.round((_eB - _eA) / _eB * 100); if (_cut > 0) _html += '<br><strong style="color:#8fd18f;">' + _cut + '% less empty space overall (after AI)</strong>'; }
+          }
+          _dEl.innerHTML = _html;
+          var _vEl = document.getElementById('pub-pick-verdict');
+          if (_vEl) { var _vh = finalizeVerdictHtml(bp, cnt, _fB, _fA); _vEl.innerHTML = _vh; _vEl.style.display = _vh ? '' : 'none'; }
+        } catch (e) {}
       }
 
       iterate(1, null).catch(function (e) {
