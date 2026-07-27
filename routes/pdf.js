@@ -119,8 +119,8 @@ function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom
 function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function lmFlow(m) { return lmMeta(m).flow === true; }   // text-flow: pull next beat's intro up
-function lmScale(m) { var n = Number(lmMeta(m).scale); return (n >= 0.3 && n <= 1) ? n : 1; }   // measured shrink-to-fit
-function lmGrow(m) { var n = Number(lmMeta(m).imgGrow); return (n >= 0.5 && n <= 3) ? n : 1; }   // persisted magazine image grow/shrink (AI/loop), applied at pack time so grows AND clip-shrinks carry across passes
+function lmScale(m) { var r = runGrowsGet(m && m.id); if (r != null && r <= 1) return r; return 1; }   // paired shrink-to-fit -- run-scoped only (never from layout_meta), so every fresh Optimize starts natural
+function lmGrow(m) { var r = runGrowsGet(m && m.id); return (r != null && r >= 0.5 && r <= 3) ? r : 1; }   // magazine image grow/shrink -- run-scoped only (holds across a run's passes for convergence, never persisted to the DB)
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 // Display aspect for the IMG box. Towers are GENERATED tall (1:4) but their nominal shape
 // ratio is 9:16 (Picture Book's towerthin is 2:5), so a cover-fit box at the nominal ratio
@@ -2093,6 +2093,44 @@ function composedCacheGet(campaignId, req) {
   } catch (e) { return null; }
 }
 var _mzBands = null;
+
+// RUN-SCOPED image grow/scale state. Optimization changes (grows for magazine, shrinks for paired)
+// used to persist into moments.layout_meta permanently -- which made the layout DRIFT every run: each
+// Optimize seeded from the previous run's grows/shrinks and piled more on, so images monotonically
+// shrank and white accumulated ("it looked great before, now it's different"). Per Ian's decision,
+// optimization is now PER-RUN: it holds across the loop's passes WITHIN one Optimize (so the loop still
+// converges instead of re-proposing the same grows forever), but it is NEVER written to the database,
+// so every fresh Optimize starts from the natural images and is deterministic. Keyed by the compose
+// cache key (stable across a run's passes, distinct per book/layout). Cleared when a new run begins
+// (the initial compose=1) and by a TTL fallback so stale keys don't leak.
+var _runGrows = new Map();              // runKey -> { at, grows: { momId: growMul } }
+var RUN_GROWS_TTL_MS = 30 * 60 * 1000;
+var _runGrowsCurrentKey = null;         // set at the top of each pack so band-build lmGrow reads the right run
+function runGrowsKey(campaignId, req) { return composedCacheKey(campaignId, req); }
+function runGrowsSetCurrent(k) { _runGrowsCurrentKey = k || null; }
+function runGrowsClear(k) { if (k) _runGrows.delete(k); }
+function runGrowsGetMap(k) {
+  if (!k) return null;
+  var v = _runGrows.get(k);
+  if (v && (Date.now() - v.at > RUN_GROWS_TTL_MS)) { _runGrows.delete(k); v = null; }
+  return v ? v.grows : null;
+}
+function runGrowsGet(momId) {
+  if (momId == null || _runGrowsCurrentKey == null) return null;
+  var g = runGrowsGetMap(_runGrowsCurrentKey);
+  if (!g) return null;
+  var n = Number(g[momId]);
+  return (n >= 0.3 && n <= 3) ? n : null;
+}
+function runGrowsPut(momId, mul) {
+  if (momId == null || _runGrowsCurrentKey == null) return;
+  var v = _runGrows.get(_runGrowsCurrentKey);
+  if (!v) { v = { at: Date.now(), grows: {} }; _runGrows.set(_runGrowsCurrentKey, v); }
+  v.at = Date.now();
+  if (mul == null || mul === 1) { delete v.grows[momId]; }
+  else { v.grows[momId] = Math.round(Math.max(0.3, Math.min(3, mul)) * 1000) / 1000; }
+}
+
 // Iterative-optimizer re-measure state: { plan, bands } of the composed pages to RE-MEASURE (real
 // per-page/-line numbers). Set right before the composed measure pass, cleared right after.
 var _mzComposed = null;
@@ -4398,6 +4436,7 @@ function beatImageHeight(beat, pageH) {
 // packer, and return { plan, overrides }. Overrides carry the per-beat image scale the
 // packer chose, ready to apply through the normal override render path.
 async function computePairedPack(req, campaignId, packOpts) {
+  runGrowsSetCurrent(runGrowsKey(campaignId, req));   // run-scoped scales -> lmScale reads this run's state
   if (packOpts && packOpts.debug) _imgProbeOn = true;   // emit per-image geometry probes for the dump (AI input contract)
   req.query.measurePaired = '1';
   var mbuilt = await assembleNovelHtml(req, campaignId, null);
@@ -5010,6 +5049,7 @@ function lookBackPullUpCandidate(pgs, bnds, pageH, estH) {
 }
 
 async function computeMagazinePack(req, campaignId, packOpts) {
+  runGrowsSetCurrent(runGrowsKey(campaignId, req));   // run-scoped grows -> band-build lmGrow reads this run's state
   var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
   if (packOpts && packOpts.debug) { _imgProbeOn = true; _co._towerProbe = true; req.query._towerProbe = '1'; }   // module-level flags survive the fresh opts re-parse inside assembleNovelHtml (the mutated _co does not)
   var _hdrOn = (_co.header == null) ? true : !!_co.header;
@@ -6542,13 +6582,11 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       }
 
       // PERMANENT AI GROWS (Option B): persist each growable cell's final growMul to its moment's
-      // layout_meta.imgGrow, keyed by the band's momId. The next pack seeds from this via lmGrow ->
-      // band.persistGrow, so the grown book carries forward and the loop converges instead of re-
-      // proposing the same grows every pass. Mirrors the paired scale-persistence block. We persist the
-      // final state of every growable cell (not just this batch's ops) so a shrink that lowered a grow
-      // is saved too; one write per moment.
+      // RUN-SCOPED grow persistence: record each growable cell's final grow into the run store so the
+      // next pass in THIS Optimize run seeds from it (the loop converges instead of re-proposing the
+      // same grows forever). This is NOT written to the database -- a fresh Optimize starts from natural
+      // images, so the layout no longer drifts/degrades across runs.
       try {
-        var _dbm = await getDb();
         var _seenM = {}, _persistCount = 0;
         for (var _pi = 0; _pi < mplan.pages.length; _pi++) {
           var _pg = mplan.pages[_pi];
@@ -6560,20 +6598,13 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
             if (_seenM[_bb.momId]) continue;
             _seenM[_bb.momId] = true;
             var _gm = _c.growMul || 1;
-            // Persist a real grow OR a real shrink (a clip fix). Clamp to the 0.5..3 range lmGrow reads.
-            if (!(_gm > 1.01) && !(_gm < 0.99)) continue;
-            _gm = Math.round(Math.max(0.5, Math.min(3, _gm)) * 1000) / 1000;
-            var _mrow = null;
-            try { _mrow = await _dbm.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(_bb.momId); } catch (e) {}
-            var _lm = {};
-            try { _lm = (_mrow && _mrow.layout_meta) ? JSON.parse(_mrow.layout_meta) : {}; } catch (e) { _lm = {}; }
-            if (!_lm || typeof _lm !== 'object') _lm = {};
-            _lm.imgGrow = _gm;
-            try { await _dbm.prepare('UPDATE moments SET layout_meta = ?, edited_at = ? WHERE id = ?').run(JSON.stringify(_lm), new Date().toISOString(), _bb.momId); _persistCount++; } catch (e) { console.error('persist magazine grow failed for moment ' + _bb.momId + ':', e && e.message); }
+            if (!(_gm > 1.01) && !(_gm < 0.99)) { runGrowsPut(_bb.momId, 1); continue; }   // back to natural -> clear
+            runGrowsPut(_bb.momId, _gm);
+            _persistCount++;
           }
         }
-        if (_persistCount) console.log('[layout-apply] persisted ' + _persistCount + ' magazine image grow(s) to layout_meta');
-      } catch (e) { console.error('magazine grow persistence pass failed:', e && e.message); }
+        if (_persistCount) console.log('[layout-apply] recorded ' + _persistCount + ' magazine image grow(s) to the run store (not persisted to DB)');
+      } catch (e) { console.error('magazine grow run-store pass failed:', e && e.message); }
 
       var mBody = composeMagazine(mplan, mbands, _cco);
       composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName);
@@ -6713,13 +6744,12 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       }
     }
 
-    // Persist applied SCALE ops into each affected moment's layout_meta.scale, so the change becomes
-    // part of the book's layout: the next pack (and the next loop round) reads it via lmScale(m). This
-    // is what makes the AI pass iterative and durable (Option B -- AI changes are part of the book).
-    // Text-move ops are reflected in the cached composed body but not yet persisted structurally (a
-    // later refinement -- they need a per-beat page assignment, not a per-moment field).
+    // RUN-SCOPED scale persistence: record each applied scale into the run store so the next pass in
+    // THIS Optimize run reads it via lmScale(m) and the loop converges. NOT written to the database --
+    // a fresh Optimize starts from natural images, so paired no longer accumulates shrinks and drifts
+    // (the bug where images monotonically shrank to 0.6x and white piled up across runs).
+    // Text-move ops are reflected in the cached composed body but not persisted structurally.
     try {
-      var _dbw = await getDb();
       var _byIdx = {}; (beats || []).forEach(function (b) { if (b && b.idx != null) _byIdx[b.idx] = b; });
       var _seen = {};
       for (var ai = 0; ai < applied.length; ai++) {
@@ -6730,11 +6760,9 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         var _mom = _bt && _bt.moment;
         if (!_mom || _mom.id == null || _seen[_mom.id]) continue;
         _seen[_mom.id] = true;
-        var _meta = lmMeta(_mom); _meta = (_meta && typeof _meta === 'object') ? Object.assign({}, _meta) : {};
-        _meta.scale = Math.round(_ap.scaleTo * 1000) / 1000;
-        try { await _dbw.prepare('UPDATE moments SET layout_meta = ?, edited_at = ? WHERE id = ?').run(JSON.stringify(_meta), new Date().toISOString(), _mom.id); } catch (e) { console.error('persist scale failed for moment ' + _mom.id + ':', e && e.message); }
+        runGrowsPut(_mom.id, Math.round(_ap.scaleTo * 1000) / 1000);
       }
-    } catch (e) { console.error('scale persistence pass failed:', e && e.message); }
+    } catch (e) { console.error('scale run-store pass failed:', e && e.message); }
 
     // Compose the improved book from the mutated plan, cache it (so the render + print interior use
     // it), and render the PDF. Only persists the composed body cache -- same mechanism Optimize uses.
@@ -6778,8 +6806,11 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
 // what keep re-seeding the crop, so they must be cleared explicitly.
 router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   try {
-    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
-    // Pack the book so we can enumerate exactly the moments that carry image grows (via band momId).
+    // Clear this book's run-scoped grows (the live state) so the next Optimize starts natural.
+    try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
+    // Also purge any LEGACY imgGrow/scale left in layout_meta from before grows went run-scoped. These
+    // are no longer read (lmGrow/lmScale are run-scoped now), so they're inert -- but clearing them
+    // removes stale data. Enumerate the book's moments via the pack (band momId) and strip both keys.
     var packedR = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
     var _rbands = packedR.bands || [];
     var _db = await getDb();
@@ -6792,15 +6823,12 @@ router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async functi
       try { _row = await _db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(_rb.momId); } catch (e) {}
       var _lm = {};
       try { _lm = (_row && _row.layout_meta) ? JSON.parse(_row.layout_meta) : {}; } catch (e) { _lm = {}; }
-      if (!_lm || typeof _lm !== 'object' || _lm.imgGrow == null) continue;   // nothing to clear
-      delete _lm.imgGrow;
+      if (!_lm || typeof _lm !== 'object' || (_lm.imgGrow == null && _lm.scale == null)) continue;   // nothing to clear
+      delete _lm.imgGrow; delete _lm.scale;
       try { await _db.prepare('UPDATE moments SET layout_meta = ?, edited_at = ? WHERE id = ?').run(JSON.stringify(_lm), new Date().toISOString(), _rb.momId); _cleared++; } catch (e) { console.error('reset grow failed for moment ' + _rb.momId + ':', e && e.message); }
     }
-    // Drop any cached composed body so the next render re-packs from the cleared (natural) state. The
-    // cache key includes request params, so we clear the whole (small, in-memory) cache -- it rebuilds
-    // on the next render.
     try { _composedCache.clear(); } catch (e) {}
-    return res.json({ campaign: (packedR.campaign && packedR.campaign.name) || 'campaign', cleared: _cleared, note: 'Persisted image grows cleared. Re-run Optimize to rebuild from the natural layout with the current crop-safe limits.' });
+    return res.json({ campaign: (packedR.campaign && packedR.campaign.name) || 'campaign', cleared: _cleared, note: 'Run-scoped grows cleared and legacy layout_meta grows/scales purged. Re-run Optimize to rebuild from the natural layout.' });
   } catch (e) {
     return res.status(500).json({ error: (e && e.message) || 'layout-reset failed' });
   }
@@ -6810,6 +6838,10 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
     if (req.query.compose === '1' || req.query.compose === 'true') {
       // Optimize costs 1 token. Check up front; charge only after a successful compose (below).
       if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
+      // A new Optimize run: clear this book's run-scoped grows so we start from the NATURAL images.
+      // Grows recorded during this run's loop passes are keyed the same way and carry across passes for
+      // convergence, but never persist to the DB -- so the layout is deterministic and never degrades.
+      try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
       if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
         var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
