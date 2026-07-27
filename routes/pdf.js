@@ -120,7 +120,7 @@ function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function lmFlow(m) { return lmMeta(m).flow === true; }   // text-flow: pull next beat's intro up
 function lmScale(m) { var n = Number(lmMeta(m).scale); return (n >= 0.3 && n <= 1) ? n : 1; }   // measured shrink-to-fit
-function lmGrow(m) { var n = Number(lmMeta(m).imgGrow); return (n >= 1 && n <= 3) ? n : 1; }   // persisted magazine image grow (AI/loop), applied at pack time so grows carry across passes
+function lmGrow(m) { var n = Number(lmMeta(m).imgGrow); return (n >= 0.5 && n <= 3) ? n : 1; }   // persisted magazine image grow/shrink (AI/loop), applied at pack time so grows AND clip-shrinks carry across passes
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 // Display aspect for the IMG box. Towers are GENERATED tall (1:4) but their nominal shape
 // ratio is 9:16 (Picture Book's towerthin is 2:5), so a cover-fit box at the nominal ratio
@@ -5253,11 +5253,14 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   pages.forEach(function (pg) {
     pg.forEach(function (c, ci) {
       var bb = bands[c.band];
-      if (!bb || !(bb.persistGrow > 1) || !(bb.sImgH > 0) || !bb.remeta) return;
+      if (!bb || bb.persistGrow == null || bb.persistGrow === 1 || !(bb.sImgH > 0) || !bb.remeta) return;
       if (c.textLead || c.towerLead) return;
       if (c.split && (c.cStart || 0) > 0 && !c.imgBody) return;   // text-only continuation tail
       var cur = c.growMul || 1;
-      if (bb.persistGrow > cur) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
+      // A persisted GROW (>1) is a floor -- only apply if larger than what the optimizer already did.
+      // A persisted SHRINK (<1, a clip fix) is applied whenever the cell is not already at/below it.
+      if (bb.persistGrow > 1 && bb.persistGrow > cur) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
+      else if (bb.persistGrow < 1 && cur > bb.persistGrow) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
     });
   });
 
@@ -6469,9 +6472,9 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
             if (_seenM[_bb.momId]) continue;
             _seenM[_bb.momId] = true;
             var _gm = _c.growMul || 1;
-            // Only persist a real grow (>1). Clamp to the sane 1..3 range lmGrow accepts.
-            if (!(_gm > 1.01)) continue;
-            _gm = Math.round(Math.max(1, Math.min(3, _gm)) * 1000) / 1000;
+            // Persist a real grow OR a real shrink (a clip fix). Clamp to the 0.5..3 range lmGrow reads.
+            if (!(_gm > 1.01) && !(_gm < 0.99)) continue;
+            _gm = Math.round(Math.max(0.5, Math.min(3, _gm)) * 1000) / 1000;
             var _mrow = null;
             try { _mrow = await _dbm.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(_bb.momId); } catch (e) {}
             var _lm = {};
