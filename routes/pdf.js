@@ -5904,6 +5904,32 @@ var LAYOUT_GOALS = {
   ].join('\n')
 };
 
+// Shared helper: send ONE layout dump to the model and return parsed ops (or a parseError). Used by
+// the single-shot review endpoint AND the iterative loop, so both call the model identically.
+async function _aiReviewOps(dump, arrange, campaignName, key) {
+  var _goals = LAYOUT_GOALS[arrange] || LAYOUT_GOALS.paired;
+  var _system = _goals + '\n\n' + LAYOUT_REVIEW_SYSTEM;
+  var response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: TEXT_MODEL, max_tokens: 2000, system: _system,
+      messages: [{ role: 'user', content: 'Here is the layout dump for "' + campaignName + '". Return the JSON array of ops.\n\n' + dump }]
+    })
+  });
+  var data = await response.json();
+  if (data.error) return { ops: null, parseError: friendlyAnthropicError(data.error), apiError: true };
+  var raw = (data.content || []).map(function (b) { return b.text || ''; }).join('').trim();
+  var ops = null, parseError = null;
+  try {
+    var jtxt = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+    var _s = jtxt.indexOf('['), _e = jtxt.lastIndexOf(']');
+    if (_s >= 0 && _e > _s) jtxt = jtxt.slice(_s, _e + 1);
+    ops = JSON.parse(jtxt);
+  } catch (e) { parseError = String((e && e.message) || e); }
+  return { ops: ops, parseError: parseError };
+}
+
 router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   try {
     var key = process.env.ANTHROPIC_API_KEY;
@@ -6312,6 +6338,29 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: (op.op === 'growImage' ? 'no room to grow within box' : 'could not clear box by shrinking') });
       }
     }
+
+    // Persist applied SCALE ops into each affected moment's layout_meta.scale, so the change becomes
+    // part of the book's layout: the next pack (and the next loop round) reads it via lmScale(m). This
+    // is what makes the AI pass iterative and durable (Option B -- AI changes are part of the book).
+    // Text-move ops are reflected in the cached composed body but not yet persisted structurally (a
+    // later refinement -- they need a per-beat page assignment, not a per-moment field).
+    try {
+      var _dbw = await getDb();
+      var _byIdx = {}; (beats || []).forEach(function (b) { if (b && b.idx != null) _byIdx[b.idx] = b; });
+      var _seen = {};
+      for (var ai = 0; ai < applied.length; ai++) {
+        var _ap = applied[ai];
+        if (_ap.scaleTo == null) continue;
+        var _plc = imgPlacementOnPage(_ap.page);
+        var _bt = _plc ? _byIdx[_plc.beat] : null;
+        var _mom = _bt && _bt.moment;
+        if (!_mom || _mom.id == null || _seen[_mom.id]) continue;
+        _seen[_mom.id] = true;
+        var _meta = lmMeta(_mom); _meta = (_meta && typeof _meta === 'object') ? Object.assign({}, _meta) : {};
+        _meta.scale = Math.round(_ap.scaleTo * 1000) / 1000;
+        try { await _dbw.prepare('UPDATE moments SET layout_meta = ?, edited_at = ? WHERE id = ?').run(JSON.stringify(_meta), new Date().toISOString(), _mom.id); } catch (e) { console.error('persist scale failed for moment ' + _mom.id + ':', e && e.message); }
+      }
+    } catch (e) { console.error('scale persistence pass failed:', e && e.message); }
 
     // Compose the improved book from the mutated plan, cache it (so the render + print interior use
     // it), and render the PDF. Only persists the composed body cache -- same mechanism Optimize uses.
