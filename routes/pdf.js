@@ -5244,6 +5244,23 @@ async function computeMagazinePack(req, campaignId, packOpts) {
 
   }   // end look-back pull-up + page-local grow (skipped for Gazette)
   }   // end optimization transforms (skipped for the Before flow-sim dump)
+
+  // PERMANENT AI GROWS: seed each growable cell's growMul from its band's persisted grow (lmGrow, read
+  // at band-build time into band.persistGrow), applied as a FLOOR -- a cell the optimizer already grew
+  // further keeps the larger value; a cell with no grow picks up the persisted one. This MUST run
+  // before the dump's real-measure below, so the dump reflects the grown pages -- otherwise the review
+  // sees the old white and re-proposes the same grows forever (the loop never converges).
+  pages.forEach(function (pg) {
+    pg.forEach(function (c, ci) {
+      var bb = bands[c.band];
+      if (!bb || !(bb.persistGrow > 1) || !(bb.sImgH > 0) || !bb.remeta) return;
+      if (c.textLead || c.towerLead) return;
+      if (c.split && (c.cStart || 0) > 0 && !c.imgBody) return;   // text-only continuation tail
+      var cur = c.growMul || 1;
+      if (bb.persistGrow > cur) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
+    });
+  });
+
   var _dbg = null;
   if (packOpts && packOpts.debug) {
     var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
@@ -5309,21 +5326,6 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   }
 
   _imgProbeOn = false;   // clear the probe flag so it never leaks into a subsequent normal render
-  // PERMANENT AI GROWS: seed each growable cell's growMul from its band's persisted grow (lmGrow, read
-  // at band-build time into band.persistGrow). Applied as a FLOOR -- a cell already grown further by
-  // the optimizer keeps the larger value; a cell with no grow picks up the persisted one. This makes
-  // AI-loop grows part of the saved layout, so a re-pack (the next review pass, or a later Optimize)
-  // sees the grown book and the loop converges instead of re-proposing the same grows every pass.
-  pages.forEach(function (pg) {
-    pg.forEach(function (c, ci) {
-      var bb = bands[c.band];
-      if (!bb || !(bb.persistGrow > 1) || !(bb.sImgH > 0) || !bb.remeta) return;
-      if (c.textLead || c.towerLead) return;
-      if (c.split && (c.cStart || 0) > 0 && !c.imgBody) return;   // text-only continuation tail
-      var cur = c.growMul || 1;
-      if (bb.persistGrow > cur) pg[ci] = Object.assign({}, c, { growMul: Math.round(bb.persistGrow * 1000) / 1000 });
-    });
-  });
   return { plan: { pages: pages, pageCount: pages.length }, bands: bands, campaign: mbuilt.campaign, dbg: _dbg, measure: (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas };
 }
 // Literal composer: one fixed-height content-page per plan page, hard break after, so the
