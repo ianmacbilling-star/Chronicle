@@ -1442,6 +1442,21 @@ function cgFeatureImgH(m, opts) {
   if (asp >= 1.5) return CG_W / asp;
   return Math.min((opts && opts.mzCapFeatures) ? MZ_FEATURE_MAX_H : MZ_FEATURE_MAX_H_FLOW, CG_W / asp);
 }
+// The largest growMul a feature image can take before object-fit:cover begins cropping the
+// composition. cgFlowFeature grows H by mul and sets W = min(CG_W, H*asp); once W hits the column
+// width CG_W, further mul only makes the box TALLER while the image width is fixed, so cover crops the
+// top/bottom. The crop-safe ceiling is therefore the mul where W just reaches CG_W: baseH*mul*asp =
+// CG_W  ->  mul = (CG_W/asp) / baseH. A crop-safe image (the whole frame is safe to trim) may grow
+// further, so it keeps the normal cap; a non-crop-safe image (composition matters) is capped here.
+function cgFeatureCropSafeMaxMul(m, opts) {
+  var asp = Math.max(0.3, momentAspect(m));
+  if (asp >= 1.5) return 3.0;   // wide images are width-bound already; handled elsewhere, keep normal cap
+  var baseH = Math.min((opts && opts.mzCapFeatures) ? MZ_FEATURE_MAX_H : MZ_FEATURE_MAX_H_FLOW, CG_W / asp);
+  if (!(baseH > 0)) return 3.0;
+  var safe = (CG_W / asp) / baseH;   // mul where W reaches the column width (no crop yet)
+  // A tiny margin so we stop just before the crop point; never below 1.0 (that would force a shrink).
+  return Math.max(1.0, Math.round((safe * 0.98) * 1000) / 1000);
+}
 function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
   mul = mul || 1;
   var asp = Math.max(0.3, momentAspect(m));
@@ -6250,27 +6265,48 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
 
       // Stage 1: set an analytic target mul on each scale op's cell.
       var _staged = [];   // { op, pageIdx, ci, curMul, tryMul }
-      _scaleOps.forEach(function (op) {
+      var _cropMomCache = {};   // momId -> moment row, so the crop-safe cap lookup hits the DB once per image
+      for (var _si = 0; _si < _scaleOps.length; _si++) {
+        var op = _scaleOps[_si];
         var pgc = mplan.pages[op.page];
-        if (!pgc) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page not found' }); return; }
+        if (!pgc) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page not found' }); continue; }
         var ci = mGrowCellIdx(pgc);
-        if (ci < 0) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no growable image on page' }); return; }
+        if (ci < 0) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no growable image on page' }); continue; }
         var curMul = pgc[ci].growMul || 1;
         var pageReal = (mReal0[op.page] != null) ? mReal0[op.page] : null;
         var bb = mbands[pgc[ci].band];
         var imgH = (bb && bb.sImgH) ? bb.sImgH * curMul : null;   // current rendered image height
+        // Crop-safe grow ceiling: a feature/float image grown past the point where its width fills the
+        // column starts CROPPING the composition (object-fit:cover). Unless the image is explicitly
+        // crop-safe (safe to trim), cap the grow there so filling white never eats the picture. We look
+        // the moment up so we can honor its aspect + crop_safe flag; fall back to 3.0 if unavailable.
+        var _growCap = 3.0;
+        try {
+          if (bb && bb.momId != null) {
+            var _mm = (typeof _cropMomCache !== 'undefined' && _cropMomCache[bb.momId]) ? _cropMomCache[bb.momId] : null;
+            if (!_mm) {
+              var _dbc = await getDb();
+              _mm = await _dbc.prepare('SELECT id, image, layout_meta FROM moments WHERE id = ?').get(bb.momId);
+              if (typeof _cropMomCache !== 'undefined' && _mm) _cropMomCache[bb.momId] = _mm;
+            }
+            if (_mm && !lmCropSafe(_mm)) {
+              var _csMul = cgFeatureCropSafeMaxMul(_mm, _cco);
+              if (_csMul > 0) _growCap = _csMul;
+            }
+          }
+        } catch (e) {}
         var tryMul;
         if (op.op === 'growImage') {
-          if (pageReal == null || imgH == null || imgH <= 0) { tryMul = Math.min(3.0, curMul * 1.5); }
+          if (pageReal == null || imgH == null || imgH <= 0) { tryMul = Math.min(_growCap, curMul * 1.5); }
           else {
             var white = MCLIP - pageReal - 0.06;                 // leave a hair of margin
-            if (white <= 0.05) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no room to grow within box' }); return; }
+            if (white <= 0.05) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no room to grow within box' }); continue; }
             tryMul = curMul * (imgH + white) / imgH;             // grow the image by the white gap
-            tryMul = Math.min(3.0, Math.max(curMul, tryMul));
+            tryMul = Math.min(_growCap, Math.max(curMul, tryMul));
           }
-          if (tryMul <= curMul + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no room to grow within box' }); return; }
+          if (tryMul <= curMul + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: (_growCap <= curMul + 0.02 ? 'image at crop-safe max (growing further would crop the picture)' : 'no room to grow within box') }); continue; }
         } else {   // shrinkImage: only meaningful if the page currently clips
-          if (pageReal == null || pageReal <= MCLIP + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); return; }
+          if (pageReal == null || pageReal <= MCLIP + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); continue; }
           if (imgH == null || imgH <= 0) { tryMul = Math.max(0.5, curMul - 0.05); }
           else {
             var over = pageReal - MCLIP + 0.06;
@@ -6280,7 +6316,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         }
         pgc[ci] = Object.assign({}, pgc[ci], { growMul: Math.round(tryMul * 1000) / 1000 });
         _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul });
-      });
+      }
 
       // Stage 2: ONE re-measure of the whole book with all targets applied.
       if (_staged.length) {
