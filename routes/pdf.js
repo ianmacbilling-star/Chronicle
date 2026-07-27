@@ -6318,19 +6318,22 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         var bb = mbands[pgc[ci].band];
         var imgH = (bb && bb.sImgH) ? bb.sImgH * curMul : null;   // current rendered image height
         // Crop-safe grow ceiling: a feature/float image grown past the point where its width fills the
-        // column starts CROPPING the composition (object-fit:cover). Unless the image is explicitly
-        // crop-safe (safe to trim), cap the grow there so filling white never eats the picture. We look
-        // the moment up so we can honor its aspect + crop_safe flag; fall back to 3.0 if unavailable.
+        // column starts CROPPING the composition (object-fit:cover). Cap the grow there so filling white
+        // never eats the picture. This applies to EVERY image by default (Ian's rule: images essentially
+        // never crop). An image explicitly flagged crop_safe (safe to trim) is the only exception -- it
+        // keeps the full 3.0 cap. We look the moment up for its aspect + flag; fall back to 3.0 only if
+        // the moment is unavailable.
         var _growCap = 3.0;
         try {
           if (bb && bb.momId != null) {
             var _mm = (typeof _cropMomCache !== 'undefined' && _cropMomCache[bb.momId]) ? _cropMomCache[bb.momId] : null;
             if (!_mm) {
               var _dbc = await getDb();
-              _mm = await _dbc.prepare('SELECT id, image, layout_meta FROM moments WHERE id = ?').get(bb.momId);
+              _mm = await _dbc.prepare('SELECT id, image, img_w, img_h, shape, layout_meta FROM moments WHERE id = ?').get(bb.momId);
               if (typeof _cropMomCache !== 'undefined' && _mm) _cropMomCache[bb.momId] = _mm;
             }
-            if (_mm && !lmCropSafe(_mm)) {
+            // Apply the cap unless the image is explicitly marked safe to crop.
+            if (_mm && lmMeta(_mm).crop_safe !== true) {
               var _csMul = cgFeatureCropSafeMaxMul(_mm, _cco);
               if (_csMul > 0) _growCap = _csMul;
             }
