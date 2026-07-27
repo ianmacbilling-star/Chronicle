@@ -4799,20 +4799,33 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
       return _must ? _fb : null;
     }
     var R = pageH - used;
+    // An image-bearing band's split head must CLEAR its image (sImgH); if the image alone won't fit the
+    // room left, splitting here would clip the image/first slice -- so treat it as un-splittable into R
+    // and move the whole band to a fresh page (where sImgH fits).
+    var _imgNeedsClear = (it.cStart === 0 && it.simg && it.sImgH > 0) ? round3(it.sImgH + MZ_SPLIT_PAD) : 0;
+    var _canSplitIntoR = function (room) { return (_imgNeedsClear ? (_imgNeedsClear <= room + 1e-6) : true) && !!chooseCut(room); };
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
     if (cur.length && (it.height + keepWith) > R + 1e-6) {
-      if (!(canSplit && chooseCut(R))) {
+      if (!(canSplit && _canSplitIntoR(R))) {
         if (trySpill(it, R)) continue;   // dropped the before-text into the gap; image + after queued on the next page
         flush(); R = pageH;
       }
     }
     if ((it.height + keepWith) <= R + 1e-6) { placeWhole(it); continue; }   // fits
-    if (canSplit) {
+    if (canSplit && _canSplitIntoR(R)) {
       var _cut = chooseCut(R);
       var L = _cut ? _cut.L : -1;
       if (L >= 0) {
         var cEnd = _cut.cEnd;
-        var headH = round3(it.lines[L] + MZ_SPLIT_PAD);   // the rendered slice carries the paragraph's bottom margin beyond the last line
+        // The rendered slice carries the paragraph's bottom margin beyond the last line. For an
+        // IMAGE-bearing first slice (feature/wide/float head), the image lives in this head and can't
+        // be split off -- so the head must be tall enough to CLEAR the image (sImgH), not just the text
+        // lines beside it. Using only the text height under-budgeted the head by the image's overhang
+        // and the slice clipped its last line(s) in its overflow:hidden cell even when the page fit
+        // (the gazette feature-band chop). Take the max of text-height and image-height.
+        var _textH = it.lines[L] + MZ_SPLIT_PAD;
+        var _imgClear = (it.cStart === 0 && it.simg && it.sImgH > 0) ? round3(it.sImgH + MZ_SPLIT_PAD) : 0;
+        var headH = round3(Math.max(_textH, _imgClear));
         // The sentence snap and the word/punctuation sanitizer both ran inside chooseCut above, so
         // cEnd is already a clean boundary here. Head keeps its reserved height (a little extra
         // white is fine); the tail gets the pulled-back text and re-derives its lines.
@@ -5826,14 +5839,22 @@ function magazinePlanText(packed) {
   // clip risk (flagging them would hand the AI a shrink op that fights its own grow op).
   d.pages.forEach(function (pg) {
     // Only a concern if the PAGE is near the real 9.41 clip box; a cell taller than its estimate on a
-    // page that still fits comfortably is not a problem (see paired OVERSIZED note).
+    // page that still fits comfortably is not a problem (see paired OVERSIZED note). EXCEPTION: a SPLIT
+    // text slice sits in a fixed-height cell with overflow:hidden, so it clips its own last line(s)
+    // even when the page total is well under the box -- so split slices are checked regardless of the
+    // page-level headroom (this is the gazette/magazine split-slice chop the page-height gate missed).
     var _pgReal = (pg.realUsed != null) ? pg.realUsed : (pg.used || 0);
-    if (_pgReal <= ((9.65 - HEADER_BAND_IN) - 0.4)) return;   // 9.01in: fits with headroom
+    var _pageFits = (_pgReal <= ((9.65 - HEADER_BAND_IN) - 0.4));   // 9.01in: fits with headroom
     (pg.cells || []).forEach(function (c) {
       if (c.growMul && c.growMul !== 1) return;   // intentional grow, not oversized-risk
-      if (c.realH != null && c.h != null && (c.realH - c.h) > 0.3) {
-        _issues.push('  OVERSIZED  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  b' + c.band + ' renders ' + (c.realH - c.h).toFixed(2) + 'in taller than packed (real ' + c.realH.toFixed(2) + ' vs ' + c.h.toFixed(2) + ')  -> op: shrinkImage/pushLines');
-      }
+      if (c.realH == null || c.h == null) return;
+      var _over = c.realH - c.h;
+      if (!(_over > 0.3)) return;
+      // A slice clips in its own cell even if the page fits; a whole band only matters if the page is tight.
+      if (_pageFits && !c.split) return;
+      var _tag = c.split ? 'CLIP-SLICE' : 'OVERSIZED';
+      var _op = c.split ? 'op: pushLines forward / re-split so this slice fits its cell (it clips its last line otherwise)' : 'op: shrinkImage/pushLines';
+      _issues.push('  ' + _tag + '  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  b' + c.band + (c.split ? ' (split slice)' : '') + ' renders ' + _over.toFixed(2) + 'in taller than packed (real ' + c.realH.toFixed(2) + ' vs ' + c.h.toFixed(2) + ')  -> ' + _op);
     });
   });
 
