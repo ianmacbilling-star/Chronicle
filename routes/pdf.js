@@ -1450,16 +1450,16 @@ function cgFeatureImgH(m, opts) {
 // further, so it keeps the normal cap; a non-crop-safe image (composition matters) is capped here.
 function cgFeatureCropSafeMaxMul(m, opts) {
   var asp = Math.max(0.3, momentAspect(m));
-  if (asp >= 1.5) return 3.0;   // wide images are width-bound already; handled elsewhere, keep normal cap
+  if (asp >= 1.5) return 1.0;   // wide/landscape: already fills the column width -> ANY grow only adds height and crops. No grow.
   var baseH = Math.min((opts && opts.mzCapFeatures) ? MZ_FEATURE_MAX_H : MZ_FEATURE_MAX_H_FLOW, CG_W / asp);
-  if (!(baseH > 0)) return 3.0;
+  if (!(baseH > 0)) return 1.0;
   var safe = (CG_W / asp) / baseH;   // mul where W reaches the column width (0 percent crop)
-  // Ian's rule: an image should essentially never crop; if unavoidable, keep it small (under ~10 percent).
-  // So allow the grow to go a little past the zero-crop point -- up to where about 10 percent of the
-  // image height would be cropped -- but never more. This fills a bit more white without visibly eating
-  // the composition. (At the zero-crop mul the box just fits the image; growing height ~10 percent more
-  // crops ~10 percent, so the 10-percent-crop ceiling is about safe * 1.10.)
-  var maxCrop = safe * 1.10;
+  // If the image is ALREADY at column width at mul 1.0 (baseH == CG_W/asp, i.e. safe <= 1), growing it
+  // at all only makes the box taller and crops immediately. Such images must not grow: cap = 1.0.
+  if (safe <= 1.02) return 1.0;
+  // Genuinely tall images have real headroom before the width fills. Let them grow to the zero-crop
+  // point plus a small margin (Ian's rule: never crop; if unavoidable, keep it under ~10 percent).
+  var maxCrop = Math.min(safe * 1.10, safe + 0.10 * safe);   // ~10 percent past zero-crop
   return Math.max(1.0, Math.round(maxCrop * 1000) / 1000);
 }
 function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
