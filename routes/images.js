@@ -4,6 +4,7 @@ const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
+const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { fal } = require('@fal-ai/client');
@@ -17,6 +18,30 @@ const { logDebug } = require('./debug');
 let PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';
 while (PUBLIC_BASE_URL.length && PUBLIC_BASE_URL.charAt(PUBLIC_BASE_URL.length - 1) === '/') PUBLIC_BASE_URL = PUBLIC_BASE_URL.slice(0, -1);
 function falWebhookUrl() { return PUBLIC_BASE_URL ? (PUBLIC_BASE_URL + '/api/images/webhook/fal') : ''; }
+
+// Fetch an image URL and read its true pixel dimensions from the header bytes. Returns
+// { width, height } or null. Only the first ~64KB is needed to parse any header, but some
+// CDNs ignore Range, so we cap the body defensively and measure whatever we get.
+async function measureImageDims(url) {
+  if (!url) return null;
+  try {
+    const axios = require('axios');
+    const https = require('https');
+    const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+    const resp = await axios.get(url, {
+      responseType: 'arraybuffer',
+      httpsAgent: agent,
+      timeout: 30000,
+      maxContentLength: 50 * 1024 * 1024,
+      maxBodyLength: 50 * 1024 * 1024,
+      headers: { Range: 'bytes=0-65535' },
+      validateStatus: function (s) { return s >= 200 && s < 400; }
+    });
+    return imageSize(Buffer.from(resp.data));
+  } catch (e) {
+    return null;
+  }
+}
 
 // ============================================================
 // PROVIDER ABSTRACTION LAYER
@@ -1007,30 +1032,30 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     }
     const webhookUrl = falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
-    // Gather the SAME references this panel was generated with — its attached
-    // cast characters AND assets — so a retouch can add a character it would
-    // otherwise have no reference for. Mirrors the generate-moment path.
-    const campRowR = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
-    const campIdR = campRowR ? campRowR.campaign_id : moment.campaign_id;
-    const charsR = await db.prepare(
-      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
-      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
-      'sc.change_note, sc.change_moment_index, sc.change_status ' +
-      'FROM characters ch ' +
-      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
-      'WHERE ch.campaign_id = ?'
-    ).all(moment.fork_id, campIdR);
-    await attachPriorReferences(db, charsR, moment.session_id, campIdR);
-    const panelTextR = (moment.prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
-    let explicitCharIdsR = null, explicitAssetIdsR = null;
-    if (moment.cast_explicit) {
-      explicitCharIdsR = (await db.prepare('SELECT character_id FROM moment_characters WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.character_id; });
-      explicitAssetIdsR = (await db.prepare('SELECT asset_id FROM moment_assets WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.asset_id; });
-    }
-    const charListR = buildCharacterBlock(charsR, panelTextR, moment.panel_order, explicitCharIdsR);
-    const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
-    const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
-    const refsR = combineRefs(charListR.refs, assetListR.refs);
+    // Gather the SAME references this panel was generated with — its attached
+    // cast characters AND assets — so a retouch can add a character it would
+    // otherwise have no reference for. Mirrors the generate-moment path.
+    const campRowR = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(moment.session_id);
+    const campIdR = campRowR ? campRowR.campaign_id : moment.campaign_id;
+    const charsR = await db.prepare(
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(moment.fork_id, campIdR);
+    await attachPriorReferences(db, charsR, moment.session_id, campIdR);
+    const panelTextR = (moment.prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
+    let explicitCharIdsR = null, explicitAssetIdsR = null;
+    if (moment.cast_explicit) {
+      explicitCharIdsR = (await db.prepare('SELECT character_id FROM moment_characters WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.character_id; });
+      explicitAssetIdsR = (await db.prepare('SELECT asset_id FROM moment_assets WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.asset_id; });
+    }
+    const charListR = buildCharacterBlock(charsR, panelTextR, moment.panel_order, explicitCharIdsR);
+    const assetsR = await db.prepare('SELECT id, name, category, image_url FROM campaign_assets WHERE campaign_id = ?').all(campIdR);
+    const assetListR = buildAssetBlock(assetsR, panelTextR, explicitAssetIdsR);
+    const refsR = combineRefs(charListR.refs, assetListR.refs);
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
     if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
     const sub = await submitRetouch(moment.image, instruction, _rs.styleForGen, fal_key, webhookUrl, { refs: refsR, text: charListR.text }, moment.shape);
@@ -1346,6 +1371,17 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
     if (!claim || claim.changes === 0) return res.status(200).json({ ok: true });
     try {
       const imageUrl = await persistToR2(falUrl);
+      // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
+      // width/height in its webhook, so without this the layout uses the nominal shape aspect
+      // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3
+      // box gets cropped by object-fit:cover. Measuring the bytes gives the true aspect so the
+      // box fits exactly. Falls through to whatever imgW/imgH already hold if measuring fails.
+      try {
+        const _measured = await measureImageDims(imageUrl) || await measureImageDims(falUrl);
+        if (_measured && _measured.width > 0 && _measured.height > 0) {
+          imgW = _measured.width; imgH = _measured.height; dimsSource = 'measured';
+        }
+      } catch (_me) { /* keep existing imgW/imgH */ }
       if (job.moment_id && (job.kind === 'moment' || job.kind === 'batch' || job.kind === 'retouch')) {
         const now = new Date().toISOString();
         const _priorM = await db.prepare('SELECT image, img_w, img_h, revert_image, shape FROM moments WHERE id = ?').get(job.moment_id);
@@ -1502,6 +1538,38 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
   }
 });
 
+// Backfill true pixel dimensions for existing moment images. The image model returns null
+// width/height, so older images stored the NOMINAL shape aspect (e.g. a portrait "Standard"
+// saved as 4:3) -- which crops them via object-fit:cover. This measures each image's real
+// bytes and stores true img_w/img_h so every box fits its image. Admin-only; batched and
+// resumable via ?limit= and ?onlyNull=1 (default measures ALL to correct synthetic values too).
+router.post('/backfill-dims', requireAuth, async function (req, res) {
+  try {
+    const db = await getDb();
+    const me = await db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
+    if (!me || !me.is_admin) return res.status(403).json({ error: 'admin only' });
+    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit, 10) || 200));
+    const onlyNull = (req.query.onlyNull === '1' || req.query.onlyNull === 'true');
+    const where = onlyNull ? 'image IS NOT NULL AND (img_w IS NULL OR img_h IS NULL)' : 'image IS NOT NULL';
+    const rows = await db.prepare('SELECT id, image, img_w, img_h FROM moments WHERE ' + where + ' ORDER BY id ASC LIMIT ?').all(limit);
+    let measured = 0, changed = 0, failed = 0;
+    const now = new Date().toISOString();
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const dims = await measureImageDims(r.image);
+      if (!dims || !(dims.width > 0) || !(dims.height > 0)) { failed++; continue; }
+      measured++;
+      if (Number(r.img_w) === dims.width && Number(r.img_h) === dims.height) continue;   // already correct
+      try {
+        await db.prepare('UPDATE moments SET img_w = ?, img_h = ? WHERE id = ?').run(dims.width, dims.height, r.id);
+        changed++;
+      } catch (e) { failed++; }
+    }
+    return res.json({ scanned: rows.length, measured: measured, changed: changed, failed: failed, limit: limit, onlyNull: onlyNull, note: 'Re-run with a higher offset/limit if scanned == limit (more may remain). Re-optimize books afterward so boxes rebuild to the true image aspect.' });
+  } catch (e) {
+    return res.status(500).json({ error: (e && e.message) || 'backfill-dims failed' });
+  }
+});
 module.exports = router;
 module.exports.generateReferenceImage = generateReferenceImage;
 module.exports.editReferenceImage = editReferenceImage;
