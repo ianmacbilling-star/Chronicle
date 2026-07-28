@@ -2073,6 +2073,14 @@ function magazineBands(moments, sections, intro, outro, opts) {
           var _shr = (_m < 1) ? Math.min(0.20, Math.max(0, 1 - _m)) : 0;   // cgFlowTower re-clamps; belt and braces
           var band = { kind: 'tower', html: cgFlowTower(mm, oo, nn, bside, sl, _shr),
             momId: ((mm && mm.id != null) ? mm.id : null),
+            // persistGrow is what carries a scale across a RE-PACK. Every pass re-packs from scratch,
+            // and the seeding loop after the transforms re-applies each band's persisted value to its
+            // cell -- a shrink below 1 being a clip fix, always re-applied. v3.0.270 gave the tower
+            // momId, remeta and sImgH but NOT this, so pass 1 shrank The ANOMALIES b11 and rendered it
+            // correctly, then pass 2 re-packed, skipped it for want of persistGrow, and it came back at
+            // full height and clipped again -- while the log showed pass 2 changing nothing at all,
+            // because it was the re-pack that undid it and not the optimizer.
+            persistGrow: lmGrow(mm),
             sTitle: ((mm && mm.title) || ''), sImgH: Math.round(imgH * (1 - _shr) * 1000) / 1000, sAsp: asp,   // round3 is local to packMagazineBands -- do NOT reference it here
             regrow: function (m2) { return buildTower(m2).html; },
             remeta: function (m2) { return buildTower(m2); },
