@@ -2055,9 +2055,37 @@ function magazineBands(moments, sections, intro, outro, opts) {
       // only. NOT adding momId/remeta here: those would make towers eligible for grow ops the
       // composer cannot actually apply (composePageInner's grow path needs remeta), which is a
       // behaviour change and belongs in its own build with its own verification.
-      bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft),
-        sTitle: ((p.m && p.m.title) || ''), sImgH: _ttImgH, sAsp: Math.round(momentAspect(p.m) * 100) / 100,
-        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml, shrink, wrapBelow, targetH, leadAfter) { var _oo = (targetH != null && targetH > 1) ? Object.assign({}, oo, { _towerTargetH: targetH }) : oo; var _nr = leadAfter ? ((nn || '') + (leadHtml || '')) : ((leadHtml || '') + (nn || '')); return cgFlowTower(mm, _oo, _nr, bside, sl, shrink, wrapBelow); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
+      // TOWER PARITY (v3.0.270). Every other image band carries `remeta`, and the optimizer's whole
+      // scale pipeline gates on it: mGrowCellIdx skips any cell whose band has no remeta, so a tower
+      // was invisible to growImage/shrinkImage and every proposal against one came back 'no growable
+      // image on page' -- on a band with a full-page picture in it. In The ANOMALIES that left b11
+      // ('The King Speaks') rendering 9.98in on a 9.41in page and clipping three lines of dialogue,
+      // while its immediate neighbours b10 and b12 -- the same problem, one band type over -- were
+      // shrunk to fit automatically on the first pass.
+      // A tower is sized by HEIGHT, so a scale multiplier maps onto cgFlowTower's existing `shrink`
+      // argument (already hard-capped at 20 percent in there). SHRINK ONLY: a tower is already page
+      // height, so growing it is meaningless -- mul >= 1 returns the natural band untouched rather
+      // than pretending to apply. Purely additive: nothing calls remeta unless the optimizer decides
+      // to, and the band's default html is built exactly as before.
+      bands.push((function (mm, oo, nn, bside, sl, imgH, asp) {
+        function buildTower(mul) {
+          var _m = (mul == null) ? 1 : mul;
+          var _shr = (_m < 1) ? Math.min(0.20, Math.max(0, 1 - _m)) : 0;   // cgFlowTower re-clamps; belt and braces
+          var band = { kind: 'tower', html: cgFlowTower(mm, oo, nn, bside, sl, _shr),
+            momId: ((mm && mm.id != null) ? mm.id : null),
+            sTitle: ((mm && mm.title) || ''), sImgH: Math.round(imgH * (1 - _shr) * 1000) / 1000, sAsp: asp,   // round3 is local to packMagazineBands -- do NOT reference it here
+            regrow: function (m2) { return buildTower(m2).html; },
+            remeta: function (m2) { return buildTower(m2); },
+            renderTowerLead: function (leadHtml, shrink, wrapBelow, targetH, leadAfter) {
+              var _oo = (targetH != null && targetH > 1) ? Object.assign({}, oo, { _towerTargetH: targetH }) : oo;
+              var _nr = leadAfter ? ((nn || '') + (leadHtml || '')) : ((leadHtml || '') + (nn || ''));
+              return cgFlowTower(mm, _oo, _nr, bside, sl, ((shrink != null && shrink > 0) ? shrink : _shr), wrapBelow);
+            } };
+          return band;
+        }
+        return buildTower(1);
+      })(p.m, opts, p.narr, mzBeside, sideLeft, _ttImgH, Math.round(momentAspect(p.m) * 100) / 100));
+      sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
