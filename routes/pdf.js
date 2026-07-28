@@ -6606,12 +6606,20 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
 
       // Find the growable image cell on a page (same test the optimizer uses: re-renderable + carries
       // a picture). Returns the cell index or -1.
-      function mGrowCellIdx(pgCells) {
+      function mGrowCellIdx(pgCells, opName) {
         for (var ci = 0; ci < pgCells.length; ci++) {
           var c = pgCells[ci], bb = mbands[c.band];
           if (!bb || !bb.remeta || !(bb.sImgH > 0)) continue;
           if (c.textLead || c.towerLead) continue;
           if (c.split && (c.cStart || 0) > 0 && !c.imgBody) continue;
+          // TOWERS SHRINK ONLY (v3.0.271). A tower is already page height, so there is no legitimate
+          // grow for one -- and letting the loop grow one back UNDOES a shrink that fixed a clip.
+          // Seen immediately after v3.0.270 gave towers a remeta: pass 1 shrank The ANOMALIES b11 to
+          // fit and the page was correct, then pass 2 saw the reclaimed white, grew it back toward
+          // full height and it clipped again -- worse after two passes than after one. The shrink
+          // path already clamps tryMul to at most curMul; only the grow path raises it, so refusing
+          // grow ops here is the whole fix. Features and floats are unaffected.
+          if (bb.kind === 'tower' && opName === 'growImage') continue;
           return ci;
         }
         return -1;
@@ -6641,7 +6649,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         var op = _scaleOps[_si];
         var pgc = mplan.pages[op.page];
         if (!pgc) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page not found' }); continue; }
-        var ci = mGrowCellIdx(pgc);
+        var ci = mGrowCellIdx(pgc, op.op);
         if (ci < 0) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no growable image on page' }); continue; }
         var curMul = pgc[ci].growMul || 1;
         var pageReal = (mReal0[op.page] != null) ? mReal0[op.page] : null;
