@@ -589,6 +589,37 @@ function layoutSaga(moments, sections, intro, outro) {
 // Read at call time, not at boot, so a Railway variable change takes effect on redeploy without a
 // code change. The check lives in parseCustomOpts, which every route funnels through, so a withheld
 // layout cannot be reached by a hand-written URL either -- not just hidden in the picker.
+// ===== DECORATION STRIP (diagnostic) ==============================================================
+// Set DECOR_OFF=1 to render every layout with its chrome removed. This is a DIAGNOSTIC, not a
+// destination -- captions are content, not decoration, and no book should ship without them.
+// The question it answers: is decoration space the source of the estimate noise? Today the registry
+// (decorationRegistry.js) is consulted in 3 places while at least 8 others hardcode their own
+// numbers -- the composer reserves 0.5in for a below-image caption where the registry says 0.42in,
+// and the composer wins because it renders. That class of disagreement is what makes a picture
+// shrink while its frame does not. With the chrome off, both sides reserve zero and the
+// disagreement cannot exist. If the layouts come out clean, decoration space is the noise and the
+// fix is to make every decoration either provably zero-cost or part of the measured unit. If they
+// are still messy, the noise is elsewhere and we have saved ourselves the wrong overhaul.
+// STRIPPED: picture frames, captions and titles, drop caps, the narrative box, paper conditioning.
+// KEPT ON PURPOSE:
+//   fonts       -- they set the line height the entire measure pass is calibrated on
+//   header      -- packer and composer already reserve it CONSISTENTLY, so it is not a
+//                  disagreement source; removing it would change the page box and therefore the
+//                  clip line, muddying the one signal this test exists to read
+//   markers     -- session dividers are navigation, not chrome
+//   markerbreak -- a session starting on a fresh page is structure, not decoration
+// Applied in parseCustomOpts, the same choke point the layout gate uses, so nothing can bypass it,
+// and echoed in both dump headers so an artifact always states which mode produced it.
+function decorStripOn() { var v = String(process.env.DECOR_OFF || '').toLowerCase(); return v === '1' || v === 'true'; }
+function decorStrip(o) {
+  if (!o || !decorStripOn()) return o;
+  o.border = 'none';      // picture frames
+  o.caption = 'none';     // titles / caption bars
+  o.dropcap = 0;          // drop caps
+  o.narr = 'plain';       // narrative text box
+  o.condition = 'none';   // paper conditioning overlays
+  return o;
+}
 var CO_LAYOUTS_WITHHELD = ['gazette', 'comicpage'];
 var CO_LAYOUT_FALLBACK = 'magazine';   // nearest relative to Gazette; shares the packer, no parchment box
 function layoutIsEnabled(a) {
@@ -653,6 +684,7 @@ function parseCustomOpts(str) {
   });
   // AUTHORITATIVE GATE: a withheld layout never reaches the packer, however the request was formed.
   if (o.arrange && !layoutIsEnabled(o.arrange)) o.arrange = CO_LAYOUT_FALLBACK;
+  decorStrip(o);   // DECOR_OFF=1 -> chrome removed everywhere, including hand-written URLs
   return o;
 }
 
@@ -5856,6 +5888,7 @@ function pairedPlanText(packed) {
   (packed.beats || []).forEach(function (b) { beats[b.idx] = b; });
   var L = [];
   L.push('PACK PLAN (paired / Picture Book)  -  ' + ((packed.campaign && packed.campaign.name) || 'campaign'));
+  if (decorStripOn()) L.push('*** DECOR_OFF: frames, captions, drop caps and the narrative box are STRIPPED (diagnostic mode) ***');
   L.push('arrange=paired  content-pages=' + pages.length + '  (the PDF also adds front/back matter, so viewer page numbers are higher)');
   // Front matter offset: count the pages the PDF prepends before content, the same way the magazine
   // dumper does, instead of assuming a flat 4. cover (if on) + title (always) + details (always) +
@@ -6024,6 +6057,7 @@ function magazinePlanText(packed) {
   var _viewer = function (contentPage) { return contentPage + _fm + 1; };   // 0-based content -> 1-based viewer
   var L = [];
   L.push('PACK PLAN  -  ' + (d.campaign || ''));
+  if (decorStripOn()) L.push('*** DECOR_OFF: frames, captions, drop caps and the narrative box are STRIPPED (diagnostic mode) ***');
   L.push('arrange=' + d.arrange + '  pageH=' + d.pageH.toFixed(2) + 'in  markerBreak=' + d.markerBreak + '  bands=' + d.bands.length + '  content-pages=' + d.pages.length + '  (the PDF also adds front/back matter: cover, title, contents, cast -- so the viewer page count is higher)');
   L.push('front-matter offset: ' + _fm + ' page(s) before content -> a dump PAGE n is viewer page n+' + (_fm + 1) + ' (cover=' + _has('cover', true) + ' cast=' + _has('cast', true) + ' toc=' + _has('toc', false) + ', title+details always)');
   // NEVER-CLIP: pages whose REAL measured height exceeds the clip box -- these are the exact pages
