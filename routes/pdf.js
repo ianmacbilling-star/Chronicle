@@ -5421,12 +5421,13 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       var _fvReal = await remeasureComposedPages(req, campaignId, pages, bands);
       if (!_fvReal || !_fvReal._cells) { _mzFitVerifyLog.noCells = true; break; }
       var _fvCut = false;
-      if (_fvR === 0) _mzFitVerifyLog.probe = [];   // first-round snapshot of every split cell's real-vs-budget
+      if (_fvR === 0) { _mzFitVerifyLog.probe = []; _mzFitVerifyLog.sawPages = pages.length; _mzFitVerifyLog.sawCells = 0; _mzFitVerifyLog.bandList = []; }
       for (var _pi = 0; _pi < pages.length && !_fvCut; _pi++) {
         var _pg = pages[_pi];
         for (var _ci = 0; _ci < _pg.length; _ci++) {
           var _c = _pg[_ci];
           if (!_c) continue;
+          if (_fvR === 0) { _mzFitVerifyLog.sawCells++; if (_c.split) _mzFitVerifyLog.bandList.push('b' + _c.band + '@' + _pi + ':' + _ci); }
           var _cRealAny = _fvReal._cells[_pi + ':' + _ci];
           if (_fvR === 0 && (_c.band === 13 || _c.band === 27 || _c.band === 26)) {
             _mzFitVerifyLog.probe.push('TARGET b' + _c.band + ' p' + _pi + ':' + _ci + ' budget=' + (_c.heightIn != null ? _c.heightIn.toFixed(2) : '?') + ' real=' + (_cRealAny != null ? _cRealAny.toFixed(2) : 'NULL') + ' split=' + (_c.split ? 1 : 0) + ' imgBody=' + (_c.imgBody ? 1 : 0) + ' textLead=' + (_c.textLead ? 1 : 0) + ' cStart=' + (_c.cStart || 0) + ' cEnd=' + (_c.cEnd != null ? _c.cEnd : 'null'));
@@ -5831,6 +5832,7 @@ function magazinePlanText(packed) {
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
   // the page counts are not comparable no matter how similar the books look.
   if (d.fitVerify) { L.push('fit-verify: ' + (d.fitVerify.ran ? ('ran ' + d.fitVerify.rounds + ' round(s), ' + d.fitVerify.recuts + ' re-cut(s)' + (d.fitVerify.noCells ? ' [NO _cells returned]' : '')) : 'did not run (flowSim or skipped)')); 
+    if (d.fitVerify.sawPages != null) L.push('    fv-saw: ' + d.fitVerify.sawPages + ' pages, ' + d.fitVerify.sawCells + ' cells; split cells: ' + ((d.fitVerify.bandList || []).join(' ') || '(none)'));
     if (d.fitVerify.probe && d.fitVerify.probe.length) { d.fitVerify.probe.forEach(function (p) { L.push('    fv-probe: ' + p); }); } }
   if (d.towerMerge && d.towerMerge.length) {
     L.push('tower merge: ' + d.towerMerge.length + ' attempt(s)');
