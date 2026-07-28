@@ -31,6 +31,20 @@ function packPaired(beats, opts) {
   var IMG_OVER = (opts.imgOverIn != null) ? opts.imgOverIn : 0.1;   // image margins beyond the gap (frame is now inset, adds no height)
   var maxPages = opts.maxPages || 400;
   var minLeftForText = (opts.minLeftForTextIn != null) ? opts.minLeftForTextIn : 0.4;
+  // ANTI-SLIVER: no slice of a paragraph may be left with fewer lines than this. Without it the
+  // packer filled whatever room remained and cut, however small the remainder -- 31 characters got a
+  // page of their own, and a single trailing line landed on a page whose predecessor had 6.7in going
+  // spare. The magazine packer has had MZ_MIN_SLICE_LINES for exactly this; paired never got one.
+  var MIN_SLICE_LINES = (opts.minSliceLines != null) ? opts.minSliceLines : 2;
+  // BEAT COHESION: a beat's before-text, picture and after-text want to live on one page. When they
+  // do not all fit, trim the picture rather than separate the text from the art -- but never below
+  // this fraction of natural size; past that, a page break is the better trade.
+  // 0.75 measured, not guessed: on The Strangers, 12 of 36 picture beats want more than a page, but
+  // only 3 of them are within a trim of fitting (0.77-0.79). The other 9 need 0.51-0.65, far below
+  // the floor, so they are left alone and span pages exactly as before. The floor is what keeps this
+  // rare and self-limiting: it can only ever fire where a SMALL trim buys cohesion, so Picture Book
+  // stays big pictures -- 3 trimmed out of 36 on a 44-page book.
+  var COHESION_FLOOR = (opts.cohesionFloor != null) ? opts.cohesionFloor : 0.75;
 
   var pages = [];
   function newPage() { pages.push({ index: pages.length, usedIn: 0, hasImage: false, placements: [] }); return pages[pages.length - 1]; }
@@ -77,6 +91,22 @@ function packPaired(beats, opts) {
       var endLine = -1;
       for (var k = lineIdx; k < nLines; k++) { if ((lines[k] - startY) <= rem + 0.03) endLine = k; else break; }
       if (endLine < lineIdx) { newPage(); continue; }   // not even one line fits here
+      // ANTI-SLIVER. A cut is only worth making if BOTH halves carry real text. Three rules, in order:
+      //   1. if the TAIL would be a sliver, pull the cut back so the tail reaches the minimum
+      //   2. if pulling back would starve the HEAD instead, do not cut here at all -- move the whole
+      //      block to a fresh page, where it has the best chance of fitting whole
+      //   3. on a page that is ALREADY fresh, accept whatever fits: a block taller than a page has to
+      //      split somewhere, and refusing forever would loop
+      // Rule 3 is also what terminates this loop: newPage() makes the page fresh, so the next pass
+      // through cannot take the newPage() branch again.
+      var _fresh = cur().usedIn <= 1e-6;
+      var _tail = nLines - (endLine + 1);
+      if (_tail > 0 && _tail < MIN_SLICE_LINES) {
+        var _pull = MIN_SLICE_LINES - _tail;
+        if ((endLine - _pull) >= (lineIdx + MIN_SLICE_LINES - 1)) endLine -= _pull;   // head still has enough
+        else if (!_fresh) { newPage(); continue; }                                    // move the whole block
+      }
+      if ((endLine - lineIdx + 1) < MIN_SLICE_LINES && (endLine + 1) < nLines && !_fresh) { newPage(); continue; }
       var segH = round3(lines[endLine] - startY + TEXT_MARGIN);   // include the top margin the composer adds
       var cStart = (lineChars[lineIdx] != null) ? lineChars[lineIdx] : 0;
       var cEnd = (endLine + 1 < nLines && lineChars[endLine + 1] != null) ? lineChars[endLine + 1] : textLen;
@@ -108,9 +138,19 @@ function packPaired(beats, opts) {
 
   // JOINT sizing: place an image AND leave room for its own following text on the same page,
   // so a beat's image + narration are considered together (not image-first, discover-text-doesn't-fit).
-  function placeImageWithText(beatIdx, fullH, shape, afterH, over) {
+  function placeImageWithText(beatIdx, fullH, shape, afterH, over, cohScale) {
     if (!(fullH > 0)) return;
     if (over == null) over = IMG_OVER;
+    // A cohesion scale means the caller already worked out what keeps this beat on one page and has
+    // made room for it. Honour it when it fits, so the picture is not shrunk twice by two different
+    // rules arriving at two different answers.
+    if (cohScale != null && cohScale > 0 && cohScale < 1) {
+      var _ch = round3(fullH * cohScale + over);
+      if (_ch <= remaining() + 1e-6) {
+        place('image', beatIdx, _ch, { scale: cohScale, shrunk: true, fullH: round3(fullH) });
+        return;
+      }
+    }
     var floor = shrinkFloor(shape);
     var minH = round3(fullH * floor);
     var rem = remaining();
@@ -158,9 +198,27 @@ function packPaired(beats, opts) {
       place('tower', b.idx, blockH, { imageH: round3(b.imageH), textH: round3(textH) });
       return;
     }
+    // BEAT COHESION. The before-text used to be placed first and the picture asked for room
+    // afterwards, so a beat could put its paragraph on one page and its picture on the next with
+    // inches of white between them -- beat 6 of The Strangers wanted 2.45 + 5.93 + 1.25 = 9.63in
+    // against 9.16in available, and the packer chose to separate them. Decide the whole beat up
+    // front instead: work out the picture scale that would hold it together on ONE page, and if that
+    // is within the floor, break to a fresh page first (if needed) and pass the scale down. If even
+    // the floor cannot hold it, place as before and let the beat span pages -- some genuinely must.
+    var _cohScale = null;
+    if (b.hasImage && b.imageH > 0 && ((b.textBeforeH || 0) + (b.textAfterH || 0)) > 0) {
+      var _txt = (b.textBeforeH || 0) + (b.textAfterH || 0);
+      var _room = pageH - _txt - (b.imgOver || IMG_OVER) - gap;
+      var _need = (_room > 0) ? round3(Math.min(1, _room / b.imageH)) : 0;
+      if (_need >= COHESION_FLOOR) {
+        _cohScale = _need;
+        var _total = round3(_txt + b.imageH * _need + (b.imgOver || IMG_OVER) + gap);
+        if (_total > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();   // start the beat clean
+      }
+    }
     if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines, b.beforeLineChars, b.beforeLen, b.beforeNoSplit);
     if (b.hasImage && b.imageH > 0) {
-      placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0, b.imgOver);
+      placeImageWithText(b.idx, b.imageH, b.shape, b.textAfterH || 0, b.imgOver, _cohScale);
       if (b.textAfterH > 0) placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen, b.afterNoSplit);
     } else if (b.textAfterH > 0) {
       placeText(b.idx, 'after', b.textAfterH, b.afterLines, b.afterLineChars, b.afterLen, b.afterNoSplit);

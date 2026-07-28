@@ -4654,6 +4654,42 @@ function applyRunMoves(plan, k, pageBudget) {
   });
   return applied;
 }
+// ===== READING ORDER -- ONE ENGINE, ONE RULE, EVERY LAYOUT =========================================
+// Ian's rule: text must NEVER read out of order, on ANY layout. It was implemented twice -- once for
+// magazine and gazette in v3.0.263, once for paired in v3.0.284 -- because the second was written
+// without remembering the first. Two copies of one rule is how the tower bug happened twice, so this
+// is the shared half: the walk, the comparison and the report. A layout supplies ONE function, its
+// order key, and inherits the detector for free. A new layout that registers no key is a build
+// failure, not a silent 'n/a' in the dump -- which is exactly how the paired break hid for hours.
+// A key is an array compared left to right; whatever a layout's unit of reading order is, express it
+// as ascending numbers and the engine does the rest.
+function orderBreaks(seq) {
+  var out = [];
+  for (var i = 1; i < seq.length; i++) {
+    var a = seq[i - 1].k, b = seq[i].k, back = false;
+    for (var j = 0; j < Math.max(a.length, b.length); j++) {
+      var av = (a[j] == null ? 0 : a[j]), bv = (b[j] == null ? 0 : b[j]);
+      if (bv < av) { back = true; break; }
+      if (bv > av) break;
+    }
+    if (back) out.push({ prev: seq[i - 1], cur: seq[i] });
+  }
+  return out;
+}
+// Shared reporter: the same [OK] line and the same violation block for every layout.
+function orderReport(L, brk, count, viewer) {
+  if (brk.length) {
+    L.push('');
+    L.push('!!! ORDER-BREAK: ' + brk.length + ' PLACE(S) READ OUT OF NARRATIVE ORDER !!!');
+    brk.slice(0, 20).forEach(function (o) {
+      L.push('    PAGE ' + o.cur.p + ' (viewer p.' + viewer(o.cur.p) + ')  ' + o.cur.what +
+        ' renders AFTER ' + o.prev.what +
+        (o.prev.p !== o.cur.p ? ('  [from PAGE ' + o.prev.p + ']') : '') + '  -> the reader hits these backwards');
+    });
+  } else if (count) {
+    L.push('ORDER-BREAK: reading order is monotonic across all ' + count + ' placements (nothing out of order). [OK]');
+  }
+}
 // ===== PAIRED READING ORDER =======================================================================
 // Ian's rule, from the Gazette work: text must NEVER read out of order, on ANY layout. v3.0.263
 // built the ORDER-BREAK detector for magazine and gazette and stopped there, so every paired dump
@@ -4687,18 +4723,18 @@ function pairedOrdinals(beats) {
   (beats || []).forEach(function (b, i) { if (b && b.idx != null && m[b.idx] == null) m[b.idx] = i; });
   return m;
 }
-function pairedOrderBreaks(plan, ord) {
-  var seq = [], out = [];
+// Paired's half of the contract: turn its placements into keyed items. The walk and the comparison
+// are the shared engine's job.
+function pairedOrderSeq(plan, ord) {
+  var seq = [];
   (plan && plan.pages || []).forEach(function (pg, pi) {
-    (pg.placements || []).forEach(function (pl) { seq.push({ p: pi, k: pairedOrderKey(pl, ord), pl: pl }); });
+    (pg.placements || []).forEach(function (pl) {
+      seq.push({ p: pi, k: pairedOrderKey(pl, ord), pl: pl, what: pairedPlacementLabel(pl) });
+    });
   });
-  for (var i = 1; i < seq.length; i++) {
-    var a = seq[i - 1].k, b = seq[i].k;
-    var back = (b[0] < a[0]) || (b[0] === a[0] && (b[1] < a[1] || (b[1] === a[1] && b[2] < a[2])));
-    if (back) out.push({ prev: seq[i - 1], cur: seq[i] });
-  }
-  return out;
+  return seq;
 }
+function pairedOrderBreaks(plan, ord) { return orderBreaks(pairedOrderSeq(plan, ord)); }
 function pairedPlacementLabel(pl) {
   var w = 'beat ' + (pl.beat != null ? pl.beat : '?') + ' ' + (pl.kind || '?');
   if (pl.kind === 'narr') w += ' ' + (pl.part || 'before');
@@ -6056,17 +6092,8 @@ function pairedPlanText(packed) {
     var _pord = {};
     (d.beatOrder || []).forEach(function (bx, i) { if (bx != null && _pord[bx] == null) _pord[bx] = i; });
     var _pob = pairedOrderBreaks({ pages: (d.pages || []).map(function (pg) { return { placements: (pg.placements || []) }; }) }, _pord);
-    if (_pob.length) {
-      L.push('');
-      L.push('!!! ORDER-BREAK: ' + _pob.length + ' PLACE(S) READ OUT OF NARRATIVE ORDER !!!');
-      _pob.slice(0, 20).forEach(function (o) {
-        L.push('    PAGE ' + o.cur.p + ' (viewer ~p.' + _viewer(o.cur.p) + ')  ' + pairedPlacementLabel(o.cur.pl) +
-          ' renders AFTER ' + pairedPlacementLabel(o.prev.pl) +
-          (o.prev.p !== o.cur.p ? ('  [from PAGE ' + o.prev.p + ']') : '') + '  -> the reader hits these backwards');
-      });
-    } else {
-      L.push('ORDER-BREAK: reading order is monotonic across every placement (nothing out of order). [OK]');
-    }
+    var _pseq = pairedOrderSeq({ pages: (d.pages || []).map(function (pg) { return { placements: (pg.placements || []) }; }) }, _pord);
+    orderReport(L, _pob, _pseq.length, _viewer);
   } catch (e) { L.push('ORDER-BREAK: check failed -- ' + ((e && e.message) || e)); }
   if (d.remeasureError) L.push('(re-measure error: ' + d.remeasureError + ')');
   L.push('');
@@ -6267,20 +6294,10 @@ function magazinePlanText(packed) {
       } else _seq.push(_self);
     });
   });
-  for (var _si = 1; _si < _seq.length; _si++) {
-    var _a = _seq[_si - 1], _b2 = _seq[_si];
-    if (_b2.band < _a.band || (_b2.band === _a.band && _b2.cs < _a.cs)) _brk.push({ a: _a, b: _b2 });
-  }
-  if (_brk.length) {
-    L.push('');
-    L.push('!!! ORDER-BREAK: ' + _brk.length + ' PLACE(S) READ OUT OF NARRATIVE ORDER !!!');
-    _brk.forEach(function (o) {
-      L.push('    PAGE ' + o.b.p + ' (viewer p.' + _viewer(o.b.p) + ')  ' + o.b.what + ' renders AFTER ' + o.a.what +
-        (o.a.p !== o.b.p ? ('  [from PAGE ' + o.a.p + ']') : '') + '  -> the reader hits these backwards');
-    });
-  } else if (_seq.length) {
-    L.push('ORDER-BREAK: reading order is monotonic across all ' + _seq.length + ' placements (nothing out of order). [OK]');
-  }
+  // Magazine's key: band, then char offset. Same engine, same reporter as paired.
+  _seq.forEach(function (s) { s.k = [s.band, s.cs]; });
+  _brk = orderBreaks(_seq);
+  orderReport(L, _brk, _seq.length, _viewer);
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
