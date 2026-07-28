@@ -4604,7 +4604,10 @@ function runMovesClear(k) { if (k) _runMoves.delete(k); }
 // Re-apply recorded moves to a freshly packed plan. Matches on the LEADING placement of a page,
 // which is what moveLeadingNarr moves, and refuses any move that would leave a page empty (a blank
 // page in the middle of a book is worse than the white space the move was fixing).
-function applyRunMoves(plan, k) {
+function applyRunMoves(plan, k, pageBudget) {
+  // The REFERENCE pack must be a deterministic baseline. _noGrows bypassed grows but not moves, so a
+  // recorded move leaked into the reference too and it stopped describing the un-optimized book.
+  if (_noGrows) return 0;
   var recs = runMovesGet(k);
   if (!recs || !recs.length || !plan || !plan.pages) return 0;
   var applied = 0;
@@ -4620,6 +4623,23 @@ function applyRunMoves(plan, k) {
       var to = pi + mv.dir;
       if (to < 0 || to >= plan.pages.length) break;
       var toPg = plan.pages[to];
+      // MUST STILL FIT. moveLeadingNarr verifies a move against a real re-measure when it is first
+      // accepted, but this REPLAY had no check at all: it dropped the recorded text onto a freshly
+      // packed book whose geometry had changed. In The Strangers that put 2.10in of narrative onto a
+      // page already holding a 9.20in tower -- 11.40in in a 9.24in box, and 2.16in of text destroyed.
+      // Judged with the packer's own budgeted heights, which is the same arithmetic the packer used to
+      // build the page, so the check is deterministic and costs no measure. A refused move simply does
+      // not replay: the text stays where this pack put it, which is always a legal position.
+      if (pageBudget && pageBudget > 1) {
+        var _tUsed = 0;
+        (toPg.placements || []).forEach(function (o) { _tUsed += (o.heightIn || 0); });
+        if (_tUsed + (p0.heightIn || 0) > pageBudget + 0.02) {
+          try { console.warn('[run-moves] refused replay of b' + mv.beat + ' onto page ' + to +
+            ': ' + Math.round((_tUsed + (p0.heightIn || 0)) * 100) / 100 + 'in would exceed the ' +
+            pageBudget + 'in budget'); } catch (e) {}
+          break;
+        }
+      }
       if (mv.dir < 0) toPg.placements = (toPg.placements || []).concat([p0]);   // pull up: append
       else toPg.placements = [p0].concat(toPg.placements || []);                // push down: prepend
       plan.pages[pi].placements = pls.slice(1);
@@ -4749,7 +4769,7 @@ async function computePairedPack(req, campaignId, packOpts) {
   if (_scaleN) { try { console.log('[run-scales] campaign ' + campaignId + ': re-applied ' + _scaleN + ' image scale(s) to the fresh pack'); } catch (e) {} }
   // HONEST LOOP: re-apply this run's accepted text moves to the fresh plan, so every pass measures the
   // book as it actually stands rather than one where the previous passes never happened.
-  var _mvN = applyRunMoves(plan, runGrowsKey(campaignId, req));
+  var _mvN = applyRunMoves(plan, runGrowsKey(campaignId, req), _pageBudget);
   if (_mvN) { try { console.log('[run-moves] campaign ' + campaignId + ': re-applied ' + _mvN + ' text move(s) to the fresh pack'); } catch (e) {} }
   var overrides = {};
   plan.pages.forEach(function (pg) { pg.placements.forEach(function (pl) {
