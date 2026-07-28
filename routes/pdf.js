@@ -4856,7 +4856,31 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
   return pages;
 }
 
-// The browser measure sometimes captures only a panel's FIRST narrative paragraph (the `before`),
+// Re-flow already-cut cells across page boundaries by their (now honest) heights. Used by the
+// fit-verify re-cut pass: after a clipping slice sheds a line, its shed text must move forward. We keep
+// every cell's decided cut and just re-greedy-place them into pages up to pageH. Tower/textLead/imgBody
+// grouping is preserved by keeping cells in their original order and never splitting further here.
+function repackMzFromCells(pages, bands, meas, pageH) {
+  var flat = [];
+  (pages || []).forEach(function (pg) { (pg || []).forEach(function (c) { if (c) flat.push(c); }); });
+  var round3 = function (n) { return Math.round(n * 1000) / 1000; };
+  var out = [], cur = [], used = 0;
+  function cellH(c) {
+    if (c.heightIn != null) return c.heightIn;
+    var bh = (meas && meas.h && meas.h[c.band]) || 0;
+    return bh;
+  }
+  for (var i = 0; i < flat.length; i++) {
+    var c = flat[i];
+    var h = cellH(c);
+    // A textLead must stay with the gap it filled on its page; but if it no longer fits, move it on.
+    if (cur.length && (used + h) > pageH + 1e-6) { out.push(cur); cur = []; used = 0; }
+    cur.push(c); used = round3(used + h);
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
 // leaving the `after` half with no line positions -- so the packer can't cut there and the whole
 // `after` is stranded on the next page (big white). If a splittable band's line data stops well
 // short of its text, extend it: reuse the measured line-height and chars-per-line to lay out the
@@ -5098,6 +5122,69 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   var bands = _mzBands || [];
   fillMissingMagazineLines(meas, bands);
   var pages = packMagazineBands(bands, meas, pageH, _markerBreak, null, null);
+
+  // ---- FIT-VERIFY RE-CUT (the permanent no-clip guarantee) ----------------------------------------
+  // The greedy pack budgets cell heights from measured line data, but the real render adds height the
+  // estimate can't fully see (Gazette box padding/border, line-height:1.4, paragraph margins). When a
+  // text slice renders taller than its budgeted cell, it clips its last line(s) at the cell/page
+  // overflow:hidden -- and different render paths (spill lead, feature head, tail) each under-estimate
+  // by a different amount, so patching them one at a time never ends. Instead we VERIFY against the
+  // truth: compose the pages, measure the REAL height of every cell, and for any text slice that
+  // renders enough taller than budgeted to risk a clip, shed a line from its cut (push it to the tail)
+  // and re-pack. Repeat until nothing clips or we hit the iteration cap. This reacts to the real
+  // measurement, so it fixes every clip class at once, now and for any future render change.
+  try {
+    var _fvMaxRounds = 6, _fvClipTol = 0.12;   // >0.12in over budget = real clip risk (sub-line rounding ignored)
+    if (packOpts && packOpts.flowSim) throw '__skip_flowsim__';   // Before dump shows the raw pack; no re-cut
+    for (var _fvR = 0; _fvR < _fvMaxRounds; _fvR++) {
+      var _fvReal = await remeasureComposedPages(req, campaignId, pages, bands);
+      if (!_fvReal || !_fvReal._cells) break;
+      var _fvCut = false;
+      for (var _pi = 0; _pi < pages.length && !_fvCut; _pi++) {
+        var _pg = pages[_pi];
+        for (var _ci = 0; _ci < _pg.length; _ci++) {
+          var _c = _pg[_ci];
+          if (!_c || !_c.split || _c.imgBody || _c.towerLead) continue;      // only text-bearing slices can shed lines
+          var _cReal = _fvReal._cells[_pi + ':' + _ci];
+          if (_cReal == null || _c.heightIn == null) continue;
+          var _over = _cReal - _c.heightIn;
+          if (_over <= _fvClipTol) continue;                                 // renders within its budget -> fine
+          var _bd = bands[_c.band];
+          var _lc = meas.lineChars[_c.band], _ln = meas.lines[_c.band];
+          if (!_bd || _bd.stext == null || !_lc || !_ln || _lc.length < 2) continue;
+          // Shed enough whole lines to cover the overflow (+ one line of safety). Map the new cEnd to a
+          // line boundary so we never cut mid-line.
+          var _lhAvg = (_ln[_ln.length - 1] - _ln[0]) / Math.max(1, (_ln.length - 1));
+          if (!(_lhAvg > 0.02)) continue;
+          var _shed = Math.max(1, Math.ceil(_over / _lhAvg) + 1);
+          var _curEnd = (_c.cEnd != null) ? _c.cEnd : _bd.stext.length;
+          // Find the line index at/just before the current cut, step back _shed lines.
+          var _curLine = 0; for (var _q = 0; _q < _lc.length; _q++) { if (_lc[_q] <= (_curEnd - (_c.cStart || 0))) _curLine = _q; }
+          var _newLine = _curLine - _shed;
+          if (_newLine < 1) continue;                                        // can't shrink further without emptying the slice
+          var _newEnd = (_c.cStart || 0) + _lc[_newLine];
+          if (_newEnd <= (_c.cStart || 0) + 20 || _newEnd >= _curEnd) continue;   // no-op / too small guard
+          // Re-cut: shrink this cell's char range and its budgeted height; push the shed text to the
+          // tail. If a following cell on this page is this band's continuation tail, extend its start
+          // back; otherwise insert a new tail cell right after.
+          _c.cEnd = _newEnd;
+          _c.heightIn = round3(_ln[_newLine] + MZ_SPLIT_PAD);
+          var _next = _pg[_ci + 1];
+          if (_next && _next.band === _c.band && (_next.cStart || 0) === _curEnd) {
+            _next.cStart = _newEnd;                                          // existing tail absorbs the shed text
+          } else {
+            _pg.splice(_ci + 1, 0, { band: _c.band, cStart: _newEnd, cEnd: _curEnd, split: true, heightIn: round3((_ln[_curLine] - _ln[_newLine]) + MZ_SPLIT_PAD + 0.32) });
+          }
+          _fvCut = true;                                                     // re-measure from scratch after each structural change
+          break;
+        }
+      }
+      if (!_fvCut) break;                                                    // nothing clipped this round -> done
+      // Re-pack so the shed text reflows across page breaks with its new, honest heights.
+      pages = repackMzFromCells(pages, bands, meas, pageH);
+    }
+  } catch (_fvE) { try { console.error('[fit-verify] recut pass failed (non-fatal):', _fvE && _fvE.message); } catch (e) {} }
+
   if (!(packOpts && packOpts.flowSim)) {   // FLOW-SIM (Before dump): skip ALL optimization transforms; keep the raw greedy pack
 
   // Grow-to-fill: for each page left noticeably under-full, enlarge its LAST growable floated
