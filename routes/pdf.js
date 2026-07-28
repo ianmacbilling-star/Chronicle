@@ -2035,7 +2035,7 @@ function magazineBands(moments, sections, intro, outro, opts) {
         mzAdv += 1; mzFill += 1;
       }
       bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft),
-        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml, shrink, wrapBelow, targetH) { var _oo = (targetH != null && targetH > 1) ? Object.assign({}, oo, { _towerTargetH: targetH }) : oo; return cgFlowTower(mm, _oo, (leadHtml || '') + (nn || ''), bside, sl, shrink, wrapBelow); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
+        renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml, shrink, wrapBelow, targetH, leadAfter) { var _oo = (targetH != null && targetH > 1) ? Object.assign({}, oo, { _towerTargetH: targetH }) : oo; var _nr = leadAfter ? ((nn || '') + (leadHtml || '')) : ((leadHtml || '') + (nn || '')); return cgFlowTower(mm, _oo, _nr, bside, sl, shrink, wrapBelow); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
@@ -5497,7 +5497,14 @@ function composePageInner(pg, bands, opts) {
     } else if (b.kind === 'tower' && cell.towerLead && b.renderTowerLead) {
       var _lb = bands[cell.towerLead.band];
       var _lead = (_lb && _lb.stext != null) ? renderMzSlice(_lb.stext, _lb.mbound, cell.towerLead.cStart || 0, (cell.towerLead.cEnd != null ? cell.towerLead.cEnd : _lb.stext.length), _lb.sOpts || opts) : '';
-      html = b.renderTowerLead(_lead ? ('<div style="margin-bottom:0.16in;">' + _lead + '</div>') : '', cell.towerShrink, cell.towerWrap);
+      // READING ORDER: a tower's beside-column can receive a lead from EITHER side. towerMergeCandidate
+      // folds in a stranded tail from a band BEFORE the tower (lead goes first); trySpill hands it the
+      // before-text of the panel that FOLLOWS the tower (lead goes last). Prepending unconditionally --
+      // what shipped in v3.0.262 -- rendered b26's opening paragraph above b25's own prose, so the book
+      // read out of order and the text looked lost. Decide by band index; never by caller.
+      var _leadAfter = (cell.towerLead.band > cell.band);
+      var _leadGap = _leadAfter ? 'margin-top:0.16in;' : 'margin-bottom:0.16in;';
+      html = b.renderTowerLead(_lead ? ('<div style="' + _leadGap + '">' + _lead + '</div>') : '', cell.towerShrink, cell.towerWrap, null, _leadAfter);
     } else if (b.kind === 'tower' && _above > 0.3 && b.renderTowerLead) {
       // A plain tower that is NOT first on its page: content sits above it, so it cannot be full
       // page height or its bottom (image + absolute caption) clips at the frame. Re-render it capped
@@ -5744,6 +5751,37 @@ function magazinePlanText(packed) {
   }
   if (!_ovf.length && !_risk.length && d.remeasured) {
     L.push('NEVER-CLIP: no page overflows or at-risk gaps (nothing clipped). [OK]');
+  }
+  // ORDER-BREAK: text must NEVER render out of narrative order, on any layout. Walk the plan in
+  // reading order -- expanding each tower's beside-lead to the side it actually renders on -- and
+  // assert (band, cStart) never goes backwards. v3.0.262 inverted a tower lead and nothing in the
+  // dump said so; only Ian's eye caught it. This is a permanent guardrail, like NEVER-CLIP: it is
+  // diagnostic-only, costs nothing at render time, and must survive the TF-02 dev-control strip.
+  var _seq = [], _brk = [];
+  (d.pages || []).forEach(function (pg, pi) {
+    (pg.cells || []).forEach(function (c2) {
+      var _self = { p: pi, band: c2.band, cs: (c2.cStart || 0), what: 'b' + c2.band + (c2.cStart ? ('@' + c2.cStart) : '') };
+      if (c2.towerLead) {
+        var _tl = { p: pi, band: c2.towerLead.band, cs: (c2.towerLead.cStart || 0),
+          what: 'b' + c2.towerLead.band + (c2.towerLead.cStart ? ('@' + c2.towerLead.cStart) : '') + ' (tower-lead)' };
+        if (c2.towerLead.band > c2.band) { _seq.push(_self); _seq.push(_tl); }
+        else { _seq.push(_tl); _seq.push(_self); }
+      } else _seq.push(_self);
+    });
+  });
+  for (var _si = 1; _si < _seq.length; _si++) {
+    var _a = _seq[_si - 1], _b2 = _seq[_si];
+    if (_b2.band < _a.band || (_b2.band === _a.band && _b2.cs < _a.cs)) _brk.push({ a: _a, b: _b2 });
+  }
+  if (_brk.length) {
+    L.push('');
+    L.push('!!! ORDER-BREAK: ' + _brk.length + ' PLACE(S) READ OUT OF NARRATIVE ORDER !!!');
+    _brk.forEach(function (o) {
+      L.push('    PAGE ' + o.b.p + ' (viewer p.' + _viewer(o.b.p) + ')  ' + o.b.what + ' renders AFTER ' + o.a.what +
+        (o.a.p !== o.b.p ? ('  [from PAGE ' + o.a.p + ']') : '') + '  -> the reader hits these backwards');
+    });
+  } else if (_seq.length) {
+    L.push('ORDER-BREAK: reading order is monotonic across all ' + _seq.length + ' placements (nothing out of order). [OK]');
   }
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
