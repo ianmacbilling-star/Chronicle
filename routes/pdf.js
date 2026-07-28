@@ -5421,12 +5421,14 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       var _fvReal = await remeasureComposedPages(req, campaignId, pages, bands);
       if (!_fvReal || !_fvReal._cells) { _mzFitVerifyLog.noCells = true; break; }
       var _fvCut = false;
+      if (_fvR === 0) _mzFitVerifyLog.probe = [];   // first-round snapshot of every split cell's real-vs-budget
       for (var _pi = 0; _pi < pages.length && !_fvCut; _pi++) {
         var _pg = pages[_pi];
         for (var _ci = 0; _ci < _pg.length; _ci++) {
           var _c = _pg[_ci];
           if (!_c || !_c.split || _c.imgBody || _c.towerLead) continue;      // only text-bearing slices can shed lines
           var _cReal = _fvReal._cells[_pi + ':' + _ci];
+          if (_fvR === 0) _mzFitVerifyLog.probe.push('b' + _c.band + ' p' + _pi + ':' + _ci + ' budget=' + (_c.heightIn != null ? _c.heightIn.toFixed(2) : '?') + ' real=' + (_cReal != null ? _cReal.toFixed(2) : 'NULL') + ' split=' + (_c.split ? 1 : 0));
           if (_cReal == null || _c.heightIn == null) continue;
           var _over = _cReal - _c.heightIn;
           if (_over <= _fvClipTol) continue;                                 // renders within its budget -> fine
@@ -5820,7 +5822,8 @@ function magazinePlanText(packed) {
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
   // the page counts are not comparable no matter how similar the books look.
-  if (d.fitVerify) { L.push('fit-verify: ' + (d.fitVerify.ran ? ('ran ' + d.fitVerify.rounds + ' round(s), ' + d.fitVerify.recuts + ' re-cut(s)' + (d.fitVerify.noCells ? ' [NO _cells returned]' : '')) : 'did not run (flowSim or skipped)')); }
+  if (d.fitVerify) { L.push('fit-verify: ' + (d.fitVerify.ran ? ('ran ' + d.fitVerify.rounds + ' round(s), ' + d.fitVerify.recuts + ' re-cut(s)' + (d.fitVerify.noCells ? ' [NO _cells returned]' : '')) : 'did not run (flowSim or skipped)')); 
+    if (d.fitVerify.probe && d.fitVerify.probe.length) { d.fitVerify.probe.forEach(function (p) { L.push('    fv-probe: ' + p); }); } }
   if (d.towerMerge && d.towerMerge.length) {
     L.push('tower merge: ' + d.towerMerge.length + ' attempt(s)');
     d.towerMerge.forEach(function (s) { L.push('  ' + s); });
