@@ -4654,6 +4654,42 @@ function applyRunMoves(plan, k, pageBudget) {
   });
   return applied;
 }
+// ===== PAIRED READING ORDER =======================================================================
+// Ian's rule, from the Gazette work: text must NEVER read out of order, on ANY layout. v3.0.263
+// built the ORDER-BREAK detector for magazine and gazette and stopped there, so every paired dump
+// has printed 'n/a' in that column -- the guard that exists to catch this was switched off on the
+// layout where it happened.
+// It happened: moveLeadingNarr pushed beat 5's after-text tail off one page onto the next, and
+// beat 6's opening paragraph stayed between them. The reader got the head of a sentence on p.10
+// and its tail on p.12 -- 'been built across distances too great to see.' arriving two pages after
+// the words it completes. The move satisfied the height test perfectly, because the height test
+// was the only test there was.
+// Order key: beat index, then part within the beat (before < image/tower < after), then the char
+// offset of the slice. Walk the plan front to back and it must never go backwards.
+function pairedOrderKey(pl) {
+  var part = 1;                                            // image / tower / section-header sit mid-beat
+  if (pl.kind === 'narr') part = (pl.part === 'after') ? 2 : 0;
+  else if (pl.kind === 'section-header') part = -1;        // the header opens its beat
+  return [(pl.beat != null ? pl.beat : 0), part, (pl.charStart || 0)];
+}
+function pairedOrderBreaks(plan) {
+  var seq = [], out = [];
+  (plan && plan.pages || []).forEach(function (pg, pi) {
+    (pg.placements || []).forEach(function (pl) { seq.push({ p: pi, k: pairedOrderKey(pl), pl: pl }); });
+  });
+  for (var i = 1; i < seq.length; i++) {
+    var a = seq[i - 1].k, b = seq[i].k;
+    var back = (b[0] < a[0]) || (b[0] === a[0] && (b[1] < a[1] || (b[1] === a[1] && b[2] < a[2])));
+    if (back) out.push({ prev: seq[i - 1], cur: seq[i] });
+  }
+  return out;
+}
+function pairedPlacementLabel(pl) {
+  var w = 'beat ' + (pl.beat != null ? pl.beat : '?') + ' ' + (pl.kind || '?');
+  if (pl.kind === 'narr') w += ' ' + (pl.part || 'before');
+  if (pl.charStart) w += '@' + pl.charStart;
+  return w;
+}
 // PHASE 2 (page-packer): analytic image display height for a beat in the paired layout.
 // Portraits float narrow (~4.6in wide); non-portraits sit ~full content width. Height is
 // width / aspect, capped to a page. (Float text-beside footprint is a Phase 3 refinement.)
@@ -6000,6 +6036,21 @@ function pairedPlanText(packed) {
     });
   }
   if (!_ovf.length && !_risk.length && d.remeasured) L.push('NEVER-CLIP: no page overflows or at-risk gaps (nothing clipped). [OK]');
+  // ORDER-BREAK, paired. Printed for every paired dump so the column can never read 'n/a' again.
+  try {
+    var _pob = pairedOrderBreaks({ pages: (d.pages || []).map(function (pg) { return { placements: (pg.placements || []) }; }) });
+    if (_pob.length) {
+      L.push('');
+      L.push('!!! ORDER-BREAK: ' + _pob.length + ' PLACE(S) READ OUT OF NARRATIVE ORDER !!!');
+      _pob.slice(0, 20).forEach(function (o) {
+        L.push('    PAGE ' + o.cur.p + ' (viewer ~p.' + _viewer(o.cur.p) + ')  ' + pairedPlacementLabel(o.cur.pl) +
+          ' renders AFTER ' + pairedPlacementLabel(o.prev.pl) +
+          (o.prev.p !== o.cur.p ? ('  [from PAGE ' + o.prev.p + ']') : '') + '  -> the reader hits these backwards');
+      });
+    } else {
+      L.push('ORDER-BREAK: reading order is monotonic across every placement (nothing out of order). [OK]');
+    }
+  } catch (e) { L.push('ORDER-BREAK: check failed -- ' + ((e && e.message) || e)); }
   if (d.remeasureError) L.push('(re-measure error: ' + d.remeasureError + ')');
   L.push('');
   L.push('PAGES  (REAL = true composed fill; est = packer estimate)');
@@ -7224,6 +7275,16 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       if (toPageIdx < fromPageIdx) { toPg.placements = toBefore.concat([moving]); }   // pull up: append to earlier page
       else { toPg.placements = [moving].concat(toBefore); }                            // push down: prepend to later page
       fromPg.placements = fromBefore.slice(1);
+      // ORDER FIRST, then fit. A move that reads wrong is not worth measuring: the height test alone
+      // happily accepted pushing a beat's after-tail past the NEXT beat's opening paragraph.
+      var _ob = pairedOrderBreaks(plan);
+      if (_ob.length) {
+        toPg.placements = toBefore; fromPg.placements = fromBefore;
+        try { console.warn('[order] refused move of ' + pairedPlacementLabel(moving) + ' from page ' +
+          fromPageIdx + ' to ' + toPageIdx + ': it would put ' + pairedPlacementLabel(_ob[0].cur.pl) +
+          ' after ' + pairedPlacementLabel(_ob[0].prev.pl)); } catch (e) {}
+        return { ok: false, reason: 'move would put the text out of reading order' };
+      }
       // Re-measure the whole book; both affected pages must fit.
       var _r = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
       var okFrom = (_r && _r[fromPageIdx] != null) ? (_r[fromPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : true;
@@ -7262,6 +7323,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           if (_try < MOVE_SHRINK_FLOOR) break;
           _tgtImg.scale = _try;
           _tgtImg.heightIn = Math.round((_tgtImg.fullH * _try + _over) * 1000) / 1000;
+          if (pairedOrderBreaks(plan).length) break;   // trimming the picture cannot fix bad order
           var _r2 = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
           var _okF = (_r2 && _r2[fromPageIdx] != null) ? (_r2[fromPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : true;
           var _okT = (_r2 && _r2[toPageIdx] != null) ? (_r2[toPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : false;
@@ -7369,6 +7431,22 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
 
     // Compose the improved book from the mutated plan, cache it (so the render + print interior use
     // it), and render the PDF. Only persists the composed body cache -- same mechanism Optimize uses.
+    // DROP EMPTIED PAGES. moveLeadingNarr takes the leading placement off its source page with
+    // fromPg.placements = fromBefore.slice(1) -- and when that page held only the moved text, it is
+    // left with an EMPTY placements array that nothing removes. The page then renders as a genuinely
+    // blank sheet in the middle of the book: seen on The Strangers viewer p.29, where the loop
+    // correctly pulled a 31-character fragment up onto p.28 and left the page it came from behind.
+    // Swept here, AFTER every op has been applied, rather than at the moment of the move: removing a
+    // page mid-loop would shift every later page index and invalidate the op list still being
+    // processed. Nothing legitimate produces a placement-free page, so this is safe to do blindly.
+    try {
+      var _before = (plan.pages || []).length;
+      plan.pages = (plan.pages || []).filter(function (pg) { return pg && (pg.placements || []).length; });
+      plan.pageCount = plan.pages.length;
+      plan.pages.forEach(function (pg, _i) { pg.index = _i; });
+      var _dropped = _before - plan.pages.length;
+      if (_dropped) console.log('[blank-pages] campaign ' + req.params.campaignId + ': dropped ' + _dropped + ' page(s) emptied by a text move');
+    } catch (e) { try { console.error('[blank-pages] sweep failed: ' + ((e && e.message) || e)); } catch (e2) {} }
     var body = composeBook(plan, beats, _pco0);
     composedCachePut(req.params.campaignId, req, 'paired', body, campaignName);
     var rbuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
