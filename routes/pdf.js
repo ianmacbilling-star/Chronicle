@@ -4715,16 +4715,33 @@ async function computePairedPack(req, campaignId, packOpts) {
   try {
     var _bByIdx = {};
     (mbuilt.beats || []).forEach(function (b) { if (b && b.idx != null) _bByIdx[b.idx] = b; });
+    var _pageBudget = _basePackH - (_hdrOn ? HEADER_BAND_IN : 0);
     (plan.pages || []).forEach(function (pg) {
       (pg.placements || []).forEach(function (pl) {
         if (pl.kind !== 'image' || pl.fullH == null || !(pl.fullH > 0)) return;
         var _bt = _bByIdx[pl.beat], _mom = _bt && _bt.moment;
         if (!_mom) return;
-        var _s = lmScale(_mom);
-        if (!(_s > 0) || _s >= 0.999) return;                 // nothing recorded for this image
-        if (pl.scale != null && pl.scale <= _s + 0.001) return; // the packer already shrank it further
-        pl.scale = _s;
-        pl.heightIn = Math.round((pl.fullH * _s + _imgOver) * 1000) / 1000;
+        // Read the RAW store, not lmScale. A growImage records the scale the AI settled on, and for
+        // paired that is usually 1.0 -- natural size, meaning 'do not let the packer shrink this one'.
+        // v3.0.279 seeded through lmScale and then skipped anything >= 0.999, so every single grow was
+        // recorded, read back as 1.0, and discarded by its own guard. The packer re-shrank to 0.65, the
+        // AI proposed the same grow, and four passes did one pass's work. A NULL means nothing was
+        // recorded; 1.0 is a real instruction and must be honoured.
+        var _s = _noGrows ? null : runGrowsGet(_mom.id);       // _noGrows keeps the reference pack natural
+        if (_s == null || !(_s > 0)) return;                   // nothing recorded for this image
+        var _cur = (pl.scale != null) ? pl.scale : 1;
+        if (Math.abs(_cur - _s) < 0.005) return;                // already where the store wants it
+        // CLAMP: the packer may have shrunk this image to make its page fit. Honour the recorded scale
+        // only as far as the page can actually hold -- never seed a grow that creates a clip. Below the
+        // packer's own choice we always accept (a recorded shrink is a clip fix).
+        var _others = 0;
+        (pg.placements || []).forEach(function (o) { if (o !== pl) _others += (o.heightIn || 0); });
+        var _room = _pageBudget - _others - _imgOver;
+        var _max = (_room > 0) ? (_room / pl.fullH) : _cur;
+        var _use = (_s <= _cur) ? _s : Math.min(_s, Math.max(_cur, Math.round(_max * 1000) / 1000));
+        if (Math.abs(_use - _cur) < 0.005) return;
+        pl.scale = _use;
+        pl.heightIn = Math.round((pl.fullH * _use + _imgOver) * 1000) / 1000;
         _scaleN++;
       });
     });
