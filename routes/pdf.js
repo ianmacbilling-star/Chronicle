@@ -5426,9 +5426,14 @@ async function computeMagazinePack(req, campaignId, packOpts) {
         var _pg = pages[_pi];
         for (var _ci = 0; _ci < _pg.length; _ci++) {
           var _c = _pg[_ci];
-          if (!_c || !_c.split || _c.imgBody || _c.towerLead) continue;      // only text-bearing slices can shed lines
+          if (!_c) continue;
+          var _cRealAny = _fvReal._cells[_pi + ':' + _ci];
+          // Log EVERY cell that renders taller than a modest bar, with its flags, so skipped clippers show.
+          if (_fvR === 0 && _cRealAny != null && _c.heightIn != null && (_cRealAny - _c.heightIn) > 0.12) {
+            _mzFitVerifyLog.probe.push('b' + _c.band + ' p' + _pi + ':' + _ci + ' budget=' + _c.heightIn.toFixed(2) + ' real=' + _cRealAny.toFixed(2) + ' over=' + (_cRealAny - _c.heightIn).toFixed(2) + ' split=' + (_c.split ? 1 : 0) + ' imgBody=' + (_c.imgBody ? 1 : 0) + ' towerLead=' + (_c.towerLead ? 1 : 0) + ' cStart=' + (_c.cStart || 0));
+          }
+          if (!_c.split || _c.imgBody || _c.towerLead) continue;             // only text-bearing slices can shed lines
           var _cReal = _fvReal._cells[_pi + ':' + _ci];
-          if (_fvR === 0) _mzFitVerifyLog.probe.push('b' + _c.band + ' p' + _pi + ':' + _ci + ' budget=' + (_c.heightIn != null ? _c.heightIn.toFixed(2) : '?') + ' real=' + (_cReal != null ? _cReal.toFixed(2) : 'NULL') + ' split=' + (_c.split ? 1 : 0));
           if (_cReal == null || _c.heightIn == null) continue;
           var _over = _cReal - _c.heightIn;
           if (_over <= _fvClipTol) continue;                                 // renders within its budget -> fine
