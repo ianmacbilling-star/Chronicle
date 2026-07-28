@@ -119,8 +119,13 @@ function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom
 function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
 function lmFlow(m) { return lmMeta(m).flow === true; }   // text-flow: pull next beat's intro up
-function lmScale(m) { var r = runGrowsGet(m && m.id); if (r != null && r <= 1) return r; return 1; }   // paired shrink-to-fit -- run-scoped only (never from layout_meta), so every fresh Optimize starts natural
-function lmGrow(m) { var r = runGrowsGet(m && m.id); return (r != null && r >= 0.5 && r <= 3) ? r : 1; }   // magazine image grow/shrink -- run-scoped only (holds across a run's passes for convergence, never persisted to the DB)
+// REFERENCE-PACK BYPASS: when set, lmScale/lmGrow ignore the run-scoped store entirely and report
+// NATURAL size. Used only by pack-debug?nogrows=1 to produce a deterministic reference pack for the
+// diagnostics bundle. STRICTLY READ-ONLY: it suppresses a read, never clears or writes _runGrows, so
+// pulling a bundle can never destroy the live run state the rest of the bundle is reporting on.
+var _noGrows = false;
+function lmScale(m) { if (_noGrows) return 1; var r = runGrowsGet(m && m.id); if (r != null && r <= 1) return r; return 1; }   // paired shrink-to-fit -- run-scoped only (never from layout_meta), so every fresh Optimize starts natural
+function lmGrow(m) { if (_noGrows) return 1; var r = runGrowsGet(m && m.id); return (r != null && r >= 0.5 && r <= 3) ? r : 1; }   // magazine image grow/shrink -- run-scoped only (holds across a run's passes for convergence, never persisted to the DB)
 function shapeRatioCSS(shape) { var r = shapeRatio(shape); return r[0] + ' / ' + r[1]; }
 // Display aspect for the IMG box. Towers are GENERATED tall (1:4) but their nominal shape
 // ratio is 9:16 (Picture Book's towerthin is 2:5), so a cover-fit box at the nominal ratio
@@ -5983,7 +5988,14 @@ function magazinePlanText(packed) {
 // Admin-only easter egg: dump the pack plan as plain text (double-click the After page count).
 // Runs the same pack the compose does but returns the readable plan instead of a PDF -- no token spend.
 router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+  // ?nogrows=1 -> REFERENCE PACK: every image at natural size, the run-scoped grow store ignored.
+  // The store survives 30 minutes after an Optimize, so a plain pack-debug silently inherits the
+  // last run's grows -- which is why dumps showed 'sized: (none)' in the header and GROWN cells in
+  // the body, and why we could never tell whether a Cancel had landed in time. The reference pack is
+  // deterministic and reproducible regardless of what ran before it.
+  var _wantRef = (req.query.nogrows === '1' || req.query.nogrows === 'true');
   try {
+    if (_wantRef) _noGrows = true;
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     var txt, _dlName = 'campaign';
     var _ver = ''; try { _ver = (require('../version-info.json') || {}).version || ''; } catch (e) {}
@@ -6003,11 +6015,14 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
     }
     res.set('Content-Type', 'text/plain; charset=utf-8');
     // Download rather than open inline: saves the round trip of File > Save in a new tab.
-    res.set('Content-Disposition', 'attachment; filename="' + _dlName + (_flow ? '_Before' : '_After') + '_pack.txt"');
+    res.set('Content-Disposition', 'attachment; filename="' + _dlName + (_wantRef ? '_Reference' : (_flow ? '_Before' : '_After')) + '_pack.txt"');
     return res.send(txt);
   } catch (e) {
     res.set('Content-Type', 'text/plain; charset=utf-8');
     return res.status(500).send('pack-debug error:\n' + ((e && e.stack) || (e && e.message) || e));
+  } finally {
+    _noGrows = false;   // ALWAYS clear, including on the error path -- a stuck flag would make every
+                        // later pack in this process report natural images and quietly break Optimize.
   }
 });
 
@@ -6252,9 +6267,15 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
     try { await recordGeneration(req.session.userId, { event_type: 'layout_review', tokens_redeemed: 0, quantity: 1, unit: 'review', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
 
     // Read-only: return the proposed ops (and the raw text if it didn't parse) -- APPLY NOTHING.
+    // `dump` carries THIS pass's freshly measured layout -- the exact text the model just reasoned
+    // over. Every pass re-packs and re-measures from scratch (a new PDF each time), so each pass's
+    // dump is an independent measurement, not a projection of an earlier one. The diagnostics bundle
+    // keeps them all so a clip can be traced to the pass that introduced it. Costs nothing to return:
+    // it is already built above and was otherwise discarded after the AI call.
     return res.json({
       campaign: campaignName,
       arrange: (_arrange || 'paired'),
+      dump: dump,
       viewerPageOffset: _off,   // viewerPage = page + this offset (front matter: cover/title/toc/cast)
       applied: false,   // this is the read-only advisor; pass 3 (apply) is not wired yet
       opCount: (ops && ops.length) || 0,

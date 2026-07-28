@@ -14864,46 +14864,149 @@ function finalizeAfterZoomStep(dir) {
   finalizeApplyAfterZoom();
 }
 
-// Download a combined diagnostics text file: the pack dump (fresh) + this session's AI proposals (JSON)
-// and log, if the loop ran. Admin easter egg from the clean user view (double-click the After count).
+// Download a combined diagnostics TIMELINE. Every Optimize pass measures a brand-new PDF from scratch
+// (re-pack + re-measure), so the run is a sequence of independent measurements, not one measurement
+// with four adjustments layered on top. This bundle keeps every one of them, in order, next to the ops
+// that produced them -- plus a REFERENCE pack (natural images, run-grow store bypassed) that is
+// deterministic no matter what ran before it. The FLAG TIMELINE at the top pins a clip to the exact
+// stage that introduced it. Admin easter egg: double-click the After count.
+function _dxPad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
+function _dxPadL(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return s; }
+// Pull the few numbers that matter out of a dump's text. Deliberately tolerant: a dump that failed to
+// fetch, or a paired (Picture Book) dump with different headings, yields nulls rather than throwing.
+function _dxStats(txt) {
+  var s = { pages: null, clip: 0, clipLines: [], order: 'n/a', real: {}, ok: !!txt };
+  if (!txt) return s;
+  var m = txt.match(/content-pages=(\d+)/);
+  if (m) s.pages = parseInt(m[1], 10);
+  var mc = txt.match(/NEVER-CLIP: (\d+) PAGE\(S\) OVERFLOW/);
+  if (mc) s.clip = parseInt(mc[1], 10);
+  var reC = /PAGE (\d+) \(viewer p\.(\d+)\)\s+real ([\d.]+)in\s+vs box ([\d.]+)in\s+-> OVER by ([\d.]+)in/g, mm;
+  while ((mm = reC.exec(txt))) s.clipLines.push({ page: +mm[1], viewer: +mm[2], real: +mm[3], over: +mm[5] });
+  if (/ORDER-BREAK: reading order is monotonic/.test(txt)) s.order = 'OK';
+  else { var mo = txt.match(/ORDER-BREAK: (\d+) PLACE/); if (mo) s.order = mo[1] + ' BREAK'; }
+  var reR = /PAGE (\d+)\s+\(viewer p\.\s*(\d+)\s*\)[^\r\n]*?REAL ([\d.]+) \(est ([\d.]+)/g, rm;
+  while ((rm = reR.exec(txt))) s.real[+rm[1]] = { real: +rm[3], est: +rm[4], viewer: +rm[2] };
+  return s;
+}
 function finalizeDownloadDiagnostics() {
   if (!state.currentCampaign) return;
   var cid = state.currentCampaign.id;
   var q = finalizeBookQuery();
   var cap = window._optimizeCapture || null;
-  fetch('/api/pdf/pack-debug/' + cid + q, { credentials: 'same-origin' })
-    .then(function (r) { return r.ok ? r.text() : ('[dump fetch failed: HTTP ' + r.status + ']'); })
-    .catch(function (e) { return '[dump fetch error: ' + (e && e.message) + ']'; })
-    .then(function (dumpText) {
-      var name = (state.currentCampaign.name || 'campaign').replace(/[^a-z0-9]+/gi, '_');
-      var stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      var parts = [];
-      parts.push('===== CAMPAIGNIA DIAGNOSTICS BUNDLE =====');
-      parts.push('campaign: ' + (state.currentCampaign.name || cid));
-      parts.push('generated: ' + new Date().toISOString());
-      parts.push('run diagnostics: ' + (cap ? ('captured ' + cap.at) : 'no Optimize run this session (JSON/log unavailable)'));
-      parts.push('');
-      parts.push('===== PACK DUMP =====');
-      parts.push(dumpText || '[empty]');
-      parts.push('');
-      parts.push('===== AI PROPOSALS (JSON) =====');
-      if (cap && cap.json && cap.json.length) {
-        cap.json.forEach(function (p) {
-          parts.push('--- pass ' + p.pass + ' ---');
-          try { parts.push(JSON.stringify(p.data, null, 2)); } catch (e) { parts.push('[unserializable]'); }
-        });
-      } else { parts.push('(no AI proposals captured this session -- run Optimize, then download to include them)'); }
-      parts.push('');
-      parts.push('===== AI OPTIMIZE LOG =====');
-      if (cap && cap.log && cap.log.length) { parts.push(cap.log.join('\n')); }
-      else { parts.push('(no log captured this session)'); }
-      var blob = new Blob([parts.join('\n')], { type: 'text/plain' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = name + '_diagnostics_' + stamp + '.txt';
-      document.body.appendChild(a); a.click();
-      setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
+  var refQ = q ? (q + '&nogrows=1') : '?nogrows=1';
+  function grab(url) {
+    return fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : ('[dump fetch failed: HTTP ' + r.status + ']'); })
+      .catch(function (e) { return '[dump fetch error: ' + (e && e.message) + ']'; });
+  }
+  Promise.all([
+    grab('/api/pdf/pack-debug/' + cid + refQ),
+    grab('/api/pdf/pack-debug/' + cid + q)
+  ]).then(function (both) {
+    var refText = both[0], finalText = both[1];
+    var dumps = (cap && cap.dumps) || [];
+    var applies = (cap && cap.applies) || [];
+    var name = (state.currentCampaign.name || 'campaign').replace(/[^a-z0-9]+/gi, '_');
+    var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    var parts = [];
+    // ---- stage list: reference, every measured pass, final -------------------------------------
+    var stages = [{ label: 'reference', stats: _dxStats(refText) }];
+    dumps.forEach(function (d) { stages.push({ label: 'pass ' + d.pass, stats: _dxStats(d.text) }); });
+    stages.push({ label: 'final', stats: _dxStats(finalText) });
+
+    parts.push('===== CAMPAIGNIA DIAGNOSTICS BUNDLE =====');
+    parts.push('campaign: ' + (state.currentCampaign.name || cid));
+    parts.push('generated: ' + new Date().toISOString());
+    parts.push('optimize run: ' + (cap ? ('captured ' + cap.at + ', ' + dumps.length + ' measured pass(es)')
+                                       : 'no Optimize run this session'));
+    parts.push('');
+    parts.push('HOW TO READ THIS: each stage below is a SEPARATE measurement of a SEPARATE PDF.');
+    parts.push('The reference pack ignores the run-scoped grow store, so it is the same every time.');
+    parts.push('Each pass dump is what the AI actually measured and reasoned over on that pass.');
+    parts.push('');
+    // ---- flag timeline -- the entry point ------------------------------------------------------
+    parts.push('===== FLAG TIMELINE =====');
+    parts.push(_dxPad('stage', 14) + _dxPadL('pages', 7) + _dxPadL('NEVER-CLIP', 13) + '   ORDER-BREAK');
+    stages.forEach(function (st) {
+      parts.push(_dxPad(st.label, 14) +
+                 _dxPadL(st.stats.pages != null ? st.stats.pages : '?', 7) +
+                 _dxPadL(st.stats.ok ? st.stats.clip : '?', 13) + '   ' + st.stats.order);
     });
+    // Attribution: the first stage where a clip appears answers "packer or loop?" outright.
+    var firstClip = null;
+    for (var si = 0; si < stages.length; si++) { if (stages[si].stats.clip > 0) { firstClip = stages[si]; break; } }
+    parts.push('');
+    if (!firstClip) parts.push('VERDICT: no stage reports a clip.');
+    else if (firstClip.label === 'reference') parts.push('VERDICT: the clip is present in the REFERENCE pack -- it is the packer/composer, NOT the loop.');
+    else parts.push('VERDICT: the reference pack is clean; the clip first appears at "' + firstClip.label + '" -- the LOOP introduced it.');
+    parts.push('');
+    // ---- delta: reference -> final -------------------------------------------------------------
+    var A = stages[0].stats, Z = stages[stages.length - 1].stats;
+    parts.push('===== DELTA: REFERENCE -> FINAL =====');
+    parts.push('content pages: ' + (A.pages != null ? A.pages : '?') + ' -> ' + (Z.pages != null ? Z.pages : '?'));
+    parts.push('NEVER-CLIP:    ' + A.clip + ' -> ' + Z.clip);
+    Z.clipLines.forEach(function (cl) {
+      var inRef = A.clipLines.some(function (r) { return r.page === cl.page; });
+      parts.push('   ' + (inRef ? '=' : '+') + ' PAGE ' + cl.page + ' (viewer p.' + cl.viewer + ') over by ' +
+                 cl.over.toFixed(2) + 'in' + (inRef ? '  [also in reference]' : '  [final only]'));
+    });
+    parts.push('ORDER-BREAK:   ' + A.order + ' -> ' + Z.order);
+    var moved = [];
+    Object.keys(Z.real).forEach(function (k) {
+      var a = A.real[k], z = Z.real[k];
+      if (a && z && Math.abs(z.real - a.real) >= 0.05) moved.push({ p: +k, v: z.viewer, a: a.real, z: z.real });
+    });
+    parts.push('pages whose REAL height moved by 0.05in or more: ' + (moved.length ? moved.length : 'none'));
+    moved.sort(function (x, y) { return Math.abs(y.z - y.a) - Math.abs(x.z - x.a); }).slice(0, 25).forEach(function (o) {
+      var d = o.z - o.a;
+      parts.push('   PAGE ' + o.p + ' (viewer p.' + o.v + ')  ' + o.a.toFixed(2) + ' -> ' + o.z.toFixed(2) +
+                 '  (' + (d >= 0 ? '+' : '') + d.toFixed(2) + ')');
+    });
+    parts.push('');
+    // ---- reference pack -------------------------------------------------------------------------
+    parts.push('===== REFERENCE PACK (natural images, run-grow store bypassed) =====');
+    parts.push(refText || '[empty]');
+    parts.push('');
+    // ---- per pass: measurement -> proposals -> what applied -------------------------------------
+    if (dumps.length || applies.length) {
+      var byPass = {};
+      dumps.forEach(function (d) { (byPass[d.pass] = byPass[d.pass] || {}).dump = d.text; });
+      ((cap && cap.json) || []).forEach(function (p) { (byPass[p.pass] = byPass[p.pass] || {}).json = p.data; });
+      applies.forEach(function (a) { (byPass[a.pass] = byPass[a.pass] || {}).report = a.report; });
+      Object.keys(byPass).map(Number).sort(function (a, b) { return a - b; }).forEach(function (pn) {
+        var blk = byPass[pn];
+        parts.push('===== PASS ' + pn + ' -- MEASURED LAYOUT (fresh re-pack + re-measure) =====');
+        parts.push(blk.dump || '(no dump captured for this pass)');
+        parts.push('');
+        parts.push('----- PASS ' + pn + ' -- AI PROPOSALS (JSON) -----');
+        try { parts.push(blk.json ? JSON.stringify(blk.json, null, 2) : '(none)'); } catch (e) { parts.push('[unserializable]'); }
+        parts.push('');
+        parts.push('----- PASS ' + pn + ' -- WHAT ACTUALLY APPLIED -----');
+        try { parts.push(blk.report ? JSON.stringify(blk.report, null, 2) : '(no apply report -- pass proposed nothing, or the run stopped here)'); } catch (e) { parts.push('[unserializable]'); }
+        parts.push('');
+      });
+    } else {
+      parts.push('===== PASSES =====');
+      parts.push('(no Optimize passes captured this session -- run Optimize, then download to include them.');
+      parts.push(' A cancelled run captures the passes that completed before the cancel.)');
+      parts.push('');
+    }
+    // ---- final ----------------------------------------------------------------------------------
+    parts.push('===== FINAL PACK (as downloaded -- current run state) =====');
+    parts.push(finalText || '[empty]');
+    parts.push('');
+    parts.push('===== AI OPTIMIZE LOG =====');
+    if (cap && cap.log && cap.log.length) { parts.push(cap.log.join('\n')); }
+    else { parts.push('(no log captured this session)'); }
+
+    var blob = new Blob([parts.join('\n')], { type: 'text/plain' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name + '_diagnostics_' + stamp + '.txt';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
+  });
 }
 
 // Save the just-optimized book so it's there when the user returns (Phase 2). Called when the loop
@@ -15159,7 +15262,10 @@ function _runLayoutAiOptimize() {
       window._aiLoopRunning = true;
       // Capture the run's diagnostics (JSON proposals + log) so an admin can download them from the
       // clean user view without re-running. Reset each run.
-      window._optimizeCapture = { json: [], log: [], at: new Date().toISOString() };
+      // dumps[] holds one FRESH measurement per pass. Every pass re-packs and re-measures a brand-new
+      // PDF, so these are independent measurements -- never a projection of an earlier pass. applies[]
+      // holds what each pass actually changed, so a dump can be read against the ops that produced it.
+      window._optimizeCapture = { json: [], log: [], dumps: [], applies: [], at: new Date().toISOString() };
       var _cid = state.currentCampaign.id;
       var _q = finalizeBookQuery();
       var MAX_ROUNDS = 4;   // safety cap; the loop also stops early when a round changes nothing
@@ -15272,6 +15378,14 @@ function _runLayoutAiOptimize() {
         return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
+            // Lift this pass's freshly measured dump out BEFORE showPassJson, so the raw-proposals
+            // window and the bundle's JSON section stay readable (a full dump is tens of KB).
+            try {
+              if (j && j.dump && window._optimizeCapture) {
+                window._optimizeCapture.dumps.push({ pass: roundNum, text: j.dump });
+                delete j.dump;
+              }
+            } catch (e) {}
             showPassJson(roundNum, j);   // surface the raw proposals in the side tab
             var _ops = (j && j.ops) || [];
             if (!_ops.length) {
@@ -15293,6 +15407,7 @@ function _runLayoutAiOptimize() {
               var _rep = r.headers.get('X-Apply-Report');
               return r.blob().then(function (b) {
                 var rep = null; try { rep = _rep ? JSON.parse(_rep) : null; } catch (e) {}
+                try { if (window._optimizeCapture) window._optimizeCapture.applies.push({ pass: roundNum, report: rep }); } catch (e) {}
                 // Log the detail of what actually happened this pass.
                 if (rep) {
                   (rep.applied || []).forEach(function (a) {
