@@ -12168,6 +12168,7 @@ function saveCampaignLayoutOpts(ctx){
 // this never triggers a save. The modal is repainted ONLY when it is actually open (no 'hidden'
 // class), so this can never pop a closed modal into view.
 function _syncLayoutPanels(){
+  applyLayoutAvailability();   // prune withheld layouts BEFORE the panels set their values
   try { if (typeof prepLayoutLoad === 'function') prepLayoutLoad(); } catch (e) {}
   try {
     var _pn = document.getElementById('custom-layout-modal');
@@ -14763,29 +14764,40 @@ function optimizeProgressDone() {
 }
 // Clear everything a prior optimize/scan left behind so a fresh initial scan starts clean.
 // LAYOUT AVAILABILITY (client half). The server is authoritative -- parseCustomOpts rewrites a
-// withheld layout to the fallback whatever the request looks like -- but leaving a dead option in the
-// picker invites someone to choose it and watch nothing happen. Ask the server which layouts exist and
-// remove the rest from BOTH arrange selects (app.html carries two copies). If the fetch fails we leave
-// the picker alone: the server gate still holds, so the worst case is a visible option that silently
-// falls back, never a broken book.
-var _coLayoutsChecked = false;
+// withheld layout to the fallback however the request was formed -- but a dead option left in the
+// picker invites someone to choose it and watch nothing happen.
+// The enabled list is fetched ONCE and cached, so pruning is synchronous from then on. That matters:
+// the panels set each select's value right after this runs, and an async prune landing afterwards
+// would clobber the selection. On the very first call the list is not back yet, so we re-sync the
+// panels once it arrives. If the fetch fails we leave the picker alone -- the server gate still
+// holds, so the worst case is a visible option that silently falls back, never a broken book.
+var _coLayoutsEnabled = null;   // null = not fetched yet
+var _coLayoutsPending = false;
+function _coPruneArrangeSelects() {
+  if (!_coLayoutsEnabled || !_coLayoutsEnabled.length) return;
+  ['pcl-arrange', 'cl-arrange'].forEach(function (id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    Array.prototype.slice.call(sel.options).forEach(function (opt) {
+      if (_coLayoutsEnabled.indexOf(opt.value) < 0) opt.parentNode.removeChild(opt);
+    });
+    if (sel.selectedIndex < 0 && sel.options.length) sel.selectedIndex = 0;
+  });
+}
 function applyLayoutAvailability() {
-  if (_coLayoutsChecked) return;
-  _coLayoutsChecked = true;
+  if (_coLayoutsEnabled) { _coPruneArrangeSelects(); return; }
+  if (_coLayoutsPending) return;
+  _coLayoutsPending = true;
   fetch('/api/pdf/layouts', { credentials: 'same-origin' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) {
       if (!j || !j.enabled || !j.enabled.length) return;
-      ['pcl-arrange', 'cl-arrange'].forEach(function (id) {
-        var sel = document.getElementById(id);
-        if (!sel) return;
-        Array.prototype.slice.call(sel.options).forEach(function (opt) {
-          if (j.enabled.indexOf(opt.value) < 0) opt.parentNode.removeChild(opt);
-        });
-        if (sel.selectedIndex < 0 && sel.options.length) sel.selectedIndex = 0;
-      });
+      _coLayoutsEnabled = j.enabled;
+      _coPruneArrangeSelects();
+      try { _syncLayoutPanels(); } catch (e) {}   // re-apply the saved values against the pruned list
     })
-    .catch(function () {});
+    .catch(function () {})
+    .then(function () { _coLayoutsPending = false; });
 }
 function finalizeClearScanState() {
   ['layoutai-free', 'layoutai-delta'].forEach(function (id) { var e = document.getElementById(id); if (e) e.innerHTML = ''; });
