@@ -4431,6 +4431,7 @@ router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
     res.set('Content-Type', 'application/pdf');
     res.send(buf);
   } catch (e) {
+    log500('novel-packed', req, e);
     res.status(500).json({ error: (e && e.message) || 'novel-packed failed' });
   }
 });
@@ -5119,16 +5120,64 @@ function lookBackPullUpCandidate(pgs, bnds, pageH, estH) {
   return null;
 }
 
+// SILENT 500s: every pack/render route caught its exception, put the message in a JSON body the
+// browser throws away, and logged NOTHING. Intermittent 500s therefore left no trace in Railway at
+// all -- we spent an evening guessing at an error the server already knew. Log route, campaign and
+// full stack before responding. Diagnostics only; the response body is unchanged.
+function log500(tag, req, e) {
+  try {
+    console.error('[500] ' + tag +
+      ' campaign=' + ((req && req.params && req.params.campaignId) || '?') +
+      ' -- ' + ((e && e.message) || e) + '\n' + ((e && e.stack) || '(no stack available)'));
+  } catch (_x) {}
+}
 // SERIALIZATION: computeMagazinePack writes module-level state (_mzBands, _mzComposed, the run-grow
 // current key, the probe flags). Two concurrent calls interleave and corrupt each other -- seen in
 // v3.0.264, where the diagnostics bundle fetched a reference pack and a final pack in parallel and
 // got bands=78 (double) on one and bands=0 (empty) on the other, 49ms apart. The old code comment
 // called concurrency 'acceptable for the deliberate one-shot Optimize action'; that assumption no
 // longer holds, so it is now enforced rather than assumed. Calls queue on a single promise chain.
+// LIVENESS: the queue above is deliberately GLOBAL, not per-campaign, because _mzBands is module
+// level and shared -- two books packing at once corrupt each other just as two packs of one book
+// do (v3.0.264). But a single global chain with no escape means one stuck pack stalls every later
+// request in the process, which is a worse failure than the race it prevents. So: wait for the
+// previous pack, but stop waiting after MZ_PACK_MAX_WAIT_MS and run anyway, and say so LOUDLY --
+// a dump produced after that warning may be interleaved and should not be trusted. Correctness
+// first, liveness second, and never a silent trade between them. The real cure is making _mzBands
+// call-scoped; until then this is the honest compromise.
 var _mzPackChain = Promise.resolve();
+var MZ_PACK_MAX_WAIT_MS = 120000;   // give up waiting on a prior pack after two minutes
+var MZ_PACK_SLOW_MS = 30000;        // a pack taking longer than this is worth knowing about
 function computeMagazinePack(req, campaignId, packOpts) {
-  var run = function () { return _computeMagazinePackInner(req, campaignId, packOpts); };
-  var next = _mzPackChain.then(run, run);
+  var t0 = Date.now();
+  var gate = Promise.race([
+    _mzPackChain.then(function () {}, function () {}),
+    new Promise(function (resolve) {
+      var t = setTimeout(resolve, MZ_PACK_MAX_WAIT_MS);
+      if (t && t.unref) t.unref();   // never hold the event loop open on this timer
+    })
+  ]);
+  var next = gate.then(function () {
+    var waited = Date.now() - t0;
+    if (waited >= MZ_PACK_MAX_WAIT_MS) {
+      try { console.error('[pack-queue] campaign ' + campaignId + ' WAITED OUT a prior pack after ' +
+        Math.round(waited / 1000) + 's and is running ANYWAY -- results may be interleaved, do not trust a dump from this run'); } catch (e) {}
+    }
+    var t1 = Date.now();
+    return Promise.resolve(_computeMagazinePackInner(req, campaignId, packOpts)).then(function (r) {
+      var took = Date.now() - t1;
+      if (took > MZ_PACK_SLOW_MS) {
+        try { console.warn('[pack-queue] campaign ' + campaignId + ' pack took ' + Math.round(took / 1000) +
+          's (queued ' + Math.round((t1 - t0) / 1000) + 's)'); } catch (e) {}
+      }
+      return r;
+    }, function (err) {
+      try { console.error('[pack-queue] campaign ' + campaignId + ' pack FAILED after ' +
+        Math.round((Date.now() - t1) / 1000) + 's -- ' + ((err && err.message) || err) + '\n' +
+        ((err && err.stack) || '(no stack available)')); } catch (e) {}
+      throw err;
+    });
+  });
   _mzPackChain = next.then(function () {}, function () {});   // never let a rejection poison the queue
   return next;
 }
@@ -6340,6 +6389,7 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
       rawIfUnparsed: ops ? undefined : raw
     });
   } catch (e) {
+    log500('layout-review', req, e);
     return res.status(500).json({ error: (e && e.message) || 'layout-review failed' });
   }
 });
@@ -6454,6 +6504,7 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
       results: results
     });
   } catch (e) {
+    log500('layout-apply-preview', req, e);
     return res.status(500).json({ error: (e && e.message) || 'layout-apply-preview failed' });
   }
 });
@@ -6966,6 +7017,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       note: 'Scale ops applied and confirmed by real re-measure; the composed book is cached. Re-open the After view to see it. Text-move ops are deferred to the next build.'
     });
   } catch (e) {
+    log500('layout-apply', req, e);
     return res.status(500).json({ error: (e && e.message) || 'layout-apply failed' });
   }
 });
@@ -6999,6 +7051,7 @@ router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async functi
     try { _composedCache.clear(); } catch (e) {}
     return res.json({ campaign: (packedR.campaign && packedR.campaign.name) || 'campaign', cleared: _cleared, note: 'Run-scoped grows cleared and legacy layout_meta grows/scales purged. Re-run Optimize to rebuild from the natural layout.' });
   } catch (e) {
+    log500('layout-reset', req, e);
     return res.status(500).json({ error: (e && e.message) || 'layout-reset failed' });
   }
 });
@@ -7039,6 +7092,7 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     return res.json({ ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at });
   } catch (e) {
     console.error('[save-optimized] failed:', e && e.message ? e.message : e);
+    log500('save-optimized', req, e);
     return res.status(500).json({ error: (e && e.message) || 'save-optimized failed' });
   }
 });
@@ -7057,6 +7111,7 @@ router.get('/last-optimized/:campaignId', requireAuth, async function (req, res)
     if (!lastOpt || !lastOpt.pdfUrl) return res.json({ found: false });
     return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null });
   } catch (e) {
+    log500('last-optimized', req, e);
     return res.status(500).json({ error: (e && e.message) || 'last-optimized failed' });
   }
 });
@@ -7112,6 +7167,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
     res.set('Content-Disposition', 'inline; filename="packed-preview.pdf"');
     res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
   } catch (e) {
+    log500('pack-render', req, e);
     res.status(500).json({ error: (e && e.message) || 'pack-render failed' });
   }
 });
@@ -7146,6 +7202,7 @@ router.get('/pack-paired/:campaignId', requireAuth, async function (req, res) {
       pages: plan.pages
     });
   } catch (e) {
+    log500('pack-paired', req, e);
     res.status(500).json({ error: (e && e.message) || 'pack-paired failed' });
   }
 });
@@ -7166,6 +7223,7 @@ router.get('/measure-paired/:campaignId', requireAuth, async function (req, res)
       blocks: measured.blocks
     });
   } catch (e) {
+    log500('measure-paired', req, e);
     res.status(500).json({ error: (e && e.message) || 'measure-paired failed' });
   }
 });
