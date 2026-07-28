@@ -4722,6 +4722,30 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     var afterLines = Math.ceil(Math.max(0, it.stextLen - bb.mbound) / wideC);
     var bodyH = round3(it.sImgH + afterLines * lh + 0.2);
     if (bodyH > pageH - 0.2) return false;
+    // UNIVERSAL: if the cell directly above this spill is a TOWER, flow the before-text into the tower's
+    // empty beside-column (towerLead) instead of stacking it in a full-width box below. This is exactly
+    // how the non-spilling case renders (text beside the image), it never needs its own fixed-height
+    // box, and it can't clip the way the below-box did. Only when there's no tower above do we fall back
+    // to the below-box lead.
+    var _lastCell = cur.length ? cur[cur.length - 1] : null;
+    var _lastBand = _lastCell ? bands[_lastCell.band] : null;
+    // The tower's beside-column is roughly the tower's own height tall. Only flow the before-text there
+    // if it fits beside the tower (so it wraps entirely alongside the image and never spills BELOW the
+    // tower, which would grow the page past the box and re-introduce a clip). A tower column is narrower
+    // than full width, so a line holds fewer chars -> estimate the beside line count conservatively.
+    var _towerH = _lastCell ? (_lastCell.heightIn || 6.0) : 0;
+    var _besideCharsPerLine = Math.max(8, Math.floor(wideC * 0.62));   // tower column ~60% of full width
+    var _besideLines = Math.ceil(bb.mbound / _besideCharsPerLine);
+    var _besideFits = (_besideLines * lh + 0.2) <= (_towerH - 0.2);
+    if (_lastCell && _lastBand && _lastBand.kind === 'tower' && _lastBand.renderTowerLead &&
+        !_lastCell.towerLead && !_lastCell.split && _besideFits) {
+      // Attach the before-text as the tower's beside-column; the image + after still go on the next page.
+      _lastCell.towerLead = { band: it.band, cStart: 0, cEnd: bb.mbound };
+      flush();
+      cur.push({ band: it.band, heightIn: bodyH, cStart: bb.mbound, cEnd: null, split: true, imgBody: true });
+      used += bodyH;
+      return true;
+    }
     cur.push({ band: it.band, heightIn: leadH, cStart: 0, cEnd: bb.mbound, split: true, textLead: true });
     used += leadH; flush();
     cur.push({ band: it.band, heightIn: bodyH, cStart: bb.mbound, cEnd: null, split: true, imgBody: true });
