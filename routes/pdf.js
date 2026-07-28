@@ -581,8 +581,8 @@ function layoutSaga(moments, sections, intro, outro) {
 // GAZETTE is withheld: after a long session its remaining fault is a page rendering a hair over the
 // clip line and cutting the panel border. Every individual cause found was real and fixed, but the
 // architecture predicts what the browser will do and then hopes the render agrees. Narrowing that gap
-// is not the same as closing it, and only a hard post-compose verify gate can close it. See the V36
-// handoff, 'The condition for Gazette coming back'.
+// is not the same as closing it, and only a hard post-compose verify gate can close it. See
+// GAZETTE_SESSION_NOTE.md, 'The condition for Gazette coming back'.
 // COMICPAGE is withheld simply because it has never been worked or verified to this standard.
 // To re-enable on staging without shipping to production, set the env var (comma-separated):
 //     LAYOUTS_BETA=gazette,comicpage
@@ -4533,6 +4533,69 @@ router.get('/novel-packed/:campaignId', requireAuth, async function (req, res) {
   }
 });
 
+// ===== RUN-SCOPED TEXT MOVES ======================================================================
+// Scale ops survive a re-pack because lmGrow/persistGrow re-seed them. TEXT moves had no such
+// mechanism: moveLeadingNarr mutates plan.pages[].placements, the plan is rebuilt from scratch on
+// every pack, and the move evaporated -- while the COMPOSED CACHE, which is what actually renders
+// to PDF, kept it. So the loop shipped a book nothing could measure.
+// Seen in The ANOMALIES Picture Book: pass 2 pushed beat 3's before-text off viewer p.8, passes 3
+// and 4 re-packed and saw it still there, and the delivered PDF had a page carrying an image and
+// three inches of white that no guard could see -- not the loop, not the dump, not NEVER-CLIP.
+// Ian's requirement: each pass must LOOK and MEASURE the real current book, then fix, then repeat.
+// Independent measurement, not amnesia.
+// Records are keyed by CONTENT (beat + part + char offset), never by page index, so they survive
+// the repagination that applying them causes. Run-scoped exactly like the grow store: held across
+// a run's passes for convergence, cleared at the start of each Optimize, never persisted to the DB.
+var _runMoves = new Map();              // runKey -> { at, moves: [ { beat, part, cs, dir } ] }
+function runMovesGet(k) {
+  if (!k) return null;
+  var v = _runMoves.get(k);
+  if (v && (Date.now() - v.at > RUN_GROWS_TTL_MS)) { _runMoves.delete(k); v = null; }
+  return v ? v.moves : null;
+}
+function runMovesAdd(k, rec) {
+  if (!k || !rec) return;
+  var v = _runMoves.get(k);
+  if (!v) { v = { at: Date.now(), moves: [] }; _runMoves.set(k, v); }
+  // One record per moved placement: a later move of the same text replaces the earlier direction
+  // rather than stacking, so a push followed by a pull cannot drift the text two pages.
+  for (var i = 0; i < v.moves.length; i++) {
+    var m = v.moves[i];
+    if (m.beat === rec.beat && (m.part || '') === (rec.part || '') && (m.cs || 0) === (rec.cs || 0)) {
+      m.dir = rec.dir; v.at = Date.now(); return;
+    }
+  }
+  v.moves.push(rec); v.at = Date.now();
+}
+function runMovesClear(k) { if (k) _runMoves.delete(k); }
+// Re-apply recorded moves to a freshly packed plan. Matches on the LEADING placement of a page,
+// which is what moveLeadingNarr moves, and refuses any move that would leave a page empty (a blank
+// page in the middle of a book is worse than the white space the move was fixing).
+function applyRunMoves(plan, k) {
+  var recs = runMovesGet(k);
+  if (!recs || !recs.length || !plan || !plan.pages) return 0;
+  var applied = 0;
+  recs.forEach(function (mv) {
+    for (var pi = 0; pi < plan.pages.length; pi++) {
+      var pls = plan.pages[pi].placements || [];
+      if (!pls.length) continue;
+      var p0 = pls[0];
+      if (p0.kind !== 'narr' || p0.beat !== mv.beat) continue;
+      if ((p0.part || '') !== (mv.part || '')) continue;
+      if ((p0.charStart || 0) !== (mv.cs || 0)) continue;
+      if (pls.length < 2) break;                       // would empty the source page -- refuse
+      var to = pi + mv.dir;
+      if (to < 0 || to >= plan.pages.length) break;
+      var toPg = plan.pages[to];
+      if (mv.dir < 0) toPg.placements = (toPg.placements || []).concat([p0]);   // pull up: append
+      else toPg.placements = [p0].concat(toPg.placements || []);                // push down: prepend
+      plan.pages[pi].placements = pls.slice(1);
+      applied++;
+      break;
+    }
+  });
+  return applied;
+}
 // PHASE 2 (page-packer): analytic image display height for a beat in the paired layout.
 // Portraits float narrow (~4.6in wide); non-portraits sit ~full content width. Height is
 // width / aspect, capped to a page. (Float text-beside footprint is a Phase 3 refinement.)
@@ -4605,6 +4668,10 @@ async function computePairedPack(req, campaignId, packOpts) {
   var _hdrOn = (_dco.header == null) ? true : !!_dco.header;
   var _basePackH = (packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : pageH;
   var plan = packPaired(packBeats, Object.assign({}, packOpts || {}, { pageHeightIn: _basePackH - (_hdrOn ? HEADER_BAND_IN : 0) }));
+  // HONEST LOOP: re-apply this run's accepted text moves to the fresh plan, so every pass measures the
+  // book as it actually stands rather than one where the previous passes never happened.
+  var _mvN = applyRunMoves(plan, runGrowsKey(campaignId, req));
+  if (_mvN) { try { console.log('[run-moves] campaign ' + campaignId + ': re-applied ' + _mvN + ' text move(s) to the fresh pack'); } catch (e) {} }
   var overrides = {};
   plan.pages.forEach(function (pg) { pg.placements.forEach(function (pl) {
     if (pl.kind === 'image' && pl.scale != null && pl.scale < 0.999) overrides[pl.beat] = { scale: pl.scale };
@@ -7049,6 +7116,14 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       var okFrom = (_r && _r[fromPageIdx] != null) ? (_r[fromPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : true;
       var okTo = (_r && _r[toPageIdx] != null) ? (_r[toPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : false;
       if (_r && !_r._error && okTo && okFrom) {
+        // Record it so the NEXT pack re-applies it -- otherwise this move exists only in the composed
+        // cache and every later measurement describes a book without it.
+        try {
+          runMovesAdd(runGrowsKey(req.params.campaignId, req), {
+            beat: moving.beat, part: (moving.part || ''), cs: (moving.charStart || 0),
+            dir: (toPageIdx < fromPageIdx) ? -1 : 1
+          });
+        } catch (e) {}
         return { ok: true, toReal: _r[toPageIdx], fromReal: _r[fromPageIdx] };
       }
       // roll back
@@ -7181,7 +7256,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
 router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   try {
     // Clear this book's run-scoped grows (the live state) so the next Optimize starts natural.
-    try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
+    try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
     // Also purge any LEGACY imgGrow/scale left in layout_meta from before grows went run-scoped. These
     // are no longer read (lmGrow/lmScale are run-scoped now), so they're inert -- but clearing them
     // removes stale data. Enumerate the book's moments via the pack (band momId) and strip both keys.
@@ -7277,7 +7352,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       // A new Optimize run: clear this book's run-scoped grows so we start from the NATURAL images.
       // Grows recorded during this run's loop passes are keyed the same way and carry across passes for
       // convergence, but never persist to the DB -- so the layout is deterministic and never degrades.
-      try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
+      try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
       if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
         var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
