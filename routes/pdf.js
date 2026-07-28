@@ -1026,6 +1026,22 @@ var MZ_TOWER_MERGE_MAX_IN = 9.16; // a merged/grown page must fit the composed C
 // 9.41). The old 9.40 let a page measuring 9.2-9.4 pass the gate and then clip its last line under
 // overflow:hidden -- the tower-lead beside-column overflow. 9.16 matches the packer's own body
 // budget (pageHeightIn 9.4 - HEADER_BAND_IN), so the merge gate and the packer now agree.
+// ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
+// Content past this is cut by the composed page's overflow:hidden. This used to be recomputed as
+// (9.65 - HEADER_BAND_IN) = 9.41in in SIX separate places, with four more derivations of 'near the
+// box', so correcting it meant finding all ten. It is now defined once.
+// 9.41 was WRONG and had been for a long time. Two independent lines of evidence agree:
+//  - MZ_TOWER_MERGE_MAX_IN's comment above already worked out that the usable area is ~9.17in, not
+//    9.41, because the header band is carved from the top with padding and there is a further
+//    bottom safety; the merge gate was corrected to 9.16 and this check never was.
+//  - Measured across The Strangers, For ALL the Ages and The ANOMALIES: every page rendering 9.23in
+//    was clean, 9.28in nicked its border, and 9.31in lost a line of text. Thirteen pages, no overlap.
+// 9.24 with a 0.02 tolerance therefore flags above 9.26: it leaves the clean 9.23 pages alone and
+// catches 9.28 and 9.31. Do NOT go lower without new measurements -- 9.20 would flag pages that
+// demonstrably render fine and shrink pictures for no reason.
+var CO_CLIP_BOX_IN = 9.24;            // the real clip boundary
+var CO_CLIP_TOL_IN = 0.02;            // rounding slack before a page counts as overflowing
+var CO_CLIP_NEAR_IN = CO_CLIP_BOX_IN - 0.4;   // 'close enough to the edge to be at risk'
 var MZ_SPILL_MIN_GAP = 1.8;   // leading-text spill fires when the wasted gap is at least this tall
 var MZ_SPILL_MIN_LINES = 2;   // and only if at least this many lines of the before-paragraph fill it
 var MZ_GROW_TO_FILL = false; // OFF: growing images to hide white bloats pictures (against the wrap guardrail) AND pre-empts collapse. Collapse-to-fit is the density lever now.
@@ -4589,7 +4605,7 @@ async function computePairedPack(req, campaignId, packOpts) {
     // even if it beat its estimate by 0.7in. Gating on proximity to 9.41 (not just est->real gap) stops
     // the false AT-RISK flags that produced needless pushLines ops on pages that fit comfortably.
     var _riskGap = 0.4;
-    var _riskNearBox = (9.65 - HEADER_BAND_IN) - 0.4;   // 9.01in: only pages within 0.4in of the box are at risk
+    var _riskNearBox = CO_CLIP_NEAR_IN;   // only pages within 0.4in of the real box are at risk
     _pdbg.pages.forEach(function (pg) {
       if (pg.realUsed == null) return;
       var gap = pg.realUsed - pg.used;
@@ -5070,12 +5086,13 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     // the composed content area: 9.65in minus the header band; a small tolerance absorbs sub-pixel
     // rounding so only a REAL overflow (a line/image genuinely past the edge) is flagged.
     // CLIP LINE: the real render wraps each page in height:9.65in; padding-top:HEADER_BAND_IN;
-    // overflow:hidden -- so content is actually clipped at (9.65 - HEADER_BAND_IN) = 9.41in, NOT 9.16.
+    // overflow:hidden. The clip boundary is CO_CLIP_BOX_IN (see its definition for the measurements);
+    // it is NOT (9.65 - HEADER_BAND_IN) = 9.41in, which this check wrongly used until v3.0.273.
     // 9.16 is the PACKER'S conservative budget (a target to aim for), not the render's clip boundary.
     // Using 9.16 here flagged pages at 9.20-9.34 as "overflow" when they render perfectly inside the
     // 9.41 box -- false positives that produced bogus shrinkImage ops. Compare against the true line.
-    var _clipBox = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in true content clip boundary
-    var _clipTol = 0.03;                    // ~3 hundredths of an inch of rounding slack
+    var _clipBox = CO_CLIP_BOX_IN;
+    var _clipTol = CO_CLIP_TOL_IN;
     realH._overflows = [];
     Object.keys(realH).forEach(function (k) {
       if (k[0] === '_') return;             // skip _cells / _error / _overflows
@@ -5110,8 +5127,8 @@ async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
       var mc = /^cc:(\d+):(\d+)$/.exec(bl.id || '');
       if (mc) { (realH._cells || (realH._cells = {}))[mc[1] + ':' + mc[2]] = bl.heightIn; }
     });
-    var _clipBox = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in true content clip boundary (9.65 box - header band), not the 9.16 packer budget
-    var _clipTol = 0.03;
+    var _clipBox = CO_CLIP_BOX_IN;   // NOTE: shared with the magazine path. The page shell is the same
+    var _clipTol = CO_CLIP_TOL_IN;   // geometry, but this correction is measured on GAZETTE books only.
     realH._overflows = [];
     Object.keys(realH).forEach(function (k) {
       if (k[0] === '_') return;
@@ -5610,7 +5627,7 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
         // stacked cell overflows INSIDE the page even though the page total squeaks under box -- the
         // page-24 case (est 8.13, real 8.86) the page-total check alone misses. Threshold 0.4in.
         var _riskGap = 0.4;
-        var _riskNearBox = (9.65 - HEADER_BAND_IN) - 0.4;   // 9.01in: rendering taller than the estimate is only a risk when the page is near the real 9.41 box
+        var _riskNearBox = CO_CLIP_NEAR_IN;   // rendering over the estimate only matters near the real box
         _dbg.atRisk = [];
         _dbg.pages.forEach(function (pg) {
           if (pg.realUsed == null) return;
@@ -5802,7 +5819,7 @@ function pairedPlanText(packed) {
     // taller than its estimate on a page that still fits comfortably (e.g. real 8.56) is not a problem
     // -- flagging it produced needless shrink/push ops. Gate on the page's real total.
     var _pgReal = (dp.realUsed != null) ? dp.realUsed : (dp.used || 0);
-    var _nearBox = (9.65 - HEADER_BAND_IN) - 0.4;   // 9.01in
+    var _nearBox = CO_CLIP_NEAR_IN;
     if (_pgReal <= _nearBox) return;   // page fits with headroom -> no oversized risk
     (dp.placements || []).forEach(function (pl) {
       if (pl.realH != null && pl.heightIn != null && (pl.realH - pl.heightIn) > 0.3) {
@@ -6103,7 +6120,7 @@ function magazinePlanText(packed) {
     // even when the page total is well under the box -- so split slices are checked regardless of the
     // page-level headroom (this is the gazette/magazine split-slice chop the page-height gate missed).
     var _pgReal = (pg.realUsed != null) ? pg.realUsed : (pg.used || 0);
-    var _pageFits = (_pgReal <= ((9.65 - HEADER_BAND_IN) - 0.4));   // 9.01in: fits with headroom
+    var _pageFits = (_pgReal <= CO_CLIP_NEAR_IN);   // fits with headroom
     (pg.cells || []).forEach(function (c) {
       if (c.growMul && c.growMul !== 1) return;   // intentional grow, not oversized-risk
       if (c.realH == null || c.h == null) return;
@@ -6488,7 +6505,7 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
 // fullH*scale, so changing scale changes the page height by fullH*(newScale-oldScale). Text moves
 // (pullLines / pushLines) are modeled from the dump's average line height. This is a SIMULATION; the
 // real apply (next build) will persist the scale/split and re-render to confirm.
-var CLIP_LINE_IN = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in true content box
+var CLIP_LINE_IN = CO_CLIP_BOX_IN;
 
 router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   try {
@@ -6610,7 +6627,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
       var mplan = packedM.plan, mbands = packedM.bands, mMeasure = packedM.measure || { lines: {}, lineChars: {} };
       var mName = (packedM.campaign && packedM.campaign.name) || 'campaign';
-      var MCLIP = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in
+      var MCLIP = CO_CLIP_BOX_IN;
 
       // Find the growable image cell on a page (same test the optimizer uses: re-renderable + carries
       // a picture). Returns the cell index or -1.
@@ -6939,7 +6956,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     var plan = packed.plan;
     var beats = packed.beats;
     var campaignName = (packed.campaign && packed.campaign.name) || 'campaign';
-    var CLIP = Math.round((9.65 - HEADER_BAND_IN) * 1000) / 1000;   // 9.41in
+    var CLIP = CO_CLIP_BOX_IN;
 
     // Index image placements by dump page so an op's { page } targets the right placement.
     function imgPlacementOnPage(pageIdx) {
