@@ -177,10 +177,15 @@ async function measureDocument(html, options) {
           var all = Array.prototype.slice.call(n.querySelectorAll('*'));
           all.push(n);
           all.forEach(function (el) {
+            if (el.__boxSeen) return;                // a nested block re-walks its parent's elements
             var sh = el.scrollHeight || 0, ch = el.clientHeight || 0;
             if (!sh || !ch) return;
             var overIn = (sh - ch) / PX;
-            if (overIn <= 0.02) return;              // sub-pixel rounding, not a clip
+            // 0.05in floor: an <img> whose intrinsic height rounds a hair past its box reported at
+            // 0.02in on every title page -- six entries of pure noise that buried the real signal.
+            // Nothing under a rendered line height can lose a line, so nothing under it matters.
+            if (overIn <= 0.05) return;
+            el.__boxSeen = 1;
             var ovf = '?';
             try { var cs = window.getComputedStyle(el); ovf = cs.overflow + '/' + cs.overflowY; } catch (e) {}
             if (!/hidden|clip|scroll|auto/.test(ovf)) return;   // visible overflow spills, it does not cut

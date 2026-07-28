@@ -1346,12 +1346,22 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
                     : 'float:right;margin:0 0 0.10in 0.20in;';
   // Same letterbox fix as gzImgBox: a contain image would leave transparent bands inside the border.
   var box = (!lmCropSafe(m) && m.image)
-    // NO min-height here: the image is sized by WIDTH with height:auto, so if its real aspect makes
-    // it shorter than the reserved height, a min-height would hold the border open and leave a band
-    // of dead space between the picture and the frame. Letting the box hug the image keeps the
-    // frame tight to the art; the packer's estimate stays on the high side, which is the safe way
-    // to be wrong (a slightly short page, never a clipped one).
+    // MIN-HEIGHT FLOOR (v3.0.266) -- this box previously had NO floor, on the reasoning that letting
+    // it hug the art avoided a dead-space band and that 'the packer's estimate stays on the high
+    // side, which is the safe way to be wrong'. That reasoning was wrong, and it cost us a week.
+    // measureLayout ABORTS every image request so layout never waits on R2 -- so with height:auto
+    // and no floor, this box measured ~ZERO and the tower measured TEXT-ONLY. Every downstream
+    // number was then blind: the band height, the tower-merge rung ladder (which read 7.89in for a
+    // page that renders far taller and therefore never climbed to a shrink rung), REAL, REAL-CELL,
+    // NEVER-CLIP and BOX-OVERFLOW all reported healthy on a page that visibly chopped its text in
+    // the PDF, where images DO load. gzImgBox already carries exactly this floor for the same
+    // reason -- the tower was the one band type left without it.
+    // The floor is imgH, which is what a width-driven box renders at for the stored aspect, so it
+    // adds NO dead space unless that stored aspect is stale. It is a FLOOR, never a ceiling: the
+    // img keeps width:100 percent + height:auto, there is no overflow:hidden and no object-fit here,
+    // so the box can only grow to the picture. This cannot crop a tower.
     ? ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) +
+       'in;min-height:' + imgH.toFixed(2) +
        'in;position:relative;background:transparent;line-height:0;">' +
        // Tower box is WIDTH-driven with no fixed height, so the image must use height:auto (the box
        // grows to the image). The primitive's contain path uses height:100%, which behaves
