@@ -14,10 +14,22 @@
 // puppeteer is require()'d lazily so the module loads before the dep is installed.
 // ============================================================
 
-async function measureDocument(html, options) {
-  options = options || {};
-  const puppeteer = require('puppeteer');
-  const launchOpts = {
+// ===== SHARED MEASURE BROWSER =====================================================================
+// measureDocument used to launch a FRESH Chromium on every call and close it again. The optimize
+// loop calls it constantly -- once per review pass, once per text move, and once per round of the
+// scale bisection -- so a couple of Optimize runs produced roughly 95 browser launches, visible in
+// the Railway log as 95 [NEVER-CLIP] lines. A single shrinkImage op alone costs four whole-book
+// launches while it bisects. Eventually the container has no room to start another and Chromium
+// reports 'Failed to launch the browser process' -- which is what stalled a run mid-loop with the
+// progress bar still animating (the bar is a CSS animation and knows nothing about state).
+// One browser is now launched lazily, shared by every measure, and closed after an idle period.
+// Only the PAGE is closed per call. If the browser dies or is disconnected the handle is dropped
+// and the next call relaunches, so a crash costs one measure rather than the process.
+var _mBrowser = null;
+var _mIdleTimer = null;
+var MEASURE_BROWSER_IDLE_MS = 5 * 60 * 1000;   // release the browser after five idle minutes
+function _mLaunchOpts() {
+  var o = {
     headless: true,
     args: [
       '--no-sandbox',
@@ -27,13 +39,51 @@ async function measureDocument(html, options) {
       '--font-render-hinting=none'
     ]
   };
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    launchOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) o.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  return o;
+}
+function _mTouchIdle() {
+  if (_mIdleTimer) clearTimeout(_mIdleTimer);
+  _mIdleTimer = setTimeout(function () {
+    var b = _mBrowser; _mBrowser = null; _mIdleTimer = null;
+    if (b) { try { b.close(); } catch (e) {} }
+  }, MEASURE_BROWSER_IDLE_MS);
+  if (_mIdleTimer && _mIdleTimer.unref) _mIdleTimer.unref();   // never hold the process open
+}
+async function _mGetBrowser() {
+  if (_mBrowser) {
+    var alive = true;
+    try { if (typeof _mBrowser.isConnected === 'function') alive = _mBrowser.isConnected(); } catch (e) { alive = false; }
+    if (alive) { _mTouchIdle(); return _mBrowser; }
+    try { await _mBrowser.close(); } catch (e) {}
+    _mBrowser = null;
   }
-
-  const browser = await puppeteer.launch(launchOpts);
+  const puppeteer = require('puppeteer');
+  _mBrowser = await puppeteer.launch(_mLaunchOpts());
+  try { _mBrowser.on('disconnected', function () { _mBrowser = null; }); } catch (e) {}
+  _mTouchIdle();
+  return _mBrowser;
+}
+// Bound a promise that has no timeout of its own. document.fonts.ready in particular can hang
+// forever if a webfont never settles -- and because it hangs, the cleanup below never runs and the
+// browser leaks. Measuring with fallback metrics is far better than never returning.
+function _mWithTimeout(p, ms, label) {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise(function (resolve) {
+      var t = setTimeout(function () {
+        try { console.warn('[measure] ' + label + ' timed out after ' + ms + 'ms -- continuing'); } catch (e) {}
+        resolve(null);
+      }, ms);
+      if (t && t.unref) t.unref();
+    })
+  ]);
+}
+async function measureDocument(html, options) {
+  options = options || {};
+  const browser = await _mGetBrowser();   // shared, not launched per call
+  const page = await browser.newPage();
   try {
-    const page = await browser.newPage();
 
     // Block image + media requests: layout is instant and never waits on R2.
     await page.setRequestInterception(true);
@@ -46,9 +96,11 @@ async function measureDocument(html, options) {
     await page.setContent(html, { waitUntil: 'load', timeout: options.timeoutMs || 60000 });
 
     // Wait for web fonts so measured text height matches the real PDF metrics.
-    await page.evaluate(function () {
+    // BOUNDED: setContent above carries a timeout; this did not, and a font that never settles hung
+    // the pack forever while leaking the browser, because the cleanup below never ran.
+    await _mWithTimeout(page.evaluate(function () {
       return (document.fonts && document.fonts.ready) ? document.fonts.ready : null;
-    });
+    }), 15000, 'document.fonts.ready');
 
     var data = await page.evaluate(function () {
       var PX = 96; // CSS px per inch
@@ -211,7 +263,9 @@ async function measureDocument(html, options) {
     data.imagesBlocked = true;
     return data;
   } finally {
-    await browser.close();
+    // Close the PAGE only -- the browser is shared and lives on. A failure here must never mask the
+    // real error or abort the caller, but a leaked page is a leaked tab, so it is still attempted.
+    try { await page.close(); } catch (e) {}
   }
 }
 
