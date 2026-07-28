@@ -4708,7 +4708,16 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     // page; otherwise bail to today's behavior. The picture is never shrunk.
     var beforeLines = Math.ceil(bb.mbound / wideC);
     if (beforeLines < MZ_SPILL_MIN_LINES) return false;
-    var leadH = round3(beforeLines * lh + MZ_SPLIT_PAD);
+    // GAZETTE: the spill lead is wrapped in gzNarrBox, which adds real vertical chrome the raw
+    // line-height estimate misses -- padding 0.13in top+bottom (0.26), margin-bottom 0.10, a hairline
+    // border, AND line-height:1.4 that makes each rendered line taller than the measured `lh`. Left
+    // unbudgeted, the enclosed lead rendered ~0.73in taller than planned and clipped its last line(s)
+    // in the box's overflow:hidden (the gazette feature/float chop). Add the box overhead + a
+    // line-height allowance when enclose is on; Magazine (no box) keeps the bare estimate.
+    var _enclosed = !!(bb.sOpts ? (bb.sOpts.enclose) : (opts && opts.enclose));
+    var _boxChrome = _enclosed ? (0.26 + 0.10 + 0.03) : 0;                 // padding + margin + border
+    var _lhPad = _enclosed ? (beforeLines * lh * 0.18) : 0;                // ~line-height:1.4 vs raw lh underestimate
+    var leadH = round3(beforeLines * lh + MZ_SPLIT_PAD + _boxChrome + _lhPad);
     if (leadH > R - 0.2) return false;
     var afterLines = Math.ceil(Math.max(0, it.stextLen - bb.mbound) / wideC);
     var bodyH = round3(it.sImgH + afterLines * lh + 0.2);
@@ -5387,7 +5396,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       pages: pages.map(function (pg, pi) {
         var u = 0; pg.forEach(function (c) { u += (c.heightIn != null ? c.heightIn : (_fm.h[c.band] || 0)); });
         return { page: pi, used: Math.round(u * 1000) / 1000,
-          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null), simg: (c._simg || false), sImgH: (c._sImgH != null ? c._sImgH : null), linesAtCut: (c._linesAtCut != null ? c._linesAtCut : null) }; }) };
+          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null), simg: (c._simg || false), sImgH: (c._sImgH != null ? c._sImgH : null), linesAtCut: (c._linesAtCut != null ? c._linesAtCut : null), textLead: !!c.textLead }; }) };
       })
     };
     // Re-measure the REAL composed output (after any tower-merge) so the dump shows true per-page
@@ -5750,7 +5759,7 @@ function magazinePlanText(packed) {
         (c.growMul ? ('  GROWN x' + (Math.round(c.growMul * 100) / 100)) : '') +
         (c.towerLead ? ('  +TOWER-LEAD b' + c.towerLead.band) : '') +
         (c.realH != null ? ('  [REAL-CELL ' + c.realH.toFixed(2) + 'in]') : '') +
-        (c.split && c.cStart === 0 ? ('  {simg=' + (c.simg ? '1' : '0') + ' sImgH=' + (c.sImgH != null ? c.sImgH.toFixed(2) : '?') + ' linesL=' + (c.linesAtCut != null ? c.linesAtCut.toFixed(2) : '?') + '}') : ''));
+        (c.split && c.cStart === 0 ? ('  {simg=' + (c.simg ? '1' : '0') + ' sImgH=' + (c.sImgH != null ? c.sImgH.toFixed(2) : '?') + ' linesL=' + (c.linesAtCut != null ? c.linesAtCut.toFixed(2) : '?') + (c.textLead ? ' textLead' : '') + '}') : ''));
     });
   });
 
