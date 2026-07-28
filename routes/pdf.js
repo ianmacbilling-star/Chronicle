@@ -4666,16 +4666,31 @@ function applyRunMoves(plan, k, pageBudget) {
 // was the only test there was.
 // Order key: beat index, then part within the beat (before < image/tower < after), then the char
 // offset of the slice. Walk the plan front to back and it must never go backwards.
-function pairedOrderKey(pl) {
-  var part = 1;                                            // image / tower / section-header sit mid-beat
+// ORDINAL, not beat id. Session scaffolding -- the header, the title image and the intro paragraph --
+// is emitted as synthetic beats numbered from 900001, interleaved with real beats numbered from 1.
+// Sorting by beat NUMBER therefore reports page 6 as broken, because beat 2 legitimately follows beat
+// 900003: header, title image, intro, then the story starts. Three such false positives on The
+// Strangers, all the same shape. The packer receives beats already in reading order, so the honest key
+// is a beat's POSITION in that stream. Every caller passes the map; without one the key falls back to
+// the id, which is right only for a book with no scaffolding and wrong for every real one.
+function pairedOrderKey(pl, ord) {
+  var b = (pl.beat != null ? pl.beat : 0);
+  var pos = (ord && ord[b] != null) ? ord[b] : b;
+  var part = 1;                                            // image / tower sits mid-beat
   if (pl.kind === 'narr') part = (pl.part === 'after') ? 2 : 0;
   else if (pl.kind === 'section-header') part = -1;        // the header opens its beat
-  return [(pl.beat != null ? pl.beat : 0), part, (pl.charStart || 0)];
+  return [pos, part, (pl.charStart || 0)];
 }
-function pairedOrderBreaks(plan) {
+// beat id -> ordinal, from a beats array already in reading order.
+function pairedOrdinals(beats) {
+  var m = {};
+  (beats || []).forEach(function (b, i) { if (b && b.idx != null && m[b.idx] == null) m[b.idx] = i; });
+  return m;
+}
+function pairedOrderBreaks(plan, ord) {
   var seq = [], out = [];
   (plan && plan.pages || []).forEach(function (pg, pi) {
-    (pg.placements || []).forEach(function (pl) { seq.push({ p: pi, k: pairedOrderKey(pl), pl: pl }); });
+    (pg.placements || []).forEach(function (pl) { seq.push({ p: pi, k: pairedOrderKey(pl, ord), pl: pl }); });
   });
   for (var i = 1; i < seq.length; i++) {
     var a = seq[i - 1].k, b = seq[i].k;
@@ -4823,7 +4838,7 @@ async function computePairedPack(req, campaignId, packOpts) {
   if (packOpts && packOpts.debug) {
     var _pco = Object.assign({}, _dco, { paper: 'white', campaignName: (mbuilt.campaign && mbuilt.campaign.name) || '' });
     var _realP = await remeasureComposedPaired(req, campaignId, plan, mbuilt.beats, _pco);
-    _pdbg = { pages: [], overflows: [], atRisk: [], remeasured: !_realP._error, remeasureError: _realP._error || null, beatText: [], imgProbes: (_realP._imgProbes || []) };
+    _pdbg = { pages: [], beatOrder: (packBeats || []).map(function (b) { return b.idx; }), overflows: [], atRisk: [], remeasured: !_realP._error, remeasureError: _realP._error || null, beatText: [], imgProbes: (_realP._imgProbes || []) };
     // Per-beat text measurement diagnostic: shows whether the split-slice heights have real line
     // data or fell back to estTextH, and the measured lines-per-char, so a compressed/bad measure
     // is visible directly.
@@ -6038,7 +6053,9 @@ function pairedPlanText(packed) {
   if (!_ovf.length && !_risk.length && d.remeasured) L.push('NEVER-CLIP: no page overflows or at-risk gaps (nothing clipped). [OK]');
   // ORDER-BREAK, paired. Printed for every paired dump so the column can never read 'n/a' again.
   try {
-    var _pob = pairedOrderBreaks({ pages: (d.pages || []).map(function (pg) { return { placements: (pg.placements || []) }; }) });
+    var _pord = {};
+    (d.beatOrder || []).forEach(function (bx, i) { if (bx != null && _pord[bx] == null) _pord[bx] = i; });
+    var _pob = pairedOrderBreaks({ pages: (d.pages || []).map(function (pg) { return { placements: (pg.placements || []) }; }) }, _pord);
     if (_pob.length) {
       L.push('');
       L.push('!!! ORDER-BREAK: ' + _pob.length + ' PLACE(S) READ OUT OF NARRATIVE ORDER !!!');
@@ -7277,7 +7294,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       fromPg.placements = fromBefore.slice(1);
       // ORDER FIRST, then fit. A move that reads wrong is not worth measuring: the height test alone
       // happily accepted pushing a beat's after-tail past the NEXT beat's opening paragraph.
-      var _ob = pairedOrderBreaks(plan);
+      var _ob = pairedOrderBreaks(plan, pairedOrdinals(beats));
       if (_ob.length) {
         toPg.placements = toBefore; fromPg.placements = fromBefore;
         try { console.warn('[order] refused move of ' + pairedPlacementLabel(moving) + ' from page ' +
@@ -7323,7 +7340,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           if (_try < MOVE_SHRINK_FLOOR) break;
           _tgtImg.scale = _try;
           _tgtImg.heightIn = Math.round((_tgtImg.fullH * _try + _over) * 1000) / 1000;
-          if (pairedOrderBreaks(plan).length) break;   // trimming the picture cannot fix bad order
+          if (pairedOrderBreaks(plan, pairedOrdinals(beats)).length) break;   // trimming cannot fix bad order
           var _r2 = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
           var _okF = (_r2 && _r2[fromPageIdx] != null) ? (_r2[fromPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : true;
           var _okT = (_r2 && _r2[toPageIdx] != null) ? (_r2[toPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : false;
