@@ -5413,17 +5413,18 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   // and re-pack. Repeat until nothing clips or we hit the iteration cap. This reacts to the real
   // measurement, so it fixes every clip class at once, now and for any future render change.
   try {
-    var _fvMaxRounds = 6, _fvClipTol = 0.12;   // >0.12in over budget = real clip risk (sub-line rounding ignored)
+    var _fvMaxRounds = 8, _fvClipTol = 0.12;   // >0.12in over budget = real clip risk (sub-line rounding ignored)
     if (packOpts && packOpts.flowSim) throw '__skip_flowsim__';   // Before dump shows the raw pack; no re-cut
     _mzFitVerifyLog = { rounds: 0, recuts: 0, ran: true };
     var round3 = function (n) { return Math.round(n * 1000) / 1000; };   // local: packMagazineBands's round3 is out of scope here
+    var _fvDone = {};   // (band:cStart) already re-cut once -> never re-cut the same slice again (prevents sliver loops)
     for (var _fvR = 0; _fvR < _fvMaxRounds; _fvR++) {
       _mzFitVerifyLog.rounds = _fvR + 1;
       var _fvReal = await remeasureComposedPages(req, campaignId, pages, bands);
       if (!_fvReal || !_fvReal._cells) { _mzFitVerifyLog.noCells = true; break; }
       var _fvCut = false;
       if (_fvR === 0) { _mzFitVerifyLog.probe = []; _mzFitVerifyLog.sawPages = pages.length; _mzFitVerifyLog.sawCells = 0; _mzFitVerifyLog.bandList = []; }
-      for (var _pi = 0; _pi < pages.length && !_fvCut; _pi++) {
+      for (var _pi = 0; _pi < pages.length; _pi++) {
         var _pg = pages[_pi];
         for (var _ci = 0; _ci < _pg.length; _ci++) {
           var _c = _pg[_ci];
@@ -5443,6 +5444,8 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           if (_cReal == null || _c.heightIn == null) continue;
           var _over = _cReal - _c.heightIn;
           if (_over <= _fvClipTol) continue;                                 // renders within its budget -> fine
+          var _doneKey = _c.band + ':' + (_c.cStart || 0);
+          if (_fvDone[_doneKey]) continue;                                   // already re-cut this slice once -> don't churn it into slivers
           try {
           var _bd = bands[_c.band];
           var _lc = meas.lineChars[_c.band], _ln = meas.lines[_c.band];
@@ -5459,20 +5462,21 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           if (_newLine < 1) continue;                                        // can't shrink further without emptying the slice
           var _newEnd = (_c.cStart || 0) + _lc[_newLine];
           if (_newEnd <= (_c.cStart || 0) + 20 || _newEnd >= _curEnd) continue;   // no-op / too small guard
-          // Re-cut: shrink this cell's char range and its budgeted height; push the shed text to the
-          // tail. If a following cell on this page is this band's continuation tail, extend its start
-          // back; otherwise insert a new tail cell right after.
+          // Re-cut: shrink this cell's char range. Budget the shrunk cell at its REAL height minus the
+          // shed lines' height (chrome-aware -- avoids the re-estimate re-clipping and looping).
           _c.cEnd = _newEnd;
-          _c.heightIn = round3(_ln[_newLine] + MZ_SPLIT_PAD);
+          var _shedH = (_ln[_curLine] - _ln[_newLine]);
+          _c.heightIn = round3(Math.max(_ln[_newLine] + MZ_SPLIT_PAD, _cReal - _shedH));
           var _next = _pg[_ci + 1];
           if (_next && _next.band === _c.band && (_next.cStart || 0) === _curEnd) {
             _next.cStart = _newEnd;                                          // existing tail absorbs the shed text
           } else {
-            _pg.splice(_ci + 1, 0, { band: _c.band, cStart: _newEnd, cEnd: _curEnd, split: true, heightIn: round3((_ln[_curLine] - _ln[_newLine]) + MZ_SPLIT_PAD + 0.32) });
+            _pg.splice(_ci + 1, 0, { band: _c.band, cStart: _newEnd, cEnd: _curEnd, split: true, heightIn: round3(_shedH + MZ_SPLIT_PAD + 0.32) });
+            _ci++;                                                           // skip the tail we just inserted
           }
-          _fvCut = true;                                                     // re-measure from scratch after each structural change
+          _fvDone[_doneKey] = true;                                          // this slice is handled; don't re-cut it again
+          _fvCut = true;
           _mzFitVerifyLog.recuts++;
-          break;
           } catch (_cellE) { if (!_mzFitVerifyLog.cellErr) _mzFitVerifyLog.cellErr = 'b' + _c.band + ': ' + String((_cellE && _cellE.message) || _cellE); continue; }
         }
       }
