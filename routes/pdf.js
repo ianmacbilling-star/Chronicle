@@ -4879,13 +4879,29 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
         // lines beside it. Using only the text height under-budgeted the head by the image's overhang
         // and the slice clipped its last line(s) in its overflow:hidden cell even when the page fit
         // (the gazette feature-band chop). Take the max of text-height and image-height.
-        var _textH = it.lines[L] + MZ_SPLIT_PAD;
+        // GAZETTE SPLIT-HEAD RE-WRAP (v3.0.268). A split head is not shown the slice in the position
+        // it was measured in: renderHead() re-renders it as a FRESH panel and the text re-wraps. It
+        // consistently comes out ONE LINE taller than lines[L] predicts. Measured across two books
+        // and two dumps, every enclosed split head ran over: +0.19in five times, +0.34 once, -0.11
+        // once (14 head/tail readings; every one of the 44 UNSPLIT cells measured exact to 0.00, so
+        // the machinery is fine -- it is only the re-wrap that is unaccounted for).
+        // MZ_SPLIT_PAD (0.25) already covers the panel chrome below the last line -- padding-bottom
+        // 0.13 + margin-bottom 0.10 + hairline border -- which is why v3.0.249's derived 0.39in
+        // over-corrected. The shortfall is a LINE, so reserve a line: taken from this band's own
+        // measured spacing, never a constant, so it tracks font size and layout instead of drifting
+        // out of date. Erring high costs a little white; erring low loses text -- and it did: the
+        // three pages that packed to 9.12 and rendered 9.31 all had a whole cell plus a split head.
+        var _bh = bands[it.band];
+        var _encH = !!((_bh && _bh.sOpts) ? _bh.sOpts.enclose : (opts && opts.enclose));
+        var _lhH = (_realTotal >= 2) ? ((it.lines[_realTotal - 1] - it.lines[0]) / (_realTotal - 1)) : 0;
+        var _reWrap = (_encH && _lhH > 0.05 && _lhH < 0.60) ? _lhH : 0;   // sane band only; 0 disables
+        var _textH = round3(it.lines[L] + MZ_SPLIT_PAD + _reWrap);
         var _imgClear = (it.cStart === 0 && it.simg && it.sImgH > 0) ? round3(it.sImgH + MZ_SPLIT_PAD) : 0;
         var headH = round3(Math.max(_textH, _imgClear));
         // The sentence snap and the word/punctuation sanitizer both ran inside chooseCut above, so
         // cEnd is already a clean boundary here. Head keeps its reserved height (a little extra
         // white is fine); the tail gets the pulled-back text and re-derives its lines.
-        cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true, imgBody: !!it.imgBody, _simg: !!it.simg, _sImgH: it.sImgH || 0, _linesAtCut: it.lines[L] });
+        cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true, imgBody: !!it.imgBody, _simg: !!it.simg, _sImgH: it.sImgH || 0, _linesAtCut: it.lines[L], _reWrap: round3(_reWrap) });
         used += headH; flush();
         var _rel = cEnd - it.cStart;
         var tLines = [], tChars = [];
@@ -5507,7 +5523,7 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
       pages: pages.map(function (pg, pi) {
         var u = 0; pg.forEach(function (c) { u += (c.heightIn != null ? c.heightIn : (_fm.h[c.band] || 0)); });
         return { page: pi, used: Math.round(u * 1000) / 1000,
-          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null), simg: (c._simg || false), sImgH: (c._sImgH != null ? c._sImgH : null), linesAtCut: (c._linesAtCut != null ? c._linesAtCut : null), textLead: !!c.textLead }; }) };
+          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null), simg: (c._simg || false), sImgH: (c._sImgH != null ? c._sImgH : null), linesAtCut: (c._linesAtCut != null ? c._linesAtCut : null), reWrap: (c._reWrap != null ? c._reWrap : null), textLead: !!c.textLead }; }) };
       })
     };
     // Re-measure the REAL composed output (after any tower-merge) so the dump shows true per-page
@@ -5930,7 +5946,7 @@ function magazinePlanText(packed) {
         (c.growMul ? ('  GROWN x' + (Math.round(c.growMul * 100) / 100)) : '') +
         (c.towerLead ? ('  +TOWER-LEAD b' + c.towerLead.band) : '') +
         (c.realH != null ? ('  [REAL-CELL ' + c.realH.toFixed(2) + 'in]') : '') +
-        (c.split && c.cStart === 0 ? ('  {simg=' + (c.simg ? '1' : '0') + ' sImgH=' + (c.sImgH != null ? c.sImgH.toFixed(2) : '?') + ' linesL=' + (c.linesAtCut != null ? c.linesAtCut.toFixed(2) : '?') + (c.textLead ? ' textLead' : '') + '}') : ''));
+        (c.split && c.cStart === 0 ? ('  {simg=' + (c.simg ? '1' : '0') + ' sImgH=' + (c.sImgH != null ? c.sImgH.toFixed(2) : '?') + ' linesL=' + (c.linesAtCut != null ? c.linesAtCut.toFixed(2) : '?') + (c.reWrap ? (' reWrap=' + c.reWrap.toFixed(2)) : '') + (c.textLead ? ' textLead' : '') + '}') : ''));
     });
   });
 
