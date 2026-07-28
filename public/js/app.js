@@ -14652,6 +14652,7 @@ var _finalizeAfterFills = {};   // per-page ink-fill % for the After pane (paral
 var _finalizeRunAiLoop = null;  // set by the finalize view to the AI loop; Optimize fires it once the After pane first renders (one-click AI optimize)
 var _finalizeAfterBlob = '';
 function loadFinalize() {
+  applyLayoutAvailability();   // drop withheld layouts from the pickers (server is authoritative)
   if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
   applyOptimizeViewMode();   // clean user view by default; admin diagnostics only when toggled on
   finalizeUpdateHeader();   // show the layout + attributes immediately, before the scan finishes
@@ -14761,6 +14762,31 @@ function optimizeProgressDone() {
   // process quit early. The log persists until the next Optimize run resets it.
 }
 // Clear everything a prior optimize/scan left behind so a fresh initial scan starts clean.
+// LAYOUT AVAILABILITY (client half). The server is authoritative -- parseCustomOpts rewrites a
+// withheld layout to the fallback whatever the request looks like -- but leaving a dead option in the
+// picker invites someone to choose it and watch nothing happen. Ask the server which layouts exist and
+// remove the rest from BOTH arrange selects (app.html carries two copies). If the fetch fails we leave
+// the picker alone: the server gate still holds, so the worst case is a visible option that silently
+// falls back, never a broken book.
+var _coLayoutsChecked = false;
+function applyLayoutAvailability() {
+  if (_coLayoutsChecked) return;
+  _coLayoutsChecked = true;
+  fetch('/api/pdf/layouts', { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      if (!j || !j.enabled || !j.enabled.length) return;
+      ['pcl-arrange', 'cl-arrange'].forEach(function (id) {
+        var sel = document.getElementById(id);
+        if (!sel) return;
+        Array.prototype.slice.call(sel.options).forEach(function (opt) {
+          if (j.enabled.indexOf(opt.value) < 0) opt.parentNode.removeChild(opt);
+        });
+        if (sel.selectedIndex < 0 && sel.options.length) sel.selectedIndex = 0;
+      });
+    })
+    .catch(function () {});
+}
 function finalizeClearScanState() {
   ['layoutai-free', 'layoutai-delta'].forEach(function (id) { var e = document.getElementById(id); if (e) e.innerHTML = ''; });
   ['finalize-before-count', 'finalize-after-count'].forEach(function (id) { var e = document.getElementById(id); if (e) e.textContent = ''; });

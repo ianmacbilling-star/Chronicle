@@ -574,6 +574,32 @@ function layoutSaga(moments, sections, intro, outro) {
 // A single options object drives the render instead of a named preset.
 // All visual primitives above are reused; nothing here touches the 7 presets.
 // ============================================================
+// ===== LAYOUT AVAILABILITY -- ONE PLACE ============================================================
+// A layout that cannot be guaranteed error-free is a layout that cannot be offered. Unlike a picture,
+// a reader cannot regenerate a page that clipped -- so 'usually fine' is not a standard, and a layout
+// either holds every page in every book or it is withheld.
+// GAZETTE is withheld: after a long session its remaining fault is a page rendering a hair over the
+// clip line and cutting the panel border. Every individual cause found was real and fixed, but the
+// architecture predicts what the browser will do and then hopes the render agrees. Narrowing that gap
+// is not the same as closing it, and only a hard post-compose verify gate can close it. See the V36
+// handoff, 'The condition for Gazette coming back'.
+// COMICPAGE is withheld simply because it has never been worked or verified to this standard.
+// To re-enable on staging without shipping to production, set the env var (comma-separated):
+//     LAYOUTS_BETA=gazette,comicpage
+// Read at call time, not at boot, so a Railway variable change takes effect on redeploy without a
+// code change. The check lives in parseCustomOpts, which every route funnels through, so a withheld
+// layout cannot be reached by a hand-written URL either -- not just hidden in the picker.
+var CO_LAYOUTS_WITHHELD = ['gazette', 'comicpage'];
+var CO_LAYOUT_FALLBACK = 'magazine';   // nearest relative to Gazette; shares the packer, no parchment box
+function layoutIsEnabled(a) {
+  a = String(a || '').toLowerCase();
+  if (CO_LAYOUTS_WITHHELD.indexOf(a) < 0) return true;
+  var beta = String(process.env.LAYOUTS_BETA || '').toLowerCase().split(/[,\s]+/).filter(Boolean);
+  return beta.indexOf(a) >= 0;
+}
+function layoutsEnabledList() {
+  return ['paired', 'comicpage', 'magazine', 'gazette'].filter(layoutIsEnabled);
+}
 var CO_DEFAULTS = {
   arrange: 'grid',       // grid | stack | splash | paired
   border: 'none',        // none | keyline | frame | comic | vignette | gallery
@@ -625,6 +651,8 @@ function parseCustomOpts(str) {
     if (typeof CO_DEFAULTS[k] === 'number') o[k] = (v === '1' || v === 'true') ? 1 : 0;
     else o[k] = v;
   });
+  // AUTHORITATIVE GATE: a withheld layout never reaches the packer, however the request was formed.
+  if (o.arrange && !layoutIsEnabled(o.arrange)) o.arrange = CO_LAYOUT_FALLBACK;
   return o;
 }
 
@@ -1026,6 +1054,23 @@ var MZ_TOWER_MERGE_MAX_IN = 9.16; // a merged/grown page must fit the composed C
 // 9.41). The old 9.40 let a page measuring 9.2-9.4 pass the gate and then clip its last line under
 // overflow:hidden -- the tower-lead beside-column overflow. 9.16 matches the packer's own body
 // budget (pageHeightIn 9.4 - HEADER_BAND_IN), so the merge gate and the packer now agree.
+// ===== PAGE GEOMETRY -- DERIVED FROM THE PHYSICAL PAGE, NOT ASSERTED ==============================
+// The page does not change between layouts: .content-page is 8.5 x 11in with 0.75in top and bottom
+// padding, shared by every layout. So the content area is 11 - 0.75 - 0.75 = 9.50in, and after the
+// running-head band is carved from the top, 9.50 - 0.24 = 9.26in is what a page can actually hold.
+// That derivation matches the measurements independently: across three books every page rendering
+// 9.23in was clean, 9.28in cut its border and 9.31in lost text -- a boundary at 9.26.
+// The code carried 9.65in as the content box for a long time, which is 0.15in more than the page
+// physically has, and every guard downstream inherited that error.
+// CO_CLIP_BOX_IN stays at the measured 9.24 rather than the derived 9.26: it is two hundredths
+// conservative, it is what the current books were verified against, and moving it is a behaviour
+// change that wants its own build and its own verification pass. The derivation is recorded here so
+// the next session can close that gap deliberately instead of rediscovering it.
+var CO_PAGE_H_IN = 11.0;                                  // physical page height
+var CO_PAGE_PAD_IN = 0.75;                                // .content-page top/bottom padding
+var CO_CONTENT_H_IN = CO_PAGE_H_IN - (2 * CO_PAGE_PAD_IN);  // 9.50in of usable page
+var CO_PACK_PAGE_H_IN = 9.4;                              // what every route passes as pageHeightIn
+var CO_CLIP_ACCEPT_TOL = 0.02;                            // slack when the apply gate asks 'does this fit'
 // ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
 // Content past this is cut by the composed page's overflow:hidden. This used to be recomputed as
 // (9.65 - HEADER_BAND_IN) = 9.41in in SIX separate places, with four more derivations of 'near the
@@ -3751,12 +3796,12 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
         _extra.campaignName = _hit.campaignName || '';
         _extra.packComposedBody = _hit.body;
       } else if (co.arrange === 'paired') {
-        var _packP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+        var _packP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
         _pco.campaignName = (_packP.campaign && _packP.campaign.name) || '';
         _extra.campaignName = _pco.campaignName;
         _extra.packComposedBody = composeBook(_packP.plan, _packP.beats, _pco);
       } else {
-        var _packM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+        var _packM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
         _pco.campaignName = (_packM.campaign && _packM.campaign.name) || '';
         _extra.campaignName = _pco.campaignName;
         _extra.packComposedBody = composeMagazine(_packM.plan, _packM.bands, _pco);
@@ -6187,6 +6232,11 @@ function magazinePlanText(packed) {
 
 // Admin-only easter egg: dump the pack plan as plain text (double-click the After page count).
 // Runs the same pack the compose does but returns the readable plan instead of a PDF -- no token spend.
+// Which layouts may be offered. The picker reads this so the server stays the single source of truth
+// -- no hard-coded list in the HTML to drift out of step with the gate above.
+router.get('/layouts', requireAuth, function (req, res) {
+  res.json({ enabled: layoutsEnabledList(), withheld: CO_LAYOUTS_WITHHELD.filter(function (a) { return !layoutIsEnabled(a); }) });
+});
 router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   // ?nogrows=1 -> REFERENCE PACK: every image at natural size, the run-scoped grow store ignored.
   // The store survives 30 minutes after an Optimize, so a plain pack-debug silently inherits the
@@ -6203,13 +6253,13 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
                  'arrange=' + (_cco.arrange || 'paired') + '\n\n';
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var _flow = !!req.query.flow;
-      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true, flowSim: _flow });
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true, flowSim: _flow });
       txt = _stamp + (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
       _dlName = String((packedM && packedM.campaign && packedM.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     } else {
       // Paired (Picture Book) now dumps too: compute with debug so it re-measures the composed
       // book and runs the never-clip check, then format with the paired dumper.
-      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
       txt = _stamp + pairedPlanText(packedP);
       _dlName = String((packedP && packedP.campaign && packedP.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     }
@@ -6414,12 +6464,12 @@ router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async functi
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     var dump, campaignName = 'campaign', _arrange;
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
-      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
       dump = magazinePlanText(packedM);
       campaignName = (packedM && packedM.campaign && packedM.campaign.name) || 'campaign';
       _arrange = _cco.arrange;
     } else {
-      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
       dump = pairedPlanText(packedP);
       campaignName = (packedP && packedP.campaign && packedP.campaign.name) || 'campaign';
       _arrange = 'paired';
@@ -6516,8 +6566,8 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     var isMag = (_cco.arrange === 'magazine' || _cco.arrange === 'gazette');
     var packed = isMag
-      ? await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true })
-      : await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      ? await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true })
+      : await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
     var dbg = packed.dbg || {};
     var dumpPages = dbg.pages || [];
 
@@ -6551,7 +6601,7 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
         if (newScale <= curScale + 0.02) { r.result = 'REJECT'; r.reason = 'no room to grow (page near box)'; results.push(r); return; }
         var deltaH = (im.fullH || 0) * (newScale - curScale);
         var after = before + deltaH;
-        if (after > CLIP_LINE_IN + 0.03) { r.result = 'REJECT'; r.reason = 'grow would overflow box'; results.push(r); return; }
+        if (after > CLIP_LINE_IN + CO_CLIP_ACCEPT_TOL) { r.result = 'REJECT'; r.reason = 'grow would overflow box'; results.push(r); return; }
         H[page] = after; im.scale = newScale; im.realH = (im.fullH || 0) * newScale;
         r.result = 'KEEP'; r.detail = 'scale ' + curScale.toFixed(2) + ' -> ' + newScale.toFixed(2) + ', image ' + ((im.fullH || 0) * newScale).toFixed(2) + 'in'; r.after = Math.round(after * 100) / 100;
         results.push(r); return;
@@ -6576,7 +6626,7 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
         var to = (op.op === 'pullLines') ? page : (op.page + 1);
         if (H[from] == null || H[to] == null) { r.result = 'REJECT'; r.reason = 'source or target page not found'; results.push(r); return; }
         var toAfter = H[to] + moveH;
-        if (toAfter > CLIP_LINE_IN + 0.03) { r.result = 'REJECT'; r.reason = 'moving ' + lines + ' line(s) would overflow the target page'; results.push(r); return; }
+        if (toAfter > CLIP_LINE_IN + CO_CLIP_ACCEPT_TOL) { r.result = 'REJECT'; r.reason = 'moving ' + lines + ' line(s) would overflow the target page'; results.push(r); return; }
         H[from] = Math.max(0, H[from] - moveH); H[to] = toAfter;
         r.result = 'KEEP'; r.detail = 'move ' + lines + ' line(s) (~' + moveH.toFixed(2) + 'in) from p' + from + ' to p' + to; r.fromPage = from; r.toPage = to;
         r.fromAfter = Math.round(H[from] * 100) / 100; r.toAfter = Math.round(H[to] * 100) / 100;
@@ -6624,7 +6674,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     // ===== MAGAZINE / GAZETTE apply (growMul on cells + text-cell moves) =====
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
-      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
       var mplan = packedM.plan, mbands = packedM.bands, mMeasure = packedM.measure || { lines: {}, lineChars: {} };
       var mName = (packedM.campaign && packedM.campaign.name) || 'campaign';
       var MCLIP = CO_CLIP_BOX_IN;
@@ -6713,7 +6763,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           }
           if (tryMul <= curMul + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: (_growCap <= curMul + 0.02 ? 'image at crop-safe max (growing further would crop the picture)' : 'no room to grow within box') }); continue; }
         } else {   // shrinkImage: only meaningful if the page currently clips
-          if (pageReal == null || pageReal <= MCLIP + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); continue; }
+          if (pageReal == null || pageReal <= MCLIP + CO_CLIP_ACCEPT_TOL) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); continue; }
           if (imgH == null || imgH <= 0) { tryMul = Math.max(0.5, curMul - 0.05); }
           else {
             var over = pageReal - MCLIP + 0.06;
@@ -6735,7 +6785,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         var _overshot = [];
         _staged.forEach(function (s) {
           var ph = (_batchReal[s.pageIdx] != null) ? _batchReal[s.pageIdx] : null;
-          if (ph != null && ph <= MCLIP + 0.02) {
+          if (ph != null && ph <= MCLIP + CO_CLIP_ACCEPT_TOL) {
             mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: s.tryMul, pageReal: Math.round(ph * 100) / 100 });
           } else {
             _overshot.push(s);
@@ -6759,7 +6809,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
             var _rr = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
             var rph = (_rr && _rr[s.pageIdx] != null) ? _rr[s.pageIdx] : null;
             if (rph == null) break;
-            if (rph <= MCLIP + 0.02) { best = mid; bestReal = rph; lo = mid; }   // fits -> reach higher (less shrink / more grow)
+            if (rph <= MCLIP + CO_CLIP_ACCEPT_TOL) { best = mid; bestReal = rph; lo = mid; }   // fits -> reach higher (less shrink / more grow)
             else { hi = mid; }                                                   // clips -> back off
             if (hi - lo < 0.04) break;
           }
@@ -6823,8 +6873,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
               headPg.push(_movedCell);
               tailPg.shift();
               var _mrWB = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
-              var okH2 = (_mrWB && _mrWB[headIdx] != null) ? (_mrWB[headIdx] <= MCLIP + 0.02) : false;
-              var okT2 = (_mrWB && _mrWB[tailIdx] != null) ? (_mrWB[tailIdx] <= MCLIP + 0.02) : true;
+              var okH2 = (_mrWB && _mrWB[headIdx] != null) ? (_mrWB[headIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : false;
+              var okT2 = (_mrWB && _mrWB[tailIdx] != null) ? (_mrWB[tailIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : true;
               if (_mrWB && !_mrWB._error && okH2 && okT2) {
                 if (tailPg.length === 0) mplan.pages.splice(tailIdx, 1);
                 mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: 'whole band', headReal: Math.round((_mrWB[headIdx] || 0) * 100) / 100, wholeBand: true });
@@ -6841,8 +6891,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
             headPg.push(headNew);
             tailPg[0] = tailNew;
             var _mrP = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
-            var okHp = (_mrP && _mrP[headIdx] != null) ? (_mrP[headIdx] <= MCLIP + 0.02) : false;
-            var okTp = (_mrP && _mrP[tailIdx] != null) ? (_mrP[tailIdx] <= MCLIP + 0.02) : true;
+            var okHp = (_mrP && _mrP[headIdx] != null) ? (_mrP[headIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : false;
+            var okTp = (_mrP && _mrP[tailIdx] != null) ? (_mrP[tailIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : true;
             if (_mrP && !_mrP._error && okHp && okTp) {
               mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: (cutLine - startLine), splitBand: true, headReal: Math.round((_mrP[headIdx] || 0) * 100) / 100 });
             } else {
@@ -6870,8 +6920,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
             headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: tailEnd });   // head absorbs the whole tail range
             tailPg.shift();   // remove the tail slice cell from the next page
             var _mrW = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
-            var okHeadW = (_mrW && _mrW[headIdx] != null) ? (_mrW[headIdx] <= MCLIP + 0.02) : false;
-            var okTailW = (_mrW && _mrW[tailIdx] != null) ? (_mrW[tailIdx] <= MCLIP + 0.02) : true;
+            var okHeadW = (_mrW && _mrW[headIdx] != null) ? (_mrW[headIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : false;
+            var okTailW = (_mrW && _mrW[tailIdx] != null) ? (_mrW[tailIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : true;
             if (_mrW && !_mrW._error && okHeadW && okTailW) {
               // If the tail page is now empty (the pulled tail was its only content), drop the page.
               if (tailPg.length === 0) { mplan.pages.splice(tailIdx, 1); }
@@ -6888,8 +6938,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: newBound });
           tailPg[0] = Object.assign({}, tailCell, { cStart: newBound });
           var _mr2 = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
-          var okHead = (_mr2 && _mr2[headIdx] != null) ? (_mr2[headIdx] <= MCLIP + 0.02) : false;
-          var okTail = (_mr2 && _mr2[tailIdx] != null) ? (_mr2[tailIdx] <= MCLIP + 0.02) : true;
+          var okHead = (_mr2 && _mr2[headIdx] != null) ? (_mr2[headIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : false;
+          var okTail = (_mr2 && _mr2[tailIdx] != null) ? (_mr2[tailIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL) : true;
           if (_mr2 && !_mr2._error && okHead && okTail) {
             mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: (newLi - li), boundaryFrom: _hSave, boundaryTo: newBound, headReal: Math.round((_mr2[headIdx] || 0) * 100) / 100 });
           } else {
@@ -6952,7 +7002,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         note: 'Magazine grow/shrink applied and confirmed by real re-measure. Text/tower moves deferred (pass 1 already densifies magazine).' });
     }
 
-    var packed = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4, debug: true });
+    var packed = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
     var plan = packed.plan;
     var beats = packed.beats;
     var campaignName = (packed.campaign && packed.campaign.name) || 'campaign';
@@ -6996,8 +7046,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       fromPg.placements = fromBefore.slice(1);
       // Re-measure the whole book; both affected pages must fit.
       var _r = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
-      var okFrom = (_r && _r[fromPageIdx] != null) ? (_r[fromPageIdx] <= CLIP + 0.02) : true;
-      var okTo = (_r && _r[toPageIdx] != null) ? (_r[toPageIdx] <= CLIP + 0.02) : false;
+      var okFrom = (_r && _r[fromPageIdx] != null) ? (_r[fromPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : true;
+      var okTo = (_r && _r[toPageIdx] != null) ? (_r[toPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : false;
       if (_r && !_r._error && okTo && okFrom) {
         return { ok: true, toReal: _r[toPageIdx], fromReal: _r[fromPageIdx] };
       }
@@ -7049,7 +7099,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         var _r = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
         var ph = (_r && _r[op.page] != null) ? _r[op.page] : null;
         if (ph == null) break;
-        if (ph <= CLIP + 0.02) {
+        if (ph <= CLIP + CO_CLIP_ACCEPT_TOL) {
           best = pl.scale; bestReal = ph;
           if (op.op === 'growImage') lo = pl.scale; else hi = pl.scale;   // grow: reach higher; shrink: it cleared, try less shrink
         } else {
@@ -7135,7 +7185,7 @@ router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async functi
     // Also purge any LEGACY imgGrow/scale left in layout_meta from before grows went run-scoped. These
     // are no longer read (lmGrow/lmScale are run-scoped now), so they're inert -- but clearing them
     // removes stale data. Enumerate the book's moments via the pack (band momId) and strip both keys.
-    var packedR = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+    var packedR = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
     var _rbands = packedR.bands || [];
     var _db = await getDb();
     var _seen = {}, _cleared = 0;
@@ -7230,7 +7280,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
       if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
-        var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+        var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
         _cco.campaignName = (packedM.campaign && packedM.campaign.name) || '';
         var bodyM = composeMagazine(packedM.plan, packedM.bands, _cco);
         composedCachePut(req.params.campaignId, req, _cco.arrange, bodyM, _cco.campaignName);   // the print interior reuses this
@@ -7247,7 +7297,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       }
       // Per-image decoration overhead (frame + margins) is resolved from the decoration
       // registry inside computePairedPack, per beat -- no hand-coded per-style numbers here.
-      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: 9.4 });
+      var packedC = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
       _cco.campaignName = (packedC.campaign && packedC.campaign.name) || '';
       var body = composeBook(packedC.plan, packedC.beats, _cco);
       composedCachePut(req.params.campaignId, req, 'paired', body, _cco.campaignName);   // the print interior reuses this
