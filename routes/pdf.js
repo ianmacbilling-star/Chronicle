@@ -4829,7 +4829,7 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
         // The sentence snap and the word/punctuation sanitizer both ran inside chooseCut above, so
         // cEnd is already a clean boundary here. Head keeps its reserved height (a little extra
         // white is fine); the tail gets the pulled-back text and re-derives its lines.
-        cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true, imgBody: !!it.imgBody });
+        cur.push({ band: it.band, heightIn: headH, cStart: it.cStart, cEnd: cEnd, split: true, imgBody: !!it.imgBody, _simg: !!it.simg, _sImgH: it.sImgH || 0, _linesAtCut: it.lines[L] });
         used += headH; flush();
         var _rel = cEnd - it.cStart;
         var tLines = [], tChars = [];
@@ -5387,7 +5387,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       pages: pages.map(function (pg, pi) {
         var u = 0; pg.forEach(function (c) { u += (c.heightIn != null ? c.heightIn : (_fm.h[c.band] || 0)); });
         return { page: pi, used: Math.round(u * 1000) / 1000,
-          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null) }; }) };
+          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null), simg: (c._simg || false), sImgH: (c._sImgH != null ? c._sImgH : null), linesAtCut: (c._linesAtCut != null ? c._linesAtCut : null) }; }) };
       })
     };
     // Re-measure the REAL composed output (after any tower-merge) so the dump shows true per-page
@@ -5749,7 +5749,8 @@ function magazinePlanText(packed) {
         (c.split ? ('CUT ' + c.cStart + '..' + (c.cEnd == null ? 'end' : c.cEnd)) : '') +
         (c.growMul ? ('  GROWN x' + (Math.round(c.growMul * 100) / 100)) : '') +
         (c.towerLead ? ('  +TOWER-LEAD b' + c.towerLead.band) : '') +
-        (c.realH != null ? ('  [REAL-CELL ' + c.realH.toFixed(2) + 'in]') : ''));
+        (c.realH != null ? ('  [REAL-CELL ' + c.realH.toFixed(2) + 'in]') : '') +
+        (c.split && c.cStart === 0 ? ('  {simg=' + (c.simg ? '1' : '0') + ' sImgH=' + (c.sImgH != null ? c.sImgH.toFixed(2) : '?') + ' linesL=' + (c.linesAtCut != null ? c.linesAtCut.toFixed(2) : '?') + '}') : ''));
     });
   });
 
