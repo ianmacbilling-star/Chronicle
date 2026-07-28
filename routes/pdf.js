@@ -5416,6 +5416,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     var _fvMaxRounds = 6, _fvClipTol = 0.12;   // >0.12in over budget = real clip risk (sub-line rounding ignored)
     if (packOpts && packOpts.flowSim) throw '__skip_flowsim__';   // Before dump shows the raw pack; no re-cut
     _mzFitVerifyLog = { rounds: 0, recuts: 0, ran: true };
+    var round3 = function (n) { return Math.round(n * 1000) / 1000; };   // local: packMagazineBands's round3 is out of scope here
     for (var _fvR = 0; _fvR < _fvMaxRounds; _fvR++) {
       _mzFitVerifyLog.rounds = _fvR + 1;
       var _fvReal = await remeasureComposedPages(req, campaignId, pages, bands);
@@ -5437,6 +5438,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
             _mzFitVerifyLog.probe.push('b' + _c.band + ' p' + _pi + ':' + _ci + ' budget=' + _c.heightIn.toFixed(2) + ' real=' + _cRealAny.toFixed(2) + ' over=' + (_cRealAny - _c.heightIn).toFixed(2) + ' split=' + (_c.split ? 1 : 0) + ' imgBody=' + (_c.imgBody ? 1 : 0) + ' towerLead=' + (_c.towerLead ? 1 : 0) + ' cStart=' + (_c.cStart || 0) + ' grow=' + (_c.growMul || 1));
           }
           if (!_c.split || _c.imgBody || _c.towerLead) continue;             // only text-bearing slices can shed lines
+          if (_c.growMul && _c.growMul !== 1) continue;                      // a GROWN cell is intentionally taller than its pre-grow budget -- not a clip
           var _cReal = _fvReal._cells[_pi + ':' + _ci];
           if (_cReal == null || _c.heightIn == null) continue;
           var _over = _cReal - _c.heightIn;
