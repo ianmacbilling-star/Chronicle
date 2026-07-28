@@ -14897,9 +14897,16 @@ function finalizeDownloadDiagnostics() {
   var q = finalizeBookQuery();
   var cap = window._optimizeCapture || null;
   var refQ = q ? (q + '&nogrows=1') : '?nogrows=1';
+  // KEEP THE ERROR BODY. pack-debug puts its FULL STACK in the 500 response body; this helper used to
+  // throw that away and substitute 'HTTP 500', so the one artifact that explained a failure was
+  // discarded by the very tool built to capture it. Read the body either way.
   function grab(url) {
     return fetch(url, { credentials: 'same-origin' })
-      .then(function (r) { return r.ok ? r.text() : ('[dump fetch failed: HTTP ' + r.status + ']'); })
+      .then(function (r) {
+        return r.text().then(function (body) {
+          return r.ok ? body : ('[dump fetch failed: HTTP ' + r.status + ']\n' + (body || '(empty response body)'));
+        });
+      })
       .catch(function (e) { return '[dump fetch error: ' + (e && e.message) + ']'; });
   }
   // SEQUENTIAL, never Promise.all: computeMagazinePack writes module-level state, so two packs in

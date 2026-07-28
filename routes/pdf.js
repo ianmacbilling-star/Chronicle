@@ -4737,7 +4737,10 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     // unbudgeted, the enclosed lead rendered ~0.73in taller than planned and clipped its last line(s)
     // in the box's overflow:hidden (the gazette feature/float chop). Add the box overhead + a
     // line-height allowance when enclose is on; Magazine (no box) keeps the bare estimate.
-    var _enclosed = !!(bb.sOpts ? (bb.sOpts.enclose) : (opts && opts.enclose));
+    // sOpts is the ONLY source for enclose in here: packMagazineBands takes no opts parameter, so the
+    // old fallback referenced an undefined identifier and only survived because bb.sOpts is always set
+    // on a band that reaches this point. A latent ReferenceError with no reason to exist -- removed.
+    var _enclosed = !!(bb.sOpts && bb.sOpts.enclose);
     var _boxChrome = _enclosed ? (0.26 + 0.10 + 0.03) : 0;                 // padding + margin + border
     var _lhPad = _enclosed ? (beforeLines * lh * 0.18) : 0;                // ~line-height:1.4 vs raw lh underestimate
     var leadH = round3(beforeLines * lh + MZ_SPLIT_PAD + _boxChrome + _lhPad);
@@ -4859,7 +4862,34 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     // room left, splitting here would clip the image/first slice -- so treat it as un-splittable into R
     // and move the whole band to a fresh page (where sImgH fits).
     var _imgNeedsClear = (it.cStart === 0 && it.simg && it.sImgH > 0) ? round3(it.sImgH + MZ_SPLIT_PAD) : 0;
-    var _canSplitIntoR = function (room) { return (_imgNeedsClear ? (_imgNeedsClear <= room + 1e-6) : true) && !!chooseCut(room); };
+    // SPLIT-HEAD RE-WRAP RESERVE (v3.0.269 -- corrects v3.0.268). renderHead() re-renders the slice as
+    // a FRESH panel, where it re-wraps one line longer than its measured position predicted. v3.0.268
+    // added that line to the head's recorded height but left chooseCut() sizing the cut from the old
+    // room -- so the cut never moved, the page was still committed to the same two cells, and the
+    // three nicked pages stayed at a rendered 9.31in with only the bookkeeping changed. The rule the
+    // handoff states (chooseCut must be BOTH the predicate and the cut) means the reserve has to be
+    // netted out of the room the cut is chosen against, so it is computed HERE, before any cut.
+    // Line height is the MEDIAN gap between consecutive measured line bottoms, not the mean:
+    // paragraph breaks are large outliers and dragged the mean to 0.30in against a true 0.19in
+    // (v3.0.268 over-reserved by half a line on all 42 heads). The median ignores them.
+    // sOpts is the only source for enclose here -- packMagazineBands has no opts parameter, and
+    // v3.0.268 referenced one, which threw ReferenceError on any band whose sOpts was unset.
+    var _bh = bands[it.band];
+    var _encH = !!(_bh && _bh.sOpts && _bh.sOpts.enclose);
+    var _lhH = 0;
+    if (_encH && it.lines && _realTotal >= 3) {
+      var _gaps = [];
+      for (var _gi = 1; _gi < _realTotal; _gi++) {
+        var _g = it.lines[_gi] - it.lines[_gi - 1];
+        if (_g > 0.02) _gaps.push(_g);
+      }
+      if (_gaps.length) {
+        _gaps.sort(function (x, y) { return x - y; });
+        _lhH = _gaps[Math.floor(_gaps.length / 2)];
+      }
+    }
+    var _reWrap = (_encH && _lhH > 0.05 && _lhH < 0.60) ? round3(_lhH) : 0;   // 0 disables; sane band only
+    var _canSplitIntoR = function (room) { return (_imgNeedsClear ? (_imgNeedsClear <= room + 1e-6) : true) && !!chooseCut(room - _reWrap); };
     // If it overflows the room left and can neither split into that room nor sit here, move to a fresh page first.
     if (cur.length && (it.height + keepWith) > R + 1e-6) {
       if (!(canSplit && _canSplitIntoR(R))) {
@@ -4869,7 +4899,7 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
     }
     if ((it.height + keepWith) <= R + 1e-6) { placeWhole(it); continue; }   // fits
     if (canSplit && _canSplitIntoR(R)) {
-      var _cut = chooseCut(R);
+      var _cut = chooseCut(R - _reWrap);   // SAME room the predicate just approved -- never disagree
       var L = _cut ? _cut.L : -1;
       if (L >= 0) {
         var cEnd = _cut.cEnd;
@@ -4891,11 +4921,7 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
         // measured spacing, never a constant, so it tracks font size and layout instead of drifting
         // out of date. Erring high costs a little white; erring low loses text -- and it did: the
         // three pages that packed to 9.12 and rendered 9.31 all had a whole cell plus a split head.
-        var _bh = bands[it.band];
-        var _encH = !!((_bh && _bh.sOpts) ? _bh.sOpts.enclose : (opts && opts.enclose));
-        var _lhH = (_realTotal >= 2) ? ((it.lines[_realTotal - 1] - it.lines[0]) / (_realTotal - 1)) : 0;
-        var _reWrap = (_encH && _lhH > 0.05 && _lhH < 0.60) ? _lhH : 0;   // sane band only; 0 disables
-        var _textH = round3(it.lines[L] + MZ_SPLIT_PAD + _reWrap);
+        var _textH = round3(it.lines[L] + MZ_SPLIT_PAD + _reWrap);   // _reWrap computed above, before the cut
         var _imgClear = (it.cStart === 0 && it.simg && it.sImgH > 0) ? round3(it.sImgH + MZ_SPLIT_PAD) : 0;
         var headH = round3(Math.max(_textH, _imgClear));
         // The sentence snap and the word/punctuation sanitizer both ran inside chooseCut above, so
