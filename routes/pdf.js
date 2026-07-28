@@ -2093,7 +2093,6 @@ function composedCacheGet(campaignId, req) {
   } catch (e) { return null; }
 }
 var _mzBands = null;
-var _mzFitVerifyLog = null;   // fit-verify re-cut pass telemetry for the dump
 
 // RUN-SCOPED image grow/scale state. Optimization changes (grows for magazine, shrinks for paired)
 // used to persist into moments.layout_meta permanently -- which made the layout DRIFT every run: each
@@ -4857,31 +4856,6 @@ function packMagazineBands(bands, meas, pageH, markerBreak, growMap, splitAllow)
   return pages;
 }
 
-// Re-flow already-cut cells across page boundaries by their (now honest) heights. Used by the
-// fit-verify re-cut pass: after a clipping slice sheds a line, its shed text must move forward. We keep
-// every cell's decided cut and just re-greedy-place them into pages up to pageH. Tower/textLead/imgBody
-// grouping is preserved by keeping cells in their original order and never splitting further here.
-function repackMzFromCells(pages, bands, meas, pageH) {
-  var flat = [];
-  (pages || []).forEach(function (pg) { (pg || []).forEach(function (c) { if (c) flat.push(c); }); });
-  var round3 = function (n) { return Math.round(n * 1000) / 1000; };
-  var out = [], cur = [], used = 0;
-  function cellH(c) {
-    if (c.heightIn != null) return c.heightIn;
-    var bh = (meas && meas.h && meas.h[c.band]) || 0;
-    return bh;
-  }
-  for (var i = 0; i < flat.length; i++) {
-    var c = flat[i];
-    var h = cellH(c);
-    // A textLead must stay with the gap it filled on its page; but if it no longer fits, move it on.
-    if (cur.length && (used + h) > pageH + 1e-6) { out.push(cur); cur = []; used = 0; }
-    cur.push(c); used = round3(used + h);
-  }
-  if (cur.length) out.push(cur);
-  return out;
-}
-
 // leaving the `after` half with no line positions -- so the packer can't cut there and the whole
 // `after` is stranded on the next page (big white). If a splittable band's line data stops well
 // short of its text, extend it: reuse the measured line-height and chars-per-line to lay out the
@@ -5399,101 +5373,12 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     });
   });
 
-  // ---- FIT-VERIFY RE-CUT moved here: run AFTER all transforms so it verifies the FINAL layout ----
-  _mzFitVerifyLog = { rounds: 0, recuts: 0, ran: false };
-
-  // ---- FIT-VERIFY RE-CUT (the permanent no-clip guarantee) ----------------------------------------
-  // The greedy pack budgets cell heights from measured line data, but the real render adds height the
-  // estimate can't fully see (Gazette box padding/border, line-height:1.4, paragraph margins). When a
-  // text slice renders taller than its budgeted cell, it clips its last line(s) at the cell/page
-  // overflow:hidden -- and different render paths (spill lead, feature head, tail) each under-estimate
-  // by a different amount, so patching them one at a time never ends. Instead we VERIFY against the
-  // truth: compose the pages, measure the REAL height of every cell, and for any text slice that
-  // renders enough taller than budgeted to risk a clip, shed a line from its cut (push it to the tail)
-  // and re-pack. Repeat until nothing clips or we hit the iteration cap. This reacts to the real
-  // measurement, so it fixes every clip class at once, now and for any future render change.
-  try {
-    var _fvMaxRounds = 8, _fvClipTol = 0.12;   // >0.12in over budget = real clip risk (sub-line rounding ignored)
-    if (packOpts && packOpts.flowSim) throw '__skip_flowsim__';   // Before dump shows the raw pack; no re-cut
-    _mzFitVerifyLog = { rounds: 0, recuts: 0, ran: true };
-    var round3 = function (n) { return Math.round(n * 1000) / 1000; };   // local: packMagazineBands's round3 is out of scope here
-    var _fvDone = {};   // (band:cStart) already re-cut once -> never re-cut the same slice again (prevents sliver loops)
-    for (var _fvR = 0; _fvR < _fvMaxRounds; _fvR++) {
-      _mzFitVerifyLog.rounds = _fvR + 1;
-      var _fvReal = await remeasureComposedPages(req, campaignId, pages, bands);
-      if (!_fvReal || !_fvReal._cells) { _mzFitVerifyLog.noCells = true; break; }
-      var _fvCut = false;
-      if (_fvR === 0) { _mzFitVerifyLog.probe = []; _mzFitVerifyLog.sawPages = pages.length; _mzFitVerifyLog.sawCells = 0; _mzFitVerifyLog.bandList = []; }
-      for (var _pi = 0; _pi < pages.length; _pi++) {
-        var _pg = pages[_pi];
-        for (var _ci = 0; _ci < _pg.length; _ci++) {
-          var _c = _pg[_ci];
-          if (!_c) continue;
-          if (_fvR === 0) { _mzFitVerifyLog.sawCells++; if (_c.split) _mzFitVerifyLog.bandList.push('b' + _c.band + '@' + _pi + ':' + _ci); }
-          var _cRealAny = _fvReal._cells[_pi + ':' + _ci];
-          if (_fvR === 0 && (_c.band === 13 || _c.band === 27 || _c.band === 26)) {
-            _mzFitVerifyLog.probe.push('TARGET b' + _c.band + ' p' + _pi + ':' + _ci + ' budget=' + (_c.heightIn != null ? _c.heightIn.toFixed(2) : '?') + ' real=' + (_cRealAny != null ? _cRealAny.toFixed(2) : 'NULL') + ' split=' + (_c.split ? 1 : 0) + ' imgBody=' + (_c.imgBody ? 1 : 0) + ' textLead=' + (_c.textLead ? 1 : 0) + ' cStart=' + (_c.cStart || 0) + ' cEnd=' + (_c.cEnd != null ? _c.cEnd : 'null'));
-          }
-          // Log EVERY cell that renders taller than a modest bar, with its flags, so skipped clippers show.
-          if (_fvR === 0 && _cRealAny != null && _c.heightIn != null && (_cRealAny - _c.heightIn) > 0.12) {
-            _mzFitVerifyLog.probe.push('b' + _c.band + ' p' + _pi + ':' + _ci + ' budget=' + _c.heightIn.toFixed(2) + ' real=' + _cRealAny.toFixed(2) + ' over=' + (_cRealAny - _c.heightIn).toFixed(2) + ' split=' + (_c.split ? 1 : 0) + ' imgBody=' + (_c.imgBody ? 1 : 0) + ' towerLead=' + (_c.towerLead ? 1 : 0) + ' cStart=' + (_c.cStart || 0) + ' grow=' + (_c.growMul || 1));
-          }
-          if (!_c.split || _c.imgBody || _c.towerLead) continue;             // only text-bearing slices can shed lines
-          if (_c.growMul && _c.growMul !== 1) continue;                      // a GROWN cell is intentionally taller than its pre-grow budget -- not a clip
-          var _cReal = _fvReal._cells[_pi + ':' + _ci];
-          if (_cReal == null || _c.heightIn == null) continue;
-          var _over = _cReal - _c.heightIn;
-          if (_over <= _fvClipTol) continue;                                 // renders within its budget -> fine
-          var _doneKey = _c.band + ':' + (_c.cStart || 0);
-          if (_fvDone[_doneKey]) continue;                                   // already re-cut this slice once -> don't churn it into slivers
-          try {
-          var _bd = bands[_c.band];
-          var _lc = meas.lineChars[_c.band], _ln = meas.lines[_c.band];
-          if (!_bd || _bd.stext == null || !_lc || !_ln || _lc.length < 2) continue;
-          // Shed enough whole lines to cover the overflow (+ one line of safety). Map the new cEnd to a
-          // line boundary so we never cut mid-line.
-          var _lhAvg = (_ln[_ln.length - 1] - _ln[0]) / Math.max(1, (_ln.length - 1));
-          if (!(_lhAvg > 0.02)) continue;
-          var _shed = Math.max(1, Math.ceil(_over / _lhAvg) + 1);
-          var _curEnd = (_c.cEnd != null) ? _c.cEnd : _bd.stext.length;
-          // Find the line index at/just before the current cut, step back _shed lines.
-          var _curLine = 0; for (var _q = 0; _q < _lc.length; _q++) { if (_lc[_q] <= (_curEnd - (_c.cStart || 0))) _curLine = _q; }
-          var _newLine = _curLine - _shed;
-          if (_newLine < 1) continue;                                        // can't shrink further without emptying the slice
-          var _newEnd = (_c.cStart || 0) + _lc[_newLine];
-          if (_newEnd <= (_c.cStart || 0) + 20 || _newEnd >= _curEnd) continue;   // no-op / too small guard
-          // Re-cut: shrink this cell's char range. Budget the shrunk cell at its REAL height minus the
-          // shed lines' height (chrome-aware -- avoids the re-estimate re-clipping and looping).
-          _c.cEnd = _newEnd;
-          var _shedH = (_ln[_curLine] - _ln[_newLine]);
-          _c.heightIn = round3(Math.max(_ln[_newLine] + MZ_SPLIT_PAD, _cReal - _shedH));
-          var _next = _pg[_ci + 1];
-          if (_next && _next.band === _c.band && (_next.cStart || 0) === _curEnd) {
-            _next.cStart = _newEnd;                                          // existing tail absorbs the shed text
-          } else {
-            _pg.splice(_ci + 1, 0, { band: _c.band, cStart: _newEnd, cEnd: _curEnd, split: true, heightIn: round3(_shedH + MZ_SPLIT_PAD + 0.32) });
-            _ci++;                                                           // skip the tail we just inserted
-          }
-          _fvDone[_doneKey] = true;                                          // this slice is handled; don't re-cut it again
-          _fvCut = true;
-          _mzFitVerifyLog.recuts++;
-          } catch (_cellE) { if (!_mzFitVerifyLog.cellErr) _mzFitVerifyLog.cellErr = 'b' + _c.band + ': ' + String((_cellE && _cellE.message) || _cellE); continue; }
-        }
-      }
-      if (!_fvCut) break;                                                    // nothing clipped this round -> done
-      // Re-pack so the shed text reflows across page breaks with its new, honest heights.
-      pages = repackMzFromCells(pages, bands, meas, pageH);
-    }
-  } catch (_fvE) { try { console.error('[fit-verify] recut pass failed (non-fatal):', _fvE && _fvE.message); } catch (e) {} }
-
   var _dbg = null;
   if (packOpts && packOpts.debug) {
     var _fm = (typeof meas2 !== 'undefined' && meas2) ? meas2 : meas;
     _dbg = {
       arrange: (_co.arrange || 'magazine'), pageH: pageH, markerBreak: _markerBreak, grow: grow || {},
       towerMerge: _tmLog,   // per-attempt record of the tower-column merge (printed under the header)
-      fitVerify: _mzFitVerifyLog,   // fit-verify re-cut pass telemetry
-      _pagesAtDump: pages.length,   // pages.length at the moment the dump is built (compare vs fv-saw)
       co: _co,   // the FULL layout option set this plan was built from -- printed at the top of the dump
                  // so two dumps can be compared with certainty (a font change silently made two dumps
                  // describe different books once, and nothing on the page said so).
@@ -5840,10 +5725,6 @@ function magazinePlanText(packed) {
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
   // the page counts are not comparable no matter how similar the books look.
-  if (d.fitVerify) { L.push('fit-verify: ' + (d.fitVerify.ran ? ('ran ' + d.fitVerify.rounds + ' round(s), ' + d.fitVerify.recuts + ' re-cut(s)' + (d.fitVerify.noCells ? ' [NO _cells returned]' : '')) : 'did not run (flowSim or skipped)')); 
-    if (d.fitVerify.sawPages != null) L.push('    fv-saw: ' + d.fitVerify.sawPages + ' pages, ' + d.fitVerify.sawCells + ' cells; split cells: ' + ((d.fitVerify.bandList || []).join(' ') || '(none)') + '  [pagesAtDump=' + (d._pagesAtDump != null ? d._pagesAtDump : '?') + ']');
-    if (d.fitVerify.cellErr) L.push('    fv-cellErr: ' + d.fitVerify.cellErr);
-    if (d.fitVerify.probe && d.fitVerify.probe.length) { d.fitVerify.probe.forEach(function (p) { L.push('    fv-probe: ' + p); }); } }
   if (d.towerMerge && d.towerMerge.length) {
     L.push('tower merge: ' + d.towerMerge.length + ' attempt(s)');
     d.towerMerge.forEach(function (s) { L.push('  ' + s); });

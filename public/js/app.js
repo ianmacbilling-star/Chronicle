@@ -14658,7 +14658,7 @@ function loadFinalize() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
-  if (loadFinalize._lastUrl === url) { finalizeLoadLastOptimized(); return; }   // came back to the same book -> just re-restore the saved optimized PDF
+  if (loadFinalize._lastUrl === url) { finalizeLoadLastOptimized(); return; }   // came back: reveal the 'Load Last Optimized File' button if one is saved
   loadFinalize._lastUrl = url;
   finalizeClearScanState();   // fresh initial scan -> drop stale counts / under-fill list / optimized pane
   var _rb = document.getElementById('layoutai-run-btn');
@@ -14675,7 +14675,7 @@ function loadFinalize() {
     if (_sl) _sl.style.display = 'none';
   }
   renderPdfInto(url, 'finalize-before-scroll', true);
-  finalizeLoadLastOptimized();   // fresh load: restore AFTER clearScanState (which wiped the After pane) so the saved optimized PDF shows
+  finalizeLoadLastOptimized();   // reveal the 'Load Last Optimized File' button if a saved version exists for this book+layout
 }
 
 // The optimize tab has two faces. Regular users (and admins by default) see ONLY the After pane -- the
@@ -14711,6 +14711,8 @@ function applyOptimizeViewMode() {
   if (afterNav) afterNav.style.display = showDiag ? 'none' : 'flex';
   var estNote = document.getElementById('layoutai-est-note');
   if (estNote) estNote.style.display = showDiag ? 'none' : '';
+  var loadLast = document.getElementById('layoutai-load-last');
+  if (loadLast && showDiag) loadLast.style.display = 'none';   // admin diagnostic view: hide (user-view aid); user view re-checks via finalizeLoadLastOptimized
   if (typeof finalizeUpdateEstimateBadge === 'function') finalizeUpdateEstimateBadge();
   // Reflect the state on the pill for the admin (subtle), and keep the label honest.
   var pill = document.getElementById('optimize-preview-pill');
@@ -14930,19 +14932,26 @@ function finalizeShowOptimizedNote(at, fromPrevious) {
 }
 // On opening the Optimize tab, load the saved optimized PDF (if any) so the user sees their finished
 // book without re-running. Only in the clean user view; the admin diagnostic view runs its own flow.
-function finalizeLoadLastOptimized() {
+function finalizeLoadLastOptimized(manual) {
   if (!state.currentCampaign) return;
-  if (optimizeIsAdmin() && window._optimizeAdminView) return;   // admin view uses Before/After compare
+  if (!manual && optimizeIsAdmin() && window._optimizeAdminView) return;   // auto: admin diagnostic view uses Before/After compare (manual click still works)
   try {
     var q = finalizeBookQuery();
     fetch('/api/pdf/last-optimized/' + state.currentCampaign.id + q + '&_=' + Date.now())
       .then(function (r) { return r.json(); }).then(function (j) {
+        var btn = document.getElementById('layoutai-load-last');
         if (j && j.found && j.pdfUrl) {
-          finalizeShowOptimizedNote(j.at, true);
-          renderPdfInto(j.pdfUrl, 'finalize-after-scroll', false);
-          var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
-          var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.style.display = '';
-          _publishSource = 'composed';   // the restored optimized book is what publishes
+          if (btn) btn.style.display = '';   // a saved file exists -> offer the manual load
+          if (manual) {
+            finalizeShowOptimizedNote(j.at, true);
+            renderPdfInto(j.pdfUrl, 'finalize-after-scroll', false);
+            var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
+            var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.style.display = '';
+            _publishSource = 'composed';   // the loaded optimized book is what publishes
+          }
+        } else {
+          if (btn) btn.style.display = 'none';   // nothing saved yet
+          if (manual && typeof billingToast === 'function') billingToast('No optimized version saved yet for this book and layout. Run Optimize first.', 'error');
         }
       }).catch(function () {});
   } catch (e) {}
@@ -15043,6 +15052,13 @@ function finalizeUpdateEstimateBadge() {
   var lbl = document.getElementById('layoutai-est-note');
   if (lbl) lbl.textContent = est ? ('Estimated cost: ' + est + ' token' + (est === 1 ? '' : 's') + ' (~1 / 10 pages)') : 'Roughly 1 token for every 10 pages';
 }
+function finalizeCancelOptimize() {
+  window._optimizeCancelled = true;   // checked at the pre-loop auto-fire and between loop passes
+  var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) { _cb.disabled = true; _cb.textContent = 'Cancelling...'; }
+  // If the loop hasn't started yet, the pre-loop render stays in the After pane (that's the intent:
+  // stop after the first, un-optimized render so the packer output can be inspected/dumped).
+  if (typeof optimizeProgress === 'function') optimizeProgress('Cancelling &mdash; will stop after the current step.', {});
+}
 function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
   var _gb = document.getElementById('layoutai-run-btn'); if (_gb) _gb.disabled = true;
@@ -15071,6 +15087,10 @@ function _runLayoutAiOptimize() {
   var pmsg = document.getElementById('layoutai-progress-msg');
   var _lf = document.getElementById('layoutai-free'); if (_lf) _lf.style.maxHeight = '540px';   // composer is free -- keep the full findings shown, don't collapse
   if (btn) { btn.disabled = true; btn.textContent = 'Analyzing...'; btn.classList.remove('has-token'); }
+  window._optimizeCancelled = false;   // fresh run: clear any prior cancel
+  var _cancelBtn = document.getElementById('layoutai-cancel-btn');
+  if (_cancelBtn) { _cancelBtn.style.display = ''; _cancelBtn.disabled = false; _cancelBtn.textContent = 'Cancel'; }
+  var _loadLastBtn = document.getElementById('layoutai-load-last'); if (_loadLastBtn) _loadLastBtn.style.display = 'none';   // hide during a run
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
   var _d0 = document.getElementById('layoutai-delta'); if (_d0) _d0.innerHTML = '';
@@ -15238,6 +15258,14 @@ function _runLayoutAiOptimize() {
 
       // blob. Because scale ops persist to layout_meta, each round's review sees the prior round's state.
       function runRound(roundNum) {
+        if (window._optimizeCancelled) {   // user cancelled -> stop the loop, keep whatever's rendered
+          aiLog('Cancelled by user at pass ' + roundNum + '.');
+          optimizeProgress('Optimize cancelled.', { done: true });
+          window._aiLoopRunning = false;
+          var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) _cb.style.display = 'none';
+          var _rb = document.getElementById('layoutai-run-btn'); if (_rb) { _rb.disabled = false; _rb.textContent = 'Optimize layout'; _rb.classList.add('has-token'); }
+          return Promise.resolve();
+        }
         loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
         aiLog('Pass ' + roundNum + ': reviewing the layout...');
         optimizeProgress('AI Loop ' + roundNum + ': reviewing the layout&hellip;');
@@ -15364,9 +15392,11 @@ function _runLayoutAiOptimize() {
       iterate(1, null).then(function () {
         window._aiLoopRunning = false;
         removeLoopBar();
+        var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) _cb.style.display = 'none';
       }).catch(function (e) {
         window._aiLoopRunning = false;
         removeLoopBar();
+        var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) _cb.style.display = 'none';
         _revLbl.textContent = 'After (optimized)';
         alert('AI optimize failed: ' + ((e && e.message) || e));
       });
@@ -15424,9 +15454,13 @@ function _runLayoutAiOptimize() {
         // prevents a double-run if the user also double-clicks. The After progress bar keeps running
         // through the loop because each loop render re-shows it.
         try {
-          if (typeof _finalizeRunAiLoop === 'function' && !window._aiLoopRunning) {
+          if (window._optimizeCancelled) {
+            optimizeProgress('Stopped before optimizing &mdash; showing the un-optimized layout.', { done: true });
+            var _cb0 = document.getElementById('layoutai-cancel-btn'); if (_cb0) _cb0.style.display = 'none';
+            var _rb0 = document.getElementById('layoutai-run-btn'); if (_rb0) { _rb0.disabled = false; _rb0.textContent = 'Optimize layout'; _rb0.classList.add('has-token'); }
+          } else if (typeof _finalizeRunAiLoop === 'function' && !window._aiLoopRunning) {
             optimizeProgress('Arranging the pages for the best fit&hellip;', { done: true });
-            setTimeout(function () { try { _finalizeRunAiLoop(); } catch (e) {} }, 150);
+            setTimeout(function () { try { if (!window._optimizeCancelled) _finalizeRunAiLoop(); } catch (e) {} }, 150);
           }
         } catch (e) {}
     }
