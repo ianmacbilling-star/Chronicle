@@ -2093,6 +2093,7 @@ function composedCacheGet(campaignId, req) {
   } catch (e) { return null; }
 }
 var _mzBands = null;
+var _mzFitVerifyLog = null;   // fit-verify re-cut pass telemetry for the dump
 
 // RUN-SCOPED image grow/scale state. Optimization changes (grows for magazine, shrinks for paired)
 // used to persist into moments.layout_meta permanently -- which made the layout DRIFT every run: each
@@ -5122,6 +5123,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   var bands = _mzBands || [];
   fillMissingMagazineLines(meas, bands);
   var pages = packMagazineBands(bands, meas, pageH, _markerBreak, null, null);
+  _mzFitVerifyLog = { rounds: 0, recuts: 0, ran: false };
 
   // ---- FIT-VERIFY RE-CUT (the permanent no-clip guarantee) ----------------------------------------
   // The greedy pack budgets cell heights from measured line data, but the real render adds height the
@@ -5136,9 +5138,11 @@ async function computeMagazinePack(req, campaignId, packOpts) {
   try {
     var _fvMaxRounds = 6, _fvClipTol = 0.12;   // >0.12in over budget = real clip risk (sub-line rounding ignored)
     if (packOpts && packOpts.flowSim) throw '__skip_flowsim__';   // Before dump shows the raw pack; no re-cut
+    _mzFitVerifyLog = { rounds: 0, recuts: 0, ran: true };
     for (var _fvR = 0; _fvR < _fvMaxRounds; _fvR++) {
+      _mzFitVerifyLog.rounds = _fvR + 1;
       var _fvReal = await remeasureComposedPages(req, campaignId, pages, bands);
-      if (!_fvReal || !_fvReal._cells) break;
+      if (!_fvReal || !_fvReal._cells) { _mzFitVerifyLog.noCells = true; break; }
       var _fvCut = false;
       for (var _pi = 0; _pi < pages.length && !_fvCut; _pi++) {
         var _pg = pages[_pi];
@@ -5176,6 +5180,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
             _pg.splice(_ci + 1, 0, { band: _c.band, cStart: _newEnd, cEnd: _curEnd, split: true, heightIn: round3((_ln[_curLine] - _ln[_newLine]) + MZ_SPLIT_PAD + 0.32) });
           }
           _fvCut = true;                                                     // re-measure from scratch after each structural change
+          _mzFitVerifyLog.recuts++;
           break;
         }
       }
@@ -5467,6 +5472,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
     _dbg = {
       arrange: (_co.arrange || 'magazine'), pageH: pageH, markerBreak: _markerBreak, grow: grow || {},
       towerMerge: _tmLog,   // per-attempt record of the tower-column merge (printed under the header)
+      fitVerify: _mzFitVerifyLog,   // fit-verify re-cut pass telemetry
       co: _co,   // the FULL layout option set this plan was built from -- printed at the top of the dump
                  // so two dumps can be compared with certainty (a font change silently made two dumps
                  // describe different books once, and nothing on the page said so).
@@ -5813,6 +5819,7 @@ function magazinePlanText(packed) {
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
   // the page counts are not comparable no matter how similar the books look.
+  if (d.fitVerify) { L.push('fit-verify: ' + (d.fitVerify.ran ? ('ran ' + d.fitVerify.rounds + ' round(s), ' + d.fitVerify.recuts + ' re-cut(s)' + (d.fitVerify.noCells ? ' [NO _cells returned]' : '')) : 'did not run (flowSim or skipped)')); }
   if (d.towerMerge && d.towerMerge.length) {
     L.push('tower merge: ' + d.towerMerge.length + ' attempt(s)');
     d.towerMerge.forEach(function (s) { L.push('  ' + s); });
