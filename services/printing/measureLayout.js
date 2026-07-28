@@ -164,7 +164,39 @@ async function measureDocument(html, options) {
           cropAxis: cropAxis, capInFlow: capInFlow, capRealH: capRealH
         };
       });
-      return { blocks: blocks, towerProbes: probes, imgProbes: imgProbes };
+      // BOX-OVERFLOW: content clipped INSIDE a measured block is invisible to the page/cell height
+      // check, because the height we report is the BOX's height, not the content's. A tower whose
+      // beside-column runs past its panel reports the panel height and looks healthy. Walk every
+      // element inside each measured block and flag any whose scroll extent exceeds its client box
+      // while its computed overflow actually HIDES the excess. Deliberately cause-agnostic: it names
+      // the element that is clipping without assuming why it clips.
+      var boxOverflows = [];
+      try {
+        nodes.forEach(function (n) {
+          var bid = n.getAttribute('data-mblk') || '';
+          var all = Array.prototype.slice.call(n.querySelectorAll('*'));
+          all.push(n);
+          all.forEach(function (el) {
+            var sh = el.scrollHeight || 0, ch = el.clientHeight || 0;
+            if (!sh || !ch) return;
+            var overIn = (sh - ch) / PX;
+            if (overIn <= 0.02) return;              // sub-pixel rounding, not a clip
+            var ovf = '?';
+            try { var cs = window.getComputedStyle(el); ovf = cs.overflow + '/' + cs.overflowY; } catch (e) {}
+            if (!/hidden|clip|scroll|auto/.test(ovf)) return;   // visible overflow spills, it does not cut
+            boxOverflows.push({
+              block: bid,
+              tag: (el.tagName || '').toLowerCase(),
+              cls: String(el.className || '').slice(0, 48),
+              clientIn: round3(ch / PX),
+              scrollIn: round3(sh / PX),
+              overIn: round3(overIn),
+              overflow: ovf
+            });
+          });
+        });
+      } catch (e) { boxOverflows = []; }
+      return { blocks: blocks, towerProbes: probes, imgProbes: imgProbes, boxOverflows: boxOverflows };
     });
 
     var total = 0;

@@ -14875,7 +14875,7 @@ function _dxPadL(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return
 // Pull the few numbers that matter out of a dump's text. Deliberately tolerant: a dump that failed to
 // fetch, or a paired (Picture Book) dump with different headings, yields nulls rather than throwing.
 function _dxStats(txt) {
-  var s = { pages: null, clip: 0, clipLines: [], order: 'n/a', real: {}, ok: !!txt };
+  var s = { pages: null, clip: 0, clipLines: [], order: 'n/a', box: 'n/a', real: {}, ok: !!txt };
   if (!txt) return s;
   var m = txt.match(/content-pages=(\d+)/);
   if (m) s.pages = parseInt(m[1], 10);
@@ -14885,6 +14885,8 @@ function _dxStats(txt) {
   while ((mm = reC.exec(txt))) s.clipLines.push({ page: +mm[1], viewer: +mm[2], real: +mm[3], over: +mm[5] });
   if (/ORDER-BREAK: reading order is monotonic/.test(txt)) s.order = 'OK';
   else { var mo = txt.match(/ORDER-BREAK: (\d+) PLACE/); if (mo) s.order = mo[1] + ' BREAK'; }
+  if (/BOX-OVERFLOW: no element clips/.test(txt)) s.box = 'OK';
+  else { var mb = txt.match(/BOX-OVERFLOW: (\d+) ELEMENT/); if (mb) s.box = mb[1] + ' CUT'; }
   var reR = /PAGE (\d+)\s+\(viewer p\.\s*(\d+)\s*\)[^\r\n]*?REAL ([\d.]+) \(est ([\d.]+)/g, rm;
   while ((rm = reR.exec(txt))) s.real[+rm[1]] = { real: +rm[3], est: +rm[4], viewer: +rm[2] };
   return s;
@@ -14900,10 +14902,13 @@ function finalizeDownloadDiagnostics() {
       .then(function (r) { return r.ok ? r.text() : ('[dump fetch failed: HTTP ' + r.status + ']'); })
       .catch(function (e) { return '[dump fetch error: ' + (e && e.message) + ']'; });
   }
-  Promise.all([
-    grab('/api/pdf/pack-debug/' + cid + refQ),
-    grab('/api/pdf/pack-debug/' + cid + q)
-  ]).then(function (both) {
+  // SEQUENTIAL, never Promise.all: computeMagazinePack writes module-level state, so two packs in
+  // flight at once corrupt each other. v3.0.264 fetched these in parallel and got a doubled band
+  // list on one and an empty pack on the other, 49ms apart. The server now serializes too; this
+  // keeps the client honest as well, and costs only the wait.
+  grab('/api/pdf/pack-debug/' + cid + refQ).then(function (refText) {
+    return grab('/api/pdf/pack-debug/' + cid + q).then(function (finalText) { return [refText, finalText]; });
+  }).then(function (both) {
     var refText = both[0], finalText = both[1];
     var dumps = (cap && cap.dumps) || [];
     var applies = (cap && cap.applies) || [];
@@ -14927,15 +14932,20 @@ function finalizeDownloadDiagnostics() {
     parts.push('');
     // ---- flag timeline -- the entry point ------------------------------------------------------
     parts.push('===== FLAG TIMELINE =====');
-    parts.push(_dxPad('stage', 14) + _dxPadL('pages', 7) + _dxPadL('NEVER-CLIP', 13) + '   ORDER-BREAK');
+    parts.push(_dxPad('stage', 14) + _dxPadL('pages', 7) + _dxPadL('NEVER-CLIP', 13) +
+               _dxPadL('BOX-OVERFLOW', 15) + '   ORDER-BREAK');
     stages.forEach(function (st) {
       parts.push(_dxPad(st.label, 14) +
                  _dxPadL(st.stats.pages != null ? st.stats.pages : '?', 7) +
-                 _dxPadL(st.stats.ok ? st.stats.clip : '?', 13) + '   ' + st.stats.order);
+                 _dxPadL(st.stats.ok ? st.stats.clip : '?', 13) +
+                 _dxPadL(st.stats.box, 15) + '   ' + st.stats.order);
     });
     // Attribution: the first stage where a clip appears answers "packer or loop?" outright.
     var firstClip = null;
-    for (var si = 0; si < stages.length; si++) { if (stages[si].stats.clip > 0) { firstClip = stages[si]; break; } }
+    for (var si = 0; si < stages.length; si++) {
+      var _st = stages[si];
+      if (_st.stats.clip > 0 || (_st.stats.box !== 'OK' && _st.stats.box !== 'n/a')) { firstClip = _st; break; }
+    }
     parts.push('');
     if (!firstClip) parts.push('VERDICT: no stage reports a clip.');
     else if (firstClip.label === 'reference') parts.push('VERDICT: the clip is present in the REFERENCE pack -- it is the packer/composer, NOT the loop.');
@@ -14951,6 +14961,7 @@ function finalizeDownloadDiagnostics() {
       parts.push('   ' + (inRef ? '=' : '+') + ' PAGE ' + cl.page + ' (viewer p.' + cl.viewer + ') over by ' +
                  cl.over.toFixed(2) + 'in' + (inRef ? '  [also in reference]' : '  [final only]'));
     });
+    parts.push('BOX-OVERFLOW:  ' + A.box + ' -> ' + Z.box);
     parts.push('ORDER-BREAK:   ' + A.order + ' -> ' + Z.order);
     var moved = [];
     Object.keys(Z.real).forEach(function (k) {

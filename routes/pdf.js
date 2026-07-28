@@ -2039,7 +2039,14 @@ function magazineBands(moments, sections, intro, outro, opts) {
         mzBeside += cgBesidePanel(mzNp.m, opts, mzNp.narr);
         mzAdv += 1; mzFill += 1;
       }
+      // DIAGNOSTIC METADATA: a tower band used to carry only { kind, html, renderTowerLead }, so it
+      // printed in the dump with no title and no image geometry -- anonymous, in a book where the
+      // tower is the band behind every clip. sTitle/sImgH/sAsp are read by the dump's BANDS line
+      // only. NOT adding momId/remeta here: those would make towers eligible for grow ops the
+      // composer cannot actually apply (composePageInner's grow path needs remeta), which is a
+      // behaviour change and belongs in its own build with its own verification.
       bands.push({ kind: 'tower', html: cgFlowTower(p.m, opts, p.narr, mzBeside, sideLeft),
+        sTitle: ((p.m && p.m.title) || ''), sImgH: _ttImgH, sAsp: Math.round(momentAspect(p.m) * 100) / 100,
         renderTowerLead: (function (mm, oo, nn, bside, sl) { return function (leadHtml, shrink, wrapBelow, targetH, leadAfter) { var _oo = (targetH != null && targetH > 1) ? Object.assign({}, oo, { _towerTargetH: targetH }) : oo; var _nr = leadAfter ? ((nn || '') + (leadHtml || '')) : ((leadHtml || '') + (nn || '')); return cgFlowTower(mm, _oo, _nr, bside, sl, shrink, wrapBelow); }; })(p.m, opts, p.narr, mzBeside, sideLeft) }); sideLeft = !sideLeft; i += mzAdv;
     } else if (p.feature) {
       bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
@@ -4957,6 +4964,10 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     var cblocks = _cmeas.blocks || [];
     if (_cmeas.towerProbes && _cmeas.towerProbes.length) realH._towerProbes = _cmeas.towerProbes;
     if (_cmeas.imgProbes && _cmeas.imgProbes.length) realH._imgProbes = _cmeas.imgProbes;
+    // BOX-OVERFLOW: elements clipping their own content INSIDE a cell. The page/cell heights cannot
+    // see these -- they report the box, not what is inside it -- which is why a visibly chopped
+    // Gazette tower reported 7.89in and NEVER-CLIP said [OK] on the same render.
+    if (_cmeas.boxOverflows && _cmeas.boxOverflows.length) realH._boxOverflows = _cmeas.boxOverflows;
     cblocks.forEach(function (bl) {
       var mm = /^cp:(\d+)$/.exec(bl.id || '');
       if (mm) { realH[+mm[1]] = bl.heightIn; return; }
@@ -5098,7 +5109,20 @@ function lookBackPullUpCandidate(pgs, bnds, pageH, estH) {
   return null;
 }
 
-async function computeMagazinePack(req, campaignId, packOpts) {
+// SERIALIZATION: computeMagazinePack writes module-level state (_mzBands, _mzComposed, the run-grow
+// current key, the probe flags). Two concurrent calls interleave and corrupt each other -- seen in
+// v3.0.264, where the diagnostics bundle fetched a reference pack and a final pack in parallel and
+// got bands=78 (double) on one and bands=0 (empty) on the other, 49ms apart. The old code comment
+// called concurrency 'acceptable for the deliberate one-shot Optimize action'; that assumption no
+// longer holds, so it is now enforced rather than assumed. Calls queue on a single promise chain.
+var _mzPackChain = Promise.resolve();
+function computeMagazinePack(req, campaignId, packOpts) {
+  var run = function () { return _computeMagazinePackInner(req, campaignId, packOpts); };
+  var next = _mzPackChain.then(run, run);
+  _mzPackChain = next.then(function () {}, function () {});   // never let a rejection poison the queue
+  return next;
+}
+async function _computeMagazinePackInner(req, campaignId, packOpts) {
   runGrowsSetCurrent(runGrowsKey(campaignId, req));   // run-scoped grows -> band-build lmGrow reads this run's state
   var _co = req.query.co ? parseCustomOpts(req.query.co) : {};
   if (packOpts && packOpts.debug) { _imgProbeOn = true; _co._towerProbe = true; req.query._towerProbe = '1'; }   // module-level flags survive the fresh opts re-parse inside assembleNovelHtml (the mutated _co does not)
@@ -5441,6 +5465,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           });
         });
         _dbg.overflows = realH._overflows || [];   // NEVER-CLIP: pages whose real height clips the box
+        _dbg.boxOverflows = realH._boxOverflows || [];   // BOX-OVERFLOW: elements clipping INSIDE a cell
         if (realH._towerProbes) _dbg.towerProbes = realH._towerProbes;   // tower geometry: planned vs real box height
         if (realH._imgProbes) _dbg.imgProbes = realH._imgProbes;         // universal per-image geometry (AI input contract)
         // NEVER-CLIP (at-risk): also flag pages that fit the box TOTAL but render much taller than
@@ -5756,6 +5781,27 @@ function magazinePlanText(packed) {
   }
   if (!_ovf.length && !_risk.length && d.remeasured) {
     L.push('NEVER-CLIP: no page overflows or at-risk gaps (nothing clipped). [OK]');
+  }
+  // BOX-OVERFLOW: a clip INSIDE a cell. NEVER-CLIP compares a page's measured height to the box, so
+  // it is blind to an element that clips its own content -- the measured height IS the clipped
+  // height, and everything downstream (the tower merge rung ladder, REAL-CELL, the AI's reasoning)
+  // believes it. This walks the composed DOM instead of the plan and names the element doing the
+  // cutting. Permanent guardrail, like NEVER-CLIP and ORDER-BREAK.
+  var _box = (d.boxOverflows || []);
+  if (_box.length) {
+    L.push('');
+    L.push('!!! BOX-OVERFLOW: ' + _box.length + ' ELEMENT(S) CLIP THEIR OWN CONTENT !!!');
+    L.push('    (the page may still measure UNDER the box -- these are cut INSIDE a cell)');
+    _box.slice(0, 40).forEach(function (o) {
+      var _pm = /^cc:(\d+):(\d+)$/.exec(o.block || '') || /^cp:(\d+)$/.exec(o.block || '');
+      var _where = _pm ? ('PAGE ' + _pm[1] + ' (viewer p.' + _viewer(+_pm[1]) + ')' + (_pm[2] != null ? (' cell ' + _pm[2]) : ''))
+                       : ('block ' + (o.block || '?'));
+      L.push('    ' + _where + '  <' + o.tag + '>  box ' + o.clientIn.toFixed(2) + 'in  content ' +
+        o.scrollIn.toFixed(2) + 'in  -> CUT by ' + o.overIn.toFixed(2) + 'in  [overflow:' + o.overflow + ']');
+    });
+    if (_box.length > 40) L.push('    ... and ' + (_box.length - 40) + ' more');
+  } else if (d.remeasured) {
+    L.push('BOX-OVERFLOW: no element clips its own content. [OK]');
   }
   // ORDER-BREAK: text must NEVER render out of narrative order, on any layout. Walk the plan in
   // reading order -- expanding each tower's beside-lead to the side it actually renders on -- and
