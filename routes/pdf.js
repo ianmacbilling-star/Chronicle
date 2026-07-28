@@ -5441,6 +5441,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           if (_cReal == null || _c.heightIn == null) continue;
           var _over = _cReal - _c.heightIn;
           if (_over <= _fvClipTol) continue;                                 // renders within its budget -> fine
+          try {
           var _bd = bands[_c.band];
           var _lc = meas.lineChars[_c.band], _ln = meas.lines[_c.band];
           if (!_bd || _bd.stext == null || !_lc || !_ln || _lc.length < 2) continue;
@@ -5470,6 +5471,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
           _fvCut = true;                                                     // re-measure from scratch after each structural change
           _mzFitVerifyLog.recuts++;
           break;
+          } catch (_cellE) { if (!_mzFitVerifyLog.cellErr) _mzFitVerifyLog.cellErr = 'b' + _c.band + ': ' + String((_cellE && _cellE.message) || _cellE); continue; }
         }
       }
       if (!_fvCut) break;                                                    // nothing clipped this round -> done
@@ -5485,6 +5487,7 @@ async function computeMagazinePack(req, campaignId, packOpts) {
       arrange: (_co.arrange || 'magazine'), pageH: pageH, markerBreak: _markerBreak, grow: grow || {},
       towerMerge: _tmLog,   // per-attempt record of the tower-column merge (printed under the header)
       fitVerify: _mzFitVerifyLog,   // fit-verify re-cut pass telemetry
+      _pagesAtDump: pages.length,   // pages.length at the moment the dump is built (compare vs fv-saw)
       co: _co,   // the FULL layout option set this plan was built from -- printed at the top of the dump
                  // so two dumps can be compared with certainty (a font change silently made two dumps
                  // describe different books once, and nothing on the page said so).
@@ -5832,7 +5835,8 @@ function magazinePlanText(packed) {
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
   // the page counts are not comparable no matter how similar the books look.
   if (d.fitVerify) { L.push('fit-verify: ' + (d.fitVerify.ran ? ('ran ' + d.fitVerify.rounds + ' round(s), ' + d.fitVerify.recuts + ' re-cut(s)' + (d.fitVerify.noCells ? ' [NO _cells returned]' : '')) : 'did not run (flowSim or skipped)')); 
-    if (d.fitVerify.sawPages != null) L.push('    fv-saw: ' + d.fitVerify.sawPages + ' pages, ' + d.fitVerify.sawCells + ' cells; split cells: ' + ((d.fitVerify.bandList || []).join(' ') || '(none)'));
+    if (d.fitVerify.sawPages != null) L.push('    fv-saw: ' + d.fitVerify.sawPages + ' pages, ' + d.fitVerify.sawCells + ' cells; split cells: ' + ((d.fitVerify.bandList || []).join(' ') || '(none)') + '  [pagesAtDump=' + (d._pagesAtDump != null ? d._pagesAtDump : '?') + ']');
+    if (d.fitVerify.cellErr) L.push('    fv-cellErr: ' + d.fitVerify.cellErr);
     if (d.fitVerify.probe && d.fitVerify.probe.length) { d.fitVerify.probe.forEach(function (p) { L.push('    fv-probe: ' + p); }); } }
   if (d.towerMerge && d.towerMerge.length) {
     L.push('tower merge: ' + d.towerMerge.length + ' attempt(s)');
