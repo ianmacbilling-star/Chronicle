@@ -1102,6 +1102,7 @@ var CO_PAGE_H_IN = 11.0;                                  // physical page heigh
 var CO_PAGE_PAD_IN = 0.75;                                // .content-page top/bottom padding
 var CO_CONTENT_H_IN = CO_PAGE_H_IN - (2 * CO_PAGE_PAD_IN);  // 9.50in of usable page
 var CO_PACK_PAGE_H_IN = 9.4;                              // what every route passes as pageHeightIn
+var MOVE_SHRINK_FLOOR = 0.85;         // a picture may lose at most 15 percent to absorb an orphan line
 var CO_CLIP_ACCEPT_TOL = 0.02;                            // slack when the apply gate asks 'does this fit'
 // ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
 // Content past this is cut by the composed page's overflow:hidden. This used to be recomputed as
@@ -4700,6 +4701,35 @@ async function computePairedPack(req, campaignId, packOpts) {
   var _hdrOn = (_dco.header == null) ? true : !!_dco.header;
   var _basePackH = (packOpts && packOpts.pageHeightIn != null) ? packOpts.pageHeightIn : pageH;
   var plan = packPaired(packBeats, Object.assign({}, packOpts || {}, { pageHeightIn: _basePackH - (_hdrOn ? HEADER_BAND_IN : 0) }));
+  // HONEST LOOP, part 2: seed each image placement's scale from this run's store. The applier already
+  // RECORDS every accepted paired scale (runGrowsPut, further down) and lmScale reads it when the
+  // composer sizes image widths -- but the PACKER never read it back. beatImageHeight computes purely
+  // from the aspect, so every pass re-packed at natural size, the AI saw the same white space it had
+  // already filled, and proposed the same grow again. In The Strangers that showed as growImage on
+  // p.13, p.15, p.35, p.38, p.42, p.48 and p.10 applying on ALL FOUR passes -- four passes doing one
+  // pass's work, and never reaching the second problem on any page. Seeding here closes the loop:
+  // pass N+1 measures the book pass N actually produced.
+  // lmScale is used rather than the raw store because it already honours the DECOR/nogrows reference
+  // bypass, so the reference pack stays a true natural-size baseline.
+  var _scaleN = 0;
+  try {
+    var _bByIdx = {};
+    (mbuilt.beats || []).forEach(function (b) { if (b && b.idx != null) _bByIdx[b.idx] = b; });
+    (plan.pages || []).forEach(function (pg) {
+      (pg.placements || []).forEach(function (pl) {
+        if (pl.kind !== 'image' || pl.fullH == null || !(pl.fullH > 0)) return;
+        var _bt = _bByIdx[pl.beat], _mom = _bt && _bt.moment;
+        if (!_mom) return;
+        var _s = lmScale(_mom);
+        if (!(_s > 0) || _s >= 0.999) return;                 // nothing recorded for this image
+        if (pl.scale != null && pl.scale <= _s + 0.001) return; // the packer already shrank it further
+        pl.scale = _s;
+        pl.heightIn = Math.round((pl.fullH * _s + _imgOver) * 1000) / 1000;
+        _scaleN++;
+      });
+    });
+  } catch (e) { try { console.error('[run-scales] seed failed: ' + ((e && e.message) || e)); } catch (e2) {} }
+  if (_scaleN) { try { console.log('[run-scales] campaign ' + campaignId + ': re-applied ' + _scaleN + ' image scale(s) to the fresh pack'); } catch (e) {} }
   // HONEST LOOP: re-apply this run's accepted text moves to the fresh plan, so every pass measures the
   // book as it actually stands rather than one where the previous passes never happened.
   var _mvN = applyRunMoves(plan, runGrowsKey(campaignId, req));
@@ -7160,9 +7190,51 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         } catch (e) {}
         return { ok: true, toReal: _r[toPageIdx], fromReal: _r[fromPageIdx] };
       }
+      // SHRINK TO MAKE ROOM. The move does not fit -- but the target page usually has a picture on it,
+      // and trimming that picture a little is exactly what a person would do to pull an orphan line
+      // back off the next page. The optimizer could not do this before: shrinkImage is only permitted
+      // on a page that is CLIPPING ('page already within box, no shrink needed'), so a page at 8.9 of
+      // 9.24 with a nearly empty page after it was untouchable. This is not a new op and needs no
+      // prompt change -- the AI already proposes exactly these pulls and they were simply refused.
+      // Bounded and verified: at most MOVE_SHRINK_FLOOR of natural size, tried smallest-trim-first,
+      // and every candidate is re-measured. If none makes BOTH pages fit, the picture is restored.
+      var _tgtImg = null;
+      var _tpls = toPg.placements || [];
+      for (var _ti = 0; _ti < _tpls.length; _ti++) {
+        if (_tpls[_ti].kind === 'image' && _tpls[_ti].fullH != null && _tpls[_ti].fullH > 0) { _tgtImg = _tpls[_ti]; break; }
+      }
+      if (_tgtImg) {
+        var _s0 = (_tgtImg.scale != null) ? _tgtImg.scale : 1;
+        var _h0 = _tgtImg.heightIn;
+        var _over = _h0 - (_tgtImg.fullH * _s0);   // the image's own decoration overhead, preserved
+        var _rungs = [0.94, 0.88, MOVE_SHRINK_FLOOR];
+        for (var _ri = 0; _ri < _rungs.length; _ri++) {
+          var _try = Math.round(_s0 * _rungs[_ri] * 1000) / 1000;
+          if (_try < MOVE_SHRINK_FLOOR) break;
+          _tgtImg.scale = _try;
+          _tgtImg.heightIn = Math.round((_tgtImg.fullH * _try + _over) * 1000) / 1000;
+          var _r2 = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
+          var _okF = (_r2 && _r2[fromPageIdx] != null) ? (_r2[fromPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : true;
+          var _okT = (_r2 && _r2[toPageIdx] != null) ? (_r2[toPageIdx] <= CLIP + CO_CLIP_ACCEPT_TOL) : false;
+          if (_r2 && !_r2._error && _okT && _okF) {
+            try {
+              runMovesAdd(runGrowsKey(req.params.campaignId, req), {
+                beat: moving.beat, part: (moving.part || ''), cs: (moving.charStart || 0),
+                dir: (toPageIdx < fromPageIdx) ? -1 : 1
+              });
+              var _tb = null;
+              for (var _bk = 0; _bk < (beats || []).length; _bk++) { if (beats[_bk] && beats[_bk].idx === _tgtImg.beat) { _tb = beats[_bk]; break; } }
+              var _tm = _tb && _tb.moment;   // NOTE: byIdx is NOT in this handler's scope -- use beats
+              if (_tm && _tm.id != null) runGrowsPut(_tm.id, _try);   // so the next pack keeps the trim
+            } catch (e) {}
+            return { ok: true, toReal: _r2[toPageIdx], fromReal: _r2[fromPageIdx], shrankTo: _try, shrankFrom: _s0 };
+          }
+        }
+        _tgtImg.scale = _s0; _tgtImg.heightIn = _h0;   // no rung worked -- put the picture back
+      }
       // roll back
       toPg.placements = toBefore; fromPg.placements = fromBefore;
-      return { ok: false, reason: 'move would overflow the target page' };
+      return { ok: false, reason: 'move would overflow the target page (even after trimming its image)' };
     }
 
     for (var oi = 0; oi < ops.length; oi++) {
@@ -7176,7 +7248,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         if (srcIdx == null || dstIdx == null) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'missing page reference' }); continue; }
         var mv = await moveLeadingNarr(srcIdx, dstIdx);
         if (mv.ok) {
-          applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, movedFrom: srcIdx, movedTo: dstIdx, toReal: Math.round((mv.toReal || 0) * 100) / 100, fromReal: Math.round((mv.fromReal || 0) * 100) / 100 });
+          applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, movedFrom: srcIdx, movedTo: dstIdx, toReal: Math.round((mv.toReal || 0) * 100) / 100, fromReal: Math.round((mv.fromReal || 0) * 100) / 100, shrankFrom: (mv.shrankFrom != null ? mv.shrankFrom : undefined), shrankTo: (mv.shrankTo != null ? mv.shrankTo : undefined) });
         } else {
           rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: mv.reason });
         }
