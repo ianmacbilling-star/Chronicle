@@ -1102,6 +1102,11 @@ var CO_PAGE_H_IN = 11.0;                                  // physical page heigh
 var CO_PAGE_PAD_IN = 0.75;                                // .content-page top/bottom padding
 var CO_CONTENT_H_IN = CO_PAGE_H_IN - (2 * CO_PAGE_PAD_IN);  // 9.50in of usable page
 var CO_PACK_PAGE_H_IN = 9.4;                              // what every route passes as pageHeightIn
+// A paired tower's CELL renders taller than its image: borders, the float's own margin and the
+// line-height:0 wrapper add up. Measured at 0.14in on The Strangers 'Down the Icy Stairs' -- the cell
+// came out 9.20in against a 9.06in image cap. Named so the cap can be derived instead of guessed.
+var CO_TOWER_CELL_OVERHEAD = 0.14;
+var CO_TOWER_WRAP_MARGIN = 0.10;      // the tower wrapper's own margin-bottom, outside the cell
 var MOVE_SHRINK_FLOOR = 0.85;         // a picture may lose at most 15 percent to absorb an orphan line
 var CO_CLIP_ACCEPT_TOL = 0.02;                            // slack when the apply gate asks 'does this fit'
 // ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
@@ -4870,8 +4875,15 @@ function composeBook(plan, beats, opts) {
         // The tower height cap must fit the USABLE box (9.16in), not 9.3/9.2 -- a full-height tower
         // at the old caps rendered ~0.3in past the box and clipped. Reserve the below-title bar and
         // the wrapper's 0.1in bottom margin so the whole tower cell (image + caption) stays in box.
-        var _twBelow = (m.title && (opts.caption === 'bar' || opts.caption === 'engraved')) ? 0.5 : 0;
-        var _twCap = 9.16 - 0.1 - _twBelow;   // box - wrapper bottom margin - below-title bar
+        var _twBelow = (m.title && (opts.caption === 'bar' || opts.caption === 'engraved')) ? decoHeight('caption:below', DEFAULT_LH) : 0;
+        // DERIVED, not guessed. This used to be 9.16 - 0.1 - _twBelow: it started from the PACKER'S
+        // BUDGET as though that were the clip box, and it accounted for the wrapper margin but not for
+        // the cell's own overhead. The result was an image cap of 9.06in producing a 9.20in cell inside
+        // a 0.10in wrapper -- 9.30in against a 9.24in box, cutting one line of text clean through on
+        // every full-height tower page. Start from the real clip line and subtract everything that sits
+        // between it and the picture. The caption reserve now comes from the decoration registry too,
+        // instead of a hardcoded 0.5in that disagreed with the registry's own 0.42in.
+        var _twCap = CO_CLIP_BOX_IN - CO_TOWER_WRAP_MARGIN - CO_TOWER_CELL_OVERHEAD - _twBelow;
         var tw = Math.min(6.8 - 2.6, _twCap * asp);
         if ((tw / asp) > _twCap) tw = _twCap * asp;
         var _tpi = panelN; panelN += 1;
