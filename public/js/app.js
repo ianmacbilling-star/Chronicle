@@ -15563,6 +15563,7 @@ function _runLayoutAiOptimize() {
       // the saved file. It is rewritten by the save at the end of this run.
       try { var _n0 = document.getElementById('finalize-optimized-note'); if (_n0) { _n0.textContent = ''; _n0.style.display = 'none'; } } catch (e) {}
       try { finalizeSetPriorLoaded(false); } catch (e) {}   // this run's output is not a restored one
+      var _reviewRetried = false;   // one retry per run for a transient AI failure
       window._optimizeCapture = { json: [], log: [], dumps: [], applies: [], at: new Date().toISOString(),
                                   t0: Date.now(), endedAt: null, tEnd: null, passTimes: [] };
       var _cid = state.currentCampaign.id;
@@ -15697,8 +15698,26 @@ function _runLayoutAiOptimize() {
             if (!_ops.length) {
               // Distinguish a genuine "nothing to do" from a silent failure: surface parseError / API error.
               if (j && j.parseError) aiLog('Pass ' + roundNum + ': AI response could not be parsed (' + j.parseError + ').', 'reject');
-              else if (j && j.error) aiLog('Pass ' + roundNum + ': review error -- ' + j.error, 'reject');
-              else aiLog('Pass ' + roundNum + ': AI proposed no changes (opCount ' + ((j && j.opCount) || 0) + ').', 'stop');
+              // A FAILED REVIEW IS NOT CONVERGENCE. Both branches fell through to the same 'the pages
+              // already fit well' message and the same done:true, so an overloaded AI service ended the
+              // run after one working pass and reported the book finished. Exactly what happened on the
+              // v3.0.320 test: 'Pass 2: review error -- the AI service is temporarily overloaded'
+              // followed immediately by a claim of convergence. A quarter of a run, described as a
+              // complete one, with nothing in the summary to say otherwise.
+              // A transient failure earns one retry; a second failure is reported as a failure.
+              if (j && j.error) {
+                aiLog('Pass ' + roundNum + ': review FAILED -- ' + j.error, 'stop');
+                if (!_reviewRetried) {
+                  _reviewRetried = true;
+                  aiLog('Pass ' + roundNum + ': retrying once in 6s...', 'skip');
+                  optimizeProgress('The AI service was busy &mdash; retrying...', { dim: true });
+                  return new Promise(function (res) { setTimeout(res, 6000); })
+                    .then(function () { return iterate(roundNum, lastBlob); });
+                }
+                optimizeProgress('Stopped early &mdash; the AI service was unavailable. Your book was NOT fully optimized; try again shortly.', { done: true });
+                return { done: true, applied: 0, blob: null, report: null, failed: true };
+              }
+              aiLog('Pass ' + roundNum + ': AI proposed no changes (opCount ' + ((j && j.opCount) || 0) + ').', 'stop');
               optimizeProgress('Reviewed &mdash; the pages already fit well.', { dim: true });
               return { done: true, applied: 0, blob: null, report: null };
             }
@@ -15754,7 +15773,9 @@ function _runLayoutAiOptimize() {
             renderPdfInto(url, 'finalize-after-scroll', false);   // show this round's result in place
           }
           var converged = res.done || res.applied === 0;
-          if (converged) {
+          // Do not call a failure convergence. res.failed is set only when a review failed twice.
+          if (res.failed) { aiLog('STOPPED EARLY -- the AI service was unavailable. This book was NOT fully optimized.', 'stop'); }
+          else if (converged) {
             aiLog(res.applied === 0 && !res.done ? ('Pass ' + roundNum + ' changed nothing -- stopping.') : 'Converged -- nothing left to improve.', 'stop');
           }
           if (!converged && roundNum < MAX_ROUNDS) {
