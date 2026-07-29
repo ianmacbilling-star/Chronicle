@@ -174,6 +174,34 @@ app.get('/sw.js', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'sw.js'));
 });
 
+// SELF-HOSTED FONTS, served from the packages that already ship them. The faces are an npm
+// dependency (@fontsource/*), so committing 27 copies of the same woff2 files into public/ would be
+// pure duplication -- and pushing them through the apply script made it 2.2MB, which Git Bash cannot
+// chew through. This maps /fonts/<pkg>-latin-<weight>-<style>.woff2 onto node_modules/@fontsource.
+// The filename pattern is validated before it touches the filesystem: only lowercase letters,
+// digits and hyphens, and the package must be one we actually depend on -- so this cannot be walked
+// out of the fonts directory.
+var FONT_PKGS = ['cinzel', 'crimson-text', 'bangers', 'eb-garamond', 'lora', 'merriweather',
+                 'dancing-script', 'caveat', 'comic-neue'];
+// The browser stylesheet, generated from the same table the renderer inlines from -- one list of
+// families and weights, two consumers, so they cannot drift apart.
+app.get('/css/fonts.css', function (req, res) {
+  res.set('Content-Type', 'text/css');
+  res.set('Cache-Control', 'public, max-age=86400');
+  try { res.send(require('./services/printing/fonts').browserFontCss()); }
+  catch (e) { res.status(500).send('/* font sheet unavailable */'); }
+});
+app.get('/fonts/:file', function (req, res) {
+  var f = String(req.params.file || '');
+  if (!/^[a-z0-9-]+\.woff2$/.test(f)) return res.status(404).end();
+  var pkg = FONT_PKGS.filter(function (p) { return f.indexOf(p + '-latin-') === 0; })
+                     .sort(function (a, b) { return b.length - a.length; })[0];   // longest match wins
+  if (!pkg) return res.status(404).end();
+  var p = path.join(__dirname, 'node_modules', '@fontsource', pkg, 'files', f);
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');   // content-addressed by weight/style
+  res.set('Content-Type', 'font/woff2');
+  res.sendFile(p, function (err) { if (err && !res.headersSent) res.status(404).end(); });
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicit page routes
@@ -313,12 +341,12 @@ getDb().then(async function() {
   var server = app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');
-  // Fonts ship with the app and inline as data URIs; a missing face silently falls back to a system
-  // typeface that MEASURES DIFFERENTLY from what the PDF renders, which is how pages end up clipped.
-  // Say so at boot rather than letting it surface weeks later as inexplicable line counts.
+  // A missing face silently falls back to a system typeface that MEASURES DIFFERENTLY from what the
+  // PDF renders, which is how pages end up clipped. Say so at boot, not weeks later.
   try {
     var _fp = require('./services/printing/fonts').fontsPresent();
     if (!_fp.ok) console.error('[fonts] MISSING ' + _fp.missing.length + ' face file(s), e.g. ' + _fp.missing.slice(0, 3).join(', ') + ' -- run npm install. Text metrics will be wrong until fixed.');
+    else console.log('  Fonts: self-hosted (' + _fp.total + ' faces)');
   } catch (e) { console.error('[fonts] self-hosted font check failed: ' + ((e && e.message) || e)); }
 
     console.log('  Database: ' + (process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite'));

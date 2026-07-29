@@ -4,6 +4,11 @@ const { getDb } = require('../database/db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const crypto = require('crypto');
 const EMAIL_ASSET_BASE = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '') + '/images';
+// Point at OUR font sheet, not Google's. Most mail clients strip webfonts entirely, so this is not
+// about reliability -- it is about not handing a third party a request every time someone opens an
+// email from us, when we already serve the same files ourselves. The stylesheet has full fallbacks,
+// so a client that ignores it is unaffected.
+const EMAIL_FONT_CSS = (process.env.APP_URL || 'https://campaignia.com').replace(/\/$/, '') + '/css/fonts.css';
 
 // ============================================================
 // EMAIL SERVICE
@@ -43,7 +48,7 @@ function passwordResetHTML(name, resetUrl) {
   <meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
     .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
@@ -85,7 +90,7 @@ function verifyEmailHTML(name, verifyUrl) {
   <meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
     .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
@@ -124,7 +129,7 @@ function welcomeHTML(name) {
   <meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
     .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
@@ -290,7 +295,7 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
 <head><meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:#1a1008;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
@@ -340,7 +345,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
 <head><meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:#1a1008;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
@@ -383,7 +388,7 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
 <head><meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:#1a1008;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
@@ -573,7 +578,7 @@ function orderConfirmationHTML(name, order) {
   <meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
     .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
@@ -644,7 +649,7 @@ function orderProblemHTML(name, order) {
   <meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet">
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
     body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
     .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
@@ -745,7 +750,7 @@ function trialLifecycleHTML(copy, name, ctaUrl) {
 <head><meta charset="UTF-8">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Bangers&display=swap" rel="stylesheet"></head>
+  <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:#1a1008;">
   <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>

@@ -24,8 +24,9 @@ const path = require('path');
 
 // family key -> { pkg, family, faces: [ [weight, style] ] }
 const FACES = {
-  cinzel:          { pkg: 'cinzel',         family: 'Cinzel',         faces: [['400','normal'], ['600','normal'], ['700','normal']] },
+  cinzel:          { pkg: 'cinzel',         family: 'Cinzel',         faces: [['400','normal'], ['600','normal'], ['700','normal'], ['900','normal']] },   // 900 is used by the marketing page
   'crimson-text':  { pkg: 'crimson-text',   family: 'Crimson Text',   faces: [['400','normal'], ['600','normal'], ['400','italic']] },
+  bangers:         { pkg: 'bangers',        family: 'Bangers',        faces: [['400','normal']] },
   garamond:        { pkg: 'eb-garamond',    family: 'EB Garamond',    faces: [['400','normal'], ['600','normal'], ['400','italic']] },
   lora:            { pkg: 'lora',           family: 'Lora',           faces: [['400','normal'], ['600','normal'], ['400','italic']] },
   merriweather:    { pkg: 'merriweather',   family: 'Merriweather',   faces: [['400','normal'], ['400','italic']] },
@@ -65,7 +66,9 @@ function faceCss(key) {
 
 // Always-on display + body pair, used by every layout.
 function baseFontCss() {
-  return faceCss('cinzel') + faceCss('crimson-text');
+  // Cinzel (display), Crimson Text (body) and Bangers (comic display) are referenced by every
+  // layout's CSS, so all three ship in every document. Bangers is one small face.
+  return faceCss('cinzel') + faceCss('crimson-text') + faceCss('bangers');
 }
 
 // The optional body font a book has chosen ('classic' means none -- Crimson Text is already loaded).
@@ -83,15 +86,32 @@ function fontCss(key) {
 // found at boot rather than as mysteriously wrong line counts weeks later.
 function fontsPresent() {
   const missing = [];
+  let total = 0;
   Object.keys(FACES).forEach(function (k) {
     const def = FACES[k];
     def.faces.forEach(function (f) {
       const file = def.pkg + '-latin-' + f[0] + '-' + f[1] + '.woff2';
       const p = path.join(__dirname, '..', '..', 'node_modules', '@fontsource', def.pkg, 'files', file);
+      total++;
       if (!fs.existsSync(p)) missing.push(def.pkg + '/' + file);
     });
   });
-  return { ok: missing.length === 0, missing: missing };
+  return { ok: missing.length === 0, missing: missing, total: total };
 }
 
-module.exports = { fontCss, baseFontCss, bookFontCss, fontsPresent, FACES };
+// The stylesheet browser-served pages use. Generated from the SAME table the renderer inlines from, so
+// the two can never drift: one list of families and weights, two consumers. Served at /css/fonts.css.
+function browserFontCss() {
+  let css = '/* self-hosted; generated from services/printing/fonts.js */\n';
+  Object.keys(FACES).forEach(function (k) {
+    const def = FACES[k];
+    def.faces.forEach(function (f) {
+      css += "@font-face{font-family:'" + def.family + "';font-style:" + f[1] + ";font-weight:" + f[0] +
+             ";font-display:swap;src:url('/fonts/" + def.pkg + '-latin-' + f[0] + '-' + f[1] +
+             ".woff2') format('woff2');}\n";
+    });
+  });
+  return css;
+}
+
+module.exports = { fontCss, baseFontCss, bookFontCss, browserFontCss, fontsPresent, FACES };
