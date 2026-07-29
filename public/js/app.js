@@ -15072,6 +15072,20 @@ function finalizeDownloadDiagnostics() {
 
 // Save the just-optimized book so it's there when the user returns (Phase 2). Called when the loop
 // finishes. Renders from the composed cache server-side (no token) and stores the PDF per layout.
+// Ask the server to grow every picture into the leftover room on its page. One call, two measures.
+function finalizeFinalFill() {
+  if (!state.currentCampaign) return Promise.resolve();
+  try {
+    return fetch('/api/pdf/layout-fill/' + state.currentCampaign.id + finalizeBookQuery(), { method: 'POST' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j && j.grown) aiLog('Final pass: grew ' + j.grown + ' picture' + (j.grown === 1 ? '' : 's') +
+          ' into leftover space' + (j.reverted ? (' (' + j.reverted + ' put back)') : '') + '.', 'ok');
+        else if (j && j.ok) aiLog('Final pass: no picture had room to grow.', 'skip');
+      })
+      .catch(function () { aiLog('Final pass: could not run.', 'skip'); });
+  } catch (e) { return Promise.resolve(); }
+}
 function finalizeSaveOptimized() {
   if (!state.currentCampaign) return;
   try {
@@ -15080,9 +15094,16 @@ function finalizeSaveOptimized() {
     var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) body.bookTitle = _pt.value.trim();
     fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    }).then(function (r) { return r.json(); }).then(function (j) {
-      if (j && j.ok) finalizeShowOptimizedNote(j.at, false);
-    }).catch(function () {});
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
+      // SAY SO, EITHER WAY. This used to note only success and swallow every failure, so a 409 from a
+      // cache-key miss was completely invisible -- nothing was ever saved and nothing ever said so.
+      if (rj.ok && rj.j && rj.j.ok) {
+        finalizeShowOptimizedNote(rj.j.at, false);
+        aiLog('Saved -- this version will be here when you return.', 'ok');
+      } else {
+        aiLog('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
+      }
+    }).catch(function (e) { aiLog('Could not save this version: ' + ((e && e.message) || 'network error'), 'stop'); });
   } catch (e) {}
 }
 // Show the "already optimized" note (either freshly saved, or restored from a previous session).
@@ -15527,7 +15548,10 @@ function _runLayoutAiOptimize() {
           _publishSource = 'composed';
           optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
           optimizeProgressDone();
-          finalizeSaveOptimized();   // persist the optimized PDF (per fork/campaign/layout) so it's there when they return
+          // FINAL FILL, then save. Deterministic, not an AI proposal: the loop has converged, nothing
+          // more will move, so growing each picture into the room left on its page is pure arithmetic
+          // and cannot displace anything. Runs before the save so the stored PDF is the filled one.
+          finalizeFinalFill().then(function () { finalizeSaveOptimized(); });
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish

@@ -42,6 +42,9 @@ function packPaired(beats, opts) {
   // page of their own, and a single trailing line landed on a page whose predecessor had 6.7in going
   // spare. The magazine packer has had MZ_MIN_SLICE_LINES for exactly this; paired never got one.
   var MIN_SLICE_LINES = (opts.minSliceLines != null) ? opts.minSliceLines : 2;
+  // A split is worth making when it FILLS the page it is on. Below this fraction the page is not
+  // being filled by the split, so moving the whole block on is the better trade.
+  var SPLIT_MIN_PAGE_FRAC = (opts.splitMinPageFrac != null) ? opts.splitMinPageFrac : 0.55;
   // BEAT COHESION: a beat's before-text, picture and after-text want to live on one page. When they
   // do not all fit, trim the picture rather than separate the text from the art -- but never below
   // this fraction of natural size; past that, a page break is the better trade.
@@ -96,22 +99,26 @@ function packPaired(beats, opts) {
       var endLine = -1;
       for (var k = lineIdx; k < nLines; k++) { if ((lines[k] - startY) <= rem + 0.03) endLine = k; else break; }
       if (endLine < lineIdx) { newPage(); continue; }   // not even one line fits here
-      // ANTI-SLIVER. A cut is only worth making if BOTH halves carry real text. Three rules, in order:
-      //   1. if the TAIL would be a sliver, pull the cut back so the tail reaches the minimum
-      //   2. if pulling back would starve the HEAD instead, do not cut here at all -- move the whole
-      //      block to a fresh page, where it has the best chance of fitting whole
-      //   3. on a page that is ALREADY fresh, accept whatever fits: a block taller than a page has to
-      //      split somewhere, and refusing forever would loop
-      // Rule 3 is also what terminates this loop: newPage() makes the page fresh, so the next pass
-      // through cannot take the newPage() branch again.
+      // SPLIT MAXIMALLY. Take every line that fits, always. The offence is not a small tail -- a
+      // sentence carrying over a page break is ordinary typography -- it is leaving USABLE ROOM
+      // BEHIND while pushing words forward.
+      // v3.0.286 got this backwards: it PULLED THE CUT BACK to avoid a small tail, which deliberately
+      // left room on the page and moved lines forward -- manufacturing exactly the fault it was meant
+      // to prevent, and costing five pages and nine points of fill.
+      // The one case still worth refusing: the page is nearly empty anyway, so this is not a split
+      // that fills a page, it is a block being chopped for no gain. Then move the whole block on. And
+      // on a page that is ALREADY fresh, accept whatever fits -- a block taller than a page has to
+      // split somewhere, and that is also what terminates this loop.
+      // Cuts land on word boundaries by construction: lineChars records the offset of each rendered
+      // line's FIRST WORD (measureLayout splits on whitespace), so a word cannot be broken and
+      // punctuation always travels with its word.
       var _fresh = cur().usedIn <= 1e-6;
+      var _usedFrac = _fresh ? 0 : (cur().usedIn / pageH);
       var _tail = nLines - (endLine + 1);
-      if (_tail > 0 && _tail < MIN_SLICE_LINES) {
-        var _pull = MIN_SLICE_LINES - _tail;
-        if ((endLine - _pull) >= (lineIdx + MIN_SLICE_LINES - 1)) endLine -= _pull;   // head still has enough
-        else if (!_fresh) { newPage(); continue; }                                    // move the whole block
+      var _headLines = endLine - lineIdx + 1;
+      if (!_fresh && _tail > 0 && _headLines < MIN_SLICE_LINES && _usedFrac < SPLIT_MIN_PAGE_FRAC) {
+        newPage(); continue;   // near-empty page: chopping a couple of lines off here gains nothing
       }
-      if ((endLine - lineIdx + 1) < MIN_SLICE_LINES && (endLine + 1) < nLines && !_fresh) { newPage(); continue; }
       var segH = round3(lines[endLine] - startY + TEXT_MARGIN);   // include the top margin the composer adds
       var cStart = (lineChars[lineIdx] != null) ? lineChars[lineIdx] : 0;
       var cEnd = (endLine + 1 < nLines && lineChars[endLine + 1] != null) ? lineChars[endLine + 1] : textLen;
@@ -256,6 +263,26 @@ function packPaired(beats, opts) {
     }
   });
 
+  // AN UNUSED COHESION TRIM IS NOT LOAD-BEARING. The picture is trimmed so its beat's text fits
+  // beside it -- but if the text ended up on another page anyway, the trim bought nothing and the
+  // flag is a lie. It then stops the optimizer growing a picture to protect a reservation nobody is
+  // using: The Strangers viewer p.42 sat at 7.84 of 9.24 with its picture held at 0.76, refusing to
+  // grow to keep company with text that was already on p.43. Clear the flag wherever the beat did
+  // not actually end up whole on one page.
+  try {
+    var _beatPages = {};
+    pages.forEach(function (pg, pi) {
+      (pg.placements || []).forEach(function (pl) {
+        if (pl.beat == null) return;
+        (_beatPages[pl.beat] = _beatPages[pl.beat] || {})[pi] = 1;
+      });
+    });
+    pages.forEach(function (pg) {
+      (pg.placements || []).forEach(function (pl) {
+        if (pl.cohesion && Object.keys(_beatPages[pl.beat] || {}).length > 1) delete pl.cohesion;
+      });
+    });
+  } catch (e) {}
   var whiteByPage = pages.map(function (p) { return round3(Math.max(0, pageH - p.usedIn)); });
   var pictureless = pages.filter(function (p) { return p.placements.length && !p.hasImage; }).map(function (p) { return p.index; });
   var shrunkCount = pages.reduce(function (n, p) { return n + p.placements.filter(function (pl) { return pl.shrunk; }).length; }, 0);

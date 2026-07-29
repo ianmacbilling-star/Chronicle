@@ -7558,6 +7558,114 @@ router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async functi
   }
 });
 
+// ===== FINAL FILL -- SHARED ACROSS LAYOUTS =========================================================
+// The last thing done to a book, after the loop has converged and nothing more will move. At that
+// point growing a picture into the room left on its page is pure arithmetic: nothing can be displaced
+// because nothing is left to displace. It is deliberately NOT an AI proposal --
+//   * it cannot be missed. The AI has to mention a page for that page to be considered; a sweep
+//     covers every page. The Strangers p.42 sat at 7.84 of 9.24 because no proposal named it.
+//   * it is cheap. Two measures for the whole book, instead of one per op plus a bisection.
+//   * it cannot fight anything. Growth that only consumes leftover space on a settled page cannot
+//     displace text.
+// LAYOUT-AGNOSTIC BY CONSTRUCTION. The sweep asks an adapter four things and knows nothing else about
+// the layout, so Magazine plugs in by supplying its own adapter rather than re-deriving this:
+//     pageCount()          how many pages
+//     pictures(pageIdx)    the growable pictures on a page: { scale, fullH, heightIn, over, capMul }
+//     setScale(pic, mul)   apply a scale
+//     measure()            real page heights, as an array
+// Grow-all-then-verify, not one-at-a-time: apply every page's grow, measure once, and revert only the
+// pages that overshot. A page that overshoots is restored exactly, so the sweep can only ever improve
+// a page or leave it alone.
+async function finalFillPass(adapter, box, tol) {
+  var out = { grown: 0, reverted: 0, gained: 0 };
+  var before = await adapter.measure();
+  if (!before || before._error) return out;
+  var touched = [];
+  for (var pi = 0; pi < adapter.pageCount(); pi++) {
+    var real = before[pi];
+    if (real == null) continue;
+    var room = box - real - 0.04;                 // leave a hair so rounding cannot tip it over
+    if (room <= 0.08) continue;                   // nothing worth having
+    var pics = adapter.pictures(pi) || [];
+    if (pics.length !== 1) continue;              // one picture: unambiguous. More than one, leave it.
+    var pic = pics[0];
+    if (!pic || !(pic.fullH > 0)) continue;
+    var cur = (pic.scale != null) ? pic.scale : 1;
+    var cap = (pic.capMul != null && pic.capMul > 0) ? pic.capMul : 1;   // crop-safety: never crop to fill
+    if (cur >= cap - 0.005) continue;             // already as large as it may be
+    var want = Math.min(cap, (pic.fullH * cur + room) / pic.fullH);
+    want = Math.round(want * 1000) / 1000;
+    if (want <= cur + 0.005) continue;
+    touched.push({ pi: pi, pic: pic, from: cur, to: want, wasReal: real });
+    adapter.setScale(pic, want);
+  }
+  if (!touched.length) return out;
+  var after = await adapter.measure();
+  if (!after || after._error) {                   // measure failed -- put everything back
+    touched.forEach(function (t) { adapter.setScale(t.pic, t.from); });
+    return out;
+  }
+  touched.forEach(function (t) {
+    var r = after[t.pi];
+    if (r == null || r > box + tol) { adapter.setScale(t.pic, t.from); out.reverted++; return; }
+    out.grown++;
+    out.gained += Math.max(0, r - t.wasReal);
+  });
+  out.gained = Math.round(out.gained * 100) / 100;
+  return out;
+}
+// Run the shared final fill over a Picture Book. Called once, after the loop has converged.
+// The adapter is the ONLY paired-specific part; Magazine supplies its own and reuses everything else.
+router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    if (_cco.arrange !== 'paired') return res.json({ ok: true, skipped: 'only the paired layout is wired up so far', grown: 0 });
+    var packed = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
+    var plan = packed && packed.plan, beats = packed && packed.beats;
+    if (!plan || !plan.pages) return res.status(500).json({ error: 'no plan' });
+    var _pco = Object.assign({}, _cco, { arrange: 'paired' });
+    var adapter = {
+      pageCount: function () { return plan.pages.length; },
+      pictures: function (pi) {
+        var pg = plan.pages[pi]; if (!pg) return [];
+        return (pg.placements || []).filter(function (pl) {
+          return (pl.kind === 'image' || pl.kind === 'tower') && pl.fullH != null && pl.fullH > 0;
+        }).map(function (pl) {
+          var _b = null;
+          for (var k = 0; k < (beats || []).length; k++) { if (beats[k] && beats[k].idx === pl.beat) { _b = beats[k]; break; } }
+          var _cap = 1;
+          try { if (_b && _b.moment) { var _m = cgFeatureCropSafeMaxMul(_b.moment, _pco); if (_m > 0) _cap = _m; } } catch (e) {}
+          return { _pl: pl, scale: (pl.scale != null ? pl.scale : 1), fullH: pl.fullH, over: (pl.heightIn - pl.fullH * (pl.scale != null ? pl.scale : 1)), capMul: _cap };
+        });
+      },
+      setScale: function (pic, mul) {
+        pic._pl.scale = mul;
+        pic._pl.heightIn = Math.round((pic.fullH * mul + pic.over) * 1000) / 1000;
+        pic.scale = mul;
+      },
+      measure: function () { return remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco); }
+    };
+    var r = await finalFillPass(adapter, CO_CLIP_BOX_IN, CO_CLIP_ACCEPT_TOL);
+    if (r.grown) {
+      // Persist each grown scale so the next pack keeps it, then re-compose so the PDF reflects it.
+      plan.pages.forEach(function (pg) {
+        (pg.placements || []).forEach(function (pl) {
+          if ((pl.kind !== 'image' && pl.kind !== 'tower') || pl.scale == null) return;
+          var _b = null;
+          for (var k = 0; k < (beats || []).length; k++) { if (beats[k] && beats[k].idx === pl.beat) { _b = beats[k]; break; } }
+          if (_b && _b.moment && _b.moment.id != null) runGrowsPut(_b.moment.id, pl.scale);
+        });
+      });
+      var body = composeBook(plan, beats, _pco);
+      composedCachePut(req.params.campaignId, req, 'paired', body, (packed && packed.campaign) || '');   // the pack returns `campaign`, not `campaignName`
+      try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in'); } catch (e) {}
+    }
+    return res.json({ ok: true, grown: r.grown, reverted: r.reverted, gained: r.gained });
+  } catch (e) {
+    log500('layout-fill', req, e);
+    return res.status(500).json({ error: (e && e.message) || 'layout-fill failed' });
+  }
+});
 // PHASE 2 -- persist the last optimized PDF per (chooser x fork x campaign x LAYOUT) so it survives a
 // refresh / logout / campaign switch. The client calls this once the Optimize loop finishes; we render
 // the already-composed (optimized) body from cache -- no re-pack, no token -- upload it to R2, and store
@@ -7568,8 +7676,14 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     var campaignId = req.params.campaignId;
     req.query.nocover = '1'; req.query.publicMode = '1';
     var bookTitle = (req.body && req.body.bookTitle) || req.query.bookTitle || '';
-    if (bookTitle) req.query.bookTitle = bookTitle;
+    // LOOK UP THE CACHE FIRST, with the key the compose actually used. composedCacheKey includes
+    // bookTitle, and finalizeBookQuery() does NOT send one -- so the loop composed under an empty
+    // title. Setting req.query.bookTitle from the POST body BEFORE the lookup changed the key and
+    // missed every time, returning 409 optimize_required, which the client swallowed. Nothing was
+    // ever saved, so 'Load Last Optimized File' never had a file to offer. The title belongs to the
+    // RENDER (it sets the cover), not to the cache key, so it is applied after the hit.
     var hit = composedCacheGet(campaignId, req);
+    if (bookTitle) req.query.bookTitle = bookTitle;
     if (!(hit && hit.body)) return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize first.' });
     var arrange = hit.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
     var built = await assembleNovelHtml(req, campaignId, null, { arrange: arrange, packComposedBody: hit.body, campaignName: hit.campaignName || '' });
