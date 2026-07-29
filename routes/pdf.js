@@ -7309,7 +7309,14 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       if (!fromPg || !toPg) return { ok: false, reason: 'page not found' };
       var pls = fromPg.placements || [];
       // The leading narr placement on the source page (index 0 if it's a narr).
-      if (!pls.length || pls[0].kind !== 'narr') return { ok: false, reason: 'no leading text to move on source page' };
+      if (!pls.length || pls[0].kind !== 'narr') {
+        // The op can only ever move a page's FIRST placement. When that is a picture, the move the AI
+        // wanted is simply not expressible -- which is a vocabulary limit, not a bad proposal, and the
+        // message should say so rather than sounding like the page was empty.
+        var _lead = pls.length ? pairedPlacementLabel(pls[0]) : 'nothing';
+        return { ok: false, reason: 'cannot move: page ' + fromPageIdx + ' starts with ' + _lead +
+                 ', and only a leading text block can be moved' };
+      }
       var moving = pls[0];
       // Append to the target page (text moves to the END of the earlier page / START of the later one
       // depending on direction; for a pull-up the earlier page gets it appended after its content).
@@ -7336,7 +7343,20 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         try { console.warn('[order] refused move of ' + pairedPlacementLabel(moving) + ' from page ' +
           fromPageIdx + ' to ' + toPageIdx + ': it would put ' + pairedPlacementLabel(_ob[0].cur.pl) +
           ' after ' + pairedPlacementLabel(_ob[0].prev.pl)); } catch (e) {}
-        return { ok: false, reason: 'move would put the text out of reading order' };
+        // SAY WHAT WAS REFUSED. 'move would put the text out of reading order' told us a move was
+        // blocked and nothing else -- not what was moving, not where from or to, not which pair it
+        // would invert. With the guard now comparing before against after, a refusal is either correct
+        // (the AI asked for something genuinely backwards) or a bug, and the message is the only thing
+        // that can tell those apart. Guessing which it was has already cost three wrong theories today.
+        var _why = 'move would put the text out of reading order';
+        try {
+          _why += ': ' + pairedPlacementLabel(moving) + ' from page ' + fromPageIdx + ' to ' + toPageIdx;
+          if (_ob && _ob.length) {
+            _why += ' -- would put ' + pairedPlacementLabel(_ob[0].cur.pl) + ' after ' + pairedPlacementLabel(_ob[0].prev.pl);
+          }
+          _why += ' (breaks ' + _obBefore + ' -> ' + _obN + ')';
+        } catch (e) {}
+        return { ok: false, reason: _why };
       }
       // Re-measure the whole book; both affected pages must fit.
       var _r = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
@@ -7398,7 +7418,9 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       }
       // roll back
       toPg.placements = toBefore; fromPg.placements = fromBefore;
-      return { ok: false, reason: 'move would overflow the target page (even after trimming its image)' };
+      return { ok: false, reason: 'move would overflow page ' + toPageIdx + ' (' +
+               pairedPlacementLabel(moving) + ' needs ' + Math.round((moving.heightIn || 0) * 100) / 100 +
+               'in, even after trimming that page\'s picture)' };
     }
 
     for (var oi = 0; oi < ops.length; oi++) {
