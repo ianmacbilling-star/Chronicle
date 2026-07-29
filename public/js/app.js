@@ -14926,7 +14926,8 @@ function _dxPadL(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return
 // Pull the few numbers that matter out of a dump's text. Deliberately tolerant: a dump that failed to
 // fetch, or a paired (Picture Book) dump with different headings, yields nulls rather than throwing.
 function _dxStats(txt) {
-  var s = { pages: null, clip: 0, clipLines: [], order: 'n/a', box: 'n/a', real: {}, ok: !!txt };
+  var s = { pages: null, clip: 0, clipLines: [], order: 'n/a', box: 'n/a', real: {}, ok: !!txt,
+            fill: null, thin: null, meanIn: null };
   if (!txt) return s;
   var m = txt.match(/content-pages=(\d+)/);
   if (m) s.pages = parseInt(m[1], 10);
@@ -14938,8 +14939,26 @@ function _dxStats(txt) {
   else { var mo = txt.match(/ORDER-BREAK: (\d+) PLACE/); if (mo) s.order = mo[1] + ' BREAK'; }
   if (/BOX-OVERFLOW: no element clips/.test(txt)) s.box = 'OK';
   else { var mb = txt.match(/BOX-OVERFLOW: (\d+) ELEMENT/); if (mb) s.box = mb[1] + ' CUT'; }
-  var reR = /PAGE (\d+)\s+\(viewer p\.\s*(\d+)\s*\)[^\r\n]*?REAL ([\d.]+) \(est ([\d.]+)/g, rm;
+  // The paired dump writes 'viewer ~p.10' with a tilde and the magazine dump writes 'viewer p.10'.
+  // Without the optional tilde this matched nothing at all for Picture Book, so every per-page number
+  // -- and therefore density -- was silently unavailable for the layout we have spent two days on.
+  var reR = /PAGE (\d+)\s+\(viewer ~?p\.\s*(\d+)\s*\)[^\r\n]*?REAL ([\d.]+) \(est ([\d.]+)/g, rm;
   while ((rm = reR.exec(txt))) s.real[+rm[1]] = { real: +rm[3], est: +rm[4], viewer: +rm[2] };
+  // DENSITY. Mean page fill against the clip box, and how many pages are less than a third full.
+  // This is the number Ian reads to judge a run, and it was not in the timeline -- only page count
+  // was, which barely moves. Note this is HEIGHT fill: a portrait picture that fills a page top to
+  // bottom while leaving inches of white down each side counts as full here. The on-screen readout
+  // uses grid occupancy and reads lower for exactly that reason; both are honest, they measure
+  // different things, and quoting one while looking at the other wasted an afternoon.
+  var _rk = Object.keys(s.real);
+  if (_rk.length) {
+    var _sum = 0, _thin = 0;
+    _rk.forEach(function (k) { var v = s.real[k].real; _sum += v; if (v < 3.0) _thin++; });
+    s.meanIn = Math.round((_sum / _rk.length) * 100) / 100;
+    s.fill = Math.round((s.meanIn / 9.24) * 100);
+    s.thin = _thin;
+    if (s.pages == null) s.pages = _rk.length;
+  }
   return s;
 }
 function finalizeDownloadDiagnostics() {
@@ -15001,14 +15020,19 @@ function finalizeDownloadDiagnostics() {
     parts.push('');
     // ---- flag timeline -- the entry point ------------------------------------------------------
     parts.push('===== FLAG TIMELINE =====');
-    parts.push(_dxPad('stage', 14) + _dxPadL('pages', 7) + _dxPadL('NEVER-CLIP', 13) +
-               _dxPadL('BOX-OVERFLOW', 15) + '   ORDER-BREAK');
+    parts.push(_dxPad('stage', 14) + _dxPadL('pages', 7) + _dxPadL('fill', 7) + _dxPadL('mean', 8) +
+               _dxPadL('thin', 6) + _dxPadL('NEVER-CLIP', 13) + _dxPadL('BOX-OVERFLOW', 15) + '   ORDER-BREAK');
     stages.forEach(function (st) {
       parts.push(_dxPad(st.label, 14) +
                  _dxPadL(st.stats.pages != null ? st.stats.pages : '?', 7) +
+                 _dxPadL(st.stats.fill != null ? (st.stats.fill + '%') : '?', 7) +
+                 _dxPadL(st.stats.meanIn != null ? (st.stats.meanIn.toFixed(2) + 'in') : '?', 8) +
+                 _dxPadL(st.stats.thin != null ? st.stats.thin : '?', 6) +
                  _dxPadL(st.stats.ok ? st.stats.clip : '?', 13) +
                  _dxPadL(st.stats.box, 15) + '   ' + st.stats.order);
     });
+    parts.push('(fill is HEIGHT of the 9.24in box -- side white does not count, so it reads higher than');
+    parts.push(' the on-screen density, which measures grid occupancy. thin = pages under 3.0in.)');
     // Attribution: the first stage where a clip appears answers "packer or loop?" outright.
     var firstClip = null;
     for (var si = 0; si < stages.length; si++) {
