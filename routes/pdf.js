@@ -7341,14 +7341,19 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       var fromPg = plan.pages[fromPageIdx], toPg = plan.pages[toPageIdx];
       if (!fromPg || !toPg) return { ok: false, reason: 'page not found' };
       var pls = fromPg.placements || [];
-      // The leading narr placement on the source page (index 0 if it's a narr).
-      if (!pls.length || pls[0].kind !== 'narr') {
-        // The op can only ever move a page's FIRST placement. When that is a picture, the move the AI
-        // wanted is simply not expressible -- which is a vocabulary limit, not a bad proposal, and the
-        // message should say so rather than sounding like the page was empty.
-        var _lead = pls.length ? pairedPlacementLabel(pls[0]) : 'nothing';
-        return { ok: false, reason: 'cannot move: page ' + fromPageIdx + ' starts with ' + _lead +
-                 ', and only a leading text block can be moved' };
+      // PICTURES MOVE TOO. This accepted only a leading NARR, so a slide stopped dead at the first
+      // picture -- and in Picture Book the thing after a beat's opening paragraph is, by definition, a
+      // picture. The Strangers viewer p.32 held 1.00in of beat 25's opening text with 8in of white
+      // under it, and beat 25's picture sat alone at the top of p.33. Moving that picture up reads
+      // [1-opening] then [2-picture] -- perfectly in order -- and comes to 8.21in against a 9.24in box.
+      // It was refused only because the op could not express it, which then blocked the whole cascade
+      // behind it: p.33's closing text could have taken beat 26's opening, and so on down the book.
+      // Nothing else changes -- the reading-order comparison and the real re-measure still gate every
+      // move, so a picture can only move where text could have.
+      if (!pls.length) return { ok: false, reason: 'cannot move: page ' + fromPageIdx + ' is empty' };
+      if (pls[0].kind !== 'narr' && pls[0].kind !== 'image' && pls[0].kind !== 'tower') {
+        return { ok: false, reason: 'cannot move: page ' + fromPageIdx + ' starts with ' +
+                 pairedPlacementLabel(pls[0]) + ', which is structural and must stay where it is' };
       }
       var moving = pls[0];
       // Append to the target page (text moves to the END of the earlier page / START of the later one
