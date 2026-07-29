@@ -7391,9 +7391,17 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         var _h0 = _tgtImg.heightIn;
         var _over = _h0 - (_tgtImg.fullH * _s0);   // the image's own decoration overhead, preserved
         var _rungs = [0.94, 0.88, MOVE_SHRINK_FLOOR];
+        // CLAMP, do not bail. The rungs are relative to the picture's current scale while the floor is
+        // absolute, so a picture already near the floor had its very first rung land underneath it and
+        // the loop exited without trying anything at all. A picture at 0.87 could not be trimmed one
+        // percent. Clamping means the floor itself is always attempted, and the duplicate check below
+        // stops a clamped rung being re-measured three times for the same value.
+        var _lastTry = null;
         for (var _ri = 0; _ri < _rungs.length; _ri++) {
-          var _try = Math.round(_s0 * _rungs[_ri] * 1000) / 1000;
-          if (_try < MOVE_SHRINK_FLOOR) break;
+          var _try = Math.round(Math.max(MOVE_SHRINK_FLOOR, _s0 * _rungs[_ri]) * 1000) / 1000;
+          if (_try >= _s0 - 0.001) continue;          // no smaller than it already is
+          if (_lastTry != null && Math.abs(_try - _lastTry) < 0.001) continue;   // same rung twice
+          _lastTry = _try;
           _tgtImg.scale = _try;
           _tgtImg.heightIn = Math.round((_tgtImg.fullH * _try + _over) * 1000) / 1000;
           if (pairedOrderBreaks(plan, pairedOrdinals(beats)).length) break;   // trimming cannot fix bad order
@@ -7423,6 +7431,17 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
                'in, even after trimming that page\'s picture)' };
     }
 
+    // TEXT MOVES BEFORE PICTURE GROWS. Ops used to run in whatever order the AI happened to list them,
+    // and a grow could eat the room a later move needed. On The Strangers, viewer p.33 measured 8.19in
+    // and a 1.00in fragment was waiting on p.32 -- it would have fitted at 9.19in against a 9.24in box.
+    // But the loop had already grown that page's picture twice, 0.72 to 0.87, and the move was then
+    // refused for want of the space the grow had just taken. Moves change what is ON a page; grows only
+    // fill what is left over. Doing moves first is therefore strictly better -- it is the same reason
+    // the deterministic fill pass runs last of all, applied one level down.
+    ops = ops.slice().sort(function (a, b) {
+      var ga = (a.op === 'growImage') ? 1 : 0, gb = (b.op === 'growImage') ? 1 : 0;
+      return ga - gb;   // stable: everything else keeps the AI's ordering
+    });
     for (var oi = 0; oi < ops.length; oi++) {
       var op = ops[oi];
 
