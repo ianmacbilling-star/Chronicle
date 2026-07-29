@@ -13,6 +13,7 @@ const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packPaired } = require('../services/printing/packPaired');
 const { decoSumHeight, decoHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
+const { fontCss, baseFontCss, bookFontCss, fontsPresent } = require('../services/printing/fonts');
 var HEADER_BAND_IN = 0.24;   // top band reserved on each composed page for the per-page running header (keeps body clear)
 const { packComic } = require('../services/printing/packComic');
 const { planComic } = require('../services/printing/comicEngine');
@@ -667,7 +668,15 @@ var CO_FONT_IMPORTS = {
   comic:        'family=Comic+Neue:ital,wght@0,400;0,700;1,400'
 };
 function coFontFamily(f){ if (!f || f === 'classic') return ''; return CO_FONTS[f] || ''; }
-function coFontImport(f){ var q = CO_FONT_IMPORTS[f]; return q ? ("@import url('https://fonts.googleapis.com/css2?" + q + "&display=swap');") : ''; }
+// SELF-HOSTED. This used to emit an @import against fonts.googleapis.com, so every render AND every
+// measure had to reach the network for type. In the Railway container those requests never complete,
+// so document.fonts.ready never resolved: the measure pass hung, took its browser with it, and a run
+// stalled mid-loop with no stack and nothing logged. Bounding that wait in v3.0.278 turned an
+// infinite hang into fifteen seconds per measure and left every measurement taken against FALLBACK
+// metrics -- wrong wrapping, wrong line counts, wrong estimates. The faces now ship with the app and
+// inline as data URIs, so a document requests nothing, and the measure pass and the PDF render see
+// exactly the same type. CO_FONT_IMPORTS is kept only as the record of which family each key means.
+function coFontImport(f){ return bookFontCss(f); }
 
 function parseCustomOpts(str) {
   var o = {};
@@ -2702,7 +2711,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+  ${baseFontCss()}
   ${fontImp}
   ${fontRule}
 
@@ -3265,7 +3274,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+  ${baseFontCss()}
   ${fontImp}
   ${fontRule}
 

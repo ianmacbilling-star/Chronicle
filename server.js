@@ -313,6 +313,14 @@ getDb().then(async function() {
   var server = app.listen(PORT, function() {
     console.log('');
     console.log('  Campaignia is running!');
+  // Fonts ship with the app and inline as data URIs; a missing face silently falls back to a system
+  // typeface that MEASURES DIFFERENTLY from what the PDF renders, which is how pages end up clipped.
+  // Say so at boot rather than letting it surface weeks later as inexplicable line counts.
+  try {
+    var _fp = require('./services/printing/fonts').fontsPresent();
+    if (!_fp.ok) console.error('[fonts] MISSING ' + _fp.missing.length + ' face file(s), e.g. ' + _fp.missing.slice(0, 3).join(', ') + ' -- run npm install. Text metrics will be wrong until fixed.');
+  } catch (e) { console.error('[fonts] self-hosted font check failed: ' + ((e && e.message) || e)); }
+
     console.log('  Database: ' + (process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite'));
     console.log('  Open: http://localhost:' + PORT);
     console.log('');
