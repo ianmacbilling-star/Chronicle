@@ -4744,6 +4744,11 @@ function pairedOrderSeq(plan, ord) {
   return seq;
 }
 function pairedOrderBreaks(plan, ord) { return orderBreaks(pairedOrderSeq(plan, ord)); }
+// Identity for a placement, stable across the sort and the print: what it belongs to and where it
+// starts. Two placements never share one, which is why segment numbers are unique.
+function _segKey(pl) {
+  return (pl.beat != null ? pl.beat : '?') + '|' + (pl.kind || '?') + '|' + (pl.part || '') + '|' + (pl.charStart || 0);
+}
 function pairedPlacementLabel(pl) {
   var w = 'beat ' + (pl.beat != null ? pl.beat : '?') + ' ' + (pl.kind || '?');
   if (pl.kind === 'narr') w += ' ' + (pl.part || 'before');
@@ -6107,6 +6112,43 @@ function pairedPlanText(packed) {
   if (d.remeasureError) L.push('(re-measure error: ' + d.remeasureError + ')');
   L.push('');
   L.push('PAGES  (REAL = true composed fill; est = packer estimate)');
+  // SEGMENT NUMBERS. The reading order of a book is already a total ordering -- beat position, then
+  // part within the beat, then character offset -- and pairedOrderKey has computed it since v3.0.284.
+  // It was invisible: the AI had to infer order from beat ids and part names, which is exactly where it
+  // went wrong, proposing a beat's opening text onto a page its picture already occupied, over and
+  // over. Numbering every segment turns the rule into arithmetic: a move is legal if the numbers still
+  // ascend. Sorted by the same key the move guard enforces, so the two cannot disagree.
+  var _seqOf = {};
+  try {
+    var _pord0 = {};
+    (d.beatOrder || []).forEach(function (bx, i) { if (bx != null && _pord0[bx] == null) _pord0[bx] = i; });
+    var _all = [];
+    (d.pages || []).forEach(function (pg) {
+      (pg.placements || []).forEach(function (pl) { _all.push(pl); });
+    });
+    _all.sort(function (x, y) {
+      var a = pairedOrderKey(x, _pord0), b = pairedOrderKey(y, _pord0);
+      for (var i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); }
+      return 0;
+    });
+    // A PICTURE AND ITS CLOSING TEXT SHARE A NUMBER. They are one unit: nothing may ever come between
+    // them. They stay independent -- either can be pulled up or down on its own -- and they may
+    // straddle a page break, picture at the foot of one page and its text at the head of the next,
+    // because 'touching' means adjacent in the SEQUENCE, not on the same sheet. Since no other segment
+    // carries that number, nothing can wedge in between them; the rule enforces itself rather than
+    // needing a special case in the move op.
+    // The guard underneath still knows picture precedes closing, so the two cannot invert and leave a
+    // reader meeting the aftermath above the moment. The shared number governs what may come BETWEEN
+    // them; the internal ordering governs which faces which way.
+    var _n = 0, _prev = null;
+    _all.forEach(function (pl) {
+      var _pairWithPrev = _prev && pl.kind === 'narr' && pl.part === 'after' &&
+                          pl.beat === _prev.beat && (_prev.kind === 'image' || _prev.kind === 'tower');
+      if (!_pairWithPrev) _n++;
+      _seqOf[_segKey(pl)] = _n;
+      _prev = pl;
+    });
+  } catch (e) {}
   var _byPage = {};
   (d.pages || []).forEach(function (pg) { _byPage[pg.page] = pg; });
   pages.forEach(function (pg, pi) {
@@ -6138,17 +6180,36 @@ function pairedPlanText(packed) {
       // are possible.
       var _slot = (pl.kind === 'narr') ? ((pl.part === 'after') ? '[3-closing]' : '[1-opening]')
                 : (pl.kind === 'section-header') ? '[0-header]' : '[2-picture]';
-      L.push('      beat ' + pl.beat + ' ' + _slot + '  ' + lbl + _hstr + _rcStr + _fhStr + _flag + _dflag);
+      var _sq = _seqOf[_segKey(pl)];
+      var _sqs = (_sq != null) ? ('#' + (_sq < 10 ? '00' : (_sq < 100 ? '0' : '')) + _sq + ' ') : '     ';
+      L.push('      ' + _sqs + 'beat ' + pl.beat + ' ' + _slot + '  ' + lbl + _hstr + _rcStr + _fhStr + _flag + _dflag);
     });
   });
 
   // The rule the slot markers encode, stated once so it cannot be inferred wrongly.
   L.push('');
-  L.push('READING ORDER: within one beat the parts run [1-opening] -> [2-picture] -> [3-closing], and');
-  L.push('beats run in the order listed. A move is only legal if the text still reads in that order');
-  L.push('afterwards. So [1-opening] can never land on or after its own beat\'s [2-picture], and');
-  L.push('[3-closing] can never land on or after the NEXT beat\'s [1-opening]. Moves that would do');
-  L.push('either are refused, and refused moves still cost a measure -- so do not propose them.');
+  L.push('READING ORDER: every segment carries a number, #001 upward, in the order a reader meets it.');
+  L.push('Walk the book top to bottom and those numbers MUST ascend. That is the whole rule.');
+  L.push('A move is legal if the numbers still ascend afterwards -- so a segment may only ever move to');
+  L.push('sit directly beside its neighbours, #n next to #n-1 or #n+1. Moving #47 onto a page whose');
+  L.push('last segment is #52 puts 47 after 52 and is refused. Refused moves still cost a full');
+  L.push('re-measure, so check the numbers before proposing.');
+  L.push('');
+  L.push('MOVING SEGMENTS: pullLines and pushLines move a page\'s FIRST segment, whatever it is --');
+  L.push('bridge text, a PICTURE, or pic text. The names say lines for historical reasons; they are');
+  L.push('not restricted to text. A picture can be pulled onto the page above it or pushed onto the');
+  L.push('page below, exactly like a paragraph, subject to the same two tests: the numbers must still');
+  L.push('ascend, and both pages must still fit. This is often the ONLY way to fill a nearly empty');
+  L.push('page, because a page holding the tail of some bridge text can only legally be joined by the');
+  L.push('picture that follows it -- no text may go there.');
+  L.push('');
+  L.push('TWO SEGMENTS SHARING A NUMBER are one unit: a picture and the text that closes its beat.');
+  L.push('Nothing may ever come between them. They still move independently, and they may straddle a');
+  L.push('page break -- picture at the foot of one page, its text at the head of the next -- because');
+  L.push('touching means adjacent in the SEQUENCE, not on the same sheet.');
+  L.push('Within a beat the parts are [1-opening] then [2-picture] then [3-closing], which is why a');
+  L.push('beat\'s opening text can never join the page its own picture is already on -- unless the');
+  L.push('picture comes to IT, which is a legal move in the other direction.');
   L.push('');
   // ===== ISSUES (AI signals) -- paired ===========================================================
   // Same structured signals the magazine dump emits, computed from the paired plan: over-box clips,
@@ -6191,6 +6252,15 @@ function pairedPlanText(packed) {
             (_sp.part || 'before') === (_nx.part || 'before')) {
           _hint = '  -> op: pullLines page ' + pi + ' fromPage ' + (pi + 1) +
                   ' (the rest of beat ' + _sp.beat + "'s same paragraph -- legal, same slot)";
+        } else if (_sp.beat != null && _nx.beat === _sp.beat && (_nx.kind === 'image' || _nx.kind === 'tower')) {
+          // The commonest stranded page in Picture Book: the tail of a beat's bridge text, with that
+          // beat's PICTURE alone at the top of the next page. Pulling the picture up reads bridge then
+          // picture -- correct order -- and its pic text comes with it, since they share a number.
+          // Until v3.0.309 the op could not carry a picture at all, so this page was unfillable and the
+          // hint said to leave it alone. It is fillable now, and this is the move.
+          _hint = '  -> op: pullLines page ' + pi + ' fromPage ' + (pi + 1) +
+                  ' (bring beat ' + _sp.beat + "'s PICTURE up to its own bridge text -- legal, and the" +
+                  ' only thing that can fill this page)';
         } else if (_sp.beat != null && _nx.beat === _sp.beat) {
           _hint = '  -> the next page continues beat ' + _sp.beat + ', but as ' +
                   ((_nx.kind === 'narr') ? ((_nx.part === 'after') ? '[3-closing]' : '[1-opening]') : '[2-picture]') +
