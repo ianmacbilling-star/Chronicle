@@ -6130,10 +6130,26 @@ function pairedPlanText(packed) {
       var _fhStr = (pl.fullH != null) ? ('  fullH' + pl.fullH.toFixed(2)) : '';
       var _flag = (_h != null && _cum > 9.16) ? '  <== OVER 9.16' : '';
       var _dflag = (_rcH != null && _h != null && (_rcH - _h) > 0.3) ? '  <== RENDERS TALLER THAN PACKED' : '';
-      L.push('      beat ' + pl.beat + '  ' + lbl + _hstr + _rcStr + _fhStr + _flag + _dflag);
+      // WHERE THIS SITS INSIDE ITS BEAT. The dump listed what was on a page but never what each block
+      // WAS within its scene, so the AI could see 'page 32 is nearly empty, pull something in' and had
+      // no way to know it was about to put a beat's OPENING text on a page where that beat's picture
+      // already sat. Three of every four refused moves were exactly that, repeated pass after pass
+      // because a refusal teaches it nothing. Naming the slot lets it work out for itself which moves
+      // are possible.
+      var _slot = (pl.kind === 'narr') ? ((pl.part === 'after') ? '[3-closing]' : '[1-opening]')
+                : (pl.kind === 'section-header') ? '[0-header]' : '[2-picture]';
+      L.push('      beat ' + pl.beat + ' ' + _slot + '  ' + lbl + _hstr + _rcStr + _fhStr + _flag + _dflag);
     });
   });
 
+  // The rule the slot markers encode, stated once so it cannot be inferred wrongly.
+  L.push('');
+  L.push('READING ORDER: within one beat the parts run [1-opening] -> [2-picture] -> [3-closing], and');
+  L.push('beats run in the order listed. A move is only legal if the text still reads in that order');
+  L.push('afterwards. So [1-opening] can never land on or after its own beat\'s [2-picture], and');
+  L.push('[3-closing] can never land on or after the NEXT beat\'s [1-opening]. Moves that would do');
+  L.push('either are refused, and refused moves still cost a measure -- so do not propose them.');
+  L.push('');
   // ===== ISSUES (AI signals) -- paired ===========================================================
   // Same structured signals the magazine dump emits, computed from the paired plan: over-box clips,
   // oversized cells (real >> packed), and underfull pages. Maps to the op vocabulary in the spec.
@@ -6165,7 +6181,24 @@ function pairedPlanText(packed) {
     // so it is an advisory flag only (the real fix is content-side: re-split narration or add an image).
     if (!_hasImg) {
       if (real < 3.5) {
-        _pIssues.push('  TEXT-ONLY-SHORT  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16, no image -- a stranded text page  -> op: pullLines to consolidate onto an adjacent page that has an image (Picture Book wants an image per page)');
+        // Name the ONE move that can legally fill this page, worked out here rather than guessed at.
+        // A stranded page is nearly always a beat split across a page break, and the only text that may
+        // legally join it is the immediately adjacent part of the SAME beat.
+        var _sp = (pg.placements || [])[0] || {};
+        var _nx = ((pages[pi + 1] || {}).placements || [])[0] || {};
+        var _hint = '';
+        if (_sp.beat != null && _nx.beat === _sp.beat && _nx.kind === 'narr' &&
+            (_sp.part || 'before') === (_nx.part || 'before')) {
+          _hint = '  -> op: pullLines page ' + pi + ' fromPage ' + (pi + 1) +
+                  ' (the rest of beat ' + _sp.beat + "'s same paragraph -- legal, same slot)";
+        } else if (_sp.beat != null && _nx.beat === _sp.beat) {
+          _hint = '  -> the next page continues beat ' + _sp.beat + ', but as ' +
+                  ((_nx.kind === 'narr') ? ((_nx.part === 'after') ? '[3-closing]' : '[1-opening]') : '[2-picture]') +
+                  ' -- pulling it here would read out of order. Leave this page alone.';
+        } else {
+          _hint = '  -> no legal pull: the next page starts a different beat. Leave this page alone.';
+        }
+        _pIssues.push('  TEXT-ONLY-SHORT  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16, no image -- a stranded text page' + _hint);
       } else {
         _pIssues.push('  TEXT-ONLY-FULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  fills ' + real.toFixed(2) + ' / 9.16, no image -- a full page of narration. Picture Book ideally wants an image per page, but no layout op can add one; ADVISORY (content-side fix: re-split narration or generate art). Do not force a layout op here.');
       }
