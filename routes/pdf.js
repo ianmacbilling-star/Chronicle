@@ -7313,6 +7313,8 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       var moving = pls[0];
       // Append to the target page (text moves to the END of the earlier page / START of the later one
       // depending on direction; for a pull-up the earlier page gets it appended after its content).
+      // Baseline BEFORE touching anything, so the comparison is against this book as it stands.
+      var _obBefore = pairedOrderBreaks(plan, pairedOrdinals(beats)).length;
       var toBefore = (toPg.placements || []).slice();
       var fromBefore = pls.slice();
       if (toPageIdx < fromPageIdx) { toPg.placements = toBefore.concat([moving]); }   // pull up: append to earlier page
@@ -7320,8 +7322,16 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       fromPg.placements = fromBefore.slice(1);
       // ORDER FIRST, then fit. A move that reads wrong is not worth measuring: the height test alone
       // happily accepted pushing a beat's after-tail past the NEXT beat's opening paragraph.
-      var _ob = pairedOrderBreaks(plan, pairedOrdinals(beats));
-      if (_ob.length) {
+      // COMPARE, do not just count. This asked 'are there any breaks now?' rather than 'did this move
+      // create one?', so a single pre-existing break anywhere in the book refused EVERY text move for
+      // the rest of the run and blamed each one in turn. On The Strangers the AI twice asked to pull
+      // beat 25's paragraph tail up onto p.32 -- a page holding 1.30in against a 9.24in box, with the
+      // head of that very paragraph on it -- and was refused both times for an order problem it had
+      // nothing to do with. The move was legal, and would have filled that page AND freed room for the
+      // picture below it.
+      var _obN = pairedOrderBreaks(plan, pairedOrdinals(beats)).length;
+      if (_obN > _obBefore) {
+        var _ob = pairedOrderBreaks(plan, pairedOrdinals(beats));
         toPg.placements = toBefore; fromPg.placements = fromBefore;
         try { console.warn('[order] refused move of ' + pairedPlacementLabel(moving) + ' from page ' +
           fromPageIdx + ' to ' + toPageIdx + ': it would put ' + pairedPlacementLabel(_ob[0].cur.pl) +
