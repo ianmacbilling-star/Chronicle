@@ -15173,6 +15173,11 @@ function finalizeClearPriorLoaded() {
 }
 function optimizeLogLine(txt, kind) {
   try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push(txt); } catch (e) {}
+  // The USER-facing progress list, not just the admin log panel. aiLog only renders that panel behind
+  // the easter-egg view, so 'Saved' reached the downloadable bundle and the admin panel and never the
+  // place anyone actually watches -- the run appeared to end at 'Polished your book' with no word on
+  // whether the version had been kept.
+  try { if (typeof optimizeProgress === 'function') optimizeProgress(txt, { done: kind === 'ok' }); } catch (e) {}
   try {
     var p = document.getElementById('__aiLoopLog');
     if (p) {
