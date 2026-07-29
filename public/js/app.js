@@ -15101,15 +15101,33 @@ function finalizeFinalFill() {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; },
                                                function () { return { ok: r.ok, j: null }; }); })
       .then(function (rj) {
-        if (!rj.ok) { aiLog('Final pass: failed -- ' + ((rj.j && (rj.j.error || rj.j.message)) || 'server error'), 'stop'); return; }
+        if (!rj.ok) { optimizeLogLine('Final pass: failed -- ' + ((rj.j && (rj.j.error || rj.j.message)) || 'server error'), 'stop'); return; }
         var j = rj.j || {};
-        if (j.grown) aiLog('Final pass: grew ' + j.grown + ' picture' + (j.grown === 1 ? '' : 's') +
+        if (j.grown) optimizeLogLine('Final pass: grew ' + j.grown + ' picture' + (j.grown === 1 ? '' : 's') +
           ' into leftover space' + (j.reverted ? (' (' + j.reverted + ' put back)') : '') + '.', 'ok');
-        else if (j.skipped) aiLog('Final pass: skipped -- ' + j.skipped, 'skip');
-        else aiLog('Final pass: no picture had room to grow.', 'skip');
+        else if (j.skipped) optimizeLogLine('Final pass: skipped -- ' + j.skipped, 'skip');
+        else optimizeLogLine('Final pass: no picture had room to grow.', 'skip');
       })
-      .catch(function (e) { aiLog('Final pass: could not run -- ' + ((e && e.message) || 'network error'), 'stop'); });
+      .catch(function (e) { optimizeLogLine('Final pass: could not run -- ' + ((e && e.message) || 'network error'), 'stop'); });
   } catch (e) { return Promise.resolve(); }
+}
+// TOP-LEVEL LOGGER. aiLog is declared INSIDE runAiOptimizeLoop, so the finalize* functions below --
+// which live at module scope -- cannot see it. Every aiLog call from them threw ReferenceError, and
+// because the .catch handler also called aiLog it threw again inside the catch, so the failure itself
+// vanished. That is why 'Final pass' and 'Saved' never appeared in any bundle: the fetches went out,
+// the work may well have happened, and nothing could say so. Fourth scope error of the day, same
+// shape as the others -- an identifier that reads as available and is not.
+function optimizeLogLine(txt, kind) {
+  try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push(txt); } catch (e) {}
+  try {
+    var p = document.getElementById('__aiLoopLog');
+    if (p) {
+      var d = document.createElement('div');
+      d.textContent = (kind === 'stop' ? '\u2717 ' : (kind === 'ok' ? '\u2713 ' : '\u2022 ')) + txt;
+      d.style.cssText = 'opacity:0.85;margin:2px 0;' + (kind === 'stop' ? 'color:#e0a0a0;' : '');
+      p.appendChild(d);
+    }
+  } catch (e) {}
 }
 function finalizeSaveOptimized() {
   if (!state.currentCampaign) return;
@@ -15124,11 +15142,11 @@ function finalizeSaveOptimized() {
       // cache-key miss was completely invisible -- nothing was ever saved and nothing ever said so.
       if (rj.ok && rj.j && rj.j.ok) {
         finalizeShowOptimizedNote(rj.j.at, false);
-        aiLog('Saved -- this version will be here when you return.', 'ok');
+        optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
       } else {
-        aiLog('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
+        optimizeLogLine('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
       }
-    }).catch(function (e) { aiLog('Could not save this version: ' + ((e && e.message) || 'network error'), 'stop'); });
+    }).catch(function (e) { optimizeLogLine('Could not save this version: ' + ((e && e.message) || 'network error'), 'stop'); });
   } catch (e) {}
 }
 // Show the "already optimized" note (either freshly saved, or restored from a previous session).
