@@ -6188,12 +6188,21 @@ function pairedPlanText(packed) {
 
   // The rule the slot markers encode, stated once so it cannot be inferred wrongly.
   L.push('');
-  L.push('READING ORDER: every segment carries a number, #001 upward, in the order a reader meets it.');
-  L.push('Walk the book top to bottom and those numbers MUST ascend. That is the whole rule.');
-  L.push('A move is legal if the numbers still ascend afterwards -- so a segment may only ever move to');
-  L.push('sit directly beside its neighbours, #n next to #n-1 or #n+1. Moving #47 onto a page whose');
-  L.push('last segment is #52 puts 47 after 52 and is refused. Refused moves still cost a full');
-  L.push('re-measure, so check the numbers before proposing.');
+  // TONE MATTERS AND I GOT IT WRONG. v3.0.310 replaced this block and the AI went from proposing six
+  // ops to proposing none, reporting that the pages already fit well. Nothing structural changed --
+  // the code diff was this text. It was almost entirely prohibition: what is refused, what can never
+  // happen, do not propose it, check before you ask. One line described the commonest pattern in the
+  // book -- a beat's opening text on one page and its picture on the next -- as something that can
+  // never be joined, with the escape clause buried at the end of the sentence. The AI matched the
+  // prohibition to what it was looking at and stood down, which was the rational reading.
+  // Lead with the job. State the constraint once, plainly, without repeating the threat.
+  L.push('YOUR JOB: fill the empty space. A page holding two inches of a nine-inch box is the problem');
+  L.push('worth solving; a page that already fits well needs nothing. Propose moves. A refusal is');
+  L.push('cheap information, not a mistake -- proposing nothing is the only outcome that cannot help.');
+  L.push('');
+  L.push('HOW ORDER WORKS: every segment carries a number, #001 upward, in the order a reader meets it.');
+  L.push('Walk the book top to bottom and those numbers ascend. A move is legal if they still ascend');
+  L.push('afterwards -- that is the whole rule, and it is arithmetic, not judgement.');
   L.push('');
   L.push('MOVING SEGMENTS: pullLines and pushLines move a page\'s FIRST segment, whatever it is --');
   L.push('bridge text, a PICTURE, or pic text. The names say lines for historical reasons; they are');
@@ -6207,14 +6216,52 @@ function pairedPlanText(packed) {
   L.push('Nothing may ever come between them. They still move independently, and they may straddle a');
   L.push('page break -- picture at the foot of one page, its text at the head of the next -- because');
   L.push('touching means adjacent in the SEQUENCE, not on the same sheet.');
-  L.push('Within a beat the parts are [1-opening] then [2-picture] then [3-closing], which is why a');
-  L.push('beat\'s opening text can never join the page its own picture is already on -- unless the');
-  L.push('picture comes to IT, which is a legal move in the other direction.');
+  L.push('THE COMMONEST FIX in Picture Book: a page holding the tail of some bridge text, with that');
+  L.push('beat\'s PICTURE alone at the top of the next page. Pull the picture UP onto it. That reads');
+  L.push('bridge then picture, the numbers ascend, and its pic text comes along because they share a');
+  L.push('number. Do this whenever you see it -- it is usually the only thing that can fill the page,');
+  L.push('and it can empty the page the picture came from, which shortens the book.');
   L.push('');
   // ===== ISSUES (AI signals) -- paired ===========================================================
   // Same structured signals the magazine dump emits, computed from the paired plan: over-box clips,
   // oversized cells (real >> packed), and underfull pages. Maps to the op vocabulary in the spec.
   var _pIssues = [];
+  // UNDERFULL PAGES, computed straight from the measured page heights.
+  // The existing per-page branch below has NEVER emitted TEXT-ONLY-SHORT -- not once, in any dump, at
+  // any version -- and UNDERFULL has been zero on every paired run. So for Picture Book the AI has
+  // only ever been shown CLIP and TEXT-ONLY-FULL, and TEXT-ONLY-FULL says outright not to act. It was
+  // reading an issue list that contained nothing to do, and reporting that the pages fit well; when
+  // it proposed work anyway it was inventing it from the page listing, which is why so much of it was
+  // illegal. Rather than keep guessing at why that branch misses -- I have guessed wrong repeatedly
+  // today -- this computes the same thing from the page heights the timeline already reports
+  // correctly, and names the one legal move for each case.
+  (pages || []).forEach(function (pg, pi) {
+    var _dpU = (d.pages || []).filter(function (x) { return x.page === pi; })[0] || {};
+    var _rl = (_dpU.realUsed != null) ? _dpU.realUsed : null;
+    if (_rl == null || _rl >= 6.0) return;                      // comfortably full: nothing to say
+    var _mine = (pg.placements || []);
+    var _next = ((pages[pi + 1] || {}).placements || [])[0] || null;
+    var _head = _mine[0] || null;
+    if (!_head) return;
+    var _room = Math.round((CO_CLIP_BOX_IN - _rl) * 100) / 100;
+    var _act = '';
+    if (_next && _next.beat === (_mine[_mine.length - 1] || {}).beat) {
+      // The next page continues the SAME beat, so its first segment is this page's natural neighbour
+      // and pulling it up cannot break reading order. This is the move, whatever kind it is.
+      _act = '  -> op: pullLines page ' + pi + ' fromPage ' + (pi + 1) + '  (brings ' +
+             ((_next.kind === 'image' || _next.kind === 'tower') ? 'the PICTURE' :
+              (_next.part === 'after' ? 'the pic text' : 'the bridge text')) +
+             ' of beat ' + _next.beat + ' up to join its own beat -- reads in order, and there is ' +
+             _room.toFixed(2) + 'in of room)';
+    } else if (_next) {
+      _act = '  -> op: pullLines page ' + pi + ' fromPage ' + (pi + 1) + '  (beat ' + _next.beat +
+             ' starts on the next page; check the segment numbers still ascend before proposing)';
+    } else {
+      _act = '  -> last page of the book; nothing follows it to pull up';
+    }
+    _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  holds ' + _rl.toFixed(2) +
+      'in of ' + CO_CLIP_BOX_IN + 'in -- ' + _room.toFixed(2) + 'in EMPTY. This is the main thing to fix.' + _act);
+  });
   (d.overflows || []).forEach(function (o) {
     _pIssues.push('  CLIP  page ' + o.page + ' (viewer ~p.' + _viewer(o.page) + ')  over box by ' + o.overIn.toFixed(2) + 'in  -> op: shrinkImage / pushLines');
   });
