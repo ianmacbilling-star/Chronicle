@@ -4624,7 +4624,8 @@ function runMovesAdd(k, rec) {
   // rather than stacking, so a push followed by a pull cannot drift the text two pages.
   for (var i = 0; i < v.moves.length; i++) {
     var m = v.moves[i];
-    if (m.beat === rec.beat && (m.part || '') === (rec.part || '') && (m.cs || 0) === (rec.cs || 0)) {
+    if (m.beat === rec.beat && (m.kind || 'narr') === (rec.kind || 'narr') &&
+        (m.part || '') === (rec.part || '') && (m.cs || 0) === (rec.cs || 0)) {
       m.dir = rec.dir; v.at = Date.now(); return;
     }
   }
@@ -4646,7 +4647,14 @@ function applyRunMoves(plan, k, pageBudget) {
       var pls = plan.pages[pi].placements || [];
       if (!pls.length) continue;
       var p0 = pls[0];
-      if (p0.kind !== 'narr' || p0.beat !== mv.beat) continue;
+      // MATCH THE KIND THAT WAS RECORDED. This required 'narr', so a PICTURE move -- newly possible
+      // since v3.0.309 -- was accepted, recorded, and then silently dropped by the next re-pack. A
+      // picture moved on pass 4 survived because nothing repacks after it; one moved on passes 1 to 3
+      // vanished, so the cascade it was meant to start never got past a single step. Exactly the fault
+      // v3.0.276 fixed for text, reintroduced for pictures by making them movable without extending
+      // the replay to carry them.
+      if (p0.beat !== mv.beat) continue;
+      if ((p0.kind || '') !== (mv.kind || 'narr')) continue;
       if ((p0.part || '') !== (mv.part || '')) continue;
       if ((p0.charStart || 0) !== (mv.cs || 0)) continue;
       if (pls.length < 2) break;                       // would empty the source page -- refuse
@@ -7547,7 +7555,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         // cache and every later measurement describes a book without it.
         try {
           runMovesAdd(runGrowsKey(req.params.campaignId, req), {
-            beat: moving.beat, part: (moving.part || ''), cs: (moving.charStart || 0),
+            beat: moving.beat, kind: (moving.kind || 'narr'), part: (moving.part || ''), cs: (moving.charStart || 0),
             dir: (toPageIdx < fromPageIdx) ? -1 : 1
           });
         } catch (e) {}
@@ -7591,7 +7599,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
           if (_r2 && !_r2._error && _okT && _okF) {
             try {
               runMovesAdd(runGrowsKey(req.params.campaignId, req), {
-                beat: moving.beat, part: (moving.part || ''), cs: (moving.charStart || 0),
+                beat: moving.beat, kind: (moving.kind || 'narr'), part: (moving.part || ''), cs: (moving.charStart || 0),
                 dir: (toPageIdx < fromPageIdx) ? -1 : 1
               });
               var _tb = null;
