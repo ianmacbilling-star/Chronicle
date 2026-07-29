@@ -1116,6 +1116,8 @@ var CO_PACK_PAGE_H_IN = 9.4;                              // what every route pa
 // came out 9.20in against a 9.06in image cap. Named so the cap can be derived instead of guessed.
 var CO_TOWER_CELL_OVERHEAD = 0.14;
 var CO_TOWER_WRAP_MARGIN = 0.10;      // the tower wrapper's own margin-bottom, outside the cell
+// A page holding less than this is worth reporting. Not 'nearly empty' -- 'not full'.
+var CO_UNDERFULL_AT = 8.2;
 var MOVE_SHRINK_FLOOR = 0.85;         // a picture may lose at most 15 percent to absorb an orphan line
 var CO_CLIP_ACCEPT_TOL = 0.02;                            // slack when the apply gate asks 'does this fit'
 // ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
@@ -6252,7 +6254,15 @@ function pairedPlanText(packed) {
   (pages || []).forEach(function (pg, pi) {
     var _dpU = (d.pages || []).filter(function (x) { return x.page === pi; })[0] || {};
     var _rl = (_dpU.realUsed != null) ? _dpU.realUsed : null;
-    if (_rl == null || _rl >= 6.0) return;                      // comfortably full: nothing to say
+    // THE BAR IS 'NOT FULL', NOT 'NEARLY EMPTY'. At 6.0in this reported only the extreme cases and
+    // stayed silent on nine pages of The Strangers holding between 6.0 and 8.0in -- 18.2 inches of
+    // empty space between them, about two pages' worth, none of it ever reaching the AI. Those are
+    // exactly the pages Ian kept pointing at: a page with a complete beat on it and two and a half
+    // inches spare, while the next page's bridge text would have slid straight in. The loop cannot act
+    // on what it is not shown, and it was shown nothing.
+    // 8.2in leaves about an inch of slack, which is roughly three lines -- below that there is no
+    // useful move to make anyway, since the smallest thing that can slide is a paragraph.
+    if (_rl == null || _rl >= CO_UNDERFULL_AT) return;
     var _mine = (pg.placements || []);
     var _next = ((pages[pi + 1] || {}).placements || [])[0] || null;
     var _head = _mine[0] || null;
