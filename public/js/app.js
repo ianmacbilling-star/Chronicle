@@ -14873,6 +14873,52 @@ function finalizeBuildAfterNav(first, last) {
     h += '<div data-page="' + n + '" onclick="finalizeAfterGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
   }
   nav.innerHTML = h;
+  finalizeAttachNavTracking();
+  finalizeNavHighlight('finalize-after-nav', 'finalize-after-scroll');   // mark the current page at once
+}
+// SCROLL-TRACKED PAGE SPINE. The spine highlighted only what you had CLICKED, so as soon as you
+// scrolled it pointed at the wrong page -- worse than no highlight, because it reads as authoritative.
+// Highlights whichever page's top edge is nearest the top of the viewport, matching the styling the
+// click handler already uses so the two cannot diverge.
+function finalizeNavHighlight(navId, scrollId) {
+  var nav = document.getElementById(navId), sc = document.getElementById(scrollId);
+  if (!nav || !sc || sc.style.display === 'none') return;
+  var cs = sc.querySelectorAll('canvas[data-page]');
+  if (!cs.length) return;
+  var base = sc.firstChild ? sc.firstChild.offsetTop : 0;
+  var top = sc.scrollTop, best = null, bestD = Infinity;
+  for (var i = 0; i < cs.length; i++) {
+    var d = Math.abs((cs[i].offsetTop - base) - top);
+    if (d < bestD) { bestD = d; best = cs[i].getAttribute('data-page'); }
+  }
+  if (best == null) return;
+  for (var j = 0; j < nav.children.length; j++) {
+    var el = nav.children[j], on = (el.getAttribute('data-page') == best);
+    el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)';
+    el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent';
+    if (on) {
+      // Keep the marker visible in a long spine, but only nudge -- a full scrollIntoView every frame
+      // fights the user's own scrolling.
+      var nr = nav.getBoundingClientRect(), er = el.getBoundingClientRect();
+      if (er.top < nr.top + 4 || er.bottom > nr.bottom - 4) nav.scrollTop += (er.top - nr.top) - (nr.height / 2);
+    }
+  }
+}
+// One rAF-throttled listener per pane, attached once. Scroll fires far faster than a highlight needs
+// repainting, and doing this per event would make the pane feel heavy.
+function finalizeAttachNavTracking() {
+  [['finalize-after-nav', 'finalize-after-scroll'], ['finalize-page-nav', 'finalize-before-scroll']]
+    .forEach(function (pair) {
+      var sc = document.getElementById(pair[1]);
+      if (!sc || sc._navTracked) return;
+      sc._navTracked = true;
+      var pending = false;
+      sc.addEventListener('scroll', function () {
+        if (pending) return;
+        pending = true;
+        window.requestAnimationFrame(function () { pending = false; finalizeNavHighlight(pair[0], pair[1]); });
+      }, { passive: true });
+    });
 }
 function finalizeAfterGoToPage(n) {
   var after = document.getElementById('finalize-after-scroll');
@@ -15188,7 +15234,11 @@ function optimizeLogLine(txt, kind) {
     }
   } catch (e) {}
 }
-function finalizeSaveOptimized() {
+// `quiet` suppresses the confirmation line. A run saves TWICE on purpose -- once the moment the loop
+// ends, so a book is protected even if the final fill is slow or fails, and again afterwards if the
+// fill improved it. Both announcing themselves put 'Saved' on screen twice, which reads like a stutter
+// or a bug rather than a belt-and-braces save.
+function finalizeSaveOptimized(quiet) {
   if (!state.currentCampaign) return;
   try {
     var q = finalizeBookQuery();
@@ -15201,7 +15251,7 @@ function finalizeSaveOptimized() {
       // cache-key miss was completely invisible -- nothing was ever saved and nothing ever said so.
       if (rj.ok && rj.j && rj.j.ok) {
         finalizeShowOptimizedNote(rj.j.at, false);
-        optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
+        if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
       } else {
         optimizeLogLine('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
       }
@@ -15699,8 +15749,10 @@ function _runLayoutAiOptimize() {
           // 'Load Last Optimized File' had no file behind it. Kick both off; the fill re-composes the
           // cache in place, so if it lands first the save stores the filled book, and if it does not
           // the save still stores a good one.
-          finalizeSaveOptimized();
-          finalizeFinalFill().then(function () { finalizeSaveOptimized(); });   // re-save if the fill improved it
+          // Save immediately and QUIETLY so the book is protected if the fill is slow or fails, then
+          // again after the fill -- and let THAT one speak, since by then it is the finished article.
+          finalizeSaveOptimized(true);
+          finalizeFinalFill().then(function () { finalizeSaveOptimized(); });
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
