@@ -15141,6 +15141,36 @@ function finalizeFinalFill() {
 // vanished. That is why 'Final pass' and 'Saved' never appeared in any bundle: the fetches went out,
 // the work may well have happened, and nothing could say so. Fourth scope error of the day, same
 // shape as the others -- an identifier that reads as available and is not.
+// Is the After pane showing a book restored from a previous session? It changes two things: the
+// button becomes Clear (so there is a way back to a blank slate), and Optimize asks first, because
+// what is on screen is NOT what a new run would continue from.
+var _finalizePriorLoaded = false;
+function finalizeSetPriorLoaded(on) {
+  _finalizePriorLoaded = !!on;
+  var btn = document.getElementById('layoutai-load-last');
+  if (!btn) return;
+  if (on) {
+    btn.textContent = 'Clear Loaded Version';
+    btn.setAttribute('onclick', 'finalizeClearPriorLoaded()');
+    btn.style.display = '';
+  } else {
+    btn.textContent = 'Load Last Optimized File';
+    btn.setAttribute('onclick', 'finalizeLoadLastOptimized(true)');
+  }
+}
+// Put the pane back to where it was before the saved book was loaded, and offer the load again.
+function finalizeClearPriorLoaded() {
+  try {
+    var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.innerHTML = '';
+    var body = document.getElementById('finalize-after-body'); if (body) body.style.display = '';
+    if (scroll) scroll.style.display = 'none';
+    var note = document.getElementById('finalize-optimized-note');
+    if (note) { note.textContent = ''; note.style.display = 'none'; }
+    _publishSource = '';
+  } catch (e) {}
+  finalizeSetPriorLoaded(false);
+  finalizeLoadLastOptimized();   // re-check: the button stays offered if a saved file still exists
+}
 function optimizeLogLine(txt, kind) {
   try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push(txt); } catch (e) {}
   try {
@@ -15207,6 +15237,7 @@ function finalizeLoadLastOptimized(manual) {
             // Same-origin proxy, not the raw R2 URL: the bucket is private and pdf.js fetches, so the
             // stored URL fails CORS and authorisation both. See /last-optimized-file.
             renderPdfInto('/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery(), 'finalize-after-scroll', false);
+            finalizeSetPriorLoaded(true);   // the pane now holds a SAVED book, not this session's work
             var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
             var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.style.display = '';
             _publishSource = 'composed';   // the loaded optimized book is what publishes
@@ -15321,8 +15352,21 @@ function finalizeCancelOptimize() {
   // stop after the first, un-optimized render so the packer output can be inspected/dumped).
   if (typeof optimizeProgress === 'function') optimizeProgress('Cancelling &mdash; will stop after the current step.', {});
 }
-function runLayoutAiDryRun() {
+async function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
+  // A saved book on screen is NOT a starting point. Optimize always re-packs from the campaign's
+  // beats with the run stores cleared -- proven by two runs producing byte-identical reference packs
+  // -- so the loaded version is replaced, not improved. Say that plainly rather than implying a
+  // continuation the code does not do. (Continuing from a saved version is TD-096, not built.)
+  if (_finalizePriorLoaded) {
+    var goOn = await uiConfirm(
+      'You are looking at a saved version of this book from an earlier session.\n\n' +
+      'Optimizing starts over from scratch -- it does not carry on from what is on screen, and it ' +
+      'replaces the saved version when it finishes.\n\nRun a fresh optimize anyway?',
+      { okText: 'Yes, start fresh', cancelText: 'Keep what I have' });
+    if (!goOn) return;
+    finalizeSetPriorLoaded(false);
+  }
   var _gb = document.getElementById('layoutai-run-btn'); if (_gb) _gb.disabled = true;
   var est = finalizeOptimizeEstimate() || 1;   // fall back to 1 if page count not yet known
   fetch('/api/tokens/balance', { credentials: 'same-origin' })
@@ -15432,6 +15476,7 @@ function _runLayoutAiOptimize() {
       // sat a stale label directly over live progress text, reading as though the run were chewing on
       // the saved file. It is rewritten by the save at the end of this run.
       try { var _n0 = document.getElementById('finalize-optimized-note'); if (_n0) { _n0.textContent = ''; _n0.style.display = 'none'; } } catch (e) {}
+      try { finalizeSetPriorLoaded(false); } catch (e) {}   // this run's output is not a restored one
       window._optimizeCapture = { json: [], log: [], dumps: [], applies: [], at: new Date().toISOString(),
                                   t0: Date.now(), endedAt: null, tEnd: null, passTimes: [] };
       var _cid = state.currentCampaign.id;
