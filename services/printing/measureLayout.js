@@ -98,9 +98,20 @@ async function measureDocument(html, options) {
     // Wait for web fonts so measured text height matches the real PDF metrics.
     // BOUNDED: setContent above carries a timeout; this did not, and a font that never settles hung
     // the pack forever while leaking the browser, because the cleanup below never ran.
-    await _mWithTimeout(page.evaluate(function () {
-      return (document.fonts && document.fonts.ready) ? document.fonts.ready : null;
-    }), 15000, 'document.fonts.ready');
+    // RETURN SOMETHING SERIALISABLE. This used to return document.fonts.ready itself, which resolves
+    // to a FontFaceSet -- a live, Set-like DOM object with iterators and circular references that
+    // Puppeteer then has to marshal back across CDP. The fonts were loading fine; what hung was the
+    // serialisation of the return value. That is the real reason this wait never came back, and it
+    // predates the self-hosted fonts entirely -- with remote fonts it looked like a network problem,
+    // and even after every face became a data URI the timeout kept firing. Resolve to a short string
+    // instead, which also tells us in the log whether the fonts genuinely finished.
+    var _fs = await _mWithTimeout(page.evaluate(function () {
+      if (!document.fonts || !document.fonts.ready) return 'no-font-api';
+      return document.fonts.ready.then(function () { return String(document.fonts.status || 'done'); });
+    }), 5000, 'document.fonts.ready');
+    if (_fs && _fs !== 'loaded' && _fs !== 'done') {
+      try { console.warn('[measure] fonts settled as "' + _fs + '" -- text metrics may not match the render'); } catch (e) {}
+    }
 
     var data = await page.evaluate(function () {
       var PX = 96; // CSS px per inch
