@@ -4657,7 +4657,12 @@ function applyRunMoves(plan, k, pageBudget) {
       if ((p0.kind || '') !== (mv.kind || 'narr')) continue;
       if ((p0.part || '') !== (mv.part || '')) continue;
       if ((p0.charStart || 0) !== (mv.cs || 0)) continue;
-      if (pls.length < 2) break;                       // would empty the source page -- refuse
+      // A MOVE MAY EMPTY ITS SOURCE PAGE. This refused any move that would, which was right in
+      // v3.0.276 when nothing cleaned up afterwards -- but v3.0.283 added a sweep, and the guard
+      // outlived its reason. Its effect since has been absolute: the last thing on a page could never
+      // leave it, so a page could never become empty, so the page count could never drop. That is why
+      // content pages read X -> X in every run of every book across twenty versions. The packer could
+      // change the count; the loop structurally could not. Emptied pages are swept below.
       var to = pi + mv.dir;
       if (to < 0 || to >= plan.pages.length) break;
       var toPg = plan.pages[to];
@@ -4900,6 +4905,19 @@ async function computePairedPack(req, campaignId, packOpts) {
   // HONEST LOOP: re-apply this run's accepted text moves to the fresh plan, so every pass measures the
   // book as it actually stands rather than one where the previous passes never happened.
   var _mvN = applyRunMoves(plan, runGrowsKey(campaignId, req), _pageBudget);
+  // SWEEP PAGES THE MOVES EMPTIED. The apply path has done this since v3.0.283, but the PACK did not,
+  // so a page emptied by the replay came back as a blank one on the next re-pack and the count never
+  // moved. Sweeping here is what actually lets the loop shorten a book: a move empties a page, the
+  // page disappears, and every later pass measures the shorter book. Nothing legitimate produces a
+  // placement-free page, so this is safe to do unconditionally.
+  try {
+    var _pgBefore = (plan.pages || []).length;
+    plan.pages = (plan.pages || []).filter(function (pg) { return pg && (pg.placements || []).length; });
+    plan.pageCount = plan.pages.length;
+    plan.pages.forEach(function (pg, _i) { pg.index = _i; });
+    var _pgGone = _pgBefore - plan.pages.length;
+    if (_pgGone) console.log('[pack-sweep] campaign ' + campaignId + ': ' + _pgGone + ' page(s) emptied by moves and removed');
+  } catch (e) { try { console.error('[pack-sweep] failed: ' + ((e && e.message) || e)); } catch (e2) {} }
   if (_mvN) { try { console.log('[run-moves] campaign ' + campaignId + ': re-applied ' + _mvN + ' text move(s) to the fresh pack'); } catch (e) {} }
   var overrides = {};
   plan.pages.forEach(function (pg) { pg.placements.forEach(function (pl) {
