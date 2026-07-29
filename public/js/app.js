@@ -15568,7 +15568,13 @@ function _runLayoutAiOptimize() {
                                   t0: Date.now(), endedAt: null, tEnd: null, passTimes: [] };
       var _cid = state.currentCampaign.id;
       var _q = finalizeBookQuery();
-      var MAX_ROUNDS = 4;   // safety cap; the loop also stops early when a round changes nothing
+      // 5, not 4. The loop moves ONE leading placement per page per pass, so a cascade of depth N
+      // needs N passes. On The Strangers v3.0.325 pass 4 pulled beat 26's bridge text up onto
+      // viewer p.32 and stopped there -- beat 26's picture was the NEXT link, 5.20in against 6.64in
+      // of room, and it never got a pass to move in. That left a 2.60in page in a finished book.
+      // This is a CAP, not a target: converged (applied === 0) still exits immediately below, so a
+      // book with nothing left to do still stops at pass 2 or 3 and costs nothing.
+      var MAX_ROUNDS = 5;   // safety cap; the loop also stops early when a round changes nothing
 
       // Write the current loop status above the progress bar (the message element renderPdfInto builds
       // inside the After pane), and mirror it on the label so it's visible even before the pane renders.
