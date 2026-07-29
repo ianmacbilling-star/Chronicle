@@ -4899,7 +4899,7 @@ async function computePairedPack(req, campaignId, packOpts) {
       });
       var real = (_realP[pi] != null) ? _realP[pi] : null;
       _pdbg.pages.push({ page: pi, used: Math.round(est * 100) / 100, realUsed: real,
-        placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null) }; }) });
+        placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), cohesion: (pl.cohesion ? 1 : 0), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null) }; }) });
     });
     _pdbg.overflows = _realP._overflows || [];
     // AT-RISK: a page renders taller than the packer ESTIMATED and is also close enough to the real
@@ -6112,7 +6112,7 @@ function pairedPlanText(packed) {
       var b = beats[pl.beat] || {};
       var lbl = pl.kind;
       if (pl.kind === 'narr') lbl += ' ' + (pl.part || 'before') + (pl.charStart != null ? (' CUT ' + pl.charStart + '..' + (pl.charEnd != null ? pl.charEnd : 'end')) : '');
-      if (pl.kind === 'image' || pl.kind === 'tower') { lbl += (pl.scale != null && pl.scale < 0.999) ? (' scale' + pl.scale.toFixed(2)) : ''; if (b.moment && b.moment.title) lbl += '  "' + b.moment.title + '"'; }
+      if (pl.kind === 'image' || pl.kind === 'tower') { lbl += (pl.scale != null && pl.scale < 0.999) ? (' scale' + pl.scale.toFixed(2) + (pl.cohesion ? '(cohesion)' : '')) : ''; if (b.moment && b.moment.title) lbl += '  "' + b.moment.title + '"'; }
       var _h = (pl.heightIn != null) ? pl.heightIn : null;
       if (_h != null) _cum = Math.round((_cum + _h) * 100) / 100;
       var _hstr = (_h != null) ? ('  packed' + _h.toFixed(2) + '  cum' + _cum.toFixed(2)) : '';
@@ -7407,6 +7407,13 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       var oldScale = (pl.scale != null) ? pl.scale : 1;
       var newScale;
       if (op.op === 'growImage') {
+        // A COHESION TRIM IS LOAD-BEARING. The packer made this picture small so its beat's text
+        // would fit on the same page; the white the AI can see is the room being held for that text.
+        // Growing it back consumes the reservation and re-orphans the paragraph, which is what
+        // happened on The Strangers viewer p.10: the packer trimmed beat 5 to 0.83, the loop grew it
+        // to 0.96, and the closing paragraph stayed alone on p.11. Shrinking one is still allowed --
+        // that only ever makes more room.
+        if (pl.cohesion) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'picture is trimmed to keep this beat together -- growing it would orphan the text' }); continue; }
         if (oldScale >= 0.999) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'image already at full size' }); continue; }
         newScale = 1.0;   // try full; the re-measure will reject if it overflows, then we bisect down
       } else {   // shrinkImage

@@ -29,6 +29,12 @@ function packPaired(beats, opts) {
   var pageH = opts.pageHeightIn || 9.7;
   var gap = (opts.gapIn != null) ? opts.gapIn : 0.1;
   var IMG_OVER = (opts.imgOverIn != null) ? opts.imgOverIn : 0.1;   // image margins beyond the gap (frame is now inset, adds no height)
+  // Hoisted out of placeText so the cohesion arithmetic in the driver uses the SAME number the
+  // placement actually costs. It did not, and cohesion under-reserved by exactly one margin per text
+  // block -- it trimmed the picture to make room for the after-text and the after-text still would
+  // not fit, which is how beat 5 of The Strangers ended up with its picture on one page and its
+  // closing paragraph alone on the next.
+  var TEXT_MARGIN = 0.1;   // the composer's paragraph top margin, added to EVERY placed slice
   var maxPages = opts.maxPages || 400;
   var minLeftForText = (opts.minLeftForTextIn != null) ? opts.minLeftForTextIn : 0.4;
   // ANTI-SLIVER: no slice of a paragraph may be left with fewer lines than this. Without it the
@@ -82,7 +88,6 @@ function packPaired(beats, opts) {
     // `lines` (text-only line bottoms) do NOT include. Reserve it so the fit test and the placed
     // height match the real render -- otherwise the packer fits one extra line and the composed
     // page renders ~0.1in taller per slice, slicing the last line horizontally at the box edge.
-    var TEXT_MARGIN = 0.1;
     var lineIdx = 0;
     while (lineIdx < nLines) {
       var rem = remaining() - TEXT_MARGIN;   // the slice's own top margin eats into the room
@@ -147,7 +152,11 @@ function packPaired(beats, opts) {
     if (cohScale != null && cohScale > 0 && cohScale < 1) {
       var _ch = round3(fullH * cohScale + over);
       if (_ch <= remaining() + 1e-6) {
-        place('image', beatIdx, _ch, { scale: cohScale, shrunk: true, fullH: round3(fullH) });
+        // `cohesion` marks this trim as LOAD-BEARING: the picture is small specifically so this
+        // beat's text fits beside it. Growing it back re-orphans the text, which is exactly what the
+        // loop did -- growImage on viewer p.10 took beat 5 from 0.83 to 0.96, consumed the room
+        // cohesion had reserved, and left the closing paragraph stranded on its own page.
+        place('image', beatIdx, _ch, { scale: cohScale, shrunk: true, cohesion: true, fullH: round3(fullH) });
         return;
       }
     }
@@ -208,11 +217,16 @@ function packPaired(beats, opts) {
     var _cohScale = null;
     if (b.hasImage && b.imageH > 0 && ((b.textBeforeH || 0) + (b.textAfterH || 0)) > 0) {
       var _txt = (b.textBeforeH || 0) + (b.textAfterH || 0);
-      var _room = pageH - _txt - (b.imgOver || IMG_OVER) - gap;
+      // Each text block costs its measured height PLUS a TEXT_MARGIN. Reserving only the measured
+      // heights left the beat 0.10in short per block -- so cohesion trimmed the picture, the text it
+      // was making room for still did not fit, and the beat was separated anyway with a smaller
+      // picture into the bargain. Worst of both.
+      var _tm = (((b.textBeforeH || 0) > 0) ? TEXT_MARGIN : 0) + (((b.textAfterH || 0) > 0) ? TEXT_MARGIN : 0);
+      var _room = pageH - _txt - _tm - (b.imgOver || IMG_OVER) - gap;
       var _need = (_room > 0) ? round3(Math.min(1, _room / b.imageH)) : 0;
       if (_need >= COHESION_FLOOR) {
         _cohScale = _need;
-        var _total = round3(_txt + b.imageH * _need + (b.imgOver || IMG_OVER) + gap);
+        var _total = round3(_txt + _tm + b.imageH * _need + (b.imgOver || IMG_OVER) + gap);
         if (_total > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();   // start the beat clean
       }
     }
