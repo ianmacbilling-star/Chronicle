@@ -98,19 +98,45 @@ async function measureDocument(html, options) {
     // Wait for web fonts so measured text height matches the real PDF metrics.
     // BOUNDED: setContent above carries a timeout; this did not, and a font that never settles hung
     // the pack forever while leaking the browser, because the cleanup below never ran.
-    // RETURN SOMETHING SERIALISABLE. This used to return document.fonts.ready itself, which resolves
-    // to a FontFaceSet -- a live, Set-like DOM object with iterators and circular references that
-    // Puppeteer then has to marshal back across CDP. The fonts were loading fine; what hung was the
-    // serialisation of the return value. That is the real reason this wait never came back, and it
-    // predates the self-hosted fonts entirely -- with remote fonts it looked like a network problem,
-    // and even after every face became a data URI the timeout kept firing. Resolve to a short string
-    // instead, which also tells us in the log whether the fonts genuinely finished.
+    // DO NOT WAIT ON document.fonts.ready. Three explanations for this hang have now been wrong:
+    // that the fonts were fetched from Google and never arrived (they were, and self-hosting them was
+    // worth doing, but the timeout survived it); that Puppeteer choked marshalling the FontFaceSet the
+    // promise resolves to (it returns a plain string now, and the timeout survived that too). The
+    // promise simply does not settle here. Per spec it waits on the document being finished loading,
+    // and this page is built with setContent and has every image request aborted, so that condition
+    // may never be satisfied -- but the honest position is that we do not know.
+    // So stop depending on it. Load each declared face EXPLICITLY and wait for exactly those promises:
+    // that is what we actually care about -- the faces this document uses being ready before we
+    // measure text with them -- and it does not care what the document's loading state is.
+    // On timeout, report the state instead of shrugging, so a fourth wrong theory is not necessary.
     var _fs = await _mWithTimeout(page.evaluate(function () {
-      if (!document.fonts || !document.fonts.ready) return 'no-font-api';
-      return document.fonts.ready.then(function () { return String(document.fonts.status || 'done'); });
-    }), 5000, 'document.fonts.ready');
-    if (_fs && _fs !== 'loaded' && _fs !== 'done') {
-      try { console.warn('[measure] fonts settled as "' + _fs + '" -- text metrics may not match the render'); } catch (e) {}
+      if (!document.fonts) return 'no-font-api';
+      var faces = [];
+      try { document.fonts.forEach(function (f) { faces.push(f); }); } catch (e) {}
+      if (!faces.length) return 'no-faces-declared';
+      return Promise.all(faces.map(function (f) {
+        try { return f.load().then(function () { return 1; }, function () { return 0; }); }
+        catch (e) { return 0; }
+      })).then(function (r) {
+        var okN = r.reduce(function (a, b) { return a + b; }, 0);
+        return okN + '/' + r.length + ' faces, status=' + String(document.fonts.status || '?') +
+               ', readyState=' + String(document.readyState || '?');
+      });
+    }), 5000, 'font loading');
+    if (_fs == null) {
+      // The wait timed out. Say what the page looked like at that moment -- that is the datum that has
+      // been missing every time this has come up.
+      try {
+        var _st = await _mWithTimeout(page.evaluate(function () {
+          return 'status=' + String((document.fonts && document.fonts.status) || '?') +
+                 ', readyState=' + String(document.readyState || '?') +
+                 ', faces=' + String((document.fonts && document.fonts.size) || 0);
+        }), 2000, 'font state probe');
+        console.warn('[measure] font loading did not settle -- ' + (_st || 'the page did not answer either'));
+      } catch (e) {}
+    } else if (String(_fs).indexOf('no-') !== 0 && String(_fs).indexOf('/') > 0 &&
+               String(_fs).split('/')[0] !== String(_fs).split(' ')[0].split('/')[1]) {
+      try { console.warn('[measure] not every face loaded: ' + _fs + ' -- text metrics may not match the render'); } catch (e) {}
     }
 
     var data = await page.evaluate(function () {

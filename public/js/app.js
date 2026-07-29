@@ -14913,6 +14913,14 @@ function finalizeAfterZoomStep(dir) {
 // that produced them -- plus a REFERENCE pack (natural images, run-grow store bypassed) that is
 // deterministic no matter what ran before it. The FLAG TIMELINE at the top pins a clip to the exact
 // stage that introduced it. Admin easter egg: double-click the After count.
+// 4m 12s / 47s / 950ms -- short enough to read at a glance in a log line.
+function _fmtDur(ms) {
+  if (ms == null || !(ms >= 0)) return '?';
+  if (ms < 1000) return Math.round(ms) + 'ms';
+  var s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+}
 function _dxPad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
 function _dxPadL(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return s; }
 // Pull the few numbers that matter out of a dump's text. Deliberately tolerant: a dump that failed to
@@ -14973,8 +14981,19 @@ function finalizeDownloadDiagnostics() {
     parts.push('===== CAMPAIGNIA DIAGNOSTICS BUNDLE =====');
     parts.push('campaign: ' + (state.currentCampaign.name || cid));
     parts.push('generated: ' + new Date().toISOString());
-    parts.push('optimize run: ' + (cap ? ('captured ' + cap.at + ', ' + dumps.length + ' measured pass(es)')
-                                       : 'no Optimize run this session'));
+    if (cap) {
+      parts.push('optimize run started: ' + cap.at);
+      parts.push('optimize run ended  : ' + (cap.endedAt || '(did not finish -- still running, or it failed)'));
+      parts.push('elapsed            : ' + ((cap.tEnd && cap.t0) ? _fmtDur(cap.tEnd - cap.t0) : '(unfinished)') +
+        '   over ' + dumps.length + ' measured pass(es)');
+      if (cap.passTimes && cap.passTimes.length) {
+        parts.push('per pass           : ' + cap.passTimes.map(function (p) { return 'pass ' + p.pass + ' ' + _fmtDur(p.ms); }).join('   '));
+      }
+      parts.push('bundle generated   : ' + new Date().toISOString() +
+        ((cap.tEnd) ? ('   (' + _fmtDur(Date.now() - cap.tEnd) + ' after the run ended)') : ''));
+    } else {
+      parts.push('optimize run: no Optimize run this session');
+    }
     parts.push('');
     parts.push('HOW TO READ THIS: each stage below is a SEPARATE measurement of a SEPARATE PDF.');
     parts.push('The reference pack ignores the run-scoped grow store, so it is the same every time.');
@@ -15077,13 +15096,19 @@ function finalizeFinalFill() {
   if (!state.currentCampaign) return Promise.resolve();
   try {
     return fetch('/api/pdf/layout-fill/' + state.currentCampaign.id + finalizeBookQuery(), { method: 'POST' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (j && j.grown) aiLog('Final pass: grew ' + j.grown + ' picture' + (j.grown === 1 ? '' : 's') +
+      // SAY SO EITHER WAY. A non-200 used to fall through both branches and log nothing at all -- the
+      // same swallow that hid save-optimized failing for weeks.
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; },
+                                               function () { return { ok: r.ok, j: null }; }); })
+      .then(function (rj) {
+        if (!rj.ok) { aiLog('Final pass: failed -- ' + ((rj.j && (rj.j.error || rj.j.message)) || 'server error'), 'stop'); return; }
+        var j = rj.j || {};
+        if (j.grown) aiLog('Final pass: grew ' + j.grown + ' picture' + (j.grown === 1 ? '' : 's') +
           ' into leftover space' + (j.reverted ? (' (' + j.reverted + ' put back)') : '') + '.', 'ok');
-        else if (j && j.ok) aiLog('Final pass: no picture had room to grow.', 'skip');
+        else if (j.skipped) aiLog('Final pass: skipped -- ' + j.skipped, 'skip');
+        else aiLog('Final pass: no picture had room to grow.', 'skip');
       })
-      .catch(function () { aiLog('Final pass: could not run.', 'skip'); });
+      .catch(function (e) { aiLog('Final pass: could not run -- ' + ((e && e.message) || 'network error'), 'stop'); });
   } catch (e) { return Promise.resolve(); }
 }
 function finalizeSaveOptimized() {
@@ -15350,7 +15375,12 @@ function _runLayoutAiOptimize() {
       // dumps[] holds one FRESH measurement per pass. Every pass re-packs and re-measures a brand-new
       // PDF, so these are independent measurements -- never a projection of an earlier pass. applies[]
       // holds what each pass actually changed, so a dump can be read against the ops that produced it.
-      window._optimizeCapture = { json: [], log: [], dumps: [], applies: [], at: new Date().toISOString() };
+      // TIMING. Wall-clock start, end and per-pass durations, all recorded here and rendered into the
+      // bundle header. Worth having: a pass that used to sit for fifteen seconds per measure on a font
+      // wait looked identical from the outside to one that was working, and the progress bar is a CSS
+      // animation that keeps moving either way.
+      window._optimizeCapture = { json: [], log: [], dumps: [], applies: [], at: new Date().toISOString(),
+                                  t0: Date.now(), endedAt: null, tEnd: null, passTimes: [] };
       var _cid = state.currentCampaign.id;
       var _q = finalizeBookQuery();
       var MAX_ROUNDS = 4;   // safety cap; the loop also stops early when a round changes nothing
@@ -15463,6 +15493,13 @@ function _runLayoutAiOptimize() {
         return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
+            try {
+              if (window._optimizeCapture) {
+                var _pt = window._optimizeCapture.passTimes;
+                var _prev = _pt.length ? _pt[_pt.length - 1].endedMs : window._optimizeCapture.t0;
+                _pt.push({ pass: roundNum, endedMs: Date.now(), ms: Date.now() - _prev });
+              }
+            } catch (e) {}
             // Lift this pass's freshly measured dump out BEFORE showPassJson, so the raw-proposals
             // window and the bundle's JSON section stay readable (a full dump is tens of KB).
             try {
@@ -15541,7 +15578,9 @@ function _runLayoutAiOptimize() {
           }
           if (!converged && roundNum >= MAX_ROUNDS) aiLog('Reached the ' + MAX_ROUNDS + '-pass limit -- stopping.', 'stop');
           _revLbl.textContent = 'After (optimized)';
-          aiLog('Done: ' + totalApplied + ' total change(s) across ' + roundNum + ' pass(es).', 'stop');
+          try { if (window._optimizeCapture) { window._optimizeCapture.endedAt = new Date().toISOString(); window._optimizeCapture.tEnd = Date.now(); } } catch (e) {}
+          aiLog('Done: ' + totalApplied + ' total change(s) across ' + roundNum + ' pass(es)' +
+            ((window._optimizeCapture && window._optimizeCapture.t0) ? (' in ' + _fmtDur(window._optimizeCapture.tEnd - window._optimizeCapture.t0)) : '') + '.', 'stop');
           // Users only ever publish the optimized version -- arm it automatically now that Optimize has
           // completed (the publish-pick buttons are hidden for them). finalizeUpdatePublishPick() gates
           // this on _finalizeAfterDone/_finalizeAfterPages, so it sticks once the After render lands.
@@ -15551,7 +15590,14 @@ function _runLayoutAiOptimize() {
           // FINAL FILL, then save. Deterministic, not an AI proposal: the loop has converged, nothing
           // more will move, so growing each picture into the room left on its page is pure arithmetic
           // and cannot displace anything. Runs before the save so the stored PDF is the filled one.
-          finalizeFinalFill().then(function () { finalizeSaveOptimized(); });
+          // SAVE REGARDLESS. Chaining the save behind the fill was wrong: they are independent, and
+          // the save is the one that protects the user's work. On a slow run the fill could take
+          // minutes, so the save fired long after the user had moved on -- or never -- which is why
+          // 'Load Last Optimized File' had no file behind it. Kick both off; the fill re-composes the
+          // cache in place, so if it lands first the save stores the filled book, and if it does not
+          // the save still stores a good one.
+          finalizeSaveOptimized();
+          finalizeFinalFill().then(function () { finalizeSaveOptimized(); });   // re-save if the fill improved it
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
