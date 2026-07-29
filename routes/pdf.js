@@ -1117,7 +1117,7 @@ var CO_PACK_PAGE_H_IN = 9.4;                              // what every route pa
 var CO_TOWER_CELL_OVERHEAD = 0.14;
 var CO_TOWER_WRAP_MARGIN = 0.10;      // the tower wrapper's own margin-bottom, outside the cell
 // A page holding less than this is worth reporting. Not 'nearly empty' -- 'not full'.
-var CO_UNDERFULL_AT = 8.2;
+var CO_UNDERFULL_AT = 7.75;
 var MOVE_SHRINK_FLOOR = 0.85;         // a picture may lose at most 15 percent to absorb an orphan line
 var CO_CLIP_ACCEPT_TOL = 0.02;                            // slack when the apply gate asks 'does this fit'
 // ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
