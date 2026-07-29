@@ -85,6 +85,29 @@ async function uploadFile(fileBuffer, filename, mimetype, prefix) {
   }
 }
 
+// Turn a stored public URL back into a bucket key. Lifted out of deleteFile, which had this inline,
+// so a read path can use the same derivation rather than a second copy that drifts.
+function keyFromUrl(fileUrl) {
+  if (!fileUrl) return null;
+  const base = process.env.R2_PUBLIC_URL || '';
+  if (base && fileUrl.indexOf(base) === 0) return fileUrl.slice(base.length).replace(/^\/+/, '');
+  const m = fileUrl.match(/\/((?:uploads|archives|optimized)\/[^?#]+)$/);
+  return m ? m[1] : null;
+}
+// Read an object back OUT of the bucket. The bucket is private -- uploads are AWS-signed PUTs -- so a
+// browser fetch of the stored URL fails CORS and, underneath that, authorisation. Every other PDF in
+// the app is served from our own origin; this one was the exception, and it failed with nothing more
+// useful than 'Failed to fetch'. Sign a GET and hand the bytes back so a route can stream them from
+// our origin instead -- same-origin, behind requireAuth, no bucket CORS config to keep in step.
+async function fetchFile(fileUrl) {
+  if (!useCloud) return null;                       // local disk mode: the file is served statically
+  const key = keyFromUrl(fileUrl);
+  if (!key) return null;
+  const axios = require('axios');   // required here, not at module scope -- see uploadFile
+  const signed = signRequest('GET', key, 'application/octet-stream', Buffer.alloc(0));
+  const res = await axios.get(signed.url, { headers: signed.headers, responseType: 'arraybuffer', timeout: 60000 });
+  return Buffer.from(res.data);
+}
 async function deleteFile(fileUrl) {
   if (!fileUrl) return;
   if (useCloud) {
@@ -216,4 +239,4 @@ async function restoreCopy(sourceUrl) {
   return await uploadFile(buf, filename, ct);
 }
 
-module.exports = { initStorage, uploadFile, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy };
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy };

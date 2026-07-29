@@ -15165,7 +15165,12 @@ function finalizeLoadLastOptimized(manual) {
   // The AUTO-LOAD of the PDF into the After pane stays suppressed in the admin diagnostic view -- it
   // would fight the Before/After panes. Revealing the BUTTON does not, so the check always runs and
   // only the load is gated. See _autoLoad below.
-  var _autoLoad = !(optimizeIsAdmin() && window._optimizeAdminView);
+  // NEVER AUTO-LOAD. The check runs on every visit to the Optimize tab -- it has to, to know whether
+  // to show the button -- but LOADING is an explicit request. Auto-loading meant a plain page refresh
+  // fetched a book nobody asked for, and when that fetch failed it threw an error into a pane the user
+  // was only passing through. The button says 'Load Last Optimized File'; nothing should load until it
+  // is pressed.
+  var _autoLoad = false;
   try {
     var q = finalizeBookQuery();
     fetch('/api/pdf/last-optimized/' + state.currentCampaign.id + q + '&_=' + Date.now())
@@ -15175,7 +15180,9 @@ function finalizeLoadLastOptimized(manual) {
           if (btn) btn.style.display = '';   // a saved file exists -> offer the manual load, always
           if (manual || _autoLoad) {
             finalizeShowOptimizedNote(j.at, true);
-            renderPdfInto(j.pdfUrl, 'finalize-after-scroll', false);
+            // Same-origin proxy, not the raw R2 URL: the bucket is private and pdf.js fetches, so the
+            // stored URL fails CORS and authorisation both. See /last-optimized-file.
+            renderPdfInto('/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery(), 'finalize-after-scroll', false);
             var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
             var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.style.display = '';
             _publishSource = 'composed';   // the loaded optimized book is what publishes
@@ -15397,6 +15404,10 @@ function _runLayoutAiOptimize() {
       // bundle header. Worth having: a pass that used to sit for fifteen seconds per measure on a font
       // wait looked identical from the outside to one that was working, and the progress bar is a CSS
       // animation that keeps moving either way.
+      // Clear the 'From a previous session' note -- a new run is not the old book, and leaving it up
+      // sat a stale label directly over live progress text, reading as though the run were chewing on
+      // the saved file. It is rewritten by the save at the end of this run.
+      try { var _n0 = document.getElementById('finalize-optimized-note'); if (_n0) { _n0.textContent = ''; _n0.style.display = 'none'; } } catch (e) {}
       window._optimizeCapture = { json: [], log: [], dumps: [], applies: [], at: new Date().toISOString(),
                                   t0: Date.now(), endedAt: null, tEnd: null, passTimes: [] };
       var _cid = state.currentCampaign.id;

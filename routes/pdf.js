@@ -8,7 +8,7 @@ const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
-const { uploadFile, deleteFile } = require('../storage/storage');
+const { uploadFile, deleteFile, fetchFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packPaired } = require('../services/printing/packPaired');
@@ -7724,6 +7724,33 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
 
 // Return the saved last-optimized entry for the current layout (or null), so the Optimize tab can show
 // the already-optimized PDF on load without re-running.
+// Stream the saved optimized PDF back from OUR origin. The bucket is private -- uploads are AWS-signed
+// PUTs -- so handing the browser the stored R2 URL could never work: pdf.js fetches, fetch enforces
+// CORS, and underneath that the object is not readable anonymously anyway. Every other PDF in the app
+// comes from /api/pdf/..., and this one was the exception; it failed with nothing more useful than
+// 'Failed to fetch'. Proxying keeps it same-origin and behind requireAuth, so a book is not readable
+// by anyone holding the URL, and there is no bucket CORS configuration to keep in step with the code.
+router.get('/last-optimized-file/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var campaignId = req.params.campaignId;
+    var arrange = req.query.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
+    var db = await getDb();
+    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
+    var chooser = req.session.userId || fork;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    var lastOpt = prefs && prefs.lastOptimized && prefs.lastOptimized[arrange];
+    if (!lastOpt || !lastOpt.pdfUrl) return res.status(404).json({ error: 'no saved optimized version for this book and layout' });
+    var buf = await fetchFile(lastOpt.pdfUrl);
+    if (!buf || !buf.length) return res.status(502).json({ error: 'the saved file could not be read back from storage' });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Length', String(buf.length));
+    res.set('Cache-Control', 'private, max-age=60');
+    return res.send(buf);
+  } catch (e) {
+    log500('last-optimized-file', req, e);
+    return res.status(500).json({ error: (e && e.message) || 'could not read the saved file' });
+  }
+});
 router.get('/last-optimized/:campaignId', requireAuth, async function (req, res) {
   try {
     var campaignId = req.params.campaignId;
