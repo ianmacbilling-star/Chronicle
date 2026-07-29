@@ -15065,6 +15065,33 @@ function finalizeDownloadDiagnostics() {
     parts.push('Each pass dump is what the AI actually measured and reasoned over on that pass.');
     parts.push('');
     // ---- flag timeline -- the entry point ------------------------------------------------------
+    // THE PAGE-NUMBER OFFSET, MEASURED RATHER THAN ASSUMED. The dump computes it by counting front
+    // matter ELEMENTS -- cover, title, details, cast, contents -- and assuming one page each. On a long
+    // book the cast or the contents runs to two pages, so the assumption is short and every 'viewer
+    // ~p.N' in the dump is one too low. That is not cosmetic: it sent an entire afternoon's diagnosis
+    // to the wrong pages, and Ian caught it only because a picture in a screenshot did not match the
+    // one the dump named. We know the rendered page count here, so measure the offset instead and say
+    // plainly when it disagrees with what the dump assumed.
+    try {
+      var _cp = null, _mfin = (stages.length ? stages[stages.length - 1] : null);
+      if (_mfin && _mfin.stats && _mfin.stats.pages != null) _cp = _mfin.stats.pages;
+      var _tot = _finalizeAfterPages || 0;
+      if (_cp && _tot && _tot > _cp) {
+        var _realOff = _tot - _cp;
+        var _dumpOff = null;
+        var _fmLine = (dumps.length ? String(dumps[0].text || '') : '').match(/viewer page n\+(\d+)/);
+        if (_fmLine) _dumpOff = parseInt(_fmLine[1], 10);
+        parts.push('PAGE NUMBERS: the rendered PDF has ' + _tot + ' pages and the pack has ' + _cp +
+          ' content pages, so dump PAGE n is viewer page n+' + _realOff + '.');
+        if (_dumpOff != null && _dumpOff !== _realOff) {
+          parts.push('  *** THE DUMP SAYS n+' + _dumpOff + ' AND IS WRONG BY ' + (_realOff - _dumpOff) +
+            '. It counts front-matter ELEMENTS and assumes one page each; the cast or contents has run');
+          parts.push('  to two pages. USE n+' + _realOff + '. Every viewer page number printed inside the');
+          parts.push('  dumps below is ' + (_realOff - _dumpOff) + ' too low.');
+        }
+        parts.push('');
+      }
+    } catch (e) {}
     parts.push('===== FLAG TIMELINE =====');
     parts.push(_dxPad('stage', 14) + _dxPadL('pages', 7) + _dxPadL('fill', 7) + _dxPadL('mean', 8) +
                _dxPadL('thin', 6) + _dxPadL('NEVER-CLIP', 13) + _dxPadL('BOX-OVERFLOW', 15) + '   ORDER-BREAK');
@@ -15153,7 +15180,11 @@ function finalizeDownloadDiagnostics() {
     var blob = new Blob([parts.join('\n')], { type: 'text/plain' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = name + '_diagnostics_' + stamp + '.txt';
+    // Version in the filename: three times today a bundle or a PDF was read against the wrong build,
+    // and the only way to tell them apart was to remember which run it came from.
+    var _bv = '';
+    try { var _m = (dumps.length ? String(dumps[0].text || '') : '').match(/CAMPAIGNIA PACK DUMP\s+v([\d.]+)/); if (_m) _bv = '_v' + _m[1]; } catch (e) {}
+    a.download = name + '_diagnostics' + _bv + '_' + stamp + '.txt';
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
   });

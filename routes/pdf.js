@@ -3501,10 +3501,24 @@ function pdfFileSafe(s) {
   }
   return out.split(' ').filter(function (x) { return x.length; }).join(' ');
 }
+// The running version, for stamping into filenames. Read once and cached -- require() memoises, but
+// this makes the intent explicit and keeps a bad read from throwing inside a filename builder.
+var _appVer = null;
+function appVersion() {
+  if (_appVer != null) return _appVer;
+  try { _appVer = String((require('../version-info.json') || {}).version || ''); } catch (e) { _appVer = ''; }
+  return _appVer;
+}
 function pdfFileName(parts) {
   var nm = (parts || []).map(pdfFileSafe).filter(Boolean).join(' - ');
   if (nm.length > 120) nm = nm.slice(0, 120).trim();
-  return nm || 'preview';
+  // STAMP THE VERSION. Three times today a screenshot was diagnosed against the wrong build -- a page
+  // that had already been fixed, a page that had not been rendered yet, and a cascade that was working
+  // five versions earlier. Nothing in a saved PDF said which build made it, so the only way to tell
+  // was to remember. Put it in the name.
+  var _v = appVersion();
+  if (_v) nm += ' v' + _v;
+  return nm || ('preview' + (_v ? (' v' + _v) : ''));
 }
 
 async function sendHtmlAsPdf(res, html, name, pdfOpts) {
@@ -6689,7 +6703,8 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
     }
     res.set('Content-Type', 'text/plain; charset=utf-8');
     // Download rather than open inline: saves the round trip of File > Save in a new tab.
-    res.set('Content-Disposition', 'attachment; filename="' + _dlName + (_wantRef ? '_Reference' : (_flow ? '_Before' : '_After')) + '_pack.txt"');
+    res.set('Content-Disposition', 'attachment; filename="' + _dlName + (_wantRef ? '_Reference' : (_flow ? '_Before' : '_After')) +
+            '_pack' + (_ver ? ('_v' + _ver) : '') + '.txt"');
     return res.send(txt);
   } catch (e) {
     res.set('Content-Type', 'text/plain; charset=utf-8');
