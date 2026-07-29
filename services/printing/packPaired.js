@@ -54,6 +54,9 @@ function packPaired(beats, opts) {
   // rare and self-limiting: it can only ever fire where a SMALL trim buys cohesion, so Picture Book
   // stays big pictures -- 3 trimmed out of 36 on a 44-page book.
   var COHESION_FLOOR = (opts.cohesionFloor != null) ? opts.cohesionFloor : 0.75;
+  // How much unused room cohesion may walk away from. Below this a gap is the price of keeping a beat
+  // whole; above it the gap is the bigger fault and the beat should split across the page break.
+  var COHESION_MAX_WASTE = (opts.cohesionMaxWaste != null) ? opts.cohesionMaxWaste : 1.6;
 
   var pages = [];
   function newPage() { pages.push({ index: pages.length, usedIn: 0, hasImage: false, placements: [] }); return pages[pages.length - 1]; }
@@ -250,7 +253,18 @@ function packPaired(beats, opts) {
         if (_need >= COHESION_FLOOR) {
           _cohScale = _need;
           var _total = round3(_fixed + b.imageH * _need);
-          if (_total > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();   // start the beat clean
+          // DO NOT ABANDON USABLE ROOM. This broke to a fresh page whenever the WHOLE beat would not
+          // fit the space remaining -- and walked away from that space entirely, however much of it
+          // there was. On The Strangers viewer p.17 that left 2.75in empty while the very next beat's
+          // bridge text, 1.80in, would have slid straight into it. Nothing needed resizing; it simply
+          // had to slide. Cohesion is worth a small gap, not a large one: if the bridge text alone can
+          // use most of what is left, let it, and the picture starts the next page as it would have
+          // anyway. The beat is then split across a page break, which is ordinary in a picture book --
+          // bridge text at the foot of one page, its picture at the head of the next reads perfectly.
+          var _slideH = (b.textBeforeH > 0) ? round3(b.textBeforeH + TEXT_MARGIN) : 0;
+          var _freeNow = round3(remaining());
+          var _wouldWaste = (_freeNow > COHESION_MAX_WASTE) && (_slideH > 0) && (_slideH <= _freeNow + 1e-6);
+          if (_total > remaining() + 1e-6 && cur().usedIn > 1e-6 && !_wouldWaste) newPage();
         }
       }
     }
