@@ -14713,8 +14713,13 @@ function applyOptimizeViewMode() {
   if (afterNav) afterNav.style.display = showDiag ? 'none' : 'flex';
   var estNote = document.getElementById('layoutai-est-note');
   if (estNote) estNote.style.display = showDiag ? 'none' : '';
-  var loadLast = document.getElementById('layoutai-load-last');
-  if (loadLast && showDiag) loadLast.style.display = 'none';   // admin diagnostic view: hide (user-view aid); user view re-checks via finalizeLoadLastOptimized
+  // 'Load Last Optimized File' is a RECOVERY affordance, not a viewing aid, so it is shown to everyone
+  // whenever a saved file exists. It used to be hidden in the admin diagnostic view on the reasoning
+  // that Before/After compare replaces it -- but the After pane is cleared by finalizeClearScanState
+  // on any tab switch, and this button is the only way back to a finished book. The one person who
+  // most needed it was the one person structurally excluded from seeing it, which is also why the
+  // feature went unverified from v3.0.250 until now: nobody had ever laid eyes on it.
+  // finalizeLoadLastOptimized decides visibility from whether a file actually exists.
   if (typeof finalizeUpdateEstimateBadge === 'function') finalizeUpdateEstimateBadge();
   // Reflect the state on the pill for the admin (subtle), and keep the label honest.
   var pill = document.getElementById('optimize-preview-pill');
@@ -15093,15 +15098,18 @@ function finalizeShowOptimizedNote(at, fromPrevious) {
 // book without re-running. Only in the clean user view; the admin diagnostic view runs its own flow.
 function finalizeLoadLastOptimized(manual) {
   if (!state.currentCampaign) return;
-  if (!manual && optimizeIsAdmin() && window._optimizeAdminView) return;   // auto: admin diagnostic view uses Before/After compare (manual click still works)
+  // The AUTO-LOAD of the PDF into the After pane stays suppressed in the admin diagnostic view -- it
+  // would fight the Before/After panes. Revealing the BUTTON does not, so the check always runs and
+  // only the load is gated. See _autoLoad below.
+  var _autoLoad = !(optimizeIsAdmin() && window._optimizeAdminView);
   try {
     var q = finalizeBookQuery();
     fetch('/api/pdf/last-optimized/' + state.currentCampaign.id + q + '&_=' + Date.now())
       .then(function (r) { return r.json(); }).then(function (j) {
         var btn = document.getElementById('layoutai-load-last');
         if (j && j.found && j.pdfUrl) {
-          if (btn) btn.style.display = '';   // a saved file exists -> offer the manual load
-          if (manual) {
+          if (btn) btn.style.display = '';   // a saved file exists -> offer the manual load, always
+          if (manual || _autoLoad) {
             finalizeShowOptimizedNote(j.at, true);
             renderPdfInto(j.pdfUrl, 'finalize-after-scroll', false);
             var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
