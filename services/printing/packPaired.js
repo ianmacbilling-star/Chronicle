@@ -222,12 +222,29 @@ function packPaired(beats, opts) {
       // was making room for still did not fit, and the beat was separated anyway with a smaller
       // picture into the bargain. Worst of both.
       var _tm = (((b.textBeforeH || 0) > 0) ? TEXT_MARGIN : 0) + (((b.textAfterH || 0) > 0) ? TEXT_MARGIN : 0);
-      var _room = pageH - _txt - _tm - (b.imgOver || IMG_OVER) - gap;
-      var _need = (_room > 0) ? round3(Math.min(1, _room / b.imageH)) : 0;
-      if (_need >= COHESION_FLOOR) {
-        _cohScale = _need;
-        var _total = round3(_txt + _tm + b.imageH * _need + (b.imgOver || IMG_OVER) + gap);
-        if (_total > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();   // start the beat clean
+      var _fixed = _txt + _tm + (b.imgOver || IMG_OVER) + gap;   // everything except the picture
+      // TWO QUESTIONS, IN THIS ORDER. The first version of this asked only the second one -- can this
+      // beat fit a WHOLE page at some scale -- and if the answer meant it would not fit the room in
+      // front of it, it abandoned that room and started a fresh page. On The Strangers page 34 that
+      // left a 0.70in fragment alone on a page while beat 26, needing 8.60in against 8.36in free,
+      // moved on: a miss of 0.24in. Trimming that picture by five percent would have fitted the whole
+      // beat exactly, filled the page, and removed the page after it. So ask about the room actually
+      // available FIRST, and only fall back to a fresh page when even a floor-deep trim cannot hold
+      // the beat where it stands. This is the per-page fill loop working as intended: keep taking
+      // beats, trimming a few percent where a few percent is all that is wanted, and break only when
+      // the room genuinely cannot hold the next one.
+      var _here = remaining() - _fixed;
+      var _needHere = (_here > 0) ? round3(Math.min(1, _here / b.imageH)) : 0;
+      if (cur().usedIn > 1e-6 && _needHere >= COHESION_FLOOR) {
+        _cohScale = _needHere;          // fits right here -- keep filling this page
+      } else {
+        var _room = pageH - _fixed;
+        var _need = (_room > 0) ? round3(Math.min(1, _room / b.imageH)) : 0;
+        if (_need >= COHESION_FLOOR) {
+          _cohScale = _need;
+          var _total = round3(_fixed + b.imageH * _need);
+          if (_total > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();   // start the beat clean
+        }
       }
     }
     if (b.textBeforeH > 0) placeText(b.idx, 'before', b.textBeforeH, b.beforeLines, b.beforeLineChars, b.beforeLen, b.beforeNoSplit);
