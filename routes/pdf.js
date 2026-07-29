@@ -7581,9 +7581,26 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       }
       // roll back
       toPg.placements = toBefore; fromPg.placements = fromBefore;
-      return { ok: false, reason: 'move would overflow page ' + toPageIdx + ' (' +
-               pairedPlacementLabel(moving) + ' needs ' + Math.round((moving.heightIn || 0) * 100) / 100 +
-               'in, even after trimming that page\'s picture)' };
+      // REPORT WHAT WAS MEASURED, not what was budgeted. This said a move 'would overflow' and gave
+      // the moving segment's PACKED height, which is an estimate, then claimed the page's picture had
+      // been trimmed even when that page had no picture to trim. On The Strangers the AI asked to pull
+      // beat 25's picture onto a page holding 1.30in of a 9.24in box -- 1.30 plus 7.22 is 8.52, which
+      // fits -- and was refused with a message that made it impossible to tell whether the real
+      // measurement disagreed with that arithmetic or something else rejected it. Print both pages'
+      // measured heights and whether a trim was even possible, so the next refusal answers itself.
+      var _rr = (typeof _r !== 'undefined' && _r && !_r._error) ? _r : null;
+      var _msg = 'move would overflow page ' + toPageIdx + ': ' + pairedPlacementLabel(moving) +
+                 ' packed ' + Math.round((moving.heightIn || 0) * 100) / 100 + 'in';
+      if (_rr) {
+        _msg += ' -- MEASURED page ' + toPageIdx + ' = ' + (_rr[toPageIdx] != null ? _rr[toPageIdx].toFixed(2) : '?') +
+                'in, page ' + fromPageIdx + ' = ' + (_rr[fromPageIdx] != null ? _rr[fromPageIdx].toFixed(2) : '?') +
+                'in, box ' + CO_CLIP_BOX_IN + 'in';
+      } else {
+        _msg += ' -- the re-measure did not return a usable result';
+      }
+      _msg += _tgtImg ? ' (a trim of that page\'s picture was tried and did not help)'
+                      : ' (that page has no picture to trim)';
+      return { ok: false, reason: _msg };
     }
 
     // TEXT MOVES BEFORE PICTURE GROWS. Ops used to run in whatever order the AI happened to list them,
