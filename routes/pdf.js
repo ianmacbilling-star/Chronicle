@@ -1117,7 +1117,7 @@ var CO_PACK_PAGE_H_IN = 9.4;                              // what every route pa
 var CO_TOWER_CELL_OVERHEAD = 0.14;
 var CO_TOWER_WRAP_MARGIN = 0.10;      // the tower wrapper's own margin-bottom, outside the cell
 // A page holding less than this is worth reporting. Not 'nearly empty' -- 'not full'.
-var CO_UNDERFULL_AT = 7.75;
+var CO_UNDERFULL_AT = 8.5;
 var MOVE_SHRINK_FLOOR = 0.85;         // a picture may lose at most 15 percent to absorb an orphan line
 var CO_CLIP_ACCEPT_TOL = 0.02;                            // slack when the apply gate asks 'does this fit'
 // ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
@@ -6246,13 +6246,15 @@ function pairedPlanText(packed) {
   L.push('Walk the book top to bottom and those numbers ascend. A move is legal if they still ascend');
   L.push('afterwards -- that is the whole rule, and it is arithmetic, not judgement.');
   L.push('');
-  L.push('MOVING SEGMENTS: pullLines and pushLines move a page\'s FIRST segment, whatever it is --');
-  L.push('bridge text, a PICTURE, or pic text. The names say lines for historical reasons; they are');
-  L.push('not restricted to text. A picture can be pulled onto the page above it or pushed onto the');
-  L.push('page below, exactly like a paragraph, subject to the same two tests: the numbers must still');
-  L.push('ascend, and both pages must still fit. This is often the ONLY way to fill a nearly empty');
-  L.push('page, because a page holding the tail of some bridge text can only legally be joined by the');
-  L.push('picture that follows it -- no text may go there.');
+  L.push('MOVING SEGMENTS -- four ops, each moving a page\'s FIRST segment onto a neighbour:');
+  L.push('   pullLines   page N fromPage N+1   bring the next page\'s leading TEXT up to page N');
+  L.push('   pushLines   page N                send page N\'s leading TEXT down to page N+1');
+  L.push('   pullPicture page N fromPage N+1   bring the next page\'s leading PICTURE up to page N');
+  L.push('   pushPicture page N                send page N\'s leading PICTURE down to page N+1');
+  L.push('All four take the same two tests: the segment numbers must still ascend, and both pages must');
+  L.push('still fit. A picture moves exactly like a paragraph, and its pic text follows because they');
+  L.push('share a number. pullPicture is often the ONLY way to fill a page: one holding the tail of');
+  L.push('some bridge text can legally be joined by that beat\'s picture and by nothing else.');
   L.push('');
   L.push('TWO SEGMENTS SHARING A NUMBER are one unit: a picture and the text that closes its beat.');
   L.push('Nothing may ever come between them. They still move independently, and they may straddle a');
@@ -6298,8 +6300,9 @@ function pairedPlanText(packed) {
     if (_next && _next.beat === (_mine[_mine.length - 1] || {}).beat) {
       // The next page continues the SAME beat, so its first segment is this page's natural neighbour
       // and pulling it up cannot break reading order. This is the move, whatever kind it is.
-      _act = '  -> op: pullLines page ' + pi + ' fromPage ' + (pi + 1) + '  (brings ' +
-             ((_next.kind === 'image' || _next.kind === 'tower') ? 'the PICTURE' :
+      var _isPic = (_next.kind === 'image' || _next.kind === 'tower');
+      _act = '  -> op: ' + (_isPic ? 'pullPicture' : 'pullLines') + ' page ' + pi + ' fromPage ' + (pi + 1) +
+             '  (brings ' + (_isPic ? 'the PICTURE' :
               (_next.part === 'after' ? 'the pic text' : 'the bridge text')) +
              ' of beat ' + _next.beat + ' up to join its own beat -- reads in order, and there is ' +
              _room.toFixed(2) + 'in of room)';
@@ -7094,11 +7097,18 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
         results.push(r); return;
       }
 
-      if (op.op === 'pullLines' || op.op === 'pushLines') {
+      // DISTINCT NAMES FOR MOVING A PICTURE. pullLines and pushLines say LINES, and after two full runs
+      // of the dump explaining that they carry any segment, the AI had proposed 86 text pulls and not
+      // one picture pull -- while a hint sat there naming the exact picture move to make. Asking it to
+      // use a text verb on a picture was the wrong request. pullPicture and pushPicture run the same
+      // machinery and the same two tests; only the name differs, so nothing has to be reasoned around.
+      if (op.op === 'pullPicture' || op.op === 'pushPicture' ||
+          op.op === 'pullLines' || op.op === 'pushLines') {
         var lines = op.lines || 1;
         var moveH = lines * _avgLH;
-        var from = (op.op === 'pullLines') ? op.fromPage : page;
-        var to = (op.op === 'pullLines') ? page : (op.page + 1);
+        var _isPull = (op.op === 'pullLines' || op.op === 'pullPicture');
+        var from = _isPull ? op.fromPage : page;
+        var to = _isPull ? page : (op.page + 1);
         if (H[from] == null || H[to] == null) { r.result = 'REJECT'; r.reason = 'source or target page not found'; results.push(r); return; }
         var toAfter = H[to] + moveH;
         if (toAfter > CLIP_LINE_IN + CO_CLIP_ACCEPT_TOL) { r.result = 'REJECT'; r.reason = 'moving ' + lines + ' line(s) would overflow the target page'; results.push(r); return; }
@@ -7669,9 +7679,17 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       var op = ops[oi];
 
       // ---- Text moves: pullLines (fromPage -> page) / pushLines (page -> page+1) ----
-      if (op.op === 'pullLines' || op.op === 'pushLines') {
+      // DISTINCT NAMES FOR MOVING A PICTURE. pullLines and pushLines say LINES, and after two full runs
+      // of the dump explaining that they carry any segment, the AI had proposed 86 text pulls and not
+      // one picture pull -- while a hint sat there naming the exact picture move to make. Asking it to
+      // use a text verb on a picture was the wrong request. pullPicture and pushPicture run the same
+      // machinery and the same two tests; only the name differs, so nothing has to be reasoned around.
+      if (op.op === 'pullPicture' || op.op === 'pushPicture' ||
+          op.op === 'pullLines' || op.op === 'pushLines') {
         var srcIdx, dstIdx;
-        if (op.op === 'pullLines') { srcIdx = op.fromPage; dstIdx = op.page; }
+        // Direction by VERB, not by exact name: pullPicture is a pull, and falling through to the else
+        // branch would have sent it the wrong way.
+        if (op.op === 'pullLines' || op.op === 'pullPicture') { srcIdx = op.fromPage; dstIdx = op.page; }
         else { srcIdx = op.page; dstIdx = (op.page != null ? op.page + 1 : null); }
         if (srcIdx == null || dstIdx == null) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'missing page reference' }); continue; }
         var mv = await moveLeadingNarr(srcIdx, dstIdx);
