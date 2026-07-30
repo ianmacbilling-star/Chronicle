@@ -4964,7 +4964,7 @@ async function computePairedPack(req, campaignId, packOpts) {
       });
       var real = (_realP[pi] != null) ? _realP[pi] : null;
       _pdbg.pages.push({ page: pi, used: Math.round(est * 100) / 100, realUsed: real,
-        placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), cohesion: (pl.cohesion ? 1 : 0), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null) }; }) });
+        placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), cohesion: (pl.cohesion ? 1 : 0), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null), imageH: (pl.imageH != null ? pl.imageH : null), textH: (pl.textH != null ? pl.textH : null) }; }) });
     });
     _pdbg.overflows = _realP._overflows || [];
     // AT-RISK: a page renders taller than the packer ESTIMATED and is also close enough to the real
