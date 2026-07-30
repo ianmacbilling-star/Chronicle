@@ -14669,6 +14669,15 @@ function loadFinalize() {
   if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
   applyOptimizeViewMode();   // clean user view by default; admin diagnostics only when toggled on
   finalizeUpdateHeader();   // show the layout + attributes immediately, before the scan finishes
+  // v3.0.334 -- A RUN IN FLIGHT OWNS BOTH PANES. Stepping to another tab and back tore the rendered
+  // book out of the After pane while the loop was still running. Nothing was wrong with the loop: the
+  // identity check below compares the PDF URL against the last one, and that URL carries bookTitle and
+  // titleColor -- two fields that live on OTHER tabs and that prepSyncTitle fills with defaults the
+  // moment you visit one. So the URL legitimately changes just by navigating, the check misses, and
+  // finalizeClearScanState empties finalize-after-scroll. Deliberately NOT fixed by making the URL
+  // comparison fuzzy -- it is load-bearing for a real title change, and a stale Before pane would be
+  // the worse bug. This returns early instead, so a run can only ever be left alone.
+  if (window._aiLoopRunning) return;
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);

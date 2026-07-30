@@ -8066,10 +8066,18 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
       },
       measure: function () { return remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco); }
     };
+    // v3.0.334 -- SNAPSHOT BEFORE THE SWEEP. Every picture scale on the plan, and the page count the
+    // loop actually produced. Both are needed to put the book back if the sweep turns out to cost pages.
+    var _preScales = [];
+    (plan.pages || []).forEach(function (pg) {
+      (pg.placements || []).forEach(function (pl) {
+        if (pl.kind === 'image' || pl.kind === 'tower') _preScales.push({ pl: pl, scale: pl.scale, heightIn: pl.heightIn });
+      });
+    });
+    var _prePages = (plan.pages || []).length;
     var r = await finalFillPass(adapter, CO_CLIP_BOX_IN, CO_CLIP_ACCEPT_TOL);
-    if (r.grown) {
-      // Persist each grown scale so the next pack keeps it, then re-compose so the PDF reflects it.
-      plan.pages.forEach(function (pg) {
+    function _persistScales() {
+      (plan.pages || []).forEach(function (pg) {
         (pg.placements || []).forEach(function (pl) {
           if ((pl.kind !== 'image' && pl.kind !== 'tower') || pl.scale == null) return;
           var _b = null;
@@ -8077,9 +8085,39 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
           if (_b && _b.moment && _b.moment.id != null) runGrowsPut(_b.moment.id, pl.scale);
         });
       });
+    }
+    if (r.grown) {
+      // Persist each grown scale so the next pack keeps it, then re-compose so the PDF reflects it.
+      _persistScales();
       var body = composeBook(plan, beats, _pco);
       composedCachePut(req.params.campaignId, req, 'paired', body, (packed && packed.campaign) || '');   // the pack returns `campaign`, not `campaignName`
-      try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in'); } catch (e) {}
+      // ===== THE SWEEP MUST NEVER LENGTHEN THE BOOK ================================================
+      // finalFillPass reverts a grow whose OWN page overflows, and nothing ever asked what the grows
+      // did to the book. They do plenty. A persisted grow is seeded into the NEXT pack, which makes
+      // the page taller, which makes applyRunMoves refuse to replay a recorded move onto it -- and a
+      // refused replay is silent. The move simply is not there any more.
+      // Measured on Whispers Beneath v3.0.332: the loop pulled the head of a split paragraph up onto
+      // page 6 and held it there from pass 2 to pass 5, page real 9.00. After the sweep both halves
+      // were stranded alone again at 1.00in and 1.90in, and the book went 59 pages to 60 with fill
+      // down a point. Two separate paragraphs on that one book, both fixed by the loop, both undone.
+      // So: re-pack once and count. If the grows cost pages, put every one of them back. This can
+      // only ever restore the book the loop produced -- it cannot invent a worse one.
+      var _postPages = null;
+      try {
+        var _chk = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
+        _postPages = (_chk && _chk.plan && _chk.plan.pages) ? _chk.plan.pages.length : null;
+      } catch (e) { _postPages = null; }
+      if (_postPages != null && _postPages > _prePages) {
+        _preScales.forEach(function (s) { s.pl.scale = s.scale; s.pl.heightIn = s.heightIn; });
+        _persistScales();
+        var _bodyR = composeBook(plan, beats, _pco);
+        composedCachePut(req.params.campaignId, req, 'paired', _bodyR, (packed && packed.campaign) || '');
+        try { console.log('[final-fill] campaign ' + req.params.campaignId + ': REVERTED all ' + r.grown +
+          ' grow(s) -- they took the book from ' + _prePages + ' to ' + _postPages + ' pages'); } catch (e) {}
+        return res.json({ ok: true, grown: 0, reverted: r.grown, gained: 0,
+          skipped: 'the grows were put back -- they would have made the book longer (' + _prePages + ' to ' + _postPages + ' pages)' });
+      }
+      try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in, pages ' + _prePages + ' -> ' + _postPages); } catch (e) {}
     }
     return res.json({ ok: true, grown: r.grown, reverted: r.reverted, gained: r.gained });
   } catch (e) {
