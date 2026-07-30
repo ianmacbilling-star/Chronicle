@@ -15779,16 +15779,28 @@ function _runLayoutAiOptimize() {
                 // Log the detail of what actually happened this pass.
                 if (rep) {
                   (rep.applied || []).forEach(function (a) {
+                    // v3.0.329: name what MOVED, not what the op was called. The server now sends
+                    // movedKind; a pullLines against a page led by a picture moves the picture, so the
+                    // op name was never a reliable label. Also surfaces the automatic trim, which the
+                    // apply report has always computed and the wire has always thrown away.
+                    var _mk = (a.movedKind === 'image') ? 'image' : (a.movedKind === 'tower') ? 'tower' : 'text';
+                    var _trimmed = (a.shrankFrom != null && a.shrankTo != null);
+                    var _trimTxt = _trimmed ? ('; trimmed ' + Number(a.shrankFrom).toFixed(2) + ' -> ' + Number(a.shrankTo).toFixed(2)) : '';
                     var d = a.scaleTo != null ? ('scale ' + (a.scaleFrom != null ? a.scaleFrom.toFixed(2) : '?') + ' -> ' + a.scaleTo.toFixed(2))
                           : a.growTo != null ? ('grow ' + (a.growFrom != null ? a.growFrom.toFixed(2) : '?') + ' -> ' + a.growTo.toFixed(2))
-                          : a.movedTo != null ? ('moved text p' + a.movedFrom + ' -> p' + a.movedTo) : 'applied';
+                          : a.movedTo != null ? ('moved ' + _mk + ' p' + a.movedFrom + ' -> p' + a.movedTo + _trimTxt) : 'applied';
                     aiLog('   OK ' + a.op + ' viewer p.' + (a.viewerPage != null ? a.viewerPage : '?') + ' (' + d + ')', 'applied');
                     // Friendly translation for the user-facing progress log.
                     var _pg = (a.viewerPage != null ? (' on page ' + a.viewerPage) : '');
+                    // A MOVED PICTURE IS NOT REFLOWED TEXT. pullPicture sets movedTo, so it fell into
+                    // the text branch below and every picture move in every run read as text moving.
+                    var _movedPic = (a.movedKind === 'image' || a.movedKind === 'tower');
+                    var _trimSay = _trimmed ? ' and trimming a picture to fit' : '';
                     var _friendly = (a.op === 'growImage') ? ('Enlarging an image' + _pg + ' to fill the page')
                                   : (a.op === 'shrinkImage') ? ('Fitting an image' + _pg + ' to its space')
                                   : (a.op === 'scaleImage') ? ('Resizing an image' + _pg)
-                                  : (a.op === 'pullLines' || a.movedTo != null) ? ('Reflowing text' + _pg + ' to close a gap')
+                                  : _movedPic ? ('Reflowing an image' + _pg + ' to close a gap' + _trimSay)
+                                  : (a.op === 'pullLines' || a.movedTo != null) ? ('Reflowing text' + _pg + ' to close a gap' + _trimSay)
                                   : ('Adjusting the layout' + _pg);
                     optimizeProgress(_friendly, { dim: true });
                   });

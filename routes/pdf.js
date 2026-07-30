@@ -7601,7 +7601,11 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
             dir: (toPageIdx < fromPageIdx) ? -1 : 1
           });
         } catch (e) {}
-        return { ok: true, toReal: _r[toPageIdx], fromReal: _r[fromPageIdx] };
+        // v3.0.329: SAY WHAT MOVED. The applied record carried no kind, so the client could only
+        // guess from the op name -- and since v3.0.309 a pullLines against a page whose leading
+        // placement is a picture moves that picture, so the op name is not the answer. Every
+        // picture move in every run has been reported to the user as "Reflowing text".
+        return { ok: true, toReal: _r[toPageIdx], fromReal: _r[fromPageIdx], movedKind: (moving.kind || 'narr') };
       }
       // SHRINK TO MAKE ROOM. The move does not fit -- but the target page usually has a picture on it,
       // and trimming that picture a little is exactly what a person would do to pull an orphan line
@@ -7649,7 +7653,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
               var _tm = _tb && _tb.moment;   // NOTE: byIdx is NOT in this handler's scope -- use beats
               if (_tm && _tm.id != null) runGrowsPut(_tm.id, _try);   // so the next pack keeps the trim
             } catch (e) {}
-            return { ok: true, toReal: _r2[toPageIdx], fromReal: _r2[fromPageIdx], shrankTo: _try, shrankFrom: _s0 };
+            return { ok: true, toReal: _r2[toPageIdx], fromReal: _r2[fromPageIdx], shrankTo: _try, shrankFrom: _s0, movedKind: (moving.kind || 'narr') };
           }
         }
         _tgtImg.scale = _s0; _tgtImg.heightIn = _h0;   // no rung worked -- put the picture back
@@ -7708,7 +7712,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
         if (srcIdx == null || dstIdx == null) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'missing page reference' }); continue; }
         var mv = await moveLeadingNarr(srcIdx, dstIdx);
         if (mv.ok) {
-          applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, movedFrom: srcIdx, movedTo: dstIdx, toReal: Math.round((mv.toReal || 0) * 100) / 100, fromReal: Math.round((mv.fromReal || 0) * 100) / 100, shrankFrom: (mv.shrankFrom != null ? mv.shrankFrom : undefined), shrankTo: (mv.shrankTo != null ? mv.shrankTo : undefined) });
+          applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, movedFrom: srcIdx, movedTo: dstIdx, toReal: Math.round((mv.toReal || 0) * 100) / 100, fromReal: Math.round((mv.fromReal || 0) * 100) / 100, shrankFrom: (mv.shrankFrom != null ? mv.shrankFrom : undefined), shrankTo: (mv.shrankTo != null ? mv.shrankTo : undefined), movedKind: mv.movedKind });
         } else {
           rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: mv.reason });
         }
@@ -7819,7 +7823,7 @@ router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async functi
       res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
       try { res.set('X-Apply-Report', JSON.stringify({
         appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
-        applied: applied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, scaleFrom: a.scaleFrom, scaleTo: a.scaleTo, movedFrom: a.movedFrom, movedTo: a.movedTo }; }),
+        applied: applied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, scaleFrom: a.scaleFrom, scaleTo: a.scaleTo, movedFrom: a.movedFrom, movedTo: a.movedTo, movedKind: a.movedKind, shrankFrom: a.shrankFrom, shrankTo: a.shrankTo }; }),
         rejected: rejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
       })); } catch (e) {}
       return res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
