@@ -6989,9 +6989,26 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
     } else {
       // Paired (Picture Book) now dumps too: compute with debug so it re-measures the composed
       // book and runs the never-clip check, then format with the paired dumper.
-      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
-      txt = _stamp + pairedPlanText(packedP);
-      _dlName = String((packedP && packedP.campaign && packedP.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
+      // v3.0.339 -- SERVE THE BOOK THAT WAS RENDERED. This route re-packed from scratch every time, so
+      // the dump described a plan nobody had composed. A re-pack drifts from the composed book --
+      // sometimes by a page, sometimes only in ARRANGEMENT with the same page count, which is worse
+      // because it looks reconciled. That cost four separate wrong diagnoses in one evening: pages the
+      // dump called full were the pages Ian was photographing as nearly empty.
+      // v3.0.338 stores the plan text beside the composed body. Serve it. The REFERENCE pack still
+      // re-packs deliberately -- it is a fresh natural pack by definition.
+      var _cc = null;
+      if (!_wantRef) { try { var _c0 = composedCacheGet(req.params.campaignId, req); if (_c0 && _c0.arrange === 'paired' && _c0.planText) _cc = _c0; } catch (e) { _cc = null; } }
+      if (_cc) {
+        txt = _stamp + 'SOURCE: the COMPOSED plan -- this is the book that was rendered into the PDF,\n' +
+              'not a fresh re-pack. Composed ' + (_cc.at ? new Date(_cc.at).toISOString() : '?') + '.\n\n' + _cc.planText;
+        _dlName = String(_cc.campaignName || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
+      } else {
+        var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
+        txt = _stamp + (_wantRef ? '' : ('SOURCE: a FRESH RE-PACK -- no composed plan is cached (no Optimize in the last 30\n' +
+              'minutes, or the cache expired). This may differ from the PDF you downloaded; page-level\n' +
+              'detail is indicative, not authoritative.\n\n')) + pairedPlanText(packedP);
+        _dlName = String((packedP && packedP.campaign && packedP.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
+      }
     }
     res.set('Content-Type', 'text/plain; charset=utf-8');
     // Download rather than open inline: saves the round trip of File > Save in a new tab.
@@ -8299,8 +8316,28 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
         });
       });
       var body = composeBook(plan, beats, _pco);
+      // v3.0.339 -- MEASURE THE COMPOSED BOOK BEFORE DESCRIBING IT. pairedPlanText reports NEVER-CLIP
+      // and the REAL per-page heights out of dbg. Handing it the PACK's dbg would describe this plan
+      // with another plan's numbers -- the same lie in a different place. Re-measure the plan that is
+      // about to be composed, so the clip check finally runs against the book that ships. Every page
+      // composes at overflow:hidden, so an unnoticed overflow is silently deleted text.
       var _planTxt = null;
-      try { _planTxt = pairedPlanText({ plan: plan, beats: beats, campaign: (packed && packed.campaign) || null, dbg: (packed && packed.dbg) || {}, co: _pco }); } catch (e) { _planTxt = null; }
+      try {
+        var _dbg2 = Object.assign({}, (packed && packed.dbg) || {});
+        var _realF = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco);
+        if (_realF && !_realF._error) {
+          _dbg2.pages = (plan.pages || []).map(function (pg2, _pi2) {
+            var _u = 0; (pg2.placements || []).forEach(function (x) { _u += (x.heightIn || 0); });
+            return { page: _pi2, used: Math.round(_u * 100) / 100,
+                     realUsed: (_realF[_pi2] != null ? _realF[_pi2] : null),
+                     placements: (pg2.placements || []) };
+          });
+          _dbg2.overflows = (_realF._overflows || []);
+          _dbg2.atRisk = [];
+          _dbg2.remeasured = true;
+        }
+        _planTxt = pairedPlanText({ plan: plan, beats: beats, campaign: (packed && packed.campaign) || null, dbg: _dbg2, co: _pco });
+      } catch (e) { _planTxt = null; }
       composedCachePut(req.params.campaignId, req, 'paired', body, (packed && packed.campaign) || '', _planTxt);   // the pack returns `campaign`, not `campaignName`
       try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in'); } catch (e) {}
     }
