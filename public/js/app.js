@@ -1633,6 +1633,10 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
+  // pane, so arriving at the Optimize tab by the subnav showed the PREVIOUS book's log and panes.
+  // Idempotent -- guarded on _last === _cid, so re-entering the SAME campaign changes nothing.
+  if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   showCampaignSection('sessions');
 }
@@ -8847,6 +8851,10 @@ function setCampaignElements() {
 
 function selectCampaign(id) {
   state.currentCampaign = state.campaigns.find(function(c) { return c.id === id; });
+  // v3.0.328: the Sessions route reached a new campaign without ever resetting the Finalize/Optimize
+  // pane, so arriving at the Optimize tab by the subnav showed the PREVIOUS book's log and panes.
+  // Idempotent -- guarded on _last === _cid, so re-entering the SAME campaign changes nothing.
+  if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
   setCampaignElements();
   showCampaignSection('sessions');
 }
@@ -11590,6 +11598,7 @@ function onForkChange(forkId) {
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
   updateForkEditability();
+  if (typeof resetOptimizeLogForSwitch === 'function') resetOptimizeLogForSwitch();   // v3.0.328: different fork, different book
   // Apply this member's saved layout first; the per-fork reload then overrides
   // art/narrative with any session-specific value.
   mpLoadAndApply('session', function(){ reloadSessionForFork(); });
@@ -14700,7 +14709,7 @@ function applyOptimizeViewMode() {
   var publishPick = document.getElementById('layoutai-publish-pick');   // dual publish buttons: users only ever publish the optimized version
   var afterWrap = document.getElementById('finalize-after-wrap');
   if (beforeWrap) beforeWrap.style.display = showDiag ? '' : 'none';
-  if (pageNav) pageNav.style.display = showDiag ? '' : 'none';
+  if (pageNav) pageNav.style.display = showDiag ? 'flex' : 'none';   // v3.0.328: '' deleted the inline flex and left a block
   if (beforeOpen) beforeOpen.style.display = showDiag ? '' : 'none';   // never expose the Before PDF to users
   if (freeList) freeList.style.display = showDiag ? '' : 'none';
   if (results) results.style.display = showDiag ? '' : 'none';
@@ -14766,6 +14775,27 @@ function optimizeProgress(msg, opts) {
 function optimizeProgressDone() {
   // Leave the finished progress log on screen -- hiding it made a fast convergence look like the
   // process quit early. The log persists until the next Optimize run resets it.
+}
+// v3.0.328 -- clear the optimize log once the thing it describes is gone.
+// The progress list persists ON PURPOSE after a run (see above), but nothing cleared it when the book
+// underneath changed. Switching campaign or fork left a log narrating a different book, and left
+// window._optimizeCapture holding the PREVIOUS book's passes -- so a diagnostics bundle downloaded
+// after a switch silently reported the wrong run, which is worse than reporting nothing.
+// Guarded on campaign+fork so returning to the SAME book leaves the log alone. Pass force when the
+// pane itself is being emptied: no PDF on screen, no log.
+function resetOptimizeLogForSwitch(force) {
+  try {
+    var _cid = (typeof state !== 'undefined' && state.currentCampaign) ? state.currentCampaign.id : null;
+    var _fid = (typeof state !== 'undefined' && state.currentForkId) ? state.currentForkId : 'canonical';
+    var key = String(_cid) + '|' + String(_fid);
+    if (!force && resetOptimizeLogForSwitch._last === key) return;   // same campaign, same fork -- nothing changed
+    resetOptimizeLogForSwitch._last = key;
+    var box = document.getElementById('optimize-progress');
+    if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+    var panel = document.getElementById('__aiLoopLog');
+    if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
+    window._optimizeCapture = null;
+  } catch (e) {}
 }
 // Clear everything a prior optimize/scan left behind so a fresh initial scan starts clean.
 // LAYOUT AVAILABILITY (client half). The server is authoritative -- parseCustomOpts rewrites a
@@ -15245,6 +15275,8 @@ function finalizeClearPriorLoaded() {
     if (note) { note.textContent = ''; note.style.display = 'none'; }
     _publishSource = '';
   } catch (e) {}
+  resetOptimizeLogForSwitch(true);   // v3.0.328: FORCED -- same campaign and fork, but the pane is now
+                                     // empty, and a log with no PDF behind it describes nothing.
   finalizeSetPriorLoaded(false);
   finalizeLoadLastOptimized();   // re-check: the button stays offered if a saved file still exists
 }
@@ -15470,6 +15502,11 @@ async function runLayoutAiDryRun() {
 }
 function _runLayoutAiOptimize() {
   if (!state.currentCampaign) return;
+  // v3.0.328: re-assert the view mode at the moment the run starts. applyOptimizeViewMode used to be
+  // called from exactly one place (loadFinalize, below an early return), so any path that reached the
+  // pane without it left the HTML defaults showing -- which were the ADMIN layout. Harmless when the
+  // view is already correct.
+  applyOptimizeViewMode();
   var cid = state.currentCampaign.id;
   var btn = document.getElementById('layoutai-run-btn');
   var status = document.getElementById('layoutai-status');
@@ -16095,12 +16132,14 @@ function finalizeSplitEnd() {
   document.body.style.userSelect = '';
 }
 function finalizeSetPdfTab(which) {
-  // Tabs removed -- the panes are always side by side now. Kept as a safe hook so existing
-  // callers (e.g. the optimize handler) still work; it just ensures both panes are visible.
-  var before = document.getElementById('finalize-before-wrap');
-  var after = document.getElementById('finalize-after-wrap');
-  if (before) { before.style.display = ''; before.style.flex = '1 1 50%'; }
-  if (after) { after.style.display = ''; after.style.flex = '1 1 50%'; }
+  // Tabs removed -- the panes are always side by side now. Kept as a safe hook so existing callers
+  // still work. v3.0.328: this used to force BOTH panes visible at 50/50 with NO admin check, which
+  // made it the one function able to un-hide the Before pane after applyOptimizeViewMode had hidden
+  // it. Its only caller is resetPublishForCampaignSwitch, so switching campaign dropped a normal
+  // user into the admin diagnostic view -- Before pane, findings list, before/after delta and the
+  // dual publish-pick buttons all exposed. There is now exactly ONE authority for pane visibility
+  // and this defers to it.
+  applyOptimizeViewMode();
 }
 
 // ---- Finalize: pdf.js render into scroll containers + synced scrolling ----
@@ -16348,6 +16387,7 @@ function resetPublishForCampaignSwitch() {
   var _cid = state.currentCampaign ? state.currentCampaign.id : null;
   if (resetPublishForCampaignSwitch._last === _cid) return;   // already reset for this campaign
   resetPublishForCampaignSwitch._last = _cid;
+  resetOptimizeLogForSwitch();   // v3.0.328: the optimize log describes a book we are leaving
   var t = document.getElementById('prep-title'); if (t) t.value = '';
   var pv = document.getElementById('novel-preview-iframe'); if (pv) pv.src = '';   // clear cached Preview & Export
   state._prepOwnTitle = null;
