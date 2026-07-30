@@ -1118,6 +1118,15 @@ var CO_TOWER_CELL_OVERHEAD = 0.14;
 var CO_TOWER_WRAP_MARGIN = 0.10;      // the tower wrapper's own margin-bottom, outside the cell
 // A page holding less than this is worth reporting. Not 'nearly empty' -- 'not full'.
 var CO_UNDERFULL_AT = 8.5;
+// v3.0.330 -- CHAIN HINTS. The under-full hint used to name ONE move per page, so a cascade
+// advanced one link per pass and books ran out of passes mid-slide. These bound the walk that
+// now names the whole chain. CO_CHAIN_MARGIN_IN is slack against est-vs-real disagreement;
+// CO_CHAIN_THIN_IN matches the dump definition of a thin page; CO_CHAIN_MAX_OPS stops a runaway.
+var CO_CHAIN_MARGIN_IN = 0.12;
+var CO_CHAIN_THIN_IN = 3.0;
+var CO_CHAIN_MAX_OPS = 6;
+var CO_PACK_BODY_H_IN = 9.16;   // the packer body budget the paired dump prints as "est X / 9.16"
+var CO_NL = String.fromCharCode(10);   // newline for multi-line hint text (no escape in a single-quoted string)
 var MOVE_SHRINK_FLOOR = 0.85;         // a picture may lose at most 15 percent to absorb an orphan line
 var CO_CLIP_ACCEPT_TOL = 0.02;                            // slack when the apply gate asks 'does this fit'
 // ===== THE CLIP LINE -- SINGLE SOURCE OF TRUTH =====================================================
@@ -6292,25 +6301,68 @@ function pairedPlanText(packed) {
     // useful move to make anyway, since the smallest thing that can slide is a paragraph.
     if (_rl == null || _rl >= CO_UNDERFULL_AT) return;
     var _mine = (pg.placements || []);
-    var _next = ((pages[pi + 1] || {}).placements || [])[0] || null;
     var _head = _mine[0] || null;
     if (!_head) return;
     var _room = Math.round((CO_CLIP_BOX_IN - _rl) * 100) / 100;
+    // v3.0.330 -- NAME THE WHOLE CHAIN, NOT ONE LINK.
+    // This looked exactly one placement ahead -- pages[pi+1].placements[0] -- named ONE op, and moved
+    // on. The applier has always applied ops in order against a MUTATING plan, so several ops can land
+    // on one page in a single pass; nothing ever told the model that more than one thing fitted.
+    // Measured on For ALL the Ages: viewer p.11 received exactly one op on each of passes 2, 3, 4 and
+    // 5, walking beat 6 up one placement per pass. Four passes to move one beat, and the run hit the
+    // cap mid-cascade with beat 7 closing text stranded alone on a page.
+    // WHAT THIS CHANGES IS WHAT THE MODEL IS TOLD, NEVER WHAT THE APPLIER ALLOWS. Every op named here
+    // still passes the reading-order comparison, the fit check and a real re-measure before it is
+    // accepted, so the worst case of a wrong chain is a refused op -- which already happens 12 to 16
+    // times per pass on the one-link hint.
+    // BUDGET IN PACKER UNITS, and take the tighter of the two views. The trigger above is REAL (that
+    // is what a reader sees), but placement heights are packer estimates, so a chain built purely on
+    // real would be mixing units. Using the smaller of the two rooms keeps the walk conservative in
+    // both directions, and CO_CHAIN_MARGIN_IN covers the pages where est reads under real.
+    var _estUsed = (_dpU.used != null) ? _dpU.used : _rl;
+    var _budget = Math.min(CO_PACK_BODY_H_IN - _estUsed, CO_CLIP_BOX_IN - _rl) - CO_CHAIN_MARGIN_IN;
+    var _chain = [];
+    var _src = pi + 1, _took = 0, _spin = 0;
+    function _plH(x) { return (x && x.heightIn != null) ? x.heightIn : ((x && x.realH != null) ? x.realH : 0); }
+    while (_budget > 0.15 && _src < pages.length && _chain.length < CO_CHAIN_MAX_OPS && _spin++ < 40) {
+      var _sp = ((pages[_src] || {}).placements || []);
+      var _cand = _sp[_took] || null;
+      // Source page exhausted by this chain: it would be emptied, and the sweep removes an empty page.
+      // That is exactly how the book shortens, so keep walking into the page after it.
+      if (!_cand) { _src++; _took = 0; continue; }
+      var _ch = _plH(_cand);
+      if (!(_ch > 0) || _ch > _budget) break;                 // stop rule 1: it does not fit
+      // Stop rule 2: DO NOT STRAND A TAIL. If taking this leaves the source page holding exactly one
+      // placement and that placement is thin, and there is no room to bring it too, stop before the
+      // move. This is the fault seen on Gnomes pass 5: the shard moved up legally and left its own
+      // closing paragraph alone on a page at 1.30in. Emptying the source is NOT this case and stays
+      // allowed -- refusing that is what kept page counts from ever dropping before v3.0.283.
+      if ((_sp.length - (_took + 1)) === 1) {
+        var _tailH = _plH(_sp[_took + 1]);
+        if (_tailH < CO_CHAIN_THIN_IN && (_ch + _tailH) > _budget) break;
+      }
+      _chain.push({ pl: _cand, from: _src, h: _ch });
+      _budget = Math.round((_budget - _ch) * 1000) / 1000;
+      _took++;
+    }
     var _act = '';
-    if (_next && _next.beat === (_mine[_mine.length - 1] || {}).beat) {
-      // The next page continues the SAME beat, so its first segment is this page's natural neighbour
-      // and pulling it up cannot break reading order. This is the move, whatever kind it is.
-      var _isPic = (_next.kind === 'image' || _next.kind === 'tower');
-      _act = '  -> op: ' + (_isPic ? 'pullPicture' : 'pullLines') + ' page ' + pi + ' fromPage ' + (pi + 1) +
-             '  (brings ' + (_isPic ? 'the PICTURE' :
-              (_next.part === 'after' ? 'the pic text' : 'the bridge text')) +
-             ' of beat ' + _next.beat + ' up to join its own beat -- reads in order, and there is ' +
-             _room.toFixed(2) + 'in of room)';
-    } else if (_next) {
-      _act = '  -> op: pullLines page ' + pi + ' fromPage ' + (pi + 1) + '  (beat ' + _next.beat +
-             ' starts on the next page; check the segment numbers still ascend before proposing)';
+    if (!_chain.length) {
+      _act = (_src >= pages.length)
+        ? '  -> last page of the book; nothing follows it to pull up'
+        : '  -> nothing that follows fits the room left on this page; treat it as FINISHED and leave it alone';
     } else {
-      _act = '  -> last page of the book; nothing follows it to pull up';
+      // ONE LINE PER LINK, in the order they must be applied. Ops apply in sequence against a mutating
+      // plan, so link 2 sees the page link 1 left behind -- which is why the arithmetic below is
+      // cumulative rather than each link being measured against the original page.
+      _act = '  -> CHAIN of ' + _chain.length + ' move(s), apply IN THIS ORDER (each one sees the page the previous left):';
+      _chain.forEach(function (c, ci) {
+        var _isPic = (c.pl.kind === 'image' || c.pl.kind === 'tower');
+        _act += CO_NL + '       ' + (ci + 1) + '. op: ' + (_isPic ? 'pullPicture' : 'pullLines') +
+                ' page ' + pi + ' fromPage ' + c.from + '  (brings ' +
+                (_isPic ? 'the PICTURE' : (c.pl.part === 'after' ? 'the pic text' : 'the bridge text')) +
+                ' of beat ' + c.pl.beat + ', ' + c.h.toFixed(2) + 'in)';
+      });
+      _act += CO_NL + '       every link above is measured to FIT. Propose them all in one pass.';
     }
     _pIssues.push('  UNDERFULL  page ' + pi + ' (viewer ~p.' + _viewer(pi) + ')  holds ' + _rl.toFixed(2) +
       'in of ' + CO_CLIP_BOX_IN + 'in -- ' + _room.toFixed(2) + 'in EMPTY. This is the main thing to fix.' + _act);
