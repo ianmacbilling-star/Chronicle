@@ -15125,11 +15125,23 @@ function finalizeDownloadDiagnostics() {
         if (_fmLine) _dumpOff = parseInt(_fmLine[1], 10);
         parts.push('PAGE NUMBERS: the rendered PDF has ' + _tot + ' pages and the pack has ' + _cp +
           ' content pages, so dump PAGE n is viewer page n+' + _realOff + '.');
-        if (_dumpOff != null && _dumpOff !== _realOff) {
-          parts.push('  *** THE DUMP SAYS n+' + _dumpOff + ' AND IS WRONG BY ' + (_realOff - _dumpOff) +
-            '. It counts front-matter ELEMENTS and assumes one page each; the cast or contents has run');
-          parts.push('  to two pages. USE n+' + _realOff + '. Every viewer page number printed inside the');
-          parts.push('  dumps below is ' + (_realOff - _dumpOff) + ' too low.');
+        if (_dumpOff != null && _dumpOff > _realOff) {
+          // v3.0.335 -- THE PACK DOES NOT DESCRIBE THE PDF. A dump offset LARGER than the measured one
+          // cannot be a front-matter miscount: it means this pack produced MORE content pages than the
+          // rendered book has. Every section of this bundle is a fresh re-pack, so when the two
+          // disagree the sections are describing a book that was never rendered. Saying WRONG BY -2 and
+          // blaming the cast page sent an entire session chasing the wrong cause.
+          parts.push('  *** THIS BUNDLE DOES NOT DESCRIBE THE PDF YOU DOWNLOADED. The pack has ' +
+            (_dumpOff - _realOff) + ' MORE content page(s) than the rendered book.');
+          parts.push('  Front matter is n+' + _dumpOff + ', so ' + _cp + ' content pages should render as ' +
+            (_cp + _dumpOff) + ' pages -- the PDF has ' + _tot + '.');
+          parts.push('  Every section below is a FRESH RE-PACK, not the composed body that was rendered.');
+          parts.push('  Judge the artifact, not these pages. Page-level detail here is NOT trustworthy.');
+        } else if (_dumpOff != null && _dumpOff < _realOff) {
+          parts.push('  *** FRONT MATTER RAN LONG. The dump assumes n+' + _dumpOff + ', the rendered book is n+' +
+            _realOff + ' -- the cast or the contents has spilled to a second page.');
+          parts.push('  USE n+' + _realOff + '. Every viewer page number printed inside the dumps below is ' +
+            (_realOff - _dumpOff) + ' too low.');
         }
         parts.push('');
       }

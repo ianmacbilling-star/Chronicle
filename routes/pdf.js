@@ -4650,6 +4650,17 @@ function runMovesClear(k) { if (k) _runMoves.delete(k); }
 // Re-apply recorded moves to a freshly packed plan. Matches on the LEADING placement of a page,
 // which is what moveLeadingNarr moves, and refuses any move that would leave a page empty (a blank
 // page in the middle of a book is worse than the white space the move was fixing).
+// v3.0.335 -- WHAT THE REPLAY DROPPED. A refused replay wrote one line to the SERVER console and
+// appeared in no dump, no bundle and nothing the client could see, so the loop could apply the same
+// op on four consecutive passes, report OK every time, and never make it stick. On Whispers Beneath
+// v3.0.332 pullPicture on viewer p.13 applied on passes 2, 3, 4 AND 5. Ian saw two paragraphs sitting
+// alone on adjacent pages and asked, reasonably, why three loops did nothing about them. They had
+// each done something; it was thrown away before the next pass measured.
+// Note the asymmetry this exposes: moveLeadingNarr accepts a move against a REAL re-measure, while
+// the replay below judges it on the PACKER ESTIMATE, and those disagree by 0.56in on average and
+// 3.6in at worst. A move can be honestly accepted and then honestly refused. Report first; decide
+// what to do about it once there is a run to read.
+var _runMovesReport = null;   // { replayed, refused: [ 'text' ] } -- last pack only, read by the dump
 function applyRunMoves(plan, k, pageBudget) {
   // The REFERENCE pack must be a deterministic baseline. _noGrows bypassed grows but not moves, so a
   // recorded move leaked into the reference too and it stopped describing the un-optimized book.
@@ -4657,6 +4668,7 @@ function applyRunMoves(plan, k, pageBudget) {
   var recs = runMovesGet(k);
   if (!recs || !recs.length || !plan || !plan.pages) return 0;
   var applied = 0;
+  var _refused = [];
   recs.forEach(function (mv) {
     for (var pi = 0; pi < plan.pages.length; pi++) {
       var pls = plan.pages[pi].placements || [];
@@ -4692,6 +4704,12 @@ function applyRunMoves(plan, k, pageBudget) {
         var _tUsed = 0;
         (toPg.placements || []).forEach(function (o) { _tUsed += (o.heightIn || 0); });
         if (_tUsed + (p0.heightIn || 0) > pageBudget + 0.02) {
+          try {
+            _refused.push('beat ' + mv.beat + ' ' + (mv.kind || 'narr') + ' ' + (mv.part || '') +
+              '@' + (mv.cs || 0) + '  page ' + pi + ' -> ' + to + ' : ' +
+              (Math.round((_tUsed + (p0.heightIn || 0)) * 100) / 100) + 'in would exceed the ' +
+              pageBudget + 'in budget (page already holds ' + (Math.round(_tUsed * 100) / 100) + 'in)');
+          } catch (e) {}
           try { console.warn('[run-moves] refused replay of b' + mv.beat + ' onto page ' + to +
             ': ' + Math.round((_tUsed + (p0.heightIn || 0)) * 100) / 100 + 'in would exceed the ' +
             pageBudget + 'in budget'); } catch (e) {}
@@ -4705,6 +4723,7 @@ function applyRunMoves(plan, k, pageBudget) {
       break;
     }
   });
+  _runMovesReport = { replayed: applied, refused: _refused };
   return applied;
 }
 // ===== READING ORDER -- ONE ENGINE, ONE RULE, EVERY LAYOUT =========================================
@@ -6168,6 +6187,20 @@ function pairedPlanText(packed) {
   } catch (e) { L.push('ORDER-BREAK: check failed -- ' + ((e && e.message) || e)); }
   if (d.remeasureError) L.push('(re-measure error: ' + d.remeasureError + ')');
   L.push('');
+  // v3.0.335 -- REPLAY LEDGER. Every pass re-packs from natural and replays this run of accepted
+  // moves. A move that will not fit the fresh pack is dropped, and until now that was invisible.
+  // A non-zero refused count means the loop is spending passes re-doing work it keeps losing.
+  if (_runMovesReport) {
+    if (!_runMovesReport.refused.length) {
+      L.push('RUN-MOVES: ' + _runMovesReport.replayed + ' replayed, 0 refused. [OK]');
+    } else {
+      L.push('!! RUN-MOVES: ' + _runMovesReport.replayed + ' replayed, ' + _runMovesReport.refused.length +
+        ' REFUSED -- accepted by an earlier pass, DROPPED by this re-pack. The AI will see the same'); 
+      L.push('   fault again and propose the same op again. Repeated ops in the log are this.');
+      _runMovesReport.refused.forEach(function (t) { L.push('     ' + t); });
+    }
+    L.push('');
+  }
   L.push('PAGES  (REAL = true composed fill; est = packer estimate)');
   // SEGMENT NUMBERS. The reading order of a book is already a total ordering -- beat position, then
   // part within the beat, then character offset -- and pairedOrderKey has computed it since v3.0.284.
@@ -8066,18 +8099,10 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
       },
       measure: function () { return remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco); }
     };
-    // v3.0.334 -- SNAPSHOT BEFORE THE SWEEP. Every picture scale on the plan, and the page count the
-    // loop actually produced. Both are needed to put the book back if the sweep turns out to cost pages.
-    var _preScales = [];
-    (plan.pages || []).forEach(function (pg) {
-      (pg.placements || []).forEach(function (pl) {
-        if (pl.kind === 'image' || pl.kind === 'tower') _preScales.push({ pl: pl, scale: pl.scale, heightIn: pl.heightIn });
-      });
-    });
-    var _prePages = (plan.pages || []).length;
     var r = await finalFillPass(adapter, CO_CLIP_BOX_IN, CO_CLIP_ACCEPT_TOL);
-    function _persistScales() {
-      (plan.pages || []).forEach(function (pg) {
+    if (r.grown) {
+      // Persist each grown scale so the next pack keeps it, then re-compose so the PDF reflects it.
+      plan.pages.forEach(function (pg) {
         (pg.placements || []).forEach(function (pl) {
           if ((pl.kind !== 'image' && pl.kind !== 'tower') || pl.scale == null) return;
           var _b = null;
@@ -8085,39 +8110,9 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
           if (_b && _b.moment && _b.moment.id != null) runGrowsPut(_b.moment.id, pl.scale);
         });
       });
-    }
-    if (r.grown) {
-      // Persist each grown scale so the next pack keeps it, then re-compose so the PDF reflects it.
-      _persistScales();
       var body = composeBook(plan, beats, _pco);
       composedCachePut(req.params.campaignId, req, 'paired', body, (packed && packed.campaign) || '');   // the pack returns `campaign`, not `campaignName`
-      // ===== THE SWEEP MUST NEVER LENGTHEN THE BOOK ================================================
-      // finalFillPass reverts a grow whose OWN page overflows, and nothing ever asked what the grows
-      // did to the book. They do plenty. A persisted grow is seeded into the NEXT pack, which makes
-      // the page taller, which makes applyRunMoves refuse to replay a recorded move onto it -- and a
-      // refused replay is silent. The move simply is not there any more.
-      // Measured on Whispers Beneath v3.0.332: the loop pulled the head of a split paragraph up onto
-      // page 6 and held it there from pass 2 to pass 5, page real 9.00. After the sweep both halves
-      // were stranded alone again at 1.00in and 1.90in, and the book went 59 pages to 60 with fill
-      // down a point. Two separate paragraphs on that one book, both fixed by the loop, both undone.
-      // So: re-pack once and count. If the grows cost pages, put every one of them back. This can
-      // only ever restore the book the loop produced -- it cannot invent a worse one.
-      var _postPages = null;
-      try {
-        var _chk = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
-        _postPages = (_chk && _chk.plan && _chk.plan.pages) ? _chk.plan.pages.length : null;
-      } catch (e) { _postPages = null; }
-      if (_postPages != null && _postPages > _prePages) {
-        _preScales.forEach(function (s) { s.pl.scale = s.scale; s.pl.heightIn = s.heightIn; });
-        _persistScales();
-        var _bodyR = composeBook(plan, beats, _pco);
-        composedCachePut(req.params.campaignId, req, 'paired', _bodyR, (packed && packed.campaign) || '');
-        try { console.log('[final-fill] campaign ' + req.params.campaignId + ': REVERTED all ' + r.grown +
-          ' grow(s) -- they took the book from ' + _prePages + ' to ' + _postPages + ' pages'); } catch (e) {}
-        return res.json({ ok: true, grown: 0, reverted: r.grown, gained: 0,
-          skipped: 'the grows were put back -- they would have made the book longer (' + _prePages + ' to ' + _postPages + ' pages)' });
-      }
-      try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in, pages ' + _prePages + ' -> ' + _postPages); } catch (e) {}
+      try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in'); } catch (e) {}
     }
     return res.json({ ok: true, grown: r.grown, reverted: r.reverted, gained: r.gained });
   } catch (e) {
