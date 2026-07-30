@@ -15896,7 +15896,21 @@ function _runLayoutAiOptimize() {
           // Save immediately and QUIETLY so the book is protected if the fill is slow or fails, then
           // again after the fill -- and let THAT one speak, since by then it is the finished article.
           finalizeSaveOptimized(true);
-          finalizeFinalFill().then(function () { finalizeSaveOptimized(); });
+          // v3.0.340 -- SHOW THE BOOK THAT SAVES. The last render of the After pane happens INSIDE the
+          // loop, so the pane held pass 5 output. The fill sweep and the collapse sweep then run and
+          // re-compose, and THAT book is what finalizeSaveOptimized stores, what Load Last Optimized
+          // File returns, and what publishes. On Whispers Beneath the pane showed 63 pages while the
+          // saved book was two pages shorter and, in Ian's words, without any of the issues. A whole
+          // evening went into grading a draft the pipeline had already improved on.
+          // Re-render from the composed cache once the fill is done: no re-pack, no measure, just a
+          // fetch and a rasterise of a body that already exists.
+          finalizeFinalFill().then(function () {
+            finalizeSaveOptimized();
+            try {
+              optimizeLogLine('Showing the finished book -- this is the version that saves.', 'ok');
+              renderPdfInto(composeUrl, 'finalize-after-scroll', false);
+            } catch (e) {}
+          });
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
