@@ -4641,14 +4641,24 @@ function runMovesAdd(k, rec) {
     var m = v.moves[i];
     if (m.beat === rec.beat && (m.kind || 'narr') === (rec.kind || 'narr') &&
         (m.part || '') === (rec.part || '') && (m.cs || 0) === (rec.cs || 0)) {
+      // v3.0.337 -- ACCUMULATE. This wrote m.dir = rec.dir, so a placement moved on three separate
+    // passes still replayed as ONE page of travel: nothing in a book could ever end up more than one
+    // page from where the natural pack put it, however many passes ran. That was never a designed
+    // rule -- it fell out of storing a direction in a field that gets overwritten. Measured on
+    // Whispers Beneath: beat 8 image moved on FOUR separate passes and travelled one page.
+    // Summing keeps the original intent -- a push followed by a pull still cancels to zero -- while
+    // letting a placement travel as far as the loop actually moved it.
       // v3.0.336 -- COUNT THE OVERWRITES. A record carries a DIRECTION, not a distance, so a
     // placement moved on three separate passes still replays as ONE step. The loop then sees the
     // same gap, proposes the same pull, applies it, reports OK -- and the book never moves. That is
     // the shape of every repeated op in the Whispers log. hits is diagnostic only; nothing reads it.
-      m.dir = rec.dir; m.hits = (m.hits || 1) + 1; v.at = Date.now(); return;
+      m.net = (m.net != null ? m.net : (m.dir || 0)) + rec.dir;
+      m.dir = (m.net < 0) ? -1 : 1;                 // kept for anything still reading dir
+      m.hits = (m.hits || 1) + 1; v.at = Date.now(); return;
     }
   }
   rec.hits = 1;
+  rec.net = rec.dir;
   v.moves.push(rec); v.at = Date.now();
 }
 function runMovesClear(k) { if (k) _runMoves.delete(k); }
@@ -4666,7 +4676,7 @@ function runMovesClear(k) { if (k) _runMoves.delete(k); }
 // 3.6in at worst. A move can be honestly accepted and then honestly refused. Report first; decide
 // what to do about it once there is a run to read.
 var _runMovesReport = null;   // { replayed, refused: [ 'text' ] } -- last pack only, read by the dump
-function applyRunMoves(plan, k, pageBudget) {
+function applyRunMoves(plan, k, pageBudget, beats) {
   // The REFERENCE pack must be a deterministic baseline. _noGrows bypassed grows but not moves, so a
   // recorded move leaked into the reference too and it stopped describing the un-optimized book.
   // v3.0.336 -- the report is module-level, so an early return used to leave the PREVIOUS pack's
@@ -4687,6 +4697,18 @@ function applyRunMoves(plan, k, pageBudget) {
   // replayed + refused + lost, and every lost move says what was sought and what is there instead.
   var _lost = [];
   var _capped = [];
+  var _orderRefused = [];
+  var _cancelled = 0;
+  // v3.0.337 -- ORDER GATE ON THE REPLAY. There was none. That was survivable while every replayed
+  // move was exactly ONE page: a single hop is bounded by its neighbours and moveLeadingNarr had
+  // already verified that exact step against a real re-measure. Now a move may travel several pages,
+  // reproducing the cumulative effect of steps each verified in a state that no longer exists, so the
+  // replay has to check for itself. Reading order is the hardest rule in the product; a move that
+  // breaks it is reverted here and reported, whatever it cost the layout.
+  var _ord = null;
+  try { if (beats) _ord = pairedOrdinals(beats); } catch (e) { _ord = null; }
+  function _breaks() { try { return _ord ? pairedOrderBreaks(plan, _ord).length : 0; } catch (e) { return 0; } }
+  var _obBase = _breaks();
   function _mvName(m) {
     return 'beat ' + m.beat + ' ' + (m.kind || 'narr') + ' ' + (m.part || '-') + '@' + (m.cs || 0) +
            ' dir' + (m.dir < 0 ? '-1' : '+1');
@@ -4727,7 +4749,9 @@ function applyRunMoves(plan, k, pageBudget) {
       // leave it, so a page could never become empty, so the page count could never drop. That is why
       // content pages read X -> X in every run of every book across twenty versions. The packer could
       // change the count; the loop structurally could not. Emptied pages are swept below.
-      var to = pi + mv.dir;
+      var _step = (mv.net != null && mv.net !== 0) ? mv.net : (mv.dir || 0);
+      if (!_step) { _outcome = 'cancelled'; _cancelled++; break; }   // pushed then pulled back -- net zero
+      var to = pi + _step;
       if (to < 0 || to >= plan.pages.length) {
         _outcome = 'edge';
         _lost.push(_mvName(mv) + '  -- destination page ' + to + ' is off the end of the book');
@@ -4758,9 +4782,19 @@ function applyRunMoves(plan, k, pageBudget) {
           break;
         }
       }
-      if (mv.dir < 0) toPg.placements = (toPg.placements || []).concat([p0]);   // pull up: append
+      var _toSave = (toPg.placements || []).slice();
+      var _fromSave = pls.slice();
+      if (_step < 0) toPg.placements = (toPg.placements || []).concat([p0]);    // pull up: append
       else toPg.placements = [p0].concat(toPg.placements || []);                // push down: prepend
       plan.pages[pi].placements = pls.slice(1);
+      if (_ord && _breaks() > _obBase) {
+        toPg.placements = _toSave;
+        plan.pages[pi].placements = _fromSave;
+        _orderRefused.push(_mvName(mv) + '  -- page ' + pi + ' -> ' + to + ' (' + _step +
+          ' pages) would put the text out of reading order');
+        _outcome = 'order';
+        break;
+      }
       applied++;
       _outcome = 'ok';
       break;
@@ -4772,7 +4806,8 @@ function applyRunMoves(plan, k, pageBudget) {
       _lost.push(_mvName(mv) + '  -- NO PAGE LEADS WITH THIS. now: ' + _whereIsBeat(mv.beat));
     }
   });
-  _runMovesReport = { recorded: recs.length, replayed: applied, refused: _refused, lost: _lost, capped: _capped };
+  _runMovesReport = { recorded: recs.length, replayed: applied, refused: _refused, lost: _lost,
+                      capped: _capped, orderRefused: _orderRefused, cancelled: _cancelled };
   return applied;
 }
 // ===== READING ORDER -- ONE ENGINE, ONE RULE, EVERY LAYOUT =========================================
@@ -4987,7 +5022,7 @@ async function computePairedPack(req, campaignId, packOpts) {
   if (_scaleN) { try { console.log('[run-scales] campaign ' + campaignId + ': re-applied ' + _scaleN + ' image scale(s) to the fresh pack'); } catch (e) {} }
   // HONEST LOOP: re-apply this run's accepted text moves to the fresh plan, so every pass measures the
   // book as it actually stands rather than one where the previous passes never happened.
-  var _mvN = applyRunMoves(plan, runGrowsKey(campaignId, req), _pageBudget);
+  var _mvN = applyRunMoves(plan, runGrowsKey(campaignId, req), _pageBudget, mbuilt.beats);
   // SWEEP PAGES THE MOVES EMPTIED. The apply path has done this since v3.0.283, but the PACK did not,
   // so a page emptied by the replay came back as a blank one on the next re-pack and the count never
   // moved. Sweeping here is what actually lets the loop shorten a book: a move empties a page, the
@@ -6244,18 +6279,25 @@ function pairedPlanText(packed) {
     if (_rm.bypassed) {
       L.push('RUN-MOVES: bypassed (reference pack -- moves are deliberately not replayed here).');
     } else {
-      var _acct = (_rm.replayed || 0) + (_rm.refused || []).length + (_rm.lost || []).length;
-      var _bad = ((_rm.refused || []).length + (_rm.lost || []).length) > 0;
+      var _acct = (_rm.replayed || 0) + (_rm.refused || []).length + (_rm.lost || []).length +
+                  (_rm.orderRefused || []).length + (_rm.cancelled || 0);
+      var _bad = ((_rm.refused || []).length + (_rm.lost || []).length + (_rm.orderRefused || []).length) > 0;
       L.push((_bad ? '!! ' : '') + 'RUN-MOVES: recorded ' + (_rm.recorded || 0) + ', replayed ' +
         (_rm.replayed || 0) + ', refused ' + (_rm.refused || []).length + ', lost ' + (_rm.lost || []).length +
+        ', order-refused ' + (_rm.orderRefused || []).length + ', cancelled ' + (_rm.cancelled || 0) +
         ((_acct === (_rm.recorded || 0)) ? '.  [accounts]' : '.  *** DOES NOT ACCOUNT ***'));
       if ((_rm.refused || []).length) {
         L.push('   REFUSED -- accepted by an earlier pass, dropped by this re-pack for want of room:');
         _rm.refused.forEach(function (t) { L.push('     ' + t); });
       }
+      if ((_rm.orderRefused || []).length) {
+        L.push('   ORDER-REFUSED -- travelling that far would have put the text out of reading order,');
+        L.push('   so the move was reverted. Reading order outranks every layout gain:');
+        _rm.orderRefused.forEach(function (t) { L.push('     ' + t); });
+      }
       if ((_rm.capped || []).length) {
-        L.push('   CAPPED AT ONE STEP -- these were moved on more than one pass, but a record stores a');
-        L.push('   direction and not a distance, so only ONE page of that movement is ever replayed:');
+        L.push('   MULTI-PASS MOVES -- moved on more than one pass. Since v3.0.337 the full distance is');
+        L.push('   replayed (net of any pushes), so these travel as far as the loop moved them:');
         _rm.capped.forEach(function (t) { L.push('     ' + t); });
       }
       if ((_rm.lost || []).length) {
