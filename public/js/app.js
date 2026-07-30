@@ -15262,6 +15262,10 @@ function finalizeFinalFill() {
           ' into leftover space' + (j.reverted ? (' (' + j.reverted + ' put back)') : '') + '.', 'ok');
         else if (j.skipped) optimizeLogLine('Final pass: skipped -- ' + j.skipped, 'skip');
         else optimizeLogLine('Final pass: no picture had room to grow.', 'skip');
+        // v3.0.338 -- the collapse sweep is the LAST thing done to the book, so say what it did.
+        if (j.collapsed) optimizeLogLine('Final pass: merged ' + j.collapsed + ' nearly empty page' +
+          (j.collapsed === 1 ? '' : 's') + ' into a neighbour.', 'ok');
+        else if (j.collapseReverted) optimizeLogLine('Final pass: page merges were put back -- one would have overflowed its box.', 'skip');
       })
       .catch(function (e) { optimizeLogLine('Final pass: could not run -- ' + ((e && e.message) || 'network error'), 'stop'); });
   } catch (e) { return Promise.resolve(); }

@@ -1125,6 +1125,12 @@ var CO_UNDERFULL_AT = 8.5;
 var CO_CHAIN_MARGIN_IN = 0.12;
 var CO_CHAIN_THIN_IN = 3.0;
 var CO_CHAIN_MAX_OPS = 6;
+// v3.0.338 -- COLLAPSE SWEEP. A page under this much content is a candidate for merging into a
+// neighbour. The margin is headroom against est-vs-real so a merge cannot manufacture a clip, and
+// the cap bounds how much one sweep may rearrange.
+var CO_COLLAPSE_THIN_IN = 4.0;
+var CO_COLLAPSE_MARGIN_IN = 0.15;
+var CO_COLLAPSE_MAX = 6;
 var CO_PACK_BODY_H_IN = 9.16;   // the packer body budget the paired dump prints as "est X / 9.16"
 var CO_NL = String.fromCharCode(10);   // newline for multi-line hint text (no escape in a single-quoted string)
 var MOVE_SHRINK_FLOOR = 0.85;         // a picture may lose at most 15 percent to absorb an orphan line
@@ -2257,7 +2263,12 @@ function composedCachePut(campaignId, req, arrange, body, campaignName) {
       var it = _composedCache.keys().next();
       if (!it.done) _composedCache.delete(it.value);
     }
-    _composedCache.set(composedCacheKey(campaignId, req), { at: Date.now(), arrange: arrange, body: body, campaignName: campaignName || '' });
+    // v3.0.338 -- KEEP THE PLAN THAT WAS COMPOSED. Every section of the diagnostics bundle is a fresh
+    // re-pack, and a re-pack drifts from the composed book by one or two pages. Three separate wrong
+    // diagnoses today came from reading a dump that described a book nobody had rendered. Storing the
+    // plan text beside the body costs nothing -- the plan is in hand at compose time -- and lets the
+    // bundle serve the truth about the PDF that was downloaded.
+    _composedCache.set(composedCacheKey(campaignId, req), { at: Date.now(), arrange: arrange, body: body, campaignName: campaignName || '', planText: (arguments.length > 5 ? arguments[5] : null) });
   } catch (e) { /* cache is best-effort */ }
 }
 function composedCacheGet(campaignId, req) {
@@ -8175,6 +8186,71 @@ async function finalFillPass(adapter, box, tol) {
   out.gained = Math.round(out.gained * 100) / 100;
   return out;
 }
+// v3.0.338 -- COLLAPSE THIN PAGES INTO A NEIGHBOUR.
+// The loop reviews the state it INHERITS, never the state it LEAVES. Pass 5 applies its ops, the
+// fill sweep runs, and the book that ships is the one arrangement nothing has looked at. On Whispers
+// Beneath that shipped a final page holding 1.30in of outro with 2.45in free on the page before it --
+// a one-move repair that only pass 6 could have made, and there is no pass 6.
+// This is NOT another AI pass. TD-018 is explicit that more passes are not monotonic. It is
+// arithmetic: if a nearly empty page fits on its neighbour, put it there and drop the page.
+// SAFETY. It only ever MERGES -- never splits, never scales, never reorders. Every merge is checked
+// against the packer budget with margin AND against the reading-order engine. Then the whole book is
+// measured once, and if ANY page comes out over the box the entire sweep is reverted: either it is
+// wholly clean or it did nothing. Every page is composed at overflow:hidden, so trading two half
+// pages for one clipped page would be a silent loss of text -- worse than the white space.
+async function collapseThinPairedPages(req, campaignId, plan, beats, pco) {
+  var out = { merged: 0, notes: [], revertedAll: false };
+  if (!plan || !plan.pages || plan.pages.length < 2) return out;
+  var _pgSnap = plan.pages.slice();
+  var _plSnap = plan.pages.map(function (pg) { return (pg.placements || []).slice(); });
+  var _ord = null;
+  try { _ord = pairedOrdinals(beats); } catch (e) { _ord = null; }
+  function _ob() { try { return _ord ? pairedOrderBreaks(plan, _ord).length : 0; } catch (e) { return 0; } }
+  function _used(pg) { var t = 0; (pg.placements || []).forEach(function (x) { t += (x.heightIn || 0); }); return t; }
+  var _ob0 = _ob();
+  var _cap = CO_PACK_BODY_H_IN - CO_COLLAPSE_MARGIN_IN;
+  var i = 1, guard = 0;
+  while (i < plan.pages.length && out.merged < CO_COLLAPSE_MAX && guard++ < 200) {
+    var pg = plan.pages[i];
+    var h = _used(pg);
+    if (!(pg.placements || []).length || h > CO_COLLAPSE_THIN_IN) { i++; continue; }
+    var moved = false;
+    var prev = plan.pages[i - 1];
+    if (_used(prev) + h <= _cap) {
+      var _pSave = (prev.placements || []).slice();
+      prev.placements = (prev.placements || []).concat(pg.placements);
+      var _rm = plan.pages.splice(i, 1);
+      if (_ob() > _ob0) { plan.pages.splice(i, 0, _rm[0]); prev.placements = _pSave; }
+      else { out.merged++; out.notes.push('page ' + i + ' (' + h.toFixed(2) + 'in) merged UP'); moved = true; }
+    }
+    if (!moved && (i + 1) < plan.pages.length) {
+      var next = plan.pages[i + 1];
+      if (_used(next) + h <= _cap) {
+        var _nSave = (next.placements || []).slice();
+        next.placements = pg.placements.concat(next.placements || []);
+        var _rm2 = plan.pages.splice(i, 1);
+        if (_ob() > _ob0) { plan.pages.splice(i, 0, _rm2[0]); next.placements = _nSave; }
+        else { out.merged++; out.notes.push('page ' + i + ' (' + h.toFixed(2) + 'in) merged DOWN'); moved = true; }
+      }
+    }
+    if (!moved) i++;
+  }
+  if (!out.merged) return out;
+  var _real = null;
+  try { _real = await remeasureComposedPaired(req, campaignId, plan, beats, pco); } catch (e) { _real = null; }
+  var _bad = !_real || _real._error;
+  if (!_bad) {
+    for (var q = 0; q < plan.pages.length; q++) {
+      if (_real[q] != null && _real[q] > CO_CLIP_BOX_IN + CO_CLIP_ACCEPT_TOL) { _bad = true; break; }
+    }
+  }
+  if (_bad) {
+    plan.pages = _pgSnap;
+    plan.pages.forEach(function (pg2, idx) { pg2.placements = _plSnap[idx]; });
+    out.revertedAll = true; out.merged = 0; out.notes = [];
+  }
+  return out;
+}
 // Run the shared final fill over a Picture Book. Called once, after the loop has converged.
 // The adapter is the ONLY paired-specific part; Magazine supplies its own and reuses everything else.
 router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async function (req, res) {
@@ -8207,7 +8283,12 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
       measure: function () { return remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco); }
     };
     var r = await finalFillPass(adapter, CO_CLIP_BOX_IN, CO_CLIP_ACCEPT_TOL);
-    if (r.grown) {
+    // v3.0.338 -- and now collapse anything the loop left nearly empty. Runs on the SAME plan that is
+    // about to be composed and cached, so it acts on the book that actually ships.
+    var _col = { merged: 0, notes: [], revertedAll: false };
+    try { _col = await collapseThinPairedPages(req, req.params.campaignId, plan, beats, _pco); } catch (e) {}
+    if (_col.merged) { try { console.log('[collapse] campaign ' + req.params.campaignId + ': ' + _col.notes.join(' ; ')); } catch (e) {} }
+    if (r.grown || _col.merged) {
       // Persist each grown scale so the next pack keeps it, then re-compose so the PDF reflects it.
       plan.pages.forEach(function (pg) {
         (pg.placements || []).forEach(function (pl) {
@@ -8218,10 +8299,13 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
         });
       });
       var body = composeBook(plan, beats, _pco);
-      composedCachePut(req.params.campaignId, req, 'paired', body, (packed && packed.campaign) || '');   // the pack returns `campaign`, not `campaignName`
+      var _planTxt = null;
+      try { _planTxt = pairedPlanText({ plan: plan, beats: beats, campaign: (packed && packed.campaign) || null, dbg: (packed && packed.dbg) || {}, co: _pco }); } catch (e) { _planTxt = null; }
+      composedCachePut(req.params.campaignId, req, 'paired', body, (packed && packed.campaign) || '', _planTxt);   // the pack returns `campaign`, not `campaignName`
       try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in'); } catch (e) {}
     }
-    return res.json({ ok: true, grown: r.grown, reverted: r.reverted, gained: r.gained });
+    return res.json({ ok: true, grown: r.grown, reverted: r.reverted, gained: r.gained,
+      collapsed: _col.merged, collapseNotes: _col.notes, collapseReverted: !!_col.revertedAll });
   } catch (e) {
     log500('layout-fill', req, e);
     return res.status(500).json({ error: (e && e.message) || 'layout-fill failed' });
