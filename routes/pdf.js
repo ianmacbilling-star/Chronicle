@@ -6221,6 +6221,28 @@ function pairedPlanText(packed) {
       var _rcH = (pl.realH != null) ? pl.realH : null;
       var _rcStr = (_rcH != null) ? ('  REAL-CELL' + _rcH.toFixed(2) + ((_h != null && Math.abs(_rcH - _h) > 0.1) ? ('  (diff ' + ((_rcH - _h) >= 0 ? '+' : '') + (_rcH - _h).toFixed(2) + ')') : '')) : '';
       var _fhStr = (pl.fullH != null) ? ('  fullH' + pl.fullH.toFixed(2)) : '';
+      // v3.0.331 -- TOWER COLUMNS. packPaired places a tower as ONE block whose height is
+      // max(imageH, textH), because the picture and its narration sit SIDE BY SIDE. It records both
+      // numbers on the placement and nothing has ever printed them, so every reader of this dump --
+      // including the AI -- has seen a tower page as a single full number and concluded there is no
+      // room on it for anything. That is only true for a PICTURE move. For TEXT the capacity is the
+      // text column, which may be inches short of the block height.
+      // packPaired also HARD CAPS the block at the page height, so a tower whose narration is taller
+      // than the page is silently truncated and its beside-column overflows. TEXT-COL OVER marks that.
+      var _twStr = '';
+      if (pl.kind === 'tower' && (pl.imageH != null || pl.textH != null)) {
+        var _tImg = (pl.imageH != null) ? pl.imageH : null;
+        var _tTxt = (pl.textH != null) ? pl.textH : null;
+        var _tBlk = (pl.heightIn != null) ? pl.heightIn : null;
+        _twStr = '  [TOWER img' + (_tImg != null ? _tImg.toFixed(2) : '?') +
+                 ' text' + (_tTxt != null ? _tTxt.toFixed(2) : '?');
+        if (_tTxt != null && _tBlk != null) {
+          var _free = Math.round((_tBlk - _tTxt) * 100) / 100;
+          _twStr += (_free >= 0) ? ('  TEXT-COL FREE ' + _free.toFixed(2) + 'in')
+                                 : ('  TEXT-COL OVER by ' + Math.abs(_free).toFixed(2) + 'in');
+        }
+        _twStr += ']';
+      }
       var _flag = (_h != null && _cum > 9.16) ? '  <== OVER 9.16' : '';
       var _dflag = (_rcH != null && _h != null && (_rcH - _h) > 0.3) ? '  <== RENDERS TALLER THAN PACKED' : '';
       // WHERE THIS SITS INSIDE ITS BEAT. The dump listed what was on a page but never what each block
@@ -6233,7 +6255,7 @@ function pairedPlanText(packed) {
                 : (pl.kind === 'section-header') ? '[0-header]' : '[2-picture]';
       var _sq = _seqOf[_segKey(pl)];
       var _sqs = (_sq != null) ? ('#' + (_sq < 10 ? '00' : (_sq < 100 ? '0' : '')) + _sq + ' ') : '     ';
-      L.push('      ' + _sqs + 'beat ' + pl.beat + ' ' + _slot + '  ' + lbl + _hstr + _rcStr + _fhStr + _flag + _dflag);
+      L.push('      ' + _sqs + 'beat ' + pl.beat + ' ' + _slot + '  ' + lbl + _hstr + _rcStr + _fhStr + _twStr + _flag + _dflag);
     });
   });
 
@@ -6347,9 +6369,31 @@ function pairedPlanText(packed) {
     }
     var _act = '';
     if (!_chain.length) {
-      _act = (_src >= pages.length)
-        ? '  -> last page of the book; nothing follows it to pull up'
-        : '  -> nothing that follows fits the room left on this page; treat it as FINISHED and leave it alone';
+      // v3.0.331 -- DO NOT SAY FINISHED. v3.0.330 replaced the old one-op hint with a fitted chain and,
+      // when nothing fitted, told the model the page was done. On The Strangers that verdict landed on
+      // 135 of 144 under-full pages, and the book stopped shortening: 45 -> 45 pages against 45 -> 43
+      // on v3.0.327, with move ops falling from 33 to 11.
+      // The reason is that a STRICT fit is not the real admission test. moveLeadingNarr carries a
+      // shrink ladder (rungs 0.94 / 0.88 / MOVE_SHRINK_FLOOR) that trims a picture on the destination
+      // page to absorb a near miss, so moves this arithmetic calls impossible do land. And naming a
+      // move on EVERY under-full page is what let the model see a whole cascade: v3.0.327 pass 3 ran
+      // twelve chained moves down pages 17 to 21 and removed two pages, unaided.
+      // So the fit test now decides how MUCH to name, never WHETHER to name. A refused op costs one
+      // measure; a book that will not shorten costs pages on every copy printed.
+      var _nx = ((pages[_src] || {}).placements || [])[0] || null;
+      if (!_nx) {
+        _act = '  -> last page of the book; nothing follows it to pull up';
+      } else {
+        var _nxPic = (_nx.kind === 'image' || _nx.kind === 'tower');
+        var _nxH = (_nx.heightIn != null) ? _nx.heightIn : ((_nx.realH != null) ? _nx.realH : 0);
+        var _short = Math.round((_nxH - Math.max(0, _budget)) * 100) / 100;
+        _act = '  -> STRETCH op: ' + (_nxPic ? 'pullPicture' : 'pullLines') + ' page ' + pi +
+               ' fromPage ' + _src + '  (brings ' + (_nxPic ? 'the PICTURE' :
+               (_nx.part === 'after' ? 'the pic text' : 'the bridge text')) + ' of beat ' + _nx.beat +
+               ', ' + _nxH.toFixed(2) + 'in). By plain arithmetic it is about ' + (_short > 0 ? _short.toFixed(2) : '0.00') +
+               'in too big, but the applier may trim a picture on this page to absorb it. Worth proposing;' +
+               ' if it is refused, the page really is finished.';
+      }
     } else {
       // ONE LINE PER LINK, in the order they must be applied. Ops apply in sequence against a mutating
       // plan, so link 2 sees the page link 1 left behind -- which is why the arithmetic below is
