@@ -3735,6 +3735,12 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   res.set('X-Total-Sessions', String(sessionsWithData.length));
+  // v3.0.333 -- the INCLUDED count above has been on the wire since it was written and nothing ever
+  // read it. Publish the campaign total beside it so the Optimize tab can say 7 of 9 rather than 7,
+  // which is the only form that shows a session has been left out. Both are computed already; this
+  // adds no query and no work. Inclusion follows effectiveIncludeMap, so the numbers are correct for
+  // WHOSE book this is -- a member curating their own copy legitimately sees a different count.
+  res.set('X-Campaign-Sessions', String(sessions.length));
 
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;

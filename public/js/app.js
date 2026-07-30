@@ -14653,6 +14653,9 @@ var _finalizeFills = {};
 // ticks. But renderPdfInto appends each page's canvas BEFORE rasterising it, so any page slower
 // than ~1.5s (page 1 is the full-bleed cover) froze the count and the delta reported 1 page.
 // These are set from pdf.numPages and flipped when the render chain actually resolves.
+// v3.0.333 -- session inclusion, read off the Before PDF response headers (no extra request).
+// null means not known yet, so the line stays hidden rather than showing a wrong 0.
+var _finalizeSessInc = null, _finalizeSessTotal = null;
 var _finalizeBeforePages = 0, _finalizeAfterPages = 0;
 var _finalizeBeforeDone = false, _finalizeAfterDone = false;
 var _finalizeAfterOnDone = null;   // Optimize registers a callback here; renderPdfInto fires it the
@@ -15423,6 +15426,15 @@ function finalizeUpdateHeader() {
   var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
     (desc ? ' <span style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
   h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(201,168,76,0.6);">&middot;</span> ') + '</div>';
+  // SESSIONS INCLUDED. Sits under the layout attributes and above the Optimize button. Highlighted
+  // only when some are left out -- that is the case worth catching before ordering a print.
+  if (_finalizeSessInc != null && _finalizeSessTotal != null) {
+    var _sAll = (_finalizeSessInc >= _finalizeSessTotal);
+    h += '<div style="margin-top:5px;font-size:11px;letter-spacing:0.03em;color:' +
+         (_sAll ? 'rgba(245,232,200,0.75)' : 'var(--gold)') + ';">Sessions included: <strong>' +
+         _finalizeSessInc + ' of ' + _finalizeSessTotal + '</strong>' +
+         (_sAll ? '' : ' <span style="font-style:italic;opacity:0.8;">(some sessions are excluded)</span>') + '</div>';
+  }
   el.innerHTML = h;
 }
 
@@ -16292,6 +16304,18 @@ function renderPdfInto(url, containerId, isBefore) {
     if (pm) pm.textContent = 'Generating the book (~20s)...';
     return fetch(url, { credentials: 'same-origin' }).then(function (r) {
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
+      // v3.0.333 -- same-origin, so these headers are readable. Only the Before pane is the source of
+      // truth: it renders the book as it actually stands, from the route that computes the include map.
+      if (isBefore) {
+        try {
+          var _si = r.headers.get('X-Total-Sessions'), _st = r.headers.get('X-Campaign-Sessions');
+          if (_si != null && _st != null) {
+            _finalizeSessInc = parseInt(_si, 10); _finalizeSessTotal = parseInt(_st, 10);
+            if (isNaN(_finalizeSessInc) || isNaN(_finalizeSessTotal)) { _finalizeSessInc = null; _finalizeSessTotal = null; }
+            if (typeof finalizeUpdateHeader === 'function') finalizeUpdateHeader();
+          }
+        } catch (e) {}
+      }
       return r.arrayBuffer();
     }).then(function (buf) {
       // Keep the raw PDF as an in-memory blob so "Open in new tab" reuses it -- no re-fetch, so the
@@ -16400,6 +16424,7 @@ function resetPublishForCampaignSwitch() {
   if (resetPublishForCampaignSwitch._last === _cid) return;   // already reset for this campaign
   resetPublishForCampaignSwitch._last = _cid;
   resetOptimizeLogForSwitch();   // v3.0.328: the optimize log describes a book we are leaving
+  _finalizeSessInc = null; _finalizeSessTotal = null;   // v3.0.333: session counts belong to the old book
   var t = document.getElementById('prep-title'); if (t) t.value = '';
   var pv = document.getElementById('novel-preview-iframe'); if (pv) pv.src = '';   // clear cached Preview & Export
   state._prepOwnTitle = null;
