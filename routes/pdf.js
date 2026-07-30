@@ -4641,9 +4641,14 @@ function runMovesAdd(k, rec) {
     var m = v.moves[i];
     if (m.beat === rec.beat && (m.kind || 'narr') === (rec.kind || 'narr') &&
         (m.part || '') === (rec.part || '') && (m.cs || 0) === (rec.cs || 0)) {
-      m.dir = rec.dir; v.at = Date.now(); return;
+      // v3.0.336 -- COUNT THE OVERWRITES. A record carries a DIRECTION, not a distance, so a
+    // placement moved on three separate passes still replays as ONE step. The loop then sees the
+    // same gap, proposes the same pull, applies it, reports OK -- and the book never moves. That is
+    // the shape of every repeated op in the Whispers log. hits is diagnostic only; nothing reads it.
+      m.dir = rec.dir; m.hits = (m.hits || 1) + 1; v.at = Date.now(); return;
     }
   }
+  rec.hits = 1;
   v.moves.push(rec); v.at = Date.now();
 }
 function runMovesClear(k) { if (k) _runMoves.delete(k); }
@@ -4664,12 +4669,44 @@ var _runMovesReport = null;   // { replayed, refused: [ 'text' ] } -- last pack 
 function applyRunMoves(plan, k, pageBudget) {
   // The REFERENCE pack must be a deterministic baseline. _noGrows bypassed grows but not moves, so a
   // recorded move leaked into the reference too and it stopped describing the un-optimized book.
-  if (_noGrows) return 0;
+  // v3.0.336 -- the report is module-level, so an early return used to leave the PREVIOUS pack's
+  // numbers standing. The reference section printed 45 replayed for a pack that bypasses moves
+  // entirely. Clear it on every path.
+  if (_noGrows) { _runMovesReport = { bypassed: true, recorded: 0, replayed: 0, refused: [], lost: [] }; return 0; }
   var recs = runMovesGet(k);
-  if (!recs || !recs.length || !plan || !plan.pages) return 0;
+  if (!recs || !recs.length || !plan || !plan.pages) {
+    _runMovesReport = { recorded: (recs ? recs.length : 0), replayed: 0, refused: [], lost: [] };
+    return 0;
+  }
   var applied = 0;
   var _refused = [];
+  // v3.0.336 -- ACCOUNT FOR EVERY RECORDED MOVE. The ledger counted budget refusals only, so a move
+  // that found no matching leading placement vanished from the arithmetic as well as from the book.
+  // On Whispers Beneath a merge that pass 5 applied and reported OK was absent from the artifact and
+  // absent from the ledger, which left no way to tell where it went. recorded must now equal
+  // replayed + refused + lost, and every lost move says what was sought and what is there instead.
+  var _lost = [];
+  var _capped = [];
+  function _mvName(m) {
+    return 'beat ' + m.beat + ' ' + (m.kind || 'narr') + ' ' + (m.part || '-') + '@' + (m.cs || 0) +
+           ' dir' + (m.dir < 0 ? '-1' : '+1');
+  }
+  function _whereIsBeat(b) {
+    var out = [];
+    for (var q = 0; q < plan.pages.length && out.length < 3; q++) {
+      var qp = (plan.pages[q].placements || []);
+      for (var z = 0; z < qp.length; z++) {
+        if (qp[z].beat === b) {
+          out.push('page ' + q + (z === 0 ? ' LEADS' : ' pos' + z) + ' with ' + (qp[z].kind || '?') +
+                   ' ' + (qp[z].part || '-') + '@' + (qp[z].charStart || 0));
+          break;
+        }
+      }
+    }
+    return out.length ? out.join(' ; ') : 'beat not present in this pack at all';
+  }
   recs.forEach(function (mv) {
+    var _outcome = null;
     for (var pi = 0; pi < plan.pages.length; pi++) {
       var pls = plan.pages[pi].placements || [];
       if (!pls.length) continue;
@@ -4691,7 +4728,11 @@ function applyRunMoves(plan, k, pageBudget) {
       // content pages read X -> X in every run of every book across twenty versions. The packer could
       // change the count; the loop structurally could not. Emptied pages are swept below.
       var to = pi + mv.dir;
-      if (to < 0 || to >= plan.pages.length) break;
+      if (to < 0 || to >= plan.pages.length) {
+        _outcome = 'edge';
+        _lost.push(_mvName(mv) + '  -- destination page ' + to + ' is off the end of the book');
+        break;
+      }
       var toPg = plan.pages[to];
       // MUST STILL FIT. moveLeadingNarr verifies a move against a real re-measure when it is first
       // accepted, but this REPLAY had no check at all: it dropped the recorded text onto a freshly
@@ -4713,6 +4754,7 @@ function applyRunMoves(plan, k, pageBudget) {
           try { console.warn('[run-moves] refused replay of b' + mv.beat + ' onto page ' + to +
             ': ' + Math.round((_tUsed + (p0.heightIn || 0)) * 100) / 100 + 'in would exceed the ' +
             pageBudget + 'in budget'); } catch (e) {}
+          _outcome = 'budget';
           break;
         }
       }
@@ -4720,10 +4762,17 @@ function applyRunMoves(plan, k, pageBudget) {
       else toPg.placements = [p0].concat(toPg.placements || []);                // push down: prepend
       plan.pages[pi].placements = pls.slice(1);
       applied++;
+      _outcome = 'ok';
       break;
     }
+    if ((mv.hits || 1) > 1) {
+      _capped.push(_mvName(mv) + '  -- moved on ' + mv.hits + ' separate passes, replays as ONE step');
+    }
+    if (!_outcome) {
+      _lost.push(_mvName(mv) + '  -- NO PAGE LEADS WITH THIS. now: ' + _whereIsBeat(mv.beat));
+    }
   });
-  _runMovesReport = { replayed: applied, refused: _refused };
+  _runMovesReport = { recorded: recs.length, replayed: applied, refused: _refused, lost: _lost, capped: _capped };
   return applied;
 }
 // ===== READING ORDER -- ONE ENGINE, ONE RULE, EVERY LAYOUT =========================================
@@ -6191,13 +6240,29 @@ function pairedPlanText(packed) {
   // moves. A move that will not fit the fresh pack is dropped, and until now that was invisible.
   // A non-zero refused count means the loop is spending passes re-doing work it keeps losing.
   if (_runMovesReport) {
-    if (!_runMovesReport.refused.length) {
-      L.push('RUN-MOVES: ' + _runMovesReport.replayed + ' replayed, 0 refused. [OK]');
+    var _rm = _runMovesReport;
+    if (_rm.bypassed) {
+      L.push('RUN-MOVES: bypassed (reference pack -- moves are deliberately not replayed here).');
     } else {
-      L.push('!! RUN-MOVES: ' + _runMovesReport.replayed + ' replayed, ' + _runMovesReport.refused.length +
-        ' REFUSED -- accepted by an earlier pass, DROPPED by this re-pack. The AI will see the same'); 
-      L.push('   fault again and propose the same op again. Repeated ops in the log are this.');
-      _runMovesReport.refused.forEach(function (t) { L.push('     ' + t); });
+      var _acct = (_rm.replayed || 0) + (_rm.refused || []).length + (_rm.lost || []).length;
+      var _bad = ((_rm.refused || []).length + (_rm.lost || []).length) > 0;
+      L.push((_bad ? '!! ' : '') + 'RUN-MOVES: recorded ' + (_rm.recorded || 0) + ', replayed ' +
+        (_rm.replayed || 0) + ', refused ' + (_rm.refused || []).length + ', lost ' + (_rm.lost || []).length +
+        ((_acct === (_rm.recorded || 0)) ? '.  [accounts]' : '.  *** DOES NOT ACCOUNT ***'));
+      if ((_rm.refused || []).length) {
+        L.push('   REFUSED -- accepted by an earlier pass, dropped by this re-pack for want of room:');
+        _rm.refused.forEach(function (t) { L.push('     ' + t); });
+      }
+      if ((_rm.capped || []).length) {
+        L.push('   CAPPED AT ONE STEP -- these were moved on more than one pass, but a record stores a');
+        L.push('   direction and not a distance, so only ONE page of that movement is ever replayed:');
+        _rm.capped.forEach(function (t) { L.push('     ' + t); });
+      }
+      if ((_rm.lost || []).length) {
+        L.push('   LOST -- recorded, but this pack has nothing for them to act on. The AI will see the');
+        L.push('   same fault again and propose the same op again; repeated ops in the log are this:');
+        _rm.lost.forEach(function (t) { L.push('     ' + t); });
+      }
     }
     L.push('');
   }
