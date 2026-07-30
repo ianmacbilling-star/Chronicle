@@ -4236,11 +4236,10 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // Cover pages are a SEPARATE artifact (the print order needs its own cover PDF, and the Library
   // listing carries its own cover image), so the published book is interior-only -- same stripping
   // the print interior does via nocover.
-  // v3.0.340 -- A PUBLISHED STORY IS THE WHOLE BOOK. This carried noCover:true, so the library served
-  // a coverless interior -- the reader opens ONE pdf and it opened on the title page. The library tile
-  // has its own cover_url thumbnail, but that is a listing image, not part of the artifact.
-  // Covers are stripped for the PRINT interior only, where Lulu supplies its own cover file and an
-  // interior carrying one is a rejected order. Publishing is not printing.
+  // v3.0.341 -- A PUBLISHED STORY IS THE WHOLE BOOK. This carried noCover:true, so the library served
+  // a coverless interior and a reader opened on the title page. The library tile has its own cover_url,
+  // but that is a listing thumbnail, not part of the artifact -- the reader opens ONE pdf.
+  // Covers are stripped for the PRINT interior only. Publishing is not printing.
   var pageOpts = { publicMode: true, bookTitle: bookTitle };
 
   // Which render the reader chose on the Optimize tab: 'composed' = the optimized (After) book,
@@ -4250,7 +4249,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var _pubSrc = String((req.body && req.body.source) || req.query.source || 'flow');
   var html = null;
   if (_pubSrc === 'composed') {
-    // v3.0.340 -- same rule for the optimized book: the library gets the covers. See above.
+    // v3.0.341 -- same rule for the optimized book: the library gets the covers. See above.
     req.query.publicMode = '1';
     if (bookTitle) req.query.bookTitle = bookTitle;
     var _pubHit = composedCacheGet(req.params.campaignId, req);
@@ -8337,12 +8336,12 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
                      realUsed: (_realF[_pi2] != null ? _realF[_pi2] : null),
                      placements: (pg2.placements || []) };
           });
-          // v3.0.340 -- v3.0.339 shipped without this and every composed dump cried ORDER-BREAK. The
+          // v3.0.341 -- v3.0.339 shipped without this and every composed dump cried ORDER-BREAK. The
           // dumper builds its ordinal map from d.beatOrder; the fill route packs WITHOUT debug, so
           // packed.dbg is null and pairedOrderKey falls back to the raw beat id -- which sorts
-          // synthetic beat 900003 after beat 2 and reads the header/intro scaffolding as backwards on
-          // page 0 of every book. Proven against the reference section of the same bundle, which has
-          // the map and reports 0 breaks on the identical page.
+          // synthetic beat 900003 after beat 2 and reads the session scaffolding as backwards on page 0
+          // of every book. Proven against the reference section of the same bundle, which has the map
+          // and reports 0 breaks on the identical page.
           _dbg2.beatOrder = (beats || []).map(function (bb) { return bb && bb.idx; });
           _dbg2.overflows = (_realF._overflows || []);
           _dbg2.atRisk = [];
@@ -8368,13 +8367,13 @@ router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async functio
 router.post('/save-optimized/:campaignId', requireAuth, async function (req, res) {
   try {
     var campaignId = req.params.campaignId;
-    // v3.0.340 -- KEEP THE COVERS ON THE SAVED BOOK. This set nocover=1, which suppresses BOTH the
-    // front and back cover, so Load Last Optimized File returned a 59-page interior of a 61-page book.
-    // The preview and the print interior exclude covers ON PURPOSE -- Lulu takes the cover as its own
-    // file and an interior carrying one is a rejected order -- but this artifact is neither. It is what
-    // the reader is shown when they come back, and it should be the whole book.
+    // v3.0.341 -- KEEP THE COVERS ON THE SAVED BOOK. This set nocover=1, which suppresses BOTH covers,
+    // so Load Last Optimized File returned a 59-page interior of a 61-page book. The Finalize preview
+    // and the PRINT INTERIOR exclude covers on purpose -- Lulu takes the cover as its own file and an
+    // interior carrying one is a rejected order -- but this artifact is neither. It is what the reader
+    // is handed when they come back, and it should be the whole book.
     // *** IF TD-033 EVER LANDS (persist the optimized PDF for a POD order), THAT PATH MUST STRIP THE
-    // *** COVERS AGAIN, or re-render its interior separately. Do not reuse this buffer for print.
+    // *** COVERS AGAIN, or render its interior separately. Do not reuse this buffer for print.
     req.query.publicMode = '1';
     var bookTitle = (req.body && req.body.bookTitle) || req.query.bookTitle || '';
     // LOOK UP THE CACHE FIRST, with the key the compose actually used. composedCacheKey includes

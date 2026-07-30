@@ -15329,13 +15329,16 @@ function optimizeLogLine(txt, kind) {
 // ends, so a book is protected even if the final fill is slow or fails, and again afterwards if the
 // fill improved it. Both announcing themselves put 'Saved' on screen twice, which reads like a stutter
 // or a bug rather than a belt-and-braces save.
+// v3.0.341 -- RETURNS A PROMISE that resolves TRUE only when a file was actually stored. The caller
+// needs to know, because the pane is redrawn from that file and drawing before it exists shows the
+// previous run's book with no warning.
 function finalizeSaveOptimized(quiet) {
-  if (!state.currentCampaign) return;
+  if (!state.currentCampaign) return Promise.resolve(false);
   try {
     var q = finalizeBookQuery();
     var body = {};
     var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) body.bookTitle = _pt.value.trim();
-    fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
+    return fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
       // SAY SO, EITHER WAY. This used to note only success and swallow every failure, so a 409 from a
@@ -15343,11 +15346,12 @@ function finalizeSaveOptimized(quiet) {
       if (rj.ok && rj.j && rj.j.ok) {
         finalizeShowOptimizedNote(rj.j.at, false);
         if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
-      } else {
-        optimizeLogLine('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
+        return true;
       }
-    }).catch(function (e) { optimizeLogLine('Could not save this version: ' + ((e && e.message) || 'network error'), 'stop'); });
-  } catch (e) {}
+      optimizeLogLine('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
+      return false;
+    }).catch(function (e) { optimizeLogLine('Could not save this version: ' + ((e && e.message) || 'network error'), 'stop'); return false; });
+  } catch (e) { return Promise.resolve(false); }
 }
 // Show the "already optimized" note (either freshly saved, or restored from a previous session).
 function finalizeShowOptimizedNote(at, fromPrevious) {
@@ -15896,21 +15900,29 @@ function _runLayoutAiOptimize() {
           // Save immediately and QUIETLY so the book is protected if the fill is slow or fails, then
           // again after the fill -- and let THAT one speak, since by then it is the finished article.
           finalizeSaveOptimized(true);
-          // v3.0.340 -- SHOW THE BOOK THAT SAVES. The last render of the After pane happens INSIDE the
-          // loop, so the pane held pass 5 output. The fill sweep and the collapse sweep then run and
-          // re-compose, and THAT book is what finalizeSaveOptimized stores, what Load Last Optimized
-          // File returns, and what publishes. On Whispers Beneath the pane showed 63 pages while the
-          // saved book was two pages shorter and, in Ian's words, without any of the issues. A whole
-          // evening went into grading a draft the pipeline had already improved on.
-          // Re-render from the composed cache once the fill is done: no re-pack, no measure, just a
-          // fetch and a rasterise of a body that already exists.
-          finalizeFinalFill().then(function () {
-            finalizeSaveOptimized();
-            try {
-              optimizeLogLine('Showing the finished book -- this is the version that saves.', 'ok');
-              renderPdfInto(composeUrl, 'finalize-after-scroll', false);
-            } catch (e) {}
-          });
+          // v3.0.341 -- SHOW THE BOOK THAT SAVES, BY READING THE SAVED FILE.
+          // The After pane's last draw happens INSIDE the loop, so it held pass 5 output while the
+          // fill sweep and the collapse sweep went on to compose a shorter book -- the one that saves,
+          // publishes and prints. On Whispers the pane showed 63 pages and the saved book was 61.
+          // v3.0.340 tried to fix this by re-rendering composeUrl and that was badly wrong: that URL is
+          // pack-render?compose=1, which is the START-AN-OPTIMIZE endpoint. It charges a token, calls
+          // runGrowsClear + runMovesClear -- wiping the entire record of the run -- then composes a
+          // NATURAL book and overwrites the composed cache with it. It only escaped saving that book
+          // because the save happened to read the cache first.
+          // Draw the stored file instead. No token, no re-pack, nothing cleared -- and because it is
+          // fetched back through the origin proxy, what appears on screen is literally the artifact.
+          finalizeFinalFill()
+            .then(function () { return finalizeSaveOptimized(); })
+            .then(function (saved) {
+              if (!saved || !state.currentCampaign) return;   // nothing stored -- leave the pane alone
+              try {
+                optimizeLogLine('Showing the finished book -- this is the file that saves.', 'ok');
+                var _body = document.getElementById('finalize-after-body'); if (_body) _body.style.display = 'none';
+                var _scroll = document.getElementById('finalize-after-scroll'); if (_scroll) _scroll.style.display = '';
+                renderPdfInto('/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery(),
+                              'finalize-after-scroll', false);
+              } catch (e) {}
+            });
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
