@@ -1546,6 +1546,12 @@ function showView(view) {
 }
 
 function showCampaignSection(section) {
+  // v3.0.350 -- ONE CHOKE POINT. All three Publish entry points route through here:
+  // #camp-nav-publish (Sessions header), the unnamed Publish button on the Characters
+  // header, and goToPublishOptions() from the Session / Preview tab. Gating five shared
+  // DOM elements individually was tried in v3.0.345 and collided with itself.
+  paintPublishLock();
+  if (section === 'novel' && optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
@@ -8764,6 +8770,12 @@ function showView(view) {
 }
 
 function showCampaignSection(section) {
+  // v3.0.350 -- ONE CHOKE POINT. All three Publish entry points route through here:
+  // #camp-nav-publish (Sessions header), the unnamed Publish button on the Characters
+  // header, and goToPublishOptions() from the Session / Preview tab. Gating five shared
+  // DOM elements individually was tried in v3.0.345 and collided with itself.
+  paintPublishLock();
+  if (section === 'novel' && optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
   if (section === 'assets' || section === 'archives') { var _cur = _visibleViewId(); if (_cur && _cur !== 'assets' && _cur !== 'archives') _sectionBackFrom = _cur; }
   // A player can only enter the Graphic Novel if the SM enabled it for this campaign.
   if (section === 'novel' && state.currentCampaign) {
@@ -14708,6 +14720,94 @@ function loadFinalize() {
 // (Before + After side by side, the findings list, the raw log). The toggle is admin-only; a normal
 // user double-clicking the pill does nothing.
 window._optimizeAdminView = false;
+// ===================================================================================
+// v3.0.350 -- OPTIMIZE RUN LOCK ON THE PUBLISH ENTRY POINTS
+// Only one Optimize may run per user at a time, and while one is running the Publish
+// entry points for OTHER campaigns are greyed and answer with a message instead of
+// opening. The campaign being optimized is untouched -- it walks straight in.
+//
+// THREE INDEPENDENT ESCAPE HATCHES, deliberately. v3.0.345 shipped a lock releasable
+// only by the run holding it, across seven hand-placed release points; any path that
+// missed one stranded the user with no way back but a hard refresh. Here:
+//   1. the watchdog interval below releases the lock the moment the loop is no longer
+//      running AND no longer finishing -- nothing has to remember to call release;
+//   2. a heartbeat plus a 10-minute staleness timeout releases it even if the
+//      watchdog itself is throttled (background tab) or cleared;
+//   3. all of this is in memory, so a page load clears it unconditionally.
+// The paint is COSMETIC and the click guard is LOAD-BEARING. A missed paint costs a
+// button that looks live and then explains itself; it cannot cost access.
+var OPTIMIZE_LOCK_MSG = 'Optimize is running on another campaign. You can publish this campaign when it completes.';
+var OPTIMIZE_LOCK_STALE_MS = 10 * 60 * 1000;
+var _optimizeLock = null;   // { cid: String, at: ms } -- in memory only, never persisted
+function optimizeLockActive() {
+  if (!_optimizeLock) return null;
+  if (Date.now() - _optimizeLock.at > OPTIMIZE_LOCK_STALE_MS) { _optimizeLock = null; return null; }
+  return _optimizeLock;
+}
+// TRUE only when a run is live on a DIFFERENT campaign from the one on screen. If we cannot
+// tell which campaign is on screen we report false: an unlocked button is a smaller failure
+// than a user locked out of their own book.
+function optimizeRunIsElsewhere() {
+  var L = optimizeLockActive();
+  if (!L) return false;
+  if (typeof state === 'undefined' || !state.currentCampaign) return false;
+  return String(state.currentCampaign.id) !== String(L.cid);
+}
+function optimizeLockNotice() {
+  try { if (typeof billingToast === 'function') { billingToast(OPTIMIZE_LOCK_MSG, 'info'); return; } } catch (e) {}
+  try { alert(OPTIMIZE_LOCK_MSG); } catch (e) {}
+}
+// Greyed but CLICKABLE. A genuinely disabled button fires no click handler, so the message
+// -- which is the whole point of the feature -- would have to live in a tooltip nobody reads
+// on mobile. Opacity, greyscale and cursor only: display is owned by the novel-nav-btn
+// visibility pass and must not be touched here.
+function paintPublishLock() {
+  try {
+    var locked = optimizeRunIsElsewhere();
+    var els = [], i, nn = document.querySelectorAll('.novel-nav-btn');
+    for (i = 0; i < nn.length; i++) els.push(nn[i]);
+    var sp = document.getElementById('session-all-publish-btn');
+    if (sp) els.push(sp);
+    for (i = 0; i < els.length; i++) {
+      var b = els[i];
+      if (!b) continue;
+      if (b.getAttribute('data-lock-title') === null) b.setAttribute('data-lock-title', b.title || '');
+      if (locked) {
+        b.style.opacity = '0.45'; b.style.filter = 'grayscale(1)'; b.style.cursor = 'not-allowed';
+        b.title = OPTIMIZE_LOCK_MSG;
+      } else {
+        b.style.opacity = ''; b.style.filter = ''; b.style.cursor = '';
+        b.title = b.getAttribute('data-lock-title') || '';
+      }
+    }
+  } catch (e) {}
+}
+function optimizeLockStart(cid) {
+  _optimizeLock = { cid: String(cid), at: Date.now() };
+  try { if (window._optimizeLockTimer) clearInterval(window._optimizeLockTimer); } catch (e) {}
+  window._optimizeLockTimer = setInterval(function () {
+    if (!window._aiLoopRunning && !window._aiFinishing) { optimizeLockStop(); return; }
+    if (_optimizeLock) _optimizeLock.at = Date.now();   // heartbeat
+    paintPublishLock();
+  }, 15000);
+  paintPublishLock();
+}
+function optimizeLockStop() {
+  try { if (window._optimizeLockTimer) clearInterval(window._optimizeLockTimer); } catch (e) {}
+  window._optimizeLockTimer = null;
+  _optimizeLock = null;
+  paintPublishLock();
+}
+// The Session / Preview tab's 'All publishing options' button. It used to run TWO statements
+// inline -- showCampaignSection('novel'); switchNovelTab('sessions') -- and an early return
+// inside the first does nothing about the second, which would have left the novel panes
+// toggled underneath a view that never changed. One named handler, one guard, one return.
+function goToPublishOptions() {
+  if (optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
+  showCampaignSection('novel');
+  switchNovelTab('sessions');
+}
+// ===================================================================================
 function optimizeIsAdmin() { return !!(typeof state !== 'undefined' && state.user && state.user.is_admin); }
 function applyOptimizeViewMode() {
   var admin = optimizeIsAdmin();
@@ -15513,6 +15613,13 @@ function finalizeCancelOptimize() {
 }
 async function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
+  // v3.0.350 -- re-entry guard at the ENTRY. The only _aiLoopRunning check lived inside
+  // runAiOptimizeLoop, which runs after a full pre-loop compose and render, so a second
+  // click cost minutes of real work before being silently dropped.
+  if (window._aiLoopRunning || window._aiFinishing) {
+    if (typeof billingToast === 'function') billingToast('An optimize is already running. Let it finish first.', 'info');
+    return;
+  }
   // A saved book on screen is NOT a starting point. Optimize always re-packs from the campaign's
   // beats with the run stores cleared -- proven by two runs producing byte-identical reference packs
   // -- so the loaded version is replaced, not improved. Say that plainly rather than implying a
@@ -15549,6 +15656,10 @@ function _runLayoutAiOptimize() {
   // view is already correct.
   applyOptimizeViewMode();
   var cid = state.currentCampaign.id;
+  // v3.0.350 -- capture the book query HERE, at the click, alongside cid. finalizeBookQuery()
+  // reads novelLayoutStyle and the custom-opts globals, all of which change when the user
+  // switches campaign, so re-reading it later in the run is the same fault as re-reading cid.
+  var bookQ = finalizeBookQuery();
   var btn = document.getElementById('layoutai-run-btn');
   var status = document.getElementById('layoutai-status');
   var out = document.getElementById('layoutai-results');
@@ -15576,7 +15687,7 @@ function _runLayoutAiOptimize() {
   // Load the deterministic page-packer / composer into the After pane. Synchronous render,
   // no async job, no tokens -- the packer composes the book page by page and returns the PDF,
   // rendered through the same styled shell as the Before pane so it's a true comparison.
-  var composeUrl = '/api/pdf/pack-render/' + cid + '?compose=1' + finalizeBookQuery().replace('?', '&');
+  var composeUrl = '/api/pdf/pack-render/' + cid + '?compose=1' + bookQ.replace('?', '&');
   // Admin easter egg: double-click the After page count to DOWNLOAD a combined diagnostics bundle --
   // the pack-plan dump (fetched fresh) plus this session's AI proposals (JSON) and log, if the loop ran.
   // Lets an admin grab everything from the clean user view without re-running. The dump is always
@@ -15644,8 +15755,18 @@ function _runLayoutAiOptimize() {
       var _reviewRetried = false;   // one retry per run for a transient AI failure
       window._optimizeCapture = { json: [], log: [], dumps: [], applies: [], at: new Date().toISOString(),
                                   t0: Date.now(), endedAt: null, tEnd: null, passTimes: [] };
-      var _cid = state.currentCampaign.id;
-      var _q = finalizeBookQuery();
+      // v3.0.350 -- BIND THE RUN TO THE CLICK, NOT TO WHERE THE USER HAPPENS TO BE NOW.
+      // This is the whole of the wrong-campaign bug. _runLayoutAiOptimize already captures the
+      // right campaign at click time (var cid, above) and composeUrl uses it -- which is why the
+      // pre-loop render always showed the right book. This loop is nested inside that function,
+      // so cid sits in its closure, and it threw it away and re-read state.currentCampaign.id
+      // instead. That read happens on a 150ms timeout AFTER a compose and render that takes
+      // seconds to minutes, so navigating during the render captured the campaign navigated TO.
+      // The v3.0.346 publish guard was correct and never fired because it was fed this value.
+      var _cid = cid;
+      var _q = bookQ;
+      window._optimizeRunCid = String(_cid);   // verifiable from the console during a run
+      optimizeLockStart(_cid);
       // 5, not 4. The loop moves ONE leading placement per page per pass, so a cascade of depth N
       // needs N passes. On The Strangers v3.0.325 pass 4 pulled beat 26's bridge text up onto
       // viewer p.32 and stopped there -- beat 26's picture was the NEXT link, 5.20in against 6.64in
@@ -15899,6 +16020,9 @@ function _runLayoutAiOptimize() {
           // the save still stores a good one.
           // Save immediately and QUIETLY so the book is protected if the fill is slow or fails, then
           // again after the fill -- and let THAT one speak, since by then it is the finished article.
+          // v3.0.350 -- the loop is done but the fill, the save and the redraw are not, and
+          // _aiLoopRunning is already about to clear. Own the lock through that window too.
+          window._aiFinishing = true;
           finalizeSaveOptimized(true);
           // v3.0.341 -- SHOW THE BOOK THAT SAVES, BY READING THE SAVED FILE.
           // The After pane's last draw happens INSIDE the loop, so it held pass 5 output while the
@@ -15922,7 +16046,9 @@ function _runLayoutAiOptimize() {
                 renderPdfInto('/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery(),
                               'finalize-after-scroll', false);
               } catch (e) {}
-            });
+            })
+            .then(function () { window._aiFinishing = false; optimizeLockStop(); },
+                  function () { window._aiFinishing = false; optimizeLockStop(); });
           // Update the Before/After stats readout (next to Optimize, above the After pane) so the true
           // change from the original to the AI-optimized book is visible. The loop's renders already
           // recaptured _finalizeAfterPages / _finalizeAfterFills, so wait for the last render to finish
@@ -15965,10 +16091,12 @@ function _runLayoutAiOptimize() {
 
       iterate(1, null).then(function () {
         window._aiLoopRunning = false;
+        if (!window._aiFinishing) optimizeLockStop();   // v3.0.350 -- cancelled / converged with no finish
         removeLoopBar();
         var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) _cb.style.display = 'none';
       }).catch(function (e) {
         window._aiLoopRunning = false;
+        if (!window._aiFinishing) optimizeLockStop();   // v3.0.350 -- a throw must never strand the lock
         removeLoopBar();
         var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) _cb.style.display = 'none';
         _revLbl.textContent = 'After (optimized)';
