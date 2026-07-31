@@ -5088,7 +5088,7 @@ async function computePairedPack(req, campaignId, packOpts) {
       });
       var real = (_realP[pi] != null) ? _realP[pi] : null;
       _pdbg.pages.push({ page: pi, used: Math.round(est * 100) / 100, realUsed: real,
-        placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), cohesion: (pl.cohesion ? 1 : 0), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null), imageH: (pl.imageH != null ? pl.imageH : null), textH: (pl.textH != null ? pl.textH : null) }; }) });
+        placements: (pg.placements || []).map(function (pl, _ci) { var _rc = (_realP._cells && _realP._cells[pi + ':' + _ci] != null) ? _realP._cells[pi + ':' + _ci] : null; return { kind: pl.kind, beat: pl.beat, part: pl.part || null, scale: (pl.scale != null ? pl.scale : null), cohesion: (pl.cohesion ? 1 : 0), charStart: (pl.charStart != null ? pl.charStart : null), charEnd: (pl.charEnd != null ? pl.charEnd : null), heightIn: (pl.heightIn != null ? pl.heightIn : null), realH: _rc, fullH: (pl.fullH != null ? pl.fullH : null), imageH: (pl.imageH != null ? pl.imageH : null), textH: (pl.textH != null ? pl.textH : null), pageBreak: (pl.pageBreak ? 1 : 0) }; }) });
     });
     _pdbg.overflows = _realP._overflows || [];
     // AT-RISK: a page renders taller than the packer ESTIMATED and is also close enough to the real
@@ -6245,6 +6245,14 @@ function pairedPlanText(packed) {
   L.push('PACK PLAN (paired / Picture Book)  -  ' + ((packed.campaign && packed.campaign.name) || 'campaign'));
   if (decorStripOn()) L.push('*** DECOR_OFF: frames, captions, drop caps and the narrative box are STRIPPED (diagnostic mode) ***');
   L.push('arrange=paired  content-pages=' + pages.length + '  (the PDF also adds front/back matter, so viewer page numbers are higher)');
+  // v3.0.353 -- state the session-break situation up front. A dump that does not say this cannot
+  // be compared against one taken with the option the other way round.
+  try {
+    var _sbN = 0;
+    (pages || []).forEach(function (_p) { if (pairedPageStartsSession(_p)) _sbN++; });
+    L.push('SESSION BREAKS: ' + _sbN + ' page(s) start a session on a fresh page' +
+           (_sbN ? '  (new-page-per-session is ON)' : '  (new-page-per-session off, or a single-session book)'));
+  } catch (e) {}
   // Front matter offset: count the pages the PDF prepends before content, the same way the magazine
   // dumper does, instead of assuming a flat 4. cover (if on) + title (always) + details (always) +
   // cast/characters (if on) + toc (if on). This makes "viewer p.X" EXACT rather than approximate, so
@@ -6366,7 +6374,11 @@ function pairedPlanText(packed) {
   pages.forEach(function (pg, pi) {
     var dp = _byPage[pi] || {};
     var realStr = (dp.realUsed != null) ? ('  REAL ' + dp.realUsed.toFixed(2) + ' (est ' + (dp.used != null ? dp.used.toFixed(2) : '?') + ', ' + ((dp.realUsed - (dp.used || 0)) >= 0 ? '+' : '') + (dp.realUsed - (dp.used || 0)).toFixed(2) + ')') : '';
-    L.push('  PAGE ' + pi + '  (viewer ~p.' + _viewer(pi) + ')  est ' + (dp.used != null ? dp.used.toFixed(2) : '?') + ' / 9.16' + realStr);
+    // v3.0.353 -- mark both ends of a break. SESSION-END is the one worth seeing: its white space
+    // is intentional and no longer counts as under-filled.
+    var _sbHere = pairedPageStartsSession(pg) ? '  [SESSION-START]' : '';
+    var _sbNext = pairedPageStartsSession(pages[pi + 1]) ? '  [SESSION-END -- white space below the break line is intentional]' : '';
+    L.push('  PAGE ' + pi + '  (viewer ~p.' + _viewer(pi) + ')  est ' + (dp.used != null ? dp.used.toFixed(2) : '?') + ' / 9.16' + realStr + _sbHere + _sbNext);
     // Per-placement heights + running cumulative, so an over-budget stack is visible line by line.
     // Prefer the dbg placements (they carry the packer's real heightIn); fall back to plan order.
     var _pls = (dp.placements && dp.placements.length) ? dp.placements : (pg.placements || []);
@@ -6483,6 +6495,13 @@ function pairedPlanText(packed) {
     // 8.2in leaves about an inch of slack, which is roughly three lines -- below that there is no
     // useful move to make anyway, since the smallest thing that can slide is a paragraph.
     if (_rl == null || _rl >= CO_UNDERFULL_AT) return;
+    // v3.0.353 -- A SESSION-END PAGE IS FULL BY DEFINITION. When the user asks each session to
+    // start on a fresh page, the white space below the break line is the feature, not a fault.
+    // Reporting it UNDERFULL invites exactly the op that is illegal here -- pulling the next
+    // session's opening UP across the break -- and spends proposals on work that must be refused.
+    // Content may still be pushed DOWN into this page from earlier in the SAME session; that is a
+    // hint on the page above, not on this one, and it is untouched.
+    if (pairedPageStartsSession((pages || [])[pi + 1])) return;
     var _mine = (pg.placements || []);
     var _head = _mine[0] || null;
     if (!_head) return;
@@ -8219,6 +8238,14 @@ async function finalFillPass(adapter, box, tol) {
 // measured once, and if ANY page comes out over the box the entire sweep is reverted: either it is
 // wholly clean or it did nothing. Every page is composed at overflow:hidden, so trading two half
 // pages for one clipped page would be a silent loss of text -- worse than the white space.
+// v3.0.353 -- THE ONE READER. Every consumer of the session-break rule goes through this rather
+// than re-deriving it, so the rule cannot drift into four slightly different versions the way the
+// reading-order rule did. A page starts a session when its FIRST placement is a section-header
+// carrying the break stamped on it by packPaired.
+function pairedPageStartsSession(pg) {
+  var p0 = ((pg && pg.placements) || [])[0];
+  return !!(p0 && p0.kind === 'section-header' && p0.pageBreak);
+}
 async function collapseThinPairedPages(req, campaignId, plan, beats, pco) {
   var out = { merged: 0, notes: [], revertedAll: false };
   if (!plan || !plan.pages || plan.pages.length < 2) return out;
@@ -8237,7 +8264,10 @@ async function collapseThinPairedPages(req, campaignId, plan, beats, pco) {
     if (!(pg.placements || []).length || h > CO_COLLAPSE_THIN_IN) { i++; continue; }
     var moved = false;
     var prev = plan.pages[i - 1];
-    if (_used(prev) + h <= _cap) {
+    // v3.0.353 -- a page the user asked to start on a fresh page must never be folded back into
+    // the session before it. It MAY still merge DOWN (below): that keeps the header page-leading
+    // and stays inside its own session, so the break survives and the book still shortens.
+    if (!pairedPageStartsSession(pg) && _used(prev) + h <= _cap) {
       var _pSave = (prev.placements || []).slice();
       prev.placements = (prev.placements || []).concat(pg.placements);
       var _rm = plan.pages.splice(i, 1);
@@ -8246,7 +8276,9 @@ async function collapseThinPairedPages(req, campaignId, plan, beats, pco) {
     }
     if (!moved && (i + 1) < plan.pages.length) {
       var next = plan.pages[i + 1];
-      if (_used(next) + h <= _cap) {
+      // v3.0.353 -- and nothing may be pushed down INTO a session opening, which would put the
+      // previous session's tail on the new session's first page.
+      if (!pairedPageStartsSession(next) && _used(next) + h <= _cap) {
         var _nSave = (next.placements || []).slice();
         next.placements = pg.placements.concat(next.placements || []);
         var _rm2 = plan.pages.splice(i, 1);

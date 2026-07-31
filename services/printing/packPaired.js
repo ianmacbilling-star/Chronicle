@@ -201,9 +201,15 @@ function packPaired(beats, opts) {
         // must never be a page break between a session divider and its title picture.
         var needWith = hH + (b.nextImageH || 0) * 0.72;
         if (needWith > remaining() + 1e-6 && cur().usedIn > 1e-6) newPage();
-        place('section-header', b.idx, hH);
+        // v3.0.353 -- STAMP THE BREAK ONTO THE PLACEMENT. The rule lives on the BEAT (b.pageBreak,
+        // set in assembleNovelHtml and carried through computePairedPack), which is the right home:
+        // beats survive the re-pack that happens on every optimize pass, pages do not. But place()
+        // only ever copied {beat, kind, heightIn}, so the break never reached the PLAN -- and the
+        // collapse sweep, the AI hints and the dump all read the plan. They were not ignoring the
+        // rule; they could not see it. One stamp, one source of truth, every consumer reads it.
+        place('section-header', b.idx, hH, { pageBreak: !!b.pageBreak });
       } else {
-        cur().placements.push({ beat: b.idx, kind: 'section-header', heightIn: 0 });
+        cur().placements.push({ beat: b.idx, kind: 'section-header', heightIn: 0, pageBreak: !!b.pageBreak });
       }
       return;
     }
