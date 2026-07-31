@@ -14689,7 +14689,10 @@ function loadFinalize() {
   // finalizeClearScanState empties finalize-after-scroll. Deliberately NOT fixed by making the URL
   // comparison fuzzy -- it is load-bearing for a real title change, and a stale Before pane would be
   // the worse bug. This returns early instead, so a run can only ever be left alone.
-  if (window._aiLoopRunning) return;
+  // v3.0.352 -- _aiLoopRunning is false during the PRE-LOOP compose and render, and false
+  // again through the fill/save/finish, so the v3.0.334 guard had a hole at each end of a
+  // run. Cover the whole run with the states .351 already introduced.
+  if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) return;
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
@@ -14807,10 +14810,22 @@ function optimizeLockStart(cid) {
   paintPublishLock();
 }
 function optimizeLockStop() {
+  var _ranCid = _optimizeLock ? _optimizeLock.cid : null;
   try { if (window._optimizeLockTimer) clearInterval(window._optimizeLockTimer); } catch (e) {}
   window._optimizeLockTimer = null;
   _optimizeLock = null;
   paintPublishLock();
+  // v3.0.352 -- DEFERRED CLEANUP. The campaign-switch teardown was SKIPPED while the run was
+  // live, so if the user is standing in a different campaign now, the global panes still hold
+  // the book that just finished. Pay the debt here, forced past both the in-flight guard and
+  // the _last check, because _last was deliberately left pointing at the running campaign.
+  try {
+    if (_ranCid && typeof state !== 'undefined' && state.currentCampaign &&
+        String(state.currentCampaign.id) !== String(_ranCid) &&
+        typeof resetPublishForCampaignSwitch === 'function') {
+      resetPublishForCampaignSwitch(true);
+    }
+  } catch (e) {}
 }
 // The Session / Preview tab's 'All publishing options' button. It used to run TWO statements
 // inline -- showCampaignSection('novel'); switchNovelTab('sessions') -- and an early return
@@ -14911,6 +14926,11 @@ function optimizeProgressDone() {
 // pane itself is being emptied: no PDF on screen, no log.
 function resetOptimizeLogForSwitch(force) {
   try {
+    // v3.0.352 -- never destroy a live run's log panel or its capture bundle. Every consumer
+    // of window._optimizeCapture is null-guarded, so losing it failed silently and only
+    // showed up when the diagnostics download came back describing nothing. force still
+    // wins: it means the user explicitly asked for it (Clear Loaded Version).
+    if (!force && (window._aiLoopRunning || window._aiPreloop || window._aiFinishing)) return;
     var _cid = (typeof state !== 'undefined' && state.currentCampaign) ? state.currentCampaign.id : null;
     var _fid = (typeof state !== 'undefined' && state.currentForkId) ? state.currentForkId : 'canonical';
     var key = String(_cid) + '|' + String(_fid);
@@ -16631,11 +16651,26 @@ function finalizeAttachSync() {
 // ---- Reset the publish/Finalize page when switching campaigns ----
 // prepSyncTitle only fills the title when empty, and the Layout AI panels cache the
 // prior campaign, so switching campaigns must clear these before the novel tab reloads.
-function resetPublishForCampaignSwitch() {
+function resetPublishForCampaignSwitch(force) {
   var _cid = state.currentCampaign ? state.currentCampaign.id : null;
-  if (resetPublishForCampaignSwitch._last === _cid) return;   // already reset for this campaign
+  // v3.0.352 -- A RUN IN FLIGHT OWNS BOTH PANES AND THE LOG. This is the same rule loadFinalize
+  // was given in v3.0.334, applied to the other teardown. selectCampaign calls this DIRECTLY on
+  // every campaign switch (v3.0.328), which is why clicking a different campaign mid-run emptied
+  // finalize-after-scroll, removed the log panel, and nulled window._optimizeCapture -- the
+  // diagnostics bundle for the run that was still going. Tab-hopping and the campaign list were
+  // both fine because neither reaches this line: the first never calls selectCampaign, and the
+  // second re-enters the SAME campaign, so the _last check below returns first.
+  //
+  // Leaving the panes alone is only safe because the publish lock (v3.0.350/.351) stops the user
+  // reaching another campaign's Publish page, so the stale book has nowhere to be seen. THE TWO
+  // CHANGES DEPEND ON EACH OTHER -- do not revert the lock and leave this in place.
+  //
+  // _last is deliberately NOT updated on this path: the reset is still owed, and optimizeLockStop
+  // forces it when the run ends if the user has moved on by then.
+  if (!force && (window._aiLoopRunning || window._aiPreloop || window._aiFinishing)) return;
+  if (!force && resetPublishForCampaignSwitch._last === _cid) return;   // already reset for this campaign
   resetPublishForCampaignSwitch._last = _cid;
-  resetOptimizeLogForSwitch();   // v3.0.328: the optimize log describes a book we are leaving
+  resetOptimizeLogForSwitch(force);   // v3.0.328: the optimize log describes a book we are leaving
   _finalizeSessInc = null; _finalizeSessTotal = null;   // v3.0.333: session counts belong to the old book
   var t = document.getElementById('prep-title'); if (t) t.value = '';
   var pv = document.getElementById('novel-preview-iframe'); if (pv) pv.src = '';   // clear cached Preview & Export
