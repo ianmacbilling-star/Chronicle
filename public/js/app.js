@@ -14782,11 +14782,25 @@ function paintPublishLock() {
     }
   } catch (e) {}
 }
+// v3.0.351 -- a lock held only by the PRE-LOOP phase. Any path that abandons the run before
+// the loop takes ownership calls this. If the loop already owns the lock it does nothing, so
+// it is safe to call from anywhere.
+var OPTIMIZE_PRELOOP_MAX_MS = 15 * 60 * 1000;
+function optimizePreloopRelease() {
+  if (!window._aiPreloop) return;
+  window._aiPreloop = false;
+  if (!window._aiLoopRunning && !window._aiFinishing) optimizeLockStop();
+}
 function optimizeLockStart(cid) {
   _optimizeLock = { cid: String(cid), at: Date.now() };
   try { if (window._optimizeLockTimer) clearInterval(window._optimizeLockTimer); } catch (e) {}
   window._optimizeLockTimer = setInterval(function () {
-    if (!window._aiLoopRunning && !window._aiFinishing) { optimizeLockStop(); return; }
+    // v3.0.351 -- the pre-loop phase owns the lock too, but on a BOUNDED hold. A compose that
+    // never returns must not keep the lock alive forever on its heartbeat.
+    if (window._aiPreloop && (Date.now() - (window._aiPreloopAt || 0)) > OPTIMIZE_PRELOOP_MAX_MS) {
+      window._aiPreloop = false;
+    }
+    if (!window._aiPreloop && !window._aiLoopRunning && !window._aiFinishing) { optimizeLockStop(); return; }
     if (_optimizeLock) _optimizeLock.at = Date.now();   // heartbeat
     paintPublishLock();
   }, 15000);
@@ -15660,6 +15674,15 @@ function _runLayoutAiOptimize() {
   // reads novelLayoutStyle and the custom-opts globals, all of which change when the user
   // switches campaign, so re-reading it later in the run is the same fault as re-reading cid.
   var bookQ = finalizeBookQuery();
+  // v3.0.351 -- HOLD THE LOCK FROM THE CLICK, NOT FROM THE LOOP.
+  // v3.0.350 called optimizeLockStart inside runAiOptimizeLoop, which does not fire until the
+  // pre-loop compose and render have finished -- seconds to minutes, and precisely the window
+  // in which a user navigates away. Confirmed in the wild on .350: Publish on another campaign
+  // was open early in a run and correctly greyed once the passes began. Same mistake as the
+  // original bug, one layer up: the run identity was bound to the click and the lock was not.
+  window._aiPreloop = true;
+  window._aiPreloopAt = Date.now();
+  optimizeLockStart(cid);
   var btn = document.getElementById('layoutai-run-btn');
   var status = document.getElementById('layoutai-status');
   var out = document.getElementById('layoutai-results');
@@ -15766,6 +15789,7 @@ function _runLayoutAiOptimize() {
       var _cid = cid;
       var _q = bookQ;
       window._optimizeRunCid = String(_cid);   // verifiable from the console during a run
+      window._aiPreloop = false;   // v3.0.351 -- the loop owns the lock from here; re-assert it
       optimizeLockStart(_cid);
       // 5, not 4. The loop moves ONE leading placement per page per pass, so a cascade of depth N
       // needs N passes. On The Strangers v3.0.325 pass 4 pulled beat 26's bridge text up onto
@@ -16125,7 +16149,9 @@ function _runLayoutAiOptimize() {
         finish();
         var cnt = _finalizeAfterPages;
         var bp = _finalizeBeforePages || document.querySelectorAll('#finalize-before-scroll canvas').length;
-        if (!cnt) return;   // render failed -- leave the readout blank rather than print a wrong delta
+        // v3.0.351 -- the render failed, so the loop will never fire and the pre-loop lock
+        // would sit there until the staleness timeout. Release it on the way out.
+        if (!cnt) { optimizePreloopRelease(); return; }   // leave the readout blank rather than print a wrong delta
         var _dEl = document.getElementById('layoutai-delta');
         if (_dEl) {
           var delta = bp - cnt;
@@ -16160,9 +16186,16 @@ function _runLayoutAiOptimize() {
             optimizeProgress('Stopped before optimizing &mdash; showing the un-optimized layout.', { done: true });
             var _cb0 = document.getElementById('layoutai-cancel-btn'); if (_cb0) _cb0.style.display = 'none';
             var _rb0 = document.getElementById('layoutai-run-btn'); if (_rb0) { _rb0.disabled = false; _rb0.textContent = 'Optimize layout'; _rb0.classList.add('has-token'); }
+            optimizePreloopRelease();   // v3.0.351 -- cancelled before the loop ever started
           } else if (typeof _finalizeRunAiLoop === 'function' && !window._aiLoopRunning) {
             optimizeProgress('Arranging the pages for the best fit&hellip;', { done: true });
             setTimeout(function () { try { if (!window._optimizeCancelled) _finalizeRunAiLoop(); } catch (e) {} }, 150);
+          } else {
+            // v3.0.351 -- NO LOOP WILL RUN. runAiOptimizeLoop is declared inside the
+            // is_admin block, so _finalizeRunAiLoop is null for every non-admin and this
+            // branch is the normal end of their Optimize. Without this release they would
+            // hold the lock until the staleness timeout for a run that already finished.
+            optimizePreloopRelease();
           }
         } catch (e) {}
     }
@@ -16172,7 +16205,7 @@ function _runLayoutAiOptimize() {
   // Long stop only. If the render really did finish, still write the stats rather than discarding them.
   setTimeout(function () {
     if (_finalizeAfterDone) { _writeOptimizeStats(); return; }
-    clearInterval(_composeWatch); _finalizeAfterOnDone = null; finish();
+    clearInterval(_composeWatch); _finalizeAfterOnDone = null; optimizePreloopRelease(); finish();
   }, 900000);
 }
 // DIAGNOSTIC (temporary): draw a line on the preview canvas at the scan's detected content
