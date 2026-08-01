@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const { getDb } = require('../database/db');
+const { getDb, getAppSettingInt } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
@@ -340,8 +340,16 @@ router.get('/me', async function(req, res) {
     const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
     const isAdmin = adminEmails.includes(user.email);
 
+    // v3.0.358 -- the Optimize estimate is computed client-side and has to divide by the same
+    // cents-per-loop the SERVER will charge with, or the number quoted drifts from the number
+    // billed the moment an admin changes the dashboard field. Read-only, not sensitive, and
+    // every user needs it -- the admin settings route is admin-gated so it cannot serve this.
+    let _layoutLoopCents = 8;
+    try { const _c = await getAppSettingInt('layout_loop_cost_cents', 8); if (Number.isFinite(_c) && _c >= 1) _layoutLoopCents = _c; } catch (e) {}
+
     res.json({
       authenticated: true,
+      layoutLoopCostCents: _layoutLoopCents,
       name: user.name,
       email: user.email,
       id: user.id,

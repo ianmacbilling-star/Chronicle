@@ -992,6 +992,8 @@ function checkAuth() {
       if (libModBox) libModBox.style.display = data.is_admin ? 'block' : 'none';
       var navSettingsItem = document.getElementById('nav-settings-item');
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
+      if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')
@@ -8655,6 +8657,8 @@ function checkAuth() {
       if (libModBox) libModBox.style.display = data.is_admin ? 'block' : 'none';
       var navSettingsItem = document.getElementById('nav-settings-item');
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
+      if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
 
       // Load saved API key into settings field
       fetch('/api/auth/apikey')
@@ -15644,8 +15648,24 @@ function finalizeOptimizeEstimate() {
     ? customOpts
     : (typeof CUSTOM_LAYOUT_DEFAULTS !== 'undefined' ? CUSTOM_LAYOUT_DEFAULTS : {});
   var _arr = o.arrange || 'paired';
-  var perLoop = (_arr === 'magazine' || _arr === 'gazette') ? 2 : 1;
-  return 1 + (5 * perLoop);
+  // v3.0.358 -- SCALE WITH THE BOOK. v3.0.357 returned a flat 6 or 11 regardless of size, so a
+  // 12-page book and a 250-page book quoted the same number. The AI's cost tracks the DUMP, and
+  // the dump scales with pages -- measured across all seven diagnostics bundles of 2026-07-31/08-01:
+  //   paired   1217-1287 chars/page (mean 1241)
+  //   magazine 2480-2842 chars/page (mean 2625)
+  // Magazine is ~2.1x paired for the same book: band structure, split cells, per-cell markers.
+  // The print cap (max_pages_per_print, 400 on prod) does NOT gate Optimize, so a 400-page book
+  // can reach here. NO CAP is applied -- Ian: a big book should honestly quote a big number rather
+  // than under-promise and surprise someone at the till.
+  var charsPerPage = (_arr === 'magazine' || _arr === 'gazette') ? 2842 : 1287;   // TOP of the measured range
+  var CHARS_PER_AI_TOKEN = 3.5;   // structured/numeric text tokenizes worse than prose; 4.0 was optimistic
+  var OUT_TOKENS = 2000;          // the ops array; the API cap is 4000
+  var IN_RATE = 3.00, OUT_RATE = 15.00;   // Sonnet 4.6, $/MTok -- mirrors routes/pdf.js
+  var cents = (typeof window !== 'undefined' && window._layoutLoopCostCents) ? window._layoutLoopCostCents : 8;
+  var inTok = (p * charsPerPage) / CHARS_PER_AI_TOKEN;
+  var usdPerLoop = ((inTok * IN_RATE) + (OUT_TOKENS * OUT_RATE)) / 1e6;
+  var perLoop = Math.max(1, Math.ceil(usdPerLoop / (cents / 100)));
+  return 1 + (5 * perLoop);   // 1 composer/packer + up to 5 AI passes
 }
 // Reflect the estimate on the button badge once we know the page count.
 function finalizeUpdateEstimateBadge() {
@@ -15982,17 +16002,18 @@ function _runLayoutAiOptimize() {
                 delete j.dump;
               }
             } catch (e) {}
-            // v3.0.356 -- surface the arithmetic behind this pass's charge. Ian: "I'd like the
-            // calculation written into the log each time a token deduction is made." The server
-            // also writes it to debug_logs; this copy is the one the user actually watches, and it
-            // is what will settle whether the estimate's chars-per-token assumption was right.
+            // v3.0.358 -- DIAGNOSTICS ONLY. v3.0.356 sent this through optimizeLogLine, which renders
+            // into the progress list the USER watches -- Ian does not want per-pass costs shown there.
+            // Pushing straight into _optimizeCapture.log keeps it in the downloadable bundle and out
+            // of the UI. The server writes the same arithmetic to debug_logs independently, so the
+            // charge stays auditable from two places even if the bundle is never pulled.
             try {
-              if (j && j.charge && j.charge.tokens != null) {
-                optimizeLogLine('Pass ' + roundNum + ' cost: ' + (j.charge.inTokens || 0).toLocaleString() + ' in + ' +
+              if (j && j.charge && j.charge.tokens != null && window._optimizeCapture && window._optimizeCapture.log) {
+                window._optimizeCapture.log.push('Pass ' + roundNum + ' cost: ' + (j.charge.inTokens || 0).toLocaleString() + ' in + ' +
                   (j.charge.outTokens || 0).toLocaleString() + ' out = $' + Number(j.charge.usd || 0).toFixed(4) +
                   ' / $' + Number(j.charge.rateUsd || 0).toFixed(2) + ' = ' + j.charge.tokens +
                   ' token' + (j.charge.tokens === 1 ? '' : 's') +
-                  (j.charge.shortfall ? ('  (balance ran out -- ' + j.charge.spent + ' of ' + j.charge.tokens + ' charged)') : ''), 'ok');
+                  (j.charge.shortfall ? ('  (balance ran out -- ' + j.charge.spent + ' of ' + j.charge.tokens + ' charged)') : ''));
               }
             } catch (e) {}
             showPassJson(roundNum, j);   // surface the raw proposals in the side tab
