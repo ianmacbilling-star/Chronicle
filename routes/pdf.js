@@ -7259,7 +7259,12 @@ function _parseOpsArray(raw) {
   return objs;
 }
 
-router.get('/layout-review/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+// v3.0.355 -- NO ADMIN GATE. The layout process is identical for every user; only the debug
+// easter eggs (pack-debug, layout-reset) stay admin-only. The token is charged in pack-render,
+// which never had a gate, so a non-admin was already paying for a run this route refused to
+// finish. Campaign ownership is scoped inside computePairedPack, the same way the ungated
+// pack-render route has always relied on -- removing requireAdmin opens no new surface.
+router.get('/layout-review/:campaignId', requireAuth, async function (req, res) {
   try {
     var key = process.env.ANTHROPIC_API_KEY;
     if (!key) return res.status(500).json({ error: 'Layout review is not configured (no ANTHROPIC_API_KEY).' });
@@ -7477,7 +7482,12 @@ router.post('/layout-apply-preview/:campaignId', requireAuth, requireAdmin, asyn
 // SAFETY: every kept op is confirmed by a REAL re-measure. An op that would push its page over the box
 // is rejected and rolled back, so the applied book can never clip. Admin-only. Charges 1 token (the
 // re-measures + render). Paired (Picture Book) only for now.
-router.post('/layout-apply/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+// v3.0.355 -- NO ADMIN GATE. The layout process is identical for every user; only the debug
+// easter eggs (pack-debug, layout-reset) stay admin-only. The token is charged in pack-render,
+// which never had a gate, so a non-admin was already paying for a run this route refused to
+// finish. Campaign ownership is scoped inside computePairedPack, the same way the ungated
+// pack-render route has always relied on -- removing requireAdmin opens no new surface.
+router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) {
   try {
     var ops = (req.body && Array.isArray(req.body.ops)) ? req.body.ops : null;
     if (!ops) return res.status(400).json({ error: 'POST a JSON body { "ops": [ ... ] }.' });
@@ -8326,7 +8336,12 @@ async function collapseThinPairedPages(req, campaignId, plan, beats, pco) {
 }
 // Run the shared final fill over a Picture Book. Called once, after the loop has converged.
 // The adapter is the ONLY paired-specific part; Magazine supplies its own and reuses everything else.
-router.post('/layout-fill/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+// v3.0.355 -- NO ADMIN GATE. The layout process is identical for every user; only the debug
+// easter eggs (pack-debug, layout-reset) stay admin-only. The token is charged in pack-render,
+// which never had a gate, so a non-admin was already paying for a run this route refused to
+// finish. Campaign ownership is scoped inside computePairedPack, the same way the ungated
+// pack-render route has always relied on -- removing requireAdmin opens no new surface.
+router.post('/layout-fill/:campaignId', requireAuth, async function (req, res) {
   try {
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     if (_cco.arrange !== 'paired') return res.json({ ok: true, skipped: 'only the paired layout is wired up so far', grown: 0 });

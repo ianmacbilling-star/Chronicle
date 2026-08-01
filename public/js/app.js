@@ -15772,9 +15772,22 @@ function _runLayoutAiOptimize() {
         .catch(function (e) { _befLbl.textContent = _txt0; alert('Reset failed: ' + ((e && e.message) || e)); });
     };
   }
-  if (_revLbl && state.user && state.user.is_admin) {
-    _revLbl.style.cursor = 'pointer';
-    _revLbl.title = 'Double-click: AI layout review (admin, 1 token)';
+  // v3.0.355 -- THE LAYOUT PROCESS IS IDENTICAL FOR EVERY USER.
+  // Ian, 2026-07-31: "The entire layout process should be the same for Admin vs Non Admin... the
+  // only difference is an Admin can hit some of those debug easter eggs... Same token deductions,
+  // same pdf at the end, saved."
+  // This block held runAiOptimizeLoop, the _finalizeRunAiLoop assignment AND both
+  // finalizeSaveOptimized call sites. So a non-admin was charged at pack-render -- which has no
+  // admin gate and spends Math.max(1, ceil(pages/10)) -- and then got no AI passes, no final fill,
+  // and NOTHING SAVED: 'Load Last Optimized File' had nothing to load, and the book was gone on
+  // reload. They paid the same and kept less.
+  // The double-click affordance stays admin-only. It is an easter egg, and unlike the automatic
+  // path it re-enters the loop without going back through pack-render, so it does not charge.
+  if (_revLbl) {
+    if (optimizeIsAdmin()) {
+      _revLbl.style.cursor = 'pointer';
+      _revLbl.title = 'Double-click: AI layout review (admin, 1 token)';
+    }
     // The AI optimize loop, extracted so it can be fired both by the manual double-click AND
     // automatically right after Optimize finishes rendering the After pane (one-click flow).
     function runAiOptimizeLoop() {
@@ -16147,7 +16160,7 @@ function _runLayoutAiOptimize() {
         alert('AI optimize failed: ' + ((e && e.message) || e));
       });
     }
-    _revLbl.ondblclick = runAiOptimizeLoop;   // manual trigger still available
+    if (optimizeIsAdmin()) _revLbl.ondblclick = runAiOptimizeLoop;   // v3.0.355 -- admin easter egg only; the automatic path below is what every user gets
     _finalizeRunAiLoop = runAiOptimizeLoop;    // Optimize completion fires this automatically (one-click)
   }
   var afterBody = document.getElementById('finalize-after-body');
