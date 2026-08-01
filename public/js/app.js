@@ -16016,6 +16016,13 @@ function _runLayoutAiOptimize() {
                   (j.charge.shortfall ? ('  (balance ran out -- ' + j.charge.spent + ' of ' + j.charge.tokens + ' charged)') : ''));
               }
             } catch (e) {}
+            // v3.0.359 -- MOVE THE BALANCE AS THE RUN SPENDS. The only refresh in the whole optimize
+            // path fired once, right after the pre-loop pack-render -- written when a run cost exactly
+            // one token, and its comment still said 'the spent token', singular. Since v3.0.356 each
+            // AI pass charges too, so the number froze at the composer's 1 and stayed there for the
+            // rest of the run. Verified 2026-08-01: Gnomes magazine read 160 throughout and 156 after
+            // a reload (1 composer + 2 passes x 2). The charge was always correct; only the display lied.
+            try { if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); } catch (e) {}
             showPassJson(roundNum, j);   // surface the raw proposals in the side tab
             var _ops = (j && j.ops) || [];
             if (!_ops.length) {
@@ -16261,7 +16268,7 @@ function _runLayoutAiOptimize() {
           }
           _dEl.innerHTML = _html;
         }
-        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // reflect the spent token
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.0.359 -- reflect the composer/packer token; each AI pass refreshes again as it is charged
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // the optimized choice is now available
         try {
           var _vEl = document.getElementById('pub-pick-verdict');
