@@ -116,6 +116,18 @@ function lmMeta(m) {
 function lmProminence(m) { var n = Number(lmMeta(m).prominence); return (n >= 1 && n <= 5) ? Math.round(n) : 3; }
 // Three-tier size from prominence: Minimize (1-2) / Default (3) / Maximize (4-5).
 function lmSizeTier(m) { var p = lmProminence(m); return p >= 4 ? 'max' : (p <= 2 ? 'min' : 'def'); }
+// v3.0.366 -- HALF THE GIVE FOR A PICTURE THE USER MARKED MAXIMIZE.
+// Ian, 2026-08-01: "whatever the floor is for a particular picture, half it for pictures of high
+// prominence. So if it could shrink by 50 percent, only allow it to shrink by 25 percent."
+// Prominence is the ONE attribute where the user's intent is stated outright, so the automatic
+// shrink paths should defer to it rather than silently overrule it -- but not refuse entirely,
+// because a page that cannot fit its picture strands white instead.
+// allowedShrink = 1 - floor; halve it; floor' = 1 - (1 - floor)/2 = (1 + floor)/2.
+//   gap-fit    0.50 -> 0.75      collapse (feature) 0.72 -> 0.86      collapse (other) 0.65 -> 0.83
+function mzShrinkFloor(base, band) {
+  if (!band || !band.sMaxProm) return base;
+  return Math.min(0.98, (1 + base) / 2);
+}
 function lmFocal(m) { var f = lmMeta(m).focal; return (['center', 'top', 'bottom', 'left', 'right'].indexOf(f) >= 0) ? f : 'center'; }
 function lmCropSafe(m) { return lmMeta(m).crop_safe === false ? false : true; }
 function lmGroupBreak(m) { return lmMeta(m).group_break === true; }
@@ -2089,6 +2101,7 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
       // v3.0.363 -- a float is capped by the COLUMN it shares with text, not by cropping. See
       // cgFloatCropSafeMaxMul. Every other band kind keeps the feature rule unchanged.
       momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFloatCropSafeMaxMul(m, opts, small),
+      sMaxProm: (lmSizeTier(m) === 'max'),   // v3.0.366 -- see mzShrinkFloor
       regrow: function (mm) { return cgFlowFloat(m, opts, narr, sideLeft, small, mm); },
       remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
     band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
@@ -2156,6 +2169,7 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'wide', html: cgFlowWide(m, opts, narr, sideLeft, mul),
       momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFeatureCropSafeMaxMul(m, opts),
+      sMaxProm: (lmSizeTier(m) === 'max'),   // v3.0.366 -- prominence 4-5: the shrink paths give it half the give
       regrow: function (mm) { return cgFlowWide(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     var _aspW = Math.max(0.3, momentAspect(m));
@@ -2178,6 +2192,7 @@ function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'feature', html: cgFlowFeature(m, opts, narr, sideLeft, mul),
       momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFeatureCropSafeMaxMul(m, opts),
+      sMaxProm: (lmSizeTier(m) === 'max'),   // v3.0.366 -- prominence 4-5: the shrink paths give it half the give
       regrow: function (mm) { return cgFlowFeature(m, opts, narr, sideLeft, mm); },
       remeta: function (mm) { return build(mm); } };
     band.sImgH = mul * cgFeatureImgH(m, opts);
@@ -5986,7 +6001,7 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
     if (!band.sImgH || band.sImgH < h - 0.35) return;   // text extends below the image -> text-dominated, leave to the splitter
     if (h <= slack + 1e-6) return;                       // already fits (the packer would have placed it here)
     var mul = (slack - 0.1) / band.sImgH;
-    var _pfloor = (band.kind === 'feature') ? 0.72 : 0.65;   // collapse-to-fit: let a near-fitting image give a little to drop into the gap (features stay a touch bigger)
+    var _pfloor = mzShrinkFloor((band.kind === 'feature') ? 0.72 : 0.65, band);   // v3.0.366 -- Maximize gets half the give   // collapse-to-fit: let a near-fitting image give a little to drop into the gap (features stay a touch bigger)
     if (mul >= _pfloor && mul < 0.98) grow[nbi] = Math.round(mul * 100) / 100;   // pull it up onto this page
   });
 
@@ -6007,11 +6022,18 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
     if (!band || !band.remeta || !band.stext || !band.simg || grow[nbi]) return;   // a splittable FLOAT (image + prose), not already sized
     var full = bandH[nbi] || 0;
     if (full <= slack + 1e-6) return;                              // already fits whole -> packer would place it here
+    // v3.0.366 -- this gate's own comment says 'a splittable FLOAT', but it never checked the kind:
+    // remeta + stext + simg are all set by mzFeatureBand too, so a MAXIMIZE feature fell straight
+    // through it. For ALL the Ages band 21 ('Leap Through the Portal!', prominence max, portrait)
+    // should render 6.00in tall and rendered 3.18in -- mul 0.53, inside the 0.50 gap-fit floor and
+    // far below the 0.72 a feature gets everywhere else. It happens at PACK time, so it is baked
+    // into the reference pack and nothing downstream can undo it.
+    var _gfFloor = mzShrinkFloor(MZ_GAPFIT_FLOOR, band);
     if (band.sImgH <= slack - MZ_SPLIT_PAD - 0.7) return;         // normal splitter already cuts this into the gap (line fits below the image) -> no shrink
     var targetImgH = slack - MZ_SPLIT_PAD - 0.5;                  // shrink so image + a whole cut line clear the gap (window >= one line)
     if (targetImgH < 1.2) return;                                 // gap too small to hold a legible image + text
     var mul = targetImgH / band.sImgH;
-    if (mul >= MZ_GAPFIT_FLOOR && mul < 0.98) { grow[nbi] = Math.round(mul * 100) / 100; splitAllow[nbi] = true; }
+    if (mul >= _gfFloor && mul < 0.98) { grow[nbi] = Math.round(mul * 100) / 100; splitAllow[nbi] = true; }
   });
   }   // end de-widow / grow-to-fill / gap-fit (skipped for Gazette; grow stays empty so Pass 2 self-skips)
 
