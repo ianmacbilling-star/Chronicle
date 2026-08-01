@@ -15749,6 +15749,7 @@ function _runLayoutAiOptimize() {
   // original bug, one layer up: the run identity was bound to the click and the lock was not.
   window._aiPreloop = true;
   window._aiPreloopAt = Date.now();
+  window._optimizeTokensSpent = 0;   // v3.0.360 -- running total for this run, reset at the click
   optimizeLockStart(cid);
   var btn = document.getElementById('layoutai-run-btn');
   var status = document.getElementById('layoutai-status');
@@ -16022,6 +16023,9 @@ function _runLayoutAiOptimize() {
             // AI pass charges too, so the number froze at the composer's 1 and stayed there for the
             // rest of the run. Verified 2026-08-01: Gnomes magazine read 160 throughout and 156 after
             // a reload (1 composer + 2 passes x 2). The charge was always correct; only the display lied.
+            try {
+              if (j && j.charge && j.charge.spent != null) window._optimizeTokensSpent = (window._optimizeTokensSpent || 0) + j.charge.spent;
+            } catch (e) {}   // v3.0.360 -- accumulate what was ACTUALLY spent, not what was owed
             try { if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); } catch (e) {}
             showPassJson(roundNum, j);   // surface the raw proposals in the side tab
             var _ops = (j && j.ops) || [];
@@ -16269,6 +16273,17 @@ function _runLayoutAiOptimize() {
           _dEl.innerHTML = _html;
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.0.359 -- reflect the composer/packer token; each AI pass refreshes again as it is charged
+        // v3.0.360 -- close the run by stating what it cost. Ian: "at the bottom of the log the user
+        // sees and in the dump... put actual tokens deducted." This is the ACTUAL total, summed from
+        // the composer header and each pass's `spent` (not `tokens` -- if a balance ran out mid-run
+        // the two differ, and the user should be told what left their account). The per-pass
+        // arithmetic stays diagnostics-only; only this total is shown.
+        try {
+          var _tot = window._optimizeTokensSpent || 0;
+          if (_tot > 0 && typeof optimizeLogLine === 'function') {
+            optimizeLogLine('Tokens used for this optimization: ' + _tot + '.', 'ok');
+          }
+        } catch (e) {}
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // the optimized choice is now available
         try {
           var _vEl = document.getElementById('pub-pick-verdict');
@@ -16616,6 +16631,12 @@ function renderPdfInto(url, containerId, isBefore) {
   ensurePdfJs().then(function (pdfjsLib) {
     if (pm) pm.textContent = 'Generating the book (~20s)...';
     return fetch(url, { credentials: 'same-origin' }).then(function (r) {
+      // v3.0.360 -- the composer/packer charge rides back on a header (the body is a PDF). Only
+      // pack-render sets it, so every other render through here is unaffected.
+      try {
+        var _ot = r.headers && r.headers.get && r.headers.get('X-Optimize-Tokens');
+        if (_ot) window._optimizeTokensSpent = (window._optimizeTokensSpent || 0) + (parseInt(_ot, 10) || 0);
+      } catch (e) {}
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
       // v3.0.333 -- same-origin, so these headers are readable. Only the Before pane is the source of
       // truth: it renders the book as it actually stands, from the route that computes the include map.

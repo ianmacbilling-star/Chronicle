@@ -8599,6 +8599,10 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
         // now metered separately in layout-review, so this covers only the deterministic pack,
         // compose and render -- the first look at the PDF, which Ian confirmed is worth a token.
         var _mCost = 1;
+        // v3.0.360 -- report the composer charge so the client can total the run without assuming
+        // the amount. pack-render returns a PDF body, so a header is the only channel; hardcoding
+        // a 1 in the browser would silently lie the day this number changes.
+        try { res.set('X-Optimize-Tokens', String(_mCost)); res.set('Access-Control-Expose-Headers', 'X-Optimize-Tokens'); } catch (e) {}
         try { await spendTokens(req.session.userId, _mCost, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
         catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
         res.set('Content-Type', 'application/pdf');
@@ -8616,6 +8620,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
       var _cPages = 0; try { _cPages = await countPdfPages(pdfC); } catch (e) {}
       var _cCost = 1;   // v3.0.356 -- flat 1 token for the composer/packer; AI passes metered separately
+      try { res.set('X-Optimize-Tokens', String(_cCost)); res.set('Access-Control-Expose-Headers', 'X-Optimize-Tokens'); } catch (e) {}   // v3.0.360
       try { await spendTokens(req.session.userId, _cCost, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
       catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
       res.set('Content-Type', 'application/pdf');
