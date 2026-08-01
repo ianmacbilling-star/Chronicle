@@ -7774,7 +7774,19 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
             continue;
           }
           var mband = mbands[headCell.band];
-          var lineChars = (mband && mband.lineChars) || [];
+          // v3.0.362 -- READ THE LINE DATA FROM THE MEASURE, NOT THE BAND.
+          // computeMagazinePack returns `bands` and `measure` as SEPARATE structures: the raw band
+          // objects carry stext/kind/simg, while the per-line arrays live in measure.lineChars keyed
+          // by band index. `mband.lineChars` is therefore always undefined, the guard below always
+          // fired, and pullLines has NEVER applied on magazine -- every proposal since it was written
+          // was rejected as 'no line data to re-slice'. Confirmed on For ALL the Ages 2026-08-01:
+          // the AI asked for it twice in one pass and was refused both times.
+          // The split-pull path 50 lines above already reads it correctly
+          // (`mMeasure.lineChars[tailCell.band]`), so this was a slip on one line, not a
+          // misunderstanding of where the data lives -- and `mMeasure` was already in scope.
+          // Note `mband.stext` below IS valid: stext is a real property of a raw band.
+          // PAIRED IS UNAFFECTED -- this whole block is the magazine branch (mop/mbands/mRejected).
+          var lineChars = (mMeasure.lineChars && mMeasure.lineChars[headCell.band]) || [];
           if (!lineChars.length) { mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'no line data to re-slice' }); continue; }
           // Current boundary char = headCell.cEnd. Find its line index, advance N lines.
           var curBound = headCell.cEnd;
