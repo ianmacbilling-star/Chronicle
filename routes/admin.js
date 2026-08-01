@@ -282,7 +282,12 @@ router.get('/generation-settings', requireAuth, requireAdmin, async function (re
       storyFloor: _giToInt(await g('gen_story_floor')),
       narrativePanelsPerToken: _giToInt(await g('gen_narrative_panels_per_token')),
       narrativeFloor: _giToInt(await g('gen_narrative_floor')),
-      transcriptCacheTtl: ((await g('transcript_cache_ttl')) === '1h') ? '1h' : '5m'
+      transcriptCacheTtl: ((await g('transcript_cache_ttl')) === '1h') ? '1h' : '5m',
+      // v3.0.356 -- what ONE layout-loop token is worth to us, in cents. The layout charge divides
+      // the real Anthropic cost of each AI pass by this, so raising it makes Optimize cheaper for
+      // the user and lowering it makes it dearer. Read live at charge time: no deploy to change it.
+      // Floor of 1 -- a zero would divide by zero at the charge site.
+      layoutLoopCostCents: (function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 1) ? n : 8; })(await g('layout_loop_cost_cents'))
     });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
@@ -297,7 +302,9 @@ router.put('/generation-settings', requireAuth, requireAdmin, async function (re
       ['gen_story_floor', String(_giToInt(b.storyFloor))],
       ['gen_narrative_panels_per_token', String(_giToInt(b.narrativePanelsPerToken))],
       ['gen_narrative_floor', String(_giToInt(b.narrativeFloor))],
-      ['transcript_cache_ttl', ttl]
+      ['transcript_cache_ttl', ttl],
+      // v3.0.356 -- floor of 1 cent, default 8. Never allow 0: the charge site divides by it.
+      ['layout_loop_cost_cents', String((function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 1) ? n : 8; })(b.layoutLoopCostCents))]
     ];
     for (var i = 0; i < pairs.length; i++) {
       const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get(pairs[i][0]);

@@ -1193,6 +1193,10 @@
       <!-- Generation charging & caching (admin) -->
       <div class="settings-section">
         <div class="settings-section-title">Generation charging &amp; caching</div>
+
+        <!-- v3.0.356: existing story/narrative charging, boxed as its own sub-section -->
+        <div style="border:1px solid rgba(212,175,55,0.35);border-radius:6px;padding:12px 14px;margin-bottom:14px;">
+        <div style="color:var(--gold);font-size:13px;font-weight:600;margin-bottom:6px;">Story &amp; narrative generation</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Charge tokens for story/narrative generation, scaled by size. Tokens = max(floor, size &divide; rate) rounded down. Set a rate to 0 to charge only the floor; set both floor and rate to 0 to charge nothing.</div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;max-width:460px;">
           <label style="color:var(--gold);font-size:13px;">Generate Story &mdash; words per token</label>
@@ -1209,6 +1213,31 @@
             <option value="1h">1 hour</option>
           </select>
         </div>
+        </div>
+
+        <!-- v3.0.356: layout optimization charging -->
+        <div style="border:1px solid rgba(212,175,55,0.35);border-radius:6px;padding:12px 14px;">
+        <div style="color:var(--gold);font-size:13px;font-weight:600;margin-bottom:6px;">Layout optimization (Optimize button)</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">
+          An Optimize run charges <b>1 token</b> for the composer/packer pass (the first look at the PDF), then charges
+          <b>each AI loop separately</b> based on what that loop actually cost us to run. A run that settles after 2 loops
+          costs less than one that uses all 5.
+          <br /><br />
+          <b>How the per-loop charge works.</b> Every AI call reports exactly how much text went in and came back.
+          We turn that into a dollar cost at current Anthropic rates, then divide by the figure below and round <i>up</i>,
+          with a minimum of 1 token per loop. So if a loop costs us 12 cents and this is set to 8, the user is charged 2 tokens.
+          <br /><br />
+          <b>Raising this number makes Optimize cheaper for users; lowering it makes it dearer.</b> It is read live at the
+          moment of charging, so a change takes effect on the very next run with no deploy. Minimum 1 cent (0 is not allowed
+          because the charge divides by it). Magazine books cost roughly twice Picture Book ones because they genuinely send
+          about twice as much text per page.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;max-width:460px;">
+          <label style="color:var(--gold);font-size:13px;">Our cost per layout loop (cents)</label>
+          <input type="number" min="1" step="1" id="layout-loop-cost" style="width:110px;" />
+        </div>
+        </div>
+
         <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
           <button class="btn btn-primary btn-sm" onclick="saveGenerationSettings()">Save</button>
           <span class="settings-section-desc" id="gen-settings-msg" style="margin:0;"></span>

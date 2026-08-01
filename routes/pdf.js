@@ -2256,6 +2256,43 @@ function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
   return [campaignId, q.co || '', q.layout || '', q.as_user || '', q.bookTitle || ''].join('|');
 }
+// v3.0.356 -- METERED LAYOUT CHARGING. One helper, both layouts, so the rule cannot drift.
+// Claude Sonnet 4.6 list rates, $/MTok, verified 2026-08-01. If Anthropic repricing lands, these
+// two numbers are the only edit -- the per-token divisor is dashboard-controlled, not hardcoded.
+var LAYOUT_IN_RATE_USD_PER_MTOK = 3.00;
+var LAYOUT_OUT_RATE_USD_PER_MTOK = 15.00;
+var LAYOUT_LOOP_COST_CENTS_DEFAULT = 8;
+async function layoutLoopCostUsd() {
+  // Reuses getAppSettingInt (database/db.js), already imported here -- same reader every other
+  // live-tunable setting uses, rather than a second hand-rolled query that could drift.
+  var n = await getAppSettingInt('layout_loop_cost_cents', LAYOUT_LOOP_COST_CENTS_DEFAULT);
+  if (!Number.isFinite(n) || n < 1) n = LAYOUT_LOOP_COST_CENTS_DEFAULT;   // never 0: we divide by this
+  return n / 100;
+}
+// Charge for ONE AI pass, metered on the usage the API actually reported. Returns a plain object
+// describing the arithmetic so the caller can log it and hand it to the client.
+// SHORTFALL RULE (Ian, 2026-08-01): "if they still run out mid pass... we keep going and don't
+// worry about it." spendTokens THROWS when the balance is short, and a bare catch would make the
+// charge vanish and silently under-record the ledger. So we spend whatever remains, take the
+// balance to 0, record the shortfall, and let the run finish.
+async function chargeLayoutPass(userId, usage, campaignId) {
+  var inTok = (usage && usage.input_tokens) || 0;
+  var outTok = (usage && usage.output_tokens) || 0;
+  var rateUsd = await layoutLoopCostUsd();
+  var usd = ((inTok * LAYOUT_IN_RATE_USD_PER_MTOK) + (outTok * LAYOUT_OUT_RATE_USD_PER_MTOK)) / 1e6;
+  var want = Math.max(1, Math.ceil(usd / rateUsd));   // floor of 1: a pass always costs something
+  var spent = want, shortfall = false;
+  try {
+    await spendTokens(userId, want, { source: 'optimize_layout_pass', event_type: 'generation_spend', related_campaign_id: campaignId });
+  } catch (e) {
+    if (e && e.code === 'INSUFFICIENT_TOKENS') {
+      var have = (e.balance && e.balance.total) || 0;
+      shortfall = true; spent = have;
+      if (have > 0) { try { await spendTokens(userId, have, { source: 'optimize_layout_pass', event_type: 'generation_spend', related_campaign_id: campaignId }); } catch (e2) { spent = 0; } }
+    } else { spent = 0; console.error('layout pass spend failed:', e && e.message); }
+  }
+  return { inTokens: inTok, outTokens: outTok, usd: usd, rateUsd: rateUsd, tokens: want, spent: spent, shortfall: shortfall };
+}
 function composedCachePut(campaignId, req, arrange, body, campaignName) {
   try {
     if (!body) return;
@@ -7322,9 +7359,21 @@ router.get('/layout-review/:campaignId', requireAuth, async function (req, res) 
       });
     }
 
-    // NOTE: no per-pass charge. The whole optimize run is charged once up front at compose
-    // (ceil(pages/10) tokens); the loop's review/apply passes are part of that paid operation.
-    try { await recordGeneration(req.session.userId, { event_type: 'layout_review', tokens_redeemed: 0, quantity: 1, unit: 'review', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
+    // v3.0.356 -- PER-PASS CHARGE, metered on real usage. Replaces the note that used to sit here
+    // saying the loop was covered by the compose charge. It was not a fair trade: a run that
+    // converged at pass 2 paid the same as one that used all five.
+    var _chg = null;
+    try { _chg = await chargeLayoutPass(req.session.userId, data.usage, req.params.campaignId); } catch (e) { console.error('layout pass charge failed:', e && e.message); }
+    if (_chg) {
+      try {
+        await logDebug(req.session.userId, { level: 'info', source: 'api', page: 'Optimize', fn: 'GET /layout-review',
+          message: 'Layout pass charged ' + _chg.spent + ' token' + (_chg.spent === 1 ? '' : 's') + ': ' +
+                   _chg.inTokens + ' in + ' + _chg.outTokens + ' out = $' + _chg.usd.toFixed(4) + ' / $' + _chg.rateUsd.toFixed(2) +
+                   ' = ' + _chg.tokens + (_chg.shortfall ? ' (SHORTFALL -- balance exhausted)' : ''),
+          detail: { campaign_id: req.params.campaignId, arrange: (_arrange || 'paired'), in_tokens: _chg.inTokens, out_tokens: _chg.outTokens, usd: _chg.usd, rate_usd: _chg.rateUsd, tokens: _chg.tokens, spent: _chg.spent, shortfall: _chg.shortfall } });
+      } catch (_le) {}
+    }
+    try { await recordGeneration(req.session.userId, { event_type: 'layout_review', tokens_redeemed: (_chg ? _chg.spent : 0), quantity: 1, unit: 'review', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
 
     // Read-only: return the proposed ops (and the raw text if it didn't parse) -- APPLY NOTHING.
     // `dump` carries THIS pass's freshly measured layout -- the exact text the model just reasoned
@@ -7333,6 +7382,7 @@ router.get('/layout-review/:campaignId', requireAuth, async function (req, res) 
     // keeps them all so a clip can be traced to the pass that introduced it. Costs nothing to return:
     // it is already built above and was otherwise discarded after the AI call.
     return res.json({
+      charge: _chg,   // v3.0.356 -- the client logs this arithmetic into the optimize log
       campaign: campaignName,
       arrange: (_arrange || 'paired'),
       dump: dump,
@@ -8545,7 +8595,10 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
         if (req.query.pane === '1') rbuiltM.html = paneSafeHtml(rbuiltM.html);
         var pdfM = await renderHtmlToPdf(rbuiltM.html, {});
         var _mPages = 0; try { _mPages = await countPdfPages(pdfM); } catch (e) {}
-        var _mCost = Math.max(1, Math.ceil((_mPages || 0) / 10));   // ~1 token per 10 pages, min 1
+        // v3.0.356 -- FLAT 1 TOKEN for the composer/packer. Was ceil(pages/10). The AI passes are
+        // now metered separately in layout-review, so this covers only the deterministic pack,
+        // compose and render -- the first look at the PDF, which Ian confirmed is worth a token.
+        var _mCost = 1;
         try { await spendTokens(req.session.userId, _mCost, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
         catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
         res.set('Content-Type', 'application/pdf');
@@ -8562,7 +8615,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       if (req.query.pane === '1') rbuiltC.html = paneSafeHtml(rbuiltC.html);   // preview-safe gradients in the Finalize After pane only
       var pdfC = await renderHtmlToPdf(rbuiltC.html, {});
       var _cPages = 0; try { _cPages = await countPdfPages(pdfC); } catch (e) {}
-      var _cCost = Math.max(1, Math.ceil((_cPages || 0) / 10));   // ~1 token per 10 pages, min 1
+      var _cCost = 1;   // v3.0.356 -- flat 1 token for the composer/packer; AI passes metered separately
       try { await spendTokens(req.session.userId, _cCost, { source: 'optimize_layout', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); }
       catch (e) { if (e && e.code === 'INSUFFICIENT_TOKENS') return res.status(402).json({ error: 'insufficient_tokens' }); console.error('optimize spend failed:', e && e.message); }
       res.set('Content-Type', 'application/pdf');

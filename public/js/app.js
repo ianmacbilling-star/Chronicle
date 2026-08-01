@@ -13617,6 +13617,7 @@ function loadGenerationSettings() {
       if (g('gen-narr-ppt')) g('gen-narr-ppt').value = j.narrativePanelsPerToken;
       if (g('gen-narr-floor')) g('gen-narr-floor').value = j.narrativeFloor;
       if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
+      if (g('layout-loop-cost')) g('layout-loop-cost').value = (j.layoutLoopCostCents != null ? j.layoutLoopCostCents : 8);   // v3.0.356
     })
     .catch(function () {});
 }
@@ -13633,7 +13634,8 @@ function saveGenerationSettings() {
       storyFloor: iv('gen-story-floor'),
       narrativePanelsPerToken: iv('gen-narr-ppt'),
       narrativeFloor: iv('gen-narr-floor'),
-      transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m'
+      transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m',
+      layoutLoopCostCents: (function () { var n = parseInt((g('layout-loop-cost') || {}).value, 10); return (isFinite(n) && n >= 1) ? n : 8; })()   // v3.0.356 -- never send 0
     })
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) { if (msg) msg.textContent = res.ok ? 'Saved.' : ((res.j && res.j.error) ? res.j.error : 'Could not save.'); if (res.ok) loadGenerationSettings(); })
@@ -15626,8 +15628,18 @@ function finalizeKnownPages() {
   return _finalizeAfterPages || _finalizeBeforePages || 0;
 }
 function finalizeOptimizeEstimate() {
+  // v3.0.356 -- a CEILING, not a price. 1 token for the composer/packer, then up to 5 AI loops.
+  // Measured 2026-08-01 across seven diagnostics bundles: a loop costs 0.7-1.5 tokens at 8 cents,
+  // and magazine sends about twice the text per page that paired does (2.5-2.8k chars/page vs
+  // 1.3-1.4k). So 2 per loop for magazine, 1 for paired -- deliberately ABOVE the real figure,
+  // because an estimate that resolves smaller is a pleasant surprise and the reverse is a
+  // complaint. A run that settles early costs much less than this.
   var p = finalizeKnownPages();
-  return p > 0 ? Math.max(1, Math.ceil(p / 10)) : 0;
+  if (!(p > 0)) return 0;
+  var _arr = '';
+  try { _arr = (typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? String(novelLayoutStyle) : ''; } catch (e) {}
+  var perLoop = (_arr === 'magazine' || _arr === 'gazette') ? 2 : 1;
+  return 1 + (5 * perLoop);
 }
 // Reflect the estimate on the button badge once we know the page count.
 function finalizeUpdateEstimateBadge() {
@@ -15636,7 +15648,8 @@ function finalizeUpdateEstimateBadge() {
   var est = finalizeOptimizeEstimate();
   btn.setAttribute('data-est', est ? String(est) : '');
   var lbl = document.getElementById('layoutai-est-note');
-  if (lbl) lbl.textContent = est ? ('Estimated cost: ' + est + ' token' + (est === 1 ? '' : 's') + ' (~1 / 10 pages)') : 'Roughly 1 token for every 10 pages';
+  // v3.0.356 -- 'up to', never a bare number: the charge is metered per loop and usually lands lower.
+  if (lbl) lbl.textContent = est ? ('Estimated cost: up to ' + est + ' token' + (est === 1 ? '' : 's') + ' -- 1 to start, then each AI pass; fewer passes cost less') : 'Up to 1 token to start, then each AI pass is charged separately';
 }
 function finalizeCancelOptimize() {
   window._optimizeCancelled = true;   // checked at the pre-loop auto-fire and between loop passes
@@ -15953,6 +15966,19 @@ function _runLayoutAiOptimize() {
               if (j && j.dump && window._optimizeCapture) {
                 window._optimizeCapture.dumps.push({ pass: roundNum, text: j.dump });
                 delete j.dump;
+              }
+            } catch (e) {}
+            // v3.0.356 -- surface the arithmetic behind this pass's charge. Ian: "I'd like the
+            // calculation written into the log each time a token deduction is made." The server
+            // also writes it to debug_logs; this copy is the one the user actually watches, and it
+            // is what will settle whether the estimate's chars-per-token assumption was right.
+            try {
+              if (j && j.charge && j.charge.tokens != null) {
+                optimizeLogLine('Pass ' + roundNum + ' cost: ' + (j.charge.inTokens || 0).toLocaleString() + ' in + ' +
+                  (j.charge.outTokens || 0).toLocaleString() + ' out = $' + Number(j.charge.usd || 0).toFixed(4) +
+                  ' / $' + Number(j.charge.rateUsd || 0).toFixed(2) + ' = ' + j.charge.tokens +
+                  ' token' + (j.charge.tokens === 1 ? '' : 's') +
+                  (j.charge.shortfall ? ('  (balance ran out -- ' + j.charge.spent + ' of ' + j.charge.tokens + ' charged)') : ''), 'ok');
               }
             } catch (e) {}
             showPassJson(roundNum, j);   // surface the raw proposals in the side tab
