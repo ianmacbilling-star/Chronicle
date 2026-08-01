@@ -2107,6 +2107,51 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
 }
 // Non-enclose WIDE: full-width image with the narrative entirely BELOW it -> splittable like a
 // float, but any narrative line is a valid cut (all lines sit under the picture, so sImgH=0).
+// v3.0.364 -- SHOULD THIS LANDSCAPE PICTURE HAVE TEXT WRAPPED BESIDE IT?
+// Ian, 2026-08-01: "A high ratio of wide, landscape and panoramic pics never get shrunk. I think
+// if they could have text float around them more often the book would be more dense."
+//
+// Every landscape picture that is not a feature and not minimized became a `wide` band
+// unconditionally -- full column width, all of its narrative underneath. For a 1.78 picture that
+// is 6.80in wide and 3.82in tall; as a float at its ceiling it is 4.90 x 2.75in with a 1.9in text
+// column running the picture's full height. 1.07in shorter AND the prose moves up beside it,
+// which is what the density metric is actually measuring.
+//
+// THE GATE IS THE PROSE, and it matters. With only a line or two of narrative a float leaves an
+// ugly notch beside the picture and the full-width form is better. Converting needs enough text to
+// run the WHOLE height of the floated image.
+//
+// Both numbers below are MEASURED, not chosen -- from the lineChars/lines arrays of every wide
+// band in For ALL the Ages and Starbound Skies, 101 samples across two books:
+//   chars per line at the full 6.8in column: median 104 in BOTH books (p25 99, p75 107)
+//   line pitch: median 0.300in in BOTH books
+// Character density scales with width, so the side column carries 104 * (sideW / CG_W) per line.
+// (An earlier estimate of 95 chars/line was a guess and was low; do not reintroduce it.)
+//
+// Verified against the three measured books BEFORE building: Gnomes 5 of 5 landscape wides
+// convert, Starbound 6 of 6, ANOMALIES 0 of 2 -- both of its landscape wides carry slen 0, no
+// narrative at all, so there is nothing to wrap and they correctly stay wide. The gate is already
+// discriminating on real books rather than passing everything.
+var MZ_WRAP_CPL_FULL = 104;    // chars per line at CG_W, measured
+var MZ_WRAP_LINE_H = 0.30;     // in per line, measured
+function mzWrapWorthIt(m, opts, mtext) {
+  try {
+    if (opts && opts.enclose) return false;        // Gazette has its own float geometry and look
+    var slen = (mtext != null) ? String(mtext).length : 0;
+    if (!slen) return false;                       // no narrative -> nothing to wrap, keep it wide
+    var asp = Math.max(0.3, momentAspect(m));
+    if (asp < 1.5) return false;                   // portrait/square already route to float
+    var d = cgFloatDims(m, opts, false, 1);
+    if (!d || !(d.imgW > 0)) return false;
+    var imgW = Math.min(CG_W - MZ_MIN_TEXT_COL, d.imgW);   // the float's ceiling width
+    var imgH = imgW / asp;
+    var sideW = CG_W - imgW;
+    if (sideW < MZ_MIN_TEXT_COL - 0.01) return false;
+    var cpl = Math.max(8, MZ_WRAP_CPL_FULL * (sideW / CG_W));
+    var sideH = (slen / cpl) * MZ_WRAP_LINE_H;     // height this prose would occupy in the side column
+    return sideH >= imgH;                          // enough to run the picture's full height
+  } catch (e) { return false; }
+}
 function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'wide', html: cgFlowWide(m, opts, narr, sideLeft, mul),
@@ -2253,6 +2298,11 @@ function magazineBands(moments, sections, intro, outro, opts) {
       bands.push(mzFeatureBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (p.tier === 'min') {
       bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, true, p.mtext, p.mbound)); sideLeft = !sideLeft; i += 1;
+    } else if (p.asp >= 1.5 && mzWrapWorthIt(p.m, opts, p.mtext)) {
+      // v3.0.364 -- enough prose to run beside it: float it and let the text wrap. Landscape
+      // floats became growable in v3.0.363, so the optimizer can push this toward 4.9in
+      // afterwards -- the two changes compound. Reverting is this one branch.
+      bands.push(mzFloatBand(p.m, opts, p.narr, sideLeft, false, p.mtext, p.mbound)); sideLeft = !sideLeft; i += 1;
     } else if (p.asp >= 1.5) {
       bands.push(mzWideBand(p.m, opts, p.narr, sideLeft, p.mtext, p.mbound)); if (opts && opts.enclose) sideLeft = !sideLeft; i += 1;
     } else if (!p.narr && (i + 1) < panels.length && panels[i + 1].asp < 1.5 && normShape(panels[i + 1].m) !== 'tower') {
