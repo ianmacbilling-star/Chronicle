@@ -1429,6 +1429,34 @@ function cgAlignFirstPara(html) {
   if (!html) return html;
   return html.replace('margin:0.15in 0;', 'margin:0 0 0.15in;');
 }
+// v3.0.363 -- THE CROP-SAFE CAP FOR A FLOAT, WHICH IS A DIFFERENT QUESTION FROM A FEATURE'S.
+// cgFeatureCropSafeMaxMul hard-returns 1.0 for any image with aspect >= 1.5, on the stated grounds
+// that a landscape picture 'already fills the column width -> ANY grow only adds height and crops'.
+// That is TRUE for a wide/feature band, which renders across the full column. It is FALSE for a
+// float: cgFloatDims caps a float's width at capW (2.5in small / 3.3in normal) and then again at
+// CG_W - MZ_MIN_TEXT_COL, so a landscape float sits at ~2.5in in a 6.8in column with 4.9in
+// available to it. Measured on For ALL the Ages 2026-08-01: 11 of 24 image bands are aspect >= 1.5
+// and were refused a grow on EVERY pass of EVERY run; band 36 ('Ale and Courage', float, asp 1.78)
+// renders 2.5in wide x 1.41in tall and is nowhere near the width it is allowed.
+//
+// AND A FLOAT CANNOT CROP. Every path in cgFloatDims recomputes the other dimension from the
+// aspect -- imgW = imgH * asp, and both clamps do imgH = imgW / asp -- so the box always matches
+// the picture's own proportions no matter what mul is. Growing a float makes it BIGGER, never
+// cropped. Ian's rule (never crop) is not at stake here.
+//
+// Both imgH and capW scale linearly with mul until a clamp bites, so imgW(mul) = mul * imgW(1)
+// until it reaches the ceiling -- which makes the max useful multiplier exactly the ratio of the
+// width a float MAY have to the width it currently HAS.
+function cgFloatCropSafeMaxMul(m, opts, small) {
+  try {
+    var d1 = cgFloatDims(m, opts, small, 1);
+    if (!d1 || !(d1.imgW > 0)) return 1.0;
+    var maxW = CG_W - MZ_MIN_TEXT_COL;             // the widest a float may ever be: text keeps its column
+    var mul = maxW / d1.imgW;
+    if (!(mul > 1.02)) return 1.0;                 // already at the ceiling -- nothing to give
+    return Math.max(1.0, Math.round(Math.min(mul, MZ_GROW_MAX_MUL) * 1000) / 1000);
+  } catch (e) { return 1.0; }
+}
 function cgFlowFloat(m, opts, narrHtml, sideLeft, small, mul) {
   var d = cgFloatDims(m, opts, small, mul);
   var fl = sideLeft ? 'float:left;margin:0.04in 0.20in 0.10in 0;'
@@ -2058,7 +2086,9 @@ function renderMzSlice(text, bound, cs, ce, opts) {
 function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
   function build(mul) {
     var band = { kind: 'float', html: cgFlowFloat(m, opts, narr, sideLeft, small, mul),
-      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFeatureCropSafeMaxMul(m, opts),
+      // v3.0.363 -- a float is capped by the COLUMN it shares with text, not by cropping. See
+      // cgFloatCropSafeMaxMul. Every other band kind keeps the feature rule unchanged.
+      momId: (m && m.id != null ? m.id : null), persistGrow: lmGrow(m), cropMax: cgFloatCropSafeMaxMul(m, opts, small),
       regrow: function (mm) { return cgFlowFloat(m, opts, narr, sideLeft, small, mm); },
       remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
     band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
@@ -7610,6 +7640,12 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         // (that was the bug that let Ori grow to x1.6 and crop). Growing an image into a heavy crop is
         // wrong regardless of the flag.
         var _growCap = 3.0;
+        // v3.0.363 -- PREFER THE CAP THE BAND COMPUTED FOR ITSELF. Every band already stores
+        // `cropMax` at build time, where its own geometry and tier (small/normal, enclose) are in
+        // scope; recomputing from the moment alone here threw all of that away and applied the
+        // FEATURE rule to every kind. Fall through to the old path when a band has no cap of its own.
+        if (bb && bb.cropMax > 0) _growCap = bb.cropMax;
+        else
         try {
           if (bb && bb.momId != null) {
             var _mm = (typeof _cropMomCache !== 'undefined' && _cropMomCache[bb.momId]) ? _cropMomCache[bb.momId] : null;
