@@ -7007,7 +7007,27 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var _flow = !!req.query.flow;
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true, flowSim: _flow });
-      txt = _stamp + (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + magazinePlanText(packedM);
+      // v3.0.354 -- SAY WHAT THIS IS. The magazine branch has ALWAYS re-packed from scratch:
+      // v3.0.339 taught the PAIRED branch to serve the composed plan, but magazine was never
+      // given the same treatment and -- worse -- was never given the label either, so a magazine
+      // dump looked exactly like an authoritative one. Three books were measured on 2026-07-31
+      // before anyone noticed; the Starbound bundle reported 90 percent at pass 2 and 89 percent
+      // at 'final', identical to the reference, because the run-grow store had expired underneath
+      // it. Handoff V37 section 4 records the same class of error costing four wrong diagnoses in
+      // one evening on the paired side.
+      // This is the LABEL only (TD-154a). Serving the real composed plan is TD-154b and is a
+      // genuine build: packedM.dbg is assembled at pack time, BEFORE layout-apply mutates the
+      // plan, so it has to be rebuilt from the mutated plan and re-measured the way the paired
+      // layout-fill route does for _dbg2. Do not 'fix' this by storing packedM.dbg as-is -- that
+      // swaps one wrong document for a different wrong document.
+      var _magSrc = (_wantRef || _flow) ? '' :
+        ('SOURCE: a FRESH RE-PACK -- the magazine dump does not serve the composed plan, ever.\n' +
+         'This is a clean pack computed just now, not the book that was rendered into the PDF.\n' +
+         'Optimize moves and image grows recorded during a run expire after 30 minutes, so a\n' +
+         'bundle taken later describes a NATURAL pack. Page-level detail is indicative, not\n' +
+         'authoritative. The REFERENCE pack is unaffected -- it is a fresh natural pack by\n' +
+         'definition. (TD-154)\n\n');
+      txt = _stamp + (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + _magSrc + magazinePlanText(packedM);
       _dlName = String((packedM && packedM.campaign && packedM.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     } else {
       // Paired (Picture Book) now dumps too: compute with debug so it re-measures the composed
