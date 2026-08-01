@@ -6954,6 +6954,34 @@ function magazinePlanText(packed) {
   var _issues = [];
   // avg line height across all measured bands, for converting white space -> line counts
   var _lhSum = 0, _lhN = 0;
+  // v3.0.365 -- TELL THE AI WHICH PAGES CLIP. This was the whole reason clips survived every pass.
+  // The hints below are built from ESTIMATED heights, and an estimate is not the thing that clips:
+  // For ALL the Ages page 13 estimates 9.03 against a 9.16 budget -- comfortably fine, nothing to
+  // report -- and RENDERS at 9.62, which is 0.38in past the 9.24in box and a line of text deleted.
+  // NEVER-CLIP measures the real height and prints it at the top of this very dump, but that report
+  // goes to a human; the model was never told. So the optimizer was not failing to fix the clip --
+  // IT WAS NEVER ASKED TO. Confirmed across three books and every version since the clip was first
+  // seen: the same page clips in the reference pack, in every pass, and in the final.
+  //
+  // pairedPlanText has had this hint since it was written (its 'CLIP page N over box by X' line).
+  // Magazine's four hints are ORPHAN / PULLABLE / GROW-HEADROOM / split-tag and NONE of them
+  // mentions clipping. One layout was told and the other was not.
+  //
+  // Deliberately placed FIRST in the issue list: a deleted line of text outranks every other
+  // complaint on the page, and the model reads these in order.
+  (d.overflows || []).forEach(function (o) {
+    _issues.push('  CLIP  page ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  renders ' + o.realIn.toFixed(2) +
+      'in vs box ' + o.boxIn.toFixed(2) + 'in -- OVER BY ' + (o.realIn - o.boxIn).toFixed(2) +
+      'in and TEXT IS BEING DELETED. The planned height looks fine; the rendered height does not.' +
+      '  -> op: shrinkImage on this page (enough to give back at least ' + (o.realIn - o.boxIn).toFixed(2) + 'in), or pullLines to move text off it.');
+  });
+  // AT-RISK pages fit the box in total but a beside-column or stacked cell inside them can still
+  // clip. Worth surfacing for the same reason, one notch quieter.
+  (d.atRisk || []).forEach(function (o) {
+    _issues.push('  CLIP-RISK  page ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  renders ' + o.realIn.toFixed(2) +
+      'in against a planned ' + o.estIn.toFixed(2) + 'in -- the page total fits but a cell inside it may clip.' +
+      '  -> op: shrinkImage on this page if it holds a picture.');
+  });
   (d.bands || []).forEach(function (b) {
     if (b.lines && b.lines.length >= 2) { _lhSum += (b.lines[b.lines.length - 1] - b.lines[0]) / (b.lines.length - 1); _lhN++; }
   });
