@@ -15636,8 +15636,14 @@ function finalizeOptimizeEstimate() {
   // complaint. A run that settles early costs much less than this.
   var p = finalizeKnownPages();
   if (!(p > 0)) return 0;
-  var _arr = '';
-  try { _arr = (typeof novelLayoutStyle !== 'undefined' && novelLayoutStyle) ? String(novelLayoutStyle) : ''; } catch (e) {}
+  // v3.0.357 -- READ THE REAL ARRANGE. v3.0.356 read novelLayoutStyle, which holds an ART-STYLE id
+  // ('Mosaic', 'Saga', 'Ironframe'...) and NEVER the arrange, so the magazine branch could not fire
+  // and every book estimated as Picture Book. Same pattern as finalizeUpdateHeader above, which
+  // carries its own comment about a previous version of this exact mistake defaulting to Picture Book.
+  var o = (typeof customActive !== 'undefined' && customActive && typeof customOpts !== 'undefined' && customOpts)
+    ? customOpts
+    : (typeof CUSTOM_LAYOUT_DEFAULTS !== 'undefined' ? CUSTOM_LAYOUT_DEFAULTS : {});
+  var _arr = o.arrange || 'paired';
   var perLoop = (_arr === 'magazine' || _arr === 'gazette') ? 2 : 1;
   return 1 + (5 * perLoop);
 }
@@ -15648,8 +15654,16 @@ function finalizeUpdateEstimateBadge() {
   var est = finalizeOptimizeEstimate();
   btn.setAttribute('data-est', est ? String(est) : '');
   var lbl = document.getElementById('layoutai-est-note');
-  // v3.0.356 -- 'up to', never a bare number: the charge is metered per loop and usually lands lower.
-  if (lbl) lbl.textContent = est ? ('Estimated cost: up to ' + est + ' token' + (est === 1 ? '' : 's') + ' -- 1 to start, then each AI pass; fewer passes cost less') : 'Up to 1 token to start, then each AI pass is charged separately';
+  // v3.0.357 -- the estimate needs a page count, which arrives asynchronously, so this used to sit
+  // showing one sentence and then visibly rewrite itself into another while the user watched. Show a
+  // spinner until the number is known, then ONLY the number -- no trailing explanation.
+  if (lbl) {
+    if (est) {
+      lbl.innerHTML = 'Estimated cost: up to ' + est + ' token' + (est === 1 ? '' : 's');
+    } else {
+      lbl.innerHTML = '<span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;';
+    }
+  }
 }
 function finalizeCancelOptimize() {
   window._optimizeCancelled = true;   // checked at the pre-loop auto-fire and between loop passes

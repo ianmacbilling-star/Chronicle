@@ -347,7 +347,7 @@
               <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;">Optimize layout</button>
               <button id="layoutai-cancel-btn" onclick="finalizeCancelOptimize()" style="display:none;background:none;border:1px solid rgba(200,90,70,0.55);color:#e8a08c;border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Cancel</button>
               <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
-              <span id="layoutai-est-note" style="display:none;font-size:11px;color:rgba(245,232,200,0.55);font-style:italic;flex:0 0 auto;align-self:center;">Roughly 1 token for every 10 pages</span>
+              <span id="layoutai-est-note" style="font-size:11px;color:rgba(245,232,200,0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
               <span id="layoutai-scan-label" style="display:none;font-size:13px;color:rgba(245,232,200,0.7);font-style:italic;flex:0 0 auto;">Scanning book&hellip;</span>
               <div id="layoutai-delta" style="display:none;font-size:13px;color:#d8c9a8;line-height:1.5;flex:1 1 auto;min-width:0;"></div>
             </div>
@@ -2268,7 +2268,13 @@
 
 <style>
   #layoutai-run-btn { text-align:center; line-height:1.15; }
-  #layoutai-run-btn.has-token::after { content:'~1 token / 10 pages'; display:block; font-size:9px; font-weight:400; opacity:0.72; letter-spacing:0.04em; margin-top:1px; text-transform:none; }
+  /* v3.0.357 -- the '~1 token / 10 pages' sub-label is gone: that is no longer how Optimize is
+     charged (1 for the composer, then each AI pass metered), and it contradicted the estimate
+     sitting beside it. The estimate note is now the single source of price on this screen. */
+  #layoutai-est-note .est-spin { display:inline-block; width:9px; height:9px; margin-right:6px; vertical-align:-1px;
+    border:1.5px solid rgba(245,232,200,0.28); border-top-color:rgba(245,232,200,0.75); border-radius:50%;
+    animation:estspin 0.7s linear infinite; }
+  @keyframes estspin { to { transform:rotate(360deg); } }
   .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--gold);font-family:var(--font-display);letter-spacing:0.02em; }
   .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:6px 8px;font-size:12px;font-family:var(--font-display);width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
