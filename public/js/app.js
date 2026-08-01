@@ -15400,7 +15400,12 @@ function finalizeFinalFill() {
         var j = rj.j || {};
         if (j.grown) optimizeLogLine('Final pass: grew ' + j.grown + ' picture' + (j.grown === 1 ? '' : 's') +
           ' into leftover space' + (j.reverted ? (' (' + j.reverted + ' put back)') : '') + '.', 'ok');
-        else if (j.skipped) optimizeLogLine('Final pass: skipped -- ' + j.skipped, 'skip');
+        // v3.0.361 -- the skip reason names an internal implementation gap ('only the paired layout
+        // is wired up so far') and worried Ian into thinking a magazine run was missing something it
+        // needs. Magazine grows its pictures INLINE during its own passes (MZ_GROW_ROUNDS), so the
+        // only thing it actually lacks is the thin-page merge -- and it had 0 thin pages on 2 of the
+        // 3 books measured. Keep the line in the diagnostics bundle; keep it out of the user's log.
+        else if (j.skipped) { try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push('Final pass: skipped -- ' + j.skipped); } catch (e) {} }
         else optimizeLogLine('Final pass: no picture had room to grow.', 'skip');
         // v3.0.338 -- the collapse sweep is the LAST thing done to the book, so say what it did.
         if (j.collapsed) optimizeLogLine('Final pass: merged ' + j.collapsed + ' nearly empty page' +
@@ -16170,6 +16175,17 @@ function _runLayoutAiOptimize() {
               if (!saved || !state.currentCampaign) return;   // nothing stored -- leave the pane alone
               try {
                 optimizeLogLine('Showing the finished book -- this is the file that saves.', 'ok');
+                // v3.0.361 -- THE RUN'S TOTAL, and it belongs HERE. v3.0.360 put it in the pre-loop
+                // completion handler -- the one that FIRES the loop -- so it ran before a single AI
+                // pass had been charged and reported only the composer token, or nothing at all.
+                // This is the last line of the last step, after the fill and the save have resolved.
+                // Sums the composer header and each pass's `spent` (not `tokens`: if a balance ran
+                // out mid-run the two differ, and the user should be told what actually left their
+                // account). Per-pass arithmetic stays diagnostics-only; only this total is shown.
+                try {
+                  var _tot = window._optimizeTokensSpent || 0;
+                  if (_tot > 0) optimizeLogLine('Tokens used for this optimization: ' + _tot + '.', 'ok');
+                } catch (e) {}
                 var _body = document.getElementById('finalize-after-body'); if (_body) _body.style.display = 'none';
                 var _scroll = document.getElementById('finalize-after-scroll'); if (_scroll) _scroll.style.display = '';
                 renderPdfInto('/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery(),
@@ -16273,17 +16289,6 @@ function _runLayoutAiOptimize() {
           _dEl.innerHTML = _html;
         }
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.0.359 -- reflect the composer/packer token; each AI pass refreshes again as it is charged
-        // v3.0.360 -- close the run by stating what it cost. Ian: "at the bottom of the log the user
-        // sees and in the dump... put actual tokens deducted." This is the ACTUAL total, summed from
-        // the composer header and each pass's `spent` (not `tokens` -- if a balance ran out mid-run
-        // the two differ, and the user should be told what left their account). The per-pass
-        // arithmetic stays diagnostics-only; only this total is shown.
-        try {
-          var _tot = window._optimizeTokensSpent || 0;
-          if (_tot > 0 && typeof optimizeLogLine === 'function') {
-            optimizeLogLine('Tokens used for this optimization: ' + _tot + '.', 'ok');
-          }
-        } catch (e) {}
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // the optimized choice is now available
         try {
           var _vEl = document.getElementById('pub-pick-verdict');
