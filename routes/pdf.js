@@ -2130,6 +2130,11 @@ function mzFloatBand(m, opts, narr, sideLeft, small, mtext, mbound) {
       remeta: function (mm) { return build(mm); } };   // re-render at a new size AND carry the split metadata (sImgH / renderHead track that size)
     band.sImgH = cgFloatDims(m, opts, small, mul).imgH;   // image height at THIS size: split cut point + pull-up / gap-fit tests
     band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(momentAspect(m) * 100) / 100;
+    // v3.0.368 -- DIAGNOSTIC ONLY. Prominence and the shrink floor became load-bearing in
+    // v3.0.367 and neither reached the dump, so a small picture could not be explained from the
+    // artifact: there was no way to tell a Default float from a Minimize one, and those differ in
+    // BOTH design size (3.5in vs 2.5in) and floor (0.75 vs 0.50). Never shown to the user.
+    band.sProm = lmProminence(m); band.sTier = lmSizeTier(m); band.sShape = normShape(m);
     if (mtext) {
       // Splittable panel: image + one or two (before/after) prose paragraphs. The packer may cut the
       // text BELOW the image (sImgH) and continue it full-width on the next page; renderHead re-draws
@@ -2199,6 +2204,7 @@ function mzWideBand(m, opts, narr, sideLeft, mtext, mbound) {
     var _aspW = Math.max(0.3, momentAspect(m));
     band.sImgH = mul * ((opts && opts.enclose) ? (4.4 / _aspW) : (CG_W / _aspW));   // full-width image height (narrative sits below): split cut point + pull-up / gap-fit
     band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(_aspW * 100) / 100;
+    band.sProm = lmProminence(m); band.sTier = lmSizeTier(m); band.sShape = normShape(m);   // v3.0.368 -- diagnostic only
     if (mtext && (_mzFlowSim || !(opts && opts.enclose))) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
@@ -2221,6 +2227,11 @@ function mzFeatureBand(m, opts, narr, sideLeft, mtext, mbound) {
       remeta: function (mm) { return build(mm); } };
     band.sImgH = mul * cgFeatureImgH(m, opts);
     band.sTitle = (m && m.title) || ''; band.sAsp = Math.round(momentAspect(m) * 100) / 100;
+    // v3.0.368 -- DIAGNOSTIC ONLY. Prominence and the shrink floor became load-bearing in
+    // v3.0.367 and neither reached the dump, so a small picture could not be explained from the
+    // artifact: there was no way to tell a Default float from a Minimize one, and those differ in
+    // BOTH design size (3.5in vs 2.5in) and floor (0.75 vs 0.50). Never shown to the user.
+    band.sProm = lmProminence(m); band.sTier = lmSizeTier(m); band.sShape = normShape(m);
     if (mtext && (_mzFlowSim || !(opts && opts.enclose))) {
       band.stext = mtext; band.mbound = (mbound != null ? mbound : null); band.sOpts = opts;
       band.sIntro = false; band.sDrop = false; band.simg = true;
@@ -6257,6 +6268,11 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
       bands: bands.map(function (b, bi) {
         return { i: bi, kind: b.kind, h: Math.round((_fm.h[bi] || 0) * 1000) / 1000, simg: !!b.simg,
           sImgH: Math.round((b.sImgH || 0) * 100) / 100, asp: (b.sAsp || 0), title: (b.sTitle || ''),
+          // v3.0.368 -- read these three together to explain any picture's size:
+          //   design size comes from shape+asp+kind, floor is the smallest multiple allowed,
+          //   and sImgH / designSize IS the multiplier that was actually applied.
+          prom: (b.sProm != null ? b.sProm : null), tier: (b.sTier || null),
+          shape: (b.sShape || null), floor: (b.sFloor != null ? b.sFloor : null),
           stext: (b.stext != null), slen: (b.stext != null ? b.stext.length : 0),
           preview: (b.stext != null ? b.stext.slice(0, 60).split('\n').join(' ') : ''),
           nlines: ((_fm.lines && _fm.lines[bi]) || []).length,
