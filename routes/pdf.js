@@ -7018,6 +7018,53 @@ function magazinePlanText(packed) {
   var _issues = [];
   // avg line height across all measured bands, for converting white space -> line counts
   var _lhSum = 0, _lhN = 0;
+  (d.bands || []).forEach(function (b) {
+    if (b.lines && b.lines.length >= 2) { _lhSum += (b.lines[b.lines.length - 1] - b.lines[0]) / (b.lines.length - 1); _lhN++; }
+  });
+  var _avgLH = _lhN ? (_lhSum / _lhN) : 0.19;
+  var _pgByNum = {};
+  (d.pages || []).forEach(function (p) { _pgByNum[p.page] = p; });
+  // v3.0.369 -- NAME AN OP THE APPLIER CAN ACTUALLY RUN.
+  // pushLines is RECOGNISED AND THEN DEFERRED on magazine (the mDeferred branch in layout-apply),
+  // so every hint that named it asked for a move that could never happen. Whispers Beneath p.26 and
+  // p.43 were diagnosed correctly by the AI on every pass of every run -- its first two ops, with the
+  // right pages, the right bands and the right line counts -- and both were pushLines, so both were
+  // silently dropped and the book saved with two clipped pages. On The ANOMALIES the clipping pages
+  // held no split cell, the AI reached for shrinkImage instead, and all four cleared on pass 1. That
+  // is the whole difference between the two books: which op the hint pointed at.
+  //
+  // The SAME physical move is available under the other name. pullLines page N-1 fromPage N drags the
+  // clipping page leading text BACK onto the page before it, and that path has worked on magazine
+  // since v3.0.362. So: recommend pullLines when the previous page genuinely has room for the lines
+  // needed, and shrinkImage when it does not -- and say which, rather than offering both and hoping.
+  // The line count is named too: the applier moves exactly as many lines as it is told.
+  //
+  // Returns the op text only; callers prepend the arrow.
+  function _clipRemedy(pageIdx, overIn, boxIn) {
+    var shrink = 'shrinkImage on this page (enough to give back at least ' + overIn.toFixed(2) + 'in)';
+    var prev = _pgByNum[pageIdx - 1], cur = _pgByNum[pageIdx];
+    if (!prev || !cur || !cur.cells || !cur.cells.length || !prev.cells || !prev.cells.length) return shrink + '.';
+    var lead = cur.cells[0];
+    var last = prev.cells[prev.cells.length - 1];
+    // CASE A -- an existing split already straddles the page boundary, so shifting the cut point moves
+    // TEXT ONLY and never touches a picture. CASE B -- the leading cell is a whole pure-text band the
+    // applier can split. An image-bearing leading band is refused outright, so do not name a pull for it.
+    var caseA = !!(lead.split && lead.cStart > 0 && last.band === lead.band && last.cEnd != null);
+    var lb = _band(lead.band);
+    var caseB = !caseA && !lead.split && !lead.towerLead && !lb.simg && !(lb.sImgH > 0) && lb.stext != null && lb.nlines > 2;
+    if (!caseA && !caseB) return shrink + '.';
+    var _lh = (_avgLH > 0) ? _avgLH : 0.19;
+    var need = Math.max(1, Math.ceil(overIn / _lh) + 1);   // one spare line -- the accept tolerance is thin
+    var prevReal = (prev.realUsed != null) ? prev.realUsed : (prev.used || 0);
+    var room = (boxIn || 9.24) - prevReal;
+    if (room < need * _lh) {
+      return shrink + '.  (page ' + (pageIdx - 1) + ' holds only ' + (room > 0 ? room.toFixed(2) : '0.00') +
+        'in of real room, short of the ' + need + ' line(s) needed, so text cannot move back there.)';
+    }
+    return 'pullLines page ' + (pageIdx - 1) + ' fromPage ' + pageIdx + ' lines ' + need +
+      '  (page ' + (pageIdx - 1) + ' has ' + room.toFixed(2) + 'in of real room), or ' + shrink +
+      '.  DO NOT propose pushLines on this layout: it is deferred by the applier and can never fix anything.';
+  }
   // v3.0.365 -- TELL THE AI WHICH PAGES CLIP. This was the whole reason clips survived every pass.
   // The hints below are built from ESTIMATED heights, and an estimate is not the thing that clips:
   // For ALL the Ages page 13 estimates 9.03 against a 9.16 budget -- comfortably fine, nothing to
@@ -7036,8 +7083,8 @@ function magazinePlanText(packed) {
   (d.overflows || []).forEach(function (o) {
     _issues.push('  CLIP  page ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  renders ' + o.realIn.toFixed(2) +
       'in vs box ' + o.boxIn.toFixed(2) + 'in -- OVER BY ' + (o.realIn - o.boxIn).toFixed(2) +
-      'in and TEXT IS BEING DELETED. The planned height looks fine; the rendered height does not.' +
-      '  -> op: shrinkImage on this page (enough to give back at least ' + (o.realIn - o.boxIn).toFixed(2) + 'in), or pullLines to move text off it.');
+      'in and TEXT IS BEING DELETED.' +
+      '  -> op: ' + _clipRemedy(o.page, (o.realIn - o.boxIn), o.boxIn));
   });
   // AT-RISK pages fit the box in total but a beside-column or stacked cell inside them can still
   // clip. Worth surfacing for the same reason, one notch quieter.
@@ -7046,10 +7093,6 @@ function magazinePlanText(packed) {
       'in against a planned ' + o.estIn.toFixed(2) + 'in -- the page total fits but a cell inside it may clip.' +
       '  -> op: shrinkImage on this page if it holds a picture.');
   });
-  (d.bands || []).forEach(function (b) {
-    if (b.lines && b.lines.length >= 2) { _lhSum += (b.lines[b.lines.length - 1] - b.lines[0]) / (b.lines.length - 1); _lhN++; }
-  });
-  var _avgLH = _lhN ? (_lhSum / _lhN) : 0.19;
 
   // (1) ORPHANS: a split cell carrying only a tiny tail (<= 2 lines' worth of chars) that sits ALONE
   // or as the last cell on a page -- the stranded "it." case. Flag with the pullable target.
@@ -7136,7 +7179,10 @@ function magazinePlanText(packed) {
       // A slice clips in its own cell even if the page fits; a whole band only matters if the page is tight.
       if (_pageFits && !c.split) return;
       var _tag = c.split ? 'CLIP-SLICE' : 'OVERSIZED';
-      var _op = c.split ? 'op: pushLines forward / re-split so this slice fits its cell (it clips its last line otherwise)' : 'op: shrinkImage/pushLines';
+      // v3.0.369 -- see _clipRemedy. A split slice sits in a fixed-height cell with overflow:hidden,
+      // so it eats its own last line; the cure is to take lines OUT of the slice, which is a pull from
+      // the page before it. Naming pushLines here sent every one of these to the deferred branch.
+      var _op = c.split ? ('op: ' + _clipRemedy(pg.page, _over, CO_CLIP_BOX_IN)) : 'op: shrinkImage on this page';
       _issues.push('  ' + _tag + '  page ' + pg.page + ' (viewer p.' + _viewer(pg.page) + ')  b' + c.band + (c.split ? ' (split slice)' : '') + ' renders ' + _over.toFixed(2) + 'in taller than packed (real ' + c.realH.toFixed(2) + ' vs ' + c.h.toFixed(2) + ')  -> ' + _op);
     });
   });
@@ -7802,6 +7848,8 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
             }
           }
         } catch (e) {}
+        // v3.0.369 -- the band shrink floor, read once for both branches (see the shrink branch below).
+        var _sFloor = (bb && bb.sFloor > 0) ? bb.sFloor : 0.5;
         var tryMul;
         if (op.op === 'growImage') {
           if (pageReal == null || imgH == null || imgH <= 0) { tryMul = Math.min(_growCap, curMul * 1.5); }
@@ -7814,15 +7862,25 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           if (tryMul <= curMul + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: (_growCap <= curMul + 0.02 ? 'image at crop-safe max (growing further would crop the picture)' : 'no room to grow within box') }); continue; }
         } else {   // shrinkImage: only meaningful if the page currently clips
           if (pageReal == null || pageReal <= MCLIP + CO_CLIP_ACCEPT_TOL) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); continue; }
-          if (imgH == null || imgH <= 0) { tryMul = Math.max(0.5, curMul - 0.05); }
+          // v3.0.369 -- HONOR THE SHRINK FLOOR THE BAND COMPUTED FOR ITSELF.
+          // mzShapeShrinkFloor runs at build time, where the shape and the prominence tier are in
+          // scope, and stores the answer on the band as sFloor. Until now it had exactly three
+          // readers -- collapse-to-fit, gap-fit and the dump -- and NONE of them was this path, which
+          // used a flat 0.5 instead. Measured on The ANOMALIES at v3.0.368: b8 and b12 are both
+          // prominence 4, tier max, floor 0.85, and the loop took both to 0.71 to clear a clip.
+          // The dump printed the floor faithfully on the line above and the code ignored it. This is
+          // the same shape of fault as the v3.0.366 feature-through-a-float-gate bug: a rule that
+          // exists, is correct, and is not consulted on the path that matters.
+          if (curMul <= _sFloor + 0.01) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'image already at its shrink floor (x' + _sFloor.toFixed(2) + ' for this shape and prominence)' }); continue; }
+          if (imgH == null || imgH <= 0) { tryMul = Math.max(_sFloor, curMul - 0.05); }
           else {
             var over = pageReal - MCLIP + 0.06;
             tryMul = curMul * (imgH - over) / imgH;
-            tryMul = Math.max(0.5, Math.min(curMul, tryMul));
+            tryMul = Math.max(_sFloor, Math.min(curMul, tryMul));
           }
         }
         pgc[ci] = Object.assign({}, pgc[ci], { growMul: Math.round(tryMul * 1000) / 1000 });
-        _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul });
+        _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul, sFloor: _sFloor });
       }
 
       // Stage 2: ONE re-measure of the whole book with all targets applied.
@@ -7845,12 +7903,12 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         // Stage 4: for each overshooting page, bisect between its original mul and its (too-big) target
         // to find the largest mul that fits. These re-measures only happen for pages that overshot
         // (usually few), so the batch stays fast while nothing is left needlessly ungrown. For a grow,
-        // the search is [curMul, tryMul]; for a shrink that did not clear, [0.5, curMul].
+        // the search is [curMul, tryMul]; for a shrink that did not clear, [sFloor, curMul].
         for (var _oi = 0; _oi < _overshot.length; _oi++) {
           var s = _overshot[_oi];
           var pgc = mplan.pages[s.pageIdx];
           var isGrow = (s.op.op === 'growImage');
-          var lo = isGrow ? s.curMul : 0.5;
+          var lo = isGrow ? s.curMul : ((s.sFloor > 0) ? s.sFloor : 0.5);   // v3.0.369 -- the back-off search must not walk under the floor either
           var hi = isGrow ? s.tryMul : s.curMul;
           var best = null, bestReal = null;
           for (var _br = 0; _br < 5; _br++) {

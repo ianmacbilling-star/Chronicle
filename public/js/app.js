@@ -15212,9 +15212,17 @@ function finalizeDownloadDiagnostics() {
   // list on one and an empty pack on the other, 49ms apart. The server now serializes too; this
   // keeps the client honest as well, and costs only the wait.
   grab('/api/pdf/pack-debug/' + cid + refQ).then(function (refText) {
-    return grab('/api/pdf/pack-debug/' + cid + q).then(function (finalText) { return [refText, finalText]; });
+    return grab('/api/pdf/pack-debug/' + cid + q).then(function (finalText) {
+      // v3.0.369 -- WHICH ENVIRONMENT MADE THIS FILE. /version already reports it (server.js: env
+      // comes from RAILWAY_ENVIRONMENT_NAME), so no new variable and no hostname sniffing is needed.
+      // Never fatal: a failed fetch just leaves the environment out of the name.
+      return fetch('/version', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (vi) { return [refText, finalText, vi]; });
+    });
   }).then(function (both) {
-    var refText = both[0], finalText = both[1];
+    var refText = both[0], finalText = both[1], _vinfo = both[2] || {};
     var dumps = (cap && cap.dumps) || [];
     var applies = (cap && cap.applies) || [];
     var name = (state.currentCampaign.name || 'campaign').replace(/[^a-z0-9]+/gi, '_');
@@ -15374,11 +15382,40 @@ function finalizeDownloadDiagnostics() {
     var blob = new Blob([parts.join('\n')], { type: 'text/plain' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    // Version in the filename: three times today a bundle or a PDF was read against the wrong build,
-    // and the only way to tell them apart was to remember which run it came from.
+    // Version in the filename: three times in one day a bundle or a PDF was read against the wrong
+    // build, and the only way to tell them apart was to remember which run it came from.
+    //
+    // v3.0.369 -- IT WAS NEVER THERE. The regex ran against dumps[0].text, which is a PASS dump, and
+    // only the REFERENCE and FINAL dumps carry the 'CAMPAIGNIA PACK DUMP vX' header line -- a pass
+    // section starts straight at 'PACK PLAN'. So the match never fired, _bv stayed empty, and every
+    // bundle downloaded since the line was written has been unversioned. Read refText instead, and
+    // fall back to the /version report if the reference fetch failed.
+    //
+    // The name now also states the ENVIRONMENT and the LAYOUT, so a file can be identified without
+    // opening it: two books, two environments and two builds in one folder is the normal case here.
+    // The layout is read from the ARTIFACT (refText) rather than from client state, so the name
+    // describes the dump that was taken and not whatever the picker happens to say afterwards.
+    function _fnPart(s) { return String(s || '').replace(/[^a-z0-9]+/gi, '_').replace(/^_+/, '').replace(/_+$/, ''); }
     var _bv = '';
-    try { var _m = (dumps.length ? String(dumps[0].text || '') : '').match(/CAMPAIGNIA PACK DUMP\s+v([\d.]+)/); if (_m) _bv = '_v' + _m[1]; } catch (e) {}
-    a.download = name + '_diagnostics' + _bv + '_' + stamp + '.txt';
+    try {
+      var _m = String(refText || '').match(/CAMPAIGNIA PACK DUMP\s+v([\d.]+)/);
+      var _vv = _m ? _m[1] : (_vinfo.version || '');
+      if (_vv) _bv = '_v' + _vv;
+    } catch (e) {}
+    var _benv = '';
+    try {
+      var _ev = String(_vinfo.env || '');
+      if (/prod/i.test(_ev)) _benv = '_Production';
+      else if (/stag/i.test(_ev)) _benv = '_Staging';
+      else if (_ev) _benv = '_' + _fnPart(_ev.charAt(0).toUpperCase() + _ev.slice(1));
+    } catch (e) {}
+    var _blay = '';
+    try {
+      var _ar = String(refText || '').match(/\barrange=([a-z]+)/);
+      var _lbl = _ar ? ((typeof CL_ARRANGE_LABEL !== 'undefined' && CL_ARRANGE_LABEL[_ar[1]]) || _ar[1]) : '';
+      if (_lbl) _blay = '_' + _fnPart(_lbl);
+    } catch (e) {}
+    a.download = name + '_Diagnostic' + _benv + _blay + _bv + '_' + stamp + '.txt';
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
   });
