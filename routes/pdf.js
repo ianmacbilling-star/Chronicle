@@ -6791,7 +6791,15 @@ function pairedPlanText(packed) {
     var real = (dp.realUsed != null) ? dp.realUsed : (dp.used || 0);
     var _imgPl = (dp.placements || []).filter(function (pl) { return pl.kind === 'image' && pl.fullH != null && pl.realH != null; })
                   .sort(function (a, b) { return (b.fullH - b.realH) - (a.fullH - a.realH); })[0];
-    var _hasImg = (dp.placements || []).some(function (pl) { return pl.kind === 'image'; });
+    // v3.0.373 -- A TOWER IS A PICTURE. This tested kind === 'image' only, so a page holding
+    // nothing but a tower read as having no picture at all. Measured on The ANOMALIES (Picture Book,
+    // v3.0.372): PAGE 12 holds one placement -- beat 10 tower "The King Speaks" -- and the dump
+    // announced it as 'no image, a full page of narration' on a page carrying no narration whatever.
+    // The advisory then told the optimizer not to act, which happened to be the right answer for the
+    // wrong reason: the 0.31in over the box is the bottom of the PICTURE, not a deleted line.
+    // A rule that reaches a correct outcome from a false description will give the same answer on a
+    // page where the description matters.
+    var _hasImg = (dp.placements || []).some(function (pl) { return pl.kind === 'image' || pl.kind === 'tower'; });
     // TEXT-ONLY page: Picture Book ideally wants an image on every page. A page of pure narration is
     // flagged. A SHORT text-only page (a stranded fragment) should be consolidated onto an adjacent
     // page that has an image (pull it up/down) -- that both removes the text-only page and fills space.

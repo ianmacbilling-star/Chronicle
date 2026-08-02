@@ -16132,7 +16132,9 @@ function _runLayoutAiOptimize() {
                     // A MOVED PICTURE IS NOT REFLOWED TEXT. pullPicture sets movedTo, so it fell into
                     // the text branch below and every picture move in every run read as text moving.
                     var _movedPic = (a.movedKind === 'image' || a.movedKind === 'tower');
-                    var _trimSay = _trimmed ? ' and trimming a picture to fit' : '';
+                    // v3.0.373 -- Ian's wording. "Trimming" reads as cropping to a reader; the picture is
+                    // being scaled, not cut. This is the user-facing progress line, not the technical log.
+                    var _trimSay = _trimmed ? ' and resizing a picture to fit' : '';
                     var _friendly = (a.op === 'growImage') ? ('Enlarging an image' + _pg + ' to fill the page')
                                   : (a.op === 'shrinkImage') ? (a.belowFloor
                                       ? ('Reducing an image' + _pg + ' further than usual so no text is lost')
