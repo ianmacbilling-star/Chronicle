@@ -15269,8 +15269,19 @@ function finalizeDownloadDiagnostics() {
       if (_cp && _tot && _tot > _cp) {
         var _realOff = _tot - _cp;
         var _dumpOff = null;
-        var _fmLine = (dumps.length ? String(dumps[0].text || '') : '').match(/viewer page n\+(\d+)/);
-        if (_fmLine) _dumpOff = parseInt(_fmLine[1], 10);
+        // v3.0.375 (TD-103) -- COMPARE LIKE WITH LIKE.
+        // _realOff is a COUNT of front-matter pages (rendered total minus content pages).
+        // 'viewer page n+X' is the VIEWER offset, which is that count PLUS ONE for the 0-to-1 shift.
+        // Comparing the two made a correct book look wrong by exactly one page, every time the front
+        // matter was counted right. On Starbound 2026-08-02: 55 content pages, 5 front-matter pages,
+        // 60 rendered -- exact -- and this printed THIS BUNDLE DOES NOT DESCRIBE THE PDF YOU
+        // DOWNLOADED in capitals, over a bundle whose FINAL section said SOURCE: the COMPOSED plan.
+        // It cost an hour of doubting a fix that was working. Read the front-matter COUNT the dump
+        // states outright, and fall back to the viewer offset minus one.
+        var _d0 = (dumps.length ? String(dumps[0].text || '') : '');
+        var _fmCount = _d0.match(/front-matter offset: (\d+) page/);
+        if (_fmCount) _dumpOff = parseInt(_fmCount[1], 10);
+        else { var _fmLine = _d0.match(/viewer page n\+(\d+)/); if (_fmLine) _dumpOff = parseInt(_fmLine[1], 10) - 1; }
         parts.push('PAGE NUMBERS: the rendered PDF has ' + _tot + ' pages and the pack has ' + _cp +
           ' content pages, so dump PAGE n is viewer page n+' + _realOff + '.');
         if (_dumpOff != null && _dumpOff > _realOff) {
@@ -16160,6 +16171,28 @@ function _runLayoutAiOptimize() {
 
       // Iterate: run a round, render its result, and if it applied something and we're under the cap,
       // run another. Stop the moment a round applies 0 ops (converged) or the cap is reached.
+      // v3.0.375 -- STOP WHEN A PASS ADDS NOTHING NEW.
+      // A magazine text move is not recorded between passes, so it evaporates and the next pass
+      // applies it again, reports success, and keeps the loop alive to the 5-pass limit. Whispers
+      // 2026-08-02: passes 3, 4 and 5 each applied exactly one op -- pullLines viewer p.25 -- and the
+      // run cost 15 tokens for work pass 1 had finished. Re-applying an op that was already applied
+      // means the previous application did not survive; the plan the next pass sees is unchanged, so
+      // there is no forward progress to pay for.
+      // Deliberately NOT a fix for the persistence gap -- that is the move store, and it belongs in
+      // the packer. This only stops the meter.
+      // The signature includes the TARGET, not just the op and page, so a picture growing in stages
+      // across passes still reads as new work and the loop keeps going.
+      function _appliedSig(rep) {
+        var a = (rep && rep.applied) || [];
+        return a.map(function (x) {
+          var t = '';
+          if (x.growTo != null) t = '@g' + Number(x.growTo).toFixed(2);
+          else if (x.scaleTo != null) t = '@s' + Number(x.scaleTo).toFixed(2);
+          else if (x.movedTo != null) t = '@m' + x.movedFrom + '>' + x.movedTo;
+          return String(x.op) + '@p' + (x.viewerPage != null ? x.viewerPage : '?') + t;
+        }).sort();
+      }
+      var _prevSig = null;
       function iterate(roundNum, lastBlob) {
         return runRound(roundNum).then(function (res) {
           if (res.blob) {
@@ -16169,9 +16202,23 @@ function _runLayoutAiOptimize() {
             renderPdfInto(url, 'finalize-after-scroll', false);   // show this round's result in place
           }
           var converged = res.done || res.applied === 0;
+          // Nothing in this pass that was not in the last one -> no forward progress.
+          var _noNew = false;
+          try {
+            var _sig = _appliedSig(res.report);
+            if (!converged && _sig.length && _prevSig && _prevSig.length) {
+              _noNew = _sig.every(function (k) { return _prevSig.indexOf(k) >= 0; });
+            }
+            _prevSig = _sig;
+          } catch (e) { _prevSig = null; }
+          if (_noNew) {
+            converged = true;
+            aiLog('Pass ' + roundNum + ' re-applied only what pass ' + (roundNum - 1) + ' already applied -- no forward progress, stopping.', 'stop');
+            optimizeProgress('Finished &mdash; the layout has settled.', { dim: true });
+          }
           // Do not call a failure convergence. res.failed is set only when a review failed twice.
           if (res.failed) { aiLog('STOPPED EARLY -- the AI service was unavailable. This book was NOT fully optimized.', 'stop'); }
-          else if (converged) {
+          else if (converged && !_noNew) {
             aiLog(res.applied === 0 && !res.done ? ('Pass ' + roundNum + ' changed nothing -- stopping.') : 'Converged -- nothing left to improve.', 'stop');
           }
           if (!converged && roundNum < MAX_ROUNDS) {
