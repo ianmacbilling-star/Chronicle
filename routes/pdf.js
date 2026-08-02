@@ -142,6 +142,10 @@ function lmSizeTier(m) { var p = lmProminence(m); return p >= 4 ? 'max' : (p <= 
 // Computed ONCE per band at build time, where the moment and its metadata are in scope, and read
 // by both shrink paths -- so the rule cannot drift into two slightly different versions the way
 // the reading-order rule did.
+// v3.0.371 -- THE ABSOLUTE FLOOR. mzShapeShrinkFloor below is the floor that governs while a
+// remedy exists. This one is the point past which a picture stops being a picture, and it is only
+// ever reached on a page that would otherwise DELETE TEXT (see the shrink branch in layout-apply).
+var MZ_HARD_SHRINK_FLOOR = 0.50;
 function mzShapeShrinkFloor(m) {
   try {
     var sh = normShape(m);
@@ -6930,6 +6934,12 @@ function magazinePlanText(packed) {
     if (c.towerLead || b.kind === 'tower') return null;   // beside-column geometry, not a stack
     if (c.split) return null;                              // a slice holds a subset of the lines
     if (c.growMul && c.growMul !== 1) return null;         // the natural line array predates the grow (TD-174)
+    // v3.0.371 -- REFUSE A BAND WITH NO SPLITTABLE TEXT. Its line array is not trustworthy: on The
+    // ANOMALIES b12 the array holds 12 lines and 911 characters while the page renders 17 lines and
+    // the full narration runs to about 21. Fed that, this check reported 7.82in of content on a page
+    // that really holds 10.3 and called a REAL clip unreliable -- text was being deleted there. A
+    // check that cries wolf about the one page losing words is worse than no check.
+    if (!b.stext) return null;
     var ln = b.lines || [];
     // REFUSE A BAND WHOSE TEXT WRAPS BESIDE ITS PICTURE. When the first line sits ABOVE the
     // bottom of the image, the narrative is flowing alongside a floated picture, not stacked under
@@ -6980,9 +6990,12 @@ function magazinePlanText(packed) {
         var _gap = o.realIn - _ch;
         var _tol = _MZ_LH_FALLBACK * ((_pgByNumEarly[o.page].cells || []).length || 1);
         if (Math.abs(_gap) > _tol) {
-          L.push('        DISAGREEMENT: the cells on this page contain ' + _ch.toFixed(2) + 'in of content, so the measure is ' +
-            Math.abs(_gap).toFixed(2) + 'in ' + (_gap > 0 ? 'HIGHER' : 'LOWER') + ' than the page holds.' +
-            ' The overflow above is NOT a reliable size. Check the printed page before shrinking anything.');
+          // v3.0.371 -- CLAIM ONLY THE DISAGREEMENT. The first wording said the measure was higher
+          // 'than the page holds', which asserts the content figure is the true one. On The
+          // ANOMALIES it was not, and the page it called unreliable was deleting text.
+          L.push('        DISAGREEMENT: measured ' + o.realIn.toFixed(2) + 'in, derived from the cells ' + _ch.toFixed(2) +
+            'in -- a gap of ' + Math.abs(_gap).toFixed(2) + 'in. NEITHER number is proven here.' +
+            ' Open the printed page before acting on the overflow size above.');
         } else {
           L.push('        (content check: ' + _ch.toFixed(2) + 'in of cell content -- agrees with the measure)');
         }
@@ -7045,6 +7058,20 @@ function magazinePlanText(packed) {
   orderReport(L, _brk, _seq.length, _viewer);
   var gk = Object.keys(d.grow || {});
   L.push('sized (mul>1 grow / <1 shrink): ' + (gk.length ? gk.map(function (k) { return 'b' + k + '=' + d.grow[k]; }).join('  ') : '(none)'));
+  // v3.0.371 -- a picture taken UNDER its own floor is not a normal shrink. It only happens on a
+  // page that would otherwise delete text, and a proof reader should be able to find it.
+  var _underFloor = gk.filter(function (k) {
+    var _bU = (d.bands || [])[k];
+    return _bU && _bU.floor > 0 && d.grow[k] < _bU.floor - 0.005;
+  });
+  if (_underFloor.length) {
+    L.push('  BELOW FLOOR: ' + _underFloor.map(function (k) {
+      return 'b' + k + '=' + d.grow[k] + ' (floor ' + ((d.bands || [])[k].floor) + ')';
+    }).join('  '));
+    L.push('  These pictures were reduced past their normal minimum because the page could not be' +
+      ' fixed any other way -- the band carries no splittable text, so the only alternative was to' +
+      ' delete words. See MAGAZINE_UNSPLITTABLE_BANDS_SPEC.md.');
+  }
   // LAYOUT OPTIONS this plan was built from. Compare these FIRST between two dumps: if they differ,
   // the page counts are not comparable no matter how similar the books look.
   if (d.towerMerge && d.towerMerge.length) {
@@ -7112,7 +7139,7 @@ function magazinePlanText(packed) {
         L.push('    PAGE ' + pad(r.page, 3) + ' (viewer p.' + pad(_viewer(r.page), 3) + ')  measure ' + pad(r.measure.toFixed(2), 6) +
           '  content ' + pad(r.content.toFixed(2), 6) + '  -> measure is ' + Math.abs(r.gap).toFixed(2) + 'in ' + (r.gap > 0 ? 'HIGHER' : 'LOWER'));
       });
-      L.push('  ' + _mvc.length + ' page(s) disagree' + (_mvcSkipped ? (', ' + _mvcSkipped + ' not checkable') : '') + '. A page that disagrees cannot be reasoned about from its numbers alone.');
+      L.push('  ' + _mvc.length + ' page(s) disagree' + (_mvcSkipped ? (', ' + _mvcSkipped + ' not checkable') : '') + '. A page that disagrees cannot be settled from its numbers -- open it.');
     } else {
       L.push('    no page disagrees by more than a line' + (_mvcSkipped ? (' (' + _mvcSkipped + ' not checkable)') : '') + '. [OK]');
     }
@@ -7978,6 +8005,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         } catch (e) {}
         // v3.0.369 -- the band shrink floor, read once for both branches (see the shrink branch below).
         var _sFloor = (bb && bb.sFloor > 0) ? bb.sFloor : 0.5;
+        var _breachThis = false, _floorThis = _sFloor;   // v3.0.371 -- set by the shrink branch
         var tryMul;
         if (op.op === 'growImage') {
           if (pageReal == null || imgH == null || imgH <= 0) { tryMul = Math.min(_growCap, curMul * 1.5); }
@@ -7999,16 +8027,53 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           // The dump printed the floor faithfully on the line above and the code ignored it. This is
           // the same shape of fault as the v3.0.366 feature-through-a-float-gate bug: a rule that
           // exists, is correct, and is not consulted on the path that matters.
-          if (curMul <= _sFloor + 0.01) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'image already at its shrink floor (x' + _sFloor.toFixed(2) + ' for this shape and prominence)' }); continue; }
-          if (imgH == null || imgH <= 0) { tryMul = Math.max(_sFloor, curMul - 0.05); }
+          // v3.0.371 -- THE FLOOR YIELDS RATHER THAN LOSE TEXT.
+          // A smaller picture is a cosmetic loss. Deleted text is a defect. Where those are the only
+          // two outcomes, the picture gives.
+          //
+          // Confirmed on The ANOMALIES viewer p.16 on 2026-08-02: band b12 is script-formatted
+          // narration, so mzProseText returns null, so it has no stext, so canSplit refuses it
+          // FOREVER -- it cannot be cut at any size. It measures 10.27in on a 9.16in page and the
+          // overflow is deleted at compose time. v3.0.368 had no floor here, reached 0.71 and
+          // cleared the page; v3.0.369 gave this path the band floor of 0.85, refused, and the book
+          // shipped missing four lines of narration and the dialogue beat that closes the session.
+          // Ian supplied the missing passage; the printed page stops mid-sentence.
+          //
+          // THE GATE IS NARROW ON PURPOSE. The floor only yields when NO cell on the page can be
+          // split -- when there is no text to move and therefore no other remedy in existence. On
+          // every page with a splittable band the floor is absolute, exactly as v3.0.369 made it,
+          // which is all four of the other test books.
+          //
+          // THIS IS A WORKAROUND AND SHOULD BE LABELLED ONE. The picture is being punished for a
+          // text-fitting failure. The real fix is to let script narration split at its NEWLINE
+          // boundaries -- an offset that cannot land inside a word, which is the only reason the
+          // guard exists. See MAGAZINE_UNSPLITTABLE_BANDS_SPEC.md, stage 2.
+          var _pgSplittable = false;
+          for (var _sc = 0; _sc < pgc.length; _sc++) {
+            var _sb = mbands[pgc[_sc].band];
+            if (_sb && _sb.stext != null) { _pgSplittable = true; break; }
+          }
+          var _floorNow = _sFloor;
+          var _breach = false;
+          if (imgH == null || imgH <= 0) { tryMul = Math.max(_floorNow, curMul - 0.05); }
           else {
             var over = pageReal - MCLIP + 0.06;
-            tryMul = curMul * (imgH - over) / imgH;
-            tryMul = Math.max(_sFloor, Math.min(curMul, tryMul));
+            var _want = curMul * (imgH - over) / imgH;
+            if (_want < _sFloor && !_pgSplittable && _sFloor > MZ_HARD_SHRINK_FLOOR) {
+              _breach = true;
+              _floorNow = MZ_HARD_SHRINK_FLOOR;
+            }
+            tryMul = Math.max(_floorNow, Math.min(curMul, _want));
           }
+          if (curMul <= _floorNow + 0.01) {
+            mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage,
+              reason: 'image already at its shrink floor (x' + _floorNow.toFixed(2) + (_breach ? ' -- the absolute minimum; this page cannot be fixed by shrinking' : ' for this shape and prominence') + ')' });
+            continue;
+          }
+          _breachThis = _breach; _floorThis = _floorNow;
         }
         pgc[ci] = Object.assign({}, pgc[ci], { growMul: Math.round(tryMul * 1000) / 1000 });
-        _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul, sFloor: _sFloor });
+        _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul, sFloor: _sFloor, floorNow: _floorThis, breach: _breachThis });
       }
 
       // Stage 2: ONE re-measure of the whole book with all targets applied.
@@ -8022,7 +8087,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         _staged.forEach(function (s) {
           var ph = (_batchReal[s.pageIdx] != null) ? _batchReal[s.pageIdx] : null;
           if (ph != null && ph <= MCLIP + CO_CLIP_ACCEPT_TOL) {
-            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: s.tryMul, pageReal: Math.round(ph * 100) / 100 });
+            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: s.tryMul, pageReal: Math.round(ph * 100) / 100, belowFloor: !!(s.breach && s.tryMul < s.sFloor - 0.005), normalFloor: s.sFloor });
           } else {
             _overshot.push(s);
           }
@@ -8036,7 +8101,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           var s = _overshot[_oi];
           var pgc = mplan.pages[s.pageIdx];
           var isGrow = (s.op.op === 'growImage');
-          var lo = isGrow ? s.curMul : ((s.sFloor > 0) ? s.sFloor : 0.5);   // v3.0.369 -- the back-off search must not walk under the floor either
+          var lo = isGrow ? s.curMul : ((s.floorNow > 0) ? s.floorNow : ((s.sFloor > 0) ? s.sFloor : 0.5));   // v3.0.369 floor; v3.0.371 lets it be the absolute floor on an unsplittable page
           var hi = isGrow ? s.tryMul : s.curMul;
           var best = null, bestReal = null;
           for (var _br = 0; _br < 5; _br++) {
@@ -8051,7 +8116,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           }
           if (best != null && ((isGrow && best > s.curMul + 0.02) || (!isGrow && best < s.curMul - 0.02))) {
             pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: best });
-            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: best, pageReal: Math.round((bestReal || 0) * 100) / 100 });
+            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: best, pageReal: Math.round((bestReal || 0) * 100) / 100, belowFloor: !!(s.breach && best < s.sFloor - 0.005), normalFloor: s.sFloor });
           } else {
             pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: s.curMul });
             mRejected.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, reason: (isGrow ? 'no room to grow within box' : 'could not clear the box') });

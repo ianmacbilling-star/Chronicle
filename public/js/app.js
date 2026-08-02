@@ -16122,7 +16122,11 @@ function _runLayoutAiOptimize() {
                     var d = a.scaleTo != null ? ('scale ' + (a.scaleFrom != null ? a.scaleFrom.toFixed(2) : '?') + ' -> ' + a.scaleTo.toFixed(2))
                           : a.growTo != null ? ('grow ' + (a.growFrom != null ? a.growFrom.toFixed(2) : '?') + ' -> ' + a.growTo.toFixed(2))
                           : a.movedTo != null ? ('moved ' + _mk + ' p' + a.movedFrom + ' -> p' + a.movedTo + _trimTxt) : 'applied';
-                    aiLog('   OK ' + a.op + ' viewer p.' + (a.viewerPage != null ? a.viewerPage : '?') + ' (' + d + ')', 'applied');
+                    // v3.0.371 -- SAY WHEN A PICTURE WENT UNDER ITS FLOOR. The floor only yields on a
+                    // page that would otherwise DELETE TEXT (no splittable band, so nothing can move).
+                    // That is a real trade being made on the reader's behalf and it must not be silent.
+                    var _bf = a.belowFloor ? ('; BELOW its normal minimum of ' + (a.normalFloor != null ? Number(a.normalFloor).toFixed(2) : '?') + ' -- the page had no other way to avoid losing text') : '';
+                    aiLog('   OK ' + a.op + ' viewer p.' + (a.viewerPage != null ? a.viewerPage : '?') + ' (' + d + _bf + ')', 'applied');
                     // Friendly translation for the user-facing progress log.
                     var _pg = (a.viewerPage != null ? (' on page ' + a.viewerPage) : '');
                     // A MOVED PICTURE IS NOT REFLOWED TEXT. pullPicture sets movedTo, so it fell into
@@ -16130,7 +16134,9 @@ function _runLayoutAiOptimize() {
                     var _movedPic = (a.movedKind === 'image' || a.movedKind === 'tower');
                     var _trimSay = _trimmed ? ' and trimming a picture to fit' : '';
                     var _friendly = (a.op === 'growImage') ? ('Enlarging an image' + _pg + ' to fill the page')
-                                  : (a.op === 'shrinkImage') ? ('Fitting an image' + _pg + ' to its space')
+                                  : (a.op === 'shrinkImage') ? (a.belowFloor
+                                      ? ('Reducing an image' + _pg + ' further than usual so no text is lost')
+                                      : ('Fitting an image' + _pg + ' to its space'))
                                   : (a.op === 'scaleImage') ? ('Resizing an image' + _pg)
                                   : _movedPic ? ('Reflowing an image' + _pg + ' to close a gap' + _trimSay)
                                   : (a.op === 'pullLines' || a.movedTo != null) ? ('Reflowing text' + _pg + ' to close a gap' + _trimSay)
