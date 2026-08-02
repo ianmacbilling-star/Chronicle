@@ -6279,11 +6279,7 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
           lines: ((_fm.lines && _fm.lines[bi]) || []), lineChars: ((_fm.lineChars && _fm.lineChars[bi]) || []),
           mbound: (b.mbound != null ? b.mbound : null) };
       }),
-      pages: pages.map(function (pg, pi) {
-        var u = 0; pg.forEach(function (c) { u += (c.heightIn != null ? c.heightIn : (_fm.h[c.band] || 0)); });
-        return { page: pi, used: Math.round(u * 1000) / 1000,
-          cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null), simg: (c._simg || false), sImgH: (c._sImgH != null ? c._sImgH : null), linesAtCut: (c._linesAtCut != null ? c._linesAtCut : null), reWrap: (c._reWrap != null ? c._reWrap : null), textLead: !!c.textLead }; }) };
-      })
+      pages: mzDbgPagesFrom(bands, pages, _fm.h)   // v3.0.370 -- see mzDbgPagesFrom
     };
     // Re-measure the REAL composed output (after any tower-merge) so the dump shows true per-page
     // fills next to the estimates. Same request => still one token.
@@ -6879,6 +6875,17 @@ function pairedPlanText(packed) {
   return L.join('\n');
 }
 
+// v3.0.370 -- ONE mapping from a packed magazine plan to the shape the dumper reads.
+// Used at PACK time and again by layout-apply when it stores the composed plan text (TD-154).
+// Deliberately the only copy: two copies of one rule is how the tower bug happened twice, and a
+// dump whose page shape drifts from the packer is the exact failure this whole item is about.
+function mzDbgPagesFrom(bands, pages, fallbackH) {
+  return (pages || []).map(function (pg, pi) {
+    var u = 0; pg.forEach(function (c) { u += (c.heightIn != null ? c.heightIn : ((fallbackH && fallbackH[c.band]) || 0)); });
+    return { page: pi, used: Math.round(u * 1000) / 1000,
+      cells: pg.map(function (c) { return { band: c.band, kind: (bands[c.band] || {}).kind, split: !!c.split, cStart: c.cStart || 0, cEnd: (c.cEnd != null ? c.cEnd : null), h: c.heightIn, growMul: (c.growMul || null), towerLead: (c.towerLead || null), simg: (c._simg || false), sImgH: (c._sImgH != null ? c._sImgH : null), linesAtCut: (c._linesAtCut != null ? c._linesAtCut : null), reWrap: (c._reWrap != null ? c._reWrap : null), textLead: !!c.textLead }; }) };
+  });
+}
 function magazinePlanText(packed) {
   var d = packed && packed.dbg;
   if (!d) return 'no debug plan available';
@@ -6898,6 +6905,62 @@ function magazinePlanText(packed) {
   if (_has('cast', true))  _fm += 1;   // cast / The Company
   if (_has('toc', false))  _fm += 1;   // table of contents
   var _viewer = function (contentPage) { return contentPage + _fm + 1; };   // 0-based content -> 1-based viewer
+  // v3.0.370 -- DOES THE PAGE HEIGHT AGREE WITH WHAT THE PAGE CONTAINS?
+  // On The ANOMALIES at v3.0.369 the harness measured PAGE 6 and PAGE 10 at 10.274in each and
+  // reported both as OVER BY 1.03in. The printed pages were fine and a hair over respectively --
+  // Ian read the artifact and counted every one of b8s seventeen measured lines present on the
+  // page. b8 carries 17 lines and b12 carries 12, and BOTH measure 10.274 to the thousandth: a
+  // height that does not move when the content moves is not measuring the content. The loop then
+  // spent that phantom inch shrinking a prominence-4 picture by 29 percent.
+  //
+  // This is REPORTING ONLY. It feeds no op, gates nothing, and is not shown to the AI. It exists
+  // so the dump says out loud when its own two numbers disagree, instead of us finding it by eye
+  // three conversations later.
+  //
+  // The content figure is a LOWER BOUND and deliberately conservative: line Y positions are band-
+  // relative and already sit below the picture, so the last baseline plus one pitch is the whole
+  // band -- image, margin and text in one number -- but inter-band gaps are not added, and split,
+  // grown and tower cells are refused outright rather than estimated. A page is only reported when
+  // EVERY cell on it is computable. Inventing a number here would repeat the fault it is meant to
+  // catch.
+  var _MZ_LH_FALLBACK = 0.30;
+  function _cellContentH(c) {
+    if (!c) return null;
+    var b = (d.bands || [])[c.band] || {};
+    if (c.towerLead || b.kind === 'tower') return null;   // beside-column geometry, not a stack
+    if (c.split) return null;                              // a slice holds a subset of the lines
+    if (c.growMul && c.growMul !== 1) return null;         // the natural line array predates the grow (TD-174)
+    var ln = b.lines || [];
+    // REFUSE A BAND WHOSE TEXT WRAPS BESIDE ITS PICTURE. When the first line sits ABOVE the
+    // bottom of the image, the narrative is flowing alongside a floated picture, not stacked under
+    // it -- so the last baseline is not the band bottom, and the measured line count is taken at a
+    // width the page does not use. Measured on three books: every band where lines[0] < sImgH
+    // produced a content figure LARGER than the page (Whispers b36 9.85 against a measured 8.20,
+    // Starbound b15 11.05 against 8.20), which is the same crying-wolf this check exists to stop.
+    // Bands whose text sits below the picture are exact: b8 lines start at 4.225 against a 3.83in
+    // image, and its content figure of 9.32 matches the printed page.
+    if (ln.length && b.sImgH > 0 && ln[0] < b.sImgH) return null;
+    if (ln.length >= 2) {
+      var pitch = (ln[ln.length - 1] - ln[0]) / (ln.length - 1);
+      if (!(pitch > 0)) pitch = _MZ_LH_FALLBACK;
+      return ln[ln.length - 1] + pitch;
+    }
+    if (ln.length === 1) return ln[0] + _MZ_LH_FALLBACK;
+    if (b.sImgH > 0) return b.sImgH + 0.10;                // picture with no narrative
+    return null;
+  }
+  function _pageContentH(pg) {
+    if (!pg || !pg.cells || !pg.cells.length) return null;
+    var t = 0;
+    for (var i = 0; i < pg.cells.length; i++) {
+      var h = _cellContentH(pg.cells[i]);
+      if (h == null) return null;                          // one unknown cell makes the page unknown
+      t += h;
+    }
+    return Math.round(t * 1000) / 1000;
+  }
+  var _pgByNumEarly = {};
+  (d.pages || []).forEach(function (p) { _pgByNumEarly[p.page] = p; });
   var L = [];
   L.push('PACK PLAN  -  ' + (d.campaign || ''));
   if (decorStripOn()) L.push('*** DECOR_OFF: frames, captions, drop caps and the narrative box are STRIPPED (diagnostic mode) ***');
@@ -6911,6 +6974,19 @@ function magazinePlanText(packed) {
     L.push('!!! NEVER-CLIP: ' + _ovf.length + ' PAGE(S) OVERFLOW THE BOX (content is clipped here) !!!');
     _ovf.forEach(function (o) {
       L.push('    PAGE ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  vs box ' + o.boxIn.toFixed(2) + 'in  -> OVER by ' + o.overIn.toFixed(2) + 'in');
+      // v3.0.370 -- say so immediately when the two numbers disagree, on the same page as the flag.
+      var _ch = _pageContentH(_pgByNumEarly[o.page]);
+      if (_ch != null) {
+        var _gap = o.realIn - _ch;
+        var _tol = _MZ_LH_FALLBACK * ((_pgByNumEarly[o.page].cells || []).length || 1);
+        if (Math.abs(_gap) > _tol) {
+          L.push('        DISAGREEMENT: the cells on this page contain ' + _ch.toFixed(2) + 'in of content, so the measure is ' +
+            Math.abs(_gap).toFixed(2) + 'in ' + (_gap > 0 ? 'HIGHER' : 'LOWER') + ' than the page holds.' +
+            ' The overflow above is NOT a reliable size. Check the printed page before shrinking anything.');
+        } else {
+          L.push('        (content check: ' + _ch.toFixed(2) + 'in of cell content -- agrees with the measure)');
+        }
+      }
     });
   }
   var _risk = (d.atRisk || []);
@@ -7007,6 +7083,40 @@ function magazinePlanText(packed) {
         (c.split && c.cStart === 0 ? ('  {simg=' + (c.simg ? '1' : '0') + ' sImgH=' + (c.sImgH != null ? c.sImgH.toFixed(2) : '?') + ' linesL=' + (c.linesAtCut != null ? c.linesAtCut.toFixed(2) : '?') + (c.reWrap ? (' reWrap=' + c.reWrap.toFixed(2)) : '') + (c.textLead ? ' textLead' : '') + '}') : ''));
     });
   });
+
+  // ===== MEASURE vs CONTENT (v3.0.370, reporting only) ===========================================
+  // Runs over EVERY page, not just the clipping ones, so a disagreement is visible before it costs
+  // anything. Nothing downstream reads this.
+  var _mvc = [];
+  var _mvcSkipped = 0;
+  (d.pages || []).forEach(function (pg) {
+    var _m = (pg.realUsed != null) ? pg.realUsed : null;
+    if (_m == null) return;
+    var _c = _pageContentH(pg);
+    if (_c == null) { _mvcSkipped++; return; }
+    // Tolerance scales with the number of cells: the content figure is derived from BASELINES,
+    // so each cell can overshoot by up to one line of leading. A two-cell page must therefore
+    // differ by two lines before the disagreement means anything.
+    var _tolP = _MZ_LH_FALLBACK * (pg.cells.length || 1);
+    if (Math.abs(_m - _c) > _tolP) _mvc.push({ page: pg.page, measure: _m, content: _c, gap: Math.round((_m - _c) * 1000) / 1000 });
+  });
+  if (_mvc.length || _mvcSkipped) {
+    L.push('');
+    L.push('MEASURE vs CONTENT (does the measured page height agree with what its cells contain?)');
+    L.push('  Content is a LOWER BOUND: cell content only, inter-band gaps not added. Split, grown and');
+    L.push('  tower cells are refused rather than estimated, and one refused cell skips the whole page.');
+    L.push('  Listed when the two differ by more than one line (' + _MZ_LH_FALLBACK.toFixed(2) + 'in) PER CELL on the page.');
+    L.push('  REPORTING ONLY -- no op reads this, and nothing downstream is gated on it.');
+    if (_mvc.length) {
+      _mvc.forEach(function (r) {
+        L.push('    PAGE ' + pad(r.page, 3) + ' (viewer p.' + pad(_viewer(r.page), 3) + ')  measure ' + pad(r.measure.toFixed(2), 6) +
+          '  content ' + pad(r.content.toFixed(2), 6) + '  -> measure is ' + Math.abs(r.gap).toFixed(2) + 'in ' + (r.gap > 0 ? 'HIGHER' : 'LOWER'));
+      });
+      L.push('  ' + _mvc.length + ' page(s) disagree' + (_mvcSkipped ? (', ' + _mvcSkipped + ' not checkable') : '') + '. A page that disagrees cannot be reasoned about from its numbers alone.');
+    } else {
+      L.push('    no page disagrees by more than a line' + (_mvcSkipped ? (' (' + _mvcSkipped + ' not checkable)') : '') + '. [OK]');
+    }
+  }
 
   // ===== ISSUES (AI signals) =====================================================================
   // Computed signals the AI reviewer consumes, derived from the page/cell/band data above. Each is a
@@ -7261,6 +7371,24 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
                  'arrange=' + (_cco.arrange || 'paired') + '\n\n';
     if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
       var _flow = !!req.query.flow;
+      // v3.0.370 (TD-154b) -- SERVE THE COMPOSED PLAN when one is cached, exactly as the paired
+      // branch has since v3.0.339. The REFERENCE pack (?nogrows=1) and the FLOW simulation still
+      // re-pack deliberately: one is a natural pack by definition and the other is a Before.
+      var _ccM = null;
+      if (!_wantRef && !_flow) {
+        try {
+          var _cm0 = composedCacheGet(req.params.campaignId, req);
+          if (_cm0 && (_cm0.arrange === 'magazine' || _cm0.arrange === 'gazette') && _cm0.planText) _ccM = _cm0;
+        } catch (e) { _ccM = null; }
+      }
+      if (_ccM) {
+        txt = _stamp + 'SOURCE: the COMPOSED plan -- this is the book that was rendered into the PDF,\n' +
+              'not a fresh re-pack. Composed ' + (_ccM.at ? new Date(_ccM.at).toISOString() : '?') + '. (TD-154)\n\n' + _ccM.planText;
+        _dlName = String(_ccM.campaignName || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
+        res.set('Content-Type', 'text/plain; charset=utf-8');
+        res.set('Content-Disposition', 'attachment; filename="' + _dlName + '_After_pack' + (_ver ? ('_v' + _ver) : '') + '.txt"');
+        return res.send(txt);
+      }
       var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true, flowSim: _flow });
       // v3.0.354 -- SAY WHAT THIS IS. The magazine branch has ALWAYS re-packed from scratch:
       // v3.0.339 taught the PAIRED branch to serve the composed plan, but magazine was never
@@ -7276,12 +7404,12 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
       // layout-fill route does for _dbg2. Do not 'fix' this by storing packedM.dbg as-is -- that
       // swaps one wrong document for a different wrong document.
       var _magSrc = (_wantRef || _flow) ? '' :
-        ('SOURCE: a FRESH RE-PACK -- the magazine dump does not serve the composed plan, ever.\n' +
-         'This is a clean pack computed just now, not the book that was rendered into the PDF.\n' +
-         'Optimize moves and image grows recorded during a run expire after 30 minutes, so a\n' +
-         'bundle taken later describes a NATURAL pack. Page-level detail is indicative, not\n' +
-         'authoritative. The REFERENCE pack is unaffected -- it is a fresh natural pack by\n' +
-         'definition. (TD-154)\n\n');
+        ('SOURCE: a FRESH RE-PACK -- no composed plan is cached (no Optimize in the last 30\n' +
+         'minutes, or the cache expired). This is a clean pack computed just now, not the book\n' +
+         'that was rendered into the PDF, and it may differ from it. Page-level detail is\n' +
+         'indicative, not authoritative. Run Optimize and take the bundle within 30 minutes to\n' +
+         'get the composed plan instead. The REFERENCE pack is unaffected -- it is a fresh\n' +
+         'natural pack by definition. (TD-154)\n\n');
       txt = _stamp + (_flow ? ('FLOW SIMULATION (Before): raw greedy pack with boxes split like the browser, optimization transforms OFF.\nApproximates the Chromium flow -- exact page breaks will differ, but bands and density are directional. Compare band-for-band with the After pack.\n\n') : '') + _magSrc + magazinePlanText(packedM);
       _dlName = String((packedM && packedM.campaign && packedM.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     } else {
@@ -8100,7 +8228,50 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       } catch (e) { console.error('magazine grow run-store pass failed:', e && e.message); }
 
       var mBody = composeMagazine(mplan, mbands, _cco);
-      composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName);
+      // v3.0.370 (TD-154b) -- STORE THE PLAN THAT WAS ACTUALLY COMPOSED.
+      // Until now the magazine dump re-packed from natural every time, so its 'final' section
+      // described a book nobody rendered. On 2026-08-02 that cost two wrong conclusions in one day:
+      // Whispers Beneath was reported as shipping with a clipped page 26 that renders clean in the
+      // artifact, and the same dump put PAGE 20 at 9.53in when the printed page carries about two
+      // inches of white. The paired side learned this at v3.0.339; the note left at the label-only
+      // fix (v3.0.354) said the real build had to rebuild the debug structure from the MUTATED plan
+      // and re-measure it, because packedM.dbg is assembled before any op is applied. That is what
+      // this does -- it does not store packedM.dbg, which would swap one wrong document for another.
+      // COST: one extra full re-measure per apply. Accepted deliberately: the alternative is a dump
+      // that cannot be trusted, and every hour spent arguing with one costs more than the render.
+      var _planTxtM = null;
+      try {
+        var _dbgM = Object.assign({}, (packedM && packedM.dbg) || {});
+        _dbgM.pages = mzDbgPagesFrom(mbands, mplan.pages, null);
+        // Rebuild the `sized` header from the MUTATED cells too. packedM.dbg.grow is the pack-time
+        // picture, so carrying it over would print pre-apply multipliers above post-apply pages --
+        // a dump that contradicts itself two lines apart.
+        var _growM = {};
+        (mplan.pages || []).forEach(function (_pgG) {
+          (_pgG || []).forEach(function (_cG) {
+            if (_cG && _cG.growMul && _cG.growMul !== 1) _growM[_cG.band] = Math.round(_cG.growMul * 1000) / 1000;
+          });
+        });
+        _dbgM.grow = _growM;
+        var _realM = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+        if (_realM && !_realM._error) {
+          _dbgM.pages.forEach(function (_pgM, _piM) {
+            if (_realM[_pgM.page] != null) _pgM.realUsed = _realM[_pgM.page];
+            if (_realM._cells) _pgM.cells.forEach(function (_cM, _ciM) {
+              var _rvM = _realM._cells[_piM + ':' + _ciM];
+              if (_rvM != null) _cM.realH = _rvM;
+            });
+          });
+          _dbgM.overflows = _realM._overflows || [];
+          _dbgM.boxOverflows = _realM._boxOverflows || [];
+          if (_realM._towerProbes) _dbgM.towerProbes = _realM._towerProbes;
+          if (_realM._imgProbes) _dbgM.imgProbes = _realM._imgProbes;
+          _dbgM.atRisk = [];
+          _dbgM.remeasured = true;
+        }
+        _planTxtM = magazinePlanText({ dbg: _dbgM });
+      } catch (e) { _planTxtM = null; console.error('magazine composed plan text failed:', e && e.message); }
+      composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName, _planTxtM);
       var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
       if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
       var mPdf = await renderHtmlToPdf(mBuilt.html, {});
