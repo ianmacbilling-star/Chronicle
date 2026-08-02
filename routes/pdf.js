@@ -7111,6 +7111,49 @@ function magazinePlanText(packed) {
     });
   });
 
+  // ===== LINE DATA COVERAGE (v3.0.372, reporting only) ===========================================
+  // How much of a band does its own line array actually describe?
+  //
+  // measureLayout.js line 151 reads `var pEl = n.querySelector('p') || n` -- the FIRST paragraph in
+  // the band and no others. A band that renders as two paragraphs reports only the first one's
+  // lines. Measured on The ANOMALIES b12: the array holds 12 lines, paragraph one is exactly 12
+  // lines in the printed page, and the band renders 17. The block HEIGHT is right and the LINE
+  // ARRAY is short, which is why two numbers out of one measure pass disagreed all day.
+  //
+  // Everything that splits text indexes into this array. This section does not fix it -- it counts
+  // it, per book, so the size of the fix is known before the shared measure code is touched.
+  // Only bands whose text sits BELOW the picture are checked; a float wraps text beside the image,
+  // so its extent is legitimately shorter than its height and would read as a false positive.
+  var _cov = [], _covOk = 0, _covSkip = 0;
+  (d.bands || []).forEach(function (b, bi) {
+    var ln = b.lines || [];
+    if (ln.length < 2 || !(b.h > 0)) { _covSkip++; return; }
+    if (b.sImgH > 0 && ln[0] < b.sImgH) { _covSkip++; return; }   // text wraps beside the picture
+    var pitch = (ln[ln.length - 1] - ln[0]) / (ln.length - 1);
+    if (!(pitch > 0)) { _covSkip++; return; }
+    var extent = ln[ln.length - 1] + pitch;
+    var gap = b.h - extent;
+    if (gap > 2 * pitch) _cov.push({ b: bi, kind: b.kind, n: ln.length, extent: extent, h: b.h, gap: gap, miss: Math.round(gap / pitch) });
+    else _covOk++;
+  });
+  if (_cov.length || _covOk) {
+    L.push('');
+    L.push('LINE DATA COVERAGE (does a band line array describe the whole band?)');
+    L.push('  A band is listed when its measured lines stop more than two lines short of its measured');
+    L.push('  height. Bands whose text wraps BESIDE the picture are skipped -- their extent is');
+    L.push('  legitimately shorter. REPORTING ONLY -- no op reads this.');
+    if (_cov.length) {
+      _cov.forEach(function (r) {
+        L.push('    b' + pad(r.b, 4) + pad(r.kind || '?', 15) + 'lines ' + pad(r.n, 4) + ' reach ' + pad(r.extent.toFixed(2), 6) +
+          ' of ' + pad(r.h.toFixed(2), 6) + 'in  -> about ' + r.miss + ' line(s) of this band are NOT in its line data');
+      });
+      L.push('  ' + _cov.length + ' band(s) incomplete, ' + _covOk + ' complete, ' + _covSkip + ' not checkable.');
+      L.push('  Every split point is chosen from this array, so an incomplete band can be cut in the wrong place.');
+    } else {
+      L.push('    all ' + _covOk + ' checkable band(s) are fully described' + (_covSkip ? (' (' + _covSkip + ' not checkable)') : '') + '. [OK]');
+    }
+  }
+
   // ===== MEASURE vs CONTENT (v3.0.370, reporting only) ===========================================
   // Runs over EVERY page, not just the clipping ones, so a disagreement is visible before it costs
   // anything. Nothing downstream reads this.
@@ -8347,7 +8390,13 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
         try { res.set('X-Apply-Report', JSON.stringify({
           appliedCount: mApplied.length, rejectedCount: mRejected.length, deferredCount: mDeferred.length,
-          applied: mApplied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, growFrom: a.growFrom, growTo: a.growTo }; }),
+          // v3.0.372 -- CARRY belowFloor ACROSS THE WIRE. v3.0.371 added the flag on the server and
+          // the display on the client and never checked the wire between them: the optimize loop takes
+          // the pdf=1 path, this header is the whole report it sees, and the mapping dropped the field.
+          // So the run log said 'grow 1.00 -> 0.71' with no hint that a floor had been breached to save
+          // text -- the one thing v3.0.371 promised would never be silent. Same shape as the v3.0.356
+          // estimate that read the wrong variable and passed every build guard.
+          applied: mApplied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, growFrom: a.growFrom, growTo: a.growTo, belowFloor: !!a.belowFloor, normalFloor: (a.normalFloor != null ? a.normalFloor : null) }; }),
           rejected: mRejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
         })); } catch (e) {}
         return res.send(Buffer.isBuffer(mPdf) ? mPdf : Buffer.from(mPdf));
