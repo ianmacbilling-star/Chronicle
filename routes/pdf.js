@@ -4848,6 +4848,62 @@ function runMovesAdd(k, rec) {
   v.moves.push(rec); v.at = Date.now();
 }
 function runMovesClear(k) { if (k) _runMoves.delete(k); }
+// v3.0.374 -- REFUSALS, REMEMBERED FOR THE REST OF THE RUN.
+// Nothing told the model that an op had been refused, so it proposed the same impossible ones on
+// every pass and the user paid for every one. Measured 2026-08-02 across five books:
+//   Starbound  131 ops over 5 passes, 11 applied. The refused growImage page lists for passes 1
+//              and 2 are IDENTICAL, so are 3 and 4, and SIXTEEN pages are refused on all five
+//              passes with the same reason each time.
+//   Strangers  pass 2 re-proposed 12 of the 12 grows pass 1 had already refused.
+//   Whispers   16 tokens for a run whose pass 1 did the work; passes 2-5 cost 12 of those.
+// The loop had no memory between passes. This gives it one.
+//
+// Run-scoped and keyed exactly like the grow store, so it dies with the run and never leaks into
+// the next one. Latest reason wins per (op,page): a refusal that changes is worth re-reading, and a
+// list that only grows would eventually crowd the dump.
+var _runRefusals = new Map();            // runKey -> { at, items: [ { op, page, viewerPage, reason } ] }
+var RUN_REFUSALS_MAX = 40;               // enough for a long book, small enough to stay readable
+function runRefusalsGet(k) {
+  if (!k) return [];
+  var v = _runRefusals.get(k);
+  if (v && (Date.now() - v.at > RUN_GROWS_TTL_MS)) { _runRefusals.delete(k); v = null; }
+  return (v && v.items) || [];
+}
+function runRefusalsAdd(k, list) {
+  if (!k || !list || !list.length) return;
+  var v = _runRefusals.get(k);
+  if (!v) { v = { at: Date.now(), items: [] }; _runRefusals.set(k, v); }
+  list.forEach(function (r) {
+    if (!r || !r.op) return;
+    var pg = (r.page != null) ? r.page : -1;
+    for (var i = 0; i < v.items.length; i++) {
+      if (v.items[i].op === r.op && v.items[i].page === pg) { v.items[i].reason = r.reason || v.items[i].reason; return; }
+    }
+    v.items.push({ op: r.op, page: pg, viewerPage: (r.viewerPage != null ? r.viewerPage : null), reason: r.reason || 'refused' });
+  });
+  if (v.items.length > RUN_REFUSALS_MAX) v.items = v.items.slice(v.items.length - RUN_REFUSALS_MAX);
+  v.at = Date.now();
+}
+function runRefusalsClear(k) { if (k) _runRefusals.delete(k); }
+// Render the remembered refusals as prompt text. Returns '' when there is nothing to say, so pass 1
+// is byte-identical to before.
+function runRefusalsText(k, viewerOffset) {
+  var items = runRefusalsGet(k);
+  if (!items.length) return '';
+  var L = [];
+  L.push('');
+  L.push('ALREADY REFUSED ON AN EARLIER PASS OF THIS RUN -- DO NOT PROPOSE THESE AGAIN.');
+  L.push('Each line is an op that was tried and could not be applied, with the reason. The page has');
+  L.push('not changed since. Proposing it again cannot succeed and wastes the pass. Spend your ops on');
+  L.push('pages that are NOT listed here, and if there is nothing else worth doing, return an empty');
+  L.push('array -- a short pass is a good outcome, not a failure.');
+  items.forEach(function (r) {
+    var vp = (r.viewerPage != null) ? r.viewerPage : (r.page + (viewerOffset || 0));
+    L.push('  REFUSED  ' + r.op + '  page ' + r.page + ' (viewer p.' + vp + ')  -- ' + r.reason);
+  });
+  L.push('');
+  return L.join('\n');
+}
 // Re-apply recorded moves to a freshly packed plan. Matches on the LEADING placement of a page,
 // which is what moveLeadingNarr moves, and refuses any move that would leave a page empty (a blank
 // page in the middle of a book is worse than the white space the move was fixing).
@@ -7748,6 +7804,13 @@ router.get('/layout-review/:campaignId', requireAuth, async function (req, res) 
     // Prepend the per-layout goals so the AI optimizes for the RIGHT thing (density vs image-forward).
     var _goals = LAYOUT_GOALS[_arrange] || LAYOUT_GOALS.paired;
     var _system = _goals + '\n\n' + LAYOUT_REVIEW_SYSTEM;
+    // v3.0.374 -- CARRY THE REFUSALS FORWARD. Appended to the DUMP rather than the system prompt so
+    // it lands next to the pages it refers to, and so the diagnostics bundle records exactly what the
+    // model was told on each pass. Empty on pass 1, so a first pass is unchanged.
+    try {
+      var _refTxt = runRefusalsText(runGrowsKey(req.params.campaignId, req), 0);
+      if (_refTxt) dump = dump + '\n' + _refTxt;
+    } catch (e) {}
 
     // Send the dump to Sonnet. Mirrors the artStyles.js call pattern exactly.
     var response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -8343,6 +8406,8 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         if (_persistCount) console.log('[layout-apply] recorded ' + _persistCount + ' magazine image grow(s) to the run store (not persisted to DB)');
       } catch (e) { console.error('magazine grow run-store pass failed:', e && e.message); }
 
+      // v3.0.374 -- remember what was refused, so the next pass is not sold the same ops again.
+      try { runRefusalsAdd(runGrowsKey(req.params.campaignId, req), mRejected); } catch (e) {}
       var mBody = composeMagazine(mplan, mbands, _cco);
       // v3.0.370 (TD-154b) -- STORE THE PLAN THAT WAS ACTUALLY COMPOSED.
       // Until now the magazine dump re-packed from natural every time, so its 'final' section
@@ -8729,6 +8794,9 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     // No per-pass charge -- the run was charged once at compose (ceil(pages/10)).
     try { await recordGeneration(req.session.userId, { event_type: 'layout_apply', tokens_redeemed: 0, quantity: 1, unit: 'apply', model: TEXT_MODEL, related_campaign_id: req.params.campaignId }); } catch (e) {}
 
+    // v3.0.374 -- remember what was refused (see runRefusalsAdd). Paired wastes proposals the same
+    // way magazine does: on Strangers pass 2 re-proposed every grow pass 1 had already refused.
+    try { runRefusalsAdd(runGrowsKey(req.params.campaignId, req), rejected); } catch (e) {}
     // If pdf=1, stream the rendered PDF so the After pane can display the applied book directly
     // (the double-click flow uses this: advisor -> apply -> render the result in place). The applied
     // op report is returned in a header so the caller can still show what changed.
@@ -8763,7 +8831,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
 router.post('/layout-reset/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   try {
     // Clear this book's run-scoped grows (the live state) so the next Optimize starts natural.
-    try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
+    try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); runRefusalsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
     // Also purge any LEGACY imgGrow/scale left in layout_meta from before grows went run-scoped. These
     // are no longer read (lmGrow/lmScale are run-scoped now), so they're inert -- but clearing them
     // removes stale data. Enumerate the book's moments via the pack (band momId) and strip both keys.
@@ -9125,7 +9193,7 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       // A new Optimize run: clear this book's run-scoped grows so we start from the NATURAL images.
       // Grows recorded during this run's loop passes are keyed the same way and carry across passes for
       // convergence, but never persist to the DB -- so the layout is deterministic and never degrades.
-      try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
+      try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); runRefusalsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
       if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
         var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
