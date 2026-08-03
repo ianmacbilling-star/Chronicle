@@ -16481,10 +16481,15 @@ function _runLayoutAiOptimize() {
               // A transient failure earns one retry; a second failure is reported as a failure.
               if (j && j.error) {
                 aiLog('Pass ' + roundNum + ': review FAILED -- ' + j.error, 'stop');
+                 // v3.0.403 -- record WHAT failed. 'The AI service was busy' is our guess, printed for
+                 // any error at all: an expired key, a malformed prompt, a rate limit and a genuine
+                 // overload all produced that one sentence. The reason came back in j.error and went
+                 // only to the admin panel, so nobody could act on it.
+                 optimizeDumpLine('review failed on pass ' + roundNum + ': ' + j.error);
                 if (!_reviewRetried) {
                   _reviewRetried = true;
                   aiLog('Pass ' + roundNum + ': retrying once in 6s...', 'skip');
-                  optimizeProgress('The AI service was busy &mdash; retrying...', { dim: true });
+                  optimizeProgress('The AI could not be reached (' + String(j.error).slice(0, 80) + ') &mdash; retrying...', { dim: true });
                   // v3.0.402 -- lastBlob DOES NOT EXIST HERE, and never has.
                   // It is a parameter of iterate(), which is a SIBLING of runRound -- so this line has
                   // thrown ReferenceError since the retry was written in v3.0.320. It only fires when
@@ -16635,7 +16640,24 @@ function _runLayoutAiOptimize() {
           // v3.0.392 -- the button is NOT shown here any more. The loop finishing is not the same
           // as the book being saved, and the file it links to does not exist yet. It appears when
           // finalizeSaveOptimized succeeds, which is what 'Go to Publish' has to mean.
-          optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
+          // v3.0.403 -- A FAILED RUN MUST NOT BE SUMMARISED AS A SUCCESSFUL ONE.
+          // res.failed is checked above, but only to write an aiLog line -- which renders in the admin
+          // panel and nowhere a reader will look. So this summary fired regardless, and the log read:
+          //   Stopped early -- the AI service was unavailable. Your book was NOT fully optimized.
+          //   Your book is already well optimized.
+          // Two lines flatly contradicting each other, the second with a tick on it. Exactly the fault
+          // the v3.0.320 comment on the retry describes -- a quarter of a run reported as a complete
+          // one -- guarded there and never here.
+          // The fill and the save still run: whatever DID get applied is worth keeping. Only the claim
+          // changes.
+          if (res.failed) {
+            optimizeProgress(totalApplied > 0
+              ? ('Stopped early &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') +
+                 ' applied before the AI stopped responding. Saving what was done.')
+              : 'Stopped early &mdash; nothing was changed. Try again shortly.', { done: true });
+          } else {
+            optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
+          }
           optimizeProgressDone();
           // FINAL FILL, then save. Deterministic, not an AI proposal: the loop has converged, nothing
           // more will move, so growing each picture into the room left on its page is pure arithmetic
