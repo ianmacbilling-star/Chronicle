@@ -2956,10 +2956,18 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
     padding: 1in;
     width: 100%;
   }
+    /* v3.0.379 -- TEST TRANSPARENCY, VISIBLE IN THE PREVIEW TABS.
+       0.6 matches the wrap-cover front logo set in v3.0.378, so one value can be compared
+       on screen, in the flattened print PDF, and on the printed proof. NOTE paneSafeHtml
+       does NOT touch opacity, so the preview shows what the print HTML actually contains --
+       unlike the caption gradients, which the panes flatten for display and which therefore
+       cannot test the flattener at all.
+       Five sites carry this; revert all five to remove. Diagnostic, not a design decision. */
   .cover-logo {
     width: 160px;
     height: auto;
     object-fit: contain;
+    opacity: 0.6;
     margin-bottom: 0.4in;
   }
   .cover-eyebrow {
@@ -3168,7 +3176,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  .cover-art-logo { width:110px;height:auto;object-fit:contain; }
+  .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:0.6; }   /* v3.0.379 test transparency */
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
   .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
   .backcover-default { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
@@ -3480,7 +3488,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-border { position:absolute;inset:0.4in;border:2px solid rgba(201,168,76,0.4);pointer-events:none; }
   .cover-border-inner { position:absolute;inset:0.5in;border:1px solid rgba(201,168,76,0.2);pointer-events:none; }
   .cover-content { position:relative;z-index:1;text-align:center;padding:1in;width:100%; }
-  .cover-logo { width:160px;height:auto;object-fit:contain;margin-bottom:0.4in; }
+  .cover-logo { width:160px;height:auto;object-fit:contain;opacity:0.6;margin-bottom:0.4in; }   /* v3.0.379 test transparency */
   .cover-eyebrow { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.5);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.1in; }
   .cover-title { font-family:'Cinzel',serif;font-size:34pt;font-weight:700;color:#c9a84c;letter-spacing:0.05em;line-height:1.2;margin-bottom:0.15in;text-shadow:0 2px 20px rgba(201,168,76,0.3); }
   .cover-divider { width:80px;height:1px;background:rgba(201,168,76,0.5);margin:0.25in auto; }
@@ -3495,7 +3503,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  .cover-art-logo { width:110px;height:auto;object-fit:contain; }
+  .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:0.6; }   /* v3.0.379 test transparency */
 
   /* CAST PAGE */
   .cast-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
@@ -3535,7 +3543,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .dp-label { font-family:'Cinzel',serif;font-size:8.5pt;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.04in; }
   .dp-value { font-family:'Crimson Text',serif;font-size:12pt;color:#2c1810;line-height:1.5; }
   .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
-  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.3in auto 0.12in;opacity:0.9; }
+  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.3in auto 0.12in;opacity:0.6; }   /* v3.0.379 test transparency, was 0.9 */
   .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:6in; }
   .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }
 
