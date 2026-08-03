@@ -15738,6 +15738,17 @@ function finalizeUpdateEstimateBadge() {
     }
   }
 }
+// v3.0.382 -- the one-click hand-off from a finished Optimize run to Order and Publish.
+// Navigation only. By the time this button is visible the run has completed and
+// _publishSource is already 'composed', and switchNovelTab('order') calls loadPrintTab()
+// and finalizeUpdatePublishPick() itself -- so the Order tab arrives pointing at the book
+// that was just optimized without this function passing anything.
+function finalizeGoToPublish() {
+  var b = document.getElementById('layoutai-publish-btn'); if (b) b.disabled = true;
+  try { switchNovelTab('order'); } catch (e) {}
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { try { window.scrollTo(0, 0); } catch (e2) {} }
+  if (b) setTimeout(function () { b.disabled = false; }, 800);
+}
 function finalizeCancelOptimize() {
   window._optimizeCancelled = true;   // checked at the pre-loop auto-fire and between loop passes
   var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) { _cb.disabled = true; _cb.textContent = 'Cancelling...'; }
@@ -15815,6 +15826,10 @@ function _runLayoutAiOptimize() {
   window._optimizeCancelled = false;   // fresh run: clear any prior cancel
   var _cancelBtn = document.getElementById('layoutai-cancel-btn');
   if (_cancelBtn) { _cancelBtn.style.display = ''; _cancelBtn.disabled = false; _cancelBtn.textContent = 'Cancel'; }
+  // v3.0.382 -- a fresh run invalidates the previous result, so the hand-off goes away until
+  // this run completes. It is never shown on a cancel or a failure: the book is not optimized.
+  var _pubBtn = document.getElementById('layoutai-publish-btn');
+  if (_pubBtn) { _pubBtn.style.display = 'none'; _pubBtn.disabled = false; }
   var _loadLastBtn = document.getElementById('layoutai-load-last'); if (_loadLastBtn) _loadLastBtn.style.display = 'none';   // hide during a run
   if (status) status.textContent = '';
   if (out) out.innerHTML = '';
@@ -16233,6 +16248,9 @@ function _runLayoutAiOptimize() {
           // completed (the publish-pick buttons are hidden for them). finalizeUpdatePublishPick() gates
           // this on _finalizeAfterDone/_finalizeAfterPages, so it sticks once the After render lands.
           _publishSource = 'composed';
+          // v3.0.382 -- the run finished, so offer the next step where Cancel used to sit.
+          var _pubB = document.getElementById('layoutai-publish-btn');
+          if (_pubB) { _pubB.style.display = ''; _pubB.disabled = false; }
           optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
           optimizeProgressDone();
           // FINAL FILL, then save. Deterministic, not an AI proposal: the loop has converged, nothing
