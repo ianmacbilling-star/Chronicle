@@ -15161,6 +15161,21 @@ function finalizeLoadFixOptions() {
 function finalizeDecorateNavFix() {
   var nav = document.getElementById('finalize-after-nav');
   if (!nav) return;
+  // v3.0.401 -- NOT UNTIL THE WHOLE PROCESS HAS FINISHED. Ian: 'I do not think the fix buttons
+  // should show until the full process is done.'
+  // The spine is rebuilt on every render, including the ones DURING a run -- after the loop, again
+  // after the final fill, again from the saved file. Offering to adjust a page mid-run means
+  // offering to adjust a book that is about to change underneath the click, and layout-apply would
+  // be rewriting the composed plan while the save is reading it.
+  // Same gate the publish button uses, plus the pending case: after a manual Fix _finalizeSavedReady
+  // is false but the book IS settled, and a second fix has to stay available -- which is exactly
+  // what Ian did, moving text off a page and then growing its picture.
+  var _ready = (_finalizeSavedReady || _finalizeFixPending) && !window._aiLoopRunning;
+  if (!_ready) {
+    var gone = nav.querySelectorAll('.fix-btn');
+    for (var g = 0; g < gone.length; g++) gone[g].parentNode.removeChild(gone[g]);
+    return;
+  }
   var rows = nav.querySelectorAll('div[data-page]');
   for (var i = 0; i < rows.length; i++) {
     var pg = Number(rows[i].getAttribute('data-page'));
@@ -15304,7 +15319,9 @@ function finalizeTryFix() {
   fetch('/api/pdf/layout-apply/' + state.currentCampaign.id + finalizeBookQuery(), {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ops: [op] })
+    // v3.0.401 -- marks this as a user-driven Fix, which is free and ungated. The AI loop does not
+    // send it and keeps its balance check.
+    body: JSON.stringify({ ops: [op], manual: true })
   }).then(function (r) { return r.json().catch(function () { return null; }); })
     .then(function (j) {
       _fixBusy = false;
@@ -16064,6 +16081,7 @@ function finalizeSyncPublishBtn() {
   // _finalizeSavedReady means the file on disk IS the book on screen, _finalizeFixPending means it
   // is not. Driving both from one function is what stops them ever being shown together, or a fix
   // leaving the user with neither -- which is what shipped in v3.0.394.
+  try { finalizeDecorateNavFix(); } catch (e) {}   // v3.0.401 -- the Fix buttons follow the same state
   var sv = document.getElementById('layoutai-save-fixed-btn');
   if (sv) {
     var showSave = _finalizeFixPending && !_finalizeSavedReady && !window._aiLoopRunning;

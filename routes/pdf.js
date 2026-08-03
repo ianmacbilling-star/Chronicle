@@ -8420,7 +8420,17 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
   try {
     var ops = (req.body && Array.isArray(req.body.ops)) ? req.body.ops : null;
     if (!ops) return res.status(400).json({ error: 'POST a JSON body { "ops": [ ... ] }.' });
-    if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
+    // v3.0.401 -- A PER-PAGE FIX IS FREE, SO IT MUST NOT BE GATED ON A BALANCE.
+    // This route never calls spendTokens -- not once in 800 lines -- so the check only ever refused
+    // people, it never charged them. Harmless for the AI loop, because layout-review has already
+    // spent by the time apply runs. Actively wrong for a manual Fix: a reader with an empty balance
+    // was told insufficient_tokens and could not straighten their own book, at exactly the moment
+    // they were most stuck. Ian: 'drop the can afford gate on fixing.'
+    // The LOOP keeps the gate -- it is the only thing between a scripted caller and unlimited free
+    // Chromium renders. Nothing chargeable sits behind it either way, so a spoofed manual flag buys
+    // a render, not a token.
+    var _manualFix = !!(req.body && req.body.manual);
+    if (!_manualFix && !(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
 
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
     // ===== MAGAZINE / GAZETTE apply (growMul on cells + text-cell moves) =====
