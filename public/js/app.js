@@ -14598,6 +14598,17 @@ function finalizeIsContentPage(pageNum, totalPages) {
 // the optimized (After) book. 'composed' is only selectable once Optimize has run, because
 // publishing it reuses that run's composed body server-side.
 var _publishSource = 'flow';
+// v3.0.392 -- WHAT THE BUTTON AND THE LINK ACTUALLY MEAN: a saved optimized book EXISTS.
+// They were keyed on _publishSource === 'composed', which is a different question -- whether the
+// server's COMPOSED CACHE is still valid to publish from. Close enough to work until the timing
+// changed. renderPdfInto calls finalizeUpdatePublishPick on every render completion, and that
+// demotes _publishSource to 'flow' whenever _finalizeAfterDone is momentarily false -- which it is
+// at the START of the re-render that shows the saved book. The v3.0.388 flatten stretched that
+// window from a moment to the best part of a minute, so the button appeared at the end of a run
+// and was then taken away again before anyone could use it.
+// Set by a successful save or a successful load; cleared when a new run starts or the book
+// underneath changes. Nothing transient touches it.
+var _finalizeSavedReady = false;
 // Put the comparison in plain language. Everything here is derived from the two real measurements
 // (page count and ink fill) -- we deliberately do NOT claim anything about which one LOOKS better,
 // because we cannot measure that; we tell the reader what to go and check with their own eyes.
@@ -14670,7 +14681,7 @@ function finalizeUpdatePublishLink() {
   var a = document.getElementById('publish-book-link');
   var none = document.getElementById('publish-book-none');
   if (!a) return;
-  var ready = (_publishSource === 'composed') && !!(state && state.currentCampaign);
+  var ready = _finalizeSavedReady && !!(state && state.currentCampaign);   // v3.0.392 -- see above
   if (!ready) {
     a.style.display = 'none';
     if (none) none.style.display = '';
@@ -15621,6 +15632,16 @@ function finalizeSaveOptimized(quiet) {
             ', ' + (rj.j.pages || '?') + ' pages, arrange=' + (rj.j.arrange || '?'));
         } catch (e) {}
         finalizeShowOptimizedNote(rj.j.at, false);
+        // v3.0.392 -- the FINISHED file now exists, so the hand-off is real. This is the ONLY
+        // place a completed run turns the button on; the completion block no longer does it early.
+        // Deliberately NOT on the quiet save: that one is the protective copy taken the instant
+        // the loop ends, before the final fill, and it is overwritten seconds later. It is a real
+        // file and the link would work, but it is not the book the run produced -- so offering
+        // 'Go to Publish' against it would hand someone the wrong version of their own book.
+        if (!quiet) {
+          _finalizeSavedReady = true;
+          try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
+        }
         if (_live) _live.done('Saved -- this version will be here when you return.');
         else if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
         return true;
@@ -15685,7 +15706,9 @@ function finalizeLoadLastOptimized(manual) {
             var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
             var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.style.display = '';
             _publishSource = 'composed';   // the loaded optimized book is what publishes
+            _finalizeSavedReady = true;    // v3.0.392 -- a saved file is exactly what we just loaded
             finalizeSyncPublishBtn();      // v3.0.383 -- same state as a completed run, same next step
+            try { finalizeUpdatePublishLink(); } catch (e) {}
           }
         } else {
           if (btn) btn.style.display = 'none';   // nothing saved yet
@@ -15856,7 +15879,10 @@ function finalizeUpdateEstimateBadge() {
 function finalizeSyncPublishBtn() {
   var b = document.getElementById('layoutai-publish-btn');
   if (!b) return;
-  var show = (_publishSource === 'composed') && !window._aiLoopRunning;
+  // v3.0.392 -- a SAVED book, not a composed cache. Also means the button now appears only once
+  // the save has landed, which closes the race it always had: it links to the saved file, and
+  // before v3.0.392 it could be clicked ~43 seconds before that file existed.
+  var show = _finalizeSavedReady && !window._aiLoopRunning;
   b.style.display = show ? '' : 'none';
   if (show) b.disabled = false;
 }
@@ -15945,6 +15971,7 @@ function _runLayoutAiOptimize() {
   if (_cancelBtn) { _cancelBtn.style.display = ''; _cancelBtn.disabled = false; _cancelBtn.textContent = 'Cancel'; }
   // v3.0.383 -- a fresh run invalidates the previous result. _aiLoopRunning is not set yet at
   // this point, so hide it outright rather than relying on the sync to work it out.
+  _finalizeSavedReady = false;   // v3.0.392 -- this run has not saved anything yet
   var _pubBtn = document.getElementById('layoutai-publish-btn');
   if (_pubBtn) { _pubBtn.style.display = 'none'; _pubBtn.disabled = false; }
   var _loadLastBtn = document.getElementById('layoutai-load-last'); if (_loadLastBtn) _loadLastBtn.style.display = 'none';   // hide during a run
@@ -16365,10 +16392,9 @@ function _runLayoutAiOptimize() {
           // completed (the publish-pick buttons are hidden for them). finalizeUpdatePublishPick() gates
           // this on _finalizeAfterDone/_finalizeAfterPages, so it sticks once the After render lands.
           _publishSource = 'composed';
-          // v3.0.383 -- the run finished, so offer the next step where Cancel used to sit.
-          // _aiLoopRunning is still true here, so show it directly; the sync takes over after.
-          var _pubB = document.getElementById('layoutai-publish-btn');
-          if (_pubB) { _pubB.style.display = ''; _pubB.disabled = false; }
+          // v3.0.392 -- the button is NOT shown here any more. The loop finishing is not the same
+          // as the book being saved, and the file it links to does not exist yet. It appears when
+          // finalizeSaveOptimized succeeds, which is what 'Go to Publish' has to mean.
           optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
           optimizeProgressDone();
           // FINAL FILL, then save. Deterministic, not an AI proposal: the loop has converged, nothing
@@ -16847,6 +16873,7 @@ function renderPdfInto(url, containerId, isBefore) {
     // so leaving the button armed would only offer a choice that cannot be honoured.
     _finalizeAfterPages = 0; _finalizeAfterDone = false;
     _publishSource = 'flow';
+    _finalizeSavedReady = false;   // v3.0.392 -- a different book: whatever was saved is not this one
     try {
       var _pv = document.getElementById('pub-pick-verdict');
       if (_pv) { _pv.innerHTML = ''; _pv.style.display = 'none'; }
