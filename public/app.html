@@ -544,7 +544,10 @@
               <section class="ord-card" style="margin-bottom:0;">
             <div class="ord-card-title">Publish to the Library</div>
             <div class="ord-card-sub">Share this book on the public Library. You can unpublish or manage it any time from your Account page.</div>
-            <div style="font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:10px;">Publishing the <strong id="publish-source-label" style="color:var(--gold);">original layout</strong> &middot; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:#7fb0e0;text-decoration:underline;">change on the Optimize tab</a></div>
+            <!-- v3.0.385 -- was "Publishing the original layout / change on the Optimize tab", a leftover
+                 from when Before and After were both publishable. Only the optimized book ever publishes,
+                 so the choice is gone and this now links to the exact file that will be used. -->
+            <div style="font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:10px;">Publishing: <a id="publish-book-link" href="#" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;">the optimized book</a><span id="publish-book-none" style="display:none;">nothing yet &mdash; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:#7fb0e0;text-decoration:underline;">run Optimize first</a></span></div>
             <label class="prep-attest"><input type="checkbox" id="prep-attest" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).</span></label>
             <div class="prep-field-label">Blurb for your Library page (optional)</div>
             <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>

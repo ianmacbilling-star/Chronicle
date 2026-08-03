@@ -14656,8 +14656,33 @@ function finalizeUpdatePublishPick() {
     after.title = ready ? 'Publish the optimized layout' : 'Run Optimize first';
   }
   if (!ready && _publishSource === 'composed') _publishSource = 'flow';   // never leave a stale choice armed
-  var lbl = document.getElementById('publish-source-label');
-  if (lbl) lbl.textContent = (_publishSource === 'composed') ? 'optimized layout' : 'original layout';
+  finalizeSyncPublishBtn();   // v3.0.383 -- the demotion above must take the button with it
+  finalizeUpdatePublishLink();   // v3.0.385 -- replaces the original/optimized wording
+}
+// v3.0.385 -- SHOW WHAT WILL ACTUALLY BE PUBLISHED, AS A LINK TO IT.
+// The old line offered a choice between the original and the optimized layout. That choice
+// no longer exists for users -- a completed Optimize arms the optimized book automatically
+// and the pick buttons are admin-only -- so the wording was describing a decision nobody
+// makes, and 'original layout' read as a warning when nothing was wrong.
+// The link opens the SAVED optimized PDF, covers included, which is the same file the
+// publish call renders from. If nothing is armed, no link is offered at all.
+function finalizeUpdatePublishLink() {
+  var a = document.getElementById('publish-book-link');
+  var none = document.getElementById('publish-book-none');
+  if (!a) return;
+  var ready = (_publishSource === 'composed') && !!(state && state.currentCampaign);
+  if (!ready) {
+    a.style.display = 'none';
+    if (none) none.style.display = '';
+    return;
+  }
+  var t = '';
+  try { var tEl = document.getElementById('prep-title'); if (tEl && tEl.value) t = tEl.value.trim(); } catch (e) {}
+  if (!t) { try { t = (state.currentCampaign.name || '').trim(); } catch (e) { t = ''; } }
+  a.textContent = (t || 'the optimized book') + ' \u2014 optimized, with covers';
+  a.href = '/api/pdf/last-optimized-file/' + state.currentCampaign.id + finalizeBookQuery();
+  a.style.display = '';
+  if (none) none.style.display = 'none';
 }
 function finalizeBookQuery() {
   return '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel', '&');   // covers now render in the panes (viewer upgraded to pdf.js 6.x, which handles the cover/caption gradients)
@@ -15584,6 +15609,7 @@ function finalizeLoadLastOptimized(manual) {
             var body = document.getElementById('finalize-after-body'); if (body) body.style.display = 'none';
             var scroll = document.getElementById('finalize-after-scroll'); if (scroll) scroll.style.display = '';
             _publishSource = 'composed';   // the loaded optimized book is what publishes
+            finalizeSyncPublishBtn();      // v3.0.383 -- same state as a completed run, same next step
           }
         } else {
           if (btn) btn.style.display = 'none';   // nothing saved yet
@@ -15743,6 +15769,21 @@ function finalizeUpdateEstimateBadge() {
 // _publishSource is already 'composed', and switchNovelTab('order') calls loadPrintTab()
 // and finalizeUpdatePublishPick() itself -- so the Order tab arrives pointing at the book
 // that was just optimized without this function passing anything.
+// v3.0.383 -- THE BUTTON FOLLOWS THE STATE, NOT THE EVENT.
+// v3.0.382 showed it when a run COMPLETED, which missed the other way an optimized book
+// gets armed: finalizeLoadLastOptimized sets _publishSource to 'composed' too, both when
+// the user clicks Load Last Optimized File and automatically when they open the tab and a
+// saved file exists. Same state, same next step, and only the button disagreed.
+// Tying it to the event rather than the condition is how the two drift apart later, so
+// there is now one function and every site calls it.
+// Hidden while a run is in flight: mid-run the pane holds a half-optimized book.
+function finalizeSyncPublishBtn() {
+  var b = document.getElementById('layoutai-publish-btn');
+  if (!b) return;
+  var show = (_publishSource === 'composed') && !window._aiLoopRunning;
+  b.style.display = show ? '' : 'none';
+  if (show) b.disabled = false;
+}
 function finalizeGoToPublish() {
   var b = document.getElementById('layoutai-publish-btn'); if (b) b.disabled = true;
   try { switchNovelTab('order'); } catch (e) {}
@@ -15826,8 +15867,8 @@ function _runLayoutAiOptimize() {
   window._optimizeCancelled = false;   // fresh run: clear any prior cancel
   var _cancelBtn = document.getElementById('layoutai-cancel-btn');
   if (_cancelBtn) { _cancelBtn.style.display = ''; _cancelBtn.disabled = false; _cancelBtn.textContent = 'Cancel'; }
-  // v3.0.382 -- a fresh run invalidates the previous result, so the hand-off goes away until
-  // this run completes. It is never shown on a cancel or a failure: the book is not optimized.
+  // v3.0.383 -- a fresh run invalidates the previous result. _aiLoopRunning is not set yet at
+  // this point, so hide it outright rather than relying on the sync to work it out.
   var _pubBtn = document.getElementById('layoutai-publish-btn');
   if (_pubBtn) { _pubBtn.style.display = 'none'; _pubBtn.disabled = false; }
   var _loadLastBtn = document.getElementById('layoutai-load-last'); if (_loadLastBtn) _loadLastBtn.style.display = 'none';   // hide during a run
@@ -16248,7 +16289,8 @@ function _runLayoutAiOptimize() {
           // completed (the publish-pick buttons are hidden for them). finalizeUpdatePublishPick() gates
           // this on _finalizeAfterDone/_finalizeAfterPages, so it sticks once the After render lands.
           _publishSource = 'composed';
-          // v3.0.382 -- the run finished, so offer the next step where Cancel used to sit.
+          // v3.0.383 -- the run finished, so offer the next step where Cancel used to sit.
+          // _aiLoopRunning is still true here, so show it directly; the sync takes over after.
           var _pubB = document.getElementById('layoutai-publish-btn');
           if (_pubB) { _pubB.style.display = ''; _pubB.disabled = false; }
           optimizeProgress(totalApplied > 0 ? ('Polished your book &mdash; ' + totalApplied + ' improvement' + (totalApplied === 1 ? '' : 's') + ' applied.') : 'Your book is already well optimized.', { done: true });
@@ -16734,8 +16776,9 @@ function renderPdfInto(url, containerId, isBefore) {
       if (_pv) { _pv.innerHTML = ''; _pv.style.display = 'none'; }
       var _pw = document.getElementById('layoutai-publish-pick');
       if (_pw) _pw.style.display = 'none';
-      var _pl = document.getElementById('publish-source-label');
-      if (_pl) _pl.textContent = 'original layout';
+      // v3.0.385 -- the source was just reset to 'flow', so the link must go with it.
+      if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink();
+      if (typeof finalizeSyncPublishBtn === 'function') finalizeSyncPublishBtn();
     } catch (e) {}
   } else { _finalizeAfterPages = 0; _finalizeAfterDone = false; }
   var flagged = [];
