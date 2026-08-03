@@ -16485,8 +16485,15 @@ function _runLayoutAiOptimize() {
                   _reviewRetried = true;
                   aiLog('Pass ' + roundNum + ': retrying once in 6s...', 'skip');
                   optimizeProgress('The AI service was busy &mdash; retrying...', { dim: true });
-                  return new Promise(function (res) { setTimeout(res, 6000); })
-                    .then(function () { return iterate(roundNum, lastBlob); });
+                  // v3.0.402 -- lastBlob DOES NOT EXIST HERE, and never has.
+                  // It is a parameter of iterate(), which is a SIBLING of runRound -- so this line has
+                  // thrown ReferenceError since the retry was written in v3.0.320. It only fires when
+                  // the AI review fails, so the one path meant to rescue a run was the one path
+                  // guaranteed to kill it: 'The AI service was busy -- retrying...' followed by
+                  // 'AI optimize failed: lastBlob is not defined'.
+                  // Retrying is iterate's job. runRound asks for one and returns; the caller, which
+                  // HAS the blob, does the waiting and the re-entry.
+                  return { retry: true, done: false, applied: 0, blob: null, report: null };
                 }
                 optimizeProgress('Stopped early &mdash; the AI service was unavailable. Your book was NOT fully optimized; try again shortly.', { done: true });
                 return { done: true, applied: 0, blob: null, report: null, failed: true };
@@ -16582,6 +16589,11 @@ function _runLayoutAiOptimize() {
       var _prevSig = null;
       function iterate(roundNum, lastBlob) {
         return runRound(roundNum).then(function (res) {
+          // v3.0.402 -- honour a retry request from runRound, here where lastBlob is in scope.
+          if (res && res.retry) {
+            return new Promise(function (r) { setTimeout(r, 6000); })
+              .then(function () { return iterate(roundNum, lastBlob); });
+          }
           if (res.blob) {
             totalApplied += res.applied;
             lastBlob = res.blob;
