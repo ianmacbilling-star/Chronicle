@@ -4119,6 +4119,19 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     }
   } catch (e) { console.error('[page-limit] count failed:', e && e.message ? e.message : e); }
 
+  // v3.0.384 -- FLATTEN ONCE, RIGHT AFTER THE RENDER, SO EVERY PATH GETS THE SAME BYTES.
+  // v3.0.377 put this on the upload path only. The `download` branch returns earlier, so a
+  // PDF downloaded and handed to Lulu manually -- which is how this has actually been tested
+  // -- was NOT flattened and still tripped the transparency warning, while the file the app
+  // uploaded for the same book was. Two different artifacts for one book is worse than either
+  // being wrong: a proof read by eye would not have been the file that went to press.
+  // COST: the download now waits for Ghostscript. Accepted -- a download that is not the
+  // printed file is worse than a slow one. Preview renders are untouched.
+  try {
+    var _flatI0 = await flattenPdf(pdfBuffer, 'interior');
+    pdfBuffer = _flatI0.buffer;
+  } catch (e) { console.warn('[flatten] interior: threw, using the unflattened PDF: ' + (e && e.message ? e.message : e)); }
+
   if (req.query.download) {
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', 'inline; filename="interior-' + campaign.id + '.pdf"');
@@ -4127,15 +4140,11 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 
   try {
     var fname = 'interior-' + campaign.id + (asUser ? ('-u' + asUser) : '') + '-' + Date.now() + '.pdf';
-    // v3.0.377 -- flatten transparency on the PRINT-BOUND copy only. Preview renders are
-    // untouched, so nothing in the UI gets slower. Fails open; see flattenPdf.js.
-    var _flatI = await flattenPdf(pdfBuffer, 'interior');
-    var _outI = _flatI.buffer;
-    var url = await uploadFile(_outI, fname, 'application/pdf', 'print');
-    // Page count from the UPLOADED bytes: it is what Lulu will read, and the cover spine
-    // is derived from it. Counting the pre-flatten copy would be counting a different file.
-    var pages = await pdfPageCount(_outI);
-    return res.json({ url: url, bytes: _outI.length, pages: pages, flattened: _flatI.flattened });
+    // v3.0.384 -- already flattened above, for every path. The page count comes from the same
+    // bytes Lulu will read, because the cover spine is derived from it.
+    var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
+    var pages = await pdfPageCount(pdfBuffer);
+    return res.json({ url: url, bytes: pdfBuffer.length, pages: pages });
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
@@ -4367,6 +4376,14 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
       return res.status(500).json({ error: 'Cover render failed', detail: friendlyError(e, '') });
     }
 
+    // v3.0.384 -- see the interior route: flattened once here so the downloaded cover and the
+    // uploaded cover are the same file. This is the one most certain to need it -- wc-logo and
+    // wc-spine-logo are both RGB+ALPHA, and wc-logo also runs at COVER_LOGO_OPACITY.
+    try {
+      var _flatC0 = await flattenPdf(pdfBuffer, 'cover');
+      pdfBuffer = _flatC0.buffer;
+    } catch (e) { console.warn('[flatten] cover: threw, using the unflattened PDF: ' + (e && e.message ? e.message : e)); }
+
     if (req.query.download) {
       res.set('Content-Type', 'application/pdf');
       res.set('Content-Disposition', 'inline; filename="cover-' + campaign.id + '.pdf"');
@@ -4374,12 +4391,9 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     }
     try {
       var fname = 'cover-' + campaign.id + '-' + Date.now() + '.pdf';
-      // v3.0.377 -- the cover carries two RGB+ALPHA logos (wc-logo and wc-spine-logo),
-      // so it is the file most certain to trip Lulu's transparency warning.
-      var _flatC = await flattenPdf(pdfBuffer, 'cover');
-      var _outC = _flatC.buffer;
-      var url = await uploadFile(_outC, fname, 'application/pdf', 'print');
-      return res.json({ url: url, bytes: _outC.length, widthIn: dims.widthIn, heightIn: dims.heightIn, flattened: _flatC.flattened });
+      // v3.0.384 -- already flattened above, for every path.
+      var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
+      return res.json({ url: url, bytes: pdfBuffer.length, widthIn: dims.widthIn, heightIn: dims.heightIn });
     } catch (e) {
       console.error('[print-cover] upload failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Cover upload failed', detail: friendlyError(e, '') });
