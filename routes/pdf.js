@@ -6601,91 +6601,140 @@ function composeMagazine(plan, bands, opts) {
 // hang one on. Ian, 2026-08-03: 'We do not need the buttons on the cover pages.'
 // TD-158 is why this is a function and not a second copy: one rule in two places is how the tower
 // bug happened twice.
+// v3.0.396 -- ONE ANALYSIS, EVERY LAYOUT, EVERY PAGE.
+// v3.0.394 built this for the paired plan only and offered a button solely on pages our own checks
+// thought were wrong. Both were wrong calls, and this week is the argument against them: the checks
+// passed Starbound as clean -- VERDICT: no stage reports a clip -- while the book ended on three
+// lines and eight inches of white. A control that appears only where we already agree there is a
+// problem is useless exactly when our judgement is. Ian: 'Put the fix button next to every page
+// number. We will not know for sure what they want to fix.'
+//
+// So: the core below knows nothing about layouts. It reads a NORMALISED page -- a list of items
+// that are text or picture, with heights -- and two adapters translate. Magazine cells and paired
+// placements are different shapes for the same question, and writing the arithmetic twice is how
+// the tower bug happened twice (TD-158).
+var FIX_MIN_MOVE  = 0.30;    // one line: below this there is nothing worth moving
+var FIX_PIC_FLOOR = 0.72;    // how far a picture may be trimmed. Conservative on purpose: magazine
+                             // floors are per shape and prominence (mzShapeShrinkFloor) and can go
+                             // lower, so an AMBER verdict here understates what is available rather
+                             // than promising room that is not there.
+// One normalised page: { real, items: [ { text, pic, h } ] }
+function fixOptionsCore(npages, viewerOffset, allowPush) {
+  var rows = [];
+  function realOf(ix) { var p = npages[ix]; return (p && p.real != null) ? p.real : null; }
+  function itemsOf(ix) { return (npages[ix] && npages[ix].items) || []; }
+  function biggestPic(ix) {
+    var its = itemsOf(ix), best = null;
+    for (var i = 0; i < its.length; i++) if (its[i].pic && its[i].h > 0 && (!best || its[i].h > best.h)) best = its[i];
+    return best;
+  }
+  function give(ix) { var p = biggestPic(ix); return p ? Math.round(p.h * (1 - FIX_PIC_FLOOR) * 100) / 100 : 0; }
+  // A TEXT MOVE MOVES LINES, NOT WHOLE BLOCKS. The first version asked for the entire slice --
+  // 'needs 6.88in' on a magazine band -- and called everything impossible. pullLines and pushLines
+  // shift a split boundary by a given number of lines, so a PARTIAL move is a real and useful
+  // outcome: one line is enough to be worth doing.
+  // Moving ALL of it is still the interesting case, because that is what makes a page disappear, so
+  // the wording distinguishes the two rather than collapsing them into one yes or no.
+  function verdict(need, room, giveIx, box) {
+    if (need == null) return ['GREY', 'nothing there to move'];
+    if (need < FIX_MIN_MOVE) return ['GREY', 'less than a line -- not worth moving'];
+    if (room >= need) return ['GREEN', 'room for all of it (' + room.toFixed(2) + 'in free, ' + need.toFixed(2) + 'in to move)'];
+    if (room >= FIX_MIN_MOVE) {
+      var lines = Math.floor(room / FIX_MIN_MOVE), tot = Math.max(1, Math.round(need / FIX_MIN_MOVE));
+      return ['GREEN', 'room for about ' + lines + ' of its ' + tot + ' lines (' + room.toFixed(2) + 'in free)'];
+    }
+    var g = (giveIx != null) ? give(giveIx) : 0;
+    if (g > 0 && (room + g) >= need) {
+      var pic = biggestPic(giveIx), short = need - room;
+      var pct = pic ? Math.round((short / pic.h) * 100) : 0;
+      return ['AMBER', 'only fits if the picture on page ' + giveIx + ' is trimmed about ' + pct + ' percent (' +
+              room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in)'];
+    }
+    return ['GREY', 'no room -- ' + room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in' +
+            (g > 0 ? (', and trimming the picture there only frees ' + g.toFixed(2) + 'in') : ' and there is no picture to trim')];
+  }
+  var BOX = CO_CLIP_BOX_IN;
+  for (var pi = 0; pi < npages.length; pi++) {
+    var rMe = realOf(pi);
+    if (rMe == null) continue;                       // no measurement, no honest answer
+    var prevOk = pi > 0, nextOk = (pi + 1) < npages.length;
+    var roomMe = Math.round((BOX - rMe) * 100) / 100;
+    var roomPrev = prevOk ? Math.round((BOX - realOf(pi - 1)) * 100) / 100 : null;
+    var roomNext = nextOk ? Math.round((BOX - realOf(pi + 1)) * 100) / 100 : null;
+    var me = itemsOf(pi);
+    var headMe = me[0] || null, tailMe = me[me.length - 1] || null;
+    var nextHead = nextOk ? (itemsOf(pi + 1)[0] || null) : null;
+    var prevItems = prevOk ? itemsOf(pi - 1) : [];
+    var prevTail = prevItems[prevItems.length - 1] || null;
+    var opts = [], v;
+    // 1. take text from the page AFTER
+    if (!nextOk) opts.push(['take text from the page after', 'GREY', 'this is the last page -- there is no page after it']);
+    else if (!(nextHead && nextHead.text)) opts.push(['take text from the page after', 'GREY', 'the next page starts with a picture, which cannot move up alone']);
+    else { v = verdict(nextHead.h, roomMe, pi, BOX); opts.push(['take text from the page after', v[0], v[1]]); }
+    // 2. take text from the page BEFORE
+    if (!prevOk) opts.push(['take text from the page before', 'GREY', 'this is the first page -- there is no page before it']);
+    else if (!allowPush) opts.push(['take text from the page before', 'GREY', 'this layout cannot push text down a page yet']);
+    else if (!(prevTail && prevTail.text)) opts.push(['take text from the page before', 'GREY', 'the previous page ends with a picture, which cannot move down alone']);
+    else { v = verdict(prevTail.h, roomMe, pi, BOX); opts.push(['take text from the page before', v[0], v[1]]); }
+    // 3. send text to the page AFTER
+    if (!nextOk) opts.push(['send text to the page after', 'GREY', 'this is the last page -- there is no page after it']);
+    else if (!allowPush) opts.push(['send text to the page after', 'GREY', 'this layout cannot push text down a page yet']);
+    else if (!(tailMe && tailMe.text)) opts.push(['send text to the page after', 'GREY', 'this page ends with a picture, which cannot move down alone']);
+    else { v = verdict(tailMe.h, roomNext, pi + 1, BOX); opts.push(['send text to the page after', v[0], v[1]]); }
+    // 4. send text to the page BEFORE -- the move that absorbs a stranded page
+    if (!prevOk) opts.push(['send text to the page before', 'GREY', 'this is the first page -- there is no page before it']);
+    else if (!(headMe && headMe.text)) opts.push(['send text to the page before', 'GREY', 'this page starts with a picture, which cannot move up alone']);
+    else { v = verdict(headMe.h, roomPrev, pi - 1, BOX); opts.push(['send text to the page before', v[0], v[1]]); }
+    // 5 and 6. the pictures on this page
+    var picMe = biggestPic(pi);
+    if (!picMe) {
+      opts.push(['make the pictures bigger', 'GREY', 'there is no picture on this page']);
+      opts.push(['make the pictures smaller', 'GREY', 'there is no picture on this page']);
+    } else {
+      opts.push(['make the pictures bigger', (roomMe < FIX_MIN_MOVE ? 'GREY' : 'GREEN'),
+        (roomMe < FIX_MIN_MOVE ? ('this page has no spare height (' + roomMe.toFixed(2) + 'in)')
+                               : ('about ' + roomMe.toFixed(2) + 'in of height is free for it to grow into'))]);
+      opts.push(['make the pictures smaller', 'GREEN', 'frees up to ' + give(pi).toFixed(2) + 'in before it hits its floor']);
+    }
+    rows.push({ page: pi, real: rMe, over: rMe > BOX, opts: opts });
+  }
+  return rows;
+}
+// PAIRED adapter. A placement is one thing: a picture, or a run of narrative.
 function pairedFixOptions(pages, dbgPages, viewerOffset) {
-   var d = { pages: dbgPages || [] };
-   var _viewer = function (cp) { return cp + (viewerOffset || 0); };
-   var _FIX_EMPTY_BAR = 1.0;     // report a page holding more than an inch of empty space
-   var _FIX_MIN_MOVE  = 0.30;    // one line: below this there is nothing worth moving
-   var _FIX_PIC_FLOOR = 0.72;    // how far a paired picture may be trimmed (see the shrink ladder)
-   function _fxReal(ix) {
-     var r = (d.pages || []).filter(function (x) { return x.page === ix; })[0];
-     return (r && r.realUsed != null) ? r.realUsed : null;
-   }
-   function _fxPl(ix) { return (((pages || [])[ix] || {}).placements || []); }
-   function _fxIsText(pl) { return !!(pl && pl.kind === 'narr'); }
-   function _fxPic(ix) {
-     var ps = _fxPl(ix), best = null;
-     for (var i = 0; i < ps.length; i++) {
-       if (ps[i].kind !== 'image') continue;
-       var h = (ps[i].realH != null) ? ps[i].realH : ps[i].heightIn;
-       if (h > 0 && (!best || h > best.h)) best = { h: h, pl: ps[i] };
-     }
-     return best;   // the biggest picture is the one with the most to give
-   }
-   // How much a page could free by trimming its largest picture to the floor.
-   function _fxGive(ix) {
-     var p = _fxPic(ix);
-     return p ? (Math.round(p.h * (1 - _FIX_PIC_FLOOR) * 100) / 100) : 0;
-   }
-   function _fxVerdict(need, room, giveIx) {
-     if (need == null) return ['GREY ', 'nothing there to move'];
-     if (need < _FIX_MIN_MOVE) return ['GREY ', 'less than a line -- not worth moving'];
-     if (room >= need) return ['GREEN', 'room is already there (' + room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in)'];
-     var give = (giveIx != null) ? _fxGive(giveIx) : 0;
-     if (give > 0 && (room + give) >= need) {
-       var short = need - room;
-       var pic = _fxPic(giveIx);
-       var pct = pic ? Math.round((1 - (pic.h - short) / pic.h) * 100) : 0;
-       return ['AMBER', 'only fits if the picture on page ' + giveIx + ' is trimmed about ' + pct + ' percent (' +
-               room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in)'];
-     }
-     return ['GREY ', 'no room -- ' + room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in' +
-             (give > 0 ? (', and trimming the picture there only frees ' + give.toFixed(2) + 'in') : ' and there is no picture to trim')];
-   }
-   var _fxRows = [];
-   (pages || []).forEach(function (pg, pi) {
-     var rMe = _fxReal(pi);
-     if (rMe == null) return;
-     var over  = rMe > CO_CLIP_BOX_IN;
-     var empty = (CO_CLIP_BOX_IN - rMe) > _FIX_EMPTY_BAR;
-     if (!over && !empty) return;                       // only pages we already believe are wrong
-     var me = _fxPl(pi), prevOk = pi > 0, nextOk = (pi + 1) < (pages || []).length;
-     var rPrev = prevOk ? _fxReal(pi - 1) : null, rNext = nextOk ? _fxReal(pi + 1) : null;
-     var roomMe   = Math.round((CO_CLIP_BOX_IN - rMe) * 100) / 100;
-     var roomPrev = (rPrev != null) ? Math.round((CO_CLIP_BOX_IN - rPrev) * 100) / 100 : null;
-     var roomNext = (rNext != null) ? Math.round((CO_CLIP_BOX_IN - rNext) * 100) / 100 : null;
-     var headMe = me[0] || null, tailMe = me[me.length - 1] || null;
-     var nextHead = nextOk ? (_fxPl(pi + 1)[0] || null) : null;
-     var prevTail = prevOk ? (function () { var p = _fxPl(pi - 1); return p[p.length - 1] || null; })() : null;
-     function hOf(pl) { return pl ? ((pl.realH != null) ? pl.realH : pl.heightIn) : null; }
-     var opts = [];
-     // 1. take text from the page AFTER
-     if (!nextOk) opts.push(['take text from the page after ', 'GREY ', 'this is the last page -- there is no page after it']);
-     else if (!_fxIsText(nextHead)) opts.push(['take text from the page after ', 'GREY ', 'the next page starts with a picture, which cannot move up alone']);
-     else { var v1 = _fxVerdict(hOf(nextHead), roomMe, pi); opts.push(['take text from the page after ', v1[0], v1[1]]); }
-     // 2. take text from the page BEFORE
-     if (!prevOk) opts.push(['take text from the page before', 'GREY ', 'this is the first page -- there is no page before it']);
-     else if (!_fxIsText(prevTail)) opts.push(['take text from the page before', 'GREY ', 'the previous page ends with a picture, which cannot move down alone']);
-     else { var v2 = _fxVerdict(hOf(prevTail), roomMe, pi); opts.push(['take text from the page before', v2[0], v2[1]]); }
-     // 3. send text to the page AFTER
-     if (!nextOk) opts.push(['send text to the page after  ', 'GREY ', 'this is the last page -- there is no page after it']);
-     else if (!_fxIsText(tailMe)) opts.push(['send text to the page after  ', 'GREY ', 'this page ends with a picture, which cannot move down alone']);
-     else { var v3 = _fxVerdict(hOf(tailMe), roomNext, pi + 1); opts.push(['send text to the page after  ', v3[0], v3[1]]); }
-     // 4. send text to the page BEFORE -- the move that absorbs a stranded page
-     if (!prevOk) opts.push(['send text to the page before ', 'GREY ', 'this is the first page -- there is no page before it']);
-     else if (!_fxIsText(headMe)) opts.push(['send text to the page before ', 'GREY ', 'this page starts with a picture, which cannot move up alone']);
-     else { var v4 = _fxVerdict(hOf(headMe), roomPrev, pi - 1); opts.push(['send text to the page before ', v4[0], v4[1]]); }
-     // 5. pictures bigger
-     var picMe = _fxPic(pi);
-     if (!picMe) opts.push(['make the pictures bigger     ', 'GREY ', 'there is no picture on this page']);
-     else if (roomMe < _FIX_MIN_MOVE) opts.push(['make the pictures bigger     ', 'GREY ', 'this page has no spare height (' + roomMe.toFixed(2) + 'in)']);
-     else opts.push(['make the pictures bigger     ', 'GREEN', 'about ' + roomMe.toFixed(2) + 'in of height is free for it to grow into']);
-     // 6. pictures smaller
-     if (!picMe) opts.push(['make the pictures smaller    ', 'GREY ', 'there is no picture on this page']);
-     else opts.push(['make the pictures smaller    ', 'GREEN', 'frees up to ' + _fxGive(pi).toFixed(2) + 'in before it hits its floor']);
-     _fxRows.push({ page: pi, real: rMe, over: over, opts: opts });
-   });
-   return _fxRows;
+  var reals = {};
+  (dbgPages || []).forEach(function (x) { if (x && x.realUsed != null) reals[x.page] = x.realUsed; });
+  var np = (pages || []).map(function (pg, pi) {
+    return {
+      real: (reals[pi] != null) ? reals[pi] : null,
+      items: (pg.placements || []).map(function (pl) {
+        return { text: pl.kind === 'narr', pic: (pl.kind === 'image' || pl.kind === 'tower'),
+                 h: (pl.realH != null) ? pl.realH : pl.heightIn };
+      })
+    };
+  });
+  return fixOptionsCore(np, viewerOffset, true);
+}
+// MAGAZINE adapter. A cell is a BAND SLICE and carries text AND, sometimes, the picture -- so the
+// two are not separable the way a paired placement is. A slice counts as movable text when it is
+// split or its band has splittable narrative; it counts as a picture when the image sits in THIS
+// slice. A cell can be both, which is correct: the same slice can give text or give height.
+// pushLines is DEFERRED on magazine (TD-173), so the two moves that need it are refused with a
+// reason rather than offered and rejected on click.
+function magazineFixOptions(bands, dbgPages, viewerOffset) {
+  var np = (dbgPages || []).map(function (pg) {
+    return {
+      real: (pg && pg.realUsed != null) ? pg.realUsed : null,
+      items: ((pg && pg.cells) || []).map(function (c) {
+        var b = (bands || [])[c.band] || {};
+        var hasText = !!(c.split || b.stext);
+        var imgH = (c.sImgH != null && c.sImgH > 0) ? c.sImgH : ((c.simg && b.sImgH) ? b.sImgH : 0);
+        var h = (c.realH != null) ? c.realH : c.h;
+        return { text: hasText, pic: imgH > 0, h: (imgH > 0 && !hasText) ? imgH : h };
+      })
+    };
+  });
+  return fixOptionsCore(np, viewerOffset, false);
 }
 
 function pairedPlanText(packed) {
@@ -6946,7 +6995,9 @@ function pairedPlanText(packed) {
    if (_fxRows.length) {
      L.push('');
      L.push('PAGE FIX OPTIONS (what a PERSON could do -- reporting only, nothing reads this yet)');
-     L.push('  Listed for pages that hold more than ' + _FIX_EMPTY_BAR.toFixed(2) + 'in of empty space, or that run over the box.');
+     L.push('  EVERY page is listed, not only the ones our checks dislike -- those checks passed a book');
+     L.push('  that ended on three lines and eight inches of white, so a control shown only where we');
+     L.push('  already agree there is a problem is useless exactly when our judgement is.');
      L.push('  GREEN the room is there. AMBER it only fits if a picture gives way, and by how much.');
      L.push('  GREY why not. Every verdict is a PREDICTION -- the applier still measures and can refuse.');
      _fxRows.forEach(function (r) {
@@ -6954,7 +7005,7 @@ function pairedPlanText(packed) {
          CO_CLIP_BOX_IN.toFixed(2) + 'in' + (r.over ? '  *** OVER THE BOX ***' : ''));
        r.opts.forEach(function (o) { L.push('        [' + o[1] + ']  ' + o[0] + '  ' + o[2]); });
      });
-     L.push('  ' + _fxRows.length + ' page(s) offered options.');
+     L.push('  ' + _fxRows.length + ' page(s).');
    }
 
   // ===== ISSUES (AI signals) -- paired ===========================================================
@@ -7780,19 +7831,27 @@ router.get('/layouts', requireAuth, function (req, res) {
 router.get('/page-fix-options/:campaignId', requireAuth, async function (req, res) {
   try {
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
-    if (_cco.arrange && _cco.arrange !== 'paired') {
-      return res.json({ ok: true, arrange: _cco.arrange, pages: [], note: 'only the Picture Book layout is wired up so far' });
+    var _arr = _cco.arrange || 'paired';
+    var _mag = (_arr === 'magazine' || _arr === 'gazette');
+    // v3.0.396 -- every layout answers. Ian: the Fix buttons belong on every page, in every layout.
+    var _plan, _dbg, _rows;
+    if (_mag) {
+      var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
+      _dbg = (packedM && packedM.dbg) || {};
+      _rows = magazineFixOptions(_dbg.bands || [], _dbg.pages || [], 0);
+    } else {
+      var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
+      _plan = (packedP && packedP.plan) || {};
+      _dbg = (packedP && packedP.dbg) || {};
+      _rows = pairedFixOptions(_plan.pages || [], _dbg.pages || [], 0);
     }
-    var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
-    var _plan = (packedP && packedP.plan) || {};
-    var _dbg = (packedP && packedP.dbg) || {};
     // Front-matter count, same derivation the dumper uses, so the viewer numbers agree with the
     // page numbers the reader sees in the preview spine.
     var _has = function (k) { return !(_cco && _cco[k] === 0); };
     var _fmN = 2 + (_has('cover') ? 1 : 0) + (_has('toc') ? 1 : 0) + (_has('cast') ? 1 : 0);
-    var rows = pairedFixOptions(_plan.pages || [], _dbg.pages || [], _fmN + 1);
+    var rows = _rows;
     return res.json({
-      ok: true, arrange: 'paired', frontMatter: _fmN,
+      ok: true, arrange: _arr, frontMatter: _fmN,
       pages: rows.map(function (r) {
         return {
           page: r.page, viewerPage: r.page + _fmN + 1,
