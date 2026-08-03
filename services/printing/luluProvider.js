@@ -76,6 +76,28 @@ const PAPER_CODE_CREAM = '060UC444';
 // Confirmed SKUs win over the parametric builder so a future code change
 // can't silently break a known-good product. All entries below are
 // sandbox-confirmed (8.5x11 full color); keyed by `${binding}:${quality}:${coverFinish}`.
+// v3.0.376 -- LULU IS MIGRATING pod_package_id TO A DOTTED FORMAT.
+//   0850X1100FCPRECW060UW444MXX  ->  0850X1100.FC.PRE.CW.060UW444.MXX
+// Dotted went live 2026-03-31, the API accepts BOTH, and legacy 27-character
+// support ends 2027-02-01. Only the string changes -- same endpoints, same auth,
+// same payloads.
+//
+// The confirmed SKUs below are deliberately kept in LEGACY form and converted at
+// the boundary. They are the only values known to produce a real quote; retyping
+// them as dotted would replace confirmed constants with believed-equivalent ones,
+// and the failure mode is a 400 at order time. Converting instead keeps the
+// confirmed strings as documentation and puts the risk in one testable function.
+//
+// Field widths are fixed: Trim 9, Ink 2, Quality 3, Binding 2, Paper 8, Finish 3.
+// Anything that is not exactly 27 characters, or already dotted, is passed through
+// untouched -- a SKU we do not recognise is not one to start reformatting.
+const SKU_DOTTED = String(process.env.LULU_SKU_DOTTED || 'true').toLowerCase() !== 'false';
+function toDottedSku(sku) {
+  var s = String(sku || '');
+  if (!s || s.indexOf('.') >= 0 || s.length !== 27) return s;
+  return [s.slice(0, 9), s.slice(9, 11), s.slice(11, 14), s.slice(14, 16), s.slice(16, 24), s.slice(24, 27)].join('.');
+}
+
 const SKU_OVERRIDES = {
   'paperback:standard:gloss': '0850X1100FCSTDPB060UW444GXX', // $7.01 print
   'paperback:standard:matte': '0850X1100FCSTDPB060UW444MXX', // $7.01 print
@@ -135,7 +157,10 @@ class LuluProvider extends PrintProvider {
     }
     // Cream is a paper-code swap on the resolved SKU (white -> cream).
     if (spec.paper === 'cream') sku = sku.replace(PAPER_CODE, PAPER_CODE_CREAM);
-    return sku;
+    // Convert LAST: the cream swap above matches the legacy run, and the paper code
+    // also sits whole between two dots, so either order works -- but converting last
+    // keeps every constant in this file in the one form that is sandbox-confirmed.
+    return SKU_DOTTED ? toDottedSku(sku) : sku;
   }
 
   _lineItem(req) {
@@ -241,20 +266,55 @@ class LuluProvider extends PrintProvider {
   // spec + interior page count. Lulu derives the spine width from page count +
   // paper, and the casewrap allowance for hardcover. Normalized to inches.
   // NOTE: written to Lulu's documented shape; CONFIRM against the sandbox.
+  // v3.0.376 -- THREE THINGS WERE WRONG AND NOTHING CALLED IT.
+  //   path   '/print-job-cover-dimensions/'  ->  '/cover-dimensions/'
+  //   field  interior_page_count             ->  page_count
+  //   unit   'in'                            ->  'IN'
+  // Meanwhile computeCoverDims in routes/pdf.js kept guessing the geometry, and the
+  // guess was wrong: Lulu wants 19.00 x 12.75in for a 64-page 8.5x11 casewrap and we
+  // produced 18.78 x 12.50, so every hardcover order was rejected on dimensions.
+  //
+  // DO NOT TRUST THE UNIT FIELD. Lulu's own prose says the endpoint returns 'print
+  // points by default'; the IN/MM/PT parameter is documented by a client library, not
+  // by Lulu's schema. So the answer is normalised by MAGNITUDE instead: a book cover
+  // is 8-40 inches, 200-1000 millimetres or 600-3000 points, and those ranges do not
+  // overlap. That is correct whether the unit parameter is honoured, ignored, or
+  // named something else entirely.
   async getCoverDimensions(spec, pageCount) {
-    const raw = await this._fetch('/print-job-cover-dimensions/', {
+    const sku = this._packageId(spec);
+    const raw = await this._fetch('/cover-dimensions/', {
       method: 'POST',
       body: {
-        pod_package_id: this._packageId(spec),
-        interior_page_count: pageCount,
-        unit: 'in',
+        pod_package_id: sku,
+        page_count: pageCount,
+        unit: 'IN',
       },
     });
-    let w = Number(raw.width), h = Number(raw.height);
-    const unit = String(raw.unit || raw.unit_name || '').toLowerCase();
-    if (unit === 'pt' || unit === 'point' || unit === 'points') { w = w / 72; h = h / 72; }
-    else if (unit === 'mm') { w = w / 25.4; h = h / 25.4; }
-    return { widthIn: w, heightIn: h, raw };
+    let w = Number(raw.width != null ? raw.width : raw.width_in);
+    let h = Number(raw.height != null ? raw.height : raw.height_in);
+    if (!(w > 0 && h > 0)) throw new Error('lulu: cover-dimensions returned no usable width/height: ' + JSON.stringify(raw).slice(0, 300));
+    // Normalise by magnitude, largest unit first.
+    let unitSeen = 'in';
+    if (w > 200) { w = w / 72; h = h / 72; unitSeen = 'pt'; }
+    else if (w > 100) { w = w / 25.4; h = h / 25.4; unitSeen = 'mm'; }
+    // A cover is wider than it is tall and never smaller than its trim.
+    if (!(w >= 8 && w <= 40 && h >= 8 && h <= 20 && w > h)) {
+      throw new Error('lulu: cover-dimensions out of plausible range (' + w.toFixed(3) + ' x ' + h.toFixed(3) + 'in from ' + unitSeen + ')');
+    }
+    return { widthIn: w, heightIn: h, sku, unitSeen, raw };
+  }
+
+  // v3.0.376 -- Lulu will tell us whether a cover PDF passes BEFORE an order is
+  // placed: the same check Ian has been running by hand in the manual order flow.
+  // Returns the validation record; poll getCoverValidation for the final status.
+  async validateCover(spec, pageCount, coverUrl) {
+    return this._fetch('/validate-cover/', {
+      method: 'POST',
+      body: { pod_package_id: this._packageId(spec), page_count: pageCount, source_url: coverUrl },
+    });
+  }
+  async getCoverValidation(id) {
+    return this._fetch('/validate-cover/' + encodeURIComponent(id) + '/');
   }
 
   async createOrder(req) {

@@ -4130,13 +4130,64 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 // spine = pages / PPI; no network call needed. 8.5x11 trim, 0.125in bleed.
 // Hardcover (casewrap) adds a 0.75in wrap allowance + board to the spine; that
 // piece is approximate and should be checked against a Lulu casewrap proof.
+// v3.0.376 -- ASK LULU. computeCoverDims below is now the FALLBACK ONLY.
+//
+// Lulu rejected every hardcover order on dimensions: for a 64-page 8.5x11 casewrap
+// they require 19.00 x 12.75in and this produced 18.78 x 12.50. The height error is
+// the wrap allowance (0.875, not 0.750). The width error is that plus a spine term:
+// Lulu's 0.25in spine is the FINISHED spine including board, not paper plus a board
+// extra. One confirmed book gives one equation and there are two unknowns in it
+// (board thickness and whatever rounding Lulu applies), so fitting the constants
+// here would produce a cover that is right for a 61-page Starbound and drifts
+// everywhere else -- the kind of wrong that gets accepted and printed.
+//
+// So the numbers come from /cover-dimensions/, keyed on the SAME pod_package_id the
+// order is placed with, which also makes it structurally impossible to build a cover
+// for one binding and order another (that happened 2026-08-02).
+var _coverDimsCache = new Map();          // 'sku|pages' -> { at, widthIn, heightIn }
+var COVER_DIMS_TTL_MS = 24 * 60 * 60 * 1000;
+var _coverDimsLogged = new Set();         // log the first raw response per sku
+async function resolveCoverDims(spec) {
+  var pages = spec.pageCount;
+  var fb = computeCoverDims(spec.binding, pages);
+  var key = String(spec.binding) + '|' + String(spec.quality) + '|' + String(spec.coverFinish) + '|' + String(spec.paper) + '|' + pages;
+  var hit = _coverDimsCache.get(key);
+  if (hit && (Date.now() - hit.at) < COVER_DIMS_TTL_MS) return { widthIn: hit.widthIn, heightIn: hit.heightIn, source: 'lulu-cached' };
+  try {
+    var provider = getPrintProvider();
+    if (!provider || typeof provider.getCoverDimensions !== 'function') throw new Error('provider has no getCoverDimensions');
+    var got = await provider.getCoverDimensions(spec, pages);
+    // Log the FIRST raw response for each SKU. The unit parameter is documented by a
+    // client library rather than by Lulu, so one real response replaces inference with
+    // fact -- and the day this stops matching, the log says so.
+    if (got && got.sku && !_coverDimsLogged.has(got.sku)) {
+      _coverDimsLogged.add(got.sku);
+      console.log('[cover-dims] ' + got.sku + ' @' + pages + 'pp -> ' + got.widthIn.toFixed(3) + ' x ' + got.heightIn.toFixed(3) +
+        'in (read as ' + got.unitSeen + '); fallback would have said ' + fb.widthIn.toFixed(3) + ' x ' + fb.heightIn.toFixed(3) +
+        '; raw ' + JSON.stringify(got.raw).slice(0, 400));
+    }
+    _coverDimsCache.set(key, { at: Date.now(), widthIn: got.widthIn, heightIn: got.heightIn });
+    return { widthIn: got.widthIn, heightIn: got.heightIn, source: 'lulu' };
+  } catch (e) {
+    // Never fail the render on this. A guessed cover is worth having on screen; it
+    // just must not be quietly guessed, hence the warning.
+    console.warn('[cover-dims] LULU CALL FAILED, USING THE LOCAL ESTIMATE (' + fb.widthIn.toFixed(3) + ' x ' + fb.heightIn.toFixed(3) +
+      'in) -- Lulu may reject this cover: ' + (e && e.message ? e.message : e));
+    return { widthIn: fb.widthIn, heightIn: fb.heightIn, source: 'estimate' };
+  }
+}
 function computeCoverDims(binding, pageCount, ppi) {
   var trimW = 8.5, trimH = 11, bleed = 0.125;
   ppi = ppi || 444;
   var r3 = function (n) { return Math.round(n * 1000) / 1000; };
   var spine = (binding === 'saddle') ? 0 : (pageCount / ppi);
   if (binding === 'hardcover') {
-    var wrap = 0.75, board = 0.125;
+    // v3.0.376 -- 0.875 is CONFIRMED from a Lulu requirements block: 11 + 2*0.875 = 12.75,
+    // the height they asked for. The BOARD term is still a guess and cannot be derived --
+    // Lulu quoted a 0.25in finished spine for 64 pages, which is 0.144 of paper plus 0.106
+    // of board, or 0.144 plus 0.10 rounded up to a sixteenth, and one book cannot tell those
+    // apart. This whole function is the FALLBACK now; resolveCoverDims asks Lulu.
+    var wrap = 0.875, board = 0.106;
     return { widthIn: r3(2 * (trimW + wrap) + spine + board), heightIn: r3(trimH + 2 * wrap), spineIn: r3(spine + board) };
   }
   return { widthIn: r3(2 * (trimW + bleed) + spine), heightIn: r3(trimH + 2 * bleed), spineIn: r3(spine) };
@@ -4144,7 +4195,11 @@ function computeCoverDims(binding, pageCount, ppi) {
 
 function coverGeometry(binding, totalWidthIn) {
   var bleed = 0.125, trimW = 8.5;
-  var sideOuter = (binding === 'hardcover') ? (trimW + 0.75) : (trimW + bleed);
+  // v3.0.376 -- MUST MATCH THE WRAP ALLOWANCE ABOVE, and this one is the dangerous copy:
+  // it back-derives the spine from the total width, so a 0.75 here against a real 0.875
+  // wrap inflates the computed spine by 0.25in and slides the spine text a quarter inch
+  // onto the front cover -- on a sheet whose outer dimensions Lulu has just accepted.
+  var sideOuter = (binding === 'hardcover') ? (trimW + 0.875) : (trimW + bleed);
   var spineW = Math.max(0, Math.round((totalWidthIn - 2 * sideOuter) * 1000) / 1000);
   var sideW = Math.round(((totalWidthIn - spineW) / 2) * 1000) / 1000;
   return { bleed: bleed, sideW: sideW, spineW: spineW };
@@ -4257,7 +4312,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     var built = catalog.buildSpec(selection, pageCount);
     if (!built.ok) return res.status(400).json({ error: 'Invalid selection', details: built.errors });
 
-    var dims = computeCoverDims(built.spec.binding, built.spec.pageCount);
+    var dims = await resolveCoverDims(built.spec);   // v3.0.376 -- Lulu is the source of truth; see resolveCoverDims
     if (!(dims.widthIn > 0 && dims.heightIn > 0)) {
       return res.status(500).json({ error: 'Could not compute cover dimensions' });
     }
