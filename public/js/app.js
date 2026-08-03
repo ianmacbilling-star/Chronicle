@@ -15258,10 +15258,15 @@ function finalizeOpenFixDialog(viewerPage) {
   // which vanished against a light background: the reasons are the most useful part of this dialog
   // and they were the least legible thing in it. Muted gold, full opacity.
   var COL = { GREEN: '#4f9d5d', AMBER: '#b07d1e', GREY: '#8a6a2a' };
-  var h = '<div style="font-size:13px;color:rgba(245,232,200,0.8);margin-bottom:10px;">This page holds <strong>' +
-    info.heldIn + 'in</strong> of ' + info.boxIn + 'in' + (info.overBox ? ' &mdash; it runs over the page' : '') + '.</div>';
+  var h = '<div style="font-size:13px;color:rgba(245,232,200,0.8);margin-bottom:4px;">This page holds <strong>' +
+    info.heldIn + 'in</strong> of ' + info.boxIn + 'in' + (info.overBox ? ' &mdash; it runs over the page' : '') + '.</div>' +
+    '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
+    'Any of them can be tried &mdash; if a move will not fit, nothing changes and it says why.</div>';
   info.options.forEach(function (o, ix) {
-    var dis = (o.verdict === 'GREY');
+    // v3.0.399 -- NOTHING IS DISABLED. The colour is what we EXPECT; the applier decides. A grey
+    // option is still selectable, because our prediction has been wrong before and a wrong
+    // prediction must not be what stops someone fixing their own book.
+    var dis = false;
     h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(201,168,76,0.18);' +
       (dis ? 'cursor:not-allowed;' : 'cursor:pointer;') + '">' +   // v3.0.397 -- no opacity: colour carries it
       '<input type="radio" name="fixopt" value="' + ix + '"' + (dis ? ' disabled' : '') + ' style="margin-right:8px;">' +

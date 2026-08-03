@@ -6653,6 +6653,14 @@ function fixOptionsCore(npages, viewerOffset, allowPush) {
     return ['GREY', 'no room -- ' + room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in' +
             (g > 0 ? (', and trimming the picture there only frees ' + g.toFixed(2) + 'in') : ' and there is no picture to trim')];
   }
+  // v3.0.399 -- A VERDICT IS ADVICE, NOT A GATE.
+  // GREY used to disable the option. Ian: 'I want to shrink an image on a page and it will not let
+  // me.' He was right twice over -- the magazine picture test above was wrong, AND a prediction that
+  // can be wrong should never be the thing that stops someone trying. Every verdict here is
+  // arithmetic done ahead of time; the applier measures for real and rolls back if it does not fit,
+  // so the worst case of letting someone try is a refusal with a real reason. The worst case of
+  // blocking them is a book they cannot fix because we guessed wrong. The colour still says what we
+  // expect; it no longer decides.
   var BOX = CO_CLIP_BOX_IN;
   for (var pi = 0; pi < npages.length; pi++) {
     var rMe = realOf(pi);
@@ -6728,7 +6736,12 @@ function magazineFixOptions(bands, dbgPages, viewerOffset) {
       items: ((pg && pg.cells) || []).map(function (c) {
         var b = (bands || [])[c.band] || {};
         var hasText = !!(c.split || b.stext);
-        var imgH = (c.sImgH != null && c.sImgH > 0) ? c.sImgH : ((c.simg && b.sImgH) ? b.sImgH : 0);
+        // v3.0.399 -- A MAGAZINE CELL IS A BAND SLICE, and sImgH is only stamped on the slice that
+        // carries the picture. Reading it off the cell alone reported 'there is no picture on this
+        // page' on any page holding a later slice of a band whose picture is plainly there. Fall
+        // back to the BAND's own image height: shrinking acts on the band, so that is the honest
+        // unit anyway.
+        var imgH = (c.sImgH != null && c.sImgH > 0) ? c.sImgH : (b.sImgH > 0 ? b.sImgH : 0);
         var h = (c.realH != null) ? c.realH : c.h;
         return { text: hasText, pic: imgH > 0, h: (imgH > 0 && !hasText) ? imgH : h };
       })
