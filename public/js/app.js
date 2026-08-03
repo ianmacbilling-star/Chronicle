@@ -14944,6 +14944,44 @@ function optimizeProgress(msg, opts) {
   box.scrollTop = box.scrollHeight;
   requestAnimationFrame(function () { line.style.opacity = opts.dim ? '0.55' : '1'; });
 }
+// v3.0.389 -- A LINE THAT KEEPS MOVING WHILE THE SLOW PART RUNS.
+// Every other line here is a fact appended after the fact, which is right for a log and wrong for
+// a 43-second wait: the run said 'Polished your book' with a tick, and then nothing happened on
+// screen while the book was flattened and saved. Ian: 'have something going until it is
+// completely finished.'
+// Returns a handle. Call done() when the work lands, fail() when it does not -- either way the
+// ticking stops and the line settles into an ordinary log entry, so the finished log reads the
+// same as it always did.
+function optimizeProgressLive(msg) {
+  var box = document.getElementById('optimize-progress');
+  var noop = { done: function () {}, fail: function () {} };
+  if (!box) return noop;
+  var line = document.createElement('div');
+  line.style.cssText = 'opacity:0;transition:opacity 0.3s;';
+  var t0 = Date.now(), dots = 0, timer = null;
+  function paint() {
+    dots = (dots + 1) % 4;
+    var secs = Math.round((Date.now() - t0) / 1000);
+    // The elapsed counter only appears after a few seconds. On a short book the work is done
+    // before it would mean anything, and a timer that flashes up and vanishes reads as a glitch.
+    line.innerHTML = '&#8226; ' + msg + new Array(dots + 1).join('.') + (secs >= 4 ? ('  (' + secs + 's)') : '');
+  }
+  paint();
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  requestAnimationFrame(function () { line.style.opacity = '1'; });
+  timer = setInterval(paint, 600);
+  function settle(mark, finalMsg) {
+    if (timer) { clearInterval(timer); timer = null; }
+    line.innerHTML = mark + ' ' + (finalMsg || msg);
+    try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push((finalMsg || msg) + '  [' + Math.round((Date.now() - t0) / 1000) + 's]'); } catch (e) {}
+    try { box.scrollTop = box.scrollHeight; } catch (e) {}
+  }
+  return {
+    done: function (finalMsg) { settle('&#10003;', finalMsg); },
+    fail: function (finalMsg) { settle('&#8226;', finalMsg); }
+  };
+}
 function optimizeProgressDone() {
   // Leave the finished progress log on screen -- hiding it made a fast convergence look like the
   // process quit early. The log persists until the next Optimize run resets it.
@@ -15567,7 +15605,9 @@ function finalizeSaveOptimized(quiet) {
     // quickSave are the same call, named for what each side cares about: the client is deciding
     // whether to speak, the server is deciding whether to spend 43 seconds.
     body.quickSave = !!quiet;
-    if (!quiet) optimizeLogLine('Prepping Book for saving...');
+    // v3.0.389 -- the protective save is instant and silent; the real one flattens and takes about
+    // 43 seconds on a 49-page book, which is the whole dead-air problem. Ticking line for that one.
+    var _live = quiet ? null : optimizeProgressLive('Prepping Book for saving');
     return fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
@@ -15581,7 +15621,8 @@ function finalizeSaveOptimized(quiet) {
             ', ' + (rj.j.pages || '?') + ' pages, arrange=' + (rj.j.arrange || '?'));
         } catch (e) {}
         finalizeShowOptimizedNote(rj.j.at, false);
-        if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
+        if (_live) _live.done('Saved -- this version will be here when you return.');
+        else if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
         return true;
       }
       // v3.0.386 -- QUIET MEANS QUIET, FOR THE ONE FAILURE THAT IS EXPECTED.
@@ -15594,11 +15635,16 @@ function finalizeSaveOptimized(quiet) {
       // this used to report nothing at all, which is how a run of silent 409s went unnoticed long
       // enough that 'Load Last Optimized File' had no file behind it.
       var _code = (rj.j && rj.j.error) || '';
-      if (!(quiet && _code === 'optimize_required')) {
-        optimizeLogLine('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
-      }
+      var _msg = 'Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error');
+      // v3.0.389 -- the ticking line must never be left spinning on a failure.
+      if (_live) _live.fail(_msg);
+      else if (!(quiet && _code === 'optimize_required')) { optimizeLogLine(_msg, 'stop'); }
       return false;
-    }).catch(function (e) { optimizeLogLine('Could not save this version: ' + ((e && e.message) || 'network error'), 'stop'); return false; });
+    }).catch(function (e) {
+      var _m = 'Could not save this version: ' + ((e && e.message) || 'network error');
+      if (_live) _live.fail(_m); else optimizeLogLine(_m, 'stop');   // v3.0.389 -- never leave it spinning
+      return false;
+    });
   } catch (e) { return Promise.resolve(false); }
 }
 // Show the "already optimized" note (either freshly saved, or restored from a previous session).
