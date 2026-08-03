@@ -21,7 +21,12 @@
 
 [phases.setup]
 # Add system Chromium (pulls in the shared libs Chrome needs) to the build image.
-nixPkgs = ['nodejs_20', 'chromium']
+# ghostscript (v3.0.377): flattens transparency in print-bound PDFs. PDF 1.3 has no
+# transparency model, so converting to it composites every blend and alpha into the
+# page. Lulu warns on transparency; the logos are RGB+ALPHA and most gradients end in
+# a transparent stop. If gs is absent the app still works -- flattenPdf.js fails open
+# and logs -- so a missing binary shows up as a Lulu warning, not an outage.
+nixPkgs = ['nodejs_20', 'chromium', 'ghostscript']
 
 [variables]
 # Skip Puppeteer's bundled-Chromium download; use the system Chromium above.

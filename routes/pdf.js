@@ -10,6 +10,7 @@ const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
 const { uploadFile, deleteFile, fetchFile } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
+const { flattenPdf } = require('../services/printing/flattenPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
 const { packPaired } = require('../services/printing/packPaired');
 const { decoSumHeight, decoHeight, DEFAULT_LH } = require('../services/printing/decorationRegistry');
@@ -4106,9 +4107,15 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
 
   try {
     var fname = 'interior-' + campaign.id + (asUser ? ('-u' + asUser) : '') + '-' + Date.now() + '.pdf';
-    var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
-    var pages = await pdfPageCount(pdfBuffer);
-    return res.json({ url: url, bytes: pdfBuffer.length, pages: pages });
+    // v3.0.377 -- flatten transparency on the PRINT-BOUND copy only. Preview renders are
+    // untouched, so nothing in the UI gets slower. Fails open; see flattenPdf.js.
+    var _flatI = await flattenPdf(pdfBuffer, 'interior');
+    var _outI = _flatI.buffer;
+    var url = await uploadFile(_outI, fname, 'application/pdf', 'print');
+    // Page count from the UPLOADED bytes: it is what Lulu will read, and the cover spine
+    // is derived from it. Counting the pre-flatten copy would be counting a different file.
+    var pages = await pdfPageCount(_outI);
+    return res.json({ url: url, bytes: _outI.length, pages: pages, flattened: _flatI.flattened });
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
@@ -4341,8 +4348,12 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     }
     try {
       var fname = 'cover-' + campaign.id + '-' + Date.now() + '.pdf';
-      var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
-      return res.json({ url: url, bytes: pdfBuffer.length, widthIn: dims.widthIn, heightIn: dims.heightIn });
+      // v3.0.377 -- the cover carries two RGB+ALPHA logos (wc-logo and wc-spine-logo),
+      // so it is the file most certain to trip Lulu's transparency warning.
+      var _flatC = await flattenPdf(pdfBuffer, 'cover');
+      var _outC = _flatC.buffer;
+      var url = await uploadFile(_outC, fname, 'application/pdf', 'print');
+      return res.json({ url: url, bytes: _outC.length, widthIn: dims.widthIn, heightIn: dims.heightIn, flattened: _flatC.flattened });
     } catch (e) {
       console.error('[print-cover] upload failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Cover upload failed', detail: friendlyError(e, '') });
