@@ -4568,6 +4568,14 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   let pdfUrl;
   try {
     var fname = 'story-' + campaign.id + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
+    // v3.0.388 -- EVERY STORED PDF IS FLATTENED, not just the print-bound pair.
+    // This one is read by strangers from the public Library, so it is stored AND served on every
+    // view: the 62 percent it sheds is egress as well as storage. It also means the book someone
+    // reads in the Library and the book its author downloads to print are the same file, encoded
+    // the same way, rather than two artifacts that merely came from the same source.
+    // 43s on a 49-page book, absorbed by an operation that already says 'this can take a moment'.
+    var _flatS = await flattenPdf(pdfBuffer, 'story');
+    pdfBuffer = _flatS.buffer;
     pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'story');
   } catch (e) {
     console.error('[publish-story] upload failed:', e && e.message ? e.message : e);
@@ -9238,6 +9246,16 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     var pdfBuffer = await renderHtmlToPdf(html, {});
     var pages = 0; try { pages = await countPdfPages(pdfBuffer); } catch (e) {}
     var fname = 'optimized-' + campaignId + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
+    // v3.0.388 -- flatten the SAVED book, with one deliberate exception.
+    // This route is called TWICE at the end of a run: a protective save the instant the loop ends,
+    // so the work survives a crash or a slow fill, and the real one after the final fill. Flattening
+    // both would add ~90s to every run for a copy that is overwritten seconds later, so the
+    // protective call passes quickSave and skips it. The file that SURVIVES is always flattened.
+    // Default is to flatten: any other caller, now or later, gets the small file without asking.
+    var _quick = !!(req.body && req.body.quickSave);
+    var _flatO = { flattened: false, buffer: pdfBuffer };
+    if (!_quick) { _flatO = await flattenPdf(pdfBuffer, 'optimized'); pdfBuffer = _flatO.buffer; }
+    var _bytesO = pdfBuffer.length;
     var pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'optimized');
 
     var db = await getDb();
@@ -9249,7 +9267,10 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     try { if (lastOpt[arrange] && lastOpt[arrange].pdfUrl && lastOpt[arrange].pdfUrl !== pdfUrl) await deleteFile(lastOpt[arrange].pdfUrl); } catch (e) {}
     lastOpt[arrange] = { pdfUrl: pdfUrl, at: new Date().toISOString(), pages: pages, bookTitle: bookTitle || '' };
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt });
-    return res.json({ ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at });
+    // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
+    // bundle. The user-facing line stays generic; the bundle gets the numbers.
+    return res.json({ ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at,
+      flattened: !!_flatO.flattened, quickSave: _quick, bytes: _bytesO });
   } catch (e) {
     console.error('[save-optimized] failed:', e && e.message ? e.message : e);
     log500('save-optimized', req, e);

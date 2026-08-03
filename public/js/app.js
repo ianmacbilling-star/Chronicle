@@ -15526,6 +15526,13 @@ function finalizeClearPriorLoaded() {
   finalizeSetPriorLoaded(false);
   finalizeLoadLastOptimized();   // re-check: the button stays offered if a saved file still exists
 }
+// v3.0.388 -- BUNDLE ONLY. optimizeLogLine writes to the progress list the USER watches; aiLog is
+// nested inside the optimize loop and cannot be called from here. This is for detail that belongs
+// in the downloadable diagnostics and nowhere else -- byte counts, timings, flags. Ian's rule:
+// the visible log says what is happening, the dump says what happened.
+function optimizeDumpLine(txt) {
+  try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push(txt); } catch (e) {}
+}
 function optimizeLogLine(txt, kind) {
   try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push(txt); } catch (e) {}
   // The USER-facing progress list, not just the admin log panel. aiLog only renders that panel behind
@@ -15556,12 +15563,23 @@ function finalizeSaveOptimized(quiet) {
     var q = finalizeBookQuery();
     var body = {};
     var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) body.bookTitle = _pt.value.trim();
+    // v3.0.388 -- the protective save skips the flatten; the one that survives does not. quiet and
+    // quickSave are the same call, named for what each side cares about: the client is deciding
+    // whether to speak, the server is deciding whether to spend 43 seconds.
+    body.quickSave = !!quiet;
+    if (!quiet) optimizeLogLine('Prepping Book for saving...');
     return fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
       // SAY SO, EITHER WAY. This used to note only success and swallow every failure, so a 409 from a
       // cache-key miss was completely invisible -- nothing was ever saved and nothing ever said so.
       if (rj.ok && rj.j && rj.j.ok) {
+        // v3.0.388 -- specifics to the bundle, not to the reader.
+        try {
+          optimizeDumpLine('save-optimized: ' + (rj.j.quickSave ? 'protective copy, flatten skipped' :
+            ('flattened=' + rj.j.flattened + ', stored ' + Math.round((rj.j.bytes || 0) / 1048576) + 'MB')) +
+            ', ' + (rj.j.pages || '?') + ' pages, arrange=' + (rj.j.arrange || '?'));
+        } catch (e) {}
         finalizeShowOptimizedNote(rj.j.at, false);
         if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
         return true;
