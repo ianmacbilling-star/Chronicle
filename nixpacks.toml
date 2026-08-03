@@ -1,3 +1,22 @@
+# ============================================================================
+#  NOT IN USE. RAILWAY DOES NOT READ THIS FILE.
+#
+#  Railway builds with RAILPACK, the successor to Nixpacks -- the build log says
+#  `using build driver railpack-v0.35.0`. Build configuration lives in
+#  railpack.json in the repo root. Chromium's libraries now arrive as APT
+#  packages that Railpack adds automatically when it detects puppeteer, not from
+#  the nix store.
+#
+#  This cost real time on 2026-08-03: ghostscript was added to this file, the
+#  deploy succeeded, and nothing installed -- the only symptom being a Lulu
+#  transparency warning that would not go away. Everything below, including the
+#  advice to hunt for a chromium path and set PUPPETEER_EXECUTABLE_PATH,
+#  describes a build system this project no longer uses.
+#
+#  Kept rather than deleted only in case the builder is ever switched back.
+#  DO NOT ADD PACKAGES HERE. Add them to railpack.json.
+# ============================================================================
+
 # ============================================================
 # nixpacks.toml  -  Railway build config for headless Chromium (Puppeteer)
 # ------------------------------------------------------------
