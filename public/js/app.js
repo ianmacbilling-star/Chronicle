@@ -15164,18 +15164,20 @@ function finalizeDecorateNavFix() {
   var rows = nav.querySelectorAll('div[data-page]');
   for (var i = 0; i < rows.length; i++) {
     var pg = Number(rows[i].getAttribute('data-page'));
-    var old = rows[i].querySelector('.fix-btn');
-    if (old) old.parentNode.removeChild(old);
+    // v3.0.398 -- into the reserved slot, never appended to the row itself.
+    var slot = rows[i].querySelector('.fix-slot');
+    if (!slot) continue;                 // an older row shape: leave it alone rather than reshape it
+    slot.innerHTML = '';
     if (!_fixOptions[pg]) continue;
     var b = document.createElement('span');
     b.className = 'fix-btn';
     b.textContent = 'Fix';
-    b.style.cssText = 'margin-left:6px;font-size:9px;padding:0 4px;border-radius:2px;' +
+    b.style.cssText = 'font-size:9px;line-height:1.5;padding:0 5px;border-radius:4px;' +   // v3.0.398 -- 4px, matching every other button
       'background:rgba(201,168,76,0.22);border:1px solid rgba(201,168,76,0.5);color:var(--gold);cursor:pointer;';
     b.setAttribute('data-fix-page', pg);
     b.title = 'This page holds ' + _fixOptions[pg].heldIn + 'in of ' + _fixOptions[pg].boxIn + 'in';
     b.onclick = function (ev) { ev.stopPropagation(); finalizeOpenFixDialog(Number(this.getAttribute('data-fix-page'))); };
-    rows[i].appendChild(b);
+    slot.appendChild(b);
   }
 }
 function finalizeBuildAfterNav(first, last) {
@@ -15183,7 +15185,17 @@ function finalizeBuildAfterNav(first, last) {
   if (!nav) return;
   var h = '';
   for (var n = first; n <= last; n++) {
-    h += '<div data-page="' + n + '" onclick="finalizeAfterGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
+    // v3.0.398 -- TWO COLUMNS, so the page number does not move.
+    // The Fix button used to be appended inline, which widened the row and shifted the number
+    // sideways wherever a button existed -- so scrolling the spine made the numbers jitter, which
+    // reads as the list being unstable rather than as extra information. Fixed-width number cell,
+    // fixed-width button cell: the number sits still whether or not it has a neighbour.
+    h += '<div data-page="' + n + '" onclick="finalizeAfterGoToPage(' + n + ')" ' +
+      'style="display:flex;align-items:center;cursor:pointer;font-size:10px;line-height:1.6;' +
+      'color:rgba(245,232,200,0.6);padding:0 3px;border-radius:4px;">' +
+        '<span style="flex:0 0 20px;text-align:right;">' + n + '</span>' +
+        '<span class="fix-slot" style="flex:0 0 30px;display:flex;justify-content:flex-end;"></span>' +
+      '</div>';
   }
   nav.innerHTML = h;
   finalizeAttachNavTracking();
