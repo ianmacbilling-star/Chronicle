@@ -6709,6 +6709,14 @@ function fixOptionsCore(npages, viewerOffset, allowPush) {
   return rows;
 }
 // PAIRED adapter. A placement is one thing: a picture, or a run of narrative.
+// v3.0.404 -- ONE pad(), at module scope, because there was nearly none.
+// It was a local inside magazinePlanText. The PAGE FIX OPTIONS section was written against that
+// dumper and then moved into pairedPlanText WITHOUT it, so every paired review threw:
+//   [500] layout-review campaign=16 -- pad is not defined
+// layout-review returns 500, and the client reported 'The AI service was busy -- retrying...'.
+// Two days could have gone to Anthropic's status page. Nothing was wrong with the AI at all.
+// node --check does not catch an undefined name; only running the code does.
+function pad(v, n) { var t = String(v); while (t.length < n) t += ' '; return t; }
 function pairedFixOptions(pages, dbgPages, viewerOffset) {
   var reals = {};
   (dbgPages || []).forEach(function (x) { if (x && x.realUsed != null) reals[x.page] = x.realUsed; });
@@ -6750,7 +6758,16 @@ function magazineFixOptions(bands, dbgPages, viewerOffset) {
   return fixOptionsCore(np, viewerOffset, false);
 }
 
-function pairedPlanText(packed) {
+// v3.0.404 -- opts.fixOptions, and it is OFF unless asked for.
+// pairedPlanText is not only a dump: layout-review sends its output to the AI as the prompt. The
+// PAGE FIX OPTIONS section added in v3.0.394 therefore went into EVERY AI PASS, and v3.0.396 grew
+// it from the flagged pages to all of them -- 393 lines and about 10,700 tokens on Starbound, per
+// pass, of a control's data the model has no use for and cannot act on.
+// Staging started failing its review calls at v3.0.394 while production stayed healthy on v3.0.392.
+// Whether or not that is the cause, sending eleven thousand tokens of a human control's state to a
+// layout optimizer is wrong on its own terms, and the user pays for the input on every pass.
+// Default OFF, so the AI prompt returns to exactly what it was in v3.0.392. Only pack-debug asks.
+function pairedPlanText(packed, opts) {
   var plan = (packed && packed.plan) || {};
   var pages = (plan.pages) || [];
   var d = packed.dbg || {};
@@ -7004,7 +7021,7 @@ function pairedPlanText(packed) {
    // says how much -- v3.0.371 made exactly that trade silently for months and nobody saw it. GREY
    // says why not, because a disabled option with a reason teaches and one without is a dead end.
    // Every verdict is a PREDICTION: the applier still measures and can refuse.
-   var _fxRows = pairedFixOptions(pages, d.pages, _fm + 1);
+   var _fxRows = ((opts && opts.fixOptions) ? pairedFixOptions(pages, d.pages, _fm + 1) : []);
    if (_fxRows.length) {
      L.push('');
      L.push('PAGE FIX OPTIONS (what a PERSON could do -- reporting only, nothing reads this yet)');
@@ -7300,7 +7317,7 @@ function mzDbgPagesFrom(bands, pages, fallbackH) {
 function magazinePlanText(packed) {
   var d = packed && packed.dbg;
   if (!d) return 'no debug plan available';
-  var pad = function (v, n) { var t = String(v); while (t.length < n) t += ' '; return t; };
+  // v3.0.404 -- was a local here; now module-level so both dumpers share one.
   var L = [];
   // FRONT-MATTER OFFSET: the pack dump numbers CONTENT pages from 0, but the viewer/PDF renders
   // front matter first, so a viewer page = content page + this offset + 1 (the +1 is the 0->1 shift).
@@ -7958,7 +7975,7 @@ router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function 
         var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
         txt = _stamp + (_wantRef ? '' : ('SOURCE: a FRESH RE-PACK -- no composed plan is cached (no Optimize in the last 30\n' +
               'minutes, or the cache expired). This may differ from the PDF you downloaded; page-level\n' +
-              'detail is indicative, not authoritative.\n\n')) + pairedPlanText(packedP);
+              'detail is indicative, not authoritative.\n\n')) + pairedPlanText(packedP, { fixOptions: true });   // v3.0.404 -- a dump, not a prompt
         _dlName = String((packedP && packedP.campaign && packedP.campaign.name) || 'campaign').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
       }
     }
@@ -9475,7 +9492,7 @@ router.post('/layout-fill/:campaignId', requireAuth, async function (req, res) {
           _dbg2.atRisk = [];
           _dbg2.remeasured = true;
         }
-        _planTxt = pairedPlanText({ plan: plan, beats: beats, campaign: (packed && packed.campaign) || null, dbg: _dbg2, co: _pco });
+        _planTxt = pairedPlanText({ plan: plan, beats: beats, campaign: (packed && packed.campaign) || null, dbg: _dbg2, co: _pco }, { fixOptions: true });   // v3.0.404 -- this text is served as a DUMP, never as a prompt
       } catch (e) { _planTxt = null; }
       composedCachePut(req.params.campaignId, req, 'paired', body, (packed && packed.campaign) || '', _planTxt);   // the pack returns `campaign`, not `campaignName`
       try { console.log('[final-fill] campaign ' + req.params.campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in'); } catch (e) {}
