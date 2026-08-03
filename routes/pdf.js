@@ -3479,7 +3479,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       '<div class="dp-footer">' +
         (fHideLogo ? '' : '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
         '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
-          'This chronicle was assembled from recorded tabletop role-playing sessions. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
+          // v3.0.391 -- Ian, exact wording. The tabletop role-playing reference is gone: the term
+          // is right in the marketing copy and in the AI system prompts, where it does real work,
+          // and is jargon in the book itself.
+          // v3.0.390 tried a sentence about assembling the book from session recordings, and that
+          // was WRONG for a different reason -- it asserts how the book was made. Ian: we do not know
+          // whether they used recordings, played at a table at all, or simply wrote the story. The
+          // notice should state what is certainly true and nothing more.
+          // No apostrophe in the new text: pdf.js strings are single-quoted (file invariant).
+          'This story was created on Campaignia.com. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
       '</div>' +
     '</div>';
 
@@ -6913,7 +6921,36 @@ function pairedPlanText(packed) {
       // measure; a book that will not shorten costs pages on every copy printed.
       var _nx = ((pages[_src] || {}).placements || [])[0] || null;
       if (!_nx) {
-        _act = '  -> last page of the book; nothing follows it to pull up';
+        // v3.0.393 -- THE LAST PAGE IS FIXED FROM THE PAGE BEFORE IT, NOT FROM ITSELF.
+        // Every remedy above is written one way round: fill an under-full page by pulling content UP
+        // out of the page that follows. The last page has nothing following it, so this branch told
+        // the model there was nothing to do -- and the model, correctly, did nothing.
+        //
+        // Starbound Skies, 2026-08-03: the outro split 202/273 characters, the tail landed alone on
+        // the last page at 1.07in of a 9.24in box, and five passes went by without a single op being
+        // proposed for it. The book shipped ending on a page holding three lines and eight inches of
+        // white, and NEVER-CLIP reported the run clean, because nothing was clipped.
+        //
+        // A last page cannot be FILLED. It has to be ABSORBED: pull its content up into the page
+        // before it and the page stops existing. Same op, named from the other side -- exactly the
+        // v3.0.369 fault on the magazine clip hint, which pointed at pushLines when the move that
+        // existed was a pullLines from the previous page.
+        //
+        // Do not pre-judge the fit here. The comment above this block is the whole argument: the
+        // applier carries a shrink ladder that trims a picture on the destination page to absorb a
+        // near miss, so moves this arithmetic calls impossible do land. Name it and let the applier
+        // measure. A refused op costs one measure; a book ending on a near-blank page costs a page
+        // on every copy printed.
+        var _me = (_mine || [])[0] || null;
+        if (pi > 0 && _me) {
+          var _mePic = (_me.kind === 'image' || _me.kind === 'tower');
+          _act = '  -> op: ' + (_mePic ? 'pullPicture' : 'pullLines') + ' page ' + (pi - 1) + ' fromPage ' + pi +
+                 '  (this is the LAST page, so nothing can be pulled INTO it -- it has to be absorbed.' +
+                 ' Move its content up into page ' + (pi - 1) + ' and this page disappears. If that page is' +
+                 ' nearly full the applier will trim its picture to make room.)';
+        } else {
+          _act = '  -> last page of the book and there is no page before it; nothing can be done here';
+        }
       } else {
         var _nxPic = (_nx.kind === 'image' || _nx.kind === 'tower');
         var _nxH = (_nx.heightIn != null) ? _nx.heightIn : ((_nx.realH != null) ? _nx.realH : 0);
