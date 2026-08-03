@@ -15292,9 +15292,21 @@ function finalizeOpenFixDialog(viewerPage) {
   var t = document.getElementById('fix-modal-title'); if (t) t.textContent = 'Fix page ' + viewerPage;
   var b = document.getElementById('fix-modal-body'); if (b) b.innerHTML = h;
   var m = document.getElementById('fix-msg'); if (m) m.textContent = '';
+  // v3.0.405 -- RESET THE BUTTON ON OPEN, not only on the paths that fail.
+  // Try It was set to 'Trying...' and disabled, and restored on both failure paths -- but SUCCESS
+  // closes the dialog instead of restoring it, so the button stayed disabled and mid-sentence for
+  // every open after the first successful fix. Resetting here covers every route in and out,
+  // including ones added later: whatever happened last time, the dialog opens ready to use.
+  var tb = document.getElementById('fix-try-btn');
+  if (tb) { tb.disabled = false; tb.textContent = 'Try It'; }
+  _fixBusy = false;
   var mo = document.getElementById('fix-modal'); if (mo) mo.classList.remove('hidden');
 }
 function finalizeCloseFixDialog() {
+  // v3.0.405 -- and on the way out too, so a dialog left mid-attempt does not persist a busy state.
+  var tb = document.getElementById('fix-try-btn');
+  if (tb) { tb.disabled = false; tb.textContent = 'Try It'; }
+  _fixBusy = false;
   var mo = document.getElementById('fix-modal'); if (mo) mo.classList.add('hidden');
 }
 function finalizeTryFix() {
