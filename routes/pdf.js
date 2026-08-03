@@ -9216,7 +9216,19 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     // RENDER (it sets the cover), not to the cache key, so it is applied after the hit.
     var hit = composedCacheGet(campaignId, req);
     if (bookTitle) req.query.bookTitle = bookTitle;
-    if (!(hit && hit.body)) return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize first.' });
+    if (!(hit && hit.body)) {
+      // v3.0.386 -- SAY WHICH KEY MISSED. This 409 fired on 2026-08-03 immediately after a run that
+      // applied 33 changes, which should have left a composed body in the cache. The key is built
+      // from the request query (composedCacheKey), so a save looking up under a different query than
+      // the compose wrote under misses silently -- exactly the fault recorded in the comment above,
+      // which was fixed once for bookTitle. Printing the key and what is actually held turns the
+      // next occurrence into a diff instead of another afternoon of inference.
+      try {
+        console.warn('[save-optimized] 409 optimize_required. looked for key: ' + composedCacheKey(campaignId, req)
+          + ' | held: ' + Array.from(_composedCache.keys()).join(' , '));
+      } catch (e) {}
+      return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize first.' });
+    }
     var arrange = hit.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
     var built = await assembleNovelHtml(req, campaignId, null, { arrange: arrange, packComposedBody: hit.body, campaignName: hit.campaignName || '' });
     var html = built && built.html;

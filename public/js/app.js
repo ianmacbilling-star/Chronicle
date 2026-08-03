@@ -15482,7 +15482,7 @@ function finalizeFinalFill() {
         else optimizeLogLine('Final pass: no picture had room to grow.', 'skip');
         // v3.0.338 -- the collapse sweep is the LAST thing done to the book, so say what it did.
         if (j.collapsed) optimizeLogLine('Final pass: merged ' + j.collapsed + ' nearly empty page' +
-          (j.collapsed === 1 ? '' : 's') + ' into a neighbour.', 'ok');
+          (j.collapsed === 1 ? '' : 's') + ' into a neighbor.', 'ok');   // v3.0.386 -- US spelling
         else if (j.collapseReverted) optimizeLogLine('Final pass: page merges were put back -- one would have overflowed its box.', 'skip');
       })
       .catch(function (e) { optimizeLogLine('Final pass: could not run -- ' + ((e && e.message) || 'network error'), 'stop'); });
@@ -15566,7 +15566,19 @@ function finalizeSaveOptimized(quiet) {
         if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
         return true;
       }
-      optimizeLogLine('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
+      // v3.0.386 -- QUIET MEANS QUIET, FOR THE ONE FAILURE THAT IS EXPECTED.
+      // The protective save fired at completion passes quiet=true, but this line ignored it, so a
+      // 409 from the composed cache not being populated yet was announced as 'Could not save this
+      // version: Run Optimize first' -- immediately after a run that applied 33 changes. The save
+      // that follows the final fill then succeeded and said so, leaving a log that contradicted
+      // itself four lines apart.
+      // ONLY optimize_required is swallowed, and ONLY when quiet. Every other failure still speaks:
+      // this used to report nothing at all, which is how a run of silent 409s went unnoticed long
+      // enough that 'Load Last Optimized File' had no file behind it.
+      var _code = (rj.j && rj.j.error) || '';
+      if (!(quiet && _code === 'optimize_required')) {
+        optimizeLogLine('Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error'), 'stop');
+      }
       return false;
     }).catch(function (e) { optimizeLogLine('Could not save this version: ' + ((e && e.message) || 'network error'), 'stop'); return false; });
   } catch (e) { return Promise.resolve(false); }
