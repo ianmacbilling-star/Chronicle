@@ -349,6 +349,11 @@
               <!-- v3.0.382 -- shown only when an Optimize run COMPLETES, in the slot the Cancel
                    button vacates. The publish source is already armed to the optimized book at
                    that point, so this is purely navigation: switchNovelTab(order). -->
+              <!-- v3.0.397 -- shown after a per-page Fix, in the same slot as Go to Publish. A fix changes
+                   the book on screen but not the SAVED one, so the hand-off has to become an offer to
+                   save. Without it a fix could not be kept at all: the only way forward was to re-run
+                   Optimize, which undoes it. -->
+              <button id="layoutai-save-fixed-btn" onclick="finalizeSaveFixedVersion()" style="display:none;background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Save this Version</button>
               <button id="layoutai-publish-btn" onclick="finalizeGoToPublish()" style="display:none;background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Go to Publish &#8594;</button>
               <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
               <span id="layoutai-est-note" style="font-size:11px;color:rgba(245,232,200,0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>

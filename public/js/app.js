@@ -14609,6 +14609,11 @@ var _publishSource = 'flow';
 // Set by a successful save or a successful load; cleared when a new run starts or the book
 // underneath changes. Nothing transient touches it.
 var _finalizeSavedReady = false;
+// v3.0.397 -- a per-page Fix changed the book on screen, and the SAVED file no longer matches it.
+// Ian: 'there should be a save this version option after the fix has been applied.' Without one a
+// fix could not be kept at all -- Go to Publish correctly disappears, and the only way forward was
+// to re-run Optimize, which undoes the fix.
+var _finalizeFixPending = false;
 // Put the comparison in plain language. Everything here is derived from the two real measurements
 // (page count and ink fill) -- we deliberately do NOT claim anything about which one LOOKS better,
 // because we cannot measure that; we tell the reader what to go and check with their own eyes.
@@ -15237,16 +15242,19 @@ function finalizeOpenFixDialog(viewerPage) {
   var info = _fixOptions[viewerPage];
   if (!info) return;
   _fixPage = viewerPage;
-  var COL = { GREEN: '#7fd08a', AMBER: '#e8b45c', GREY: 'rgba(245,232,200,0.35)' };
+  // v3.0.397 -- a disabled option still has to be READ. The first version used cream at 35 percent,
+  // which vanished against a light background: the reasons are the most useful part of this dialog
+  // and they were the least legible thing in it. Muted gold, full opacity.
+  var COL = { GREEN: '#4f9d5d', AMBER: '#b07d1e', GREY: '#8a6a2a' };
   var h = '<div style="font-size:13px;color:rgba(245,232,200,0.8);margin-bottom:10px;">This page holds <strong>' +
     info.heldIn + 'in</strong> of ' + info.boxIn + 'in' + (info.overBox ? ' &mdash; it runs over the page' : '') + '.</div>';
   info.options.forEach(function (o, ix) {
     var dis = (o.verdict === 'GREY');
     h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(201,168,76,0.18);' +
-      (dis ? 'opacity:0.55;cursor:not-allowed;' : 'cursor:pointer;') + '">' +
+      (dis ? 'cursor:not-allowed;' : 'cursor:pointer;') + '">' +   // v3.0.397 -- no opacity: colour carries it
       '<input type="radio" name="fixopt" value="' + ix + '"' + (dis ? ' disabled' : '') + ' style="margin-right:8px;">' +
       '<span style="color:' + (COL[o.verdict] || COL.GREY) + ';font-weight:600;">' + o.label + '</span>' +
-      '<div style="font-size:11px;color:rgba(245,232,200,0.55);margin:3px 0 0 22px;">' + o.reason + '</div>' +
+      '<div style="font-size:11px;color:#8a6a2a;margin:3px 0 0 22px;">' + o.reason + '</div>' +
     '</label>';
   });
   var t = document.getElementById('fix-modal-title'); if (t) t.textContent = 'Fix page ' + viewerPage;
@@ -15269,7 +15277,13 @@ function finalizeTryFix() {
   if (!mk) { if (msg) msg.textContent = 'That option is not wired up yet.'; return; }
   var op = mk(info.page);   // ops speak in CONTENT pages, the dialog speaks in viewer pages
   _fixBusy = true;
-  if (msg) msg.textContent = 'Trying it...';
+  // v3.0.397 -- SHOW THAT SOMETHING IS HAPPENING. The first version wrote one small grey line and
+  // left the button live, so a refused move looked identical to nothing at all. Ian: 'I could not
+  // tell what was happening.' The button is the clearest signal available -- it is what was just
+  // pressed -- so it changes, and the message is coloured rather than whispered.
+  var _tb = document.getElementById('fix-try-btn');
+  if (_tb) { _tb.disabled = true; _tb.textContent = 'Trying...'; }
+  if (msg) { msg.style.color = '#8a6a2a'; msg.textContent = 'Trying it -- re-measuring the page...'; }
   fetch('/api/pdf/layout-apply/' + state.currentCampaign.id + finalizeBookQuery(), {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
@@ -15282,6 +15296,7 @@ function finalizeTryFix() {
         finalizeCloseFixDialog();
         optimizeLogLine('Page ' + viewerPage + ': ' + opt.label + ' -- done.', 'ok');
         _finalizeSavedReady = false;   // the book on screen is no longer the saved one
+        _finalizeFixPending = true;    // v3.0.397 -- ...so offer to make it the saved one
         try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
         finalizeLoadLastOptimizedRefresh();
         return;
@@ -15289,11 +15304,13 @@ function finalizeTryFix() {
       // Refused. Report the REASON, with its numbers -- the applier measured, so it knows.
       var why = (j && j.rejectedOps && j.rejectedOps[0] && j.rejectedOps[0].reason) ||
                 (j && (j.message || j.error)) || 'the layout engine would not take that move';
-      if (msg) msg.textContent = 'That did not work: ' + why;
+      if (_tb) { _tb.disabled = false; _tb.textContent = 'Try It'; }
+      if (msg) { msg.style.color = '#b07d1e'; msg.textContent = 'That did not work: ' + why; }
     })
     .catch(function (e) {
       _fixBusy = false;
-      if (msg) msg.textContent = 'That did not work: ' + ((e && e.message) || 'network error');
+      if (_tb) { _tb.disabled = false; _tb.textContent = 'Try It'; }
+      if (msg) { msg.style.color = '#b07d1e'; msg.textContent = 'That did not work: ' + ((e && e.message) || 'network error'); }
     });
 }
 // Re-render the After pane from the composed plan the fix just changed, then refresh the options so
@@ -16018,6 +16035,40 @@ function finalizeSyncPublishBtn() {
   var show = _finalizeSavedReady && !window._aiLoopRunning;
   b.style.display = show ? '' : 'none';
   if (show) b.disabled = false;
+  // v3.0.397 -- the two buttons share a slot and are mutually exclusive by construction:
+  // _finalizeSavedReady means the file on disk IS the book on screen, _finalizeFixPending means it
+  // is not. Driving both from one function is what stops them ever being shown together, or a fix
+  // leaving the user with neither -- which is what shipped in v3.0.394.
+  var sv = document.getElementById('layoutai-save-fixed-btn');
+  if (sv) {
+    var showSave = _finalizeFixPending && !_finalizeSavedReady && !window._aiLoopRunning;
+    sv.style.display = showSave ? '' : 'none';
+    if (showSave) { sv.disabled = false; sv.textContent = 'Save this Version'; }
+  }
+}
+// v3.0.397 -- save the book as it stands, fixes included.
+// Reuses the ordinary save path, so the fixed book is flattened (v3.0.388) and stored exactly like
+// an optimized one. On success _finalizeSavedReady turns back on and the slot reverts to Go to
+// Publish, which is the honest signal: the file and the screen agree again.
+function finalizeSaveFixedVersion() {
+  var b = document.getElementById('layoutai-save-fixed-btn');
+  if (b && b.disabled) return;
+  if (b) { b.disabled = true; b.textContent = 'Saving...'; }
+  var live = optimizeProgressLive('Prepping Book for saving');
+  finalizeSaveOptimized().then(function (ok) {
+    if (ok) {
+      _finalizeFixPending = false;   // the saved file now IS the book on screen
+      live.done('Saved -- your changes will be here when you return.');
+    } else {
+      // finalizeSaveOptimized has already reported why; leave the button so it can be retried.
+      live.fail('That version was not saved. Your changes are still on screen -- try again.');
+      if (b) { b.disabled = false; b.textContent = 'Save this Version'; }
+    }
+    try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
+  }).catch(function () {
+    live.fail('That version was not saved. Your changes are still on screen -- try again.');
+    if (b) { b.disabled = false; b.textContent = 'Save this Version'; }
+  });
 }
 function finalizeGoToPublish() {
   var b = document.getElementById('layoutai-publish-btn'); if (b) b.disabled = true;
@@ -16105,6 +16156,7 @@ function _runLayoutAiOptimize() {
   // v3.0.383 -- a fresh run invalidates the previous result. _aiLoopRunning is not set yet at
   // this point, so hide it outright rather than relying on the sync to work it out.
   _finalizeSavedReady = false;   // v3.0.392 -- this run has not saved anything yet
+  _finalizeFixPending = false;   // v3.0.397 -- and it discards any unsaved per-page fix
   var _pubBtn = document.getElementById('layoutai-publish-btn');
   if (_pubBtn) { _pubBtn.style.display = 'none'; _pubBtn.disabled = false; }
   var _loadLastBtn = document.getElementById('layoutai-load-last'); if (_loadLastBtn) _loadLastBtn.style.display = 'none';   // hide during a run
