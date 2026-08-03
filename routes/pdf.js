@@ -4270,7 +4270,13 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
     '.wc-title { font-size:26pt; font-weight:700; color:' + titleColor + '; letter-spacing:0.04em; line-height:1.12; text-align:center; text-transform:uppercase; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
     '.wc-eyebrow { font-size:10pt; color:rgba(201,168,76,0.6); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.12in; }' +
-    '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:0.92; }' +
+    // v3.0.378 -- Ian: 40 percent transparent, as a DELIBERATE TEST OF THE FLATTENER.
+    // The wrap cover is one of the two files v3.0.377 runs through Ghostscript, so this is a
+    // visible, known-magnitude transparency that must survive as a composite. The spine logo
+    // beside it is left at 0.95 on purpose: one printed sheet then carries a heavy alpha and a
+    // light one, and comparing them says whether flattening is faithful across the range
+    // rather than only at one value.
+    '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:0.6; }' +
     '</style></head><body>' +
     '<div class="wrap">' +
       '<div class="wc-panel wc-back">' + backInner + '</div>' +
