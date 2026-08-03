@@ -205,7 +205,7 @@
             <select id="novel-pager-select" onchange="novelPageJump(this.value)" style="flex:1 1 auto;min-width:0;max-width:340px;background:rgba(20,12,4,0.8);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);"></select>
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()" style="flex:0 0 auto;">Next</button>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Open in New Tab</button>
+          <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Review in a New Tab</button>
         </div>
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
@@ -780,7 +780,7 @@
             <button class="btn btn-sm" id="layout-style-btn" onclick="openStylePicker('layout')" style="display:none">Layout: Classic</button>
             <button class="btn btn-sm" id="session-custom-btn" onclick="openCustomLayout('session')" style="margin-left:6px;">Layout</button>
             <button class="btn btn-sm" id="session-preview-mode-btn" onclick="toggleSessionPreviewMode()" style="margin-left:6px;" title="Quick View = fast on-screen preview. True View = the exact paged PDF (slower).">Quick View</button>
-            <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()" style="margin-left:6px;">Open in New Tab</button>
+            <button class="btn btn-primary btn-sm" onclick="exportSessionPDF()" style="margin-left:6px;">Review in a New Tab</button>
           </div>
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
             <span style="font-size:12px;color:rgba(240,232,208,0.7);">Publish or print the full book?</span>
@@ -1981,6 +1981,25 @@
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-sm" onclick="closeImagePrompt()">Cancel</button>
       <button class="btn btn-sm btn-primary" onclick="saveImagePrompt()">Save prompt</button>
+    </div>
+  </div>
+</div>
+<!-- PER-PAGE FIX MODAL (v3.0.394, TD-184) -- one page, six moves, one Try It.
+     Opened from the small Fix button beside a page number in the After spine. Front matter never
+     appears there: the server answers in viewer pages and does not list the cover, title, details,
+     contents or cast, so those pages have nothing to hang a button on. -->
+<div class="modal-overlay hidden" id="fix-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="fix-modal-title">Fix page</div>
+      <button class="modal-close" onclick="finalizeCloseFixDialog()">&times;</button>
+    </div>
+    <div id="fix-modal-body"></div>
+    <div id="fix-msg" style="font-size:12px;color:rgba(245,232,200,0.7);margin:8px 0 0;min-height:16px;"></div>
+    <div style="font-size:11px;color:rgba(245,232,200,0.5);margin-top:10px;">Running Optimize again will undo this. Save the book afterwards to keep it.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+      <button class="btn btn-sm" onclick="finalizeCloseFixDialog()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="fix-try-btn" onclick="finalizeTryFix()">Try It</button>
     </div>
   </div>
 </div>

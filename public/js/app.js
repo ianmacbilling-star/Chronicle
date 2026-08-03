@@ -15121,6 +15121,58 @@ function finalizeBuildNav(first, last) {
   finalizeBuildAfterNav(first, last);   // user-view spine on the right of the After pane
 }
 // The user-view page spine sits to the RIGHT of the After pane and jumps only that pane.
+// v3.0.394 -- PER-PAGE FIX (TD-184).
+// A Fix button beside the page number, only on pages the server says have something wrong AND
+// something available. Front matter never appears, because the server answers in viewer pages and
+// simply does not list the cover, title, details, contents or cast.
+// Ian: one button -> a modal with six radios -> pick one -> Try It -> apply that one move.
+var _fixOptions = {};        // viewerPage -> { heldIn, overBox, options:[{label,verdict,reason}] }
+var _fixBusy = false;
+var _fixPage = null;
+// The op each label maps to. Written from the READER's point of view standing on the page; three of
+// the six are one op read from different ends, and getting that backwards has caused three separate
+// bugs (TD-173, TD-193, and the direction missing from the first draft of this feature).
+var FIX_OPS = {
+  'take text from the page after':  function (p) { return { op: 'pullLines', page: p,     fromPage: p + 1 }; },
+  'take text from the page before': function (p) { return { op: 'pushLines', page: p - 1 }; },
+  'send text to the page after':    function (p) { return { op: 'pushLines', page: p }; },
+  'send text to the page before':   function (p) { return { op: 'pullLines', page: p - 1, fromPage: p }; },
+  'make the pictures bigger':       function (p) { return { op: 'growImage', page: p }; },
+  'make the pictures smaller':      function (p) { return { op: 'shrinkImage', page: p }; }
+};
+function finalizeLoadFixOptions() {
+  if (!(state && state.currentCampaign)) return Promise.resolve();
+  return fetch('/api/pdf/page-fix-options/' + state.currentCampaign.id + finalizeBookQuery(), { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      _fixOptions = {};
+      if (j && j.pages) j.pages.forEach(function (p) { _fixOptions[p.viewerPage] = p; });
+      finalizeDecorateNavFix();
+    })
+    .catch(function () { _fixOptions = {}; });
+}
+// Added AFTER the spine is built rather than inside it, so a slow or failed fetch never delays or
+// breaks the page navigation itself.
+function finalizeDecorateNavFix() {
+  var nav = document.getElementById('finalize-after-nav');
+  if (!nav) return;
+  var rows = nav.querySelectorAll('div[data-page]');
+  for (var i = 0; i < rows.length; i++) {
+    var pg = Number(rows[i].getAttribute('data-page'));
+    var old = rows[i].querySelector('.fix-btn');
+    if (old) old.parentNode.removeChild(old);
+    if (!_fixOptions[pg]) continue;
+    var b = document.createElement('span');
+    b.className = 'fix-btn';
+    b.textContent = 'Fix';
+    b.style.cssText = 'margin-left:6px;font-size:9px;padding:0 4px;border-radius:2px;' +
+      'background:rgba(201,168,76,0.22);border:1px solid rgba(201,168,76,0.5);color:var(--gold);cursor:pointer;';
+    b.setAttribute('data-fix-page', pg);
+    b.title = 'This page holds ' + _fixOptions[pg].heldIn + 'in of ' + _fixOptions[pg].boxIn + 'in';
+    b.onclick = function (ev) { ev.stopPropagation(); finalizeOpenFixDialog(Number(this.getAttribute('data-fix-page'))); };
+    rows[i].appendChild(b);
+  }
+}
 function finalizeBuildAfterNav(first, last) {
   var nav = document.getElementById('finalize-after-nav');
   if (!nav) return;
@@ -15131,6 +15183,8 @@ function finalizeBuildAfterNav(first, last) {
   nav.innerHTML = h;
   finalizeAttachNavTracking();
   finalizeNavHighlight('finalize-after-nav', 'finalize-after-scroll');   // mark the current page at once
+  finalizeDecorateNavFix();   // v3.0.394 -- paint any options we already hold, then refresh them
+  try { finalizeLoadFixOptions(); } catch (e) {}
 }
 // SCROLL-TRACKED PAGE SPINE. The spine highlighted only what you had CLICKED, so as soon as you
 // scrolled it pointed at the wrong page -- worse than no highlight, because it reads as authoritative.
@@ -15175,6 +15229,85 @@ function finalizeAttachNavTracking() {
         window.requestAnimationFrame(function () { pending = false; finalizeNavHighlight(pair[0], pair[1]); });
       }, { passive: true });
     });
+}
+// v3.0.394 -- the Fix dialog. Six radios, one Try It, one move.
+// A verdict is a PREDICTION -- the applier still measures and can refuse -- so the wording never
+// promises, and a refusal reports the numbers rather than saying 'could not'.
+function finalizeOpenFixDialog(viewerPage) {
+  var info = _fixOptions[viewerPage];
+  if (!info) return;
+  _fixPage = viewerPage;
+  var COL = { GREEN: '#7fd08a', AMBER: '#e8b45c', GREY: 'rgba(245,232,200,0.35)' };
+  var h = '<div style="font-size:13px;color:rgba(245,232,200,0.8);margin-bottom:10px;">This page holds <strong>' +
+    info.heldIn + 'in</strong> of ' + info.boxIn + 'in' + (info.overBox ? ' &mdash; it runs over the page' : '') + '.</div>';
+  info.options.forEach(function (o, ix) {
+    var dis = (o.verdict === 'GREY');
+    h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(201,168,76,0.18);' +
+      (dis ? 'opacity:0.55;cursor:not-allowed;' : 'cursor:pointer;') + '">' +
+      '<input type="radio" name="fixopt" value="' + ix + '"' + (dis ? ' disabled' : '') + ' style="margin-right:8px;">' +
+      '<span style="color:' + (COL[o.verdict] || COL.GREY) + ';font-weight:600;">' + o.label + '</span>' +
+      '<div style="font-size:11px;color:rgba(245,232,200,0.55);margin:3px 0 0 22px;">' + o.reason + '</div>' +
+    '</label>';
+  });
+  var t = document.getElementById('fix-modal-title'); if (t) t.textContent = 'Fix page ' + viewerPage;
+  var b = document.getElementById('fix-modal-body'); if (b) b.innerHTML = h;
+  var m = document.getElementById('fix-msg'); if (m) m.textContent = '';
+  var mo = document.getElementById('fix-modal'); if (mo) mo.classList.remove('hidden');
+}
+function finalizeCloseFixDialog() {
+  var mo = document.getElementById('fix-modal'); if (mo) mo.classList.add('hidden');
+}
+function finalizeTryFix() {
+  var viewerPage = _fixPage;
+  if (_fixBusy) return;
+  var sel = document.querySelector('input[name="fixopt"]:checked');
+  var msg = document.getElementById('fix-msg');
+  if (!sel) { if (msg) msg.textContent = 'Choose one of the options first.'; return; }
+  var info = _fixOptions[viewerPage];
+  var opt = info && info.options[Number(sel.value)];
+  var mk = opt && FIX_OPS[opt.label];
+  if (!mk) { if (msg) msg.textContent = 'That option is not wired up yet.'; return; }
+  var op = mk(info.page);   // ops speak in CONTENT pages, the dialog speaks in viewer pages
+  _fixBusy = true;
+  if (msg) msg.textContent = 'Trying it...';
+  fetch('/api/pdf/layout-apply/' + state.currentCampaign.id + finalizeBookQuery(), {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ops: [op] })
+  }).then(function (r) { return r.json().catch(function () { return null; }); })
+    .then(function (j) {
+      _fixBusy = false;
+      var applied = j && j.appliedCount;
+      if (applied) {
+        finalizeCloseFixDialog();
+        optimizeLogLine('Page ' + viewerPage + ': ' + opt.label + ' -- done.', 'ok');
+        _finalizeSavedReady = false;   // the book on screen is no longer the saved one
+        try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
+        finalizeLoadLastOptimizedRefresh();
+        return;
+      }
+      // Refused. Report the REASON, with its numbers -- the applier measured, so it knows.
+      var why = (j && j.rejectedOps && j.rejectedOps[0] && j.rejectedOps[0].reason) ||
+                (j && (j.message || j.error)) || 'the layout engine would not take that move';
+      if (msg) msg.textContent = 'That did not work: ' + why;
+    })
+    .catch(function (e) {
+      _fixBusy = false;
+      if (msg) msg.textContent = 'That did not work: ' + ((e && e.message) || 'network error');
+    });
+}
+// Re-render the After pane from the composed plan the fix just changed, then refresh the options so
+// the buttons reflect the new shape of the book.
+function finalizeLoadLastOptimizedRefresh() {
+  if (!(state && state.currentCampaign)) return;
+  var sc = document.getElementById('finalize-after-scroll');
+  var keep = sc ? sc.scrollTop : 0;
+  _finalizeAfterOnDone = function () {
+    try { if (sc) sc.scrollTop = keep; } catch (e) {}
+    try { finalizeLoadFixOptions(); } catch (e) {}
+  };
+  renderPdfInto('/api/pdf/print-interior/' + state.currentCampaign.id + finalizeBookQuery() + '&download=1&pane=1',
+    'finalize-after-scroll', false);
 }
 function finalizeAfterGoToPage(n) {
   var after = document.getElementById('finalize-after-scroll');

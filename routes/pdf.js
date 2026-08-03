@@ -6594,6 +6594,100 @@ function composeMagazine(plan, bands, opts) {
 // Plain-text pack-plan dump for the admin easter egg (double-click the After page count). Everything
 // needed to debug a magazine/gazette layout: per-band kind/height/image/splittable/line-count, and
 // each page's fill with UNDERFULL flags and split char-ranges.
+// v3.0.394 -- ONE COPY OF THE FIX ARITHMETIC, read by the dump AND by the Fix dialog.
+// Returns rows keyed by CONTENT page index with the viewer page alongside, so a caller never has to
+// do front-matter maths: front matter is simply absent from the result. That is also why the Fix
+// buttons cannot appear on the cover, title, details, contents or cast pages -- there is nothing to
+// hang one on. Ian, 2026-08-03: 'We do not need the buttons on the cover pages.'
+// TD-158 is why this is a function and not a second copy: one rule in two places is how the tower
+// bug happened twice.
+function pairedFixOptions(pages, dbgPages, viewerOffset) {
+   var d = { pages: dbgPages || [] };
+   var _viewer = function (cp) { return cp + (viewerOffset || 0); };
+   var _FIX_EMPTY_BAR = 1.0;     // report a page holding more than an inch of empty space
+   var _FIX_MIN_MOVE  = 0.30;    // one line: below this there is nothing worth moving
+   var _FIX_PIC_FLOOR = 0.72;    // how far a paired picture may be trimmed (see the shrink ladder)
+   function _fxReal(ix) {
+     var r = (d.pages || []).filter(function (x) { return x.page === ix; })[0];
+     return (r && r.realUsed != null) ? r.realUsed : null;
+   }
+   function _fxPl(ix) { return (((pages || [])[ix] || {}).placements || []); }
+   function _fxIsText(pl) { return !!(pl && pl.kind === 'narr'); }
+   function _fxPic(ix) {
+     var ps = _fxPl(ix), best = null;
+     for (var i = 0; i < ps.length; i++) {
+       if (ps[i].kind !== 'image') continue;
+       var h = (ps[i].realH != null) ? ps[i].realH : ps[i].heightIn;
+       if (h > 0 && (!best || h > best.h)) best = { h: h, pl: ps[i] };
+     }
+     return best;   // the biggest picture is the one with the most to give
+   }
+   // How much a page could free by trimming its largest picture to the floor.
+   function _fxGive(ix) {
+     var p = _fxPic(ix);
+     return p ? (Math.round(p.h * (1 - _FIX_PIC_FLOOR) * 100) / 100) : 0;
+   }
+   function _fxVerdict(need, room, giveIx) {
+     if (need == null) return ['GREY ', 'nothing there to move'];
+     if (need < _FIX_MIN_MOVE) return ['GREY ', 'less than a line -- not worth moving'];
+     if (room >= need) return ['GREEN', 'room is already there (' + room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in)'];
+     var give = (giveIx != null) ? _fxGive(giveIx) : 0;
+     if (give > 0 && (room + give) >= need) {
+       var short = need - room;
+       var pic = _fxPic(giveIx);
+       var pct = pic ? Math.round((1 - (pic.h - short) / pic.h) * 100) : 0;
+       return ['AMBER', 'only fits if the picture on page ' + giveIx + ' is trimmed about ' + pct + ' percent (' +
+               room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in)'];
+     }
+     return ['GREY ', 'no room -- ' + room.toFixed(2) + 'in free, needs ' + need.toFixed(2) + 'in' +
+             (give > 0 ? (', and trimming the picture there only frees ' + give.toFixed(2) + 'in') : ' and there is no picture to trim')];
+   }
+   var _fxRows = [];
+   (pages || []).forEach(function (pg, pi) {
+     var rMe = _fxReal(pi);
+     if (rMe == null) return;
+     var over  = rMe > CO_CLIP_BOX_IN;
+     var empty = (CO_CLIP_BOX_IN - rMe) > _FIX_EMPTY_BAR;
+     if (!over && !empty) return;                       // only pages we already believe are wrong
+     var me = _fxPl(pi), prevOk = pi > 0, nextOk = (pi + 1) < (pages || []).length;
+     var rPrev = prevOk ? _fxReal(pi - 1) : null, rNext = nextOk ? _fxReal(pi + 1) : null;
+     var roomMe   = Math.round((CO_CLIP_BOX_IN - rMe) * 100) / 100;
+     var roomPrev = (rPrev != null) ? Math.round((CO_CLIP_BOX_IN - rPrev) * 100) / 100 : null;
+     var roomNext = (rNext != null) ? Math.round((CO_CLIP_BOX_IN - rNext) * 100) / 100 : null;
+     var headMe = me[0] || null, tailMe = me[me.length - 1] || null;
+     var nextHead = nextOk ? (_fxPl(pi + 1)[0] || null) : null;
+     var prevTail = prevOk ? (function () { var p = _fxPl(pi - 1); return p[p.length - 1] || null; })() : null;
+     function hOf(pl) { return pl ? ((pl.realH != null) ? pl.realH : pl.heightIn) : null; }
+     var opts = [];
+     // 1. take text from the page AFTER
+     if (!nextOk) opts.push(['take text from the page after ', 'GREY ', 'this is the last page -- there is no page after it']);
+     else if (!_fxIsText(nextHead)) opts.push(['take text from the page after ', 'GREY ', 'the next page starts with a picture, which cannot move up alone']);
+     else { var v1 = _fxVerdict(hOf(nextHead), roomMe, pi); opts.push(['take text from the page after ', v1[0], v1[1]]); }
+     // 2. take text from the page BEFORE
+     if (!prevOk) opts.push(['take text from the page before', 'GREY ', 'this is the first page -- there is no page before it']);
+     else if (!_fxIsText(prevTail)) opts.push(['take text from the page before', 'GREY ', 'the previous page ends with a picture, which cannot move down alone']);
+     else { var v2 = _fxVerdict(hOf(prevTail), roomMe, pi); opts.push(['take text from the page before', v2[0], v2[1]]); }
+     // 3. send text to the page AFTER
+     if (!nextOk) opts.push(['send text to the page after  ', 'GREY ', 'this is the last page -- there is no page after it']);
+     else if (!_fxIsText(tailMe)) opts.push(['send text to the page after  ', 'GREY ', 'this page ends with a picture, which cannot move down alone']);
+     else { var v3 = _fxVerdict(hOf(tailMe), roomNext, pi + 1); opts.push(['send text to the page after  ', v3[0], v3[1]]); }
+     // 4. send text to the page BEFORE -- the move that absorbs a stranded page
+     if (!prevOk) opts.push(['send text to the page before ', 'GREY ', 'this is the first page -- there is no page before it']);
+     else if (!_fxIsText(headMe)) opts.push(['send text to the page before ', 'GREY ', 'this page starts with a picture, which cannot move up alone']);
+     else { var v4 = _fxVerdict(hOf(headMe), roomPrev, pi - 1); opts.push(['send text to the page before ', v4[0], v4[1]]); }
+     // 5. pictures bigger
+     var picMe = _fxPic(pi);
+     if (!picMe) opts.push(['make the pictures bigger     ', 'GREY ', 'there is no picture on this page']);
+     else if (roomMe < _FIX_MIN_MOVE) opts.push(['make the pictures bigger     ', 'GREY ', 'this page has no spare height (' + roomMe.toFixed(2) + 'in)']);
+     else opts.push(['make the pictures bigger     ', 'GREEN', 'about ' + roomMe.toFixed(2) + 'in of height is free for it to grow into']);
+     // 6. pictures smaller
+     if (!picMe) opts.push(['make the pictures smaller    ', 'GREY ', 'there is no picture on this page']);
+     else opts.push(['make the pictures smaller    ', 'GREEN', 'frees up to ' + _fxGive(pi).toFixed(2) + 'in before it hits its floor']);
+     _fxRows.push({ page: pi, real: rMe, over: over, opts: opts });
+   });
+   return _fxRows;
+}
+
 function pairedPlanText(packed) {
   var plan = (packed && packed.plan) || {};
   var pages = (plan.pages) || [];
@@ -6829,6 +6923,40 @@ function pairedPlanText(packed) {
   L.push('number. Do this whenever you see it -- it is usually the only thing that can fill the page,');
   L.push('and it can empty the page the picture came from, which shortens the book.');
   L.push('');
+   // ===== PAGE FIX OPTIONS (v3.0.394, reporting only) ===========================================
+   // What could a PERSON do to this page? Not what the loop will do -- what is arithmetically
+   // available, so the per-page Fix control (TD-184) has something true to colour its radio
+   // buttons with. Nothing reads this yet; it is here to be checked against a real book before a
+   // dialog is built on top of it. Ian: review it with the button that already exists.
+   //
+   // SIX MOVES, and note that three of them are ONE op read from different ends. That confusion has
+   // now caused three bugs -- TD-173, TD-193, and the direction missing from the first draft of
+   // TD-184 -- so the names here are written from the READER's point of view, standing on the page:
+   //   take from after   = pullLines page N   fromPage N+1
+   //   take from before  = pushLines page N-1
+   //   send to after     = pushLines page N
+   //   send to before    = pullLines page N-1 fromPage N     <- the one that absorbs a stranded page
+   //   bigger / smaller  = growImage / shrinkImage page N
+   //
+   // GREEN means the room is already there. AMBER means it only fits if a picture gives way, and it
+   // says how much -- v3.0.371 made exactly that trade silently for months and nobody saw it. GREY
+   // says why not, because a disabled option with a reason teaches and one without is a dead end.
+   // Every verdict is a PREDICTION: the applier still measures and can refuse.
+   var _fxRows = pairedFixOptions(pages, d.pages, _fm + 1);
+   if (_fxRows.length) {
+     L.push('');
+     L.push('PAGE FIX OPTIONS (what a PERSON could do -- reporting only, nothing reads this yet)');
+     L.push('  Listed for pages that hold more than ' + _FIX_EMPTY_BAR.toFixed(2) + 'in of empty space, or that run over the box.');
+     L.push('  GREEN the room is there. AMBER it only fits if a picture gives way, and by how much.');
+     L.push('  GREY why not. Every verdict is a PREDICTION -- the applier still measures and can refuse.');
+     _fxRows.forEach(function (r) {
+       L.push('    PAGE ' + pad(r.page, 3) + ' (viewer p.' + pad(_viewer(r.page), 3) + ')  holds ' + r.real.toFixed(2) + 'in of ' +
+         CO_CLIP_BOX_IN.toFixed(2) + 'in' + (r.over ? '  *** OVER THE BOX ***' : ''));
+       r.opts.forEach(function (o) { L.push('        [' + o[1] + ']  ' + o[0] + '  ' + o[2]); });
+     });
+     L.push('  ' + _fxRows.length + ' page(s) offered options.');
+   }
+
   // ===== ISSUES (AI signals) -- paired ===========================================================
   // Same structured signals the magazine dump emits, computed from the paired plan: over-box clips,
   // oversized cells (real >> packed), and underfull pages. Maps to the op vocabulary in the spec.
@@ -7640,6 +7768,47 @@ function magazinePlanText(packed) {
 router.get('/layouts', requireAuth, function (req, res) {
   res.json({ enabled: layoutsEnabledList(), withheld: CO_LAYOUTS_WITHHELD.filter(function (a) { return !layoutIsEnabled(a); }) });
 });
+// v3.0.394 -- WHAT COULD A PERSON DO TO THIS PAGE? The data behind the Fix dialog (TD-184).
+// The same pairedFixOptions the dump prints, as JSON, keyed by VIEWER page -- so the client never
+// does front-matter arithmetic and the cover, title, details, contents and cast pages simply are
+// not in the answer. A page absent from `pages` gets no Fix button, which is exactly right: either
+// it is front matter or there is nothing wrong with it.
+//
+// requireAuth only, NOT requireAdmin: this is a user-facing control, unlike pack-debug.
+// Reads the COMPOSED plan when one is cached, because that is the book on screen. With no composed
+// plan there is nothing to fix yet, so it answers honestly rather than packing something new.
+router.get('/page-fix-options/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
+    if (_cco.arrange && _cco.arrange !== 'paired') {
+      return res.json({ ok: true, arrange: _cco.arrange, pages: [], note: 'only the Picture Book layout is wired up so far' });
+    }
+    var packedP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN, debug: true });
+    var _plan = (packedP && packedP.plan) || {};
+    var _dbg = (packedP && packedP.dbg) || {};
+    // Front-matter count, same derivation the dumper uses, so the viewer numbers agree with the
+    // page numbers the reader sees in the preview spine.
+    var _has = function (k) { return !(_cco && _cco[k] === 0); };
+    var _fmN = 2 + (_has('cover') ? 1 : 0) + (_has('toc') ? 1 : 0) + (_has('cast') ? 1 : 0);
+    var rows = pairedFixOptions(_plan.pages || [], _dbg.pages || [], _fmN + 1);
+    return res.json({
+      ok: true, arrange: 'paired', frontMatter: _fmN,
+      pages: rows.map(function (r) {
+        return {
+          page: r.page, viewerPage: r.page + _fmN + 1,
+          heldIn: Math.round(r.real * 100) / 100, boxIn: CO_CLIP_BOX_IN, overBox: !!r.over,
+          options: r.opts.map(function (o) {
+            return { label: String(o[0]).trim(), verdict: String(o[1]).trim(), reason: o[2] };
+          })
+        };
+      })
+    });
+  } catch (e) {
+    log500('page-fix-options', req, e);
+    return res.status(500).json({ error: (e && e.message) || 'page-fix-options failed' });
+  }
+});
+
 router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function (req, res) {
   // ?nogrows=1 -> REFERENCE PACK: every image at natural size, the run-scoped grow store ignored.
   // The store survives 30 minutes after an Optimize, so a plain pack-debug silently inherits the
