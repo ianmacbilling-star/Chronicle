@@ -15321,13 +15321,21 @@ function finalizeTryFix() {
       // Refused. Report the REASON, with its numbers -- the applier measured, so it knows.
       var why = (j && j.rejectedOps && j.rejectedOps[0] && j.rejectedOps[0].reason) ||
                 (j && (j.message || j.error)) || 'the layout engine would not take that move';
+      // v3.0.400 -- Ian: 'if it will not do it, it can just say so over in the log.'
+      // Both outcomes now end the same way -- the dialog closes and the run log carries the record.
+      // Leaving a refusal inside a modal made it the one result you had to be looking at the right
+      // place to see, and it vanished the moment the dialog was dismissed. The log is where every
+      // other thing that happened to this book is written down, so a refusal belongs there too.
       if (_tb) { _tb.disabled = false; _tb.textContent = 'Try It'; }
-      if (msg) { msg.style.color = '#b07d1e'; msg.textContent = 'That did not work: ' + why; }
+      finalizeCloseFixDialog();
+      optimizeLogLine('Page ' + viewerPage + ': could not ' + opt.label + ' -- ' + why, 'stop');
     })
     .catch(function (e) {
       _fixBusy = false;
       if (_tb) { _tb.disabled = false; _tb.textContent = 'Try It'; }
-      if (msg) { msg.style.color = '#b07d1e'; msg.textContent = 'That did not work: ' + ((e && e.message) || 'network error'); }
+      finalizeCloseFixDialog();
+      optimizeLogLine('Page ' + viewerPage + ': could not ' + ((opt && opt.label) || 'apply that change') +
+        ' -- ' + ((e && e.message) || 'network error'), 'stop');
     });
 }
 // Re-render the After pane from the composed plan the fix just changed, then refresh the options so
