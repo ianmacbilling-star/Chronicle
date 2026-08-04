@@ -7881,7 +7881,10 @@ router.get('/page-fix-options/:campaignId', requireAuth, async function (req, re
     var _fmN = 2 + (_has('cover') ? 1 : 0) + (_has('toc') ? 1 : 0) + (_has('cast') ? 1 : 0);
     var rows = _rows;
     return res.json({
-      ok: true, arrange: _arr, frontMatter: _fmN,
+      // v3.0.407 -- contentCount so the client can CHECK the offset instead of trusting it.
+      // frontMatter is computed (2 + cover + toc + cast), not measured, so a cast that spills to a
+      // second page shifts every button by one with nothing to show for it.
+      ok: true, arrange: _arr, frontMatter: _fmN, contentCount: _rows.length,
       pages: rows.map(function (r) {
         return {
           page: r.page, viewerPage: r.page + _fmN + 1,
@@ -8941,11 +8944,25 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       // Nothing else changes -- the reading-order comparison and the real re-measure still gate every
       // move, so a picture can only move where text could have.
       if (!pls.length) return { ok: false, reason: 'cannot move: page ' + fromPageIdx + ' is empty' };
-      if (pls[0].kind !== 'narr' && pls[0].kind !== 'image' && pls[0].kind !== 'tower') {
-        return { ok: false, reason: 'cannot move: page ' + fromPageIdx + ' starts with ' +
-                 pairedPlacementLabel(pls[0]) + ', which is structural and must stay where it is' };
+      // v3.0.407 -- WHICH END OF THE PAGE MOVES DEPENDS ON WHICH WAY IT IS GOING.
+      // This always took pls[0]. For a PULL UP that is right: the first thing on the later page comes
+      // off the top and lands at the end of the earlier one, and the order is preserved.
+      // For a PUSH DOWN it is not merely suboptimal, it is STRUCTURALLY GUARANTEED TO FAIL. Taking the
+      // first item off a page and prepending it to the next puts it after everything that used to
+      // follow it on its own page. The ANOMALIES viewer p.8 held [beat 3 picture][beat 3 closing text];
+      // asking to send text down moved the PICTURE, past its own caption, and the order check refused
+      // it -- correctly. Any page with more than one placement refused a push-down, every time.
+      // The last item is the order-safe one: what sits at the end of page X already precedes whatever
+      // starts page Y, so prepending it to Y cannot invert anything.
+      // Ian: 'if the option is to move text down or to the next page it should take the last text beat
+      // on page X and put it first on page Y, shoving everything else down.' That is this line.
+      var _pushDown = (toPageIdx > fromPageIdx);
+      var _ix = _pushDown ? (pls.length - 1) : 0;
+      if (pls[_ix].kind !== 'narr' && pls[_ix].kind !== 'image' && pls[_ix].kind !== 'tower') {
+        return { ok: false, reason: 'cannot move: page ' + fromPageIdx + (_pushDown ? ' ends with ' : ' starts with ') +
+                 pairedPlacementLabel(pls[_ix]) + ', which is structural and must stay where it is' };
       }
-      var moving = pls[0];
+      var moving = pls[_ix];
       // Append to the target page (text moves to the END of the earlier page / START of the later one
       // depending on direction; for a pull-up the earlier page gets it appended after its content).
       // Baseline BEFORE touching anything, so the comparison is against this book as it stands.
@@ -8954,7 +8971,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       var fromBefore = pls.slice();
       if (toPageIdx < fromPageIdx) { toPg.placements = toBefore.concat([moving]); }   // pull up: append to earlier page
       else { toPg.placements = [moving].concat(toBefore); }                            // push down: prepend to later page
-      fromPg.placements = fromBefore.slice(1);
+      fromPg.placements = fromBefore.filter(function (_p, _i) { return _i !== _ix; });   // v3.0.407 -- remove the one that moved, not always the first
       // ORDER FIRST, then fit. A move that reads wrong is not worth measuring: the height test alone
       // happily accepted pushing a beat's after-tail past the NEXT beat's opening paragraph.
       // COMPARE, do not just count. This asked 'are there any breaks now?' rather than 'did this move

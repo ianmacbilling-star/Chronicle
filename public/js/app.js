@@ -15152,6 +15152,23 @@ function finalizeLoadFixOptions() {
     .then(function (j) {
       _fixOptions = {};
       if (j && j.pages) j.pages.forEach(function (p) { _fixOptions[p.viewerPage] = p; });
+      // v3.0.407 -- CHECK THE OFFSET AGAINST THE RENDERED BOOK. The server COMPUTES front matter as
+      // 2 + cover + toc + cast, one page each. If a cast or a contents spills to a second page that
+      // is wrong by one, and every Fix button then describes its neighbour -- silently, which is the
+      // part that matters. The pane knows how many pages actually rendered, so the sum is checkable:
+      // front + content + back cover should be the whole book, and the back cover is 0 or 1.
+      // Not auto-corrected: with one equation and two unknowns a 2-page gap could be a spilled cast
+      // OR a second back page, and guessing wrong moves every button the other way. Report it.
+      try {
+        if (j && j.contentCount != null && j.frontMatter != null && _finalizeAfterPages > 0) {
+          var _extra = _finalizeAfterPages - j.frontMatter - j.contentCount;
+          if (_extra !== 0 && _extra !== 1) {
+            optimizeDumpLine('FIX OFFSET SUSPECT: the pane rendered ' + _finalizeAfterPages + ' pages, but ' +
+              j.frontMatter + ' front + ' + j.contentCount + ' content leaves ' + _extra + ' unaccounted for ' +
+              '(expected 0 or 1 for a back cover). The Fix buttons may be one page out.');
+          }
+        }
+      } catch (e) {}
       finalizeDecorateNavFix();
     })
     .catch(function () { _fixOptions = {}; });
@@ -15309,6 +15326,25 @@ function finalizeCloseFixDialog() {
   _fixBusy = false;
   var mo = document.getElementById('fix-modal'); if (mo) mo.classList.add('hidden');
 }
+// v3.0.407 -- THE REASONS COME BACK IN CONTENT PAGES. Everything the reader sees is a VIEWER page.
+// The applier reasons about plan.pages, which are numbered from the first page of the story; the
+// dialog, the spine and the log all count from the cover. So a refusal read:
+//   Page 18: could not send text to the page before -- would overflow page 11
+// Both numbers were right and the sentence was nonsense. Ian: 'Page 11???'
+// The offset is known exactly -- the server sends both numbers for the page in hand -- so translate
+// rather than guess. Anything that does not look like a plausible content page is left alone.
+function finalizeFixReasonToViewer(reason, info) {
+  if (!reason || !info || info.viewerPage == null || info.page == null) return reason;
+  var off = info.viewerPage - info.page;
+  function shift(n) { var v = Number(n) + off; return (v > 0 && v < 10000) ? v : null; }
+  // ONE PASS. 'from page 2 to 3' has a bare second number that is also a page, so it needs its own
+  // rule -- but running that rule and then a general /page (\d+)/ sweep shifts the first number
+  // TWICE, because the sweep matches what the first rule just wrote. One alternation, one traversal.
+  return String(reason).replace(/\bfrom page (\d+) to (\d+)\b|\bpage (\d+)\b/g, function (m, a, b, c) {
+    if (a != null) { var va = shift(a), vb = shift(b); return (va && vb) ? ('from page ' + va + ' to ' + vb) : m; }
+    var v = shift(c); return v ? ('page ' + v) : m;
+  });
+}
 function finalizeTryFix() {
   var viewerPage = _fixPage;
   if (_fixBusy) return;
@@ -15350,6 +15386,7 @@ function finalizeTryFix() {
       // Refused. Report the REASON, with its numbers -- the applier measured, so it knows.
       var why = (j && j.rejectedOps && j.rejectedOps[0] && j.rejectedOps[0].reason) ||
                 (j && (j.message || j.error)) || 'the layout engine would not take that move';
+      why = finalizeFixReasonToViewer(why, info);   // v3.0.407 -- one numbering, the reader's
       // v3.0.400 -- Ian: 'if it will not do it, it can just say so over in the log.'
       // Both outcomes now end the same way -- the dialog closes and the run log carries the record.
       // Leaving a refusal inside a modal made it the one result you had to be looking at the right
