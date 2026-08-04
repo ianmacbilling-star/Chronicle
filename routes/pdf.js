@@ -8482,6 +8482,18 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     // ANY GUARD ADDED HERE LATER MUST BE CLASSIFIED THE SAME WAY. If it prevents a BROKEN book it
     // stays unconditional; if it prevents a POINTLESS one it gets !_manualFix.
     var _manualFix = !!(req.body && req.body.manual);
+    // v3.0.413 -- HOW MUCH. A manual scale change is a step the reader chose, not a target the engine
+    // computed. Ian: 'when I shrunk a picture it went from full page to SUPER SMALL.' He was right --
+    // the paired shrink bisects for the SMALLEST scale that CLEARS THE BOX, and on a page that already
+    // clears it every probe succeeds, so it walked 1.0 -> 0.65 -> 0.475 -> 0.39 -> 0.34. A full-page
+    // picture at a third of its size, and a technically correct answer to the question it was asked.
+    // The dialog now carries a percentage, which changes the question: not 'what is the smallest that
+    // fits' but 'make it 15 percent smaller'. Clamped 1..75 so a typo cannot erase a picture.
+    function _manualPct(op, dflt) {
+      var p = Number(op && op.pct);
+      if (!(p > 0)) p = dflt;
+      return Math.max(1, Math.min(75, p)) / 100;
+    }
     if (!_manualFix && !(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
 
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
@@ -8576,7 +8588,11 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         var _breachThis = false, _floorThis = _sFloor;   // v3.0.371 -- set by the shrink branch
         var tryMul;
         if (op.op === 'growImage') {
-          if (pageReal == null || imgH == null || imgH <= 0) { tryMul = Math.min(_growCap, curMul * 1.5); }
+          if (_manualFix) {
+            // v3.0.413 -- a chosen step, capped by whatever the shape allows.
+            tryMul = Math.min(_growCap, curMul * (1 + _manualPct(op, 10)));
+          }
+          else if (pageReal == null || imgH == null || imgH <= 0) { tryMul = Math.min(_growCap, curMul * 1.5); }
           else {
             var white = MCLIP - pageReal - 0.06;                 // leave a hair of margin
             if (white <= 0.05) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no room to grow within box' }); continue; }
@@ -8627,7 +8643,11 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           }
           var _floorNow = _sFloor;
           var _breach = false;
-          if (imgH == null || imgH <= 0) { tryMul = Math.max(_floorNow, curMul - 0.05); }
+          if (_manualFix) {
+            // v3.0.413 -- the reader asked for a STEP, not a fit. The shrink floor still applies.
+            tryMul = Math.max(_floorNow, curMul * (1 - _manualPct(op, 10)));
+          }
+          else if (imgH == null || imgH <= 0) { tryMul = Math.max(_floorNow, curMul - 0.05); }
           else {
             var over = pageReal - MCLIP + 0.06;
             var _want = curMul * (imgH - over) / imgH;
@@ -9218,13 +9238,25 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       // clears it, every probe succeeds, hi walks back up to oldScale, and the test below refuses
       // because best is not smaller than where it started -- so a manual shrink on a healthy page
       // silently does nothing. A person asking for a smaller picture wants the nudge, not a search.
-      if (_manualFix && op.op === 'shrinkImage') {
-        var _mNew = Math.max(0.3, Math.round((oldScale - 0.1) * 1000) / 1000);
+      if (_manualFix && (op.op === 'shrinkImage' || op.op === 'growImage')) {
+        // v3.0.413 -- the reader's percentage, in whichever direction. Grow is capped at 1.0 (natural
+        // size) and shrink at 0.3, and a grow is still measured against the box below.
+        var _mPct = _manualPct(op, 10);
+        var _mNew = (op.op === 'shrinkImage')
+          ? Math.max(0.3, Math.round(oldScale * (1 - _mPct) * 1000) / 1000)
+          : Math.min(1.0, Math.round(oldScale * (1 + _mPct) * 1000) / 1000);
+        if (Math.abs(_mNew - oldScale) < 0.005) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: (op.op === 'growImage' ? 'the picture is already at its full size' : 'the picture is already as small as it can go') }); continue; }
         pl.scale = _mNew;
         var _mR = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
         var _mH = (_mR && _mR[op.page] != null) ? _mR[op.page] : null;
-        // Shrinking cannot overflow a page, so this only guards against a measure that failed.
-        if (_mH == null) { pl.scale = oldScale; rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'the page could not be re-measured after shrinking' }); continue; }
+        // Shrinking cannot overflow. GROWING CAN, so a grow is still checked against the box -- that
+        // is PHYSICAL and applies to everyone.
+        if (_mH == null) { pl.scale = oldScale; rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'the page could not be re-measured afterwards' }); continue; }
+        if (op.op === 'growImage' && _mH > CLIP + CO_CLIP_ACCEPT_TOL) {
+          pl.scale = oldScale;
+          rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'growing it by that much would push the page past the bottom (' + _mH.toFixed(2) + 'in of ' + CLIP.toFixed(2) + 'in) -- try a smaller percentage' });
+          continue;
+        }
         applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, scaleFrom: oldScale, scaleTo: _mNew, pageReal: Math.round(_mH * 100) / 100 });
         continue;
       }

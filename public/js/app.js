@@ -15290,23 +15290,41 @@ function finalizeOpenFixDialog(viewerPage) {
   // which vanished against a light background: the reasons are the most useful part of this dialog
   // and they were the least legible thing in it. Muted gold, full opacity.
   var COL = { GREEN: '#4f9d5d', AMBER: '#b07d1e', GREY: '#8a6a2a' };
-  var h = '<div style="font-size:13px;color:rgba(245,232,200,0.8);margin-bottom:4px;">This page holds <strong>' +
-    info.heldIn + 'in</strong> of ' + info.boxIn + 'in' + (info.overBox ? ' &mdash; it runs over the page' : '') + '.</div>' +
-    '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
+  // v3.0.413 -- the page measurement moves up beside the title, in a colour that can be READ. It was
+  // cream at 80 percent on a light dialog, which Ian could not see at all.
+  var h = '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
     'Any of them can be tried &mdash; if a move will not fit, nothing changes and it says why.</div>';
   info.options.forEach(function (o, ix) {
     // v3.0.399 -- NOTHING IS DISABLED. The colour is what we EXPECT; the applier decides. A grey
     // option is still selectable, because our prediction has been wrong before and a wrong
     // prediction must not be what stops someone fixing their own book.
     var dis = false;
+    // v3.0.413 -- the two picture moves take a percentage; everything else moves a whole placement
+    // and has nothing to dial. Touching the box selects its radio, so the number and the choice
+    // cannot disagree -- typing 20 into a row you have not selected and pressing Try It would
+    // otherwise apply a different move at a percentage you never meant for it.
+    var _isPic = (o.label === 'make the pictures bigger' || o.label === 'make the pictures smaller');
+    var _pctBox = _isPic
+      ? ('<span style="margin-left:8px;font-size:11px;color:#8a6a2a;">by ' +
+         '<input type="number" class="fix-pct" data-for="' + ix + '" value="10" min="1" max="75" step="5" ' +
+         'onclick="event.stopPropagation();" onfocus="finalizeFixPickRadio(' + ix + ');" ' +
+         'style="width:46px;padding:1px 4px;font-size:11px;border-radius:3px;border:1px solid rgba(201,168,76,0.5);' +
+         'background:rgba(201,168,76,0.10);color:#8a6a2a;"> percent</span>')
+      : '';
     h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(201,168,76,0.18);' +
       (dis ? 'cursor:not-allowed;' : 'cursor:pointer;') + '">' +   // v3.0.397 -- no opacity: colour carries it
       '<input type="radio" name="fixopt" value="' + ix + '"' + (dis ? ' disabled' : '') + ' style="margin-right:8px;">' +
-      '<span style="color:' + (COL[o.verdict] || COL.GREY) + ';font-weight:600;">' + o.label + '</span>' +
+      '<span style="color:' + (COL[o.verdict] || COL.GREY) + ';font-weight:600;">' + o.label + '</span>' + _pctBox +
       '<div style="font-size:11px;color:#8a6a2a;margin:3px 0 0 22px;">' + o.reason + '</div>' +
     '</label>';
   });
-  var t = document.getElementById('fix-modal-title'); if (t) t.textContent = 'Fix page ' + viewerPage;
+  var t = document.getElementById('fix-modal-title');
+  if (t) {
+    t.innerHTML = 'Fix page ' + viewerPage +
+      '<span style="font-family:var(--font-body);font-size:12px;font-weight:400;color:#8a6a2a;margin-left:10px;">' +
+      'This page holds ' + info.heldIn + 'in of ' + info.boxIn + 'in' +
+      (info.overBox ? ' &mdash; it runs over the page' : '') + '.</span>';
+  }
   var b = document.getElementById('fix-modal-body'); if (b) b.innerHTML = h;
   var m = document.getElementById('fix-msg'); if (m) m.textContent = '';
   // v3.0.405 -- RESET THE BUTTON ON OPEN, not only on the paths that fail.
@@ -15318,6 +15336,13 @@ function finalizeOpenFixDialog(viewerPage) {
   if (tb) { tb.disabled = false; tb.textContent = 'Try It'; }
   _fixBusy = false;
   var mo = document.getElementById('fix-modal'); if (mo) mo.classList.remove('hidden');
+}
+// v3.0.413 -- touching a percentage box selects the option it belongs to.
+function finalizeFixPickRadio(ix) {
+  try {
+    var r = document.querySelector('input[name="fixopt"][value="' + ix + '"]');
+    if (r && !r.disabled) r.checked = true;
+  } catch (e) {}
 }
 function finalizeCloseFixDialog() {
   // v3.0.405 -- and on the way out too, so a dialog left mid-attempt does not persist a busy state.
@@ -15356,6 +15381,11 @@ function finalizeTryFix() {
   var mk = opt && FIX_OPS[opt.label];
   if (!mk) { if (msg) msg.textContent = 'That option is not wired up yet.'; return; }
   var op = mk(info.page);   // ops speak in CONTENT pages, the dialog speaks in viewer pages
+  // v3.0.413 -- carry the chosen percentage for the two picture moves.
+  try {
+    var _pb = document.querySelector('input.fix-pct[data-for="' + sel.value + '"]');
+    if (_pb) { var _pv = Number(_pb.value); if (_pv > 0) op.pct = _pv; }
+  } catch (e) {}
   _fixBusy = true;
   // v3.0.397 -- SHOW THAT SOMETHING IS HAPPENING. The first version wrote one small grey line and
   // left the button live, so a refused move looked identical to nothing at all. Ian: 'I could not
