@@ -2400,6 +2400,16 @@ function renderMagazine(moments, sections, intro, outro, opts) {
 var _composedCache = new Map();
 var COMPOSED_CACHE_TTL_MS = 30 * 60 * 1000;
 var COMPOSED_CACHE_MAX = 24;
+// v3.0.421 -- WHICH PROCESS ANSWERED. Every store in this file is a module-level Map: the composed
+// cache, the run grows, the run moves, the refusals. All of it is one process's memory.
+// On 2026-08-04 a magazine adjust wrote the composed cache -- the write is unconditional on that
+// path -- and the save a moment later found the map EMPTY, not merely keyed differently: the log
+// read 'held:' with nothing after it. A cache that was written and is then absent points at a
+// different process answering, which is what happens with more than one replica.
+// This tag makes it a one-line answer instead of a theory: if the adjust and the save report
+// different ids, the state is split across instances and NOTHING run-scoped can be relied on --
+// not the fix control, not the optimize loop's grow store, not the move store.
+var PROC_ID = Math.random().toString(36).slice(2, 6) + ':' + process.pid;
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
   return [campaignId, q.co || '', q.layout || '', q.as_user || '', q.bookTitle || ''].join('|');
@@ -8977,6 +8987,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         _planTxtM = magazinePlanText({ dbg: _dbgM });
       } catch (e) { _planTxtM = null; console.error('magazine composed plan text failed:', e && e.message); }
       composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName, _planTxtM);
+      try { console.log('[layout-apply] proc ' + PROC_ID + ' cached the composed magazine book; the cache now holds ' + _composedCache.size + ' entr(ies)'); } catch (e) {}
       var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
       if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
       var mPdf = await renderHtmlToPdf(mBuilt.html, {});
@@ -9714,6 +9725,7 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     // missed every time, returning 409 optimize_required, which the client swallowed. Nothing was
     // ever saved, so 'Load Last Optimized File' never had a file to offer. The title belongs to the
     // RENDER (it sets the cover), not to the cache key, so it is applied after the hit.
+    var _lookKey = composedCacheKey(campaignId, req);   // v3.0.421 -- before bookTitle is written in
     var hit = composedCacheGet(campaignId, req);
     if (bookTitle) req.query.bookTitle = bookTitle;
     if (!(hit && hit.body)) {
@@ -9724,8 +9736,11 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
       // which was fixed once for bookTitle. Printing the key and what is actually held turns the
       // next occurrence into a diff instead of another afternoon of inference.
       try {
-        console.warn('[save-optimized] 409 optimize_required. looked for key: ' + composedCacheKey(campaignId, req)
-          + ' | held: ' + Array.from(_composedCache.keys()).join(' , '));
+        // v3.0.421 -- log the key the lookup ACTUALLY used. bookTitle is written into req.query on
+        // the line above, so this printed a key with the title in it while the lookup used one
+        // without -- a diagnostic that misreported the very thing it exists to report.
+        console.warn('[save-optimized] proc ' + PROC_ID + ' 409 optimize_required. looked for key: ' + _lookKey
+          + ' | held: ' + (Array.from(_composedCache.keys()).join(' , ') || '(nothing -- the cache is EMPTY)'));
       } catch (e) {}
       return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize first.' });
     }
