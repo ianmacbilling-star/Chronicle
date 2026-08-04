@@ -8466,6 +8466,21 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     // The LOOP keeps the gate -- it is the only thing between a scripted caller and unlimited free
     // Chromium renders. Nothing chargeable sits behind it either way, so a spoofed manual flag buys
     // a render, not a token.
+    // v3.0.412 -- THE MANUAL FLAG, AND WHAT IT IS FOR.
+    // This route serves two callers with opposite needs. The OPTIMIZER is deciding what is WORTH
+    // doing, so it is refused early and often -- shrinking a picture on a page that already fits is
+    // pointless work; growing one trimmed for cohesion would orphan the text it was trimmed to keep.
+    // Those are GOALS, and they are right for a machine choosing its own moves.
+    // A PERSON has already decided. Ian: 'those rules should apply to the Optimizer... when someone
+    // is manually trying to adjust something it should let it try and only fail if it BREAKS
+    // something.'
+    // So every guard in this route is one of two kinds, and only one kind is skipped when this is set:
+    //   PHYSICAL   -- kept always. Overflow, reading order, nothing there to move, already at full
+    //                 size, no line data. Ignoring one of these produces a broken book.
+    //   PREFERENCE -- skipped for a manual fix. 'no shrink needed', 'trimmed for cohesion'. These say
+    //                 a move is not worthwhile, which stops being ours to judge once someone asks.
+    // ANY GUARD ADDED HERE LATER MUST BE CLASSIFIED THE SAME WAY. If it prevents a BROKEN book it
+    // stays unconditional; if it prevents a POINTLESS one it gets !_manualFix.
     var _manualFix = !!(req.body && req.body.manual);
     if (!_manualFix && !(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
 
@@ -8570,7 +8585,11 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           }
           if (tryMul <= curMul + 0.02) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: (_growCap <= curMul + 0.02 ? 'image at crop-safe max (growing further would crop the picture)' : 'no room to grow within box') }); continue; }
         } else {   // shrinkImage: only meaningful if the page currently clips
-          if (pageReal == null || pageReal <= MCLIP + CO_CLIP_ACCEPT_TOL) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); continue; }
+          // v3.0.412 -- PREFERENCE, not physics. 'Only meaningful if the page clips' is true of the
+          // optimizer and false of a reader who simply wants a smaller picture. Ian, on Gnomes p.17:
+          // 'why can't I make the picture smaller? Seems like that should always be an option unless
+          // it is already really small.' The shrink floor below still holds -- that is 'really small'.
+          if (!_manualFix && (pageReal == null || pageReal <= MCLIP + CO_CLIP_ACCEPT_TOL)) { mRejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'page already within box, no shrink needed' }); continue; }
           // v3.0.369 -- HONOR THE SHRINK FLOOR THE BAND COMPUTED FOR ITSELF.
           // mzShapeShrinkFloor runs at build time, where the shape and the prominence tier are in
           // scope, and stores the answer on the band as sFloor. Until now it had exactly three
@@ -9164,7 +9183,9 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         // happened on The Strangers viewer p.10: the packer trimmed beat 5 to 0.83, the loop grew it
         // to 0.96, and the closing paragraph stayed alone on p.11. Shrinking one is still allowed --
         // that only ever makes more room.
-        if (pl.cohesion) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'picture is trimmed to keep this beat together -- growing it would orphan the text' }); continue; }
+        // v3.0.412 -- PREFERENCE. The re-measure below still refuses a move that actually overflows,
+        // so letting a person try this risks nothing the measurement will not catch.
+        if (!_manualFix && pl.cohesion) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'picture is trimmed to keep this beat together -- growing it would orphan the text' }); continue; }
         if (oldScale >= 0.999) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'image already at full size' }); continue; }
         newScale = 1.0;   // try full; the re-measure will reject if it overflows, then we bisect down
       } else {   // shrinkImage
@@ -9192,6 +9213,21 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         if (hi - lo < 0.03) break;
       }
 
+      // v3.0.412 -- A MANUAL SHRINK IS NOT A SEARCH FOR THE SMALLEST FITTING SCALE.
+      // The bisection above hunts the smallest scale that CLEARS THE BOX. On a page that already
+      // clears it, every probe succeeds, hi walks back up to oldScale, and the test below refuses
+      // because best is not smaller than where it started -- so a manual shrink on a healthy page
+      // silently does nothing. A person asking for a smaller picture wants the nudge, not a search.
+      if (_manualFix && op.op === 'shrinkImage') {
+        var _mNew = Math.max(0.3, Math.round((oldScale - 0.1) * 1000) / 1000);
+        pl.scale = _mNew;
+        var _mR = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
+        var _mH = (_mR && _mR[op.page] != null) ? _mR[op.page] : null;
+        // Shrinking cannot overflow a page, so this only guards against a measure that failed.
+        if (_mH == null) { pl.scale = oldScale; rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'the page could not be re-measured after shrinking' }); continue; }
+        applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, scaleFrom: oldScale, scaleTo: _mNew, pageReal: Math.round(_mH * 100) / 100 });
+        continue;
+      }
       if (best != null && ((op.op === 'growImage' && best > oldScale + 0.01) || (op.op === 'shrinkImage' && best < oldScale - 0.001))) {
         pl.scale = best;
         applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, scaleFrom: oldScale, scaleTo: best, pageReal: Math.round(bestReal * 100) / 100, imageIn: Math.round((pl.fullH || 0) * best * 100) / 100 });

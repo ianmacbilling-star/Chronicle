@@ -15405,7 +15405,13 @@ function finalizeTryFix() {
         return;
       }
       // Refused. Report the REASON, with its numbers -- the applier measured, so it knows.
-      var why = (j && j.rejectedOps && j.rejectedOps[0] && j.rejectedOps[0].reason) ||
+      // v3.0.412 -- THE HEADER CALLS IT 'rejected'; ONLY THE JSON BODY CALLS IT 'rejectedOps'.
+      // Since v3.0.410 the Fix asks for pdf=1 and reads X-Apply-Report, which uses the short names.
+      // So every refusal fell through to the generic sentence while a real one sat unread: Ian saw
+      // 'the layout engine would not take that move' when the server had said 'page already within
+      // box, no shrink needed' -- which names the actual rule and would have found this in one look.
+      var _rej = (j && (j.rejected || j.rejectedOps)) || null;
+      var why = (_rej && _rej[0] && _rej[0].reason) ||
                 (j && (j.message || j.error)) || 'the layout engine would not take that move';
       why = finalizeFixReasonToViewer(why, info);   // v3.0.407 -- one numbering, the reader's
       // v3.0.400 -- Ian: 'if it will not do it, it can just say so over in the log.'
