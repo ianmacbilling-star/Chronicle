@@ -15345,6 +15345,37 @@ function finalizeOpenFixDialog(viewerPage) {
   var mo = document.getElementById('fix-modal'); if (mo) mo.classList.remove('hidden');
 }
 // v3.0.413 -- touching a percentage box selects the option it belongs to.
+// v3.0.415 -- A BAR WHILE IT WORKS.
+// An adjust is a full re-pack, an apply, a re-measure and a Chromium render -- several seconds with
+// nothing on screen but a button that says Trying. Ian: 'I need some kind of progress bar... just
+// something that says it is doing something.'
+// This drives the SAME element and keyframes the optimize loop uses, rather than a second bar that
+// looks almost the same. ensureLoopBar is nested inside runAiOptimizeLoop and cannot be called from
+// here, so this recreates the element if it is absent and leaves the loop's copy untouched when it
+// is not -- one bar, one animation, no duplicated CSS to drift.
+function finalizeFixBusyBar(on) {
+  try {
+    var host = document.getElementById('finalize-after-progress') || document.getElementById('finalize-after-scroll');
+    if (!host) return;
+    var bar = document.getElementById('__aiLoopBar');
+    if (!on) { if (bar && bar.parentNode) bar.parentNode.removeChild(bar); return; }
+    if (host.id === 'finalize-after-progress') host.style.display = '';
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = '__aiLoopBar';
+      bar.style.cssText = 'margin:0 0 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(201,168,76,0.18);';
+      bar.innerHTML = '<div style="height:100%;width:35%;border-radius:3px;background:#c9a84c;animation:aiLoopSlide 1.2s ease-in-out infinite;"></div>';
+      if (!document.getElementById('__aiLoopBarStyle')) {
+        var st = document.createElement('style');
+        st.id = '__aiLoopBarStyle';
+        st.textContent = '@keyframes aiLoopSlide { 0%{margin-left:-35%;} 100%{margin-left:100%;} }';
+        document.head.appendChild(st);
+      }
+      host.insertBefore(bar, host.firstChild);
+    }
+    bar.style.display = '';
+  } catch (e) {}
+}
 function finalizeFixPickRadio(ix) {
   try {
     var r = document.querySelector('input[name="fixopt"][value="' + ix + '"]');
@@ -15398,9 +15429,14 @@ function finalizeTryFix() {
   // left the button live, so a refused move looked identical to nothing at all. Ian: 'I could not
   // tell what was happening.' The button is the clearest signal available -- it is what was just
   // pressed -- so it changes, and the message is coloured rather than whispered.
+  // v3.0.415 -- get out of the way and show the work. The dialog closes the moment Try It is pressed:
+  // both outcomes have gone to the run log since v3.0.400, so there is nothing left for it to say,
+  // and a modal sitting over the book for several seconds hides the very thing being changed.
   var _tb = document.getElementById('fix-try-btn');
   if (_tb) { _tb.disabled = true; _tb.textContent = 'Trying...'; }
-  if (msg) { msg.style.color = '#8a6a2a'; msg.textContent = 'Trying it -- re-measuring the page...'; }
+  finalizeCloseFixDialog();
+  finalizeFixBusyBar(true);
+  optimizeLogLine('Page ' + viewerPage + ': ' + opt.label + '...');
   // v3.0.410 -- ASK FOR THE PDF, exactly as the AI loop does.
   // The old flow read JSON here and then re-rendered the pane from pack-render?compose=1 -- which is
   // the START OF A NEW OPTIMIZE RUN. It charges a token, clears the run-scoped grows, the move store
@@ -15430,6 +15466,7 @@ function finalizeTryFix() {
       var applied = j && j.appliedCount;
       if (applied) {
         finalizeCloseFixDialog();
+        finalizeFixBusyBar(false);   // v3.0.415
         optimizeLogLine('Page ' + viewerPage + ': ' + opt.label + ' -- done.', 'ok');
         // v3.0.410 -- show the PDF layout-apply just rendered, rather than asking for a new one.
         try { finalizeShowFixedPdf(res0._blob); } catch (e) {}
@@ -15458,12 +15495,14 @@ function finalizeTryFix() {
       // other thing that happened to this book is written down, so a refusal belongs there too.
       if (_tb) { _tb.disabled = false; _tb.textContent = 'Try It'; }
       finalizeCloseFixDialog();
+      finalizeFixBusyBar(false);   // v3.0.415
       optimizeLogLine('Page ' + viewerPage + ': could not ' + opt.label + ' -- ' + why, 'stop');
     })
     .catch(function (e) {
       _fixBusy = false;
       if (_tb) { _tb.disabled = false; _tb.textContent = 'Try It'; }
       finalizeCloseFixDialog();
+      finalizeFixBusyBar(false);   // v3.0.415 -- never leave it spinning
       optimizeLogLine('Page ' + viewerPage + ': could not ' + ((opt && opt.label) || 'apply that change') +
         ' -- ' + ((e && e.message) || 'network error'), 'stop');
     });
