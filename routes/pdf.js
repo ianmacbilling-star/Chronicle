@@ -5096,17 +5096,34 @@ function applyRunMoves(plan, k, pageBudget, beats) {
     for (var pi = 0; pi < plan.pages.length; pi++) {
       var pls = plan.pages[pi].placements || [];
       if (!pls.length) continue;
-      var p0 = pls[0];
+      // v3.0.409 -- FIND THE PLACEMENT ANYWHERE ON THE PAGE, NOT JUST AT THE FRONT.
+      // This only ever examined pls[0]. That held while moveLeadingNarr could only move a leading
+      // placement -- whatever it moved, the replay could find again. v3.0.407 made a PUSH DOWN move
+      // the page's LAST placement (it had to: pushing the first item down puts it after everything
+      // that followed it, which breaks reading order by construction). Those moves are recorded and
+      // then never matched, so every one is lost on the next re-pack.
+      // Ian, on five manual fixes: 'seems like it did my first one and nothing else.' Each new Fix
+      // re-packs from natural, fails to replay the previous move, and composes a book without it.
+      // Exactly the fault recorded below for pictures in v3.0.309, reintroduced for trailing text by
+      // making it movable without extending the replay to carry it. Third time for this shape.
+      var _mi = -1;
+      for (var _mq = 0; _mq < pls.length; _mq++) {
+        var _c = pls[_mq];
+        if (_c.beat !== mv.beat) continue;
+        if ((_c.kind || '') !== (mv.kind || 'narr')) continue;
+        if ((_c.part || '') !== (mv.part || '')) continue;
+        if ((_c.charStart || 0) !== (mv.cs || 0)) continue;
+        _mi = _mq; break;
+      }
+      if (_mi < 0) continue;
+      var p0 = pls[_mi];
       // MATCH THE KIND THAT WAS RECORDED. This required 'narr', so a PICTURE move -- newly possible
       // since v3.0.309 -- was accepted, recorded, and then silently dropped by the next re-pack. A
       // picture moved on pass 4 survived because nothing repacks after it; one moved on passes 1 to 3
       // vanished, so the cascade it was meant to start never got past a single step. Exactly the fault
       // v3.0.276 fixed for text, reintroduced for pictures by making them movable without extending
       // the replay to carry them.
-      if (p0.beat !== mv.beat) continue;
-      if ((p0.kind || '') !== (mv.kind || 'narr')) continue;
-      if ((p0.part || '') !== (mv.part || '')) continue;
-      if ((p0.charStart || 0) !== (mv.cs || 0)) continue;
+      // (matched above -- the four tests moved into the search so a trailing placement can win)
       // A MOVE MAY EMPTY ITS SOURCE PAGE. This refused any move that would, which was right in
       // v3.0.276 when nothing cleaned up afterwards -- but v3.0.283 added a sweep, and the guard
       // outlived its reason. Its effect since has been absolute: the last thing on a page could never
@@ -5150,7 +5167,7 @@ function applyRunMoves(plan, k, pageBudget, beats) {
       var _fromSave = pls.slice();
       if (_step < 0) toPg.placements = (toPg.placements || []).concat([p0]);    // pull up: append
       else toPg.placements = [p0].concat(toPg.placements || []);                // push down: prepend
-      plan.pages[pi].placements = pls.slice(1);
+      plan.pages[pi].placements = pls.filter(function (_x, _xi) { return _xi !== _mi; });   // v3.0.409 -- remove the matched one, not always the first
       if (_ord && _breaks() > _obBase) {
         toPg.placements = _toSave;
         plan.pages[pi].placements = _fromSave;
