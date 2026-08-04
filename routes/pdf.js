@@ -8824,7 +8824,14 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           // Current boundary char = headCell.cEnd. Find its line index, advance N lines.
           var curBound = headCell.cEnd;
           var li = 0; for (; li < lineChars.length; li++) { if (lineChars[li] >= curBound) break; }
-          var wantN = Math.max(1, mop.lines || 1);
+          // v3.0.417 -- A MANUAL PULL ASKS FOR THE WHOLE TAIL, NOT ONE LINE.
+          // The Adjust control sends no line count, so this asked for a SINGLE line and only reached
+          // the delete-the-page branch below by luck. Ian's intent from the first sketch of this
+          // feature: 'move the first text beat, OR AS MUCH TEXT AS IT CAN, from page Y up to the last
+          // white space on page X.'
+          // Asking for everything is also the only way the emptied page gets dropped, which is the
+          // whole point of the move -- a line at a time leaves a line behind and the page stays.
+          var wantN = _manualFix ? 9999 : Math.max(1, mop.lines || 1);
           var newLi = Math.min(lineChars.length - 1, li + wantN);
           var newBound = (newLi < lineChars.length) ? lineChars[newLi] : null;   // null -> would consume whole tail
           var tailEnd = (tailCell.cEnd != null) ? tailCell.cEnd : (mband.stext != null ? mband.stext.length : null);
@@ -8846,7 +8853,29 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
             } else {
               headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: _hSaveW });
               tailPg.length = 0; Array.prototype.push.apply(tailPg, _tailCellsSave);   // restore
-              mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'orphan pull would overflow the head page' });
+              // v3.0.417 -- 'OR AS MUCH AS IT CAN'. The whole tail did not fit, so walk back down the
+              // lines and take the largest number that does, rather than refusing outright. Someone
+              // clearing a page would still rather move four of its six lines than none. Every step
+              // is measured, so nothing here is decided on an estimate.
+              var _took = null;
+              if (_manualFix) {
+                for (var _bk = lineChars.length - 1; _bk > li; _bk--) {
+                  var _tryB = lineChars[_bk];
+                  if (_tryB == null || _tryB <= curBound) continue;
+                  headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: _tryB });
+                  tailPg[0] = Object.assign({}, _tailCellsSave[0], { cStart: _tryB });
+                  var _mrB = await remeasureComposedPages(req, req.params.campaignId, mplan.pages, mbands);
+                  var _okB = (_mrB && !_mrB._error && _mrB[headIdx] != null && _mrB[headIdx] <= MCLIP + CO_CLIP_ACCEPT_TOL);
+                  if (_okB) { _took = { bound: _tryB, lines: _bk - li }; break; }
+                }
+              }
+              if (_took) {
+                mApplied.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, movedLines: _took.lines, boundaryFrom: _hSaveW, boundaryTo: _took.bound, headPage: headIdx, tailPage: tailIdx });
+              } else {
+                headPg[headPg.length - 1] = Object.assign({}, headCell, { cEnd: _hSaveW });
+                tailPg.length = 0; Array.prototype.push.apply(tailPg, _tailCellsSave);
+                mRejected.push({ op: mop.op, page: mop.page, viewerPage: mop.viewerPage, reason: 'not even one line of it will fit on the page before' });
+              }
             }
             continue;
           }
@@ -9335,8 +9364,14 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
     // Built exactly as layout-fill builds its own -- same re-measure, same beatOrder map. The
     // beatOrder line is not optional: without it the dumper falls back to raw beat ids, which sort
     // synthetic beat 900003 after beat 2 and make every composed dump cry ORDER-BREAK on page 0.
+    // v3.0.418 -- MANUAL ONLY. Building this text costs a full Chromium RE-MEASURE, and the AI loop
+    // calls this same route on every pass -- so v3.0.408 quietly added a measure to every pass of
+    // every run, for a diagnostic the loop does not need: layout-fill stores the authoritative plan
+    // text after the run finishes. Only a manual adjust has no fill behind it, so only a manual
+    // adjust needs this. Ian asked the right question -- 'can what you are doing have ill effects
+    // there?' -- about a change I made without checking who else walked the path.
     var _planTxtA = null;
-    try {
+    if (_manualFix) try {
       var _dbgA = Object.assign({}, (packed && packed.dbg) || {});
       var _realA = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
       if (_realA && !_realA._error) {
