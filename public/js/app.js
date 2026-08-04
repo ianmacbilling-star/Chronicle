@@ -16257,19 +16257,21 @@ function finalizeSaveFixedVersion() {
   var b = document.getElementById('layoutai-save-fixed-btn');
   if (b && b.disabled) return;
   if (b) { b.disabled = true; b.textContent = 'Saving...'; }
-  var live = optimizeProgressLive('Prepping Book for saving');
+  // v3.0.420 -- ONE TICKING LINE, NOT TWO. finalizeSaveOptimized raises its own for any non-quiet
+  // save (v3.0.389), and this raised a second identical one, so every manual save printed
+  // 'Prepping Book for saving. (10s)' twice. It also reported the OUTCOME twice on a failure, which
+  // is why one refusal read as two different complaints. The save owns the line; this owns the
+  // button.
   finalizeSaveOptimized().then(function (ok) {
     if (ok) {
       _finalizeFixPending = false;   // the saved file now IS the book on screen
-      live.done('Saved -- your changes will be here when you return.');
     } else {
-      // finalizeSaveOptimized has already reported why; leave the button so it can be retried.
-      live.fail('That version was not saved. Your changes are still on screen -- try again.');
+      // finalizeSaveOptimized has already said why, in the same line it raised. Just restore the
+      // button so it can be retried.
       if (b) { b.disabled = false; b.textContent = 'Save this Version'; }
     }
     try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
   }).catch(function () {
-    live.fail('That version was not saved. Your changes are still on screen -- try again.');
     if (b) { b.disabled = false; b.textContent = 'Save this Version'; }
   });
 }
