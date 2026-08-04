@@ -15364,23 +15364,44 @@ function finalizeTryFix() {
   var _tb = document.getElementById('fix-try-btn');
   if (_tb) { _tb.disabled = true; _tb.textContent = 'Trying...'; }
   if (msg) { msg.style.color = '#8a6a2a'; msg.textContent = 'Trying it -- re-measuring the page...'; }
-  fetch('/api/pdf/layout-apply/' + state.currentCampaign.id + finalizeBookQuery(), {
+  // v3.0.410 -- ASK FOR THE PDF, exactly as the AI loop does.
+  // The old flow read JSON here and then re-rendered the pane from pack-render?compose=1 -- which is
+  // the START OF A NEW OPTIMIZE RUN. It charges a token, clears the run-scoped grows, the move store
+  // and the refusal store, and re-packs from natural. So every Fix applied a move, recorded it, and
+  // then immediately wiped it and rendered the natural book instead. The move never had a chance,
+  // and each click quietly cost a token.
+  // layout-apply already renders the applied book and will stream it with pdf=1, with the report in
+  // the X-Apply-Report header. One request, no second pack, nothing cleared.
+  var _fq = finalizeBookQuery();
+  fetch('/api/pdf/layout-apply/' + state.currentCampaign.id + (_fq ? (_fq + '&pdf=1') : '?pdf=1'), {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     // v3.0.401 -- marks this as a user-driven Fix, which is free and ungated. The AI loop does not
     // send it and keeps its balance check.
     body: JSON.stringify({ ops: [op], manual: true })
-  }).then(function (r) { return r.json().catch(function () { return null; }); })
-    .then(function (j) {
+  }).then(function (r) {
+    if (!r.ok) { return r.json().catch(function () { return null; }).then(function (e) { return { _err: e }; }); }
+    var _rep = r.headers.get('X-Apply-Report');
+    return r.blob().then(function (b) {
+      var rep = null; try { rep = _rep ? JSON.parse(_rep) : null; } catch (e) {}
+      return { _blob: b, _report: rep };
+    });
+  })
+    .then(function (res0) {
       _fixBusy = false;
+      var j = (res0 && res0._err) ? res0._err : (res0 && res0._report) || null;
       var applied = j && j.appliedCount;
       if (applied) {
         finalizeCloseFixDialog();
         optimizeLogLine('Page ' + viewerPage + ': ' + opt.label + ' -- done.', 'ok');
+        // v3.0.410 -- show the PDF layout-apply just rendered, rather than asking for a new one.
+        try { finalizeShowFixedPdf(res0._blob); } catch (e) {}
         _finalizeSavedReady = false;   // the book on screen is no longer the saved one
         _finalizeFixPending = true;    // v3.0.397 -- ...so offer to make it the saved one
         try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
-        finalizeLoadLastOptimizedRefresh();
+        // v3.0.410 -- the compose=1 re-render that used to happen here is GONE. It was undoing the
+        // fix a second after applying it. finalizeShowFixedPdf above already put the applied book on
+        // screen, from the bytes layout-apply rendered.
         return;
       }
       // Refused. Report the REASON, with its numbers -- the applier measured, so it knows.
@@ -15406,28 +15427,25 @@ function finalizeTryFix() {
 }
 // Re-render the After pane from the composed plan the fix just changed, then refresh the options so
 // the buttons reflect the new shape of the book.
-function finalizeLoadLastOptimizedRefresh() {
-  if (!(state && state.currentCampaign)) return;
+// v3.0.410 -- render the blob layout-apply returned, keeping the scroll position and refreshing the
+// Fix options against the new shape of the book. Replaces a re-render that started a fresh run.
+function finalizeShowFixedPdf(blob) {
+  if (!blob) return;
   var sc = document.getElementById('finalize-after-scroll');
   var keep = sc ? sc.scrollTop : 0;
   _finalizeAfterOnDone = function () {
     try { if (sc) sc.scrollTop = keep; } catch (e) {}
     try { finalizeLoadFixOptions(); } catch (e) {}
   };
-  // v3.0.406 -- RE-RENDER FROM THE SAME SOURCE THE PANE ALWAYS USES.
-  // This called print-interior, which hardcodes pageOpts.noCover -- covers are a publish-time
-  // artifact for that route, and rightly so. But the After pane renders pack-render?compose=1,
-  // WITH covers. So the first Fix silently swapped the pane to a document one page shorter:
-  // the cover vanished and every page number shifted by one.
-  // That also threw the Fix buttons out of line, because page-fix-options counts the cover in its
-  // front matter. Ian, on a full-page picture: 'the only green option is send text to the page
-  // before... I am wondering if you have your pages off by one.' He did, and it was this.
-  // compose=1 reads the composed plan, which is what the Fix just changed, so it is also the only
-  // source that shows the result.
-  var _bq = finalizeBookQuery();
-  renderPdfInto('/api/pdf/pack-render/' + state.currentCampaign.id + '?compose=1' + _bq.replace('?', '&'),
-    'finalize-after-scroll', false);
+  try { renderPdfInto(URL.createObjectURL(blob), 'finalize-after-scroll', false); } catch (e) {}
 }
+// v3.0.410 -- finalizeLoadLastOptimizedRefresh REMOVED.
+// It re-rendered the After pane from pack-render?compose=1 after a Fix. That endpoint is not a
+// render -- it is the START of an Optimize run: it charges a token and clears the run-scoped grow,
+// move and refusal stores, then re-packs from natural. So every Fix applied its move, recorded it,
+// and was erased about a second later, and the pane showed the natural book. NO MANUAL FIX HAS EVER
+// TAKEN EFFECT. Ian: 'It just may not be doing the suggestion at all.' It was not.
+// finalizeShowFixedPdf replaces it, rendering the bytes layout-apply already produced.
 function finalizeAfterGoToPage(n) {
   var after = document.getElementById('finalize-after-scroll');
   if (after && after.style.display !== 'none') {
