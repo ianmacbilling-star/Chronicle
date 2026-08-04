@@ -9223,7 +9223,40 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       if (_dropped) console.log('[blank-pages] campaign ' + req.params.campaignId + ': dropped ' + _dropped + ' page(s) emptied by a text move');
     } catch (e) { try { console.error('[blank-pages] sweep failed: ' + ((e && e.message) || e)); } catch (e2) {} }
     var body = composeBook(plan, beats, _pco0);
-    composedCachePut(req.params.campaignId, req, 'paired', body, campaignName);
+    // v3.0.408 -- STORE THE PLAN, NOT JUST THE BOOK.
+    // composedCachePut reads its sixth argument as the plan TEXT, and this call site never passed
+    // one. layout-fill does; the magazine apply does; this -- the path EVERY manual Fix takes --
+    // did not. So a Fix updated the rendered body but left planText null, and pack-debug, finding
+    // no plan, fell back to a fresh natural re-pack. The dump therefore could not show a manual fix
+    // AT ALL, and read exactly as though nothing had happened.
+    // On 2026-08-04 that cost a wrong diagnosis: five fixes reported done, the dump showed the
+    // natural layout, and the conclusion drawn was that none of them had persisted. The dump was
+    // simply describing a different book -- which is the fault the comment on composedCachePut was
+    // written to prevent, walked into anyway.
+    // Re-measure so the stored text carries REAL heights rather than estimates, the same way the
+    // fill path does. Never fatal: a failed measure stores the plan without them.
+    // Built exactly as layout-fill builds its own -- same re-measure, same beatOrder map. The
+    // beatOrder line is not optional: without it the dumper falls back to raw beat ids, which sort
+    // synthetic beat 900003 after beat 2 and make every composed dump cry ORDER-BREAK on page 0.
+    var _planTxtA = null;
+    try {
+      var _dbgA = Object.assign({}, (packed && packed.dbg) || {});
+      var _realA = await remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0);
+      if (_realA && !_realA._error) {
+        _dbgA.pages = (plan.pages || []).map(function (pg3, _pi3) {
+          var _u3 = 0; (pg3.placements || []).forEach(function (x) { _u3 += (x.heightIn || 0); });
+          return { page: _pi3, used: Math.round(_u3 * 100) / 100,
+                   realUsed: (_realA[_pi3] != null ? _realA[_pi3] : null),
+                   placements: (pg3.placements || []) };
+        });
+        _dbgA.beatOrder = (beats || []).map(function (bb3) { return bb3 && bb3.idx; });
+        _dbgA.overflows = (_realA._overflows || []);
+        _dbgA.atRisk = [];
+        _dbgA.remeasured = true;
+      }
+      _planTxtA = pairedPlanText({ plan: plan, beats: beats, campaign: campaignName || null, dbg: _dbgA, co: _pco0 }, { fixOptions: true });
+    } catch (e) { _planTxtA = null; }
+    composedCachePut(req.params.campaignId, req, 'paired', body, campaignName, _planTxtA);
     var rbuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: 'paired', packComposedBody: body });
     if (req.query.pane === '1') rbuilt.html = paneSafeHtml(rbuilt.html);
     var pdf = await renderHtmlToPdf(rbuilt.html, {});
