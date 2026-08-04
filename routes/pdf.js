@@ -6657,8 +6657,20 @@ function fixOptionsCore(npages, viewerOffset, allowPush) {
     if (need < FIX_MIN_MOVE) return ['GREY', 'less than a line -- not worth moving'];
     if (room >= need) return ['GREEN', 'room for all of it (' + room.toFixed(2) + 'in free, ' + need.toFixed(2) + 'in to move)'];
     if (room >= FIX_MIN_MOVE) {
-      var lines = Math.floor(room / FIX_MIN_MOVE), tot = Math.max(1, Math.round(need / FIX_MIN_MOVE));
-      return ['GREEN', 'room for about ' + lines + ' of its ' + tot + ' lines (' + room.toFixed(2) + 'in free)'];
+      // v3.0.416 -- A PARTIAL MOVE CANNOT BE ALL OF IT. That case was handled above; reaching here
+      // means it does NOT all fit, so the count has to stop short or the wording contradicts the
+      // branch it is in. Rounding 0.61in of room against a 0.63in need gave 'room for about 2 of its
+      // 2 lines' -- which reads as everything, on a move that misses by two hundredths of an inch.
+      // Ian shrank a picture to make exactly that move and it was refused after being promised.
+      // If there is not even one line of headroom below the whole thing, this is not a useful
+      // partial move and it should say so rather than encourage a click.
+      var tot = Math.max(1, Math.round(need / FIX_MIN_MOVE));
+      var lines = Math.min(Math.floor(room / FIX_MIN_MOVE), tot - 1);
+      if (lines < 1) {
+        return ['AMBER', 'only part of it would fit and there is not enough room for even one line (' +
+                room.toFixed(2) + 'in free, ' + need.toFixed(2) + 'in to move) -- free a little more space first'];
+      }
+      return ['GREEN', 'room for about ' + lines + ' of its ' + tot + ' lines, not all of it (' + room.toFixed(2) + 'in free)'];
     }
     var g = (giveIx != null) ? give(giveIx) : 0;
     if (g > 0 && (room + g) >= need) {
