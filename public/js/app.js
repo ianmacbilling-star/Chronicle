@@ -15377,7 +15377,18 @@ function finalizeLoadLastOptimizedRefresh() {
     try { if (sc) sc.scrollTop = keep; } catch (e) {}
     try { finalizeLoadFixOptions(); } catch (e) {}
   };
-  renderPdfInto('/api/pdf/print-interior/' + state.currentCampaign.id + finalizeBookQuery() + '&download=1&pane=1',
+  // v3.0.406 -- RE-RENDER FROM THE SAME SOURCE THE PANE ALWAYS USES.
+  // This called print-interior, which hardcodes pageOpts.noCover -- covers are a publish-time
+  // artifact for that route, and rightly so. But the After pane renders pack-render?compose=1,
+  // WITH covers. So the first Fix silently swapped the pane to a document one page shorter:
+  // the cover vanished and every page number shifted by one.
+  // That also threw the Fix buttons out of line, because page-fix-options counts the cover in its
+  // front matter. Ian, on a full-page picture: 'the only green option is send text to the page
+  // before... I am wondering if you have your pages off by one.' He did, and it was this.
+  // compose=1 reads the composed plan, which is what the Fix just changed, so it is also the only
+  // source that shows the result.
+  var _bq = finalizeBookQuery();
+  renderPdfInto('/api/pdf/pack-render/' + state.currentCampaign.id + '?compose=1' + _bq.replace('?', '&'),
     'finalize-after-scroll', false);
 }
 function finalizeAfterGoToPage(n) {
