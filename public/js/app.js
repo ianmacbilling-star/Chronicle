@@ -15203,8 +15203,15 @@ function finalizeDecorateNavFix() {
     if (!_fixOptions[pg]) continue;
     var b = document.createElement('span');
     b.className = 'fix-btn';
-    b.textContent = 'Fix';
-    b.style.cssText = 'font-size:9px;line-height:1.5;padding:0 5px;border-radius:4px;' +   // v3.0.398 -- 4px, matching every other button
+    // v3.0.414 -- 'Edit' on the button, 'Adjust page N' in the dialog it opens.
+    // 'Fix' carried the wrong implication: it says the page is broken, when most of the time someone
+    // is exercising a preference on a page that is perfectly good. 'Adjust' says it properly but does
+    // not fit -- this spine is a 36px gutter and the word needs about 42px on its own, so using it
+    // here would mean taking width off the page preview to hold a label.
+    // So the short word points and the full word explains: four characters sit comfortably in the
+    // gutter, and the dialog title says what it actually is.
+    b.textContent = 'Edit';
+    b.style.cssText = 'font-size:9px;line-height:1.5;padding:0 3px;border-radius:4px;' +   // v3.0.414 -- 3px so 'Edit' fits the 30px slot; 4px radius matches every other button
       'background:rgba(201,168,76,0.22);border:1px solid rgba(201,168,76,0.5);color:var(--gold);cursor:pointer;';
     b.setAttribute('data-fix-page', pg);
     b.title = 'This page holds ' + _fixOptions[pg].heldIn + 'in of ' + _fixOptions[pg].boxIn + 'in';
@@ -15320,7 +15327,7 @@ function finalizeOpenFixDialog(viewerPage) {
   });
   var t = document.getElementById('fix-modal-title');
   if (t) {
-    t.innerHTML = 'Fix page ' + viewerPage +
+    t.innerHTML = 'Adjust page ' + viewerPage +
       '<span style="font-family:var(--font-body);font-size:12px;font-weight:400;color:#8a6a2a;margin-left:10px;">' +
       'This page holds ' + info.heldIn + 'in of ' + info.boxIn + 'in' +
       (info.overBox ? ' &mdash; it runs over the page' : '') + '.</span>';
