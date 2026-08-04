@@ -109,6 +109,17 @@ async function measureDocument(html, options) {
     // that is what we actually care about -- the faces this document uses being ready before we
     // measure text with them -- and it does not care what the document's loading state is.
     // On timeout, report the state instead of shrugging, so a fourth wrong theory is not necessary.
+    // v3.0.411 (TD-136) -- MAKE THIS SPEAK. It has fired on every measure of every book for weeks:
+    // roughly five seconds of dead wait per measure, several measures per pass, and if the faces
+    // genuinely are not ready then text is being measured with FALLBACK METRICS -- which would feed
+    // the est-vs-real gap that TD-186 is about. So it may be costing a quarter of every run AND be
+    // the source of the measurement error underneath the page-budget problem.
+    // Three explanations for it have already been wrong. The note on TD-136 says: capture the probe
+    // output before theorising. The probe exists -- and has never once appeared in a log, because the
+    // catch below swallowed whatever went wrong with it. Neither its timeout message nor its result
+    // has ever been seen, which means page.evaluate is THROWING and nobody was told.
+    // Nothing here changes behaviour. It only makes the next occurrence answerable.
+    var _fT0 = Date.now();
     var _fs = await _mWithTimeout(page.evaluate(function () {
       if (!document.fonts) return 'no-font-api';
       var faces = [];
@@ -123,6 +134,14 @@ async function measureDocument(html, options) {
                ', readyState=' + String(document.readyState || '?');
       });
     }), 5000, 'font loading');
+    var _fMs = Date.now() - _fT0;
+    // Report ONCE per process, whatever happened. A timeout tells us it hung; a success at 4900ms
+    // tells us it is merely slow; a success at 30ms with 0 faces tells us it never had anything to
+    // wait for. Those are three different bugs and the log has never distinguished them.
+    if (!measureDocument._fontReported) {
+      measureDocument._fontReported = true;
+      try { console.log('[measure] first font wait: ' + _fMs + 'ms, result ' + (_fs == null ? 'TIMED OUT' : String(_fs))); } catch (e) {}
+    }
     if (_fs == null) {
       // The wait timed out. Say what the page looked like at that moment -- that is the datum that has
       // been missing every time this has come up.
@@ -133,7 +152,12 @@ async function measureDocument(html, options) {
                  ', faces=' + String((document.fonts && document.fonts.size) || 0);
         }), 2000, 'font state probe');
         console.warn('[measure] font loading did not settle -- ' + (_st || 'the page did not answer either'));
-      } catch (e) {}
+      } catch (e) {
+        // v3.0.411 -- was silent. This is why the probe has never appeared in a log: it throws, and
+        // the throw was discarded, so the one diagnostic built for this question never reached anyone.
+        try { console.warn('[measure] font state probe FAILED -- ' + ((e && e.message) || e) +
+                           '  (the page could not be evaluated at all; the wait took ' + _fMs + 'ms)'); } catch (e2) {}
+      }
     } else if (String(_fs).indexOf('no-') !== 0 && String(_fs).indexOf('/') > 0 &&
                String(_fs).split('/')[0] !== String(_fs).split(' ')[0].split('/')[1]) {
       try { console.warn('[measure] not every face loaded: ' + _fs + ' -- text metrics may not match the render'); } catch (e) {}
