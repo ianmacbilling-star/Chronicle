@@ -6664,13 +6664,18 @@ function fixOptionsCore(npages, viewerOffset, allowPush) {
       // Ian shrank a picture to make exactly that move and it was refused after being promised.
       // If there is not even one line of headroom below the whole thing, this is not a useful
       // partial move and it should say so rather than encourage a click.
-      var tot = Math.max(1, Math.round(need / FIX_MIN_MOVE));
-      var lines = Math.min(Math.floor(room / FIX_MIN_MOVE), tot - 1);
-      if (lines < 1) {
-        return ['AMBER', 'only part of it would fit and there is not enough room for even one line (' +
-                room.toFixed(2) + 'in free, ' + need.toFixed(2) + 'in to move) -- free a little more space first'];
+      // v3.0.419 -- DO NOT INVENT A LINE COUNT. This divided the block's HEIGHT by a line height to
+      // guess how many lines it held -- but that height includes the band's leading and padding, so
+      // two lines in a 0.95in cell divided to three. Ian, looking at a two-line paragraph: 'the modal
+      // says room for about 2 of its 3 lines. There are only 2. Not sure what the third line is.'
+      // There was no third line. The same padding is why the move looked more expensive than it was.
+      // Inches are what this function actually knows, so inches are what it says. A count would be
+      // friendlier and it would be made up.
+      if (room < FIX_MIN_MOVE * 2) {
+        return ['AMBER', 'only a little of it would fit (' + room.toFixed(2) + 'in free, ' + need.toFixed(2) +
+                'in to move) -- free up more space first if you want the whole thing to go'];
       }
-      return ['GREEN', 'room for about ' + lines + ' of its ' + tot + ' lines, not all of it (' + room.toFixed(2) + 'in free)'];
+      return ['GREEN', 'room for some of it but not all (' + room.toFixed(2) + 'in free, ' + need.toFixed(2) + 'in to move)'];
     }
     var g = (giveIx != null) ? give(giveIx) : 0;
     if (g > 0 && (room + g) >= need) {
