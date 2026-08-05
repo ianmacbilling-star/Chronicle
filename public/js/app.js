@@ -13040,9 +13040,47 @@ function finalizeSeedPrintPageCount(estimate) {
   // Belt and braces: if that request hangs, do not leave the picker empty.
   setTimeout(function () { apply(0, false); }, 4000);
 }
+// v3.0.431 -- ASK LULU WHICH BINDINGS IT WILL CONFIRM A COVER SIZE FOR, and offer only those.
+// Paints ONCE, with both answers in hand. Painting the page-count list first and pruning it a moment
+// later would reproduce the very flicker v3.0.430 removed -- and options DISAPPEARING is worse to
+// watch than options appearing. The probe carries its own timeout, so a slow or unreachable printer
+// costs a few seconds and then the page-count list, never an empty picker.
+function probeCoverBindings(pageCount) {
+  if (!(state && state.currentCampaign) || !(pageCount > 0)) return Promise.resolve(null);
+  function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  var q = '?pageCount=' + encodeURIComponent(pageCount) +
+    '&color=' + encodeURIComponent(val('print-color') || 'premium') +
+    '&finish=' + encodeURIComponent(val('print-finish') || 'matte') +
+    '&paper=' + encodeURIComponent(val('print-paper') || 'white');
+  var done = false;
+  return new Promise(function (resolve) {
+    setTimeout(function () { if (!done) { done = true; resolve(null); } }, 12000);
+    fetch('/api/pdf/cover-dims-probe/' + state.currentCampaign.id + q, { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (!done) { done = true; resolve(j); } })
+      .catch(function () { if (!done) { done = true; resolve(null); } });
+  });
+}
 function refreshPrintOptions(pageCount) {
-  fetch('/api/print/options?pageCount=' + encodeURIComponent(pageCount))
-    .then(function (r) { return r.json(); })
+  Promise.all([
+    fetch('/api/print/options?pageCount=' + encodeURIComponent(pageCount)).then(function (r) { return r.json(); }),
+    probeCoverBindings(pageCount)
+  ])
+    .then(function (both) {
+      var o = both[0], probe = both[1];
+      // No probe answer at all -> leave the list exactly as the page count made it.
+      if (probe && probe.usable && probe.usable.length && o && o.bindings) {
+        var keep = {}; probe.usable.forEach(function (id) { keep[id] = true; });
+        var pruned = o.bindings.filter(function (b) { return keep[b.id]; });
+        if (pruned.length) {
+          o = Object.assign({}, o, { bindings: pruned });
+          if (o.default && !keep[o.default.binding]) {
+            o.default = Object.assign({}, o.default, { binding: pruned[0].id });
+          }
+        }
+      }
+      return o;
+    })
     .then(function (o) {
       var b = document.getElementById('print-binding');
       var c = document.getElementById('print-color');

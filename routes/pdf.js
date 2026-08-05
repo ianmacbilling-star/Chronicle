@@ -4487,6 +4487,55 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
 }
 
 // GET print-ready one-piece COVER PDF (R2-hosted, or ?download=1 inline).
+// v3.0.431 -- ASK THE PRINTER ABOUT EVERY BINDING BEFORE OFFERING ANY OF THEM.
+// Ian: it should not let us pick a cover that will not work, and it should not generate one either.
+// The page-count rules already prune the list (catalog BINDINGS min/max); this prunes what is left
+// by whether Lulu will actually confirm a sheet size for it, which is the other way a cover fails.
+// Cheap after the first visit: resolveCoverDims caches per SKU, so a repeat probe is local.
+//
+// FAILS OPEN, DELIBERATELY. If NOTHING can be confirmed, that is the Lulu API being unreachable, not
+// every binding being invalid -- and returning an empty list would leave a reader unable to order at
+// all with no way to tell why. In that case every page-count-valid binding is offered and the
+// order-time check speaks instead. An empty picker is a worse failure than an honest warning.
+router.get('/cover-dims-probe/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var pageCount = parseInt(req.query.pageCount, 10);
+    if (!(pageCount > 0)) return res.status(400).json({ error: 'pageCount required' });
+    var sel = {
+      colorTier: req.query.color || 'premium',
+      coverFinish: req.query.finish || 'matte',
+      paper: req.query.paper || 'white'
+    };
+    var opts = catalog.optionsForPageCount(pageCount);
+    var ids = ((opts && opts.bindings) || []).map(function (b) { return b.id; });
+    var sources = {};
+    // Sequential rather than parallel: three calls to one vendor, and a burst of them on every visit
+    // to the Order tab is the kind of thing that gets an integration rate-limited.
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      var built = catalog.buildSpec(Object.assign({}, sel, { binding: id }), pageCount);
+      if (!built.ok) { sources[id] = 'invalid'; continue; }
+      try {
+        var d = await resolveCoverDims(built.spec);
+        sources[id] = (d && d.source) || 'unknown';
+      } catch (e) { sources[id] = 'error'; }
+    }
+    var ok = ids.filter(function (id) {
+      return sources[id] === 'lulu' || sources[id] === 'lulu-cached' || sources[id] === 'estimate-exact';
+    });
+    var allFailed = (ids.length > 0 && ok.length === 0);
+    try {
+      console.log('[cover-dims-probe] campaign ' + req.params.campaignId + ' @' + pageCount + 'pp -> ' +
+        ids.map(function (id) { return id + '=' + sources[id]; }).join(', ') +
+        (allFailed ? '  [NONE CONFIRMED -- offering all of them rather than none]' : ''));
+    } catch (e) {}
+    return res.json({ ok: true, pageCount: pageCount, sources: sources,
+      usable: allFailed ? ids : ok, allFailed: allFailed });
+  } catch (e) {
+    log500('cover-dims-probe', req, e);
+    return res.status(500).json({ error: (e && e.message) || 'cover-dims-probe failed' });
+  }
+});
 router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
   try {
     const db = await getDb();
