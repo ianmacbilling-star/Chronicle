@@ -12844,7 +12844,11 @@ function finalizeShowPrintingVersion(at) {
   try { when = new Date(at).toLocaleString(); } catch (e) {}
   var d = document.createElement('div');
   d.id = 'print-approved-at';
-  d.style.cssText = 'opacity:0.75;margin-top:4px;';
+  // v3.0.434 -- MATCH THE LINE ABOVE IT. This had opacity only and no colour, so it inherited from
+  // the container and rendered dark text on a dark panel -- present, and unreadable. The estimate
+  // line it sits under is gold at 60 percent; this is the same gold, a little brighter, because it
+  // is the more important of the two.
+  d.style.cssText = 'font-size:11px;color:rgba(201,168,76,0.75);margin-bottom:4px;';
   d.textContent = 'Printing the version you saved at ' + when + '.';
   var old = document.getElementById('print-approved-at');
   if (old && old.parentNode) old.parentNode.removeChild(old);
