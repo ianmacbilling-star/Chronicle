@@ -12252,7 +12252,9 @@ function finalizeClearStats(){
     var d = document.getElementById('layoutai-delta'); if (d) d.innerHTML = '';
     var r = document.getElementById('layoutai-results'); if (r) { r.innerHTML = ''; r.removeAttribute('data-mode'); }
     if (typeof _finalizeFills !== 'undefined') _finalizeFills = {};
+    if (typeof _finalizeHeights !== 'undefined') _finalizeHeights = {};   // v3.0.437
     if (typeof _finalizeAfterFills !== 'undefined') _finalizeAfterFills = {};
+    if (typeof _finalizeAfterHeights !== 'undefined') _finalizeAfterHeights = {};   // v3.0.437
   } catch (e) {}
 }
 (function loadCustomLayoutPrefs(){
@@ -14838,6 +14840,8 @@ var _finalizeBeforeBase = '';
 var _finalizeAfterBase = '';
 var _finalizeBeforeBlob = '';
 var _finalizeFills = {};
+var _finalizeHeights = {};        // v3.0.437 -- per-page HEIGHT fill %, display only
+var _finalizeAfterHeights = {};   // ...and the same for the After pane
 // AUTHORITATIVE render results per pane. The Optimize delta used to poll the DOM -- counting
 // <canvas> elements every 500ms and calling the render 'done' once the count held still for 3
 // ticks. But renderPdfInto appends each page's canvas BEFORE rasterising it, so any page slower
@@ -15230,6 +15234,7 @@ function finalizeLoadPdf(url, iframeId, isBefore) {
 function finalizeMeasureBlob(blob) {
   if (!document.getElementById('finalize-measure-hidden')) return;
   _finalizeFills = {};
+  _finalizeHeights = {};   // v3.0.437
   ensurePdfJs().then(function (pdfjsLib) {
     return blob.arrayBuffer().then(function (buf) { return pdfjsLib.getDocument({ data: buf }).promise; })
       .then(function (pdf) {
@@ -15244,6 +15249,9 @@ function finalizeMeasureBlob(blob) {
               canvas.width = vp.width; canvas.height = vp.height;
               return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, intent: 'print' }).promise.then(_pdfYield).then(function () {
                 var fill = measureCanvasFill(canvas); if (fill != null) { _finalizeFills[pageNum] = Math.round(fill * 100); if (finalizeIsContentPage(pageNum, pdf.numPages) && fill < 0.62) flagged.push({ page: pageNum, fill: Math.round(fill * 100) }); }
+                // v3.0.437 -- recorded alongside for the DISPLAYED figure only. The flag above still
+                // fires on the ink metric at its own calibrated 0.62, untouched.
+                var _hf = measureCanvasHeightFill(canvas); if (_hf != null) _finalizeHeights[pageNum] = Math.round(_hf * 100);
               });
             });
           });
@@ -17166,7 +17174,9 @@ function _runLayoutAiOptimize() {
           var _dEl = document.getElementById('layoutai-delta');
           if (!_dEl) return;
           var delta = bp - cnt;
-          var _fB = finalizeFillPct(_finalizeFills, bp), _fA = finalizeFillPct(_finalizeAfterFills, cnt);
+          // v3.0.437 -- HEIGHT fill on screen, so the reader sees what the book looks like and the
+          // number matches the diagnostics bundle. The ink metric still drives the underfull flags.
+          var _fB = finalizeFillPct(_finalizeHeights, bp), _fA = finalizeFillPct(_finalizeAfterHeights, cnt);
           var _html = 'Pages: <strong>' + bp + '</strong> &nbsp;&rarr;&nbsp; <strong>' + cnt + '</strong>' +
             (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
           if (_fB != null && _fA != null) {
@@ -17222,7 +17232,9 @@ function _runLayoutAiOptimize() {
         var _dEl = document.getElementById('layoutai-delta');
         if (_dEl) {
           var delta = bp - cnt;
-          var _fB = finalizeFillPct(_finalizeFills, bp), _fA = finalizeFillPct(_finalizeAfterFills, cnt);
+          // v3.0.437 -- HEIGHT fill on screen, so the reader sees what the book looks like and the
+          // number matches the diagnostics bundle. The ink metric still drives the underfull flags.
+          var _fB = finalizeFillPct(_finalizeHeights, bp), _fA = finalizeFillPct(_finalizeAfterHeights, cnt);
           var _html = 'Pages: <strong>' + bp + '</strong> &nbsp;&rarr;&nbsp; <strong>' + cnt + '</strong>' +
             (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
           if (_fB != null && _fA != null) {
@@ -17294,6 +17306,48 @@ function finalizeDebugMarkCanvas(canvas, fill) {
     ctx.fillText(lbl, 6, Math.max(16, y - 5));
     ctx.restore();
   } catch (e) {}
+}
+// v3.0.437 -- HEIGHT FILL, FOR DISPLAY ONLY. Ian, 2026-08-05: "the book looks 85% ... not 67% as it
+// reports", and he is right -- the two numbers answer different questions and the reader is being
+// shown the wrong one.
+//   measureCanvasFill (below) counts INK as grid occupancy, two-dimensional, so a tall picture in a
+//   narrow column with white either side scores low. That is the honest density measure and it stays
+//   in charge of the per-page underfull flags and everything else. NOTHING about the back end moves.
+//   This one measures how far down the CLIP BOX the content reaches -- the same basis the diagnostics
+//   bundle prints, so the screen and the dump finally agree.
+// Geometry is derived, not guessed: an 11.00in page with 0.75in of .content-page padding, measured
+// against the 9.24in clip box (CO_PAGE_H_IN / CO_PAGE_PAD_IN / CO_CLIP_BOX_IN in pdf.js). Origin is
+// the top of the content area, not the first inked row, because a page that starts low is not full.
+var FILL_PAGE_H_IN = 11.0, FILL_PAD_IN = 0.75, FILL_BOX_IN = 9.24;
+function measureCanvasHeightFill(canvas) {
+  try {
+    var W = canvas.width, H = canvas.height;
+    if (!W || !H) return null;
+    var data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    // Same background sampling as the ink metric: compare against the ACTUAL paper colour, so a
+    // cream stock or a faint watermark does not read as content.
+    var bgR = 255, bgG = 255, bgB = 255, sr = 0, sg = 0, sb = 0, sn = 0;
+    var cx0 = Math.floor(W * 0.02), cx1 = Math.max(cx0 + 1, Math.floor(W * 0.07));
+    var cy0 = Math.floor(H * 0.01), cy1 = Math.max(cy0 + 1, Math.floor(H * 0.03));
+    for (var yy = cy0; yy < cy1; yy++) { for (var xx = cx0; xx < cx1; xx++) { var k = (yy * W + xx) * 4; if (data[k + 3] < 10) continue; sr += data[k]; sg += data[k + 1]; sb += data[k + 2]; sn++; } }
+    if (sn > 0) { bgR = Math.round(sr / sn); bgG = Math.round(sg / sn); bgB = Math.round(sb / sn); }
+    var TOL = 34;
+    var top = Math.round(H * (FILL_PAD_IN / FILL_PAGE_H_IN));
+    var box = Math.round(H * (FILL_BOX_IN / FILL_PAGE_H_IN));
+    if (box <= 0) return null;
+    var last = -1;
+    for (var y = H - 1; y >= top; y--) {
+      var inked = false;
+      for (var x = 0; x < W; x += 2) {   // every other column: an inked row is never one pixel wide
+        var i = (y * W + x) * 4;
+        if (data[i + 3] < 10) continue;
+        if (Math.abs(data[i] - bgR) > TOL || Math.abs(data[i + 1] - bgG) > TOL || Math.abs(data[i + 2] - bgB) > TOL) { inked = true; break; }
+      }
+      if (inked) { last = y; break; }
+    }
+    if (last < 0) return 0;
+    return Math.max(0, Math.min(1, (last - top) / box));
+  } catch (e) { return null; }
 }
 function measureCanvasFill(canvas) {
   try {
@@ -17556,6 +17610,7 @@ function renderPdfInto(url, containerId, isBefore) {
   var pf = document.getElementById(containerId + '-pf');
   var pm = document.getElementById(containerId + '-pm');
   if (isBefore) _finalizeFills = {}; else _finalizeAfterFills = {};
+  if (isBefore) _finalizeHeights = {}; else _finalizeAfterHeights = {};   // v3.0.437 -- reset in step
   if (isBefore) {
     _finalizeBeforePages = 0; _finalizeBeforeDone = false;
     // A fresh Before render means the book itself changed (layout option, version, campaign), so any
@@ -17646,6 +17701,8 @@ function renderPdfInto(url, containerId, isBefore) {
               if (pf) pf.style.width = (45 + Math.round(((pageNum - first + 1) / span) * 55)) + '%';
               if (pm) pm.textContent = 'Rendering page ' + pageNum;
               { var fill = measureCanvasFill(canvas); if (fill != null) { var _fpct = Math.round(fill * 100); if (isBefore) { _finalizeFills[pageNum] = _fpct; /* DIAGNOSTIC (disabled): finalizeDebugMarkCanvas(canvas, fill); */ if (finalizeIsContentPage(pageNum, total) && fill < 0.62) flagged.push({ page: pageNum, fill: _fpct }); } else { _finalizeAfterFills[pageNum] = _fpct; } } }
+              // v3.0.437 -- the DISPLAYED figure, recorded per pane. The flag above is untouched.
+              { var _hf2 = measureCanvasHeightFill(canvas); if (_hf2 != null) { if (isBefore) _finalizeHeights[pageNum] = Math.round(_hf2 * 100); else _finalizeAfterHeights[pageNum] = Math.round(_hf2 * 100); } }
             });
           });
         });
