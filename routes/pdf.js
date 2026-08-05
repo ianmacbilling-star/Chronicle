@@ -2503,6 +2503,56 @@ async function approvedStateLoad(url) {
 // Read the approved state for one book+layout out of the same prefs row save-optimized writes, with
 // the same fork/chooser resolution. Returns null when nothing has been saved, and EVERY caller must
 // treat null as refuse -- never as permission to build a different book.
+// v3.0.424 -- THE POD INTERIOR BY SUBTRACTION, NOT BY RE-RENDERING.
+// The saved PDF already IS the approved book; Lulu simply cannot have the covers on the interior.
+// Removing two pages is not a reason to spend minutes of Chromium re-rendering the whole thing, and
+// a second render is also a second chance to disagree with the file the reader approved.
+// EXACTNESS OVER CLEVERNESS. The cover counts are recorded at save time from the rendered HTML, and
+// the result is checked against arithmetic that must hold: pages - front - back. Anything unexpected
+// returns null and the caller re-renders exactly as before -- a slow correct book beats a fast one
+// missing its first page, which is the only way this can fail.
+async function stripCoversFromSaved(lastOpt) {
+  try {
+    if (!lastOpt || !lastOpt.pdfUrl) return null;
+    var fc = Number(lastOpt.frontCovers), bc = Number(lastOpt.backCovers);
+    if (!Number.isFinite(fc) || !Number.isFinite(bc) || fc < 0 || bc < 0) return null;   // pre-v3.0.424 save
+    if (fc === 0 && bc === 0) return null;   // nothing to remove; the saved file is not an interior candidate
+    var buf = await fetchFile(lastOpt.pdfUrl);
+    if (!buf || !buf.length) return null;
+    var lib = require('pdf-lib');
+    var doc = await lib.PDFDocument.load(buf, { ignoreEncryption: true });
+    var total = doc.getPageCount();
+    var want = total - fc - bc;
+    if (want < 1) return null;
+    // The recorded page count must agree with the file we just read, or the two are not the same book.
+    if (lastOpt.pages > 0 && lastOpt.pages !== total) {
+      console.warn('[strip-covers] saved pages ' + lastOpt.pages + ' but the stored PDF holds ' + total + ' -- re-rendering instead');
+      return null;
+    }
+    for (var i = 0; i < bc; i++) doc.removePage(doc.getPageCount() - 1);   // back first: indices below it do not move
+    for (var j = 0; j < fc; j++) doc.removePage(0);
+    if (doc.getPageCount() !== want) {
+      console.warn('[strip-covers] expected ' + want + ' pages after the strip, got ' + doc.getPageCount() + ' -- re-rendering instead');
+      return null;
+    }
+    var out = Buffer.from(await doc.save());
+    if (!out || !out.length) return null;
+    return { buffer: out, pages: want, removedFront: fc, removedBack: bc, of: total };
+  } catch (e) {
+    console.warn('[strip-covers] failed, falling back to a full re-render: ' + ((e && e.message) || e));
+    return null;
+  }
+}
+// Read the raw lastOptimized entry (not the composed body) for one book+layout.
+async function lastOptimizedEntry(req, campaignId, arrange) {
+  try {
+    var db = await getDb();
+    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
+    var chooser = req.session.userId || fork;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    return (prefs && prefs.lastOptimized && prefs.lastOptimized[arrange]) || null;
+  } catch (e) { return null; }
+}
 async function approvedStateFor(req, campaignId, arrange) {
   try {
     var db = await getDb();
@@ -4129,6 +4179,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   // No token is charged -- the reader already paid to Optimize; printing must not re-charge.
   var html = null;
   var _apprAt = null;   // v3.0.423 -- when the layout being printed was approved; returned to the client
+  var _stripped = null; // v3.0.424 -- set when the interior came from the saved PDF rather than a render
   if (co && (co.arrange === 'magazine' || co.arrange === 'gazette' || co.arrange === 'paired')) {
     // v3.0.422 -- THE PRINTED BOOK IS THE SAVED BOOK, OR THERE IS NO PRINTED BOOK. TD-214.
     // This used to read the in-memory composed cache and, ON A MISS, quietly re-pack from NATURAL and
@@ -4151,7 +4202,24 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
       return res.status(409).json({ error: 'layout_changed',
         message: 'The book settings have changed since this layout was saved. Open the Optimize tab, run Optimize again and Save, then order.' });
     }
+    // v3.0.424 -- FIRST, TRY SUBTRACTION. The saved PDF is the approved book with covers on it; if
+    // we know exactly how many cover pages it carries, the interior is that file minus those pages,
+    // which is both instant and byte-identical to what was approved. Anything unexpected returns
+    // null and we re-render below, exactly as v3.0.423 did.
     try {
+      var _loE = await lastOptimizedEntry(req, req.params.campaignId, co.arrange);
+      var _strip = await stripCoversFromSaved(_loE);
+      if (_strip && _strip.buffer) {
+        _apprAt = (_loE && _loE.at) || null;
+        _stripped = _strip;
+        try {
+          console.log('[print-interior] proc ' + PROC_ID + ' up ' + Math.round(process.uptime()) + 's built the interior by REMOVING '
+            + _strip.removedFront + ' front and ' + _strip.removedBack + ' back cover page(s) from the saved book of '
+            + _strip.of + ' -- ' + _strip.pages + ' interior pages, approved ' + (_apprAt || 'unknown') + '. No re-render.');
+        } catch (e) {}
+      }
+    } catch (e) { _stripped = null; }
+    if (!_stripped) try {
       var _builtP = await assembleNovelHtml(req, req.params.campaignId, null,
         { paper: 'white', arrange: co.arrange, campaignName: _appr.campaignName || '', packComposedBody: _appr.body });
       html = _builtP && _builtP.html;
@@ -4172,13 +4240,13 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     }
     // Deliberately NOT falling through to the flow render below: that is a different book, and the
     // whole point of this route is that it can only ever produce the approved one.
-    if (!html) {
+    if (!html && !_stripped) {
       return res.status(500).json({ error: 'approved_rebuild_failed',
         message: 'The saved layout could not be rebuilt for print. Please re-run Optimize, Save, and try again.' });
     }
   }
   // Fallback: any layout without a composer (or a compose failure) prints the flow render as before.
-  if (!html) html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
+  if (!html && !_stripped) html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
 
   // Resolve any relative decorative asset URLs (textures/logo) against the live
   // site so Chromium can fetch them under setContent (which has no document base).
@@ -4187,11 +4255,16 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
 
   let pdfBuffer;
-  try {
-    pdfBuffer = await renderHtmlToPdf(html, {});
-  } catch (e) {
-    console.error('[print-interior] render failed:', e && e.message ? e.message : e);
-    return res.status(500).json({ error: 'PDF render failed', detail: friendlyError(e, '') });
+  if (_stripped) {
+    // Already the approved bytes, minus the covers. Nothing to render.
+    pdfBuffer = _stripped.buffer;
+  } else {
+    try {
+      pdfBuffer = await renderHtmlToPdf(html, {});
+    } catch (e) {
+      console.error('[print-interior] render failed:', e && e.message ? e.message : e);
+      return res.status(500).json({ error: 'PDF render failed', detail: friendlyError(e, '') });
+    }
   }
 
   try {
@@ -4228,7 +4301,8 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
     var pages = await pdfPageCount(pdfBuffer);
     // v3.0.423 -- approvedAt lets the Order tab name the version it is about to print.
-    return res.json({ url: url, bytes: pdfBuffer.length, pages: pages, approvedAt: _apprAt });
+    return res.json({ url: url, bytes: pdfBuffer.length, pages: pages, approvedAt: _apprAt,
+      builtBy: (_stripped ? 'strip' : 'render') });   // v3.0.424 -- which path produced this file
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
@@ -8692,7 +8766,12 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         var _breachThis = false, _floorThis = _sFloor;   // v3.0.371 -- set by the shrink branch
         var tryMul;
         if (op.op === 'growImage') {
-          if (_manualFix) {
+          // v3.0.424 -- MAX. The reader asked for as big as the page allows rather than a step, which
+          // is precisely what the non-manual branch below already computes: take the real white on
+          // the page and grow into it, capped by the crop-safe ceiling. So Max simply does not take
+          // percentage branch. The staged measure-and-roll-back further down still guards it, so a
+          // Max that would overflow is reverted like any other grow.
+          if (_manualFix && !op.max) {
             // v3.0.413 -- a chosen step, capped by whatever the shape allows.
             tryMul = Math.min(_growCap, curMul * (1 + _manualPct(op, 10)));
           }
@@ -8769,7 +8848,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           _breachThis = _breach; _floorThis = _floorNow;
         }
         pgc[ci] = Object.assign({}, pgc[ci], { growMul: Math.round(tryMul * 1000) / 1000 });
-        _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul, sFloor: _sFloor, floorNow: _floorThis, breach: _breachThis });
+        _staged.push({ op: op, pageIdx: op.page, ci: ci, curMul: curMul, tryMul: pgc[ci].growMul, sFloor: _sFloor, floorNow: _floorThis, breach: _breachThis, growCap: Math.round(_growCap * 1000) / 1000 });
       }
 
       // Stage 2: ONE re-measure of the whole book with all targets applied.
@@ -8783,7 +8862,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         _staged.forEach(function (s) {
           var ph = (_batchReal[s.pageIdx] != null) ? _batchReal[s.pageIdx] : null;
           if (ph != null && ph <= MCLIP + CO_CLIP_ACCEPT_TOL) {
-            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: s.tryMul, pageReal: Math.round(ph * 100) / 100, belowFloor: !!(s.breach && s.tryMul < s.sFloor - 0.005), normalFloor: s.sFloor });
+            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: s.tryMul, pageReal: Math.round(ph * 100) / 100, belowFloor: !!(s.breach && s.tryMul < s.sFloor - 0.005), normalFloor: s.sFloor, capMul: s.growCap });
           } else {
             _overshot.push(s);
           }
@@ -8812,7 +8891,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           }
           if (best != null && ((isGrow && best > s.curMul + 0.02) || (!isGrow && best < s.curMul - 0.02))) {
             pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: best });
-            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: best, pageReal: Math.round((bestReal || 0) * 100) / 100, belowFloor: !!(s.breach && best < s.sFloor - 0.005), normalFloor: s.sFloor });
+            mApplied.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, growFrom: s.curMul, growTo: best, pageReal: Math.round((bestReal || 0) * 100) / 100, belowFloor: !!(s.breach && best < s.sFloor - 0.005), normalFloor: s.sFloor, capMul: s.growCap });
           } else {
             pgc[s.ci] = Object.assign({}, pgc[s.ci], { growMul: s.curMul });
             mRejected.push({ op: s.op.op, page: s.op.page, viewerPage: s.op.viewerPage, reason: (isGrow ? 'no room to grow within box' : 'could not clear the box') });
@@ -9081,7 +9160,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
           // So the run log said 'grow 1.00 -> 0.71' with no hint that a floor had been breached to save
           // text -- the one thing v3.0.371 promised would never be silent. Same shape as the v3.0.356
           // estimate that read the wrong variable and passed every build guard.
-          applied: mApplied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, growFrom: a.growFrom, growTo: a.growTo, belowFloor: !!a.belowFloor, normalFloor: (a.normalFloor != null ? a.normalFloor : null) }; }),
+          applied: mApplied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, growFrom: a.growFrom, growTo: a.growTo, belowFloor: !!a.belowFloor, normalFloor: (a.normalFloor != null ? a.normalFloor : null), capMul: (a.capMul != null ? a.capMul : null) }; }),
           rejected: mRejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
         })); } catch (e) {}
         return res.send(Buffer.isBuffer(mPdf) ? mPdf : Buffer.from(mPdf));
@@ -9329,6 +9408,49 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       if (!pl) { rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, reason: 'no image placement on page' }); continue; }
 
       var oldScale = (pl.scale != null) ? pl.scale : 1;
+      // v3.0.424 -- MAX: as large as this page allows, using the SAME sweep the optimizer runs at the
+      // end of a run (finalFillPass). Reused UNMODIFIED -- what changes is what it is GIVEN, not what
+      // it does, because it is shared with the Optimizer and rewriting it to serve one button is how
+      // a fix on one path becomes a regression on another.
+      // The adapter is scoped to THIS page and THIS picture, which also settles the sweep guard that
+      // skips a page holding more than one picture: that guard is the optimizer declining to CHOOSE
+      // between them, and the reader has already chosen. PREFERENCE, not physics -- so it is bypassed
+      // by construction rather than weakened for everybody.
+      // Placed ABOVE the full-size guard on purpose: 1.0 is the ceiling the PERCENTAGE branch uses,
+      // not a property of the layout -- the fill sweep has always grown past natural size up to the
+      // crop-safe cap, and Max is the same operation, so it answers to the same limit.
+      if (_manualFix && op.op === 'growImage' && op.max) {
+        var _mxCap = 1;
+        try {
+          var _mxB = null;
+          for (var _mk = 0; _mk < (beats || []).length; _mk++) { if (beats[_mk] && beats[_mk].idx === pl.beat) { _mxB = beats[_mk]; break; } }
+          if (_mxB && _mxB.moment) { var _mxM = cgFeatureCropSafeMaxMul(_mxB.moment, _pco0); if (_mxM > 0) _mxCap = _mxM; }
+        } catch (e) {}
+        var _mxPic = { _pl: pl, scale: oldScale, fullH: pl.fullH,
+                       over: ((pl.heightIn || 0) - (pl.fullH || 0) * oldScale), capMul: _mxCap };
+        var _mxAdapter = {
+          pageCount: function () { return plan.pages.length; },
+          pictures: function (pi) { return (pi === op.page) ? [_mxPic] : []; },
+          setScale: function (pic, mul) {
+            pic._pl.scale = mul;
+            pic._pl.heightIn = Math.round((pic.fullH * mul + pic.over) * 1000) / 1000;
+            pic.scale = mul;
+          },
+          measure: function () { return remeasureComposedPaired(req, req.params.campaignId, plan, beats, _pco0); }
+        };
+        var _mxR = null;
+        try { _mxR = await finalFillPass(_mxAdapter, CLIP, CO_CLIP_ACCEPT_TOL); } catch (e) { _mxR = null; }
+        if (!_mxR || !_mxR.grown) {
+          rejected.push({ op: op.op, page: op.page, viewerPage: op.viewerPage,
+            reason: (oldScale >= _mxCap - 0.005)
+              ? 'the picture is already as large as it can be without cropping it'
+              : 'there is no room left on this page to grow it into' });
+          continue;
+        }
+        applied.push({ op: op.op, page: op.page, viewerPage: op.viewerPage, scaleFrom: oldScale,
+          scaleTo: (pl.scale != null ? pl.scale : oldScale), capMul: Math.round(_mxCap * 1000) / 1000 });
+        continue;
+      }
       var newScale;
       if (op.op === 'growImage') {
         // A COHESION TRIM IS LOAD-BEARING. The packer made this picture small so its beat's text
@@ -9499,7 +9621,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
       res.set('Content-Disposition', 'inline; filename="applied-preview.pdf"');
       try { res.set('X-Apply-Report', JSON.stringify({
         appliedCount: applied.length, rejectedCount: rejected.length, deferredCount: deferred.length,
-        applied: applied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, scaleFrom: a.scaleFrom, scaleTo: a.scaleTo, movedFrom: a.movedFrom, movedTo: a.movedTo, movedKind: a.movedKind, shrankFrom: a.shrankFrom, shrankTo: a.shrankTo }; }),
+        applied: applied.map(function (a) { return { op: a.op, viewerPage: a.viewerPage, scaleFrom: a.scaleFrom, scaleTo: a.scaleTo, movedFrom: a.movedFrom, movedTo: a.movedTo, movedKind: a.movedKind, shrankFrom: a.shrankFrom, shrankTo: a.shrankTo, capMul: (a.capMul != null ? a.capMul : null) }; }),
         rejected: rejected.map(function (r) { return { op: r.op, viewerPage: r.viewerPage, reason: r.reason }; })
       })); } catch (e) {}
       return res.send(Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf));
@@ -9832,6 +9954,14 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
     var pdfBuffer = await renderHtmlToPdf(html, {});
     var pages = 0; try { pages = await countPdfPages(pdfBuffer); } catch (e) {}
+    // v3.0.424 -- HOW MANY COVER PAGES THIS FILE HAS, so the POD interior can be produced by
+    // REMOVING them from this exact PDF instead of rendering the whole book a second time.
+    // Read off the HTML that was just rendered, NOT re-derived from co + the fork book meta. The
+    // back cover is conditional on art that lives in effectiveBookMeta, and a second derivation of
+    // that rule would be free to drift from the first -- at which point the strip removes a page of
+    // the story. The markers are emitted by both builders and they describe the artifact itself.
+    var _fcN = /<!-- COVER PAGE -->/.test(html) ? 1 : 0;
+    var _bcN = /<!-- BACK COVER PAGE -->/.test(html) ? 1 : 0;
     var fname = 'optimized-' + campaignId + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
     // v3.0.388 -- flatten the SAVED book, with one deliberate exception.
     // This route is called TWICE at the end of a run: a protective save the instant the loop ends,
@@ -9874,7 +10004,8 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     // bodyUrl is the approved LAYOUT; co is the settings it was approved under, so a downstream
     // route can tell a stale approval from a current one instead of printing either blind.
     lastOpt[arrange] = { pdfUrl: pdfUrl, at: new Date().toISOString(), pages: pages, bookTitle: bookTitle || '',
-                         bodyUrl: _stUrl, co: req.query.co || '', layout: req.query.layout || '' };
+                         bodyUrl: _stUrl, co: req.query.co || '', layout: req.query.layout || '',
+                         frontCovers: _fcN, backCovers: _bcN };   // v3.0.424 -- lets print strip rather than re-render
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt });
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
     // bundle. The user-facing line stays generic; the bundle gets the numbers.

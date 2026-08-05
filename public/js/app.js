@@ -15174,7 +15174,19 @@ var FIX_OPS = {
   'make the pictures bigger':       function (p) { return { op: 'growImage', page: p }; },
   'make the pictures smaller':      function (p) { return { op: 'shrinkImage', page: p }; }
 };
+// v3.0.424 -- resolves when a restore-in-flight has finished; null when none is running.
+// The options are computed by RE-PACKING the book, and a pack reproduces the approved layout only
+// once the saved moves and grows are back in the process. Both start when Load is pressed, and it
+// only worked because rendering a book takes far longer than fetching one small file. Lose that race
+// and the buttons describe a NATURAL pack of a saved book, with nothing on screen to say so -- and
+// taking one of them would discard every adjustment the book already had.
+var _finalizeRestoreWait = null;
 function finalizeLoadFixOptions() {
+  if (!(state && state.currentCampaign)) return Promise.resolve();
+  var _gate = _finalizeRestoreWait || Promise.resolve();
+  return _gate.then(function () { return finalizeLoadFixOptionsNow(); });
+}
+function finalizeLoadFixOptionsNow() {
   if (!(state && state.currentCampaign)) return Promise.resolve();
   return fetch('/api/pdf/page-fix-options/' + state.currentCampaign.id + finalizeBookQuery(), { credentials: 'same-origin' })
     .then(function (r) { return r.ok ? r.json() : null; })
@@ -15340,12 +15352,21 @@ function finalizeOpenFixDialog(viewerPage) {
     // cannot disagree -- typing 20 into a row you have not selected and pressing Try It would
     // otherwise apply a different move at a percentage you never meant for it.
     var _isPic = (o.label === 'make the pictures bigger' || o.label === 'make the pictures smaller');
+    var _isGrow = (o.label === 'make the pictures bigger');
+    // v3.0.424 -- MAX, on the grow row only. There is no sensible Min: the shrink floor is already
+    // the smallest a picture may be, and a button for it would just be a slower way to hit the floor.
+    var _maxBox = _isGrow
+      ? ('<label style="margin-left:10px;font-size:11px;color:#8a6a2a;cursor:pointer;" onclick="event.stopPropagation();">' +
+         '<input type="checkbox" class="fix-max" data-for="' + ix + '" ' +
+         'onclick="event.stopPropagation();" onchange="finalizeFixMaxToggle(' + ix + ');" ' +
+         'style="margin-right:4px;vertical-align:middle;">Max</label>')
+      : '';
     var _pctBox = _isPic
       ? ('<span style="margin-left:8px;font-size:11px;color:#8a6a2a;">by ' +
          '<input type="number" class="fix-pct" data-for="' + ix + '" value="10" min="1" max="75" step="5" ' +
          'onclick="event.stopPropagation();" onfocus="finalizeFixPickRadio(' + ix + ');" ' +
          'style="width:46px;padding:1px 4px;font-size:11px;border-radius:3px;border:1px solid rgba(201,168,76,0.5);' +
-         'background:rgba(201,168,76,0.10);color:#8a6a2a;"> percent</span>')
+         'background:rgba(201,168,76,0.10);color:#8a6a2a;"> percent</span>' + _maxBox)
       : '';
     h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(201,168,76,0.18);' +
       (dis ? 'cursor:not-allowed;' : 'cursor:pointer;') + '">' +   // v3.0.397 -- no opacity: colour carries it
@@ -15372,6 +15393,20 @@ function finalizeOpenFixDialog(viewerPage) {
   if (tb) { tb.disabled = false; tb.textContent = 'Try It'; }
   _fixBusy = false;
   var mo = document.getElementById('fix-modal'); if (mo) mo.classList.remove('hidden');
+}
+// v3.0.424 -- Max and a percentage are mutually exclusive by construction: ticking Max greys the
+// number so the dialog cannot show two different answers to the same question, and selects its own
+// row for the same reason the percentage box does.
+function finalizeFixMaxToggle(ix) {
+  try {
+    finalizeFixPickRadio(ix);
+    var cb = document.querySelector('input.fix-max[data-for="' + ix + '"]');
+    var pb = document.querySelector('input.fix-pct[data-for="' + ix + '"]');
+    if (!pb) return;
+    var on = !!(cb && cb.checked);
+    pb.disabled = on;
+    pb.style.opacity = on ? '0.35' : '';
+  } catch (e) {}
 }
 // v3.0.413 -- touching a percentage box selects the option it belongs to.
 // v3.0.415 -- A BAR WHILE IT WORKS.
@@ -15452,6 +15487,9 @@ function finalizeTryFix() {
   try {
     var _pb = document.querySelector('input.fix-pct[data-for="' + sel.value + '"]');
     if (_pb) { var _pv = Number(_pb.value); if (_pv > 0) op.pct = _pv; }
+    // v3.0.424 -- Max wins and the percentage is dropped, so the server can never receive both.
+    var _mb = document.querySelector('input.fix-max[data-for="' + sel.value + '"]');
+    if (_mb && _mb.checked) { op.max = true; delete op.pct; }
   } catch (e) {}
   _fixBusy = true;
   // v3.0.397 -- SHOW THAT SOMETHING IS HAPPENING. The first version wrote one small grey line and
@@ -15981,8 +16019,16 @@ function finalizeFixDetail(j) {
   try {
     var a = (j && j.applied && j.applied.length) ? j.applied[0] : null;
     if (!a) return '';
-    if (a.scaleTo != null) return ' (picture ' + Number(a.scaleFrom != null ? a.scaleFrom : 1).toFixed(2) + ' to ' + Number(a.scaleTo).toFixed(2) + ')';
-    if (a.growTo != null) return ' (picture ' + Number(a.growFrom != null ? a.growFrom : 1).toFixed(2) + ' to ' + Number(a.growTo).toFixed(2) + ')';
+    // v3.0.424 -- when a grow stops, say whether the PAGE ran out or the picture reached the point
+    // where growing it further would start cropping. Without that, Max on a page with obvious white
+    // looks like it half worked.
+    var _to = (a.scaleTo != null) ? a.scaleTo : a.growTo;
+    var _from = (a.scaleTo != null) ? a.scaleFrom : a.growFrom;
+    if (_to != null) {
+      var _lim = (a.capMul != null && Number(a.capMul) > 0 && Number(_to) >= Number(a.capMul) - 0.01)
+        ? ', as large as it goes without cropping it' : '';
+      return ' (picture ' + Number(_from != null ? _from : 1).toFixed(2) + ' to ' + Number(_to).toFixed(2) + _lim + ')';
+    }
     if (a.movedTo != null) return ' (moved page ' + a.movedFrom + ' to page ' + a.movedTo + ')';
     return '';
   } catch (e) { return ''; }
@@ -16074,6 +16120,11 @@ function finalizeSaveOptimized(quiet) {
         // file from before the edit with no request made. A save is exactly the event that makes any
         // previously built interior wrong.
         try { printInteriorCache = { key: '', url: '', pages: 0 }; } catch (e) {}
+        // v3.0.424 -- and drop the PREPARED order outright. A new save is a new book, so the interior
+        // and cover links already on the Order tab point at files that are no longer this book. The
+        // existing helper collapses the review panel and sends the reader back to Prepare Your Order,
+        // which is the honest state: those files have to be built again.
+        try { if (typeof invalidatePreparedOrder === 'function') invalidatePreparedOrder(); } catch (e) {}
         return true;
       }
       // v3.0.386 -- QUIET MEANS QUIET, FOR THE ONE FAILURE THAT IS EXPECTED.
@@ -16161,7 +16212,9 @@ function finalizeRestoreSavedLayout(info) {
     return;
   }
   try {
-    fetch('/api/pdf/restore-optimized/' + state.currentCampaign.id + finalizeBookQuery(),
+    // v3.0.424 -- hold the fix options until this lands. Always settles, never rejects, so a failed
+    // restore delays the buttons rather than removing them.
+    _finalizeRestoreWait = fetch('/api/pdf/restore-optimized/' + state.currentCampaign.id + finalizeBookQuery(),
       { method: 'POST', credentials: 'same-origin' })
       .then(function (r) { return r.json(); }).then(function (j) {
         if (j && j.restored) {
@@ -16172,7 +16225,7 @@ function finalizeRestoreSavedLayout(info) {
           optimizeLogLine('Only the saved PDF came back -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }
       }).catch(function () {});
-  } catch (e) {}
+  } catch (e) { _finalizeRestoreWait = null; }
 }
 function finalizeGoToPage(n) {
   var before = document.getElementById('finalize-before-scroll');
