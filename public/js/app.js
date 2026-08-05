@@ -702,7 +702,7 @@ function uiPublishPrompt(message, opts) {
     attestBox.type = 'checkbox';
     attestBox.style.cssText = 'margin-top:2px;flex-shrink:0;';
     var attestText = document.createElement('span');
-    attestText.textContent = 'I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no sexual, hateful, or graphically gratuitous content).';
+    attestText.textContent = 'I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).';
     attestWrap.appendChild(attestBox); attestWrap.appendChild(attestText);
     ok.disabled = true;
     attestBox.addEventListener('change', function () { ok.disabled = !attestBox.checked; });
