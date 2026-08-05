@@ -158,7 +158,21 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
     if (snap && snap.sessions) {
       const pageOpts = { publicMode: true, bookTitle: snap.bookTitle || title };
       html = buildNovelHTML(snap.campaign, snap.sessions, snap.characters, snap.layoutStyle || 'Classic', pageOpts, snap.co || null);
-      html = html.replace('<head><link rel="stylesheet" href="/css/fonts.css">', '<head><link rel="stylesheet" href="/css/fonts.css">' + seo + WEB_STYLE + PWA_HEAD + '<script src="/analytics.js"></script>');
+      // v3.0.435 -- ANCHOR ON SOMETHING THAT EXISTS, AND SHOUT WHEN IT DOES NOT.
+      // This anchored on '<head><link rel="stylesheet" href="/css/fonts.css">'. buildNovelHTML emits a
+      // BARE <head> -- it inlines the self-hosted fontCss() rather than linking the sheet (see the
+      // v3.0.376 note at pdf.js:712). So the target never occurred, String.replace returned the input
+      // untouched, and EVERY published story page went out with no meta tags, no web stylesheet, no
+      // PWA head and no analytics. These pages exist for SEO; that was the whole feature, silently off.
+      // A replace that matches nothing is not an error, which is exactly why it survived. Anchored on
+      // the charset meta instead -- so the injection lands AFTER it and charset stays first in the
+      // document, where it has to be -- and a miss now writes a line rather than shrugging.
+      var _headAnchor = '<meta charset="UTF-8">';
+      if (html.indexOf(_headAnchor) >= 0) {
+        html = html.replace(_headAnchor, _headAnchor + seo + WEB_STYLE + PWA_HEAD + '<script src="/analytics.js"></script>');
+      } else {
+        console.error('[story-pages] head anchor NOT FOUND -- this page is being served with no SEO, no PWA head and no analytics. The buildNovelHTML head template has changed; fix the anchor.');
+      }
       html = html.replace('<body>', '<body>' + header + '<div id="cmp-book">');
       html = html.split('<div class="print-bar" id="printBar"><button onclick="window.print()">Save as PDF / Print</button></div>').join('');
       html = html.replace('</body>', '</div>' + footerCta + FIT_SCRIPT + '</body>');
