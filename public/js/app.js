@@ -9767,7 +9767,11 @@ async function generateAllImages(fromChain) {
   fetch('/api/images/generate-all', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
+    body: JSON.stringify({
+      // v3.0.447 -- SECOND COPY of generateAllImages. app.js duplicates functions on purpose and
+      // every copy has to be patched; v3.0.445 fixed only the first and the Storyboard button calls
+      // this one, so images kept landing on the canonical.
+      fork_id: state.currentForkId || null,
       session_id: state.currentSession.id,
       campaign_id: state.currentCampaign.id,
       style: state.artStyle,
@@ -11469,8 +11473,11 @@ function canEditCurrentStatus() {
   var role = state.currentCampaign && state.currentCampaign.my_role;
   // DM edits the canonical (DM fork) status; a player edits the status of
   // their OWN version. Read-only for any other view.
-  if (role === 'dm') return !state.currentForkId;
-  return !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+  // v3.0.446 -- was a FOURTH private copy of "which version may I edit", with the same Story-Master
+  // shortcut: editable only when NOTHING is selected. So the Draft/Ready control fell back to a
+  // read-only chip on a version you had just created and plainly own.
+  // forkOnScreenIsMine is the one implementation now; role is no longer consulted here at all.
+  return forkOnScreenIsMine();
 }
 
 function initAccessStatusUI(status) {
@@ -11677,7 +11684,16 @@ function loadSessionForks(sessionId) {
       // v3.0.442 -- Rename and Delete act on the version you are LOOKING AT, so the menu follows the
       // selection rather than merely whether you own something on this session. Viewing the canonical
       // or someone else's version, it is hidden -- neither action would be yours to take.
-      if (verMenu) verMenu.style.display = (selectedFork && selectedFork.is_mine) ? '' : 'none';
+      // v3.0.446 -- resolve against what the DROPDOWN is actually showing. state.currentForkId is
+      // null while the canonical is selected and is not yet set on a first paint, so keying the menu
+      // solely on it made the ellipsis vanish -- taking Delete with it.
+      var shownId = state.currentForkId || (sel && sel.value) || (dmFork && dmFork.fork_id);
+      var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
+      if (verMenu) verMenu.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
+      // v3.0.446 -- the canonical cannot be deleted (sessions.js refuses it), so do not offer it.
+      // Rename stays: naming your canonical version is useful and allowed.
+      var delItem = document.getElementById('delete-version-item');
+      if (delItem) delItem.style.display = (shownFork && shownFork.role !== 'dm') ? '' : 'none';
       // Phase 4 - default a player onto their OWN version of this session
       // when they have one. The Story Master (and players with no version)
       // stay on the canonical. Only applies on a fresh load (currentForkId

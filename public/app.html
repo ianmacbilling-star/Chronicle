@@ -645,10 +645,15 @@
           <!-- Player-only: ellipsis menu holding Delete My Version. Shown only
                when the viewer has their own version (JS toggles this wrapper). -->
           <div class="row-menu" id="session-version-menu" style="display:none;">
-            <button class="row-menu-btn" onclick="toggleRowMenu('session-version-dropdown', event)">&#8943;</button>
+            <!-- v3.0.446 -- btn btn-sm, matching Assets and Archives beside it. It was .row-menu-btn,
+                 whose color: var(--text) is meant for the light card rows and reads dark-on-dark up
+                 here in the session header. Styled locally rather than changing .row-menu-btn, which
+                 every row menu in the app shares. -->
+            <button class="btn btn-sm" style="padding:4px 10px;line-height:1;"
+                    onclick="toggleRowMenu('session-version-dropdown', event)">&#8943;</button>
             <div class="row-menu-dropdown" id="session-version-dropdown">
               <button class="row-menu-item" onclick="renameSessionVersion()">Rename This Version</button>
-              <button class="row-menu-item row-menu-item-danger" onclick="deleteMyVersion()">Delete This Version</button>
+              <button id="delete-version-item" class="row-menu-item row-menu-item-danger" onclick="deleteMyVersion()">Delete This Version</button>
             </div>
           </div>
         </div>
