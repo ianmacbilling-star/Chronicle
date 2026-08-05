@@ -11625,7 +11625,17 @@ function loadSessionForks(sessionId) {
         sel.style.display = forks.length > 1 ? '' : 'none';
       }
       var mineFork = forks.filter(function(f) { return f.is_mine; })[0];
-      state.myForkId = mineFork ? mineFork.fork_id : null;
+      // v3.0.442 -- myForkId MEANS "the version I am allowed to edit", and eleven call sites read it
+      // as exactly that: `currentForkId === myForkId` gates the art style, the narrative style, the
+      // storyboard, the moment editors and the rest. It used to be pinned to the FIRST fork of mine
+      // on this session, which was the only one that could exist. Select a SECOND version and all
+      // eleven went false at once -- the version opened read-only with no explanation.
+      // So it now tracks the SELECTED fork whenever that fork is mine, and falls back to my first
+      // otherwise. One line, and every one of those eleven becomes "the version on screen is mine",
+      // which is what each of them was always trying to ask.
+      var selectedFork = forks.filter(function (f) { return String(f.fork_id) === String(state.currentForkId); })[0];
+      state.myForkId = (selectedFork && selectedFork.is_mine) ? selectedFork.fork_id
+        : (mineFork ? mineFork.fork_id : null);
       if (btn) {
         var isPlayer = state.currentCampaign.my_role === 'player';
         var sessReady = state.currentSession && state.currentSession.player_access_status === 'ready';
@@ -11640,7 +11650,10 @@ function loadSessionForks(sessionId) {
         nvBtn.style.display = (mineFork && canFork) ? '' : 'none';
       }
       var verMenu = document.getElementById('session-version-menu');
-      if (verMenu) verMenu.style.display = mineFork ? '' : 'none';
+      // v3.0.442 -- Rename and Delete act on the version you are LOOKING AT, so the menu follows the
+      // selection rather than merely whether you own something on this session. Viewing the canonical
+      // or someone else's version, it is hidden -- neither action would be yours to take.
+      if (verMenu) verMenu.style.display = (selectedFork && selectedFork.is_mine) ? '' : 'none';
       // Phase 4 - default a player onto their OWN version of this session
       // when they have one. The Story Master (and players with no version)
       // stay on the canonical. Only applies on a fresh load (currentForkId
@@ -11877,7 +11890,11 @@ function makeMyVersion() {
 
 async function deleteMyVersion() {
   if (!state.currentCampaign || !state.currentSession || !state.myForkId) return;
-  if (!await uiConfirm('Delete your version of this session? This cannot be undone.')) return;
+  // v3.0.442 -- myForkId now follows the SELECTED version, so this deletes the one on screen.
+  // Named, because with several versions "your version" no longer identifies anything.
+  var _dv = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(state.myForkId); })[0];
+  var _dvName = (_dv && _dv.name) ? ('\u201c' + _dv.name + '\u201d') : 'this version';
+  if (!await uiConfirm('Delete ' + _dvName + ' of this session? Its pictures and story go with it. This cannot be undone.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + state.myForkId, { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
