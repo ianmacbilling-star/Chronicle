@@ -1092,7 +1092,18 @@ async function migrateForks(pool) {
     FROM sessions s
     JOIN campaign_members cm
       ON cm.campaign_id = s.campaign_id AND cm.role = 'dm'
-    ON CONFLICT (session_id, user_id) DO NOTHING
+    -- v3.0.440 -- WAS: ON CONFLICT (session_id, user_id) DO NOTHING.
+    -- v3.0.439 dropped that unique constraint so a user can hold several versions of a session, and
+    -- Postgres requires a matching unique index for an ON CONFLICT target -- so this backfill, which
+    -- runs on EVERY BOOT, threw "there is no unique or exclusion constraint matching the ON CONFLICT
+    -- specification" and took startup down with it. Dropping a constraint is not only a schema change:
+    -- it invalidates every ON CONFLICT that named it.
+    -- NOT EXISTS says what this actually means and is stricter than the clause it replaces: ONE DM
+    -- fork per session. The old form only blocked a duplicate for the SAME user, so a session whose
+    -- DM had changed would have quietly gained a second DM fork on the next boot.
+    WHERE NOT EXISTS (
+      SELECT 1 FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm'
+    )
   `);
 
   // Backfill content fork_id -> the session's DM fork.
