@@ -2226,7 +2226,7 @@ function saveSnapshot(charId) {
   var newPrompt = ta.value;
   ta.disabled = true;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-        state.currentSession.id + '/characters/' + charId, {
+        state.currentSession.id + '/characters/' + charId + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ prompt: newPrompt })
@@ -2383,7 +2383,7 @@ function regenerateReference(charId) {
   }, 4000);
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-        state.currentSession.id + '/characters/' + charId + '/regenerate-reference', {
+        state.currentSession.id + '/characters/' + charId + '/regenerate-reference' + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ detail: detail })
@@ -2458,7 +2458,7 @@ function approveChange(charId) {
   if (msg) msg.textContent = 'Saving...';
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-        state.currentSession.id + '/characters/' + charId + '/approve-change', {
+        state.currentSession.id + '/characters/' + charId + '/approve-change' + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ detail: detail, image_url: draftUrl, moment_index: momentIndex })
@@ -2488,7 +2488,7 @@ function rejectChange(charId) {
   if (msg) msg.textContent = 'Rejecting...';
 
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-        state.currentSession.id + '/characters/' + charId + '/reject-change', {
+        state.currentSession.id + '/characters/' + charId + '/reject-change' + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({})
@@ -5007,7 +5007,7 @@ function retouchSessionInline(charId) {
   if (btn) btn.disabled = true;
   showBusyOverlay(wrapId, 'Retouching', 'Applying your change\u2026');
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-        state.currentSession.id + '/characters/' + charId + '/retouch-reference', {
+        state.currentSession.id + '/characters/' + charId + '/retouch-reference' + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
@@ -7705,7 +7705,7 @@ function submitRetouch() {
     if (scMsg) scMsg.textContent = '';
     showBusyOverlay(scWrapId, 'Retouching', 'Applying your change\u2026');
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' +
-          state.currentSession.id + '/characters/' + scId + '/retouch-reference', {
+          state.currentSession.id + '/characters/' + scId + '/retouch-reference' + forkQ(), {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ instruction: instruction, fal_key: getFalKey() || 'platform' })
@@ -11601,36 +11601,52 @@ function saveAccessStatus(status) {
 // not greyed, GONE, with nothing to explain it.
 // And `can-edit-fork` was gated on role === 'player', so a Story Master could never have it at all.
 // Both now ask the only question that matters: is the version on screen mine to edit?
+// ============================================================
+// WHICH VERSION IS ON SCREEN  (TD-194)
+// ============================================================
+// v3.0.451 -- ONE LOOKUP, TWO FACTS, ONE COMPOSITION.
+// This rule was written NINE different ways across this file before v3.0.450, because until versions
+// existed only a player could hold a non-canonical fork, so `role === 'player' && currentForkId ===
+// myForkId` was a true description of it. Every one of those said no to a Story Master's own version.
+// Collapsing them into three helpers fixed that -- and then all three repeated the same lookup, which
+// is the beginning of the same problem again. So:
+//   forkOnScreen()             the row being displayed, resolved ONCE
+//   forkOnScreenIsMine()       may I edit it            -- a PERMISSION question
+//   forkOnScreenIsCanonical()  is it the canonical      -- a TARGETING question, session row vs fork
+//   forkOwnNonCanonical()      mine AND not canonical   -- named because five places ask exactly that
+// The first two are genuinely independent: a Story Master on the canonical is mine AND canonical; on
+// their own new version, mine and NOT canonical; on a player's version, neither. The third is their
+// composition and must never re-derive either half.
+// NOTE the two states that are NOT the same, and reading them as one is a regression a fuzz over 84
+// combinations caught before it shipped:
+//   currentForkId is EMPTY          -> the canonical view. Known, and it belongs to the Story Master.
+//   currentForkId is SET BUT UNKNOWN -> a version not in the list, or the list has not loaded yet.
+// Treating the second as canonical would send a save to the SESSION ROW instead of the fork, which is
+// the exact failure this whole line of work exists to remove. Unknown means REFUSE: not mine, not
+// canonical, nothing editable until the list resolves.
+function forkOnScreen() {
+  if (!state.currentForkId) return null;   // no selection = the canonical view
+  return (state.sessionForks || []).filter(function (x) {
+    return String(x.fork_id) === String(state.currentForkId);
+  })[0] || null;
+}
+function forkOnScreenIsCanonical() {
+  if (!state.currentForkId) return true;   // the canonical view
+  var f = forkOnScreen();
+  return !!(f && f.role === 'dm');         // unknown is NOT canonical
+}
 function forkOnScreenIsMine() {
   var role = state.currentCampaign && state.currentCampaign.my_role;
-  // No selection means the canonical view, which belongs to the Story Master.
-  if (!state.currentForkId) return role === 'dm';
-  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
-  if (!f) return false;
+  if (!state.currentForkId) return role === 'dm';   // the canonical belongs to the Story Master
+  var f = forkOnScreen();
+  if (!f) return false;                    // unknown version -> refuse
   if (f.is_mine) return true;
   // A Story Master editing the canonical explicitly: the campaign role confers that, not ownership
   // of the row, which can change hands on a handover.
   return role === 'dm' && f.role === 'dm';
 }
-// v3.0.450 -- "A VERSION I OWN THAT IS NOT THE CANONICAL", which is what every ownFork/_ownFork/
-// _pOwnFork variable in this file was trying to express. There were NINE of them, each written as
-// `role === 'player' && currentForkId === myForkId`, because only a player could hold a non-canonical
-// version. A Story Master on their own second version is in exactly that position now, and every one
-// of the nine said no -- which is why the Review tab had no Add character, Add asset, Edit Image
-// Prompt or Edit Narrative buttons on a new version.
-// v3.0.450 -- "the version on screen is the canonical". Used by the places that choose WHERE a save
-// goes -- session row versus fork row -- which is a different question from whether you may edit,
-// and was written as `role === 'dm' && !state.currentForkId` in both.
-function forkOnScreenIsCanonical() {
-  if (!state.currentForkId) return true;
-  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
-  return !!(f && f.role === 'dm');
-}
 function forkOwnNonCanonical() {
-  if (!forkOnScreenIsMine()) return false;
-  if (!state.currentForkId) return false;   // canonical view
-  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
-  return !!(f && f.role !== 'dm');
+  return forkOnScreenIsMine() && !forkOnScreenIsCanonical();
 }
 function updateForkEditability() {
   var role = state.currentCampaign && state.currentCampaign.my_role;
