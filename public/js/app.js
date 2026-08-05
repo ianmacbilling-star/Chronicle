@@ -12836,6 +12836,20 @@ function currentPageCount() {
   return (printNovelInfo && printNovelInfo.pageEstimate) || 0;
 }
 
+// v3.0.423 -- say WHICH saved version the print file was built from.
+function finalizeShowPrintingVersion(at) {
+  var pe = document.getElementById('print-page-est');
+  if (!pe || !at) return;
+  var when = at;
+  try { when = new Date(at).toLocaleString(); } catch (e) {}
+  var d = document.createElement('div');
+  d.id = 'print-approved-at';
+  d.style.cssText = 'opacity:0.75;margin-top:4px;';
+  d.textContent = 'Printing the version you saved at ' + when + '.';
+  var old = document.getElementById('print-approved-at');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+  if (pe.parentNode) pe.parentNode.insertBefore(d, pe.nextSibling);
+}
 function updatePrintPageDisplay(n, exact) {
   var pe = document.getElementById('print-page-est');
   if (!pe) return;
@@ -12883,12 +12897,27 @@ function prepareInteriorCount() {
   fetch(key)
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
-      if (!res.ok || !res.j || !res.j.url) { updatePrintPageDisplay(-1, false); return; }
+      if (!res.ok || !res.j || !res.j.url) {
+        // v3.0.422 -- SAY WHY, HERE, RATHER THAN AT THE END OF THE ORDER.
+        // print-interior now refuses when there is no SAVED layout to print, or when the settings
+        // have changed since the one that was saved. Falling back to the silent estimate would let
+        // someone fill in the whole order form before finding out, so the reason goes on screen the
+        // moment the tab opens.
+        var _why = res.j && (res.j.message || res.j.error);
+        var _pe = document.getElementById('print-page-est');
+        if (_why && _pe) { _pe.textContent = _why; return; }
+        updatePrintPageDisplay(-1, false); return;
+      }
       printInteriorCache = { key: key, url: res.j.url, pages: (res.j.pages || 0) };
       if (res.j.pages && res.j.pages > 0) {
         printActualPages = res.j.pages;
         updatePrintPageDisplay(printActualPages, true);
         refreshPrintOptions(printActualPages);
+        // v3.0.423 -- NAME THE VERSION. The interior is rebuilt from the layout that was SAVED, so
+        // the only question worth answering on this tab is which save. If this timestamp is older
+        // than the last edit, the fault is in the save and not in print -- a distinction that has
+        // been inferred twice and measured never.
+        try { finalizeShowPrintingVersion(res.j.approvedAt); } catch (e) {}
       } else {
         updatePrintPageDisplay(-1, false);
       }
@@ -15467,11 +15496,20 @@ function finalizeTryFix() {
       if (applied) {
         finalizeCloseFixDialog();
         finalizeFixBusyBar(false);   // v3.0.415
-        optimizeLogLine('Page ' + viewerPage + ': ' + opt.label + ' -- done.', 'ok');
+        // v3.0.423 -- REPORT THE NUMBERS, NOT JUST THE VERDICT. The apply has always returned
+        // scaleFrom/scaleTo (Picture Book) and growFrom/growTo (Magazine) and this path threw them
+        // away and said 'done'. With them on screen, a second shrink answers its own question: if it
+        // reads 1.00 -> 0.90 again then the previous edit was lost between requests (TD-208), and if
+        // it reads 0.90 -> 0.81 the store held. That was guessed at instead of measured.
+        optimizeLogLine('Page ' + viewerPage + ': ' + opt.label + ' -- done.' + finalizeFixDetail(j), 'ok');
         // v3.0.410 -- show the PDF layout-apply just rendered, rather than asking for a new one.
         try { finalizeShowFixedPdf(res0._blob); } catch (e) {}
         _finalizeSavedReady = false;   // the book on screen is no longer the saved one
         _finalizeFixPending = true;    // v3.0.397 -- ...so offer to make it the saved one
+        // v3.0.423 -- AFTER the two flags above, not before. v3.0.422 called this one line early,
+        // where _finalizeFixPending was still false, so the reminder it exists to print returned
+        // silently every single time. node --check and eslint both pass on a guard that never fires.
+        finalizeNagToSave();   // an applied edit is NOT kept until it is saved
         try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
         // v3.0.410 -- the compose=1 re-render that used to happen here is GONE. It was undoing the
         // fix a second after applying it. finalizeShowFixedPdf above already put the applied book on
@@ -15497,6 +15535,7 @@ function finalizeTryFix() {
       finalizeCloseFixDialog();
       finalizeFixBusyBar(false);   // v3.0.415
       optimizeLogLine('Page ' + viewerPage + ': could not ' + opt.label + ' -- ' + why, 'stop');
+      finalizeNagToSave();   // v3.0.422 -- says nothing here unless an EARLIER edit is still unsaved
     })
     .catch(function (e) {
       _fixBusy = false;
@@ -15505,6 +15544,7 @@ function finalizeTryFix() {
       finalizeFixBusyBar(false);   // v3.0.415 -- never leave it spinning
       optimizeLogLine('Page ' + viewerPage + ': could not ' + ((opt && opt.label) || 'apply that change') +
         ' -- ' + ((e && e.message) || 'network error'), 'stop');
+      finalizeNagToSave();   // v3.0.422
     });
 }
 // Re-render the After pane from the composed plan the fix just changed, then refresh the options so
@@ -15934,6 +15974,33 @@ function finalizeClearPriorLoaded() {
 function optimizeDumpLine(txt) {
   try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push(txt); } catch (e) {}
 }
+// v3.0.423 -- what actually changed, in the reader's terms, from the apply report.
+// Picture Book reports scaleFrom/scaleTo, Magazine reports growFrom/growTo, and a move reports
+// movedFrom/movedTo -- all three already crossed the wire in X-Apply-Report and none was shown.
+function finalizeFixDetail(j) {
+  try {
+    var a = (j && j.applied && j.applied.length) ? j.applied[0] : null;
+    if (!a) return '';
+    if (a.scaleTo != null) return ' (picture ' + Number(a.scaleFrom != null ? a.scaleFrom : 1).toFixed(2) + ' to ' + Number(a.scaleTo).toFixed(2) + ')';
+    if (a.growTo != null) return ' (picture ' + Number(a.growFrom != null ? a.growFrom : 1).toFixed(2) + ' to ' + Number(a.growTo).toFixed(2) + ')';
+    if (a.movedTo != null) return ' (moved page ' + a.movedFrom + ' to page ' + a.movedTo + ')';
+    return '';
+  } catch (e) { return ''; }
+}
+// v3.0.422 -- SAY IT EVERY TIME, WHILE IT IS STILL TRUE.
+// An Edit applies, renders and shows on screen, and it is still NOT in the saved book: the save is a
+// separate button and the PDF that Publish and POD use is the SAVED one. Ian: put it after every log
+// entry from when the user makes an edit.
+// Gated on _finalizeFixPending rather than fired unconditionally, so it appears after every applied
+// edit (which sets that flag) and after a refusal ONLY when an earlier edit is still unsaved. A
+// refusal changes nothing, so nagging about a book that has not been touched would be noise -- but
+// going quiet while real unsaved work is sitting there would be the worse of the two mistakes.
+function finalizeNagToSave() {
+  try {
+    if (!_finalizeFixPending || _finalizeSavedReady) return;
+    optimizeLogLine('Please Save using the button above.');
+  } catch (e) {}
+}
 function optimizeLogLine(txt, kind) {
   try { if (window._optimizeCapture && window._optimizeCapture.log) window._optimizeCapture.log.push(txt); } catch (e) {}
   // The USER-facing progress list, not just the admin log panel. aiLog only renders that panel behind
@@ -15996,6 +16063,17 @@ function finalizeSaveOptimized(quiet) {
         }
         if (_live) _live.done('Saved -- this version will be here when you return.');
         else if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
+        // v3.0.423 -- Ian: after every save, a line saying it is ready.
+        // NOT on the quiet save. That one is the protective copy taken the instant the loop ends,
+        // before the final fill, and it is overwritten seconds later -- it is a real file but it is
+        // not the book the run produced, so calling it ready to publish would be a lie by 43 seconds.
+        if (!quiet) optimizeLogLine('Saved and Ready to Publish', 'ok');
+        // v3.0.423 -- THE BROWSER MUST NOT HAND BACK YESTERDAY'S INTERIOR.
+        // printInteriorCache keys on the interior URL, and that URL does not change when a page is
+        // edited -- so opening the Order tab, going back to edit, saving, and returning served the
+        // file from before the edit with no request made. A save is exactly the event that makes any
+        // previously built interior wrong.
+        try { printInteriorCache = { key: '', url: '', pages: 0 }; } catch (e) {}
         return true;
       }
       // v3.0.386 -- QUIET MEANS QUIET, FOR THE ONE FAILURE THAT IS EXPECTED.
@@ -16061,10 +16139,37 @@ function finalizeLoadLastOptimized(manual) {
             _finalizeSavedReady = true;    // v3.0.392 -- a saved file is exactly what we just loaded
             finalizeSyncPublishBtn();      // v3.0.383 -- same state as a completed run, same next step
             try { finalizeUpdatePublishLink(); } catch (e) {}
+            finalizeRestoreSavedLayout(j);   // v3.0.422 -- pull the saved LAYOUT too, not just the PDF
           }
         } else {
           if (btn) btn.style.display = 'none';   // nothing saved yet
           if (manual && typeof billingToast === 'function') billingToast('No optimized version saved yet for this book and layout. Run Optimize first.', 'error');
+        }
+      }).catch(function () {});
+  } catch (e) {}
+}
+// v3.0.422 -- PULL BOTH.
+// Loading a saved version used to fetch only the PDF, which is enough to LOOK at the book and not
+// enough to do anything with it: the layout that produced it lived in server memory and a restart
+// emptied that. POD and Publish rebuild from the layout, and a further Edit replays the recorded
+// moves, so without this a loaded book prints as a fresh natural pack and edits from natural too.
+// Fire-and-forget: the pane is already correct either way, so nothing waits on this.
+function finalizeRestoreSavedLayout(info) {
+  if (!state.currentCampaign) return;
+  if (info && info.hasLayout === false) {
+    optimizeLogLine('This version was saved before layouts were kept, so only the PDF came back. Run Optimize and Save again before ordering or publishing.', 'stop');
+    return;
+  }
+  try {
+    fetch('/api/pdf/restore-optimized/' + state.currentCampaign.id + finalizeBookQuery(),
+      { method: 'POST', credentials: 'same-origin' })
+      .then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.restored) {
+          optimizeLogLine('Saved layout loaded -- this is the book that will print and publish.', 'ok');
+        } else if (j && j.reason === 'settings_changed') {
+          optimizeLogLine('Your book settings have changed since this version was saved. Run Optimize again and Save before ordering or publishing.', 'stop');
+        } else {
+          optimizeLogLine('Only the saved PDF came back -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }
       }).catch(function () {});
   } catch (e) {}

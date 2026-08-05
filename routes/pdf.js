@@ -2475,6 +2475,50 @@ function composedCacheGet(campaignId, req) {
     return v;
   } catch (e) { return null; }
 }
+// v3.0.422 -- THE APPROVED BOOK, MADE DURABLE.
+// save-optimized used to persist { pdfUrl, at, pages, bookTitle } and nothing else, so the LAYOUT that
+// produced the saved PDF lived only in the 30-minute in-memory composed cache above. The Library link
+// worked because it serves that PDF; the POD interior could not, because Lulu needs the interior
+// WITHOUT covers and therefore has to re-render -- and with nothing durable to re-render from it
+// silently re-packed a fresh NATURAL book and printed that. TD-214.
+// What is stored is the composed body PLUS the run-scoped moves and grows that produced it, gzipped
+// into R2 beside the PDF. The moves matter as much as the body: without them a restored book cannot
+// be edited further, because the next apply re-packs from natural and replays a move store that is
+// empty. Everything downstream -- print interior, publish to library, restore after a restart --
+// rebuilds the exact book the reader approved.
+var APPROVED_STATE_VERSION = 1;
+async function approvedStateSave(campaignId, arrange, state) {
+  var zlib = require('zlib');
+  var gz = zlib.gzipSync(Buffer.from(JSON.stringify(state), 'utf8'));
+  return await uploadFile(gz, 'approved-' + campaignId + '-' + arrange + '-' + Date.now() + '.json.gz', 'application/gzip', 'optimized');
+}
+async function approvedStateLoad(url) {
+  if (!url) return null;
+  var zlib = require('zlib');
+  var buf = await fetchFile(url);
+  if (!buf || !buf.length) return null;
+  var st = JSON.parse(zlib.gunzipSync(buf).toString('utf8'));
+  return (st && st.body) ? st : null;
+}
+// Read the approved state for one book+layout out of the same prefs row save-optimized writes, with
+// the same fork/chooser resolution. Returns null when nothing has been saved, and EVERY caller must
+// treat null as refuse -- never as permission to build a different book.
+async function approvedStateFor(req, campaignId, arrange) {
+  try {
+    var db = await getDb();
+    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
+    var chooser = req.session.userId || fork;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    var lo = prefs && prefs.lastOptimized && prefs.lastOptimized[arrange];
+    if (!lo || !lo.bodyUrl) return null;
+    var st = await approvedStateLoad(lo.bodyUrl);
+    if (st) { st.savedAt = lo.at || null; st.savedPages = lo.pages || 0; }
+    return st;
+  } catch (e) {
+    console.error('[approved-state] load failed for campaign ' + campaignId + ': ' + ((e && e.message) || e));
+    return null;
+  }
+}
 var _mzBands = null;
 
 // RUN-SCOPED image grow/scale state. Optimization changes (grows for magazine, shrinks for paired)
@@ -2492,6 +2536,7 @@ var _runGrowsCurrentKey = null;         // set at the top of each pack so band-b
 function runGrowsKey(campaignId, req) { return composedCacheKey(campaignId, req); }
 function runGrowsSetCurrent(k) { _runGrowsCurrentKey = k || null; }
 function runGrowsClear(k) { if (k) _runGrows.delete(k); }
+function runGrowsSetMap(k, g) { if (!k) return; _runGrows.set(k, { at: Date.now(), grows: Object.assign({}, g || {}) }); }   // v3.0.422 -- put a SAVED run back
 function runGrowsGetMap(k) {
   if (!k) return null;
   var v = _runGrows.get(k);
@@ -4083,33 +4128,53 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   // Paper is forced to white here as always: the physical cream stock supplies the warmth.
   // No token is charged -- the reader already paid to Optimize; printing must not re-charge.
   var html = null;
+  var _apprAt = null;   // v3.0.423 -- when the layout being printed was approved; returned to the client
   if (co && (co.arrange === 'magazine' || co.arrange === 'gazette' || co.arrange === 'paired')) {
+    // v3.0.422 -- THE PRINTED BOOK IS THE SAVED BOOK, OR THERE IS NO PRINTED BOOK. TD-214.
+    // This used to read the in-memory composed cache and, ON A MISS, quietly re-pack from NATURAL and
+    // print that: no optimize, no adjustments, a book the reader never saw. It missed constantly for
+    // two independent reasons -- the cache dies with the process, and the cache key carries bookTitle
+    // while printInteriorUrl always sends one and every writer of that cache sends none. So the miss
+    // branch was not an edge case; it was the normal path.
+    // The saved state is now the ONLY source. No saved layout means REFUSE. Silently printing a layout
+    // nobody approved is the worst outcome this code can produce, and it was the default.
+    req.query.nocover = '1';
+    var _appr = await approvedStateFor(req, req.params.campaignId, co.arrange);
+    if (!_appr || !_appr.body) {
+      return res.status(409).json({ error: 'optimize_required',
+        message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then order.' });
+    }
+    // Settings changed since the approval -- a different border, preset or paper produces a different
+    // book, and neither answer is safe to pick silently. Say so and send them back through Optimize.
+    if ((_appr.co || '') !== (req.query.co || '')) {
+      try { console.warn('[print-interior] settings differ from the approved layout. approved co: ' + (_appr.co || '(none)') + ' | requested co: ' + (req.query.co || '(none)')); } catch (e) {}
+      return res.status(409).json({ error: 'layout_changed',
+        message: 'The book settings have changed since this layout was saved. Open the Optimize tab, run Optimize again and Save, then order.' });
+    }
     try {
-      var _pco = Object.assign({}, co, { paper: 'white' });
-      var _extra = { paper: 'white', arrange: co.arrange };
-      req.query.nocover = '1';
-      var _hit = composedCacheGet(req.params.campaignId, req);
-      if (_hit && _hit.arrange === co.arrange && _hit.body) {
-        // Optimize already measured, packed and composed this exact book -- reuse it verbatim so the
-        // interior is byte-identical to the After pane and no measure pass runs again.
-        _extra.campaignName = _hit.campaignName || '';
-        _extra.packComposedBody = _hit.body;
-      } else if (co.arrange === 'paired') {
-        var _packP = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
-        _pco.campaignName = (_packP.campaign && _packP.campaign.name) || '';
-        _extra.campaignName = _pco.campaignName;
-        _extra.packComposedBody = composeBook(_packP.plan, _packP.beats, _pco);
-      } else {
-        var _packM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
-        _pco.campaignName = (_packM.campaign && _packM.campaign.name) || '';
-        _extra.campaignName = _pco.campaignName;
-        _extra.packComposedBody = composeMagazine(_packM.plan, _packM.bands, _pco);
-      }
-      var _builtP = await assembleNovelHtml(req, req.params.campaignId, null, _extra);
+      var _builtP = await assembleNovelHtml(req, req.params.campaignId, null,
+        { paper: 'white', arrange: co.arrange, campaignName: _appr.campaignName || '', packComposedBody: _appr.body });
       html = _builtP && _builtP.html;
+      // v3.0.423 -- SAY WHICH BOOK THIS IS, AND WHEN IT WAS APPROVED. v3.0.422 logged both refusal
+      // paths and neither success path, so the one route being debugged had no way to report what it
+      // did. The timestamp is the whole diagnostic: if the printed book is stale, this line says
+      // whether print served the wrong layout or whether the SAVE never landed, which are different
+      // faults with different fixes and were guessed at twice.
+      _apprAt = _appr.savedAt || null;
+      try {
+        console.log('[print-interior] proc ' + PROC_ID + ' up ' + Math.round(process.uptime()) + 's rebuilt the approved '
+          + co.arrange + ' layout for campaign ' + req.params.campaignId + ', saved at ' + (_apprAt || 'unknown')
+          + ', ' + ((_appr.moves || []).length) + ' recorded move(s)');
+      } catch (e) {}
     } catch (e) {
-      console.error('[print-interior] composed build failed, falling back to flow render:', (e && e.message) || e);
+      console.error('[print-interior] rebuild of the approved layout failed:', (e && e.message) || e);
       html = null;
+    }
+    // Deliberately NOT falling through to the flow render below: that is a different book, and the
+    // whole point of this route is that it can only ever produce the approved one.
+    if (!html) {
+      return res.status(500).json({ error: 'approved_rebuild_failed',
+        message: 'The saved layout could not be rebuilt for print. Please re-run Optimize, Save, and try again.' });
     }
   }
   // Fallback: any layout without a composer (or a compose failure) prints the flow render as before.
@@ -4162,7 +4227,8 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     // bytes Lulu will read, because the cover spine is derived from it.
     var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
     var pages = await pdfPageCount(pdfBuffer);
-    return res.json({ url: url, bytes: pdfBuffer.length, pages: pages });
+    // v3.0.423 -- approvedAt lets the Order tab name the version it is about to print.
+    return res.json({ url: url, bytes: pdfBuffer.length, pages: pages, approvedAt: _apprAt });
   } catch (e) {
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
@@ -4547,17 +4613,27 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // v3.0.341 -- same rule for the optimized book: the library gets the covers. See above.
     req.query.publicMode = '1';
     if (bookTitle) req.query.bookTitle = bookTitle;
-    var _pubHit = composedCacheGet(req.params.campaignId, req);
-    if (!(_pubHit && _pubHit.body)) {
-      return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize on this book first, then publish the optimized layout.' });
+    // v3.0.422 -- THE PUBLISHED BOOK IS THE SAVED BOOK. Same change as print-interior, same reason.
+    // This read the in-memory composed cache, and it wrote bookTitle into req.query on the line ABOVE
+    // the lookup -- while composedCacheKey includes bookTitle and every writer of that cache sends
+    // none. That is byte-for-byte the fault save-optimized fixed for itself and left live here, so
+    // publishing an optimized book with a title 409d Run Optimize first on a book already optimized.
+    var _pubArr = (co && co.arrange) ? co.arrange : 'magazine';
+    var _pubSt = await approvedStateFor(req, req.params.campaignId, _pubArr);
+    if (!_pubSt || !_pubSt.body) {
+      return res.status(409).json({ error: 'optimize_required', message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then publish.' });
+    }
+    if ((_pubSt.co || '') !== (req.query.co || '')) {
+      try { console.warn('[publish-story] settings differ from the approved layout. approved co: ' + (_pubSt.co || '(none)') + ' | requested co: ' + (req.query.co || '(none)')); } catch (e) {}
+      return res.status(409).json({ error: 'layout_changed', message: 'The book settings have changed since this layout was saved. Open the Optimize tab, run Optimize again and Save, then publish.' });
     }
     try {
       var _pubBuilt = await assembleNovelHtml(req, req.params.campaignId, null, {
-        arrange: _pubHit.arrange, packComposedBody: _pubHit.body, campaignName: _pubHit.campaignName || ''
+        arrange: _pubSt.arrange || _pubArr, packComposedBody: _pubSt.body, campaignName: _pubSt.campaignName || ''
       });
       html = _pubBuilt && _pubBuilt.html;
     } catch (e) {
-      console.error('[publish-story] composed build failed:', (e && e.message) || e);
+      console.error('[publish-story] rebuild of the approved layout failed:', (e && e.message) || e);
       html = null;
     }
     if (!html) return res.status(500).json({ error: 'Could not build the optimized layout. Re-run Optimize and try again.' });
@@ -4980,6 +5056,7 @@ function runMovesAdd(k, rec) {
   v.moves.push(rec); v.at = Date.now();
 }
 function runMovesClear(k) { if (k) _runMoves.delete(k); }
+function runMovesSet(k, list) { if (!k) return; _runMoves.set(k, { at: Date.now(), moves: (list || []).slice() }); }   // v3.0.422 -- put a SAVED run back
 // v3.0.374 -- REFUSALS, REMEMBERED FOR THE REST OF THE RUN.
 // Nothing told the model that an op had been refused, so it proposed the same impossible ones on
 // every pass and the user paid for every one. Measured 2026-08-02 across five books:
@@ -8987,7 +9064,7 @@ router.post('/layout-apply/:campaignId', requireAuth, async function (req, res) 
         _planTxtM = magazinePlanText({ dbg: _dbgM });
       } catch (e) { _planTxtM = null; console.error('magazine composed plan text failed:', e && e.message); }
       composedCachePut(req.params.campaignId, req, _cco.arrange, mBody, mName, _planTxtM);
-      try { console.log('[layout-apply] proc ' + PROC_ID + ' cached the composed magazine book; the cache now holds ' + _composedCache.size + ' entr(ies)'); } catch (e) {}
+      try { console.log('[layout-apply] proc ' + PROC_ID + ' up ' + Math.round(process.uptime()) + 's cached the composed magazine book; the cache now holds ' + _composedCache.size + ' entr(ies)'); } catch (e) {}
       var mBuilt = await assembleNovelHtml(req, req.params.campaignId, null, { arrange: _cco.arrange, packComposedBody: mBody });
       if (req.query.pane === '1') mBuilt.html = paneSafeHtml(mBuilt.html);
       var mPdf = await renderHtmlToPdf(mBuilt.html, {});
@@ -9739,7 +9816,10 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
         // v3.0.421 -- log the key the lookup ACTUALLY used. bookTitle is written into req.query on
         // the line above, so this printed a key with the title in it while the lookup used one
         // without -- a diagnostic that misreported the very thing it exists to report.
-        console.warn('[save-optimized] proc ' + PROC_ID + ' 409 optimize_required. looked for key: ' + _lookKey
+        // v3.0.423 -- UPTIME SEPARATES A SECOND REPLICA FROM A RESTART. PROC_ID alone cannot: a
+        // Railway deploy or an OOM mid-session gives a new id just as surely as a second instance
+        // does. A small uptime here means this process was born after the write.
+        console.warn('[save-optimized] proc ' + PROC_ID + ' up ' + Math.round(process.uptime()) + 's 409 optimize_required. looked for key: ' + _lookKey
           + ' | held: ' + (Array.from(_composedCache.keys()).join(' , ') || '(nothing -- the cache is EMPTY)'));
       } catch (e) {}
       return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize first.' });
@@ -9763,6 +9843,23 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     var _flatO = { flattened: false, buffer: pdfBuffer };
     if (!_quick) { _flatO = await flattenPdf(pdfBuffer, 'optimized'); pdfBuffer = _flatO.buffer; }
     var _bytesO = pdfBuffer.length;
+    // v3.0.422 -- STORE THE LAYOUT BESIDE THE PDF, on BOTH saves: the protective one taken the
+    // instant the loop ends AND the manual Save this Version, because either can be the last save
+    // a book ever gets. The run key is _lookKey -- the key captured BEFORE bookTitle was written
+    // into req.query -- which is what the run stores are actually keyed under.
+    // Stored FIRST, so a failure here costs an orphan object rather than a prefs row whose PDF and
+    // layout describe different books. That disagreement is exactly what TD-214 was.
+    var _stUrl = null;
+    try {
+      _stUrl = await approvedStateSave(campaignId, arrange, {
+        v: APPROVED_STATE_VERSION, arrange: arrange, layout: req.query.layout || '', co: req.query.co || '',
+        campaignName: hit.campaignName || '', body: hit.body, planText: hit.planText || null,
+        moves: runMovesGet(_lookKey) || [], grows: runGrowsGetMap(_lookKey) || {}
+      });
+    } catch (e) { console.error('[save-optimized] layout store failed: ' + ((e && e.message) || e)); _stUrl = null; }
+    if (!_stUrl) {
+      return res.status(502).json({ error: 'layout_store_failed', message: 'The layout could not be stored, so nothing was saved. Please try Save again.' });
+    }
     var pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'optimized');
 
     var db = await getDb();
@@ -9772,12 +9869,17 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     var lastOpt = (prev && prev.lastOptimized && typeof prev.lastOptimized === 'object') ? Object.assign({}, prev.lastOptimized) : {};
     // Best-effort cleanup of the PREVIOUS optimized PDF for THIS layout (avoid orphan accumulation in R2).
     try { if (lastOpt[arrange] && lastOpt[arrange].pdfUrl && lastOpt[arrange].pdfUrl !== pdfUrl) await deleteFile(lastOpt[arrange].pdfUrl); } catch (e) {}
-    lastOpt[arrange] = { pdfUrl: pdfUrl, at: new Date().toISOString(), pages: pages, bookTitle: bookTitle || '' };
+    // v3.0.422 -- the previous layout object goes with the previous PDF, same best-effort rule.
+    try { if (lastOpt[arrange] && lastOpt[arrange].bodyUrl && lastOpt[arrange].bodyUrl !== _stUrl) await deleteFile(lastOpt[arrange].bodyUrl); } catch (e) {}
+    // bodyUrl is the approved LAYOUT; co is the settings it was approved under, so a downstream
+    // route can tell a stale approval from a current one instead of printing either blind.
+    lastOpt[arrange] = { pdfUrl: pdfUrl, at: new Date().toISOString(), pages: pages, bookTitle: bookTitle || '',
+                         bodyUrl: _stUrl, co: req.query.co || '', layout: req.query.layout || '' };
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt });
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
     // bundle. The user-facing line stays generic; the bundle gets the numbers.
     return res.json({ ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at,
-      flattened: !!_flatO.flattened, quickSave: _quick, bytes: _bytesO });
+      flattened: !!_flatO.flattened, quickSave: _quick, bytes: _bytesO, layoutSaved: true });
   } catch (e) {
     console.error('[save-optimized] failed:', e && e.message ? e.message : e);
     log500('save-optimized', req, e);
@@ -9824,10 +9926,46 @@ router.get('/last-optimized/:campaignId', requireAuth, async function (req, res)
     var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
     var lastOpt = prefs && prefs.lastOptimized && prefs.lastOptimized[arrange];
     if (!lastOpt || !lastOpt.pdfUrl) return res.json({ found: false });
-    return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null });
+    // v3.0.422 -- hasLayout tells the client whether the SAVED LAYOUT is there too, so Load Last
+    // Optimized File can pull both and say plainly when a pre-v3.0.422 save has only the PDF.
+    return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null,
+      hasLayout: !!lastOpt.bodyUrl, layoutStale: !!(lastOpt.bodyUrl && (lastOpt.co || '') !== (req.query.co || '')) });
   } catch (e) {
     log500('last-optimized', req, e);
     return res.status(500).json({ error: (e && e.message) || 'last-optimized failed' });
+  }
+});
+// v3.0.422 -- PULL BOTH. Load Last Optimized File fetches the saved PDF for the pane; this fetches
+// the saved LAYOUT and puts it back into THIS process, so the composed cache and the run stores hold
+// the approved book again.
+// Without it a restart leaves the PDF loadable and the layout gone, and the next Edit would re-pack
+// from NATURAL, replay an empty move store, and quietly discard every adjustment already made -- and
+// then the Save would overwrite the good book with the worse one. Restoring the moves is what makes
+// a loaded book editable rather than merely viewable.
+router.post('/restore-optimized/:campaignId', requireAuth, async function (req, res) {
+  try {
+    var campaignId = req.params.campaignId;
+    var arrange = req.query.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
+    var st = await approvedStateFor(req, campaignId, arrange);
+    if (!st) return res.json({ ok: false, restored: false, reason: 'no_saved_layout' });
+    if ((st.co || '') !== (req.query.co || '')) {
+      try { console.warn('[restore-optimized] settings differ from the approved layout. approved co: ' + (st.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
+      return res.json({ ok: false, restored: false, reason: 'settings_changed' });
+    }
+    var _k = composedCacheKey(campaignId, req);
+    composedCachePut(campaignId, req, st.arrange || arrange, st.body, st.campaignName || '', st.planText || null);
+    try { runMovesSet(_k, st.moves || []); } catch (e) {}
+    try { runGrowsSetMap(_k, st.grows || {}); } catch (e) {}
+    try {
+      console.log('[restore-optimized] proc ' + PROC_ID + ' restored the approved ' + (st.arrange || arrange)
+        + ' layout for campaign ' + campaignId + ' (' + ((st.moves || []).length) + ' recorded move(s)); the cache now holds '
+        + _composedCache.size + ' entr(ies)');
+    } catch (e) {}
+    return res.json({ ok: true, restored: true, arrange: st.arrange || arrange, at: st.savedAt || null,
+      pages: st.savedPages || 0, moves: (st.moves || []).length });
+  } catch (e) {
+    log500('restore-optimized', req, e);
+    return res.status(500).json({ error: (e && e.message) || 'restore-optimized failed' });
   }
 });
 
