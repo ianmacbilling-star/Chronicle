@@ -17559,11 +17559,21 @@ function finalizeRenderWidth(container) {
 var _pdfRenderTokens = {};
 // Whole-book white-space score from per-page ink-fill %. Average the interior pages (skip the
 // front/back cover, which are non-content) and return 100 - avgFill so higher = more white.
+// v3.0.438 -- AVERAGE THE CONTENT PAGES, NOT THE WHOLE FILE.
+// This excluded only the first and last page, so the title, contents and cast pages were averaged
+// in -- and they are near-empty by design. On The ANOMALIES that is 4 sparse pages against 12
+// content pages, which drags a book measuring 92 percent in the diagnostics bundle down to the low
+// seventies before the metric is even considered. The bundle averages content pages alone, which is
+// why the two numbers never agreed.
+// finalizeIsContentPage already encodes this and is already trusted by the underfull flagging --
+// it skips the front matter (cover? + title + details + cast? + toc?) and the trailing back cover.
+// Reused rather than re-derived, so the label and the flags can never disagree about which pages
+// count as the book.
 function finalizeWhitePct(fills, total) {
   var vals = [];
   Object.keys(fills || {}).forEach(function (k) {
     var pn = parseInt(k, 10);
-    if (pn === 1 || pn === total) return;   // exclude covers
+    if (!finalizeIsContentPage(pn, total)) return;   // front matter and the back cover are not the book
     if (typeof fills[k] === 'number') vals.push(fills[k]);
   });
   if (!vals.length) return null;
@@ -17716,7 +17726,10 @@ function renderPdfInto(url, containerId, isBefore) {
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
         else { finalizeBuildAfterNav(first, last); finalizeApplyAfterZoom(); }   // user-view right spine + zoom follow the After render
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();
-        var _fpct = finalizeFillPct(isBefore ? _finalizeFills : _finalizeAfterFills, total);
+        // v3.0.438 -- THIS is the label the reader looks at, and v3.0.437 changed the wrong one.
+        // The two delta readouts were switched to the height metric; this per-pane page count was
+        // left on the ink maps, so the number on screen never moved. Ian: still 63 percent.
+        var _fpct = finalizeFillPct(isBefore ? _finalizeHeights : _finalizeAfterHeights, total);
         var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
         if (_wcnt) _wcnt.innerHTML = finalizeCountLabel(total, _fpct);
         // Admin: double-click the BEFORE page count for the flow-plan text dump (mirrors the After).
