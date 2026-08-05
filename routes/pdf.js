@@ -4557,7 +4557,11 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
       var fname = 'cover-' + campaign.id + '-' + Date.now() + '.pdf';
       // v3.0.384 -- already flattened above, for every path.
       var url = await uploadFile(pdfBuffer, fname, 'application/pdf', 'print');
-      return res.json({ url: url, bytes: pdfBuffer.length, widthIn: dims.widthIn, heightIn: dims.heightIn });
+      // v3.0.429 -- SAY WHERE THESE DIMENSIONS CAME FROM. A cover sized by the local estimate is a
+    // cover Lulu may reject, and until now that warning went to the SERVER LOG ONLY -- so a guessed
+    // spine was indistinguishable, from the reader side, from a correct one. The client blocks the
+    // order on this rather than shipping a book whose cover does not fit it.
+    return res.json({ url: url, bytes: pdfBuffer.length, widthIn: dims.widthIn, heightIn: dims.heightIn, dimsSource: (dims.source || 'unknown') });
     } catch (e) {
       console.error('[print-cover] upload failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Cover upload failed', detail: friendlyError(e, '') });

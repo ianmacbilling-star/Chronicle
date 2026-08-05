@@ -286,11 +286,16 @@ class LuluProvider extends PrintProvider {
   // Full-wrap cover dimensions (back + spine + front, including bleed) for a
   // spec + interior page count. Lulu derives the spine width from page count +
   // paper, and the casewrap allowance for hardcover. Normalized to inches.
-  // NOTE: written to Lulu's documented shape; CONFIRM against the sandbox.
+  // v3.0.429 -- THE v3.0.376 NOTE BELOW WAS TWO-THIRDS WRONG, AND IT COST A FORTNIGHT.
+  // It was written to Lulu's DOCUMENTED shape and never confirmed against a live call -- the note
+  // said so itself, and nobody did it. The path change was right; the other two broke the request:
+  //   path   '/print-job-cover-dimensions/'  ->  '/cover-dimensions/'   CORRECT
+  //   field  interior_page_count             ->  page_count            WRONG, reverted in .429
+  //   unit   'in'                            ->  'IN'                  WRONG, reverted in .429
+  // So this call 404d before .376 and 400d after it, and has NEVER returned a real dimension. The
+  // one-shot success log in resolveCoverDims is the proof: it has never fired. Do not change a field
+  // on this request again without a [cover-dims] success line to show for it.
   // v3.0.376 -- THREE THINGS WERE WRONG AND NOTHING CALLED IT.
-  //   path   '/print-job-cover-dimensions/'  ->  '/cover-dimensions/'
-  //   field  interior_page_count             ->  page_count
-  //   unit   'in'                            ->  'IN'
   // Meanwhile computeCoverDims in routes/pdf.js kept guessing the geometry, and the
   // guess was wrong: Lulu wants 19.00 x 12.75in for a 64-page 8.5x11 casewrap and we
   // produced 18.78 x 12.50, so every hardcover order was rejected on dimensions.
@@ -305,10 +310,18 @@ class LuluProvider extends PrintProvider {
     const sku = this._packageId(spec);
     const raw = await this._fetch('/cover-dimensions/', {
       method: 'POST',
+      // v3.0.429 -- WHAT LULU ACTUALLY ASKS FOR. This call has NEVER succeeded: before v3.0.376 the
+      // path was wrong (404), and v3.0.376 fixed the path while changing two fields that were right
+      // into two that are rejected (400). Lulu names both in its own error:
+      //     {"interior_page_count":["This field is required."],"unit":["\"IN\" is not a valid choice."]}
+      // Every cover shipped so far was sized by the LOCAL ESTIMATE, and the fallback warning went to
+      // the server log only, so nothing surfaced it. interior_page_count is sent alongside page_count
+      // rather than instead of it: an unrecognised field is ignored, a missing required one is a 400.
       body: {
         pod_package_id: sku,
+        interior_page_count: pageCount,
         page_count: pageCount,
-        unit: 'IN',
+        unit: 'in',
       },
     });
     let w = Number(raw.width != null ? raw.width : raw.width_in);
@@ -331,7 +344,9 @@ class LuluProvider extends PrintProvider {
   async validateCover(spec, pageCount, coverUrl) {
     return this._fetch('/validate-cover/', {
       method: 'POST',
-      body: { pod_package_id: this._packageId(spec), page_count: pageCount, source_url: coverUrl },
+      // v3.0.429 -- same field as cover-dimensions, for the same reason. This check has probably
+      // never run either.
+      body: { pod_package_id: this._packageId(spec), interior_page_count: pageCount, page_count: pageCount, source_url: coverUrl },
     });
   }
   async getCoverValidation(id) {

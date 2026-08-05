@@ -13232,6 +13232,19 @@ function reviewPrintOrder() {
         throw new Error(res.j && res.j.error ? res.j.error : 'Could not build the cover file.');
       }
       printProgress(72);
+      // v3.0.429 -- A GUESSED COVER MUST NOT REACH AN ORDER.
+      // resolveCoverDims asks Lulu for the exact sheet size and falls back to a local estimate when
+      // that call fails. The estimate has been wrong before -- 18.78 x 12.50 where Lulu wanted
+      // 19.00 x 12.75 -- and a wrong spine is a rejected order or a book whose cover does not line
+      // up. The warning used to go only to the server log, so nothing on this screen could tell the
+      // two apart. Stopping here is the honest outcome: the file exists, it just cannot be trusted.
+      // FAIL SAFE, not fail open: block unless the source is EXPLICITLY Lulu. Written the other way
+      // round first, and a missing field would then have silently re-opened the very hole this
+      // closes. resolveCoverDims always sets it and the route defaults it, so there is no third
+      // state to be lenient about.
+      if (res.j.dimsSource !== 'lulu' && res.j.dimsSource !== 'lulu-cached') {
+        throw new Error('The printer could not confirm the cover size for this book, so the cover was built from an estimate and may be rejected. Please try again in a few minutes, and let us know if it keeps happening.');
+      }
       preparedCoverUrl = res.j.url;
       return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });

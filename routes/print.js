@@ -57,20 +57,27 @@ function applyPrintMarkup(totalCost, printCost, pct) {
 // folded into the print line so the breakdown still adds up exactly, and logged so it cannot hide.
 function markedCharge(quote, pct) {
   var r2 = function (n) { return Math.round(Number(n || 0) * 100) / 100; };
-  var printBase = Number(quote.printCostExclTax != null ? quote.printCostExclTax : quote.printCost) || 0;
   var shipping = r2(quote.shippingCostExclTax != null ? quote.shippingCostExclTax : quote.shippingCost);
   var tax = r2(quote.taxCost);
   var providerTotal = Number(quote.totalCost || 0);
-  var customerCharge = r2(providerTotal + printBase * (Number(pct || 0) / 100));
-  var printMarked = r2(printBase * (1 + Number(pct || 0) / 100));
-  // Anything in Lulu's total that is not print, shipping or tax rides on the print line.
+  var totalExcl = Number(quote.totalCostExclTax != null ? quote.totalCostExclTax : (providerTotal - tax)) || 0;
+  // v3.0.429 -- THE MARKUP BASE IS EVERYTHING THAT IS NOT SHIPPING AND NOT TAX.
+  // A real Lulu quote came back as 8.59 print + 5.69 shipping + 1.20 tax against a total of 16.23:
+  // 0.75 unaccounted, which is a provider fee we do not read as its own field. v3.0.425 folded that
+  // residual onto the print line at cost. Ian, 2026-08-05: the fee is just part of the price, nobody
+  // cares about a separate line, and the markup should apply to it too.
+  // Deriving the base from the TOTAL rather than adding up the parts means an unread fee can never
+  // again sit outside the markup, whatever Lulu adds next. Shipping still passes at cost, and tax is
+  // never marked up -- that was the whole point of v3.0.425.
+  var markupBase = r2(totalExcl - shipping);
+  if (!(markupBase > 0)) markupBase = r2(quote.printCostExclTax != null ? quote.printCostExclTax : quote.printCost);
+  var customerCharge = r2(providerTotal + markupBase * (Number(pct || 0) / 100));
+  var printMarked = r2(markupBase * (1 + Number(pct || 0) / 100));
+  // Rounding only: the three displayed lines must add up to the charge exactly.
   var residual = r2(customerCharge - (printMarked + shipping + tax));
-  if (Math.abs(residual) >= 0.01) {
-    try { console.warn('[print-quote] Lulu total ' + providerTotal + ' does not equal print ' + printBase + ' + shipping ' + shipping + ' + tax ' + tax + ' -- ' + residual + ' folded into the print line'); } catch (e) {}
-    printMarked = r2(printMarked + residual);
-  }
+  if (residual !== 0) printMarked = r2(printMarked + residual);
   return {
-    printAtCost: r2(printBase),
+    printAtCost: r2(markupBase),
     printMarked: printMarked,
     shipping: shipping,
     tax: tax,
@@ -85,6 +92,7 @@ function logQuoteTax(where, quote, m) {
   try {
     console.log('[print-quote] ' + where + ': print ' + Number(quote.printCostExclTax || 0).toFixed(2)
       + ' + shipping ' + Number(quote.shippingCostExclTax || 0).toFixed(2)
+      + ' + fees ' + (Number(quote.totalCostExclTax || 0) - Number(quote.printCostExclTax || 0) - Number(quote.shippingCostExclTax || 0)).toFixed(2)
       + ' + tax ' + Number(quote.taxCost || 0).toFixed(2)
       + ' = Lulu total ' + Number(quote.totalCost || 0).toFixed(2)
       + ' ' + (quote.currency || 'USD') + '; customer charged ' + Number(m.customerCharge || 0).toFixed(2)
