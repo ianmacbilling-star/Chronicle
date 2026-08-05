@@ -9822,10 +9822,102 @@ async function collapseThinPairedPages(req, campaignId, plan, beats, pco) {
 // which never had a gate, so a non-admin was already paying for a run this route refused to
 // finish. Campaign ownership is scoped inside computePairedPack, the same way the ungated
 // pack-render route has always relied on -- removing requireAdmin opens no new surface.
+// v3.0.428 -- THE MAGAZINE HALF OF THE FINAL FILL (TD-220).
+// Same sweep, same guarantees: measure the whole book, grow the picture on a page into the room
+// page actually has, measure once more, and revert only the pages that overshot. A page can improve
+// or stay as it was; it cannot get worse.
+// The cell rules mirror mGrowCellIdx in layout-apply and MUST be kept in step with it -- notably
+// that a TOWER is never grown (v3.0.271: a tower is already page height, and growing one back undoes
+// a shrink that fixed a clip). Deliberately a second copy rather than a shared edit, because the
+// original is inside the Optimizer apply path and this batch is not touching that.
+function mzFillCellIdxs(pgCells, bands) {
+  var out = [];
+  for (var ci = 0; ci < pgCells.length; ci++) {
+    var c = pgCells[ci], bb = bands[c.band];
+    if (!bb || !bb.remeta || !(bb.sImgH > 0)) continue;
+    if (c.textLead || c.towerLead) continue;
+    if (c.split && (c.cStart || 0) > 0 && !c.imgBody) continue;
+    if (bb.kind === 'tower') continue;   // towers shrink only -- see v3.0.271
+    out.push(ci);
+  }
+  return out;
+}
+async function magazineFinalFill(req, res, _cco) {
+  var campaignId = req.params.campaignId;
+  var packedM = await computeMagazinePack(req, campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
+  var mplan = packedM && packedM.plan, mbands = packedM && packedM.bands;
+  if (!mplan || !mplan.pages) return res.status(500).json({ error: 'no plan' });
+  var _mco = Object.assign({}, _cco);
+  _mco.campaignName = (packedM.campaign && packedM.campaign.name) || '';
+  var adapter = {
+    pageCount: function () { return mplan.pages.length; },
+    pictures: function (pi) {
+      var pgc = mplan.pages[pi];
+      if (!pgc) return [];
+      // EVERY growable cell, not just the first. finalFillPass skips a page holding more than one,
+      // and that guard only works if it can see all of them -- handing it one picture off a page of
+      // two would silently make Magazine more aggressive than Picture Book on exactly the pages the
+      // rule exists to protect.
+      return mzFillCellIdxs(pgc, mbands).map(function (ci) {
+        var c = pgc[ci], bb = mbands[c.band];
+        var cur = (c.growMul != null) ? c.growMul : 1;
+        return { _pi: pi, _ci: ci, scale: cur, fullH: bb.sImgH, over: 0,
+                 capMul: (bb.cropMax > 0 ? bb.cropMax : 1) };
+      });
+    },
+    setScale: function (pic, mul) {
+      var pgc = mplan.pages[pic._pi];
+      pgc[pic._ci] = Object.assign({}, pgc[pic._ci], { growMul: Math.round(mul * 1000) / 1000 });
+      pic.scale = mul;
+    },
+    measure: function () { return remeasureComposedPages(req, campaignId, mplan.pages, mbands); }
+  };
+  var r = await finalFillPass(adapter, CO_CLIP_BOX_IN, CO_CLIP_ACCEPT_TOL);
+  if (r.grown) {
+    // Record the grows for the rest of the run, exactly as the apply route does, so the next pack
+    // reproduces the filled book rather than starting from natural again.
+    try {
+      var _seen = {};
+      for (var pi = 0; pi < mplan.pages.length; pi++) {
+        var pg = mplan.pages[pi];
+        for (var ci = 0; ci < pg.length; ci++) {
+          var c = pg[ci], bb = mbands[c.band];
+          if (!bb || bb.momId == null || !(bb.sImgH > 0)) continue;
+          if (c.textLead || c.towerLead) continue;
+          if (c.split && (c.cStart || 0) > 0 && !c.imgBody) continue;
+          if (_seen[bb.momId]) continue;
+          _seen[bb.momId] = true;
+          var _gm = c.growMul || 1;
+          if (!(_gm > 1.01) && !(_gm < 0.99)) { runGrowsPut(bb.momId, 1); continue; }
+          runGrowsPut(bb.momId, _gm);
+        }
+      }
+    } catch (e) { console.error('magazine fill run-store pass failed:', e && e.message); }
+    // Re-compose so the cached body IS the filled book. Only on a real change: overwriting the cache
+    // when nothing grew would replace an entry that carries its plan text with one that does not,
+    // and the diagnostics bundle reads that text.
+    try {
+      var body = composeMagazine(mplan, mbands, _mco);
+      composedCachePut(campaignId, req, _cco.arrange, body, _mco.campaignName, null);
+    } catch (e) { console.error('magazine fill re-compose failed:', e && e.message); }
+    try { console.log('[final-fill] magazine campaign ' + campaignId + ': grew ' + r.grown + ' picture(s), reverted ' + r.reverted + ', gained ' + r.gained + 'in'); } catch (e) {}
+  }
+  return res.json({ ok: true, grown: r.grown, reverted: r.reverted, gained: r.gained,
+    collapsed: 0, collapseNotes: [], collapseReverted: false });
+}
 router.post('/layout-fill/:campaignId', requireAuth, async function (req, res) {
   try {
     var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
-    if (_cco.arrange !== 'paired') return res.json({ ok: true, skipped: 'only the paired layout is wired up so far', grown: 0 });
+    // v3.0.428 -- MAGAZINE GETS THE FINAL FILL TOO. TD-220.
+    // This returned early for every layout but paired, so no Magazine book has ever had the last
+    // sweep and every Magazine page finished with whatever white was left on it. Ian: there is not
+    // much to gain, but the two layouts should behave the same way.
+    // finalFillPass is UNCHANGED -- Magazine plugs in by supplying its own adapter, which is what the
+    // function was written for and what its own comment asks any new layout to do.
+    if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
+      return await magazineFinalFill(req, res, _cco);
+    }
+    if (_cco.arrange !== 'paired') return res.json({ ok: true, skipped: 'this layout has no composer, so there is nothing to fill', grown: 0 });
     var packed = await computePairedPack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
     var plan = packed && packed.plan, beats = packed && packed.beats;
     if (!plan || !plan.pages) return res.status(500).json({ error: 'no plan' });
