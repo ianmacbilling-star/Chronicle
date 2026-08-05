@@ -11690,10 +11690,13 @@ function loadSessionForks(sessionId) {
       var shownId = state.currentForkId || (sel && sel.value) || (dmFork && dmFork.fork_id);
       var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
       if (verMenu) verMenu.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
-      // v3.0.446 -- the canonical cannot be deleted (sessions.js refuses it), so do not offer it.
-      // Rename stays: naming your canonical version is useful and allowed.
+      // v3.0.448 -- DELETE IS ALWAYS OFFERED ON A VERSION YOU OWN. Ian: it needs to still be there
+      // and delete the version we are on.
+      // v3.0.446 hid it on the canonical because the server refuses to delete that one -- my own
+      // addition, unasked, and it took the button away in the one place it was being looked for. The
+      // canonical case is now EXPLAINED at the point of use instead of the control disappearing.
       var delItem = document.getElementById('delete-version-item');
-      if (delItem) delItem.style.display = (shownFork && shownFork.role !== 'dm') ? '' : 'none';
+      if (delItem) delItem.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
       // Phase 4 - default a player onto their OWN version of this session
       // when they have one. The Story Master (and players with no version)
       // stay on the canonical. Only applies on a fresh load (currentForkId
@@ -11933,6 +11936,12 @@ async function deleteMyVersion() {
   // v3.0.442 -- myForkId now follows the SELECTED version, so this deletes the one on screen.
   // Named, because with several versions "your version" no longer identifies anything.
   var _dv = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(state.myForkId); })[0];
+  // v3.0.448 -- the canonical IS the session; deleting it would leave every other version pointing at
+  // nothing, which is why the server refuses. Say so here rather than let a generic error come back.
+  if (_dv && _dv.role === 'dm') {
+    showAlert('This is the original version of the session, so it cannot be deleted -- everything else is built from it. You can rename it, or delete one of your other versions.');
+    return;
+  }
   var _dvName = (_dv && _dv.name) ? ('\u201c' + _dv.name + '\u201d') : 'this version';
   if (!await uiConfirm('Delete ' + _dvName + ' of this session? Its pictures and story go with it. This cannot be undone.')) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + state.myForkId, { method: 'DELETE' })
