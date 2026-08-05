@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
-const { getDb, getOrCreateDmFork, getDmForkId } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
@@ -30,14 +30,20 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // session notes, or the player's per-version fork notes).
   const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
   if (!callerRole) return res.status(403).json({ error: 'Access denied' });
-  let targetForkId;
-  if (callerRole === 'dm') {
+  // v3.0.445 -- EXTRACT INTO THE VERSION ON SCREEN (TD-194). Resolve the version first, then let it
+  // decide -- the canonical keeps the session's own notes, any other version uses its fork notes.
+  // Was: canonical if you are the Story Master, otherwise your FIRST version.
+  let targetForkId = await resolveActingFork(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
+  if (!targetForkId && requestedForkIdOf(req)) {
+    return res.status(403).json({ error: 'That version is not yours to extract into.' });
+  }
+  if (!targetForkId && callerRole === 'dm') {
     targetForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
-  } else {
-    const myFork = await db.prepare('SELECT id, fork_notes FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(session.id, req.session.userId);
-    if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
-    targetForkId = myFork.id;
-    session.session_notes = myFork.fork_notes || '';
+  }
+  if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
+  const actRow = await db.prepare('SELECT id, role, fork_notes FROM session_forks WHERE id = ?').get(targetForkId);
+  if (actRow && actRow.role !== 'dm') {
+    session.session_notes = actRow.fork_notes || '';
   }
 
   // Image locking — Generate Story re-extracts by DELETEing and rebuilding

@@ -1423,6 +1423,38 @@ async function getOrCreateDmFork(db, sessionId, dmUserId) {
 }
 
 // getDmForkId: id of the session's DM (canonical) fork, or null. Read-only.
+// v3.0.445 -- ONE RESOLVER FOR "WHICH VERSION AM I ACTING ON" (TD-194).
+// There were THREE copies of this -- sessions.js, narrative.js and a role branch inside images.js --
+// all written when a person could hold exactly one version of a session, and all answering the same
+// way: Story Master gets the canonical, player gets their own. With several versions that answer is
+// wrong in the same way three times over, and it was found three times over, one test cycle each.
+// The rule: the version named by the REQUEST, checked by OWNERSHIP against the fork row, which is
+// what Ian asked for -- the logged-in user id matched against the fork's user_id. A Story Master may
+// also act on the canonical even if they do not own that row, because the campaign role confers it
+// and the row can change hands on a handover.
+// Returns null when the caller asked for a version that is not theirs. Callers must treat null as
+// REFUSE, never as "fall back to something else" -- silently writing to a different version than the
+// one on screen is the whole failure this replaces.
+async function resolveActingFork(db, sessionId, userId, role, requestedForkId) {
+  if (requestedForkId) {
+    const want = await db.prepare('SELECT id, user_id, role FROM session_forks WHERE id = ? AND session_id = ?')
+      .get(requestedForkId, sessionId);
+    if (!want) return null;
+    if (String(want.user_id) === String(userId)) return want.id;
+    if (role === 'dm' && want.role === 'dm') return want.id;
+    return null;
+  }
+  if (role === 'dm') return await getDmForkId(db, sessionId);
+  const f = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC").get(sessionId, userId);
+  return f ? f.id : null;
+}
+// The version a request is about: ?fork_id= on a read, fork_id in the body on a write.
+function requestedForkIdOf(req) {
+  const q = req && req.query && req.query.fork_id;
+  const b = req && req.body && req.body.fork_id;
+  const v = (q != null && q !== '') ? q : ((b != null && b !== '') ? b : null);
+  return v ? Number(v) : null;
+}
 async function getDmForkId(db, sessionId) {
   const f = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND role = 'dm'").get(sessionId);
   return f ? f.id : null;
@@ -1546,4 +1578,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt };
+module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt };

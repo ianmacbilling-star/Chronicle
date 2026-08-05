@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
-const { getDb, getDmForkId } = require('../database/db');
+const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
 const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
@@ -1123,9 +1123,20 @@ router.post('/generate-all', requireAuth, async function(req, res) {
       return res.json({ error: 'STYLE_LOCKED', message: "That art style isn't available on your current plan. Pick another, or upgrade for more styles." });
     }
   }
-  let targetForkId;
-  if (myRole === 'dm') {
-    // DM always generates into the canonical (DM) fork - never a player's version.
+  // v3.0.445 -- GENERATE INTO THE VERSION ON SCREEN (TD-194).
+  // The old comment read "DM always generates into the canonical (DM) fork - never a player's
+  // version", and the intent behind it still stands: a Story Master must never write into somebody
+  // else's version. But it was expressed as "always the canonical", which with several versions per
+  // person means a Story Master pressing Generate on their OWN second version filled the canonical
+  // instead -- tokens spent, and the wrong book changed.
+  // The shared resolver keeps the protection (it refuses a version that is not yours) and drops the
+  // assumption. Null means refuse, never fall back.
+  let targetForkId = await resolveActingFork(db, session_id, req.session.userId, myRole, requestedForkIdOf(req));
+  if (!targetForkId && requestedForkIdOf(req)) {
+    return res.status(403).json({ error: 'That version is not yours to generate into.' });
+  }
+  if (targetForkId) { /* resolved from the request */ }
+  else if (myRole === 'dm') {
     targetForkId = await getDmForkId(db, session_id);
   } else {
     const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(session_id, req.session.userId);

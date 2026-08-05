@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -15,41 +15,12 @@ const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require
 // Phase 4 Step 3c — resolve which version the caller is acting on: the DM
 // acts on the canonical (DM) fork; a player acts on their OWN version.
 // Returns null if a player has no version of this session yet.
-async function callerForkId(db, sessionId, userId, role, requestedForkId) {
-  // v3.0.443 -- HONOUR THE VERSION THE READER IS LOOKING AT (TD-194).
-  // This ignored the requested fork entirely: a player always acted on their FIRST version, and a
-  // Story Master always acted on the CANONICAL one. With a single fork each that was the same thing.
-  // With several it is not -- a Story Master viewing their own second version had every read and
-  // write silently redirected to the canonical, so the art style and narrative style pickers on that
-  // version had nothing of their own to show. The v3.0.442 client fix could not help, because the
-  // decision was being made here.
-  // Ian: "should be able to tell by User logged in ID if it matches the User ID on the fork." That is
-  // exactly the test -- OWNERSHIP, checked against the row, not an inference from campaign role.
-  if (requestedForkId) {
-    const want = await db.prepare('SELECT id, user_id, role FROM session_forks WHERE id = ? AND session_id = ?')
-      .get(requestedForkId, sessionId);
-    if (want) {
-      // Your own version, whichever one it is.
-      if (String(want.user_id) === String(userId)) return want.id;
-      // A Story Master still acts on the canonical even when they do not personally own that row --
-      // it can change hands on a handover and the campaign role is what confers the right.
-      if (role === 'dm' && want.role === 'dm') return want.id;
-    }
-    // Asked for a version that is not yours: fall through rather than silently writing to a
-    // different one. The caller decides what a null means for its own endpoint.
-    return null;
-  }
-  if (role === 'dm') return await getDmForkId(db, sessionId);
-  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(sessionId, userId);
-  return f ? f.id : null;
+// v3.0.445 -- delegates to the ONE shared resolver in db.js. This was the first of three private
+// copies of the same rule; keeping a local wrapper only so the six call sites below read unchanged.
+async function callerForkId(db, sessionId, userId, role, requested) {
+  return await resolveActingFork(db, sessionId, userId, role, requested);
 }
-// The version the request is about: ?fork_id= on a GET, fork_id in the body on a write.
-function requestedForkId(req) {
-  const q = req.query && req.query.fork_id;
-  const b = req.body && req.body.fork_id;
-  const v = (q != null && q !== '') ? q : ((b != null && b !== '') ? b : null);
-  return v ? Number(v) : null;
-}
+function requestedForkId(req) { return requestedForkIdOf(req); }
 
 router.get('/last-style', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();

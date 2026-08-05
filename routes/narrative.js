@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId } = require('../database/db');
+const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getEffectiveTier, tierRank, accessRank, narrativeStyleAllowed } = require('../middleware/tiers');
 const { logDebug } = require('./debug');
@@ -82,10 +82,15 @@ const NARRATIVE_STYLES = (function () {
 
 // Phase 4 — resolve the caller's version: DM -> canonical (DM fork);
 // player -> their own version (null if they have none).
-async function callerForkId(db, sessionId, userId, role) {
-  if (role === 'dm') return await getOrCreateDmFork(db, sessionId, userId);
-  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(sessionId, userId);
-  return f ? f.id : null;
+// v3.0.445 -- was a THIRD private copy of this rule, ignoring the requested version: generating a
+// story on your own second version wrote it to the canonical. Delegates to the one shared resolver.
+// getOrCreateDmFork is kept for the no-request case so a Story Master who has somehow lost their
+// canonical still gets one made, which the shared resolver deliberately does not do.
+async function callerForkId(db, sessionId, userId, role, requested) {
+  const id = await resolveActingFork(db, sessionId, userId, role, requested);
+  if (id) return id;
+  if (!requested && role === 'dm') return await getOrCreateDmFork(db, sessionId, userId);
+  return null;
 }
 
 // ============================================================
@@ -116,7 +121,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // their OWN version's narrative. Each writes only to its own fork row.
   const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
   if (!callerRole) return res.status(403).json({ error: 'Access denied' });
-  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   // Steering inputs (Pass 1):
@@ -454,7 +459,7 @@ router.put('/save/:campaignId/:sessionId', requireAuth, async function(req, res)
 
   const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
   if (!callerRole) return res.status(403).json({ error: 'Access denied' });
-  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   const now = new Date().toISOString();
@@ -519,7 +524,7 @@ router.put('/direction/:campaignId/:sessionId', requireAuth, async function(req,
 
   const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
   if (!callerRole) return res.status(403).json({ error: 'Access denied' });
-  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
@@ -558,7 +563,7 @@ router.put('/outline/:campaignId/:sessionId', requireAuth, async function(req, r
 
   const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
   if (!callerRole) return res.status(403).json({ error: 'Access denied' });
-  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   const gap = (req.body && req.body.gap) ? String(req.body.gap) : '';
@@ -598,7 +603,7 @@ router.put('/style/:campaignId/:sessionId', requireAuth, async function(req, res
 
   const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
   if (!callerRole) return res.status(403).json({ error: 'Access denied' });
-  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   const styleId = (req.body && typeof req.body.style === 'string') ? req.body.style.trim() : '';
@@ -635,7 +640,7 @@ router.put('/verbosity/:campaignId/:sessionId', requireAuth, async function(req,
 
   const callerRole = await getCampaignRole(req.session.userId, req.params.campaignId);
   if (!callerRole) return res.status(403).json({ error: 'Access denied' });
-  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole);
+  const targetForkId = await callerForkId(db, session.id, req.session.userId, callerRole, requestedForkIdOf(req));
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   var _v = (req.body && typeof req.body.verbosity === 'string') ? req.body.verbosity.trim().toLowerCase() : '';

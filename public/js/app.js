@@ -3074,7 +3074,7 @@ function saveNarrDirection() {
   if (!gapKey) { closeNarrDirection(); return; }
   var ta = document.getElementById('narr-direction-text');
   var text = ta ? ta.value.trim() : '';
-  fetch('/api/narrative/direction/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/direction/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ gap: gapKey, text: text })
@@ -3154,7 +3154,7 @@ function saveOutline() {
   if (!state.currentCampaign || !state.currentSession) { closeOutlineModal(); return; }
   var url, body;
   if (tgt.type === 'gap') {
-    url = '/api/narrative/outline/' + state.currentCampaign.id + '/' + state.currentSession.id;
+    url = '/api/narrative/outline/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ();
     body = { gap: tgt.gap, text: text };
   } else {
     url = '/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + tgt.momentId;
@@ -3692,7 +3692,7 @@ function setVerbosity(v) {
   if (!state.currentCampaign || !state.currentSession) return;
   var _prev = state.narrativeVerbosity || 'high';
   highlightVerbosity(v);   // optimistic
-  fetch('/api/narrative/verbosity/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/verbosity/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ verbosity: v })
@@ -3714,7 +3714,7 @@ function closeStylePicker() {
 function selectStyleCard(kind, id) {
   if (kind === 'narrative') {
     if (!state.currentCampaign || !state.currentSession) { closeStylePicker(); return; }
-    fetch('/api/narrative/style/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+    fetch('/api/narrative/style/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ style: id })
@@ -5604,7 +5604,7 @@ async function extractMoments() {
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
   var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
-  fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({key:key, artStyle:state.artStyle}),
@@ -5703,7 +5703,7 @@ function collectNarrativeState() {
 function saveNarrativeSection(type, panelIndex) {
   var data = collectNarrativeState();
 
-  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
@@ -5731,7 +5731,7 @@ function saveNarrativeSection(type, panelIndex) {
 
 function saveInlineNarrative(silent) {
   var data = collectNarrativeState();
-  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
@@ -5770,7 +5770,7 @@ function regenNarrativeSection(type, panelIndex) {
   showBusyOverlay(panelId, 'Regenerating');
 
   // Regenerate full narrative and extract the relevant section
-  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({key: key})
@@ -5868,6 +5868,8 @@ async function generateAllImages(fromChain) {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
+      // v3.0.445 -- generate into the version on screen, not the canonical (TD-194).
+      fork_id: state.currentForkId || null,
       session_id: state.currentSession.id,
       campaign_id: state.currentCampaign.id,
       style: state.artStyle,
@@ -7209,7 +7211,7 @@ function generateNarrative() {
 
   if (msg) msg.textContent = 'Writing your story narrative...';
 
-  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({key: key})
@@ -7300,7 +7302,7 @@ function collectNarrativeFromEditor() {
 
 function saveNarrative() {
   var data = collectNarrativeFromEditor();
-  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
@@ -9521,7 +9523,7 @@ async function extractMoments() {
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
   var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
-  fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({key:key, artStyle:state.artStyle}),
@@ -9620,7 +9622,7 @@ function collectNarrativeState() {
 function saveNarrativeSection(type, panelIndex) {
   var data = collectNarrativeState();
 
-  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
@@ -9648,7 +9650,7 @@ function saveNarrativeSection(type, panelIndex) {
 
 function saveInlineNarrative(silent) {
   var data = collectNarrativeState();
-  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
@@ -9687,7 +9689,7 @@ function regenNarrativeSection(type, panelIndex) {
   showBusyOverlay(panelId, 'Regenerating');
 
   // Regenerate full narrative and extract the relevant section
-  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({key: key})
@@ -10636,7 +10638,7 @@ function generateNarrative() {
 
   if (msg) msg.textContent = 'Writing your story narrative...';
 
-  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({key: key})
@@ -10727,7 +10729,7 @@ function collectNarrativeFromEditor() {
 
 function saveNarrative() {
   var data = collectNarrativeFromEditor();
-  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id, {
+  fetch('/api/narrative/save/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
