@@ -2152,8 +2152,8 @@ function renderSessionCharacters(rows) {
   // player on their OWN version. Prompt editing is allowed wherever the caller
   // can edit images (own fork, or DM on canonical) — no tier gate.
   var role = state.currentCampaign && state.currentCampaign.my_role;
-  var ownFork = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
-  var canAct = (role === 'dm' && !state.currentForkId) || ownFork;
+  var ownFork = forkOwnNonCanonical();   // v3.0.450
+  var canAct = forkOnScreenIsMine();   // v3.0.450
   var canEditPrompt = canAct;
   var list = document.getElementById('sc-list');
   if (!list) return;
@@ -2722,8 +2722,7 @@ function renderReview(data) {
   // Who may steer/edit this version's narrative (same rule as the Storyboard
   // Regen): the DM on canonical, or a player on their OWN version.
   var _nRole = state.currentCampaign && state.currentCampaign.my_role;
-  var canEditNarr = (_nRole === 'dm' && !state.currentForkId) ||
-    ((_nRole === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId)));
+  var canEditNarr = forkOnScreenIsMine();   // v3.0.450 -- one rule; was a fifth copy, present twice
 
   // Outline fallback for legacy versions that stored prose, not an outline.
   function fallback(text, words) {
@@ -5571,10 +5570,10 @@ async function extractMoments() {
   // is DM-owned and read-only to players).
   var notesVal = document.getElementById('session-notes-input');
   var _role = state.currentCampaign && state.currentCampaign.my_role;
-  var _ownFork = (_role === 'player') && state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId);
+  var _ownFork = forkOwnNonCanonical();   // v3.0.450
   if (_ownFork) {
     if (typeof saveForkNotes === 'function') saveForkNotes(notesVal ? notesVal.value.trim() : '');
-  } else if (_role === 'dm' && !state.currentForkId) {
+  } else if (forkOnScreenIsCanonical()) {   // v3.0.450 -- the canonical saves to the session row
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
@@ -6036,10 +6035,9 @@ function novelOwnView() {
 // parallel rule for the publish/version-picker context.) Canonical helper for the
 // reusable image-panel primitive; new code should call this instead of re-deriving.
 function canEditFork() {
-  var role = state.currentCampaign && state.currentCampaign.my_role;
-  if (role === 'dm' && !state.currentForkId) return true;
-  return (role === 'player') && !!(state.currentForkId && state.myForkId
-    && String(state.currentForkId) === String(state.myForkId));
+  // v3.0.450 -- its own comment already said new code should call this rather than re-derive the
+  // rule. Nine places re-derived it anyway, and this helper carried the same Story-Master shortcut.
+  return forkOnScreenIsMine();
 }
 // Player-publish: the version picker is open to everyone for VIEWING. A member
 // defaults to their OWN version; the SM defaults to the canonical book. Publishing
@@ -7427,8 +7425,8 @@ function showAlert(msg) {
 // own fork. No tier gate.
 function buildPromptBlock(m) {
   var _prole = state.currentCampaign && state.currentCampaign.my_role;
-  var _pOwnFork = (_prole === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
-  var canEdit = (_prole === 'dm' && !state.currentForkId) || _pOwnFork;
+  var _pOwnFork = forkOwnNonCanonical();   // v3.0.450
+  var canEdit = forkOnScreenIsMine();   // v3.0.450
   var safe = (m.prompt || '');
   if (m.locked) {
     return '<div class="moment-prompt-text" id="prompt-text-' + m.id + '">' + safe + '</div>';
@@ -8464,8 +8462,7 @@ function renderStoryboard() {
   // Narrative is editable on the version you OWN: the DM on canonical, or a
   // player on their own version. Read-only when viewing anyone else's.
   var _nRole = state.currentCampaign && state.currentCampaign.my_role;
-  var canEditNarr = (_nRole === 'dm' && !state.currentForkId) ||
-    ((_nRole === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId)));
+  var canEditNarr = forkOnScreenIsMine();   // v3.0.450 -- one rule; was a fifth copy, present twice
   var typeLabel = {combat:'Combat',drama:'Drama',discovery:'Discovery',humor:'Humor'};
 
   // True alternating grid — narrative and image panels flow together
@@ -9490,10 +9487,10 @@ async function extractMoments() {
   // is DM-owned and read-only to players).
   var notesVal = document.getElementById('session-notes-input');
   var _role = state.currentCampaign && state.currentCampaign.my_role;
-  var _ownFork = (_role === 'player') && state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId);
+  var _ownFork = forkOwnNonCanonical();   // v3.0.450
   if (_ownFork) {
     if (typeof saveForkNotes === 'function') saveForkNotes(notesVal ? notesVal.value.trim() : '');
-  } else if (_role === 'dm' && !state.currentForkId) {
+  } else if (forkOnScreenIsCanonical()) {   // v3.0.450 -- the canonical saves to the session row
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id, {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
@@ -11615,7 +11612,27 @@ function forkOnScreenIsMine() {
   // of the row, which can change hands on a handover.
   return role === 'dm' && f.role === 'dm';
 }
-function updateForkEditability() {
+// v3.0.450 -- "A VERSION I OWN THAT IS NOT THE CANONICAL", which is what every ownFork/_ownFork/
+// _pOwnFork variable in this file was trying to express. There were NINE of them, each written as
+// `role === 'player' && currentForkId === myForkId`, because only a player could hold a non-canonical
+// version. A Story Master on their own second version is in exactly that position now, and every one
+// of the nine said no -- which is why the Review tab had no Add character, Add asset, Edit Image
+// Prompt or Edit Narrative buttons on a new version.
+// v3.0.450 -- "the version on screen is the canonical". Used by the places that choose WHERE a save
+// goes -- session row versus fork row -- which is a different question from whether you may edit,
+// and was written as `role === 'dm' && !state.currentForkId` in both.
+function forkOnScreenIsCanonical() {
+  if (!state.currentForkId) return true;
+  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+  return !!(f && f.role === 'dm');
+}
+function forkOwnNonCanonical() {
+  if (!forkOnScreenIsMine()) return false;
+  if (!state.currentForkId) return false;   // canonical view
+  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+  return !!(f && f.role !== 'dm');
+}
+function updateForkEditability() {
   var role = state.currentCampaign && state.currentCampaign.my_role;
   var editable = forkOnScreenIsMine();
   // can-edit-fork means "editing a version that is NOT the canonical" -- it turns on the per-panel
@@ -11727,15 +11744,15 @@ function onForkChange(forkId) {
 
 function updateNotesBox(data) {
   var role = state.currentCampaign && state.currentCampaign.my_role;
-  var ownFork = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
+  var ownFork = forkOwnNonCanonical();   // v3.0.450
   var notesEl = document.getElementById('session-notes-input');
   if (notesEl) {
     notesEl.value = state.currentForkId ? (data.fork_notes || '') : (data.session_notes || '');
-    var notesEditable = ownFork || (role === 'dm' && !state.currentForkId);
+    var notesEditable = forkOnScreenIsMine();   // v3.0.450
     if (notesEditable) { notesEl.removeAttribute('readonly'); } else { notesEl.setAttribute('readonly', 'readonly'); }
     notesEl.onblur = function() {
       if (ownFork) { saveForkNotes(notesEl.value.trim()); }
-      else if (role === 'dm' && !state.currentForkId) { saveSessionField('session_notes', notesEl.value.trim()); }
+      else if (forkOnScreenIsCanonical()) { saveSessionField('session_notes', notesEl.value.trim()); }   // v3.0.450
     };
   }
   var transcriptEl = document.getElementById('transcript-input');
@@ -14197,9 +14214,7 @@ function setMomentProminence(momentId, value) {
 // Review casting block, so users do not have to bounce to the Review tab.
 // ============================================================
 function canEditCurrentVersion() {
-  var role = state.currentCampaign && state.currentCampaign.my_role;
-  return (role === 'dm' && !state.currentForkId) ||
-    (role === 'player' && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId)));
+  return forkOnScreenIsMine();   // v3.0.450 -- one rule, one implementation
 }
 // Lazy-load the review payload (cast per panel + character/asset master lists)
 // once; one fetch covers every panel in the session.
