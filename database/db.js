@@ -978,6 +978,20 @@ async function migrateForks(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_session ON session_forks(session_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_user ON session_forks(user_id)');
+  // v3.0.439 -- MANY VERSIONS PER USER PER SESSION (TD-194).
+  // `name` is what the reader types when they press New Version. NULL means an original fork made
+  // before this existed, and the UI shows the owner name for those, exactly as it does today.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS name TEXT');
+  // And the constraint that made this impossible. Note the ORDER IT IS DONE IN: every query that
+  // resolves "this user's fork for this session" was made deterministic FIRST (v3.0.439, 15 sites
+  // across sessions.js, pdf.js, images.js, narrative.js, extract.js, invites.js and getViewableForkId
+  // above). None of them had an ORDER BY, because the constraint guaranteed at most one row -- so
+  // dropping it first would have turned fifteen queries into arbitrary-row lookups, correct today and
+  // silently wrong the first time a second fork existed. Postgres names the constraint for us.
+  await pool.query('ALTER TABLE session_forks DROP CONSTRAINT IF EXISTS session_forks_session_id_user_id_key');
+  // A user may now hold several versions of one session, but not two with the SAME NAME -- which is
+  // the constraint that actually protects the reader. Partial, so the unnamed originals are exempt.
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_forks_named ON session_forks(session_id, user_id, name) WHERE name IS NOT NULL");
 
   // Per-member novel curation (Phase 2): each member can include/exclude
   // sessions for THEIR OWN published fork. A row exists only when a member
@@ -1396,7 +1410,8 @@ async function getViewableForkId(db, sessionId, userId, requestedForkId) {
   const isDM = dm && String(dm.user_id) === String(userId);
   // Has this caller made their OWN version of this session?
   const own = await db.prepare(
-    "SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'"
+    // v3.0.439 -- ORDER BY, because the unique constraint that used to guarantee one row is gone.
+    "SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC"
   ).get(sessionId, userId);
   // The DM (canonical) version is visible to the DM always; to a player only
   // once it is Ready, or once that player has made their own version. A DM

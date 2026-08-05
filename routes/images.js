@@ -1128,7 +1128,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     // DM always generates into the canonical (DM) fork - never a player's version.
     targetForkId = await getDmForkId(db, session_id);
   } else {
-    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(session_id, req.session.userId);
+    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(session_id, req.session.userId);
     if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
     targetForkId = myFork.id;
   }

@@ -13,7 +13,7 @@ const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require
 // Returns null if a player has no version of this session yet.
 async function callerForkId(db, sessionId, userId, role) {
   if (role === 'dm') return await getDmForkId(db, sessionId);
-  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(sessionId, userId);
+  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(sessionId, userId);
   return f ? f.id : null;
 }
 
@@ -41,7 +41,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const result = await Promise.all(sessions.map(async function(s) {
     let forkId = null, usedPlayerFork = false;
     if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
       if (pf) { forkId = pf.id; usedPlayerFork = true; }
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
@@ -128,8 +128,8 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const sessions = await db.prepare(
     'SELECT s.*, ' +
     "COALESCE(" +
-    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.kind = 'establishing' AND m.image IS NOT NULL AND m.image <> '' LIMIT 1), " +
-    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.image IS NOT NULL AND m.image <> '' ORDER BY m.panel_order ASC LIMIT 1), " +
+    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' ORDER BY pf.id ASC LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.kind = 'establishing' AND m.image IS NOT NULL AND m.image <> '' LIMIT 1), " +
+    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' ORDER BY pf.id ASC LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.image IS NOT NULL AND m.image <> '' ORDER BY m.panel_order ASC LIMIT 1), " +
     "s.establishing_image) AS title_image_url, " +
     '(SELECT m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = s.id AND f.role = \'dm\' AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
     // Deploy 4.0 — player_access_status now lives on the DM fork. This
@@ -307,7 +307,7 @@ router.put('/:id/access-status', requireAuth, verifyCampaignMember, async functi
   if (req.campaignRole === 'dm') {
     targetForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
   } else {
-    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=?').get(session.id, req.session.userId);
+    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=? ORDER BY id ASC').get(session.id, req.session.userId);
     if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
     targetForkId = myFork.id;
   }
@@ -326,7 +326,7 @@ router.put('/:id/fork-notes', requireAuth, verifyCampaignMember, async function(
   if (req.campaignRole === 'dm') {
     forkId = await getOrCreateDmFork(db, session.id, req.session.userId);
   } else {
-    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=?').get(session.id, req.session.userId);
+    const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=? ORDER BY id ASC').get(session.id, req.session.userId);
     if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
     forkId = myFork.id;
   }
@@ -965,7 +965,7 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   const dmFork = await db.prepare("SELECT id, player_access_status FROM session_forks WHERE session_id = ? AND role = 'dm'").get(sessionId);
   if (!dmFork) return res.status(404).json({ error: 'Session has no canonical version' });
   if (dmFork.player_access_status !== 'ready') return res.status(423).json({ error: 'This session is not Ready yet' });
-  const existing = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(sessionId, req.session.userId);
+  const existing = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(sessionId, req.session.userId);
   if (existing) return res.json({ fork_id: existing.id, existing: true });
   const now = new Date().toISOString();
   const created = await db.prepare(

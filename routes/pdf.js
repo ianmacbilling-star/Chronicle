@@ -4023,7 +4023,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
       if (pf) forkId = pf.id;
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
@@ -4141,7 +4141,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
       if (pf) forkId = pf.id;
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
@@ -4710,7 +4710,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
       if (pf) forkId = pf.id;
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
@@ -5023,7 +5023,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     let forkId = null;
     if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player'").get(s.id, asUser);
+      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
       if (pf) forkId = pf.id;
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);

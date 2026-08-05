@@ -475,7 +475,7 @@ router.post('/campaigns/:campaignId/members/:userId/make-dm', requireAuth, verif
     ).get(sid);
     if (!oldFork) continue; // no canonical yet -> nothing to transfer
     const newFork = await db.prepare(
-      'SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?'
+      'SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC'
     ).get(sid, targetUserId);
     if (newFork) {
       await db.prepare("UPDATE session_forks SET role = 'player' WHERE id = ?").run(oldFork.id);

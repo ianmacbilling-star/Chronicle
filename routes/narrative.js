@@ -84,7 +84,7 @@ const NARRATIVE_STYLES = (function () {
 // player -> their own version (null if they have none).
 async function callerForkId(db, sessionId, userId, role) {
   if (role === 'dm') return await getOrCreateDmFork(db, sessionId, userId);
-  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ?').get(sessionId, userId);
+  const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(sessionId, userId);
   return f ? f.id : null;
 }
 

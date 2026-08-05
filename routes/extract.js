@@ -34,7 +34,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   if (callerRole === 'dm') {
     targetForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
   } else {
-    const myFork = await db.prepare('SELECT id, fork_notes FROM session_forks WHERE session_id = ? AND user_id = ?').get(session.id, req.session.userId);
+    const myFork = await db.prepare('SELECT id, fork_notes FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(session.id, req.session.userId);
     if (!myFork) return res.status(403).json({ error: 'You have no version of this session' });
     targetForkId = myFork.id;
     session.session_notes = myFork.fork_notes || '';
