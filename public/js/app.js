@@ -3737,7 +3737,9 @@ function selectStyleCard(kind, id) {
       fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/art-style', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ art_style: id })
+        // v3.0.443 -- name the version. The server used to infer it from the campaign role, which
+        // sent a Story Master's pick to the canonical no matter which version was on screen.
+        body: JSON.stringify({ art_style: id, fork_id: state.currentForkId || null })
       }).catch(function () {});
     }
     refreshArtStyleButtons();
@@ -11531,7 +11533,7 @@ function saveAccessStatus(status) {
   fetch('/api/campaigns/' + cur.id + '/sessions/' + sess.id + '/access-status', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: status })
+    body: JSON.stringify({ status: status, fork_id: state.currentForkId || null })   // v3.0.443 -- this version
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -11710,7 +11712,7 @@ function saveForkNotes(value) {
   if (!state.currentCampaign || !state.currentSession || !state.currentForkId) return;
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork-notes', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ notes: value })
+    body: JSON.stringify({ notes: value, fork_id: state.currentForkId || null })   // v3.0.443 -- this version
   })
   .then(function(r) { return r.json(); })
   .then(function() {

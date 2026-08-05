@@ -15,10 +15,40 @@ const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require
 // Phase 4 Step 3c — resolve which version the caller is acting on: the DM
 // acts on the canonical (DM) fork; a player acts on their OWN version.
 // Returns null if a player has no version of this session yet.
-async function callerForkId(db, sessionId, userId, role) {
+async function callerForkId(db, sessionId, userId, role, requestedForkId) {
+  // v3.0.443 -- HONOUR THE VERSION THE READER IS LOOKING AT (TD-194).
+  // This ignored the requested fork entirely: a player always acted on their FIRST version, and a
+  // Story Master always acted on the CANONICAL one. With a single fork each that was the same thing.
+  // With several it is not -- a Story Master viewing their own second version had every read and
+  // write silently redirected to the canonical, so the art style and narrative style pickers on that
+  // version had nothing of their own to show. The v3.0.442 client fix could not help, because the
+  // decision was being made here.
+  // Ian: "should be able to tell by User logged in ID if it matches the User ID on the fork." That is
+  // exactly the test -- OWNERSHIP, checked against the row, not an inference from campaign role.
+  if (requestedForkId) {
+    const want = await db.prepare('SELECT id, user_id, role FROM session_forks WHERE id = ? AND session_id = ?')
+      .get(requestedForkId, sessionId);
+    if (want) {
+      // Your own version, whichever one it is.
+      if (String(want.user_id) === String(userId)) return want.id;
+      // A Story Master still acts on the canonical even when they do not personally own that row --
+      // it can change hands on a handover and the campaign role is what confers the right.
+      if (role === 'dm' && want.role === 'dm') return want.id;
+    }
+    // Asked for a version that is not yours: fall through rather than silently writing to a
+    // different one. The caller decides what a null means for its own endpoint.
+    return null;
+  }
   if (role === 'dm') return await getDmForkId(db, sessionId);
   const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(sessionId, userId);
   return f ? f.id : null;
+}
+// The version the request is about: ?fork_id= on a GET, fork_id in the body on a write.
+function requestedForkId(req) {
+  const q = req.query && req.query.fork_id;
+  const b = req.body && req.body.fork_id;
+  const v = (q != null && q !== '') ? q : ((b != null && b !== '') ? b : null);
+  return v ? Number(v) : null;
 }
 
 router.get('/last-style', requireAuth, verifyCampaignMember, async function(req, res) {
@@ -283,13 +313,20 @@ router.put('/:id/art-style', requireAuth, verifyCampaignMember, async function(r
     }
   }
   const now = new Date().toISOString();
-  if (req.campaignRole === 'dm') {
+  // v3.0.443 -- BRANCH ON THE VERSION, NOT ON THE ROLE (TD-194).
+  // This asked "is the caller the Story Master?" and, if so, wrote the CANONICAL session art style.
+  // That was the same question as "is this the canonical version?" while a Story Master had exactly
+  // one version. It is not any more: a Story Master picking a style on their own second version was
+  // writing it to the canonical, changing every version of that session at once.
+  // Resolve which version is being acted on FIRST, then let the version decide where the write goes.
+  const forkId = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole, requestedForkId(req));
+  if (!forkId) return res.status(403).json({ error: 'You have no version of this session' });
+  const actRow = await db.prepare('SELECT role FROM session_forks WHERE id = ?').get(forkId);
+  if (actRow && actRow.role === 'dm') {
     await db.prepare('UPDATE sessions SET art_style=?, edited_at=?, edited_by=? WHERE id=?')
       .run(artStyle, now, req.session.userId, req.params.id);
     return res.json({ success: true, scope: 'session', art_style: artStyle });
   }
-  const forkId = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
-  if (!forkId) return res.status(403).json({ error: 'You have no version of this session' });
   await db.prepare('UPDATE session_forks SET art_style_override=?, edited_at=?, edited_by=? WHERE id=?')
     .run(artStyle, now, req.session.userId, forkId);
   res.json({ success: true, scope: 'fork', art_style: artStyle });
@@ -307,8 +344,11 @@ router.put('/:id/access-status', requireAuth, verifyCampaignMember, async functi
   // The DM sets the canonical (DM fork) status; a player sets the status of
   // THEIR OWN version. Marking a player version Ready is what exposes it to
   // the other members' version dropdown.
-  let targetForkId;
-  if (req.campaignRole === 'dm') {
+  // v3.0.443 -- the version being marked Ready is the one on screen, not "the canonical if you are
+  // the Story Master". Those were the same thing with one version each; with several they are not.
+  let targetForkId = await callerForkId(db, session.id, req.session.userId, req.campaignRole, requestedForkId(req));
+  if (targetForkId) { /* the requested version, already ownership-checked */ }
+  else if (req.campaignRole === 'dm') {
     targetForkId = await getOrCreateDmFork(db, session.id, req.session.userId);
   } else {
     const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=? ORDER BY id ASC').get(session.id, req.session.userId);
@@ -326,8 +366,10 @@ router.put('/:id/fork-notes', requireAuth, verifyCampaignMember, async function(
   const db = await getDb();
   const session = await db.prepare('SELECT id FROM sessions WHERE id=? AND campaign_id=?').get(req.params.id, req.params.campaignId);
   if (!session) return res.status(404).json({ error: 'Session not found' });
-  let forkId;
-  if (req.campaignRole === 'dm') {
+  // v3.0.443 -- notes belong to the version on screen. Same reasoning as access-status above.
+  let forkId = await callerForkId(db, session.id, req.session.userId, req.campaignRole, requestedForkId(req));
+  if (forkId) { /* the requested version, already ownership-checked */ }
+  else if (req.campaignRole === 'dm') {
     forkId = await getOrCreateDmFork(db, session.id, req.session.userId);
   } else {
     const myFork = await db.prepare('SELECT id FROM session_forks WHERE session_id=? AND user_id=? ORDER BY id ASC').get(session.id, req.session.userId);
@@ -379,7 +421,7 @@ router.get('/:id/characters', requireAuth, verifyCampaignMember, async function(
 // PUT edit a session character snapshot prompt (Platinum only)
 router.put('/:id/characters/:characterId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
+  const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole, requestedForkId(req));
   if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
   // Tier gate applies only to DM canonical editing; a player edits their
   // own version freely (tokens are the meter for forks, not tier).
@@ -417,7 +459,7 @@ router.post('/:id/characters/:characterId/regenerate-reference', requireAuth, ve
     const ch = await db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
     if (!ch) return res.json({ error: 'Character not found' });
 
-    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole);
+    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole, requestedForkId(req));
     if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
     const sc = await db.prepare(
       'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
@@ -493,7 +535,7 @@ router.post('/:id/characters/:characterId/retouch-reference', requireAuth, verif
     const ch = await db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
     if (!ch) return res.json({ error: 'Character not found' });
 
-    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole);
+    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole, requestedForkId(req));
     if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
     const sc = await db.prepare(
       'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
@@ -564,7 +606,7 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
     const thisSession = await db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
     if (!thisSession) return res.json({ error: 'Session not found' });
 
-    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole);
+    const fork = await callerForkId(db, sessionId, req.session.userId, req.campaignRole, requestedForkId(req));
     if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
     const sc = await db.prepare(
       'SELECT * FROM session_characters WHERE fork_id = ? AND character_id = ?'
@@ -629,7 +671,7 @@ router.post('/:id/characters/:characterId/reject-change', requireAuth, verifyCam
   try {
     const db = await getDb();
     const now = new Date().toISOString();
-    const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole);
+    const fork = await callerForkId(db, req.params.id, req.session.userId, req.campaignRole, requestedForkId(req));
     if (!fork) return res.status(403).json({ error: 'You have no version of this session' });
     await db.prepare(
       'UPDATE session_characters SET change_flag = ?, change_status = ?, edited_at = ?, edited_by = ? ' +
