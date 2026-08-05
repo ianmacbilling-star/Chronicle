@@ -317,11 +317,18 @@ class LuluProvider extends PrintProvider {
       // Every cover shipped so far was sized by the LOCAL ESTIMATE, and the fallback warning went to
       // the server log only, so nothing surfaced it. interior_page_count is sent alongside page_count
       // rather than instead of it: an unrecognised field is ignored, a missing required one is a 400.
+      // v3.0.430 -- NO unit FIELD AT ALL.
+      // .429 got interior_page_count accepted; unit was the last complaint, and Lulu has now rejected
+      // BOTH 'IN' and 'in' without ever saying what it does want. Guessing a third string is how the
+      // last two versions were spent. Read the first error again instead: it called
+      // interior_page_count REQUIRED and unit merely an invalid CHOICE -- so unit is optional, and
+      // Lulu prose says the endpoint returns print points by default. Omit it and let the magnitude
+      // normalisation below do its job. That normalisation was written for precisely this and is
+      // correct whether the answer arrives in points, millimetres or inches.
       body: {
         pod_package_id: sku,
         interior_page_count: pageCount,
         page_count: pageCount,
-        unit: 'in',
       },
     });
     let w = Number(raw.width != null ? raw.width : raw.width_in);

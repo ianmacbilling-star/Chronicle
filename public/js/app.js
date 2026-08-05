@@ -13005,12 +13005,41 @@ function loadPrintTab() {
       printActualPages = 0;
       printInteriorCache = { key: '', url: '', pages: 0 };
       updatePrintPageDisplay(-1, false);
-      refreshPrintOptions(res.j.pageEstimate);
+      // v3.0.430 -- ASK THE SAVED BOOK FIRST. The binding list is derived from the page count, and
+      // opening on pageEstimate meant it was derived from a GUESS and then visibly changed its mind a
+      // few seconds later when the interior finished generating -- Softcover needs 32 pages, so an
+      // estimate on the wrong side of that appears and disappears. The saved record has known the
+      // exact interior count since v3.0.424 (pages minus the recorded covers) and costs one small
+      // request. Falls back to the estimate for a book saved before that, which is the old behaviour.
+      finalizeSeedPrintPageCount(res.j.pageEstimate);
       prepareInteriorCount();
     })
     .catch(function () { showPrintMsg('Could not load order options.', null); });
 }
 
+// v3.0.430 -- prefer the SAVED interior page count over the estimate for the first paint.
+// Never blocks: if the lookup fails or the book predates the stored cover counts, the estimate is
+// used exactly as before, and prepareInteriorCount still corrects it once the interior exists.
+function finalizeSeedPrintPageCount(estimate) {
+  var used = false;
+  function apply(n, exact) {
+    if (used) return; used = true;
+    if (exact && n > 0) { printActualPages = n; updatePrintPageDisplay(n, true); }
+    refreshPrintOptions(n > 0 ? n : estimate);
+  }
+  try {
+    fetch('/api/pdf/last-optimized/' + state.currentCampaign.id + finalizeBookQuery() + '&_=' + Date.now(),
+      { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j && j.found && j.interiorPages > 0) apply(j.interiorPages, true);
+        else apply(0, false);
+      })
+      .catch(function () { apply(0, false); });
+  } catch (e) { apply(0, false); }
+  // Belt and braces: if that request hangs, do not leave the picker empty.
+  setTimeout(function () { apply(0, false); }, 4000);
+}
 function refreshPrintOptions(pageCount) {
   fetch('/api/print/options?pageCount=' + encodeURIComponent(pageCount))
     .then(function (r) { return r.json(); })
@@ -13242,8 +13271,11 @@ function reviewPrintOrder() {
       // round first, and a missing field would then have silently re-opened the very hole this
       // closes. resolveCoverDims always sets it and the route defaults it, so there is no third
       // state to be lenient about.
-      if (res.j.dimsSource !== 'lulu' && res.j.dimsSource !== 'lulu-cached') {
-        throw new Error('The printer could not confirm the cover size for this book, so the cover was built from an estimate and may be rejected. Please try again in a few minutes, and let us know if it keeps happening.');
+      // v3.0.430 -- 'estimate-exact' means saddle stitch: NO SPINE, so the sheet is trim plus bleed
+      // and nothing was guessed. Ian uploaded exactly such a cover to Lulu by hand and it was
+      // accepted while this code was refusing to order it. Only a DERIVED spine is worth stopping for.
+      if (res.j.dimsSource !== 'lulu' && res.j.dimsSource !== 'lulu-cached' && res.j.dimsSource !== 'estimate-exact') {
+        throw new Error('We could not confirm the exact cover size with the printer for this binding, and the spine width has to be right or the book will not line up. Please try again in a few minutes, or choose Comic (saddle stitch), which needs no spine.');
       }
       preparedCoverUrl = res.j.url;
       return fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })

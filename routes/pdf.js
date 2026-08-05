@@ -4373,7 +4373,15 @@ async function resolveCoverDims(spec) {
     // just must not be quietly guessed, hence the warning.
     console.warn('[cover-dims] LULU CALL FAILED, USING THE LOCAL ESTIMATE (' + fb.widthIn.toFixed(3) + ' x ' + fb.heightIn.toFixed(3) +
       'in) -- Lulu may reject this cover: ' + (e && e.message ? e.message : e));
-    return { widthIn: fb.widthIn, heightIn: fb.heightIn, source: 'estimate' };
+    // v3.0.430 -- NOT ALL ESTIMATES ARE EQUAL, AND TREATING THEM ALIKE BLOCKED A CORRECT COVER.
+    // Saddle stitch has NO SPINE: the sheet is trim plus bleed and nothing is derived, so the
+    // estimate is arithmetic rather than a guess. Ian uploaded exactly such a cover to Lulu by hand
+    // and it was accepted, while Campaignia was refusing to order it.
+    // Everything else derives a spine from the page count, and hardcover additionally carries a
+    // BOARD term the code itself admits cannot be derived from one book. Those are guesses and they
+    // have been wrong before -- 18.78 x 12.50 where Lulu wanted 19.00 x 12.75.
+    var _noSpine = (spec.binding === 'saddle');
+    return { widthIn: fb.widthIn, heightIn: fb.heightIn, source: _noSpine ? 'estimate-exact' : 'estimate' };
   }
 }
 function computeCoverDims(binding, pageCount, ppi) {
@@ -10162,7 +10170,16 @@ router.get('/last-optimized/:campaignId', requireAuth, async function (req, res)
     // v3.0.422 -- hasLayout tells the client whether the SAVED LAYOUT is there too, so Load Last
     // Optimized File can pull both and say plainly when a pre-v3.0.422 save has only the PDF.
     return res.json({ found: true, arrange: arrange, pdfUrl: lastOpt.pdfUrl, pages: lastOpt.pages || 0, at: lastOpt.at || null,
-      hasLayout: !!lastOpt.bodyUrl, layoutStale: !!(lastOpt.bodyUrl && (lastOpt.co || '') !== (req.query.co || '')) });
+      hasLayout: !!lastOpt.bodyUrl, layoutStale: !!(lastOpt.bodyUrl && (lastOpt.co || '') !== (req.query.co || '')),
+      // v3.0.430 -- THE INTERIOR PAGE COUNT, EXACTLY, WITHOUT RENDERING ANYTHING.
+      // The Order tab used to open on printNovelInfo.pageEstimate -- a guess -- and only learned the
+      // real number once the interior had been generated, several seconds later. That is why the
+      // binding list visibly changed its mind: Softcover needs 32 pages and the estimate was under
+      // it. Since v3.0.424 the saved record holds the page count AND how many of those pages are
+      // covers, so the interior count is subtraction. Null when a pre-v3.0.424 save has no counts.
+      interiorPages: ((lastOpt.pages > 0 && lastOpt.frontCovers != null && lastOpt.backCovers != null)
+        ? Math.max(0, lastOpt.pages - Number(lastOpt.frontCovers || 0) - Number(lastOpt.backCovers || 0))
+        : null) });
   } catch (e) {
     log500('last-optimized', req, e);
     return res.status(500).json({ error: (e && e.message) || 'last-optimized failed' });
