@@ -992,6 +992,27 @@ async function migrateForks(pool) {
   // A user may now hold several versions of one session, but not two with the SAME NAME -- which is
   // the constraint that actually protects the reader. Partial, so the unnamed originals are exempt.
   await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_forks_named ON session_forks(session_id, user_id, name) WHERE name IS NOT NULL");
+  // v3.0.441 -- ONE CANONICAL PER SESSION, ENFORCED (TD-194). Three lookups in this file resolve the
+  // DM fork with no ORDER BY, on the assumption there is exactly one. Until now that was a convention
+  // held up by the unique constraint v3.0.439 dropped; this makes it an invariant Postgres keeps.
+  // WRAPPED, because creating a unique index fails if duplicates already exist -- and a migration
+  // that throws takes startup down with it, which is precisely how v3.0.439 broke. Ian confirmed zero
+  // duplicates on both environments, so this should take; if it ever cannot, the app still boots and
+  // says why.
+  try {
+    await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_forks_one_dm ON session_forks(session_id) WHERE role = 'dm'");
+  } catch (e) {
+    console.error('[forks] could not enforce one canonical fork per session -- there are duplicates. ' +
+      "Run: SELECT session_id, COUNT(*) FROM session_forks WHERE role='dm' GROUP BY 1 HAVING COUNT(*)>1;  (" + ((e && e.message) || e) + ')');
+  }
+  // ONE-OFF BACKFILL: give every existing fork the name it is currently shown under, so a reader can
+  // rename it later rather than being stuck with a label the app invented. Only where name IS NULL,
+  // so it never overwrites anything a reader has chosen.
+  // NOT "You (your version)" for a player: that label is VIEWER-RELATIVE and cannot be stored --
+  // the same row reads as "You" to its owner and as a person's name to everyone else. The stored
+  // name has to be viewer-neutral, and the owner is already shown beside it.
+  await pool.query("UPDATE session_forks SET name = 'Canonical' WHERE name IS NULL AND role = 'dm'");
+  await pool.query("UPDATE session_forks SET name = 'Original' WHERE name IS NULL AND role <> 'dm'");
 
   // Per-member novel curation (Phase 2): each member can include/exclude
   // sessions for THEIR OWN published fork. A row exists only when a member

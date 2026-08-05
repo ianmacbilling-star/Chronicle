@@ -593,6 +593,46 @@ if (typeof window !== "undefined" && !window.__alertPatched) {
 
 // In-app confirm dialog (matches our popups; no browser URL header). Returns a
 // Promise<boolean>. Enter = OK, Escape / click-outside = Cancel.
+// v3.0.441 -- In-app PROMPT, same shape as uiConfirm below (TD-194). Resolves to the trimmed string,
+// or null on cancel. Written rather than reached for: there was no prompt helper in this codebase and
+// no native prompt() call anywhere, so inventing one would have been the only browser dialog in the
+// app -- and the one place a URL header shows up.
+function uiPrompt(title, message, initial) {
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+    var h = document.createElement('div');
+    h.textContent = title || '';
+    h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:8px;";
+    var msg = document.createElement('div');
+    msg.textContent = (message == null) ? '' : String(message);
+    msg.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.5;margin-bottom:14px;';
+    var input = document.createElement('input');
+    input.type = 'text'; input.maxLength = 60; input.value = initial || '';
+    input.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin-bottom:16px;';
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+    var cancel = document.createElement('button');
+    cancel.className = 'btn btn-secondary'; cancel.textContent = 'Cancel';
+    var ok = document.createElement('button');
+    ok.className = 'btn btn-primary'; ok.textContent = 'Save';
+    function done(v) { try { document.body.removeChild(overlay); } catch (e) {} document.removeEventListener('keydown', onKey); resolve(v); }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      else if (e.key === 'Enter' && document.activeElement === input) { e.preventDefault(); done(input.value.trim()); }
+    }
+    cancel.onclick = function () { done(null); };
+    ok.onclick = function () { done(input.value.trim()); };
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    row.appendChild(cancel); row.appendChild(ok);
+    box.appendChild(h); box.appendChild(msg); box.appendChild(input); box.appendChild(row);
+    overlay.appendChild(box); document.body.appendChild(overlay);
+    document.addEventListener('keydown', onKey);
+    setTimeout(function () { try { input.focus(); input.select(); } catch (e) {} }, 30);
+  });
+}
 function uiConfirm(message, opts) {
   opts = opts || {};
   return new Promise(function (resolve) {
@@ -11591,6 +11631,14 @@ function loadSessionForks(sessionId) {
         var sessReady = state.currentSession && state.currentSession.player_access_status === 'ready';
         btn.style.display = (isPlayer && sessReady && !mineFork) ? '' : 'none';
       }
+      // v3.0.441 -- New Version appears once the reader already HAS a version here, so it never
+      // competes with Make My Version. Shown regardless of tier: the 402 explains itself.
+      var nvBtn = document.getElementById('new-version-btn');
+      if (nvBtn) {
+        var canFork = !!(state.currentSession && (state.currentSession.player_access_status === 'ready'
+          || state.currentCampaign.my_role === 'dm'));
+        nvBtn.style.display = (mineFork && canFork) ? '' : 'none';
+      }
       var verMenu = document.getElementById('session-version-menu');
       if (verMenu) verMenu.style.display = mineFork ? '' : 'none';
       // Phase 4 - default a player onto their OWN version of this session
@@ -11747,6 +11795,63 @@ function reloadSessionForFork() {
     });
 }
 
+// v3.0.441 -- NEW VERSION (TD-194). Copies whichever version is CURRENTLY SELECTED, whoever owns
+// it -- Ian's call, and the right one: always copying the canonical would be wrong the moment
+// somebody is iterating on their own version.
+// The button stays VISIBLE for a member without Gold on purpose. A hidden control teaches nobody;
+// the 402 comes back naming both routes out (upgrade yourself, or the Story Master upgrades).
+function newSessionVersion() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var src = state.currentForkId || (state.sessionForks && state.sessionForks[0] && state.sessionForks[0].fork_id);
+  if (!src) { showAlert('There is no version here to copy yet.'); return; }
+  var srcFork = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(src); })[0];
+  var srcLabel = srcFork ? srcFork.label : 'this version';
+  uiPrompt('Name this version', 'Copying ' + srcLabel + '. What should this one be called?', '').then(function (name) {
+    name = (name || '').trim();
+    if (!name) return;
+    var btn = document.getElementById('new-version-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating\u2026'; }
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, source_fork_id: src })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
+        if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not create that version.'); return; }
+        state.currentForkId = res.j.fork_id;
+        loadSessionForks(state.currentSession.id);
+        reloadSessionForFork();
+      })
+      .catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
+        showAlert('Could not create that version. Please try again.');
+      });
+  });
+}
+// v3.0.441 -- rename any version you own, including the one you have had all along: the backfill
+// gave every existing fork a name so there is always something to change.
+function renameSessionVersion() {
+  if (!state.currentCampaign || !state.currentSession || !state.currentForkId) return;
+  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+  if (!f || !f.is_mine) { showAlert('You can only rename your own versions.'); return; }
+  uiPrompt('Rename version', 'What should this version be called?', f.name || '').then(function (name) {
+    if (name === null) return;
+    name = (name || '').trim();
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + f.fork_id + '/name', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not rename that version.'); return; }
+        loadSessionForks(state.currentSession.id);
+      })
+      .catch(function () { showAlert('Could not rename that version. Please try again.'); });
+  });
+}
 function makeMyVersion() {
   if (!state.currentCampaign || !state.currentSession) return;
   var btn = document.getElementById('make-my-version-btn');

@@ -4,6 +4,10 @@ const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveInclu
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
+// v3.0.441 -- Gold is access_rank 3 (TD-194). NOTE the Free Trial carries access_rank 4 by design,
+// so a trial member passes this -- deliberate, since trial sits at the TOP of creative access and
+// extra versions are a creative feature. Same rule the art styles use.
+const GOLD_RANK = 3;
 const imageHelpers = require('./images');
 const { getTokenCost, canAfford, spendTokens, characterReserveStatus } = require('./tokens');
 
@@ -932,9 +936,12 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
   const db = await getDb();
   const me = req.session.userId;
   const rows = await db.prepare(
-    "SELECT sf.id, sf.user_id, sf.role, sf.player_access_status, u.name AS user_name, u.email AS user_email " +
+    // v3.0.441 -- sf.name is the reader's own label for this version (TD-194). The id tiebreaker
+    // matters now that one user can hold several: two created in the same second would otherwise
+    // swap places between page loads.
+    "SELECT sf.id, sf.user_id, sf.role, sf.player_access_status, sf.name, u.name AS user_name, u.email AS user_email " +
     "FROM session_forks sf JOIN users u ON u.id = sf.user_id " +
-    "WHERE sf.session_id = ? ORDER BY (sf.role = 'dm') DESC, sf.created_at ASC"
+    "WHERE sf.session_id = ? ORDER BY (sf.role = 'dm') DESC, sf.created_at ASC, sf.id ASC"
   ).all(req.params.id);
   const visible = rows.filter(function(f) {
     return f.role === 'dm' || String(f.user_id) === String(me) || f.player_access_status === 'ready';
@@ -946,7 +953,14 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
       role: f.role,
       status: f.player_access_status,
       is_mine: mine,
-      label: f.role === 'dm' ? 'Story Master \u2014 Canonical' : (mine ? 'You (your version)' : (f.user_name || f.user_email || 'Player'))
+      name: f.name || null,
+      // v3.0.441 -- OWNER first, then the version name. With several versions per person the owner
+      // alone no longer identifies a row, and a bare version name loses whose it is -- which matters
+      // the moment a Story Master is looking down a member's list.
+      label: (function () {
+        var who = f.role === 'dm' ? 'Story Master' : (mine ? 'You' : (f.user_name || f.user_email || 'Player'));
+        return f.name ? (who + ' \u2014 ' + f.name) : (f.role === 'dm' ? (who + ' \u2014 Canonical') : (mine ? 'You (your version)' : who));
+      })()
     };
   });
   res.json(visible);
@@ -961,26 +975,77 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
 router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const sessionId = req.params.id;
-  if (req.campaignRole !== 'player') return res.status(403).json({ error: 'Only players make their own version' });
-  const dmFork = await db.prepare("SELECT id, player_access_status FROM session_forks WHERE session_id = ? AND role = 'dm'").get(sessionId);
-  if (!dmFork) return res.status(404).json({ error: 'Session has no canonical version' });
-  if (dmFork.player_access_status !== 'ready') return res.status(423).json({ error: 'This session is not Ready yet' });
-  const existing = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').get(sessionId, req.session.userId);
-  if (existing) return res.json({ fork_id: existing.id, existing: true });
+  // v3.0.441 -- MANY VERSIONS PER PERSON (TD-194). Three rules changed here and one did not.
+  // GONE: the player-only check. Ian: a Story Master should be able to hold several versions too,
+  // and the first fork of a session is the canonical one. Role is decided below by whether this
+  // session already HAS a canonical, not by who is asking.
+  // GONE: the early return that handed back an existing fork instead of creating one. That single
+  // line WAS the one-version-per-player rule -- pressing the button twice returned the same version
+  // both times, which is exactly what it would look like if the button were broken.
+  // KEPT: the Ready requirement. A session the Story Master has not published still cannot be
+  // forked by anyone.
+  const dmFork = await db.prepare("SELECT id, player_access_status FROM session_forks WHERE session_id = ? AND role = 'dm' ORDER BY id ASC").get(sessionId);
+  const isFirstEver = !dmFork;
+  if (!isFirstEver && dmFork.player_access_status !== 'ready' && req.campaignRole !== 'dm') {
+    return res.status(423).json({ error: 'This session is not Ready yet' });
+  }
+  // How many versions of this session does the caller already hold? The FIRST is free for everyone,
+  // which is today's behaviour and must not be taken away from a Copper member. Every version AFTER
+  // that needs Gold.
+  const mineRows = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').all(sessionId, req.session.userId);
+  const mineCount = (mineRows || []).length;
+  if (mineCount >= 1) {
+    // EFFECTIVE tier, not the account tier: max(own tier, the campaign Story Master's tier), the
+    // same call the art styles use. Ian: "the DM has to be gold or they have to be gold". Extra
+    // versions are a per-campaign feature, so inheriting the SM's tier is the right rule here --
+    // note getEffectiveTier's own warning that ACCOUNT-level limits must not work this way.
+    const effRank = accessRank(await getEffectiveTier(req.session.userId, req.campaignId || (req.campaign && req.campaign.id)));
+    if (effRank < GOLD_RANK) {
+      return res.status(402).json({
+        error: 'Extra versions need Gold. You can upgrade your own plan, or the Story Master of this campaign can upgrade theirs -- either one unlocks it for you here.',
+        code: 'FORK_TIER'
+      });
+    }
+  }
+  // WHICH VERSION IS BEING COPIED. Ian: the currently selected one, whoever owns it -- copying the
+  // canonical would be wrong the moment somebody is iterating on their own version. Validated
+  // through getViewableForkId so a caller cannot copy a version they are not allowed to READ.
+  let sourceForkId = req.body && req.body.source_fork_id ? Number(req.body.source_fork_id) : null;
+  if (sourceForkId) {
+    const allowed = await getViewableForkId(db, sessionId, req.session.userId, sourceForkId);
+    if (!allowed || String(allowed) !== String(sourceForkId)) {
+      return res.status(403).json({ error: 'You cannot copy that version' });
+    }
+  } else {
+    sourceForkId = dmFork ? dmFork.id : null;
+  }
+  if (!sourceForkId) return res.status(404).json({ error: 'Session has no version to copy' });
+  // A NAME is required from the second version onward, because two rows both reading "You" in the
+  // dropdown is indistinguishable. The first stays unnamed and keeps the label it has today.
+  let forkName = (req.body && typeof req.body.name === 'string') ? req.body.name.trim().slice(0, 60) : '';
+  if (!forkName && mineCount >= 1) return res.status(400).json({ error: 'Please name this version.' });
+  if (forkName) {
+    const clash = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND name = ?').get(sessionId, req.session.userId, forkName);
+    if (clash) return res.status(409).json({ error: 'You already have a version of this session called that.' });
+  }
+  // The FIRST fork a session ever gets is the canonical one -- Ian: "his first fork is the dm fork".
+  // Decided from the session, not from the caller's role, and backed by the partial unique index on
+  // (session_id) WHERE role='dm' so two canonicals are impossible rather than merely unlikely.
+  const newRole = isFirstEver ? 'dm' : 'player';
   const now = new Date().toISOString();
   const created = await db.prepare(
-    "INSERT INTO session_forks (session_id, user_id, role, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, created_at) " +
-    "SELECT ?, ?, 'player', 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, ? FROM session_forks WHERE id = ?"
-  ).run(sessionId, req.session.userId, now, dmFork.id);
+    "INSERT INTO session_forks (session_id, user_id, role, name, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, created_at) " +
+    "SELECT ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, ? FROM session_forks WHERE id = ?"
+  ).run(sessionId, req.session.userId, newRole, forkName || null, now, sourceForkId);
   const newForkId = created.lastInsertRowid;
   await db.prepare(
     "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, created_at, created_by) " +
     "SELECT session_id, ?, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
-  ).run(newForkId, now, req.session.userId, dmFork.id);
+  ).run(newForkId, now, req.session.userId, sourceForkId);
   await db.prepare(
     "INSERT INTO session_characters (session_id, fork_id, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, created_at) " +
     "SELECT session_id, ?, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, ? FROM session_characters WHERE fork_id = ?"
-  ).run(newForkId, now, dmFork.id);
+  ).run(newForkId, now, sourceForkId);
   // Pass 2 — copy explicit per-panel casts, mapping each source moment to the
   // new fork's moment with the same panel_order (unique per fork).
   await db.prepare(
@@ -989,15 +1054,35 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
     "JOIN moments om ON om.id = mc.moment_id " +
     "JOIN moments nm ON nm.fork_id = ? AND nm.panel_order = om.panel_order " +
     "WHERE om.fork_id = ? ON CONFLICT DO NOTHING"
-  ).run(newForkId, dmFork.id);
+  ).run(newForkId, sourceForkId);
   await db.prepare(
     "INSERT INTO moment_assets (moment_id, asset_id) " +
     "SELECT nm.id, ma.asset_id FROM moment_assets ma " +
     "JOIN moments om ON om.id = ma.moment_id " +
     "JOIN moments nm ON nm.fork_id = ? AND nm.panel_order = om.panel_order " +
     "WHERE om.fork_id = ? ON CONFLICT DO NOTHING"
-  ).run(newForkId, dmFork.id);
-  res.json({ fork_id: newForkId, existing: false });
+  ).run(newForkId, sourceForkId);
+  res.json({ fork_id: newForkId, existing: false, name: forkName || null, role: newRole, copied_from: sourceForkId });
+});
+
+// v3.0.441 -- RENAME a version (TD-194). Own versions only, including the canonical if the caller
+// owns it -- that is how the unnamed originals get names, so no data migration is needed beyond the
+// one-off backfill in db.js. A blank name clears back to the default label.
+router.patch('/:id/fork/:forkId/name', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const fork = await db.prepare('SELECT id, user_id FROM session_forks WHERE id = ? AND session_id = ?').get(req.params.forkId, req.params.id);
+  if (!fork) return res.status(404).json({ error: 'Version not found' });
+  if (String(fork.user_id) !== String(req.session.userId)) {
+    return res.status(403).json({ error: 'You can only rename your own versions' });
+  }
+  const name = (req.body && typeof req.body.name === 'string') ? req.body.name.trim().slice(0, 60) : '';
+  if (name) {
+    const clash = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND name = ? AND id <> ?')
+      .get(req.params.id, req.session.userId, name, fork.id);
+    if (clash) return res.status(409).json({ error: 'You already have a version of this session called that.' });
+  }
+  await db.prepare('UPDATE session_forks SET name = ? WHERE id = ?').run(name || null, fork.id);
+  res.json({ success: true, fork_id: fork.id, name: name || null });
 });
 
 // DELETE a version. Owner may delete their own; DM may delete any

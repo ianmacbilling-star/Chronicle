@@ -635,11 +635,19 @@
                   class="btn btn-primary"
                   onclick="makeMyVersion()"
                   style="display:none;">Make My Version</button>
+          <!-- v3.0.441 -- New Version (TD-194). Always shown once the reader already has one, so a
+               member who has not got Gold learns why from the message rather than from a missing
+               button. Copies whichever version is CURRENTLY SELECTED, whoever owns it. -->
+          <button id="new-version-btn"
+                  class="btn btn-secondary"
+                  onclick="newSessionVersion()"
+                  style="display:none;">New Version</button>
           <!-- Player-only: ellipsis menu holding Delete My Version. Shown only
                when the viewer has their own version (JS toggles this wrapper). -->
           <div class="row-menu" id="session-version-menu" style="display:none;">
             <button class="row-menu-btn" onclick="toggleRowMenu('session-version-dropdown', event)">&#8943;</button>
             <div class="row-menu-dropdown" id="session-version-dropdown">
+              <button class="row-menu-item" onclick="renameSessionVersion()">Rename This Version</button>
               <button class="row-menu-item row-menu-item-danger" onclick="deleteMyVersion()">Delete My Version</button>
             </div>
           </div>
