@@ -6737,11 +6737,25 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
           // A GROWN cell is INTENTIONALLY taller than its estimate (the optimizer grew the image to
           // fill white), so its est->real gap is not a clip risk -- skip these or the AT-RISK list
           // fills with false positives (a grown page reads as +1-3in 'under-planned' when it's fine).
+          // v3.0.436 -- A GROWN PAGE IS NO LONGER EXEMPT; IT IS JUDGED AGAINST THE BOX. TD-174/TD-022.
+          // Excluding grown pages silenced the warning on precisely the pages where the estimate is
+          // most wrong. On For ALL the Ages the list flagged PAGE 4 at +0.50in and said nothing about
+          // PAGE 6 at +2.15in -- real 9.10 against a 9.24 box -- because PAGE 6 had a grown cell. The
+          // alarm fired on the mild case and was muted on the severe one.
+          // The original reasoning was right about one thing: on a grown page the est->real GAP is
+          // intentional and says nothing about risk. So a grown page is not measured by its gap. It is
+          // measured by how close the REAL height is to the box, which is the only question that
+          // matters -- and it is reported in those terms rather than as `under-planned`, which would
+          // be untrue of a deliberate grow.
           var _hasGrown = (pg.cells || []).some(function (c) { return c.growMul && c.growMul !== 1; });
-          if (_hasGrown) return;
           var gap = pg.realUsed - pg.used;
           var alreadyOver = _dbg.overflows.some(function (o) { return o.page === pg.page; });
-          if (!alreadyOver && gap > _riskGap && pg.realUsed > _riskNearBox) _dbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
+          if (alreadyOver) return;
+          if (_hasGrown) {
+            if (pg.realUsed > _riskNearBox) _dbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000, grown: true });
+            return;
+          }
+          if (gap > _riskGap && pg.realUsed > _riskNearBox) _dbg.atRisk.push({ page: pg.page, realIn: pg.realUsed, estIn: pg.used, gapIn: Math.round(gap * 1000) / 1000 });
         });
         _dbg.remeasured = true;
       }
@@ -7694,7 +7708,18 @@ function magazinePlanText(packed) {
     L.push('!! NEVER-CLIP AT-RISK: ' + _risk.length + ' page(s) fit the box TOTAL but render far taller than planned');
     L.push('   (a tower beside-column or stacked cell can clip INSIDE these even though the page total is under box):');
     _risk.forEach(function (o) {
-      L.push('    PAGE ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  est ' + o.estIn.toFixed(2) + 'in  -> under-planned by ' + o.gapIn.toFixed(2) + 'in');
+      // v3.0.436 -- a GROWN page is not under-planned, it is FULL. Saying under-planned there would be
+      // false: the optimizer grew that picture deliberately, so the stale estimate is by design. What
+      // the model needs to know is how much room is actually left, which is none.
+      if (o.grown) {
+        L.push('    PAGE ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) +
+          'in of ' + CO_CLIP_BOX_IN.toFixed(2) + 'in -- only ' +
+          Math.max(0, Math.round((CO_CLIP_BOX_IN - o.realIn) * 100) / 100).toFixed(2) +
+          'in left. A picture here was GROWN on purpose, so the plan estimate of ' + o.estIn.toFixed(2) +
+          'in is stale by design. Do NOT move anything onto this page.');
+      } else {
+        L.push('    PAGE ' + o.page + ' (viewer p.' + _viewer(o.page) + ')  real ' + o.realIn.toFixed(2) + 'in  est ' + o.estIn.toFixed(2) + 'in  -> under-planned by ' + o.gapIn.toFixed(2) + 'in');
+      }
     });
   }
   if (!_ovf.length && !_risk.length && d.remeasured) {
@@ -7783,8 +7808,29 @@ function magazinePlanText(packed) {
   L.push('');
   L.push('PAGES  (* = underfull, used < ' + (d.pageH - 1).toFixed(1) + 'in)');
   d.pages.forEach(function (pg) {
-    var white = Math.round((d.pageH - pg.used) * 100) / 100;
-    var flag = (pg.used < d.pageH - 1) ? '  *UNDERFULL' : '';
+    // v3.0.436 -- WHITE AND UNDERFULL FOLLOW THE MEASUREMENT, NOT THE ESTIMATE. TD-174.
+    // Both were derived from `used`, the packer estimate, while REAL sat on the same line saying
+    // something else. On For ALL the Ages, PAGE 6 read `used 6.95 white 2.21 *UNDERFULL` beside
+    // `REAL 9.10` -- a page at 9.10 of 9.24, with 0.14in left, advertised to the model as having
+    // 2.21in of room and labelled underfull. The model was handed a correct number and a
+    // contradictory conclusion in the same breath, and the conclusion is the part phrased as an
+    // instruction.
+    // The gap is not a mystery: a GROWN cell is planned at its natural height (TD-174), so every
+    // page carrying one under-reports by the whole grow. Fixing the packer moves every boundary in
+    // every book; fixing what is REPORTED moves nothing and removes the false invitation, which is
+    // where the harm actually was.
+    // Deliberately one-directional: this can only ever say a page has LESS room than before, so it
+    // can withdraw a bad proposal and cannot invent a new one.
+    // AND THE TWO NUMBERS ARE MEASURED AGAINST DIFFERENT LIMITS. The estimate is built against the
+    // PACKER BUDGET (9.16in); a real measurement is against the CLIP BOX (9.24in), which is what the
+    // page physically holds. Subtracting a real height from the budget mixes the two and reports
+    // NEGATIVE white on pages that are comfortably inside the box -- 9.18 against 9.16 reads as
+    // -0.02 when the truth is 0.06in left. Each basis keeps its own limit.
+    var _real = (pg.realUsed != null);
+    var _basis = _real ? pg.realUsed : pg.used;
+    var _limit = _real ? CO_CLIP_BOX_IN : d.pageH;
+    var white = Math.round((_limit - _basis) * 100) / 100;
+    var flag = (_basis < _limit - 1) ? '  *UNDERFULL' : '';
     var realStr = (pg.realUsed != null) ? ('  REAL ' + pg.realUsed.toFixed(2) + ' (est ' + pg.used.toFixed(2) + ', ' + ((pg.realUsed - pg.used) >= 0 ? '+' : '') + (pg.realUsed - pg.used).toFixed(2) + ')') : '';
     L.push('  PAGE ' + pad(pg.page, 3) + ' (viewer p.' + pad(_viewer(pg.page), 3) + ') used ' + pad(pg.used.toFixed(2), 6) + '/ ' + d.pageH.toFixed(2) + '  white ' + pad(white.toFixed(2), 6) + flag + realStr);
     pg.cells.forEach(function (c) {
