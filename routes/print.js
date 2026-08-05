@@ -46,21 +46,50 @@ function applyPrintMarkup(totalCost, printCost, pct) {
   var charge = Number(totalCost || 0) + Number(printCost || 0) * (pct / 100);
   return Math.round(charge * 100) / 100;
 }
-// Customer-facing charge breakdown. Markup applies to the PRINT cost only
-// (Lulu print cost * (1 + pct/100)); shipping passes through at cost. The
-// displayed line items therefore sum to the total: print(marked) + shipping,
-// so the math always reconciles for the customer.
+// Customer-facing charge breakdown.
+// v3.0.425 -- MARKUP ON THE PRINT COST BEFORE TAX, AND TAX SHOWN AS ITS OWN LINE.
+// The markup used to be applied to Lulu's TAX-INCLUSIVE print cost, so a share of every markup was
+// a markup on tax -- small money, wrong on principle, and it made a tax line impossible to reconcile
+// with the total. Tax now passes through untouched and is displayed.
+// THE TOTAL IS ANCHORED ON WHAT LULU ACTUALLY BILLS US (quote.totalCost) plus the markup, NOT on the
+// sum of the parts. If Lulu ever adds a fee that is in its total and in none of the parts we read,
+// summing the parts would quietly charge the customer less than the order costs. The residual is
+// folded into the print line so the breakdown still adds up exactly, and logged so it cannot hide.
 function markedCharge(quote, pct) {
   var r2 = function (n) { return Math.round(Number(n || 0) * 100) / 100; };
-  var printAtCost = r2(quote.printCost);
-  var printMarked = r2(Number(quote.printCost || 0) * (1 + Number(pct || 0) / 100));
-  var shipping = r2(quote.shippingCost);
+  var printBase = Number(quote.printCostExclTax != null ? quote.printCostExclTax : quote.printCost) || 0;
+  var shipping = r2(quote.shippingCostExclTax != null ? quote.shippingCostExclTax : quote.shippingCost);
+  var tax = r2(quote.taxCost);
+  var providerTotal = Number(quote.totalCost || 0);
+  var customerCharge = r2(providerTotal + printBase * (Number(pct || 0) / 100));
+  var printMarked = r2(printBase * (1 + Number(pct || 0) / 100));
+  // Anything in Lulu's total that is not print, shipping or tax rides on the print line.
+  var residual = r2(customerCharge - (printMarked + shipping + tax));
+  if (Math.abs(residual) >= 0.01) {
+    try { console.warn('[print-quote] Lulu total ' + providerTotal + ' does not equal print ' + printBase + ' + shipping ' + shipping + ' + tax ' + tax + ' -- ' + residual + ' folded into the print line'); } catch (e) {}
+    printMarked = r2(printMarked + residual);
+  }
   return {
-    printAtCost: printAtCost,
+    printAtCost: r2(printBase),
     printMarked: printMarked,
     shipping: shipping,
-    customerCharge: r2(printMarked + shipping),
+    tax: tax,
+    customerCharge: customerCharge,
   };
+}
+// v3.0.425 -- ONE LINE PER QUOTE, SO THE TAX QUESTION IS ANSWERABLE FROM A LOG.
+// quote.raw was never logged and never stored, so nothing in the system could say whether Lulu was
+// reporting tax at all. A tax of 0.00 here means we are NOT collecting it and the margin is paying
+// for it; a tax around 8 percent of the order means it was always in the price and merely unshown.
+function logQuoteTax(where, quote, m) {
+  try {
+    console.log('[print-quote] ' + where + ': print ' + Number(quote.printCostExclTax || 0).toFixed(2)
+      + ' + shipping ' + Number(quote.shippingCostExclTax || 0).toFixed(2)
+      + ' + tax ' + Number(quote.taxCost || 0).toFixed(2)
+      + ' = Lulu total ' + Number(quote.totalCost || 0).toFixed(2)
+      + ' ' + (quote.currency || 'USD') + '; customer charged ' + Number(m.customerCharge || 0).toFixed(2)
+      + (Number(quote.taxCost || 0) > 0 ? '' : '  [NO TAX REPORTED -- see TD-222]'));
+  } catch (e) {}
 }
 
 function requireSession(req, res, next) {
@@ -190,6 +219,7 @@ router.post('/quote', requireSession, async function (req, res) {
     const db = await getDb();
     const pct = await getPrintMarkupPct(db);
     const _m = markedCharge(quote, pct);
+    logQuoteTax('quote', quote, _m);
 
     res.json({
       podPackageId: provider._packageId ? provider._packageId(built.spec) : undefined,
@@ -198,7 +228,8 @@ router.post('/quote', requireSession, async function (req, res) {
       currency: quote.currency,
       customerCharge: _m.customerCharge,
       markupPct: pct,
-      breakdown: { print: _m.printMarked, printAtCost: _m.printAtCost, shipping: _m.shipping },
+      breakdown: { print: _m.printMarked, printAtCost: _m.printAtCost, shipping: _m.shipping, tax: _m.tax },
+      providerTax: quote.taxCost,
     });
   } catch (e) {
     res.status(502).json({ error: 'Quote failed', detail: friendlyError(e, '') });
@@ -259,7 +290,9 @@ router.post('/order', requireSession, async function (req, res) {
     const quoteReq = buildOrderRequest(body, built.spec, 'quote', contactEmail);
     const quote = await provider.getQuote(quoteReq);
     const pct = await getPrintMarkupPct(db);
-    const customerCharge = markedCharge(quote, pct).customerCharge;
+    const _mo = markedCharge(quote, pct);
+    logQuoteTax('order', quote, _mo);
+    const customerCharge = _mo.customerCharge;
     const podPackageId = provider._packageId ? provider._packageId(built.spec) : null;
 
     // 2) Persist the order as pending_payment BEFORE creating the Checkout
@@ -287,8 +320,9 @@ router.post('/order', requireSession, async function (req, res) {
          ship_name, ship_street1, ship_street2, ship_city, ship_state,
          ship_postcode, ship_country, ship_phone, shipping_level,
          provider_cost, currency, customer_charge, payment_status, status,
-         order_name, book_title, campaign_name, source_kind, source_user_id, source_user_name)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         order_name, book_title, campaign_name, source_kind, source_user_id, source_user_name,
+         provider_tax, provider_cost_excl_tax, markup_pct)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       userId, body.campaignId || null, body.sessionId || null, provider.name, podPackageId,
       built.spec.binding, (body.selection || {}).colorTier, built.spec.coverFinish,
@@ -297,7 +331,13 @@ router.post('/order', requireSession, async function (req, res) {
       s.name || null, s.street1 || null, s.street2 || null, s.city || null, s.stateCode || null,
       s.postcode || null, s.countryCode || null, s.phone || null, quoteReq.shippingLevel,
       quote.totalCost, quote.currency, customerCharge, 'unpaid', 'pending_payment',
-      orderName, bookTitle, campaignName, sourceKind, sourceUserId, sourceUserName
+      orderName, bookTitle, campaignName, sourceKind, sourceUserId, sourceUserName,
+      // v3.0.425 -- KEEP THE TAX WITH THE ORDER. It cannot be reconstructed later: Lulu prices move,
+      // and a quote is only true at the moment it was taken. If a remittance obligation ever lands,
+      // this column is the history, and there is no way to backfill a column that was never written.
+      quote.taxCost != null ? quote.taxCost : null,
+      quote.totalCostExclTax != null ? quote.totalCostExclTax : null,
+      pct
     );
     const orderId = ins.lastInsertRowid;
     const externalId = 'po-' + orderId;

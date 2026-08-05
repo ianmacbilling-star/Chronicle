@@ -251,12 +251,33 @@ class LuluProvider extends PrintProvider {
         shipping_level: this._shippingLevel(req.shippingLevel),
       },
     });
-    const print = Number(raw.line_item_costs?.[0]?.total_cost_incl_tax || raw.total_cost_incl_tax || 0);
-    const shipping = Number(raw.shipping_cost?.total_cost_incl_tax || 0);
+    // v3.0.425 -- CARRY THE TAX, DO NOT JUST SWALLOW IT.
+    // These were the incl-tax figures only, so tax sat inside the price and was invisible: nothing
+    // logged it, nothing stored it, and the print markup was being applied on top of it. Lulu computes
+    // tax from the shipping address, and a real Lulu invoice shows it as roughly 8 percent of the WHOLE
+    // order -- items AND shipping -- which is larger than the print markup itself. Getting this wrong
+    // is the difference between a margin and a loss on every book sold.
+    const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+    const li = raw.line_item_costs?.[0] || {};
+    const sh = raw.shipping_cost || {};
+    const printIncl = n(li.total_cost_incl_tax || raw.total_cost_incl_tax);
+    const shipIncl = n(sh.total_cost_incl_tax);
+    // Fall back to the incl figure when the excl one is absent, so a response carrying only one of
+    // them is read as tax-free rather than as free.
+    const printExcl = n(li.total_cost_excl_tax) || printIncl;
+    const shipExcl = n(sh.total_cost_excl_tax) || shipIncl;
+    const totalIncl = n(raw.total_cost_incl_tax) || (printIncl + shipIncl);
+    const totalExcl = n(raw.total_cost_excl_tax) || (printExcl + shipExcl);
+    // total_tax when Lulu reports it; otherwise the difference, which is the same number.
+    const tax = raw.total_tax != null ? n(raw.total_tax) : Math.round((totalIncl - totalExcl) * 100) / 100;
     return {
-      printCost: print,
-      shippingCost: shipping,
-      totalCost: Number(raw.total_cost_incl_tax || print + shipping),
+      printCost: printIncl,          // unchanged meaning, so nothing already reading this shifts
+      shippingCost: shipIncl,
+      printCostExclTax: printExcl,
+      shippingCostExclTax: shipExcl,
+      taxCost: Math.max(0, Math.round(tax * 100) / 100),
+      totalCost: Number(totalIncl || printIncl + shipIncl),
+      totalCostExclTax: totalExcl,
       currency: raw.currency || 'USD',
       raw,
     };

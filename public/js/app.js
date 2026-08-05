@@ -13090,8 +13090,14 @@ function quotePrintOrder() {
       }
       var j = res.j;
       if (out) {
+        // v3.0.425 -- TAX IS ITS OWN LINE. It was always inside the print and shipping figures with
+        // nothing to show it, so a customer could not reconcile the total and neither could we. The
+        // three parts now add up to the number being charged.
+        var _tx = Number((j.breakdown && j.breakdown.tax) || 0);
         out.innerHTML = '<strong style="color:var(--gold);">$' + Number(j.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(j.currency) + '</strong> ' +
-          '<span style="color:rgba(245,232,200,0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) + ' + shipping $' + Number(j.breakdown.shipping).toFixed(2) + ')</span>';
+          '<span style="color:rgba(245,232,200,0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) +
+          ' + shipping $' + Number(j.breakdown.shipping).toFixed(2) +
+          (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>';
       }
     })
     .catch(function () { if (out) out.textContent = 'Could not price this order.'; });
@@ -13273,6 +13279,15 @@ function renderPrintReview(body, quote) {
   html += row('Ship to', addr);
   html += row('Shipping', body.shippingLevel);
   html += '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;"></div>';
+  // v3.0.425 -- the breakdown, so the total can be checked rather than taken on trust.
+  try {
+    var _bd = quote && quote.breakdown;
+    if (_bd) {
+      html += row('Printing', '$' + Number(_bd.print || 0).toFixed(2));
+      html += row('Shipping cost', '$' + Number(_bd.shipping || 0).toFixed(2));
+      if (Number(_bd.tax || 0) > 0) html += row('Sales tax', '$' + Number(_bd.tax).toFixed(2));
+    }
+  } catch (e) {}
   html += row('Total', '$' + Number(quote.customerCharge).toFixed(2) + ' ' + (quote.currency || 'USD'));
   sum.innerHTML = html;
   var prev = document.getElementById('print-review-preview');
@@ -14982,6 +14997,14 @@ function optimizeProgress(msg, opts) {
   opts = opts || {};
   if (opts.reset) { box.innerHTML = ''; box.style.display = 'block'; }
   if (msg == null) return;
+  // v3.0.426 -- A LINE THAT IS WRITTEN MUST BE VISIBLE.
+  // The box starts display:none in app.html and the ONLY thing that ever revealed it was the
+  // reset at the start of an Optimize run. So on any path that did not begin with a run -- load a
+  // saved book and edit a page being the obvious one -- every line was appended correctly into a
+  // hidden element and nobody saw a thing. That silently swallowed the save reminder, Saved and
+  // Ready to Publish, the scale numbers on an edit, and the confirmation that a saved layout had
+  // been restored: four things built precisely so this path could be watched.
+  if (box.style.display === 'none') box.style.display = 'block';
   var line = document.createElement('div');
   line.style.cssText = 'opacity:0;transition:opacity 0.3s;';
   line.innerHTML = (opts.done ? '&#10003; ' : '&#8226; ') + msg;

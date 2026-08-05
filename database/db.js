@@ -1309,6 +1309,12 @@ async function migrateCasting(pool) {
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS card_last4 TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS stripe_session_id TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT');
+  // v3.0.425 -- the tax the provider quoted, the pre-tax total it applied to, and the markup in
+  // force at the time. Written per order because none of the three can be reconstructed later:
+  // provider prices move, the markup is a live setting, and a quote is only true when taken.
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS provider_tax NUMERIC');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS provider_cost_excl_tax NUMERIC');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS markup_pct NUMERIC');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for
