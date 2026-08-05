@@ -11587,16 +11587,36 @@ function saveAccessStatus(status) {
 // state.currentForkId === null means "viewing the DM canonical".
 // A player may edit only when viewing their OWN version; toggling the
 // body class flips the per-panel edit/regen controls on for them.
+// v3.0.444 -- WHOSE VERSION IS ON SCREEN, asked once (TD-194).
+// `viewing-foreign-fork` hides the art style, narrative style, Generate, Extract, regen and prompt
+// buttons outright -- see style.css:1474. It was computed as, for a Story Master, "nothing is
+// selected": editable ONLY on the canonical. That was the same thing as "this is my version" while a
+// Story Master had exactly one. Select a second version and every one of those controls vanished --
+// not greyed, GONE, with nothing to explain it.
+// And `can-edit-fork` was gated on role === 'player', so a Story Master could never have it at all.
+// Both now ask the only question that matters: is the version on screen mine to edit?
+function forkOnScreenIsMine() {
+  var role = state.currentCampaign && state.currentCampaign.my_role;
+  // No selection means the canonical view, which belongs to the Story Master.
+  if (!state.currentForkId) return role === 'dm';
+  var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+  if (!f) return false;
+  if (f.is_mine) return true;
+  // A Story Master editing the canonical explicitly: the campaign role confers that, not ownership
+  // of the row, which can change hands on a handover.
+  return role === 'dm' && f.role === 'dm';
+}
 function updateForkEditability() {
   var role = state.currentCampaign && state.currentCampaign.my_role;
-  var canEdit = (role === 'player') && !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
-  document.body.classList.toggle('can-edit-fork', !!canEdit);
-  // Can the viewer edit the CURRENTLY shown fork? DM may edit only canonical
-  // (no currentForkId); a player only their own version. Any other view
-  // (e.g. DM looking at a player's version) is read-only.
-  var canEditCurrent = (role === 'dm') ? !state.currentForkId
-    : !!(state.currentForkId && state.myForkId && String(state.currentForkId) === String(state.myForkId));
-  document.body.classList.toggle('viewing-foreign-fork', !canEditCurrent);
+  var editable = forkOnScreenIsMine();
+  // can-edit-fork means "editing a version that is NOT the canonical" -- it turns on the per-panel
+  // controls a player gets on their own fork. A Story Master on their own second version is in
+  // exactly that position, so it is no longer role-gated; on the canonical they keep the controls
+  // they already had by other rules.
+  var onCanonical = !state.currentForkId ||
+    !!(state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId) && x.role === 'dm'; })[0];
+  document.body.classList.toggle('can-edit-fork', !!(editable && !onCanonical));
+  document.body.classList.toggle('viewing-foreign-fork', !editable);
 }
 
 function forkQ() {
