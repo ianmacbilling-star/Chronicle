@@ -4252,7 +4252,13 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   // site so Chromium can fetch them under setContent (which has no document base).
   // Panel images are absolute R2 URLs and are unaffected by <base>.
   var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-  if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+  // v3.0.427 -- html IS NULL ON THE STRIP PATH, AND THIS LINE DID NOT KNOW THAT.
+  // v3.0.426 skipped the RENDER when the interior came from the saved PDF, and skipped the flow
+  // fallback, and skipped the refusal -- but not this, which sits between them and rewrites the
+  // document head. So the strip succeeded, logged that it had succeeded, and then the route died on
+  // the next line with 'Cannot read properties of null'. Nothing downstream needs html when the
+  // bytes are already in hand.
+  if (baseUrl && html) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
 
   let pdfBuffer;
   if (_stripped) {
