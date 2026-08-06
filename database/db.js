@@ -1689,6 +1689,36 @@ async function getOrCreateDmFork(db, sessionId, dmUserId) {
   return r.lastInsertRowid;
 }
 
+// versionStyleDefaults: the STYLE a version carries, taken from the forks it already holds.
+//
+// THE THREE FIELDS ARE THE VERSION'S IDENTITY. "Pen and Ink with dark and grim narration" is a
+// statement about a BOOK, not about one session -- Ian, 2026-08-06: three versions of session one,
+// then session two, and each version should default to its own art and narration.
+//
+// PER FIELD, NOT PER ROW. The most recent fork that has an ART style may not be the most recent
+// fork that has a NARRATION style, so each is resolved on its own. One row would silently drop a
+// setting the version genuinely holds.
+//
+// NOT the same as the old campaign-wide inheritance it replaces, which keyed on sf.user_id: with
+// three versions of one session all owned by one person and all sharing a session date, that query
+// took an ARBITRARY row and handed its style to every version alike. The mechanism whose whole
+// purpose was keeping styles consistent was homogenising the versions that exist to differ.
+async function versionStyleDefaults(db, versionId) {
+  const out = { art_style_override: null, narrative_style: null, narrative_verbosity: null };
+  if (!versionId) return out;
+  const keys = Object.keys(out);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    const r = await db.prepare(
+      'SELECT sf.' + k + ' AS v FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
+      'WHERE sf.version_id = ? AND sf.' + k + " IS NOT NULL AND sf." + k + " <> '' " +
+      'ORDER BY s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
+    ).get(versionId);
+    if (r && r.v) out[k] = r.v;
+  }
+  return out;
+}
+
 // versionsForCampaign: every version a viewer may SELECT in this campaign, with the per-session
 // state the dropdown needs.
 //
@@ -2032,4 +2062,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign };
+module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -181,30 +181,41 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   // fork_status = the VIEWED fork's own status (the access-status dropdown
   // reflects whichever version you're looking at). player_access_status
   // above stays the DM-canonical value (campaign-lock semantics).
-  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used, narrative_verbosity, art_style_override FROM session_forks WHERE id=?').get(viewForkId);
+  const viewForkRow = await db.prepare('SELECT player_access_status, fork_notes, narrative_intro, narrative_sections, narrative_outro, narrative_outline, narrative_directions, narrative_style, narrative_style_used, narrative_verbosity, art_style_override, version_id FROM session_forks WHERE id=?').get(viewForkId);
   // Set-and-forget defaults: when this user has not chosen a style for THIS session
   // yet, inherit their most recent prior choice in this campaign (per-user; DM forks
   // carry the DM's user_id, so one lookup covers DM and players). Falls back to the
   // generic default only when there is no prior session. Non-destructive -- a default
   // only; it persists once the user picks a style or generates.
+  // v3.0.460 -- SCOPED TO THE VERSION, NOT THE USER (TD-252).
+  // The old pair keyed on sf.user_id. That was correct while a person held one fork per session;
+  // with three versions of session one, all owned by the same person and all carrying the same
+  // session date, the ORDER BY had no tiebreak that meant anything and it returned an ARBITRARY
+  // row -- then offered that one style to every version alike. Same class as TD-194, third time:
+  // a query made correct by a uniqueness assumption we removed.
+  //
+  // Still a READ-TIME default, still non-destructive: it fills the picker when this fork has made
+  // no choice, and the moment someone chooses or generates, the value is stored on the fork and
+  // this stops firing. Branch time (above) is what makes it STICK for a new session.
   var _inhNarr = null, _inhArt = null;
   try {
-    if (!viewForkRow || !viewForkRow.narrative_style) {
+    const _vid = viewForkRow && viewForkRow.version_id;
+    if (_vid && (!viewForkRow || !viewForkRow.narrative_style)) {
       const _rn = await db.prepare(
         'SELECT sf.narrative_style FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
-        'WHERE s.campaign_id = ? AND sf.user_id = ? AND sf.session_id <> ? ' +
+        'WHERE sf.version_id = ? AND sf.session_id <> ? ' +
         "AND sf.narrative_style IS NOT NULL AND sf.narrative_style <> '' " +
-        'ORDER BY s.session_date DESC, s.created_at DESC LIMIT 1'
-      ).get(req.params.campaignId, req.session.userId, session.id);
+        'ORDER BY s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
+      ).get(_vid, session.id);
       _inhNarr = _rn ? _rn.narrative_style : null;
     }
-    if (!(viewForkRow && viewForkRow.art_style_override) && !session.art_style) {
+    if (_vid && !(viewForkRow && viewForkRow.art_style_override) && !session.art_style) {
       const _ra = await db.prepare(
         'SELECT COALESCE(sf.art_style_override, s.art_style) AS art FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
-        'WHERE s.campaign_id = ? AND sf.user_id = ? AND sf.session_id <> ? ' +
+        'WHERE sf.version_id = ? AND sf.session_id <> ? ' +
         "AND COALESCE(sf.art_style_override, s.art_style) IS NOT NULL AND COALESCE(sf.art_style_override, s.art_style) <> '' " +
-        'ORDER BY s.session_date DESC, s.created_at DESC LIMIT 1'
-      ).get(req.params.campaignId, req.session.userId, session.id);
+        'ORDER BY s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
+      ).get(_vid, session.id);
       _inhArt = _ra ? _ra.art : null;
     }
   } catch (e) { _inhNarr = null; _inhArt = null; }
@@ -1128,6 +1139,28 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
     "SELECT ?, ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, ? FROM session_forks WHERE id = ?"
   ).run(sessionId, req.session.userId, newRole, forkName || null, _newVersionId, now, sourceForkId);
   const newForkId = created.lastInsertRowid;
+  // v3.0.460 -- CONTENT FROM THE SOURCE, STYLE FROM THE VERSION (TD-252).
+  // The INSERT above copies from sourceForkId, which is right for CONTENT: the moments, the
+  // narrative prose and the Direction notes for THIS session exist nowhere else. It is wrong for
+  // STYLE when adding a session to a version that already has one -- branching session two into
+  // "Ian Watercolor" from session two's CANONICAL fork would have taken the canonical's art style,
+  // so the version would render half in watercolour and half in whatever the Story Master used.
+  // Applied as an UPDATE rather than folded into the INSERT because it is a DIFFERENT SOURCE ROW,
+  // and only where the version actually holds a value -- a brand new version has none, and then
+  // the copied source style stands, which is the right starting point.
+  try {
+    const _vs = await versionStyleDefaults(db, _newVersionId);
+    const _sets = [], _vals = [];
+    ['art_style_override', 'narrative_style', 'narrative_verbosity'].forEach(function (k) {
+      if (_vs[k]) { _sets.push(k + ' = ?'); _vals.push(_vs[k]); }
+    });
+    if (_sets.length) {
+      _vals.push(newForkId);
+      await db.prepare('UPDATE session_forks SET ' + _sets.join(', ') + ' WHERE id = ?').run(_vals);   // the wrapper flattens its args (db.js run: args.flat()), so the array IS the param list
+    }
+  } catch (e) {
+    console.error('[versions] style defaults not applied to fork ' + newForkId + ': ' + ((e && e.message) || e));
+  }
   await db.prepare(
     "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, created_at, created_by) " +
     "SELECT session_id, ?, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
