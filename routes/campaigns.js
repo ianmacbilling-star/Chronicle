@@ -284,6 +284,28 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // per-(chooser, fork, campaign) prefs blob as the cover art, so they follow the book, not the browser.
   if (b.layout_opts !== undefined) patch.layout_opts = b.layout_opts || null;
   const _scP = await bookPrefsScope(db, req, Number(cid));
+  // v3.0.481 -- YOU MAY READ ANYONE'S BOOK SETTINGS; YOU MAY ONLY WRITE YOUR OWN (TD-282).
+  //
+  // Ian: "If I load up someone else's book it should load up their layout too from their version.
+  // But if I change something on the layout or on the cover, that change should not change THEIR
+  // settings. If it can save my own version that's fine. If not that's fine too."
+  //
+  // The first two were already true -- v3.0.478/479 made the read follow the version's owner, and
+  // the fork check above refuses a cross-fork write. The THIRD was the problem: a member editing
+  // while someone else's version was on screen wrote to (them, them, 0) and then READ back from
+  // (them, owner, ...), so the change was saved somewhere nothing ever looks. Write-only, silent,
+  // and it appeared to work until the page reloaded. That inversion is mine, introduced by the
+  // v3.0.478 read fix, and given the choice was open, refusing is better than saving into a hole.
+  //
+  // The Story Master curating a member's book is untouched -- that is the fork check above, and it
+  // is a different permission from this one.
+  if (_scP.bookVersionId && req.campaignRole !== 'dm') {
+    const _vw = await db.prepare('SELECT user_id, is_canonical FROM campaign_versions WHERE id = ?').get(_scP.bookVersionId);
+    const _mine = _vw && !_vw.is_canonical && String(_vw.user_id) === String(uid);
+    if (!_mine) {
+      return res.status(403).json({ error: 'You are looking at someone else\u2019s version. Switch to your own version to change the cover or the layout.' });
+    }
+  }
   const merged = await setForkBookPrefs(db, uid, fork, cid, patch, _scP.versionId);
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({

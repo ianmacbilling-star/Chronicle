@@ -1952,7 +1952,23 @@ function prefsVersionId(bv) {
 async function bookPrefsScope(db, req, campaignId) {
   const bv = await resolveBookVersion(db, campaignId, req);
   const asUser = (bv && bv.asUser) || (req.query && req.query.as_user ? Number(req.query.as_user) : null);
-  const fork = asUser || (req.session && req.session.userId) || null;
+  // v3.0.478 -- THE CANONICAL'S PREFS BELONG TO THE STORY MASTER, NOT TO WHOEVER IS LOOKING (TD-280).
+  //
+  // resolveBookVersion returns asUser = NULL for a canonical version, and that is right for the
+  // two things it was written for: effectiveIncludeMap(campaignId, null) means "read
+  // sessions.novel_include", and bookForkForSession falls through to the DM fork anyway. It is
+  // WRONG here. `fork` identifies whose PREFS ROW to read, and null made it default to the viewer
+  // -- so a member opening the canonical read their OWN empty base row, inherit never fired
+  // (chooserId === forkId), and the covers fell through to the campaign image. It looked correct
+  // to Ian as the Story Master only because HE is the right fork by coincidence.
+  //
+  // Derived from campaign_members, never stored: same rule as everywhere else in this feature, and
+  // it follows a Story Master handover for free.
+  let forkOwner = asUser;
+  if (bv && bv.version && bv.version.is_canonical) {
+    try { forkOwner = await versionOwnerUserId(db, bv.version); } catch (e) { forkOwner = asUser; }
+  }
+  const fork = forkOwner || (req.session && req.session.userId) || null;
   const chooser = (req.session && req.session.userId) || fork;
   return { chooser: chooser, fork: fork, versionId: prefsVersionId(bv), bookVersionId: bv ? bv.versionId : null, asUser: bv ? bv.asUser : asUser };
 }

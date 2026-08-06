@@ -4001,8 +4001,60 @@ function sessionGenBusy() {
   if (Date.now() - L.at > 15 * 60 * 1000) { state.sessionGenLock = null; return null; }
   return L.label;
 }
-function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; }
-function clearGenLock() { state.sessionGenLock = null; }
+// v3.0.477 -- repaint BOTH pickers. A generate started on the session page has to grey the Publish
+// picker too, or the block is only enforced on the page you happened to start from.
+function paintAllVersionLocks() {
+  try { paintForkLock(); } catch (e) {}
+  try { if (typeof paintVersionLock === 'function') paintVersionLock(); } catch (e) {}
+}
+function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; paintAllVersionLocks(); }
+function clearGenLock() { state.sessionGenLock = null; paintAllVersionLocks(); }
+
+// v3.0.476 -- THE SESSION VERSION DROPDOWN LOCKS WHILE WORK IS IN FLIGHT (TD-262b).
+//
+// forkQ() reads state.currentForkId AT CALL TIME:
+//     return state.currentForkId ? ('?fork_id=' + ...) : '';
+// so during a long generate, EVERY request resolves the fork when it fires rather than when the
+// run started. Switch versions half way through and the remaining saves land on the NEW fork --
+// narrative written into the wrong version, images attached to the wrong fork, no error anywhere.
+// Ian: "if you are generating pictures or narrative and you switch versions before it finishes it
+// messes things up right?" Yes, and worse than the optimize case v3.0.463 covered, because that
+// one only stales a screen while this one writes to the wrong book.
+//
+// Pinning the fork for the duration of a run would be the other fix, but it means threading a fork
+// id through every generate path and its polls -- more places to get wrong than the thing it
+// repairs. Blocking the switch is one rule in one place, and it matches what the Publish picker
+// already does for an optimize run.
+// v3.0.477 -- ONE RULE, BOTH PICKERS. Ian: "You can't switch the version picker or fork picker if
+// anything like that is running. Generate story, Optimize a File, Generate Narrative and Story,
+// Generate Narrative and Generate Images."
+//
+// v3.0.476 blocked the SESSION fork dropdown on generation and optimize; v3.0.463 blocked the
+// PUBLISH version picker on optimize ONLY. So a generate could still be dodged by switching on the
+// other page -- and both pickers ultimately move which fork the in-flight requests resolve to.
+// Two rules that were meant to be the same rule is the shape of most of what went wrong today, so
+// there is now one function and both pickers ask it.
+//
+// The four labels come from setGenLock's own call sites -- 'Generate Story', 'Generate Images',
+// 'Generate Narrative' (the combined Narrative+Images path takes the lock once, under one of
+// these) -- plus Optimize from its three run flags. Nothing else can start work on a fork.
+function workInFlightLabel() {
+  try { if (typeof sessionGenBusy === 'function' && sessionGenBusy()) return sessionGenBusy(); } catch (e) {}
+  if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) return 'Optimize';
+  return null;
+}
+// Kept as the old name so nothing that already calls it has to change; it is the same question.
+function forkSwitchBlockedBy() { return workInFlightLabel(); }
+function paintForkLock() {
+  try {
+    var sel = document.getElementById('session-fork-select');
+    if (!sel) return;
+    var by = forkSwitchBlockedBy();
+    sel.disabled = !!by;
+    sel.style.opacity = by ? '0.5' : '';
+    sel.title = by ? (by + ' is running on this version. Let it finish before switching.') : '';
+  } catch (e) {}
+}
 function ensureGenFree() {
   var b = sessionGenBusy();
   if (b) {
@@ -6380,10 +6432,11 @@ async function onNovelVersionChange(val) {
   // switching mid-run a natural thing to do rather than an odd one.
   // Belt as well as braces: the select is disabled while locked (paintVersionLock), and this
   // refuses anyway, because a disabled control can still be driven by a script or a stale event.
-  if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) {
+  var _busy = workInFlightLabel();
+  if (_busy) {
     var _sel = document.getElementById('novel-version-select');
     if (_sel) _sel.value = state.novelVersionId || '';
-    showAlert('An optimize run is in progress on this version. Let it finish, or press Cancel, before switching versions.');
+    showAlert(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
   // v3.0.471 -- AN ORDER IN PROGRESS BLOCKS THE SWITCH UNTIL IT IS ANSWERED FOR (TD-276).
@@ -6983,7 +7036,8 @@ function openPrepImagePicker(kind) {
     var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
     x.addEventListener('click', closePrepImagePicker);
     head.appendChild(h); head.appendChild(x);
-    var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+    var grid = document.createElement('div'); grid.className = 'prep-img-grid prep-img-grid-cover';   // v3.0.482 -- the COVER picker only. openCampaignImagePicker and _buildCastPicker build the
+    // same grid for a campaign image and for character portraits, and neither is a book cover.
     if (!rows.length) {
       var empty = document.createElement('div'); empty.className = 'prep-img-empty';
       empty.textContent = 'No archived images yet. Lock or archive images from the Storyboard, then choose one here.';
@@ -12130,6 +12184,9 @@ function loadSessionForks(sessionId) {
         if (selId) sel.value = String(selId);
         // Only worth showing once there's more than the canonical to pick.
         sel.style.display = forks.length > 1 ? '' : 'none';
+        // Rebuilding the options resets disabled, so re-apply the lock. loadSessionForks runs on
+        // fork create, delete and rename -- all of which can happen while a run is in flight.
+        paintForkLock();
       }
       var mineFork = forks.filter(function(f) { return f.is_mine; })[0];
       // v3.0.442 -- myForkId MEANS "the version I am allowed to edit", and eleven call sites read it
@@ -12163,7 +12220,19 @@ function loadSessionForks(sessionId) {
       // v3.0.446 -- resolve against what the DROPDOWN is actually showing. state.currentForkId is
       // null while the canonical is selected and is not yet set on a first paint, so keying the menu
       // solely on it made the ellipsis vanish -- taking Delete with it.
-      var shownId = state.currentForkId || (sel && sel.value) || (dmFork && dmFork.fork_id);
+      // v3.0.475 -- THE FALLBACK IS WHY IT "DOESN'T ALWAYS SHOW" (TD-278). state.currentForkId is
+      // null on a first paint and after several of the version-switch resets, so shownId fell
+      // through to the CANONICAL -- whose is_mine is false for a member -- and the ellipsis
+      // vanished while that member's own version was the one selected in the dropdown.
+      //
+      // The dropdown is the truth about what is on screen, so it is asked FIRST. Only if it has no
+      // value at all does this fall back, and it falls back to MY fork rather than the canonical:
+      // selId three lines up already prefers currentForkId, so the two agree by construction
+      // instead of by coincidence.
+      //
+      // Third time today a "which version am I acting on" fallback resolved to the wrong fork
+      // (TD-194 was twelve of them; the delete in v3.0.462 was the tenth).
+      var shownId = (sel && sel.value) || state.currentForkId || (mineFork && mineFork.fork_id) || (dmFork && dmFork.fork_id);
       var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
       if (verMenu) verMenu.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
       // v3.0.448 -- DELETE IS ALWAYS OFFERED ON A VERSION YOU OWN. Ian: it needs to still be there
@@ -12190,6 +12259,20 @@ function loadSessionForks(sessionId) {
 }
 
 function onForkChange(forkId) {
+  // v3.0.476 -- REFUSE WHILE WORK IS IN FLIGHT (TD-262b). Belt as well as braces: the dropdown is
+  // disabled by paintForkLock, and this refuses anyway, because a disabled control can still be
+  // driven by a stale event or a script. The picker is snapped back so a refusal leaves the page
+  // exactly where it was rather than half-moved.
+  var _blockedBy = forkSwitchBlockedBy();
+  if (_blockedBy) {
+    var _fs = document.getElementById('session-fork-select');
+    if (_fs) {
+      var _dm = (state.sessionForks || []).filter(function (f) { return f.role === 'dm'; })[0];
+      _fs.value = String(state.currentForkId || (_dm ? _dm.fork_id : ''));
+    }
+    showAlert(_blockedBy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
+    return;
+  }
   var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
@@ -12409,14 +12492,39 @@ function renameSessionVersion() {
       .catch(function () { showAlert('Could not rename that version. Please try again.'); });
   });
 }
-function makeMyVersion() {
+// v3.0.474 -- ASKS, AND CAN ALSO JOIN AN EXISTING VERSION (TD-277).
+//
+// This posted {} and never asked for anything. It predates versions entirely, from when a member
+// held one fork per session and the name was decoration. Under Model B a version is campaign-level
+// and shows on EVERY session, so an unnamed one is a book the reader cannot identify -- and worse,
+// the server auto-named the first and asked for the second, so pressing the same button on session
+// two was refused for a reason nothing on screen explained.
+//
+// It now uses the SAME dialog as New Version, which means a member on their second session is
+// offered the version they already have rather than being pushed to invent another name for the
+// same book. That was the actual thing Ian was trying to do.
+async function makeMyVersion() {
   if (!state.currentCampaign || !state.currentSession) return;
   var btn = document.getElementById('make-my-version-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Creating\u2026'; }
+  var mine = [];
+  try {
+    var _r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/versions');
+    if (_r.ok) {
+      var _all = await _r.json();
+      mine = (Array.isArray(_all) ? _all : []).filter(function (v) {
+        return v.is_mine && !v.is_canonical && v.here === 'canonical';
+      });
+    }
+  } catch (e) { mine = []; }
+  var pick = await uiVersionPick('Story Master \u2014 Canonical', mine);
+  if (!pick) return;
+  var body = {};
+  if (pick.version_id) body.version_id = pick.version_id; else body.name = pick.name;
+  if (btn) { btn.disabled = true; btn.textContent = pick.version_id ? 'Adding\u2026' : 'Creating\u2026'; }
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
+    body: JSON.stringify(body)
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -12425,6 +12533,7 @@ function makeMyVersion() {
       state.currentForkId = data.fork_id;
       loadSessionForks(state.currentSession.id);
       reloadSessionForFork();
+      if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();
     })
     .catch(function(e) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
@@ -12900,6 +13009,15 @@ function saveCustomLayoutPrefs(ctx){
 function saveCampaignLayoutOpts(ctx){
   try {
     var c = state.currentCampaign; if (!c || !state.user) return;
+    // v3.0.481 -- DO NOT SAVE ONTO SOMEONE ELSE'S VERSION (TD-282). The server refuses this too;
+    // stopping here as well means the reader is told once, plainly, instead of a 403 arriving from
+    // a background PUT nobody was watching. Layout rides the same prefs blob as the cover, so it
+    // gets the same rule the cover already had -- prepUseMember gates the images, this gates the
+    // layout, and they now agree.
+    if (ctx !== 'session' && typeof novelOwnView === 'function' && !novelOwnView()) {
+      if (typeof showAlert === 'function') showAlert('You are looking at someone else\u2019s version. Switch to your own version to change the layout.');
+      return;
+    }
     var fork = null;
     try { var m = (typeof mpMemberFor === 'function') ? mpMemberFor(ctx === 'session' ? 'session' : 'novel') : null; fork = (m && m.userId) ? m.userId : null; } catch (e) {}
     var body = { layout_opts: JSON.stringify({ opts: customOpts, active: customActive }) };
@@ -15686,13 +15804,20 @@ function optimizeLockNotice() {
 function paintVersionLock() {
   var sel = document.getElementById('novel-version-select');
   if (!sel) return;
-  var locked = !!(window._aiLoopRunning || window._aiPreloop || window._aiFinishing);
-  sel.disabled = locked;
-  sel.style.opacity = locked ? '0.5' : '';
-  sel.title = locked ? 'Locked while an optimize run is in progress on this version.' : '';
+  // v3.0.477 -- ASKS THE SAME QUESTION AS THE SESSION DROPDOWN. This used to read the three
+  // optimize flags directly and so ignored generation entirely -- a generate running on the
+  // session page left this picker wide open, and moving it moves the fork those requests resolve
+  // to just as surely.
+  var by = workInFlightLabel();
+  sel.disabled = !!by;
+  sel.style.opacity = by ? '0.5' : '';
+  sel.title = by ? (by + ' is running on this version. Let it finish before switching.') : '';
 }
 function paintPublishLock() {
   try { paintVersionLock(); } catch (e) {}
+  // v3.0.476 -- the SESSION dropdown rides the same heartbeat, so an optimize run releases it
+  // without anyone having to touch the page.
+  try { paintForkLock(); } catch (e) {}
   try {
     var locked = optimizeRunIsElsewhere();
     var els = [], i, nn = document.querySelectorAll('.novel-nav-btn');
