@@ -4001,8 +4001,14 @@ function sessionGenBusy() {
   if (Date.now() - L.at > 15 * 60 * 1000) { state.sessionGenLock = null; return null; }
   return L.label;
 }
-function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; paintForkLock(); }
-function clearGenLock() { state.sessionGenLock = null; paintForkLock(); }
+// v3.0.477 -- repaint BOTH pickers. A generate started on the session page has to grey the Publish
+// picker too, or the block is only enforced on the page you happened to start from.
+function paintAllVersionLocks() {
+  try { paintForkLock(); } catch (e) {}
+  try { if (typeof paintVersionLock === 'function') paintVersionLock(); } catch (e) {}
+}
+function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; paintAllVersionLocks(); }
+function clearGenLock() { state.sessionGenLock = null; paintAllVersionLocks(); }
 
 // v3.0.476 -- THE SESSION VERSION DROPDOWN LOCKS WHILE WORK IS IN FLIGHT (TD-262b).
 //
@@ -4019,11 +4025,26 @@ function clearGenLock() { state.sessionGenLock = null; paintForkLock(); }
 // id through every generate path and its polls -- more places to get wrong than the thing it
 // repairs. Blocking the switch is one rule in one place, and it matches what the Publish picker
 // already does for an optimize run.
-function forkSwitchBlockedBy() {
+// v3.0.477 -- ONE RULE, BOTH PICKERS. Ian: "You can't switch the version picker or fork picker if
+// anything like that is running. Generate story, Optimize a File, Generate Narrative and Story,
+// Generate Narrative and Generate Images."
+//
+// v3.0.476 blocked the SESSION fork dropdown on generation and optimize; v3.0.463 blocked the
+// PUBLISH version picker on optimize ONLY. So a generate could still be dodged by switching on the
+// other page -- and both pickers ultimately move which fork the in-flight requests resolve to.
+// Two rules that were meant to be the same rule is the shape of most of what went wrong today, so
+// there is now one function and both pickers ask it.
+//
+// The four labels come from setGenLock's own call sites -- 'Generate Story', 'Generate Images',
+// 'Generate Narrative' (the combined Narrative+Images path takes the lock once, under one of
+// these) -- plus Optimize from its three run flags. Nothing else can start work on a fork.
+function workInFlightLabel() {
   try { if (typeof sessionGenBusy === 'function' && sessionGenBusy()) return sessionGenBusy(); } catch (e) {}
   if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) return 'Optimize';
   return null;
 }
+// Kept as the old name so nothing that already calls it has to change; it is the same question.
+function forkSwitchBlockedBy() { return workInFlightLabel(); }
 function paintForkLock() {
   try {
     var sel = document.getElementById('session-fork-select');
@@ -6411,10 +6432,11 @@ async function onNovelVersionChange(val) {
   // switching mid-run a natural thing to do rather than an odd one.
   // Belt as well as braces: the select is disabled while locked (paintVersionLock), and this
   // refuses anyway, because a disabled control can still be driven by a script or a stale event.
-  if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) {
+  var _busy = workInFlightLabel();
+  if (_busy) {
     var _sel = document.getElementById('novel-version-select');
     if (_sel) _sel.value = state.novelVersionId || '';
-    showAlert('An optimize run is in progress on this version. Let it finish, or press Cancel, before switching versions.');
+    showAlert(_busy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
     return;
   }
   // v3.0.471 -- AN ORDER IN PROGRESS BLOCKS THE SWITCH UNTIL IT IS ANSWERED FOR (TD-276).
@@ -15772,10 +15794,14 @@ function optimizeLockNotice() {
 function paintVersionLock() {
   var sel = document.getElementById('novel-version-select');
   if (!sel) return;
-  var locked = !!(window._aiLoopRunning || window._aiPreloop || window._aiFinishing);
-  sel.disabled = locked;
-  sel.style.opacity = locked ? '0.5' : '';
-  sel.title = locked ? 'Locked while an optimize run is in progress on this version.' : '';
+  // v3.0.477 -- ASKS THE SAME QUESTION AS THE SESSION DROPDOWN. This used to read the three
+  // optimize flags directly and so ignored generation entirely -- a generate running on the
+  // session page left this picker wide open, and moving it moves the fork those requests resolve
+  // to just as surely.
+  var by = workInFlightLabel();
+  sel.disabled = !!by;
+  sel.style.opacity = by ? '0.5' : '';
+  sel.title = by ? (by + ' is running on this version. Let it finish before switching.') : '';
 }
 function paintPublishLock() {
   try { paintVersionLock(); } catch (e) {}
