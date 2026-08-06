@@ -6371,7 +6371,7 @@ function applyNovelVersion(versionId) {
   state.novelAsUser = (v && !v.is_canonical && v.owner_user_id != null) ? String(v.owner_user_id) : null;
 }
 
-function onNovelVersionChange(val) {
+async function onNovelVersionChange(val) {
   // v3.0.463 -- REFUSE A SWITCH WHILE A RUN IS IN FLIGHT (TD-262).
   // finalizeBookQuery() is read at CALL time, so a run started on one version and finishing after
   // the picker moved would write save-optimized against the OTHER one -- overwriting an approved
@@ -6385,6 +6385,22 @@ function onNovelVersionChange(val) {
     if (_sel) _sel.value = state.novelVersionId || '';
     showAlert('An optimize run is in progress on this version. Let it finish, or press Cancel, before switching versions.');
     return;
+  }
+  // v3.0.471 -- AN ORDER IN PROGRESS BLOCKS THE SWITCH UNTIL IT IS ANSWERED FOR (TD-276).
+  // Asked BEFORE anything is applied, and the picker is snapped back on a refusal, so declining
+  // leaves the page exactly as it was rather than half-moved.
+  if (orderIsTeedUp()) {
+    var _ok = await uiConfirm(
+      'You have an order ready on this version \u2014 the quote and the interior were priced for it.\n\n' +
+      'Switching versions clears that, and you would need to build and price the order again for the other one.\n\n' +
+      'Nothing has been purchased, so nothing is lost but the setup.',
+      { title: 'Leave this order behind?', okText: 'Switch versions', cancelText: 'Stay here', danger: true, preserveLines: true }
+    );
+    if (!_ok) {
+      var _s = document.getElementById('novel-version-select');
+      if (_s) _s.value = state.novelVersionId || '';
+      return;
+    }
   }
   // v3.0.457 -- the picker's value is a VERSION id now, not a user id.
   applyNovelVersion(val);
@@ -6400,7 +6416,60 @@ function onNovelVersionChange(val) {
 // runs immediately after, but the REAL default now comes back from the server -- and when it did,
 // nothing told the page to reload. So the dropdown updated and the tiles did not. A second copy of
 // this tail would have drifted from the first within a week; there is one.
+// optimizeResetForVersion: put the Optimize tab back to how it looks on a clean arrival (TD-275).
+//
+// Ian: "the optimize tab needs to clear and prep like you are coming in clean." Switching versions
+// left the previous version's LOG and progress readout on screen, which is worse than untidy -- the
+// run it describes belongs to a different book, and the token cost and page counts in it are that
+// book's. finalizeClearScanState() already drops the panes and counts; the log and the progress
+// list were never in it, because until versions existed nothing could change the book underneath
+// them without leaving the tab.
+//
+// loadFinalize memoises on the composed URL, and as_version is IN that URL, so entry would rebuild
+// correctly by itself -- but only on ENTRY. Someone standing on the Optimize tab when the picker
+// moves keeps a stale screen. Nulling the memo forces the rebuild either way.
+function optimizeResetForVersion() {
+  try { if (typeof finalizeClearScanState === 'function') finalizeClearScanState(); } catch (e) {}
+  try { var lg = document.getElementById('__aiLoopLog'); if (lg) lg.innerHTML = ''; } catch (e) {}
+  try {
+    var pw = document.getElementById('layoutai-progress-wrap');
+    if (pw) pw.style.display = 'none';
+    var pf = document.getElementById('layoutai-progress-fill'); if (pf) pf.style.width = '0%';
+    var pm = document.getElementById('layoutai-progress-msg'); if (pm) pm.textContent = '';
+  } catch (e) {}
+  try { var ll = document.getElementById('layoutai-load-last'); if (ll) ll.style.display = 'none'; } catch (e) {}
+  try { if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null; } catch (e) {}
+  try { _finalizeFixPending = false; _finalizeSavedReady = false; } catch (e) {}
+}
+
+// orderIsTeedUp / orderResetForVersion: an order in progress belongs to ONE book (TD-276).
+//
+// Ian: "if there is an Order teed up Ask the user if they want to navigate away from that and loose
+// the order. If so then clear the order tab too. If not don't change the version." A quote is
+// priced against a specific interior with a specific page count; carrying it onto another version
+// would show a price for a book nobody is buying, which is the one place in this app where being
+// quietly wrong costs money.
+function orderIsTeedUp() {
+  try {
+    var q = document.getElementById('print-quote');
+    if (q && q.textContent && q.textContent.trim()) return true;
+    if (typeof printInteriorCache !== 'undefined' && printInteriorCache && printInteriorCache.url) return true;
+    if (typeof printActualPages !== 'undefined' && printActualPages > 0) return true;
+  } catch (e) {}
+  return false;
+}
+function orderResetForVersion() {
+  try { var q = document.getElementById('print-quote'); if (q) q.textContent = ''; } catch (e) {}
+  try { if (typeof printInteriorCache !== 'undefined') printInteriorCache = { key: '', url: '', pages: 0 }; } catch (e) {}
+  try { if (typeof printActualPages !== 'undefined') printActualPages = 0; } catch (e) {}
+  try { if (typeof showPrintMsg === 'function') showPrintMsg('', null); } catch (e) {}
+}
+
 function novelVersionApplied() {
+  // v3.0.471 -- the Optimize tab is rebuilt from scratch for the version now on screen. The Layout
+  // text and Prep & Preview already swapped correctly; this is the tab that did not.
+  optimizeResetForVersion();
+  orderResetForVersion();
   updateNovelPublishGuard();
   if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof prepSyncTitle === 'function') prepSyncTitle(); if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
