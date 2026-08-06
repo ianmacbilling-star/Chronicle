@@ -6333,6 +6333,35 @@ function loadNovelPeople() {
   });
 }
 
+// bookMetaVersionQ: the version fragment for every /my-book-meta call (TD-274).
+//
+// WHY. fork_book_prefs holds the cover, the back cover, the title image, the title colour, the
+// book title AND the layout options -- and v3.0.455 made that table version-scoped. Six client
+// calls read and write it and NOT ONE of them named the version, so every one resolved to
+// version 0, the base book. Ian edited the cover on Watercolor and it landed on the canonical:
+// the write went to the base row, and the read came back from the same base row, so BOTH versions
+// showed it. Exactly the shape of TD-261, which was fixed for the include checkbox and not swept
+// any wider. This is that sweep.
+//
+// ctx 'session' resolves from the fork ON THE SESSION PAGE; anything else from the Publish picker.
+// The raw version id is sent either way -- the server maps a CANONICAL version to 0 (prefsVersionId
+// in database/db.js), so the canonical keeps writing to the base row and no data has to move.
+function bookMetaVersionId(ctx) {
+  try {
+    if (ctx === 'session') {
+      var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+      return (f && f.version_id) ? f.version_id : null;
+    }
+    var v = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
+    if (v) return v.version_id;
+    return state.novelVersionId || null;
+  } catch (e) { return null; }
+}
+function bookMetaVersionQ(prefix, ctx) {
+  var id = bookMetaVersionId(ctx);
+  return id ? (prefix + 'as_version=' + encodeURIComponent(id)) : '';
+}
+
 // applyNovelVersion: set the two state fields the rest of the page reads, from ONE place.
 // as_user is kept in step because eleven URL builders and the book-meta writes still key on it;
 // the server prefers as_version wherever both arrive.
@@ -6753,7 +6782,7 @@ function prepSaveTitleColor() {
   if (typeof prepUseMember === 'function' && prepUseMember()) {
     // Per-fork (SM canonical or member), written to the logged-in user's own row.
     var _tcB = { title_color: el.value }; if (state.novelAsUser) _tcB.fork_user = state.novelAsUser;
-    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tcB) }).catch(function(){});
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tcB) }).catch(function(){});
   }
 }
 function prepPanelSync() {
@@ -6785,7 +6814,7 @@ function prepLoadBookMeta(cb) {
   var c = state.currentCampaign;
   var forkUser = state.novelAsUser || (state.user && state.user.id);
   if (!c || !forkUser) { state.bookMeta = _prepCampaignMeta(); if (cb) cb(); return; }
-  fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser), { cache: 'no-store' })
+  fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser) + bookMetaVersionQ('&'), { cache: 'no-store' })
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(m){ state.bookMeta = m || _prepCampaignMeta(); applyCampaignLayoutOpts(m); finalizeClearStats(); if (cb) cb(); })
     .catch(function(){ state.bookMeta = _prepCampaignMeta(); finalizeClearStats(); if (cb) cb(); });
@@ -6794,7 +6823,7 @@ function _prepMemberSetImage(kind, url) {
   var c = state.currentCampaign; if (!c) return;
   var field = PREP_IMG_KINDS[kind].field;
   var body = {}; body[field] = url; if (state.novelAsUser) body.fork_user = state.novelAsUser;
-  fetch('/api/campaigns/' + c.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  fetch('/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function(r){ return r.json(); })
     .then(function(m){ state.bookMeta = m || state.bookMeta || {}; renderPrepThumbs(); showAlert(url ? 'Your book image set.' : 'Reverted to the campaign image.'); })
     .catch(function(){ showAlert('Could not update your book image.'); });
@@ -6899,7 +6928,7 @@ async function publishStory() {
   var bEl = document.getElementById('prep-blurb');
   var aEl = document.getElementById('prep-attest');
   var _title = tEl ? tEl.value.trim() : '';
-  if (prepUseMember() && _title) { var _btB = { book_title: _title }; if (state.novelAsUser) _btB.fork_user = state.novelAsUser; fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_btB) }).catch(function(){}); }
+  if (prepUseMember() && _title) { var _btB = { book_title: _title }; if (state.novelAsUser) _btB.fork_user = state.novelAsUser; fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_btB) }).catch(function(){}); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
   var btn = document.getElementById('novel-publish-btn');
@@ -12756,7 +12785,7 @@ function saveCampaignLayoutOpts(ctx){
     try { var m = (typeof mpMemberFor === 'function') ? mpMemberFor(ctx === 'session' ? 'session' : 'novel') : null; fork = (m && m.userId) ? m.userId : null; } catch (e) {}
     var body = { layout_opts: JSON.stringify({ opts: customOpts, active: customActive }) };
     if (fork) body.fork_user = fork;
-    fetch('/api/campaigns/' + c.id + '/my-book-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function(){});
+    fetch('/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?', ctx), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function(){});
   } catch (e) {}
 }
 // Keep the two layout UIs in lockstep with the customOpts store: the inline Preview & Export panel
@@ -12813,7 +12842,7 @@ function loadCampaignLayoutOpts(ctx){
     if (!forkUser) return;
     var seq = ++_clLoadSeq;
     finalizeClearStats();   // the Before/After numbers belong to the campaign we just left
-    fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser), { cache: 'no-store' })
+    fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser) + bookMetaVersionQ('&', ctx), { cache: 'no-store' })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(m){ if (seq !== _clLoadSeq) return; applyCampaignLayoutOpts(m); _novelRefreshPreviewIfOpen(); })   // ignore a slow reply for a campaign we already left; repaint the preview if it is the open sub-tab
       .catch(function(){});
