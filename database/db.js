@@ -1703,17 +1703,38 @@ async function getOrCreateDmFork(db, sessionId, dmUserId) {
 // three versions of one session all owned by one person and all sharing a session date, that query
 // took an ARBITRARY row and handed its style to every version alike. The mechanism whose whole
 // purpose was keeping styles consistent was homogenising the versions that exist to differ.
-async function versionStyleDefaults(db, versionId) {
+// v3.0.468 -- EXCLUDES THE SESSION BEING BRANCHED (TD-272), and that omission is the whole bug.
+//
+// This runs AFTER the new fork is inserted, so the new fork is already IN the version -- and with
+// the latest session date, it won the ORDER BY. The INSERT populates it by copying from the SOURCE
+// (session two's canonical), so the query found the canonical's value ON THE NEW ROW and wrote it
+// back over itself. A no-op that looks exactly like a failure.
+//
+// WHY ART APPEARED TO WORK AND NARRATION DID NOT, which is what named the bug: narrative_style IS
+// set on a canonical fork, so the new row had one and won. art_style_override is usually NULL there
+// (art comes from sessions.art_style instead), so the IS NOT NULL filter skipped the new row and it
+// fell through to the version's earlier session correctly. It worked by accident, on one field.
+//
+// versionPriorCharacterLooks, written one build later, excludes the session and requires an earlier
+// date. This is the same rule and should have been the same shape.
+async function versionStyleDefaults(db, versionId, sessionId) {
   const out = { art_style_override: null, narrative_style: null, narrative_verbosity: null };
   if (!versionId) return out;
+  let before = null;
+  if (sessionId) {
+    const here = await db.prepare('SELECT session_date FROM sessions WHERE id = ?').get(sessionId);
+    if (here) before = here.session_date;
+  }
   const keys = Object.keys(out);
   for (let i = 0; i < keys.length; i++) {
     const k = keys[i];
     const r = await db.prepare(
       'SELECT sf.' + k + ' AS v FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
       'WHERE sf.version_id = ? AND sf.' + k + " IS NOT NULL AND sf." + k + " <> '' " +
+      (sessionId ? 'AND sf.session_id <> ? ' : '') +
+      (before ? 'AND s.session_date < ? ' : '') +
       'ORDER BY s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
-    ).get(versionId);
+    ).get([versionId].concat(sessionId ? [sessionId] : []).concat(before ? [before] : []));   // array form: the wrapper flattens (args.flat()); .apply(null,...) works only by accident of get() not reading `this`
     if (r && r.v) out[k] = r.v;
   }
   return out;

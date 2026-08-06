@@ -1164,7 +1164,7 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   // and only where the version actually holds a value -- a brand new version has none, and then
   // the copied source style stands, which is the right starting point.
   try {
-    const _vs = await versionStyleDefaults(db, _newVersionId);
+    const _vs = await versionStyleDefaults(db, _newVersionId, sessionId);
     const _sets = [], _vals = [];
     ['art_style_override', 'narrative_style', 'narrative_verbosity'].forEach(function (k) {
       if (_vs[k]) { _sets.push(k + ' = ?'); _vals.push(_vs[k]); }
