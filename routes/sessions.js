@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults } = require('../database/db');
-const { releaseImage } = require('../storage/storage');
+const { releaseImage, deleteFile } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 // v3.0.441 -- Gold is access_rank 3 (TD-194). NOTE the Free Trial carries access_rank 4 by design,
@@ -1218,15 +1218,35 @@ router.patch('/:id/fork/:forkId/name', requireAuth, verifyCampaignMember, async 
   res.json({ success: true, fork_id: fork.id, name: name || null });
 });
 
-// DELETE a version. Owner may delete their own; DM may delete any
-// player version. The DM canonical fork cannot be deleted here.
+// v3.0.461 -- REMOVE ONE SESSION FROM A VERSION. This deletes a FORK, never a version: the
+// campaign_versions row survives and every other session it holds is untouched. The session simply
+// stops having a representation in that version and falls through to the canonical again -- the
+// exact inverse of the branch added in v3.0.459.
+//
+// TWO RULE CHANGES, both Ian's, 2026-08-06:
+//   * OWN ONLY. It used to read `if (!isOwner && req.campaignRole !== 'dm')`, so a Story Master
+//     could delete any member's version. Ian: "You should only be able to delete your own (UserID)
+//     ... not someone else's." NOTE THE COST, deliberately accepted: an SM can no longer clean up
+//     a departed member's fork. If that is ever needed it wants its own route and its own warning,
+//     not a quiet exception here.
+//   * CANONICAL NEVER. Already true via role, and now ALSO checked on the version row -- the
+//     canonical is what every other version falls through to, so losing it would strand all of
+//     them. Two cheap checks for a failure with no recovery.
+//
+// ?delete_version=1 additionally removes the campaign version, and is only honoured when this was
+// its LAST fork. The client asks first; the server refuses to infer intent from an empty version.
 router.delete('/:id/fork/:forkId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const fork = await db.prepare('SELECT * FROM session_forks WHERE id = ? AND session_id = ?').get(req.params.forkId, req.params.id);
   if (!fork) return res.status(404).json({ error: 'Version not found' });
   if (fork.role === 'dm') return res.status(403).json({ error: 'The canonical version cannot be deleted here' });
-  const isOwner = String(fork.user_id) === String(req.session.userId);
-  if (!isOwner && req.campaignRole !== 'dm') return res.status(403).json({ error: 'You can only delete your own version' });
+  if (fork.version_id) {
+    const _vrow = await db.prepare('SELECT is_canonical FROM campaign_versions WHERE id = ?').get(fork.version_id);
+    if (_vrow && _vrow.is_canonical) return res.status(403).json({ error: 'The canonical version cannot be deleted here' });
+  }
+  if (String(fork.user_id) !== String(req.session.userId)) {
+    return res.status(403).json({ error: 'You can only delete your own versions' });
+  }
   const oldMomImgs = await db.prepare('SELECT image FROM moments WHERE fork_id = ?').all(fork.id);
   const oldRefImgs = await db.prepare('SELECT reference_url FROM session_characters WHERE fork_id = ?').all(fork.id);
   await db.prepare('DELETE FROM moments WHERE fork_id = ?').run(fork.id);
@@ -1234,7 +1254,39 @@ router.delete('/:id/fork/:forkId', requireAuth, verifyCampaignMember, async func
   await db.prepare('DELETE FROM session_forks WHERE id = ?').run(fork.id);
   for (let i = 0; i < oldMomImgs.length; i++) { await releaseImage(db, oldMomImgs[i].image); }
   for (let i = 0; i < oldRefImgs.length; i++) { await releaseImage(db, oldRefImgs[i].reference_url); }
-  res.json({ success: true });
+
+  // Was that the version's last session? An empty version is legal -- Ian: "If they keep it then
+  // they can still use it later on another session" -- so it is only removed when ASKED for.
+  let remaining = null, versionDeleted = false;
+  if (fork.version_id) {
+    const c = await db.prepare('SELECT COUNT(*)::int AS n FROM session_forks WHERE version_id = ?').get(fork.version_id);
+    remaining = c ? Number(c.n) : 0;
+    const wantDelete = String((req.query && req.query.delete_version) || '') === '1';
+    if (wantDelete && remaining === 0) {
+      // Everything else keyed to this version goes with it. Left behind, these become exactly the
+      // orphans the v3.0.458 repair had to clean up after -- and fork_book_prefs holds the approved
+      // layout and the saved PDF, so an abandoned row also keeps R2 objects alive forever.
+      try {
+        const pr = await db.prepare('SELECT prefs FROM fork_book_prefs WHERE version_id = ?').all(fork.version_id);
+        for (let i = 0; i < pr.length; i++) {
+          let lo = null;
+          try { lo = (JSON.parse(pr[i].prefs) || {}).lastOptimized || null; } catch (e) {}
+          if (!lo) continue;
+          for (const k in lo) {
+            // Best effort, and LOGGED -- a silent failed delete is TD-120, an orphan nobody sees
+            // until a storage bill.
+            if (lo[k] && lo[k].pdfUrl) { try { await deleteFile(lo[k].pdfUrl); } catch (e) { console.error('[versions] orphan pdf left in place: ' + ((e && e.message) || e)); } }
+            if (lo[k] && lo[k].bodyUrl) { try { await deleteFile(lo[k].bodyUrl); } catch (e) { console.error('[versions] orphan layout left in place: ' + ((e && e.message) || e)); } }
+          }
+        }
+      } catch (e) { console.error('[versions] approved-book cleanup skipped: ' + ((e && e.message) || e)); }
+      await db.prepare('DELETE FROM fork_book_prefs WHERE version_id = ?').run(fork.version_id);
+      await db.prepare('DELETE FROM session_includes WHERE version_id = ?').run(fork.version_id);
+      await db.prepare('DELETE FROM campaign_versions WHERE id = ? AND NOT is_canonical').run(fork.version_id);
+      versionDeleted = true;
+    }
+  }
+  res.json({ success: true, version_id: fork.version_id || null, remaining: remaining, version_deleted: versionDeleted });
 });
 
 module.exports = router;

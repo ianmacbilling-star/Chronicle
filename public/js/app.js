@@ -633,6 +633,48 @@ function uiPrompt(title, message, initial) {
     setTimeout(function () { try { input.focus(); input.select(); } catch (e) {} }, 30);
   });
 }
+// uiDeleteLastSession: the LAST session in a version is a different question, so it gets a
+// different dialog rather than a footnote on the ordinary one. Ian: "if you are deleting the very
+// last session in a version you can ask. If they keep it then they can still use it later on
+// another session."
+//
+// Resolves 'keep' | 'deleteVersion' | null. Three outcomes, three buttons -- a confirm with a
+// checkbox would let someone delete a version by not reading it.
+function uiDeleteLastSession(versionName, sessionName) {
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
+    var h = document.createElement('div');
+    h.textContent = 'That is the only session in \u201c' + versionName + '\u201d';
+    h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    var msg = document.createElement('div');
+    msg.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.55;margin-bottom:18px;white-space:pre-wrap;';
+    msg.textContent =
+      'This deletes the \u201c' + versionName + '\u201d version of \u201c' + sessionName + '\u201d \u2014 its pictures, its narrative and its character notes.\n\n' +
+      'It is the only session \u201c' + versionName + '\u201d has. You can keep the version and add a different session to it later, or delete it completely \u2014 which also removes its cover, its layout choices and its saved book.\n\n' +
+      'Either way, this session goes back to showing the canonical.';
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;';
+    var cancel = document.createElement('button');
+    cancel.className = 'btn btn-secondary'; cancel.textContent = 'Cancel';
+    var keep = document.createElement('button');
+    keep.className = 'btn'; keep.textContent = 'Keep the version';
+    var del = document.createElement('button');
+    del.className = 'btn btn-danger'; del.textContent = 'Delete the version';
+    function done(v) { try { document.body.removeChild(overlay); } catch (e) {} document.removeEventListener('keydown', onKey); resolve(v); }
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); done(null); } }
+    cancel.onclick = function () { done(null); };
+    keep.onclick = function () { done('keep'); };
+    del.onclick = function () { done('deleteVersion'); };
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    row.appendChild(cancel); row.appendChild(keep); row.appendChild(del);
+    box.appendChild(h); box.appendChild(msg); box.appendChild(row);
+    overlay.appendChild(box); document.body.appendChild(overlay);
+    document.addEventListener('keydown', onKey);
+  });
+}
 // uiVersionPick: the New Version dialog (TD-242 stage 3c).
 //
 // TWO ROUTES, MUTUALLY EXCLUSIVE, and the exclusivity is the point -- Ian: "Name a new one... or
@@ -737,14 +779,27 @@ function uiConfirm(message, opts) {
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
     box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+    // v3.0.461 -- three OPT-IN options, so every existing caller renders exactly as before:
+    //   opts.title         a heading above the message
+    //   opts.preserveLines honour blank lines, for a message written as paragraphs. Without it a
+    //                      multi-paragraph warning collapses into one wall of text, which is the
+    //                      surest way to have it not read.
+    //   opts.danger        red confirm button, for an action that cannot be undone
+    var head = null;
+    if (opts.title) {
+      head = document.createElement('div');
+      head.textContent = String(opts.title);
+      head.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    }
     var msg = document.createElement('div');
     msg.textContent = (message == null) ? '' : String(message);
-    msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:18px;';
+    msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:18px;' + (opts.preserveLines ? 'white-space:pre-wrap;' : '');
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
-    var ok = document.createElement('button'); ok.className = 'btn btn-primary btn-sm'; ok.textContent = opts.okText || 'OK';
+    var ok = document.createElement('button'); ok.className = 'btn btn-sm ' + (opts.danger ? 'btn-danger' : 'btn-primary'); ok.textContent = opts.okText || 'OK';
     row.appendChild(cancel); row.appendChild(ok);
+    if (head) box.appendChild(head);
     box.appendChild(msg); box.appendChild(row); overlay.appendChild(box);
     document.body.appendChild(overlay);
     function done(val) {
@@ -12148,9 +12203,39 @@ async function deleteMyVersion() {
     showAlert('This is the original version of the session, so it cannot be deleted -- everything else is built from it. You can rename it, or delete one of your other versions.');
     return;
   }
-  var _dvName = (_dv && _dv.name) ? ('\u201c' + _dv.name + '\u201d') : 'this version';
-  if (!await uiConfirm('Delete ' + _dvName + ' of this session? Its pictures and story go with it. This cannot be undone.')) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + state.myForkId, { method: 'DELETE' })
+  // v3.0.461 -- SAY WHAT IS ACTUALLY BEING DELETED. The old wording was "Delete <name> of this
+  // session", which under Model B reads as though the whole version is going -- and someone holding
+  // a four-session version could reasonably think they were about to lose all four. What this
+  // removes is ONE SESSION'S representation; the version and its other sessions survive.
+  var _dvName = (_dv && _dv.name) ? _dv.name : 'this version';
+  var _sName = (state.currentSession && state.currentSession.name) ? state.currentSession.name : 'this session';
+  // How many sessions does that version hold? Asked before the dialog, because the LAST one is a
+  // different question with a different answer, not a footnote on the same one.
+  var _count = null;
+  try {
+    var _vr = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/versions');
+    if (_vr.ok) {
+      var _vl = await _vr.json();
+      var _hit = (Array.isArray(_vl) ? _vl : []).filter(function (v) { return String(v.version_id) === String(_dv && _dv.version_id); })[0];
+      if (_hit) _count = _hit.session_count;
+    }
+  } catch (e) { _count = null; }
+
+  var _choice;
+  if (_count === 1) {
+    _choice = await uiDeleteLastSession(_dvName, _sName);
+    if (!_choice) return;
+  } else {
+    var _others = (_count && _count > 1) ? (_count - 1) : null;
+    var _keeps = _others ? ('\u201c' + _dvName + '\u201d keeps its other ' + _others + (_others === 1 ? ' session' : ' sessions') + ', and this session will show the Story Master\u2019s canonical version again.')
+                         : ('\u201c' + _dvName + '\u201d itself is not deleted, and this session will show the Story Master\u2019s canonical version again.');
+    var _msg = 'This deletes the \u201c' + _dvName + '\u201d version of \u201c' + _sName + '\u201d \u2014 its pictures, its narrative and its character notes for this session only.\n\n' +
+               _keeps + '\n\nThis cannot be undone.';
+    if (!await uiConfirm(_msg, { title: 'Remove this session from ' + _dvName + '?', okText: 'Remove session', danger: true, preserveLines: true })) return;
+    _choice = 'keep';
+  }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + state.myForkId +
+        (_choice === 'deleteVersion' ? '?delete_version=1' : ''), { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
@@ -12158,6 +12243,8 @@ async function deleteMyVersion() {
       state.myForkId = null;
       loadSessionForks(state.currentSession.id);
       reloadSessionForFork();
+      // The version's session count changed, or the version itself is gone.
+      if (typeof loadNovelPeople === 'function' && document.getElementById('novel-version-select')) loadNovelPeople();
     })
     .catch(function(e) { if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert(e.message); } });
 }
