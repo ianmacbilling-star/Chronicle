@@ -6015,18 +6015,52 @@ function selNovelLayout(el, layout) {
 // Phase 4 - the Story Master can produce a player's graphic novel (the player
 // cannot export their own across-sessions book). state.novelAsUser is the
 // chosen person's user id, or null for the Story Master's own canonical book.
+// v3.0.457 -- as_version rides the SAME choke point (TD-242 stage 3b). Eleven call sites build a
+// book URL and every one of them goes through here, so the version reaches all of them from one
+// edit rather than eleven. as_user is still sent alongside: the server prefers as_version when
+// present, and an old cached bundle that sends only as_user keeps working exactly as before.
 function novelAsUserQ(prefix) {
-  return state.novelAsUser ? (prefix + 'as_user=' + encodeURIComponent(state.novelAsUser)) : '';
+  var parts = [];
+  if (state.novelAsUser) parts.push('as_user=' + encodeURIComponent(state.novelAsUser));
+  if (state.novelVersionId) parts.push('as_version=' + encodeURIComponent(state.novelVersionId));
+  if (!parts.length) return '';
+  return prefix + parts.join('&');
 }
 
 // "Own view" = the version you may curate/publish: the SM on the canonical book,
 // or a member on their own fork. Drives the publish guard and whether the
 // Include-in-Print checkboxes are editable.
+// v3.0.457 -- answered from the VERSION when one is selected. The canonical is publishable by the
+// Story Master; a named version by the person who owns it. Falls back to the old as_user reading
+// when no version list has loaded, so the guard is never accidentally permissive.
 function novelOwnView() {
   var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
   var myId = (state.user && state.user.id) || null;
+  var v = novelVersionOnScreen();
+  if (v) {
+    if (!v.is_canonical) return !!v.is_mine;
+    if (isSM) return true;
+    // A member looking at the CANONICAL may still publish it IF THEY HOLD NO VERSION OF THEIR OWN.
+    // That is not a new rule -- it is today's, preserved deliberately. The old picker invented a
+    // "Your version" option for such a member, which set as_user to themselves and opened the
+    // guard; their book was the canonical with fallthrough everywhere. Removing the fake option
+    // would have removed the capability with it, silently, inside a plumbing change. Whether it
+    // SHOULD survive is a product question -- TD-254 -- not one to answer by deleting it here.
+    var own = (state.novelVersions || []).filter(function(x) { return x.is_mine; });
+    return own.length === 0;
+  }
   return isSM ? (state.novelAsUser == null)
               : (myId != null && String(state.novelAsUser) === String(myId));
+}
+
+// The row from /versions matching what the picker is showing. ONE lookup -- nine re-derivations of
+// this same question in app.js is what made TD-194 take thirteen builds.
+function novelVersionOnScreen() {
+  var list = state.novelVersions || [];
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].version_id) === String(state.novelVersionId)) return list[i];
+  }
+  return null;
 }
 
 // Shared fork-edit permission (session-detail / storyboard / establishing context):
@@ -6056,43 +6090,60 @@ function updateNovelPublishGuard() {
     if (st) { st.style.display = 'block'; st.textContent = 'You can only publish your own version. Switch the version selector back to your own version to publish to the Library.'; if (st.dataset) st.dataset.guard = '1'; }
   }
 }
+// v3.0.457 -- THE PICKER NOW LISTS CAMPAIGN VERSIONS (TD-242 stage 3b).
+//
+// It used to list PEOPLE, because one person meant one book. That stopped being true the moment a
+// reader could hold two versions, and this picker is what the Order tab reads its "Version" line
+// from -- so a book was being ordered against a name that no longer identified it.
+//
+// The label carries the OWNER as well as the name (TD-247): on The Strangers four different members
+// each hold a version called "Original", and on For ALL the Ages the Story Master owns both the
+// canonical AND a named one. A bare name cannot tell those apart.
 function loadNovelPeople() {
   var sel = document.getElementById('novel-version-select');
   var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
   var myId = (state.user && state.user.id) || null;
-  // Set the data driver synchronously so loadNovelSummary (called right after)
-  // uses the correct version before the picker options finish loading.
+  // Set the data driver synchronously: loadNovelSummary is called right after and must not read a
+  // stale version while the list is still in flight.
+  state.novelVersions = state.novelVersions || [];
   state.novelAsUser = isSM ? null : (myId != null ? String(myId) : null);
   updateNovelPublishGuard();
   if (!sel) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/novel/people')
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/versions')
     .then(function(r) { return r.ok ? r.json() : []; })
     .then(function(rows) {
       rows = Array.isArray(rows) ? rows : [];
-      var opts = '<option value="">Story Master \u2014 Canonical</option>';
-      var myAdded = false;
-      rows.forEach(function(p) {
-        var hasV = (p.has_version === true || p.has_version === 1 || p.has_version === '1' || p.has_version === 't');
-        if (p.role === 'player' && hasV) {
-          var mine = (myId != null && String(p.user_id) === String(myId));
-          var label = mine ? 'Your version' : ((p.name || p.email || 'Player') + '\u2019s version');
-          opts += '<option value="' + p.user_id + '">' + label + '</option>';
-          if (mine) myAdded = true;
-        }
+      state.novelVersions = rows;
+      var opts = '';
+      rows.forEach(function(v) {
+        var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
+        opts += '<option value="' + v.version_id + '">' + escapeHtml(v.label) + ' (' + n + ')</option>';
       });
-      if (!isSM && myId != null && !myAdded) {
-        opts += '<option value="' + myId + '">Your version</option>';
-      }
+      if (!opts) opts = '<option value="">Story Master \u2014 Canonical</option>';
       sel.innerHTML = opts;
-      if (isSM) { state.novelAsUser = null; sel.value = ''; }
-      else { state.novelAsUser = (myId != null) ? String(myId) : null; sel.value = (myId != null) ? String(myId) : ''; }
+      // DEFAULT: your own version if you have exactly one, otherwise the canonical. A reader with
+      // several is NOT guessed at -- landing on an arbitrary one of their books is the mistake this
+      // whole feature exists to stop.
+      var own = rows.filter(function(v) { return v.is_mine; });
+      var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
+      if (pick) { sel.value = String(pick.version_id); applyNovelVersion(pick.version_id); }
       updateNovelPublishGuard();
     })
     .catch(function(){ updateNovelPublishGuard(); });
 }
 
+// applyNovelVersion: set the two state fields the rest of the page reads, from ONE place.
+// as_user is kept in step because eleven URL builders and the book-meta writes still key on it;
+// the server prefers as_version wherever both arrive.
+function applyNovelVersion(versionId) {
+  state.novelVersionId = versionId ? String(versionId) : null;
+  var v = novelVersionOnScreen();
+  state.novelAsUser = (v && !v.is_canonical && v.owner_user_id != null) ? String(v.owner_user_id) : null;
+}
+
 function onNovelVersionChange(val) {
-  state.novelAsUser = val || null;
+  // v3.0.457 -- the picker's value is a VERSION id now, not a user id.
+  applyNovelVersion(val);
   updateNovelPublishGuard();
   if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof prepSyncTitle === 'function') prepSyncTitle(); if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
