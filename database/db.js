@@ -1602,6 +1602,93 @@ async function getDmForkId(db, sessionId) {
   return f ? f.id : null;
 }
 
+// ---------------------------------------------------------------------------------------------
+// CAMPAIGN VERSIONS -- the read side (TD-242 stage 2a, v3.0.454).
+//
+// ONE PLACE. TD-194 cost thirteen builds because "which version am I acting on" was written down
+// in twelve places, each correct while a person could hold exactly one version. The book side gets
+// the rule ONCE, here, and the routes call it. The apply script refuses a build in which any route
+// resolves a book fork for itself.
+// ---------------------------------------------------------------------------------------------
+
+// The version a request is about: ?as_version= on a read, as_version in the body on a write.
+// Deliberately shaped like requestedForkIdOf above -- same idea, one level up.
+function requestedVersionIdOf(req) {
+  const q = req && req.query && req.query.as_version;
+  const b = req && req.body && req.body.as_version;
+  const v = (q != null && q !== '') ? q : ((b != null && b !== '') ? b : null);
+  const n = v ? Number(v) : null;
+  return (n && !isNaN(n)) ? n : null;
+}
+
+async function getVersionRow(db, versionId) {
+  if (!versionId) return null;
+  return await db.prepare(
+    'SELECT id, campaign_id, user_id, name, is_canonical FROM campaign_versions WHERE id = ?'
+  ).get(versionId);
+}
+
+// OWNERSHIP OF THE CANONICAL IS DERIVED, NEVER STORED. Ian, 2026-08-06: "the Canonical version is
+// owned by whoever has the dm flag on the campaign but access to it is shared to the members."
+// So the canonical row carries user_id NULL and the answer comes from campaign_members. A second
+// stored copy would be free to drift, and it would go stale the first time a campaign changes hands.
+async function versionOwnerUserId(db, version) {
+  if (!version) return null;
+  if (!version.is_canonical) return version.user_id;
+  const dm = await db.prepare(
+    "SELECT user_id FROM campaign_members WHERE campaign_id = ? AND role = 'dm' LIMIT 1"
+  ).get(version.campaign_id);
+  return dm ? dm.user_id : null;
+}
+
+// resolveBookVersion: turn a request into the book context the assembly sites need.
+//
+// Returns { versionId, version, asUser } or null when no version was named (every caller then
+// keeps its existing as_user path untouched, which is why this stage changes no behaviour).
+//
+// asUser IS NOT THE VERSION OWNER FOR A CANONICAL VERSION -- it is null. That looks like an
+// omission and is not: effectiveIncludeMap(campaignId, null) means "the Story Master's own book,
+// read from sessions.novel_include", while passing the DM's user id would read session_includes
+// rows instead and quietly assemble a different book. Preserving that distinction is the whole
+// reason this returns asUser rather than letting each site derive it.
+async function resolveBookVersion(db, campaignId, req) {
+  const versionId = requestedVersionIdOf(req);
+  if (!versionId) return null;
+  const version = await getVersionRow(db, versionId);
+  if (!version) return null;
+  if (String(version.campaign_id) !== String(campaignId)) return null;
+  const asUser = version.is_canonical ? null : version.user_id;
+  return { versionId: version.id, version: version, asUser: asUser };
+}
+
+// bookForkForSession: WHICH FORK OF ONE SESSION A BOOK READS. This replaced five byte-identical
+// copies of the same lookup -- four in pdf.js, one in sessions.js.
+//
+// THE FALLTHROUGH, stated once: a version with no fork for this session reads the CANONICAL. That
+// is what makes a version cheap -- branch one session, leave the rest alone, and the book is the
+// Story Master's everywhere you did not touch it.
+//
+// NOTE ON READY: this gates on EXISTENCE, not on player_access_status, because the as_user book
+// path it replaces never had a Ready gate either and adding one here would silently change which
+// books assemble today. Whether a reader may build a book from someone else's DRAFT version is a
+// route-level product question -- see TD-249 -- and it is not answered by a helper.
+async function bookForkForSession(db, sessionId, opts) {
+  const o = opts || {};
+  if (o.versionId) {
+    const f = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND version_id = ?')
+      .get(sessionId, o.versionId);
+    if (f) return f.id;
+    return await getDmForkId(db, sessionId);
+  }
+  if (o.asUser) {
+    const pf = await db.prepare(
+      "SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC"
+    ).get(sessionId, o.asUser);
+    if (pf) return pf.id;
+  }
+  return await getDmForkId(db, sessionId);
+}
+
 // getViewableForkId: resolves which fork a member may READ for a session.
 //   - no requestedForkId  -> the DM fork (default = current behavior)
 //   - the DM fork         -> always visible to any member
@@ -1720,4 +1807,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt };
+module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -38,16 +38,22 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const db = await getDb();
   // The DM may assemble a player's novel via ?as_user=<userId>; for any
   // session that player hasn't versioned, fall back to the DM canonical fork.
-  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+  // v3.0.454 -- a named version wins over as_user; see resolveBookVersion in database/db.js.
+  const _bv = await resolveBookVersion(db, Number(req.params.campaignId), req);
+  const asVersion = _bv ? _bv.versionId : null;
+  const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
   const incMap = await effectiveIncludeMap(db, req.params.campaignId, asUser);
   const asUserRow = asUser ? await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser) : null;
   const asUserName = asUserRow ? asUserRow.name : null;
   const result = await Promise.all(sessions.map(async function(s) {
-    let forkId = null, usedPlayerFork = false;
-    if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
-      if (pf) { forkId = pf.id; usedPlayerFork = true; }
+    // v3.0.454 -- ONE resolver (database/db.js bookForkForSession), the fifth copy of this lookup.
+    // usedPlayerFork keeps its meaning: the book is NOT reading the canonical for this session.
+    let forkId = await bookForkForSession(db, s.id, { asUser: asUser, versionId: asVersion });
+    let usedPlayerFork = false;
+    if (forkId) {
+      const _dmf = await getDmForkId(db, s.id);
+      usedPlayerFork = String(forkId) !== String(_dmf);
     }
     if (!forkId) forkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);

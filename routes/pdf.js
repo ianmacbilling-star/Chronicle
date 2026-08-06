@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -2412,7 +2412,11 @@ var COMPOSED_CACHE_MAX = 24;
 var PROC_ID = Math.random().toString(36).slice(2, 6) + ':' + process.pid;
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
-  return [campaignId, q.co || '', q.layout || '', q.as_user || '', q.bookTitle || ''].join('|');
+  // v3.0.454 -- as_version joins the key. Two versions belonging to ONE user share an as_user, so
+  // without this they collide in the composed cache AND in runGrowsKey/runMovesKey derived from it:
+  // optimizing version B would read version A's grows and moves. That failure is invisible -- state
+  // written and then wrong rather than absent -- and it is the same class as TD-207.
+  return [campaignId, q.co || '', q.layout || '', q.as_user || '', q.as_version || '', q.bookTitle || ''].join('|');
 }
 // v3.0.356 -- METERED LAYOUT CHARGING. One helper, both layouts, so the rule cannot drift.
 // Claude Sonnet 4.6 list rates, $/MTok, verified 2026-08-01. If Anthropic repricing lands, these
@@ -4003,7 +4007,13 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
 
   // Optional: assemble a specific player's book (?as_user=). For any session
   // the player hasn't versioned, fall back to the DM canonical fork.
-  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+  // v3.0.454 -- a named version wins over as_user, and supplies the as_user this book is read
+  // under. resolveBookVersion returns null for a CANONICAL version on purpose: null means "the
+  // Story Master's own book, from sessions.novel_include", and substituting the DM user id there
+  // would read session_includes instead and assemble a different book.
+  const _bv = await resolveBookVersion(db, campaign.id, req);
+  const asVersion = _bv ? _bv.versionId : null;
+  const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   // Load moments and narrative for each session
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
   var _bmFork = asUser || (req.session && req.session.userId) || null;
@@ -4021,12 +4031,10 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
-    let forkId = null;
-    if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
-      if (pf) forkId = pf.id;
-    }
-    if (!forkId) forkId = await getDmForkId(db, s.id);
+    // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
+    // of this lookup in this file and a fifth in sessions.js. asVersion is null on every existing
+    // caller, so this is the same fork it has always been.
+    const forkId = await bookForkForSession(db, s.id, { asUser: asUser, versionId: asVersion });
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
     // Narrative lives on the fork; pull the resolved version's.
     const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
@@ -4122,7 +4130,13 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   }
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
-  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+  // v3.0.454 -- a named version wins over as_user, and supplies the as_user this book is read
+  // under. resolveBookVersion returns null for a CANONICAL version on purpose: null means "the
+  // Story Master's own book, from sessions.novel_include", and substituting the DM user id there
+  // would read session_includes instead and assemble a different book.
+  const _bv = await resolveBookVersion(db, campaign.id, req);
+  const asVersion = _bv ? _bv.versionId : null;
+  const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
   var _bmFork = asUser || (req.session && req.session.userId) || null;
   var _bmChooser = (req.session && req.session.userId) || _bmFork;
@@ -4139,12 +4153,10 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
-    let forkId = null;
-    if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
-      if (pf) forkId = pf.id;
-    }
-    if (!forkId) forkId = await getDmForkId(db, s.id);
+    // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
+    // of this lookup in this file and a fifth in sessions.js. asVersion is null on every existing
+    // caller, so this is the same fork it has always been.
+    const forkId = await bookForkForSession(db, s.id, { asUser: asUser, versionId: asVersion });
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
     const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
     return Object.assign({}, s, {
@@ -4551,7 +4563,13 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     }
 
     // Per-member wrap cover: use the viewed fork's own cover/back/title images.
-    const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+    // v3.0.454 -- a named version wins over as_user, and supplies the as_user this book is read
+  // under. resolveBookVersion returns null for a CANONICAL version on purpose: null means "the
+  // Story Master's own book, from sessions.novel_include", and substituting the DM user id there
+  // would read session_includes instead and assemble a different book.
+  const _bv = await resolveBookVersion(db, campaign.id, req);
+  const asVersion = _bv ? _bv.versionId : null;
+  const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
     var _bmFork = asUser || (req.session && req.session.userId) || null;
     var _bmChooser = (req.session && req.session.userId) || _bmFork;
     if (_bmFork) {
@@ -4708,12 +4726,10 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
-    let forkId = null;
-    if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
-      if (pf) forkId = pf.id;
-    }
-    if (!forkId) forkId = await getDmForkId(db, s.id);
+    // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
+    // of this lookup in this file and a fifth in sessions.js. asVersion is null on every existing
+    // caller, so this is the same fork it has always been.
+    const forkId = await bookForkForSession(db, s.id, { asUser: asUser, versionId: asVersion });
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
     const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
     return Object.assign({}, s, {
@@ -5004,7 +5020,13 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   }
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
-  const asUser = req.query.as_user ? Number(req.query.as_user) : null;
+  // v3.0.454 -- a named version wins over as_user, and supplies the as_user this book is read
+  // under. resolveBookVersion returns null for a CANONICAL version on purpose: null means "the
+  // Story Master's own book, from sessions.novel_include", and substituting the DM user id there
+  // would read session_includes instead and assemble a different book.
+  const _bv = await resolveBookVersion(db, campaign.id, req);
+  const asVersion = _bv ? _bv.versionId : null;
+  const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
   var _bmFork = asUser || (req.session && req.session.userId) || null;
   var _bmChooser = (req.session && req.session.userId) || _bmFork;
@@ -5021,12 +5043,10 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
     }
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
-    let forkId = null;
-    if (asUser) {
-      const pf = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND role = 'player' ORDER BY id ASC").get(s.id, asUser);
-      if (pf) forkId = pf.id;
-    }
-    if (!forkId) forkId = await getDmForkId(db, s.id);
+    // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
+    // of this lookup in this file and a fifth in sessions.js. asVersion is null on every existing
+    // caller, so this is the same fork it has always been.
+    const forkId = await bookForkForSession(db, s.id, { asUser: asUser, versionId: asVersion });
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id = ? ORDER BY panel_order ASC').all(forkId);
     const nfk = await db.prepare('SELECT narrative_intro, narrative_sections, narrative_outro FROM session_forks WHERE id = ?').get(forkId);
     return Object.assign({}, s, {
