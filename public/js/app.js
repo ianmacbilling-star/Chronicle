@@ -6429,17 +6429,53 @@ async function onNovelVersionChange(val) {
 // correctly by itself -- but only on ENTRY. Someone standing on the Optimize tab when the picker
 // moves keeps a stale screen. Nulling the memo forces the rebuild either way.
 function optimizeResetForVersion() {
+  // v3.0.472 -- BUILT FROM THE EXISTING RESETS, not beside them. The first attempt HID the
+  // Load Last button and cleared the log by hand, which left three things wrong that Ian found
+  // straight away: the button still said "Clear Loaded Version" with nothing loaded, "Go to
+  // Publish" stayed offered against the previous version's book, and Publish to Library stayed
+  // armed instead of falling back to "Run Optimize First".
+  //
+  // finalizeClearPriorLoaded() already does the whole job for the Clear button, so this now calls
+  // the same paths rather than a parallel set that has to be kept in step with them.
   try { if (typeof finalizeClearScanState === 'function') finalizeClearScanState(); } catch (e) {}
-  try { var lg = document.getElementById('__aiLoopLog'); if (lg) lg.innerHTML = ''; } catch (e) {}
   try {
-    var pw = document.getElementById('layoutai-progress-wrap');
-    if (pw) pw.style.display = 'none';
-    var pf = document.getElementById('layoutai-progress-fill'); if (pf) pf.style.width = '0%';
-    var pm = document.getElementById('layoutai-progress-msg'); if (pm) pm.textContent = '';
+    // The After pane and the restored-book note.
+    var scroll = document.getElementById('finalize-after-scroll'); if (scroll) { scroll.innerHTML = ''; scroll.style.display = 'none'; }
+    var body = document.getElementById('finalize-after-body'); if (body) body.style.display = '';
+    var note = document.getElementById('finalize-optimized-note');
+    if (note) { note.textContent = ''; note.style.display = 'none'; }
   } catch (e) {}
-  try { var ll = document.getElementById('layoutai-load-last'); if (ll) ll.style.display = 'none'; } catch (e) {}
-  try { if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null; } catch (e) {}
+  // THE BUTTON GOES BACK TO "Load Last Optimized File" -- it is a toggle, and leaving it on Clear
+  // offered a way to clear something that was no longer there.
+  try { if (typeof finalizeSetPriorLoaded === 'function') finalizeSetPriorLoaded(false); } catch (e) {}
+  // GO TO PUBLISH IS ABOUT A BOOK THAT NO LONGER EXISTS on screen. Offering it after a switch would
+  // hand someone the previous version's book from the Publish page.
+  try { var gp = document.getElementById('layoutai-publish-btn'); if (gp) gp.style.display = 'none'; } catch (e) {}
+  // "Save this Version" shares that slot after a per-page Fix, and the fix it refers to belonged to
+  // the book that just left the screen.
+  try { var sf = document.getElementById('layoutai-save-fixed-btn'); if (sf) sf.style.display = 'none'; } catch (e) {}
+  // AND PUBLISH TO LIBRARY FALLS BACK TO "Run Optimize First". _finalizeSavedReady is what arms it
+  // -- v3.0.392 moved that off _publishSource precisely because the other reading was a different
+  // question -- and updateNovelPublishGuard, which the tail calls immediately after, repaints from
+  // it. _publishSource goes back to 'flow' as well so no stale choice is left armed.
+  //
+  // DELIBERATELY NOT TOUCHING _finalizeAfterDone. It IS declared -- as the second name in the
+  // combined `var _finalizeBeforeDone = false, _finalizeAfterDone = false;` -- which a grep for
+  // "^var _finalizeAfterDone" cannot see, and I claimed the opposite until the build guard counted
+  // the assignments and proved otherwise. The real reason to leave it alone stands: v3.0.392
+  // records it as TRANSIENT, and finalizeUpdatePublishPick demotes the publish source whenever it
+  // is momentarily false -- which is what made the button appear at the end of a run and then be
+  // taken away again. The two renders that own it already reset it.
+  try { _publishSource = 'flow'; } catch (e) {}
   try { _finalizeFixPending = false; _finalizeSavedReady = false; } catch (e) {}
+  // FORCED: same campaign, possibly the same fork, but the book underneath changed -- and a log
+  // with no PDF behind it describes nothing. resetOptimizeLogForSwitch short-circuits on an
+  // unchanged campaign|fork key, which a version switch does not always move.
+  try { if (typeof resetOptimizeLogForSwitch === 'function') resetOptimizeLogForSwitch(true); } catch (e) {}
+  try { if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null; } catch (e) {}
+  // RE-CHECK FOR THE NEW VERSION. This is the half that was missing: hiding the button is not the
+  // same as asking whether THIS version has a saved file. It usually does.
+  try { if (typeof finalizeLoadLastOptimized === 'function') finalizeLoadLastOptimized(); } catch (e) {}
 }
 
 // orderIsTeedUp / orderResetForVersion: an order in progress belongs to ONE book (TD-276).
