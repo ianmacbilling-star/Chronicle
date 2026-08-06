@@ -99,7 +99,21 @@ router.get('/novel/people', requireAuth, verifyCampaignMember, async function(re
 // GET all sessions
 // PUT novel-include - DM toggles whether a session appears in the graphic
 // novel (preview + export). Default true. Per-session, not per-fork.
+// v3.0.463 -- A NAMED VERSION NEVER WRITES sessions.novel_include (TD-261).
+// This route is the STORY MASTER'S CANONICAL curation and it is campaign-wide: it changes what
+// every member falls through to. The client used to choose this route by ROLE, so a Story Master
+// with "Ian Watercolor" selected in the Publish picker was silently editing the CANONICAL book for
+// everyone. The client now chooses by whether the selected version IS the canonical; this refusal
+// is the backstop, because a route that can quietly rewrite everyone else's book should not depend
+// on the caller getting it right.
 router.put('/:id/novel-include', requireAuth, verifyCampaignDM, async function(req, res) {
+  {
+    const db0 = await getDb();
+    const _bv0 = await resolveBookVersion(db0, Number(req.params.campaignId), req);
+    if (_bv0 && _bv0.version && !_bv0.version.is_canonical) {
+      return res.status(400).json({ error: 'That is a named version, so this choice belongs to it rather than to the canonical book. Use my-novel-include.' });
+    }
+  }
   const db = await getDb();
   const include = !(req.body && (req.body.include === false || req.body.include === 'false' || req.body.include === 0));
   await db.prepare('UPDATE sessions SET novel_include = ? WHERE id = ? AND campaign_id = ?').run(include, req.params.id, req.params.campaignId);

@@ -712,11 +712,18 @@ function uiVersionPick(srcLabel, mine) {
       var o0 = document.createElement('option');
       o0.value = ''; o0.textContent = '\u2014 choose a version \u2014';
       sel.appendChild(o0);
+      // v3.0.463 -- STYLE THE OPTIONS, NOT JUST THE SELECT. A native <option> list is drawn by the
+      // OS, not by the select's own rule, so on Windows the panel came up near-white with the
+      // cream text set on the parent -- cream on white, effectively invisible. Reported by Ian
+      // with a screenshot. Set on every option including the placeholder.
+      var _optCss = 'background:#16100a;color:#f0e8d0;';
+      o0.style.cssText = _optCss;
       mine.forEach(function (v) {
         var o = document.createElement('option');
         o.value = String(v.version_id);
         var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
         o.textContent = v.name + ' (' + n + ')';
+        o.style.cssText = _optCss;
         sel.appendChild(o);
       });
       var l2 = document.createElement('div');
@@ -6269,7 +6276,7 @@ function loadNovelPeople() {
       var opts = '';
       rows.forEach(function(v) {
         var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
-        opts += '<option value="' + v.version_id + '">' + escapeHtml(v.label) + ' (' + n + ')</option>';
+        opts += '<option value="' + v.version_id + '" style="background:#16100a;color:#f0e8d0;">' + escapeHtml(v.label) + ' (' + n + ')</option>';
       });
       if (!opts) opts = '<option value="">Story Master \u2014 Canonical</option>';
       sel.innerHTML = opts;
@@ -6294,6 +6301,20 @@ function applyNovelVersion(versionId) {
 }
 
 function onNovelVersionChange(val) {
+  // v3.0.463 -- REFUSE A SWITCH WHILE A RUN IS IN FLIGHT (TD-262).
+  // finalizeBookQuery() is read at CALL time, so a run started on one version and finishing after
+  // the picker moved would write save-optimized against the OTHER one -- overwriting an approved
+  // layout and its saved PDF with a different book, silently. That is TD-147 on a new axis: the
+  // v3.0.139 publish lock guards the CAMPAIGN and knows nothing about versions, and versions make
+  // switching mid-run a natural thing to do rather than an odd one.
+  // Belt as well as braces: the select is disabled while locked (paintVersionLock), and this
+  // refuses anyway, because a disabled control can still be driven by a script or a stale event.
+  if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) {
+    var _sel = document.getElementById('novel-version-select');
+    if (_sel) _sel.value = state.novelVersionId || '';
+    showAlert('An optimize run is in progress on this version. Let it finish, or press Cancel, before switching versions.');
+    return;
+  }
   // v3.0.457 -- the picker's value is a VERSION id now, not a user id.
   applyNovelVersion(val);
   updateNovelPublishGuard();
@@ -14138,10 +14159,25 @@ function novelIncluded(s) {
   return !(s && (s.novel_include === false || s.novel_include === 0 || s.novel_include === 'f' || s.novel_include === 'false'));
 }
 
+// v3.0.463 -- WHICH SESSIONS ARE IN **THIS VERSION'S** BOOK (TD-261).
+//
+// This is the headline question of the whole feature and it was the one thing not wired: the call
+// sent { include } and nothing else, so v3.0.455 built per-version storage that nothing ever wrote
+// to. It LOOKED correct, because a version with no rows of its own reads the base book's.
+//
+// TWO BUGS IN ONE LINE. It also picked its endpoint by ROLE, so a Story Master with a named version
+// selected hit /novel-include -- which writes sessions.novel_include, CAMPAIGN-WIDE, changing what
+// every member falls through to. The endpoint now follows the VERSION ON SCREEN, not the role: the
+// canonical is curated campaign-wide because that is what the canonical IS; everything else is
+// curated per version.
 function toggleNovelInclude(sessionId, checked) {
+  var v = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
   var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
-  var ep = isSM ? '/novel-include' : '/my-novel-include';
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sessionId + ep, {
+  // No version list yet -> fall back to the old role reading rather than guess.
+  var onCanonical = v ? !!v.is_canonical : isSM;
+  var ep = onCanonical ? '/novel-include' : '/my-novel-include';
+  var q = (!onCanonical && state.novelVersionId) ? ('?as_version=' + encodeURIComponent(state.novelVersionId)) : '';
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sessionId + ep + q, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include: !!checked })
   }).then(function () { loadNovelSummary(); })
     .catch(function () { loadNovelSummary(); });
@@ -15426,7 +15462,18 @@ function optimizeLockNotice() {
 // -- which is the whole point of the feature -- would have to live in a tooltip nobody reads
 // on mobile. Opacity, greyscale and cursor only: display is owned by the novel-nav-btn
 // visibility pass and must not be touched here.
+// v3.0.463 -- the version picker greys with the publish lock, driven by the SAME heartbeat, so
+// there is one thing deciding "a run is in flight" rather than two that can disagree.
+function paintVersionLock() {
+  var sel = document.getElementById('novel-version-select');
+  if (!sel) return;
+  var locked = !!(window._aiLoopRunning || window._aiPreloop || window._aiFinishing);
+  sel.disabled = locked;
+  sel.style.opacity = locked ? '0.5' : '';
+  sel.title = locked ? 'Locked while an optimize run is in progress on this version.' : '';
+}
 function paintPublishLock() {
+  try { paintVersionLock(); } catch (e) {}
   try {
     var locked = optimizeRunIsElsewhere();
     var els = [], i, nn = document.querySelectorAll('.novel-nav-btn');
