@@ -7036,7 +7036,8 @@ function openPrepImagePicker(kind) {
     var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
     x.addEventListener('click', closePrepImagePicker);
     head.appendChild(h); head.appendChild(x);
-    var grid = document.createElement('div'); grid.className = 'prep-img-grid';
+    var grid = document.createElement('div'); grid.className = 'prep-img-grid prep-img-grid-cover';   // v3.0.482 -- the COVER picker only. openCampaignImagePicker and _buildCastPicker build the
+    // same grid for a campaign image and for character portraits, and neither is a book cover.
     if (!rows.length) {
       var empty = document.createElement('div'); empty.className = 'prep-img-empty';
       empty.textContent = 'No archived images yet. Lock or archive images from the Storyboard, then choose one here.';
