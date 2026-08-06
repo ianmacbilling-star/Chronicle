@@ -633,6 +633,103 @@ function uiPrompt(title, message, initial) {
     setTimeout(function () { try { input.focus(); input.select(); } catch (e) {} }, 30);
   });
 }
+// uiVersionPick: the New Version dialog (TD-242 stage 3c).
+//
+// TWO ROUTES, MUTUALLY EXCLUSIVE, and the exclusivity is the point -- Ian: "Name a new one... or
+// assign to existing one. Not both."
+//   ASSIGN : give an existing version of MINE a representation of this session. The version already
+//            has a name, so the field is not asked for and is disabled while a version is picked.
+//   CREATE : a brand new campaign version, named here, branched from the version on screen.
+//
+// Only versions that do NOT already hold this session are offered: one fork per session per version
+// is a database constraint, so offering the rest would be offering a guaranteed 409.
+//
+// Resolves { version_id } or { name } or null. Never both -- the caller does not have to referee.
+function uiVersionPick(srcLabel, mine) {
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
+    var h = document.createElement('div');
+    h.textContent = mine.length ? 'Add this session to a version' : 'Name this version';
+    h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:8px;";
+    var msg = document.createElement('div');
+    msg.textContent = 'Copying ' + (srcLabel || 'this version') + '.';
+    msg.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.5;margin-bottom:14px;';
+    box.appendChild(h); box.appendChild(msg);
+
+    var sel = null;
+    if (mine.length) {
+      var l1 = document.createElement('div');
+      l1.textContent = 'Add to one of your versions';
+      l1.style.cssText = 'color:#c9a84c;font-size:12px;margin-bottom:6px;';
+      sel = document.createElement('select');
+      sel.className = 'form-input';
+      sel.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin-bottom:14px;';
+      var o0 = document.createElement('option');
+      o0.value = ''; o0.textContent = '\u2014 choose a version \u2014';
+      sel.appendChild(o0);
+      mine.forEach(function (v) {
+        var o = document.createElement('option');
+        o.value = String(v.version_id);
+        var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
+        o.textContent = v.name + ' (' + n + ')';
+        sel.appendChild(o);
+      });
+      var l2 = document.createElement('div');
+      l2.textContent = 'or create a new version';
+      l2.style.cssText = 'color:rgba(201,168,76,0.7);font-size:12px;margin-bottom:6px;';
+      box.appendChild(l1); box.appendChild(sel); box.appendChild(l2);
+    }
+
+    var input = document.createElement('input');
+    input.type = 'text'; input.maxLength = 60; input.placeholder = 'New version name';
+    input.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin-bottom:16px;';
+    box.appendChild(input);
+
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+    var cancel = document.createElement('button');
+    cancel.className = 'btn btn-secondary'; cancel.textContent = 'Cancel';
+    var ok = document.createElement('button');
+    ok.className = 'btn btn-primary'; ok.textContent = 'Save'; ok.disabled = true;
+    row.appendChild(cancel); row.appendChild(ok);
+    box.appendChild(row);
+
+    // ONE of the two is live at a time, enforced in the UI rather than validated after the fact:
+    // a disabled control cannot be filled in and then silently ignored.
+    function sync() {
+      var picked = sel && sel.value;
+      var typed = input.value.trim();
+      input.disabled = !!picked;
+      input.style.opacity = picked ? '0.4' : '1';
+      if (sel) { sel.disabled = !!typed; sel.style.opacity = typed ? '0.4' : '1'; }
+      ok.disabled = !picked && !typed;
+    }
+    if (sel) sel.onchange = sync;
+    input.oninput = sync;
+
+    function done(v) { try { document.body.removeChild(overlay); } catch (e) {} document.removeEventListener('keydown', onKey); resolve(v); }
+    function submit() {
+      var picked = sel && sel.value;
+      if (picked) return done({ version_id: Number(picked) });
+      var n = input.value.trim();
+      if (n) return done({ name: n });
+      done(null);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      else if (e.key === 'Enter' && document.activeElement === input) { e.preventDefault(); submit(); }
+    }
+    cancel.onclick = function () { done(null); };
+    ok.onclick = submit;
+    overlay.onclick = function (e) { if (e.target === overlay) done(null); };
+    overlay.appendChild(box); document.body.appendChild(overlay);
+    document.addEventListener('keydown', onKey);
+    setTimeout(function () { try { (sel || input).focus(); } catch (e) {} }, 30);
+  });
+}
 function uiConfirm(message, opts) {
   opts = opts || {};
   return new Promise(function (resolve) {
@@ -11946,15 +12043,29 @@ function newSessionVersion() {
   if (!src) { showAlert('There is no version here to copy yet.'); return; }
   var srcFork = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(src); })[0];
   var srcLabel = srcFork ? srcFork.label : 'this version';
-  uiPrompt('Name this version', 'Copying ' + srcLabel + '. What should this one be called?', '').then(function (name) {
-    name = (name || '').trim();
-    if (!name) return;
+  // v3.0.459 -- ASK THE SERVER WHICH VERSIONS THIS SESSION IS MISSING FROM (TD-242 stage 3c).
+  // Before this the button could only ever CREATE, so a version made on session 1 was stranded
+  // there: pressing New Version on session 2 and typing the same name came back 409, because names
+  // are campaign-level. The version existed; there was no way to say "this session belongs to it".
+  // here === 'canonical' means that version is borrowing the canonical here -- i.e. it has no fork
+  // of this session yet, which is exactly the set that can legally be branched into.
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/versions')
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .catch(function () { return []; })
+    .then(function (all) {
+    var mine = (Array.isArray(all) ? all : []).filter(function (v) {
+      return v.is_mine && !v.is_canonical && v.here === 'canonical';
+    });
+    uiVersionPick(srcLabel, mine).then(function (pick) {
+    if (!pick) return;
     var btn = document.getElementById('new-version-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Creating\u2026'; }
+    if (btn) { btn.disabled = true; btn.textContent = pick.version_id ? 'Adding\u2026' : 'Creating\u2026'; }
+    var body = { source_fork_id: src };
+    if (pick.version_id) body.version_id = pick.version_id; else body.name = pick.name;
     fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, source_fork_id: src })
+      body: JSON.stringify(body)
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
@@ -11963,11 +12074,15 @@ function newSessionVersion() {
         state.currentForkId = res.j.fork_id;
         loadSessionForks(state.currentSession.id);
         reloadSessionForFork();
+        // A branch changes a version's session count and a create adds a whole version, so the
+        // Publish picker is stale either way if it has already been loaded.
+        if (typeof loadNovelPeople === 'function' && document.getElementById('novel-version-select')) loadNovelPeople();
       })
       .catch(function () {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
         showAlert('Could not create that version. Please try again.');
       });
+    });
   });
 }
 // v3.0.441 -- rename any version you own, including the one you have had all along: the backfill
