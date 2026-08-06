@@ -4001,8 +4001,39 @@ function sessionGenBusy() {
   if (Date.now() - L.at > 15 * 60 * 1000) { state.sessionGenLock = null; return null; }
   return L.label;
 }
-function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; }
-function clearGenLock() { state.sessionGenLock = null; }
+function setGenLock(label) { state.sessionGenLock = { label: label, at: Date.now() }; paintForkLock(); }
+function clearGenLock() { state.sessionGenLock = null; paintForkLock(); }
+
+// v3.0.476 -- THE SESSION VERSION DROPDOWN LOCKS WHILE WORK IS IN FLIGHT (TD-262b).
+//
+// forkQ() reads state.currentForkId AT CALL TIME:
+//     return state.currentForkId ? ('?fork_id=' + ...) : '';
+// so during a long generate, EVERY request resolves the fork when it fires rather than when the
+// run started. Switch versions half way through and the remaining saves land on the NEW fork --
+// narrative written into the wrong version, images attached to the wrong fork, no error anywhere.
+// Ian: "if you are generating pictures or narrative and you switch versions before it finishes it
+// messes things up right?" Yes, and worse than the optimize case v3.0.463 covered, because that
+// one only stales a screen while this one writes to the wrong book.
+//
+// Pinning the fork for the duration of a run would be the other fix, but it means threading a fork
+// id through every generate path and its polls -- more places to get wrong than the thing it
+// repairs. Blocking the switch is one rule in one place, and it matches what the Publish picker
+// already does for an optimize run.
+function forkSwitchBlockedBy() {
+  try { if (typeof sessionGenBusy === 'function' && sessionGenBusy()) return sessionGenBusy(); } catch (e) {}
+  if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) return 'Optimize';
+  return null;
+}
+function paintForkLock() {
+  try {
+    var sel = document.getElementById('session-fork-select');
+    if (!sel) return;
+    var by = forkSwitchBlockedBy();
+    sel.disabled = !!by;
+    sel.style.opacity = by ? '0.5' : '';
+    sel.title = by ? (by + ' is running on this version. Let it finish before switching.') : '';
+  } catch (e) {}
+}
 function ensureGenFree() {
   var b = sessionGenBusy();
   if (b) {
@@ -12130,6 +12161,9 @@ function loadSessionForks(sessionId) {
         if (selId) sel.value = String(selId);
         // Only worth showing once there's more than the canonical to pick.
         sel.style.display = forks.length > 1 ? '' : 'none';
+        // Rebuilding the options resets disabled, so re-apply the lock. loadSessionForks runs on
+        // fork create, delete and rename -- all of which can happen while a run is in flight.
+        paintForkLock();
       }
       var mineFork = forks.filter(function(f) { return f.is_mine; })[0];
       // v3.0.442 -- myForkId MEANS "the version I am allowed to edit", and eleven call sites read it
@@ -12202,6 +12236,20 @@ function loadSessionForks(sessionId) {
 }
 
 function onForkChange(forkId) {
+  // v3.0.476 -- REFUSE WHILE WORK IS IN FLIGHT (TD-262b). Belt as well as braces: the dropdown is
+  // disabled by paintForkLock, and this refuses anyway, because a disabled control can still be
+  // driven by a stale event or a script. The picker is snapped back so a refusal leaves the page
+  // exactly where it was rather than half-moved.
+  var _blockedBy = forkSwitchBlockedBy();
+  if (_blockedBy) {
+    var _fs = document.getElementById('session-fork-select');
+    if (_fs) {
+      var _dm = (state.sessionForks || []).filter(function (f) { return f.role === 'dm'; })[0];
+      _fs.value = String(state.currentForkId || (_dm ? _dm.fork_id : ''));
+    }
+    showAlert(_blockedBy + ' is still running on this version. Let it finish, or cancel it, before switching \u2014 anything it saves from here on would go to whichever version is selected at the time.');
+    return;
+  }
   var dmFork = (state.sessionForks || []).filter(function(f) { return f.role === 'dm'; })[0];
   // Selecting the DM canonical clears currentForkId (default path).
   state.currentForkId = (dmFork && String(forkId) === String(dmFork.fork_id)) ? null : forkId;
@@ -15731,6 +15779,9 @@ function paintVersionLock() {
 }
 function paintPublishLock() {
   try { paintVersionLock(); } catch (e) {}
+  // v3.0.476 -- the SESSION dropdown rides the same heartbeat, so an optimize run releases it
+  // without anyone having to touch the page.
+  try { paintForkLock(); } catch (e) {}
   try {
     var locked = optimizeRunIsElsewhere();
     var els = [], i, nn = document.querySelectorAll('.novel-nav-btn');
