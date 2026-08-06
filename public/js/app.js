@@ -12193,14 +12193,29 @@ function makeMyVersion() {
 }
 
 async function deleteMyVersion() {
-  if (!state.currentCampaign || !state.currentSession || !state.myForkId) return;
-  // v3.0.442 -- myForkId now follows the SELECTED version, so this deletes the one on screen.
-  // Named, because with several versions "your version" no longer identifies anything.
-  var _dv = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(state.myForkId); })[0];
-  // v3.0.448 -- the canonical IS the session; deleting it would leave every other version pointing at
-  // nothing, which is why the server refuses. Say so here rather than let a generic error come back.
-  if (_dv && _dv.role === 'dm') {
-    showAlert('This is the original version of the session, so it cannot be deleted -- everything else is built from it. You can rename it, or delete one of your other versions.');
+  if (!state.currentCampaign || !state.currentSession) return;
+  // v3.0.462 -- ACTS ON THE FORK ON SCREEN, and asks the ONE helper that already answers the
+  // permission question. It used to read state.myForkId, which is `the first fork of mine on this
+  // session` whenever the selected one does not resolve -- and a STORY MASTER OWNS THE CANONICAL,
+  // which sorts first. So deleting a second version of your own refused with "This is the original
+  // version of the session", true of the fork it had picked and false of the one on screen.
+  //
+  // A player never saw it: their first is_mine fork is genuinely theirs. It bites only a Story
+  // Master holding versions of their own, which is precisely what this feature made ordinary.
+  // That was the tenth re-derivation of "which version am I acting on" (TD-194). It is the last:
+  // forkOwnNonCanonical() is the single place that rule lives on the client.
+  var _fid = state.currentForkId;
+  var _dv = (state.sessionForks || []).filter(function (f) { return String(f.fork_id) === String(_fid); })[0];
+  if (!_fid || !_dv) {
+    showAlert('Pick the version you want to remove from the dropdown first.');
+    return;
+  }
+  if (!forkOwnNonCanonical()) {
+    if (forkOnScreenIsCanonical()) {
+      showAlert('This is the original version of the session, so it cannot be deleted -- everything else is built from it. You can rename it, or delete one of your other versions.');
+    } else {
+      showAlert('You can only remove a session from your own versions.');
+    }
     return;
   }
   // v3.0.461 -- SAY WHAT IS ACTUALLY BEING DELETED. The old wording was "Delete <name> of this
@@ -12234,11 +12249,14 @@ async function deleteMyVersion() {
     if (!await uiConfirm(_msg, { title: 'Remove this session from ' + _dvName + '?', okText: 'Remove session', danger: true, preserveLines: true })) return;
     _choice = 'keep';
   }
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + state.myForkId +
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + _fid +
         (_choice === 'deleteVersion' ? '?delete_version=1' : ''), { method: 'DELETE' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) { if (typeof showAlert === 'function') { showAlert(data.error); } else { alert(data.error); } return; }
+      // Ian, 2026-08-06: drop to the CANONICAL. Nulling both is exactly that -- loadSessionForks
+      // selects the canonical when nothing is named -- and it is the safe landing either way,
+      // because the fork that WAS on screen no longer exists.
       state.currentForkId = null;
       state.myForkId = null;
       loadSessionForks(state.currentSession.id);

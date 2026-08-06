@@ -1162,8 +1162,23 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
     console.error('[versions] style defaults not applied to fork ' + newForkId + ': ' + ((e && e.message) || e));
   }
   await db.prepare(
-    "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, created_at, created_by) " +
-    "SELECT session_id, ?, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
+    // v3.0.462 -- img_w AND img_h ADDED. They were missing from the day this copy was written
+    // (v3.0.441). The IMAGE came across and its stored pixel dimensions did not, so momentAspect()
+    // fell through to the NOMINAL shape ratio: a wide panel that is really 21:9 was packed as
+    // though it were the generic wide aspect. A branched version therefore paginated differently
+    // from the version it was copied from, using identical pictures -- which reads as a layout
+    // engine fault and is not one.
+    //
+    // `style` too, found by the guard rather than by reading: it is written in the same statement as
+    // the image (images.js `UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?`) and
+    // records WHICH ART STYLE produced that picture. Carrying the image without it leaves a copy
+    // holding a watercolour panel with no record of what made it.
+    // THIRD SILENT COLUMN OMISSION FOUND TODAY (TD-250 was six on session_forks; this is two on
+    // moments). A column-list copy fails SILENTLY when it is incomplete: nothing errors, the row
+    // just quietly lacks a field. Hence the build guard that now compares these lists against the
+    // table definitions -- the next column anyone adds fails the build instead of shipping.
+    "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, img_w, img_h, style, panel_order, cast_explicit, created_at, created_by) " +
+    "SELECT session_id, ?, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, img_w, img_h, style, panel_order, cast_explicit, ?, ? FROM moments WHERE fork_id = ? ORDER BY panel_order ASC"
   ).run(newForkId, now, req.session.userId, sourceForkId);
   await db.prepare(
     "INSERT INTO session_characters (session_id, fork_id, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, created_at) " +
