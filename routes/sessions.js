@@ -963,8 +963,13 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
     // v3.0.441 -- sf.name is the reader's own label for this version (TD-194). The id tiebreaker
     // matters now that one user can hold several: two created in the same second would otherwise
     // swap places between page loads.
-    "SELECT sf.id, sf.user_id, sf.role, sf.player_access_status, sf.name, u.name AS user_name, u.email AS user_email " +
+    // v3.0.458 -- THE NAME COMES FROM THE VERSION, not from the fork. Reading sf.name is what let
+    // the Session page and the Publish page disagree: the legacy rename wrote sf.name only, so one
+    // screen said "Ian Watercolor" and the other said "Ian Anime" about the same book.
+    "SELECT sf.id, sf.user_id, sf.role, sf.player_access_status, sf.version_id, " +
+    "COALESCE(cv.name, sf.name) AS name, cv.is_canonical, u.name AS user_name, u.email AS user_email " +
     "FROM session_forks sf JOIN users u ON u.id = sf.user_id " +
+    "LEFT JOIN campaign_versions cv ON cv.id = sf.version_id " +
     "WHERE sf.session_id = ? ORDER BY (sf.role = 'dm') DESC, sf.created_at ASC, sf.id ASC"
   ).all(req.params.id);
   const visible = rows.filter(function(f) {
@@ -973,6 +978,7 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
     const mine = String(f.user_id) === String(me);
     return {
       fork_id: f.id,
+      version_id: f.version_id || null,
       user_id: f.user_id,
       role: f.role,
       status: f.player_access_status,
@@ -1165,7 +1171,17 @@ router.patch('/:id/fork/:forkId/name', requireAuth, verifyCampaignMember, async 
       .get(req.params.id, req.session.userId, name, fork.id);
     if (clash) return res.status(409).json({ error: 'You already have a version of this session called that.' });
   }
-  await db.prepare('UPDATE session_forks SET name = ? WHERE id = ?').run(name || null, fork.id);
+  // v3.0.458 -- WRITES THE VERSION, then mirrors. This endpoint is superseded by
+  // PATCH /campaigns/:id/versions/:versionId and the client no longer calls it, but it stays
+  // reachable, so it must not be able to recreate the split it caused: writing sf.name alone is
+  // what made one book carry two names and what the boot backfill then turned into a phantom.
+  const _fv = await db.prepare('SELECT version_id FROM session_forks WHERE id = ?').get(fork.id);
+  if (_fv && _fv.version_id) {
+    await db.prepare('UPDATE campaign_versions SET name = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?').run(name || 'Original', _fv.version_id);
+    await db.prepare('UPDATE session_forks SET name = ? WHERE version_id = ?').run(name || 'Original', _fv.version_id);
+  } else {
+    await db.prepare('UPDATE session_forks SET name = ? WHERE id = ?').run(name || null, fork.id);
+  }
   res.json({ success: true, fork_id: fork.id, name: name || null });
 });
 

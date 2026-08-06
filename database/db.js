@@ -1286,6 +1286,15 @@ async function migrateCampaignVersions(pool) {
     FROM session_forks f
     JOIN sessions s ON s.id = f.session_id
     WHERE f.role <> 'dm'
+      -- v3.0.458 -- ONLY ORPHANS. THIS CLAUSE IS THE WHOLE BUG FIX.
+      -- Without it this INSERT re-derived versions from fork NAMES on every boot, so renaming a
+      -- version through the legacy per-fork endpoint (which writes session_forks.name and nothing
+      -- else) made the next restart see a name it had no version for and CREATE ONE -- empty, since
+      -- the stamping pass below only touches forks whose version_id is null, and that fork already
+      -- pointed at the old version. Observed twice on staging: "Ian Watercolor" (0 sessions) beside
+      -- "Ian Anime" (1 session) holding the actual fork, and "Cel-Shaded" beside "v2".
+      -- A backfill that reads a MUTABLE field is only idempotent until that field is edited.
+      AND f.version_id IS NULL
       AND NOT EXISTS (
         SELECT 1 FROM campaign_versions v
         WHERE v.campaign_id = s.campaign_id
@@ -1313,6 +1322,50 @@ async function migrateCampaignVersions(pool) {
       AND v.name = COALESCE(NULLIF(btrim(f.name), ''), 'Original')
       AND f.role <> 'dm' AND f.version_id IS NULL
   `);
+
+  // ---- REPAIR: PHANTOM VERSIONS LEFT BY THE PRE-v3.0.458 BACKFILL ------------------------------
+  // Signature, and it is specific enough to act on: a non-canonical version holding ZERO forks,
+  // whose name equals the FORK name of another version owned by the same person in the same
+  // campaign. Nothing else produces that pair. A version a reader made and simply has not branched
+  // cannot match, because it has no sibling carrying its name.
+  //
+  // THE FORK NAME IS THE TRUTH. It is what the reader last typed; the version name is what the
+  // rename never reached. So the surviving version ADOPTS its fork's name and the phantom goes.
+  // Delete first, rename second -- the other order collides with idx_campaign_versions_named.
+  try {
+    const ph = await pool.query(`
+      SELECT p.id AS phantom_id, w.id AS keep_id, f.name AS true_name, p.campaign_id, p.user_id
+      FROM campaign_versions p
+      JOIN campaign_versions w
+        ON w.campaign_id = p.campaign_id AND w.user_id = p.user_id
+       AND w.id <> p.id AND NOT w.is_canonical
+      JOIN session_forks f ON f.version_id = w.id AND f.name = p.name
+      WHERE NOT p.is_canonical
+        AND NOT EXISTS (SELECT 1 FROM session_forks x WHERE x.version_id = p.id)
+    `);
+    for (const r of ph.rows) {
+      await pool.query('DELETE FROM campaign_versions WHERE id = $1', [r.phantom_id]);
+      await pool.query('UPDATE campaign_versions SET name = $1, edited_at = NOW() WHERE id = $2', [r.true_name, r.keep_id]);
+      console.log('  [versions] repaired: version ' + r.keep_id + ' renamed to "' + r.true_name +
+        '", phantom ' + r.phantom_id + ' removed (campaign ' + r.campaign_id + ')');
+    }
+  } catch (e) {
+    console.error('  [versions] phantom repair skipped: ' + ((e && e.message) || e));
+  }
+
+  // ---- ONE NAME STORE. session_forks.name is now a MIRROR of the version it belongs to, never an
+  // independent value -- two places holding one fact is how this bug happened. Re-asserted every
+  // boot so any writer that slips through is corrected rather than compounding.
+  try {
+    const sync = await pool.query(`
+      UPDATE session_forks f SET name = v.name
+      FROM campaign_versions v
+      WHERE v.id = f.version_id AND f.name IS DISTINCT FROM v.name
+    `);
+    if (sync.rowCount) console.log('  [versions] fork names re-synced to their version: ' + sync.rowCount);
+  } catch (e) {
+    console.error('  [versions] fork name sync skipped: ' + ((e && e.message) || e));
+  }
 
   // ---- THE INVARIANT --------------------------------------------------------------------------
   // WRAPPED, for the reason recorded on idx_forks_one_dm: creating a unique index fails if
@@ -1666,6 +1719,12 @@ async function versionsForCampaign(db, campaignId, viewerUserId, sessionId) {
     const owner = v.is_canonical
       ? 'Story Master'
       : (mine ? 'You' : (v.owner_name || v.owner_email || 'Player'));
+    // Ian, 2026-08-06: the OWNER may rename any version they own -- including the canonical, which
+    // belongs to whoever holds the dm flag -- and "we always just put Canonical next to the name".
+    // So the tag is a TAG, not the name: rename it "The Official Chronicle" and it still reads as
+    // the canonical to every member who falls through to it. Suppressed when the name already IS
+    // Canonical, so the default does not render as "Canonical (Canonical)".
+    const tag = (v.is_canonical && String(v.name) !== 'Canonical') ? ' (Canonical)' : '';
     out.push({
       version_id: v.id,
       name: v.name,
@@ -1673,7 +1732,7 @@ async function versionsForCampaign(db, campaignId, viewerUserId, sessionId) {
       is_mine: mine,
       owner_user_id: v.is_canonical ? (dmRow ? dmRow.user_id : null) : v.user_id,
       owner_label: owner,
-      label: owner + ' \u2014 ' + v.name,
+      label: owner + ' \u2014 ' + v.name + tag,
       session_count: forks.length,
       // For the session on screen: does this version have its OWN representation here, or is it
       // borrowing the canonical? The dropdown says which, because "the fork is the version's

@@ -11976,10 +11976,15 @@ function renameSessionVersion() {
   if (!state.currentCampaign || !state.currentSession || !state.currentForkId) return;
   var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
   if (!f || !f.is_mine) { showAlert('You can only rename your own versions.'); return; }
+  if (!f.version_id) { showAlert('This version is still being set up. Please reload the page and try again.'); return; }
   uiPrompt('Rename version', 'What should this version be called?', f.name || '').then(function (name) {
     if (name === null) return;
     name = (name || '').trim();
-    fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork/' + f.fork_id + '/name', {
+    // v3.0.458 -- RENAMES THE VERSION, not this session's fork. The old call wrote
+    // session_forks.name only, so the Publish picker (which reads campaign_versions.name) kept
+    // showing the previous name -- and the boot backfill then invented an empty version from the
+    // new one. One name, one store, one endpoint.
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/versions/' + f.version_id, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name })
@@ -11988,6 +11993,8 @@ function renameSessionVersion() {
       .then(function (res) {
         if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not rename that version.'); return; }
         loadSessionForks(state.currentSession.id);
+        // The name is campaign-level now, so every session and the Publish picker change at once.
+        if (typeof loadNovelPeople === 'function' && document.getElementById('novel-version-select')) loadNovelPeople();
       })
       .catch(function () { showAlert('Could not rename that version. Please try again.'); });
   });
