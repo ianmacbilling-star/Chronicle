@@ -58,6 +58,10 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     if (!forkId) forkId = await getDmForkId(db, s.id);
     const moments = await db.prepare('SELECT * FROM moments WHERE fork_id=? ORDER BY panel_order ASC').all(forkId);
     const fk = await db.prepare('SELECT player_access_status FROM session_forks WHERE id = ?').get(forkId);
+    const _vinfo = await db.prepare(
+      'SELECT cv.id, cv.name, cv.is_canonical FROM session_forks sf ' +
+      'LEFT JOIN campaign_versions cv ON cv.id = sf.version_id WHERE sf.id = ?'
+    ).get(forkId);
     // Card thumbnail: the fork's establishing (title) image, else first panel,
     // else the session-level establishing image. Only ONE image per card.
     let firstMomentImg = null, estImg = null;
@@ -76,6 +80,13 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
       title_image: title_image,
       fork_owner_name: usedPlayerFork ? asUserName : null,
       is_canonical: !usedPlayerFork,
+      // v3.0.464 -- NAME THE VERSION THIS TILE IS ACTUALLY READING (TD-263). The owner no longer
+      // identifies a book: one person can hold several versions, so "Ian's Version" is true of
+      // three different books at once. And because of fallthrough the tiles on one page can come
+      // from DIFFERENT versions -- the selected one where it has a fork, the canonical where it
+      // does not -- which is exactly the case a reader must be able to see before pressing Order.
+      version_id: _vinfo ? _vinfo.id : null,
+      version_name: _vinfo ? _vinfo.name : null,
       novel_include: !!incMap[s.id]
     });
   }));

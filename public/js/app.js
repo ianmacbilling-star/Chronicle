@@ -6285,7 +6285,13 @@ function loadNovelPeople() {
       // whole feature exists to stop.
       var own = rows.filter(function(v) { return v.is_mine; });
       var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
+      // v3.0.464 -- and RELOAD if the default the server gave us is not what the page already
+      // drew. Compared on the wire query rather than on the id, because that is the thing the
+      // tiles were actually fetched with -- an id that changes without changing the query needs
+      // no reload, and one that changes the query always does.
+      var _wasQ = novelAsUserQ('&');
       if (pick) { sel.value = String(pick.version_id); applyNovelVersion(pick.version_id); }
+      if (novelAsUserQ('&') !== _wasQ) { novelVersionApplied(); return; }
       updateNovelPublishGuard();
     })
     .catch(function(){ updateNovelPublishGuard(); });
@@ -6317,10 +6323,23 @@ function onNovelVersionChange(val) {
   }
   // v3.0.457 -- the picker's value is a VERSION id now, not a user id.
   applyNovelVersion(val);
+  novelVersionApplied();
+}
+
+// novelVersionApplied: everything the page must redo once the version changes. Factored out in
+// v3.0.464 so the MANUAL switch and the DEFAULT chosen on first load run the same path -- Ian, on
+// arriving at the Publish tab: "It says Watercolor but its showing the sessions from the canonical.
+// One of the two are wrong."
+//
+// The picker was right. loadNovelPeople sets the state synchronously to a guess and loadNovelSummary
+// runs immediately after, but the REAL default now comes back from the server -- and when it did,
+// nothing told the page to reload. So the dropdown updated and the tiles did not. A second copy of
+// this tail would have drifted from the first within a week; there is one.
+function novelVersionApplied() {
   updateNovelPublishGuard();
   if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function(){ if (typeof prepSyncTitle === 'function') prepSyncTitle(); if (typeof renderPrepThumbs === 'function') renderPrepThumbs(); });
   if (typeof syncPrintVersionDisplay === 'function') syncPrintVersionDisplay();
-  // Switch to this member's saved look before rendering their book.
+  // Switch to this version's saved look before rendering its book.
   mpLoadAndApply('novel', function(){
     if (typeof novelPreviewPage !== 'undefined') novelPreviewPage = 1;
     loadNovelSummary(function(){
@@ -6961,9 +6980,17 @@ function renderNovelSummary(sessions) {
     var thumb = thumbSrc
       ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
       : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
-    var forkLabel = s.is_canonical
-      ? "Story Master's Version"
-      : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version");
+    // v3.0.464 -- THE VERSION NAME, not the owner (TD-263). Rule-based over BOTH copies of this
+    // block, because app.js duplicates on purpose and the one hand-anchored edit in the TD-194 work
+    // is the one that shipped a bug.
+    // The owner stops identifying a book the moment one person holds two, and fallthrough means the
+    // tiles on a single page can come from DIFFERENT versions -- so a page reading "Ian Watercolor"
+    // at the top can legitimately be showing canonical content in most of its tiles. That has to be
+    // visible before someone orders it.
+    var forkLabel = s.version_name
+      ? (s.version_name + (s.is_canonical ? '' : (s.fork_owner_name ? (' \u2014 ' + s.fork_owner_name) : '')))
+      : (s.is_canonical ? "Story Master's Version"
+                        : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version"));
     var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
     return '<div class="session-card session-card-publish">' +
       thumb +
@@ -10391,9 +10418,17 @@ function renderNovelSummary(sessions) {
     var thumb = thumbSrc
       ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
       : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
-    var forkLabel = s.is_canonical
-      ? "Story Master's Version"
-      : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version");
+    // v3.0.464 -- THE VERSION NAME, not the owner (TD-263). Rule-based over BOTH copies of this
+    // block, because app.js duplicates on purpose and the one hand-anchored edit in the TD-194 work
+    // is the one that shipped a bug.
+    // The owner stops identifying a book the moment one person holds two, and fallthrough means the
+    // tiles on a single page can come from DIFFERENT versions -- so a page reading "Ian Watercolor"
+    // at the top can legitimately be showing canonical content in most of its tiles. That has to be
+    // visible before someone orders it.
+    var forkLabel = s.version_name
+      ? (s.version_name + (s.is_canonical ? '' : (s.fork_owner_name ? (' \u2014 ' + s.fork_owner_name) : '')))
+      : (s.is_canonical ? "Story Master's Version"
+                        : (s.fork_owner_name ? (s.fork_owner_name + "'s Version") : "Your Version"));
     var includeChk = '<label class="session-card-include"><input type="checkbox" ' + (novelIncluded(s) ? 'checked' : '') + (novelOwnView() ? '' : ' disabled title="You can only change which sessions are included on your own version"') + ' onchange="toggleNovelInclude(' + s.id + ', this.checked)"> Include in Print</label>';
     return '<div class="session-card session-card-publish">' +
       thumb +
