@@ -451,21 +451,55 @@ function campaignSeed(campaignId) {
 // look up the prior session's reference image. Pre-change panels use it
 // so the character shows their OLD look before the change moment.
 // Mutates each char row, adding `prior_reference_url`.
-async function attachPriorReferences(db, chars, sessionId, campaignId) {
+// v3.0.466 -- SCOPED TO THE VERSION (TD-268). The query below used to name only the CAMPAIGN:
+//
+//     WHERE sc.character_id = ? AND s.campaign_id = ? AND s.session_date < ?
+//
+// no fork, no version, no user. It scanned EVERY fork of every earlier session and took the most
+// recent -- so the instant a character was changed in ONE version, that row became the "prior look"
+// for every OTHER version's later sessions, the canonical included. Ian found it on Gnomes: Frumble
+// is pale on the canonical and dark in Watercolor, and sessions two and three came out dark on
+// BOTH. Not a display fault -- the generator really did use the wrong reference.
+//
+// Correct when a session had one fork. Third time today that a backward-looking query outlived the
+// uniqueness assumption it was written under (TD-194, TD-252, this).
+//
+// The rule now matches everything else in the feature: the most recent earlier session IN THIS
+// VERSION, else the canonical's. forkId is passed by every caller; without it this falls back to
+// the canonical rather than guessing across versions.
+async function attachPriorReferences(db, chars, sessionId, campaignId, forkId) {
   try {
     var sess = await db.prepare('SELECT session_date FROM sessions WHERE id = ?').get(sessionId);
     if (!sess) return;
+    var vRow = forkId ? await db.prepare('SELECT version_id FROM session_forks WHERE id = ?').get(forkId) : null;
+    var versionId = vRow ? vRow.version_id : null;
     for (var i = 0; i < chars.length; i++) {
       var c = chars[i];
       // Only relevant if this character has an accepted change this session.
       if (c.change_status !== 'accepted') continue;
-      var prior = await db.prepare(
-        'SELECT sc.reference_url FROM session_characters sc ' +
-        'JOIN sessions s ON sc.session_id = s.id ' +
-        'WHERE sc.character_id = ? AND s.campaign_id = ? AND s.session_date < ? ' +
-        'AND sc.reference_url IS NOT NULL ' +
-        'ORDER BY s.session_date DESC LIMIT 1'
-      ).get(c.character_id, campaignId, sess.session_date);
+      var prior = null;
+      if (versionId) {
+        prior = await db.prepare(
+          'SELECT sc.reference_url FROM session_characters sc ' +
+          'JOIN session_forks sf ON sf.id = sc.fork_id ' +
+          'JOIN sessions s ON s.id = sf.session_id ' +
+          'WHERE sc.character_id = ? AND sf.version_id = ? AND s.session_date < ? ' +
+          'AND sc.reference_url IS NOT NULL ' +
+          'ORDER BY s.session_date DESC, sf.id DESC LIMIT 1'
+        ).get(c.character_id, versionId, sess.session_date);
+      }
+      if (!prior) {
+        // FALLTHROUGH to the canonical, the same rule the book itself uses for a session this
+        // version has not branched.
+        prior = await db.prepare(
+          'SELECT sc.reference_url FROM session_characters sc ' +
+          'JOIN session_forks sf ON sf.id = sc.fork_id ' +
+          'JOIN sessions s ON s.id = sf.session_id ' +
+          "WHERE sc.character_id = ? AND sf.role = 'dm' AND s.campaign_id = ? AND s.session_date < ? " +
+          'AND sc.reference_url IS NOT NULL ' +
+          'ORDER BY s.session_date DESC LIMIT 1'
+        ).get(c.character_id, campaignId, sess.session_date);
+      }
       c.prior_reference_url = (prior && prior.reference_url) ? prior.reference_url : null;
     }
   } catch (e) {
@@ -902,7 +936,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     ).all(moment.fork_id, campId);
     // Stage 4: for any character with an accepted mid-session change, fetch
     // the PRIOR session's reference so pre-change panels show the old look.
-    await attachPriorReferences(db, chars, moment.session_id, campId);
+    await attachPriorReferences(db, chars, moment.session_id, campId, moment.fork_id);
     // Only include characters actually named in this panel's text
     const panelText = (prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
     // Pass 2 — if this panel has an explicit cast, it overrides name-match.
@@ -1045,7 +1079,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
       'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
       'WHERE ch.campaign_id = ?'
     ).all(moment.fork_id, campIdR);
-    await attachPriorReferences(db, charsR, moment.session_id, campIdR);
+    await attachPriorReferences(db, charsR, moment.session_id, campIdR, moment.fork_id);
     const panelTextR = (moment.prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
     let explicitCharIdsR = null, explicitAssetIdsR = null;
     if (moment.cast_explicit) {
@@ -1164,7 +1198,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
     'WHERE ch.campaign_id = ?'
   ).all(targetForkId, campaign_id);
   // Stage 4: attach each changed character's prior-session reference image.
-  await attachPriorReferences(db, chars, session_id, campaign_id);
+  await attachPriorReferences(db, chars, session_id, campaign_id, targetForkId);
 
   // Asset library: load campaign assets once; matched per-panel in the loop.
   const assets = await db.prepare(

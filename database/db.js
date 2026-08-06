@@ -1719,6 +1719,50 @@ async function versionStyleDefaults(db, versionId) {
   return out;
 }
 
+// versionPriorCharacterLooks: how each character LOOKED at the end of this version's most recent
+// EARLIER session. Returns { <character_id>: { prompt, reference_url } }.
+//
+// WHY THIS EXISTS. Ian, 2026-08-06: "you go to a new session, make a fork of that session using a
+// pre-existing version. If you never hit Generate Story ... and go right to Generate Images and
+// Generate Narrative, you will be using images of characters from a DIFFERENT version."
+//
+// That was exactly right. A branch copies session_characters from the SOURCE fork -- session two's
+// CANONICAL -- and normal panels generate from that row's reference_url. So Zara breaks a horn in
+// Watercolor session one, you add session two to Watercolor, press Generate, and she has both horns
+// again, silently, because the row came from the Story Master's book. Nothing errors; the pictures
+// are just wrong, and the user need never run anything that would correct it.
+//
+// PER CHARACTER, and MOST RECENT FIRST. A version that has held four sessions may have last seen a
+// character in the second, so the newest row wins per character rather than one whole fork winning.
+// A character this version has never carried simply is not in the map, and the canonical's look --
+// already copied from the source fork -- stands. That is the same fallthrough as everywhere else.
+//
+// Ordered by session_date then fork id, and EXCLUDING the session being branched, because a version
+// carries a look FORWARD; the session itself has not happened yet in that version.
+async function versionPriorCharacterLooks(db, versionId, sessionId) {
+  const out = {};
+  if (!versionId || !sessionId) return out;
+  const here = await db.prepare('SELECT session_date FROM sessions WHERE id = ?').get(sessionId);
+  if (!here) return out;
+  const rows = await db.prepare(
+    'SELECT sc.character_id, sc.prompt, sc.reference_url, sc.change_note, sc.change_detail, ' +
+    '       sc.change_flag, sc.change_status, sc.change_moment_index ' +
+    'FROM session_characters sc ' +
+    'JOIN session_forks sf ON sf.id = sc.fork_id ' +
+    'JOIN sessions s ON s.id = sf.session_id ' +
+    'WHERE sf.version_id = ? AND s.session_date < ? AND sc.session_id <> ? ' +
+    'ORDER BY s.session_date ASC, sf.id ASC'
+  ).all(versionId, here.session_date, sessionId);
+  // Ascending, then overwrite: the LAST row for a character is the most recent, and this needs no
+  // per-character sub-select.
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r.reference_url && !r.prompt) continue;
+    out[r.character_id] = { prompt: r.prompt || null, reference_url: r.reference_url || null };
+  }
+  return out;
+}
+
 // versionsForCampaign: every version a viewer may SELECT in this campaign, with the per-session
 // state the dropdown needs.
 //
@@ -2062,4 +2106,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults };
+module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };

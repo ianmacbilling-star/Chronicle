@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks } = require('../database/db');
 const { releaseImage, deleteFile } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -1209,6 +1209,31 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
     "INSERT INTO session_characters (session_id, fork_id, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, created_at) " +
     "SELECT session_id, ?, character_id, prompt, change_note, reference_url, change_flag, change_detail, change_moment_index, change_status, ? FROM session_characters WHERE fork_id = ?"
   ).run(newForkId, now, sourceForkId);
+  // v3.0.466 -- SEED THE CHARACTERS FROM THE VERSION, BEFORE ANYTHING CAN BE GENERATED (TD-267).
+  // The roster still comes from the SOURCE fork: session two's cast is whoever session two's
+  // extraction found, and an earlier session's cast does not decide that. What carries forward is
+  // the LOOK -- reference_url and the prompt together, because a description edited to say "broken
+  // left horn" has to travel with the picture or the art and the text disagree.
+  // Only where the version actually holds that character; everyone else keeps the canonical look
+  // already copied above. Done at BRANCH time rather than at generation, deliberately: a reader may
+  // go straight from New Version to Generate Images and never run anything that would correct it.
+  try {
+    const _looks = await versionPriorCharacterLooks(db, _newVersionId, sessionId);
+    const _ids = Object.keys(_looks);
+    for (let i = 0; i < _ids.length; i++) {
+      const _l = _looks[_ids[i]];
+      const _sets = [], _vals = [];
+      if (_l.reference_url) { _sets.push('reference_url = ?'); _vals.push(_l.reference_url); }
+      if (_l.prompt) { _sets.push('prompt = ?'); _vals.push(_l.prompt); }
+      if (!_sets.length) continue;
+      _vals.push(newForkId, _ids[i]);
+      await db.prepare('UPDATE session_characters SET ' + _sets.join(', ') + ' WHERE fork_id = ? AND character_id = ?').run(_vals);
+    }
+    if (_ids.length) console.log('[versions] fork ' + newForkId + ' seeded ' + _ids.length + ' character look(s) from version ' + _newVersionId);
+  } catch (e) {
+    console.error('[versions] character seeding failed for fork ' + newForkId + ': ' + ((e && e.message) || e));
+  }
+
   // Pass 2 — copy explicit per-panel casts, mapping each source moment to the
   // new fork's moment with the same panel_order (unique per fork).
   await db.prepare(
