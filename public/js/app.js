@@ -6258,43 +6258,79 @@ function updateNovelPublishGuard() {
 // The label carries the OWNER as well as the name (TD-247): on The Strangers four different members
 // each hold a version called "Original", and on For ALL the Ages the Story Master owns both the
 // canonical AND a named one. A bare name cannot tell those apart.
+// v3.0.465 -- SPLIT IN TWO, and the split is the bug fix.
+//
+// WHAT WENT WRONG. v3.0.459 added a loadNovelPeople() call after creating a fork, so the Publish
+// picker would show the new session count. v3.0.464 then gave loadNovelPeople the ability to call
+// novelVersionApplied() -- which runs mpLoadAndApply('novel'), and THAT writes state.artStyle and
+// repaints the style buttons. So a SESSION-PAGE action started an async load belonging to the
+// PUBLISH page, which landed AFTER reloadSessionForFork() had set the correct value and overwrote
+// it. Ian saw the art style flick to watercolour and back to the canonical.
+//
+// The assumption I broke is written above mpApplyPrefs in this file: "in the session view the
+// per-fork loader runs AFTER this and overrides with the session-specific value." Adding a caller
+// on another page reversed that ordering, and nothing connected the two.
+//
+//   refreshNovelVersionOptions()  -- rebuilds the OPTION LIST and the cached rows. Touches no page
+//                                    state, applies no prefs, reloads nothing. Safe from anywhere.
+//   loadNovelPeople()             -- the above, plus choosing a default and letting the Publish
+//                                    page act on it. Belongs to the Publish page and only there.
+function refreshNovelVersionOptions(done) {
+  var sel = document.getElementById('novel-version-select');
+  if (!state.currentCampaign) { if (done) done(null); return; }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/versions')
+    .then(function(r) { return r.ok ? r.json() : []; })
+    .then(function(rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      state.novelVersions = rows;
+      if (sel) {
+        var keep = sel.value;
+        var opts = '';
+        rows.forEach(function(v) {
+          var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
+          opts += '<option value="' + v.version_id + '" style="background:#16100a;color:#f0e8d0;">' + escapeHtml(v.label) + ' (' + n + ')</option>';
+        });
+        if (!opts) opts = '<option value="">Story Master \u2014 Canonical</option>';
+        sel.innerHTML = opts;
+        // Hold the selection across a rebuild, so refreshing the counts never moves the book.
+        if (keep && rows.some(function (v) { return String(v.version_id) === String(keep); })) sel.value = keep;
+      }
+      if (done) done(rows);
+    })
+    .catch(function(){ if (done) done(null); });
+}
+
 function loadNovelPeople() {
   var sel = document.getElementById('novel-version-select');
   var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
   var myId = (state.user && state.user.id) || null;
+  // v3.0.465 -- CAPTURED AT TRUE ENTRY, before the synchronous reset three lines down. That reset
+  // is legacy from when novelAsUser was the only driver, and it clears the as_user half of the
+  // query -- so a snapshot taken after it always LOOKS different from the one applyNovelVersion
+  // rebuilds, and every arrival fired a full Publish reload it did not need. Caught by running it,
+  // not by reading it: the symptom is one flicker on a page that was otherwise correct.
+  var _entryQ = novelAsUserQ('&');
   // Set the data driver synchronously: loadNovelSummary is called right after and must not read a
   // stale version while the list is still in flight.
   state.novelVersions = state.novelVersions || [];
   state.novelAsUser = isSM ? null : (myId != null ? String(myId) : null);
   updateNovelPublishGuard();
   if (!sel) return;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/versions')
-    .then(function(r) { return r.ok ? r.json() : []; })
-    .then(function(rows) {
-      rows = Array.isArray(rows) ? rows : [];
-      state.novelVersions = rows;
-      var opts = '';
-      rows.forEach(function(v) {
-        var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
-        opts += '<option value="' + v.version_id + '" style="background:#16100a;color:#f0e8d0;">' + escapeHtml(v.label) + ' (' + n + ')</option>';
-      });
-      if (!opts) opts = '<option value="">Story Master \u2014 Canonical</option>';
-      sel.innerHTML = opts;
-      // DEFAULT: your own version if you have exactly one, otherwise the canonical. A reader with
-      // several is NOT guessed at -- landing on an arbitrary one of their books is the mistake this
-      // whole feature exists to stop.
-      var own = rows.filter(function(v) { return v.is_mine; });
-      var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
-      // v3.0.464 -- and RELOAD if the default the server gave us is not what the page already
-      // drew. Compared on the wire query rather than on the id, because that is the thing the
-      // tiles were actually fetched with -- an id that changes without changing the query needs
-      // no reload, and one that changes the query always does.
-      var _wasQ = novelAsUserQ('&');
-      if (pick) { sel.value = String(pick.version_id); applyNovelVersion(pick.version_id); }
-      if (novelAsUserQ('&') !== _wasQ) { novelVersionApplied(); return; }
-      updateNovelPublishGuard();
-    })
-    .catch(function(){ updateNovelPublishGuard(); });
+  refreshNovelVersionOptions(function (rows) {
+    if (!rows) { updateNovelPublishGuard(); return; }
+    // DEFAULT: your own version if you have exactly one, otherwise the canonical. A reader with
+    // several is NOT guessed at -- landing on an arbitrary one of their books is the mistake this
+    // whole feature exists to stop.
+    var own = rows.filter(function(v) { return v.is_mine; });
+    var pick = (own.length === 1) ? own[0] : (rows.filter(function(v) { return v.is_canonical; })[0] || rows[0]);
+    // v3.0.464 -- and RELOAD if the default the server gave us is not what the page already
+    // drew. Compared on the wire query rather than on the id, because that is the thing the
+    // tiles were actually fetched with -- an id that changes without changing the query needs
+    // no reload, and one that changes the query always does.
+    if (pick) { sel.value = String(pick.version_id); applyNovelVersion(pick.version_id); }
+    if (novelAsUserQ('&') !== _entryQ) { novelVersionApplied(); return; }
+    updateNovelPublishGuard();
+  });
 }
 
 // applyNovelVersion: set the two state fields the rest of the page reads, from ONE place.
@@ -12187,7 +12223,7 @@ function newSessionVersion() {
         reloadSessionForFork();
         // A branch changes a version's session count and a create adds a whole version, so the
         // Publish picker is stale either way if it has already been loaded.
-        if (typeof loadNovelPeople === 'function' && document.getElementById('novel-version-select')) loadNovelPeople();
+        if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();   // v3.0.465 -- OPTIONS ONLY. loadNovelPeople() applies Publish-page state and would stomp this page.
       })
       .catch(function () {
         if (btn) { btn.disabled = false; btn.textContent = 'New Version'; }
@@ -12220,7 +12256,7 @@ function renameSessionVersion() {
         if (!res.ok || (res.j && res.j.error)) { showAlert((res.j && res.j.error) || 'Could not rename that version.'); return; }
         loadSessionForks(state.currentSession.id);
         // The name is campaign-level now, so every session and the Publish picker change at once.
-        if (typeof loadNovelPeople === 'function' && document.getElementById('novel-version-select')) loadNovelPeople();
+        if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();   // v3.0.465 -- OPTIONS ONLY. loadNovelPeople() applies Publish-page state and would stomp this page.
       })
       .catch(function () { showAlert('Could not rename that version. Please try again.'); });
   });
@@ -12318,7 +12354,7 @@ async function deleteMyVersion() {
       loadSessionForks(state.currentSession.id);
       reloadSessionForFork();
       // The version's session count changed, or the version itself is gone.
-      if (typeof loadNovelPeople === 'function' && document.getElementById('novel-version-select')) loadNovelPeople();
+      if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();   // v3.0.465 -- OPTIONS ONLY. loadNovelPeople() applies Publish-page state and would stomp this page.
     })
     .catch(function(e) { if (typeof showAlert === 'function') { showAlert('Delete failed: ' + e.message); } else { alert(e.message); } });
 }
