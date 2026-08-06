@@ -6472,6 +6472,14 @@ function optimizeResetForVersion() {
   // with no PDF behind it describes nothing. resetOptimizeLogForSwitch short-circuits on an
   // unchanged campaign|fork key, which a version switch does not always move.
   try { if (typeof resetOptimizeLogForSwitch === 'function') resetOptimizeLogForSwitch(true); } catch (e) {}
+  // v3.0.473 -- REPAINT THE "Publishing:" LINE. Clearing _finalizeSavedReady is not enough on its
+  // own: finalizeUpdatePublishLink is only called from finalizeLoadLastOptimized when it actually
+  // LOADS a file, not when it merely reveals the button. So the line kept naming the PREVIOUS
+  // version's book until something else happened to repaint it -- which is why Ian saw it correct
+  // itself only on a tab change. It now says "nothing yet -- run Optimize first" immediately,
+  // which is true: nothing is loaded for the new version yet. Clicking Load Last Optimized File
+  // arms it again and repaints through the existing path.
+  try { if (typeof finalizeUpdatePublishLink === 'function') finalizeUpdatePublishLink(); } catch (e) {}
   try { if (typeof loadFinalize === 'function') loadFinalize._lastUrl = null; } catch (e) {}
   // RE-CHECK FOR THE NEW VERSION. This is the half that was missing: hiding the button is not the
   // same as asking whether THIS version has a saved file. It usually does.
@@ -6487,6 +6495,12 @@ function optimizeResetForVersion() {
 // quietly wrong costs money.
 function orderIsTeedUp() {
   try {
+    // v3.0.473 -- NO POSTCODE, NO ORDER. Ian: "You have to have a zipcode to get a price, and you
+    // can't have interior or cover pdfs without completing the address." So the postcode is the
+    // cheapest true test of whether anyone has actually started an order, and without it the
+    // question is just a nag in front of someone who never went near the Order tab.
+    var zip = document.getElementById('print-ship-postcode');
+    if (!zip || !zip.value || !zip.value.trim()) return false;
     var q = document.getElementById('print-quote');
     if (q && q.textContent && q.textContent.trim()) return true;
     if (typeof printInteriorCache !== 'undefined' && printInteriorCache && printInteriorCache.url) return true;
