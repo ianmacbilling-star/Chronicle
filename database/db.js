@@ -854,6 +854,13 @@ async function initPostgres() {
   // campaign_members) and the campaign_members DM backfill exist first.
   await migrateForks(pool);
 
+  // v3.0.453 -- CAMPAIGN VERSIONS (TD-242, Model B). Runs immediately after
+  // migrateForks because it groups the forks that migration guarantees exist,
+  // and before migrateArchives so nothing else has touched session_forks yet.
+  // STAGE 1 IS SCHEMA AND BACKFILL ONLY -- no route and no client reads
+  // version_id yet, so the worst case is a column nothing uses.
+  await migrateCampaignVersions(pool);
+
   // Campaign Archives — saved-off images that survive regen/re-extract.
   // After migrateForks so session_forks + moments exist for the FKs.
   await migrateArchives(pool);
@@ -1160,6 +1167,141 @@ async function migrateForks(pool) {
   // character_id, different fork_id -> the old constraint blocks it).
   try { await pool.query('ALTER TABLE session_characters DROP CONSTRAINT IF EXISTS session_characters_session_id_character_id_key'); } catch (e) {}
   try { await pool.query('ALTER TABLE session_characters ADD CONSTRAINT session_characters_fork_character_key UNIQUE (fork_id, character_id)'); } catch (e) {}
+}
+
+// migrateCampaignVersions: idempotent (runs every boot). TD-242 / USER_FORKS_SPEC.md Model B.
+//
+// THE CONCEPT. A "version" is CAMPAIGN-level and owns AT MOST ONE FORK PER SESSION. That last
+// clause is the whole point: it is the uniqueness v3.0.439 dropped from session_forks, put back one
+// level up, where a BOOK can use it. Before this, "which fork of session 3 does this book use?" had
+// no answer once a reader held two versions of that session -- the question was not a UI gap, it was
+// a missing concept.
+//
+// FALLTHROUGH. A version with no fork for a session shows the CANONICAL. That is what makes a
+// version cheap: branch one session, leave the other seven alone, and the book is the Story
+// Master's everywhere you did not touch it.
+//
+// OWNERSHIP OF THE CANONICAL IS DERIVED, NOT STORED. Ian, 2026-08-06: "the Canonical version is
+// owned by whoever has the dm flag on the campaign but access to it is shared to the members." So a
+// canonical row carries user_id NULL and the owner is read from campaign_members.role='dm'.
+// Storing it here would be a SECOND place the same fact is written down, and TD-194 cost thirteen
+// builds because one rule lived in twelve places. It also survives a Story Master handover for
+// free, which the fork-owner path does not.
+//
+// DRAFT/READY IS UNCHANGED AND STAYS PER FORK (session_forks.player_access_status). A version is
+// not a visibility unit. Stage 2 reads it as: another member sees a version when any of its forks
+// is Ready, and on the sessions where that version's fork is still draft they fall through to the
+// canonical -- the same rule as a session that was never branched.
+async function migrateCampaignVersions(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_versions (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      is_canonical BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      edited_at TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_campaign_versions_campaign ON campaign_versions(campaign_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_campaign_versions_user ON campaign_versions(user_id)');
+  // ONE canonical per campaign, enforced rather than assumed -- the same lesson as idx_forks_one_dm.
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_versions_canonical ON campaign_versions(campaign_id) WHERE is_canonical');
+  // A person cannot hold two versions of one campaign under the same name. Partial, so it never
+  // looks at the canonical row (whose user_id is NULL by design and would defeat the index anyway).
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_versions_named ON campaign_versions(campaign_id, user_id, name) WHERE NOT is_canonical');
+
+  // ON DELETE SET NULL, deliberately: an orphaned fork is recoverable and the backfill below will
+  // re-home it by name on the next boot. ON DELETE CASCADE here would make deleting a version
+  // destroy content, which is a Stage 3 product decision and not one to make by schema default.
+  await pool.query('ALTER TABLE session_forks ADD COLUMN IF NOT EXISTS version_id INTEGER REFERENCES campaign_versions(id) ON DELETE SET NULL');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_forks_version ON session_forks(version_id)');
+
+  // ---- BACKFILL -------------------------------------------------------------------------------
+  // Every campaign gets its canonical, including one with no sessions yet, so the fallthrough
+  // target always exists before anything can point at it.
+  await pool.query(`
+    INSERT INTO campaign_versions (campaign_id, user_id, name, is_canonical, created_at)
+    SELECT c.id, NULL, 'Canonical', true, NOW()
+    FROM campaigns c
+    WHERE NOT EXISTS (
+      SELECT 1 FROM campaign_versions v WHERE v.campaign_id = c.id AND v.is_canonical
+    )
+  `);
+
+  // Player versions group by (campaign, owner, NAME). Measured on both environments 2026-08-06:
+  // staging 7, production 11, and no group holds two forks of one session -- so the
+  // (version_id, session_id) index below takes on the first boot rather than logging a failure.
+  //
+  // The COALESCE/NULLIF pair is the blank-name rule. Two creation paths do NOT name a fork -- the
+  // older make-my-own-version path and the auto-canonical for a brand-new session -- and rely on
+  // the v3.0.439 boot backfill to name them later. So a fork created since the last restart can
+  // legitimately be sitting here with a NULL name (production fork 3196, staging none). It reads as
+  // 'Original', which is exactly what that backfill would have called it.
+  await pool.query(`
+    INSERT INTO campaign_versions (campaign_id, user_id, name, is_canonical, created_at)
+    SELECT DISTINCT s.campaign_id, f.user_id,
+           COALESCE(NULLIF(btrim(f.name), ''), 'Original'), false, NOW()
+    FROM session_forks f
+    JOIN sessions s ON s.id = f.session_id
+    WHERE f.role <> 'dm'
+      AND NOT EXISTS (
+        SELECT 1 FROM campaign_versions v
+        WHERE v.campaign_id = s.campaign_id
+          AND NOT v.is_canonical
+          AND v.user_id = f.user_id
+          AND v.name = COALESCE(NULLIF(btrim(f.name), ''), 'Original')
+      )
+  `);
+
+  // Stamp the forks. Only where version_id IS NULL, so a fork moved between versions by any later
+  // code is never dragged back by a boot.
+  await pool.query(`
+    UPDATE session_forks f SET version_id = v.id
+    FROM sessions s, campaign_versions v
+    WHERE s.id = f.session_id
+      AND v.campaign_id = s.campaign_id AND v.is_canonical
+      AND f.role = 'dm' AND f.version_id IS NULL
+  `);
+  await pool.query(`
+    UPDATE session_forks f SET version_id = v.id
+    FROM sessions s, campaign_versions v
+    WHERE s.id = f.session_id
+      AND v.campaign_id = s.campaign_id AND NOT v.is_canonical
+      AND v.user_id = f.user_id
+      AND v.name = COALESCE(NULLIF(btrim(f.name), ''), 'Original')
+      AND f.role <> 'dm' AND f.version_id IS NULL
+  `);
+
+  // ---- THE INVARIANT --------------------------------------------------------------------------
+  // WRAPPED, for the reason recorded on idx_forks_one_dm: creating a unique index fails if
+  // duplicates already exist, and a migration that throws takes startup down with it -- which is
+  // precisely how v3.0.439 broke staging. Verified clean on both environments before shipping; if
+  // it ever cannot take, the app still boots and prints the query that finds the offender.
+  try {
+    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_forks_version_session ON session_forks(version_id, session_id) WHERE version_id IS NOT NULL');
+  } catch (e) {
+    console.error('[versions] could not enforce one fork per session per version -- there are duplicates. ' +
+      'Run: SELECT version_id, session_id, COUNT(*) FROM session_forks WHERE version_id IS NOT NULL ' +
+      'GROUP BY 1,2 HAVING COUNT(*)>1;  (' + ((e && e.message) || e) + ')');
+  }
+
+  // ---- REPORT ---------------------------------------------------------------------------------
+  // Stage 1 ships with nothing reading version_id, so this line IS the verification. An unstamped
+  // fork is the one failure that would otherwise be invisible until Stage 2 quietly lost it.
+  try {
+    const vt = await pool.query('SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_canonical)::int AS canon FROM campaign_versions');
+    const un = await pool.query('SELECT COUNT(*)::int AS c FROM session_forks WHERE version_id IS NULL');
+    const t = vt.rows[0].total, c = vt.rows[0].canon, u = un.rows[0].c;
+    console.log('  Campaign versions: ' + t + ' (' + c + ' canonical, ' + (t - c) + ' named); forks unstamped: ' + u);
+    if (u > 0) {
+      console.error('  [versions] ' + u + ' fork(s) have no version_id. ' +
+        'Run: SELECT id, session_id, user_id, role, name FROM session_forks WHERE version_id IS NULL;');
+    }
+  } catch (e) {
+    console.error('  [versions] report failed:', (e && e.message) || e);
+  }
 }
 
 // migrateArchives: idempotent (runs every boot). Campaign Archives lets any
