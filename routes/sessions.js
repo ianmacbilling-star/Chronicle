@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId, getOrCreateCanonicalVersion, versionsForCampaign } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -990,6 +990,15 @@ router.get('/:id/forks', requireAuth, verifyCampaignMember, async function(req, 
   res.json(visible);
 });
 
+// v3.0.456 -- the CAMPAIGN-level version list for the session on screen (TD-242 Model B). Same
+// dropdown, one level up: every version the caller may select, each reporting whether it has its
+// OWN representation of this session or is borrowing the canonical.
+router.get('/:id/versions', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const list = await versionsForCampaign(db, req.params.campaignId, req.session.userId, req.params.id);
+  res.json(list);
+});
+
 // POST create the caller's own version of a session (lazy — fires only
 // when the player clicks "Make My Version"). Requires: caller is a
 // PLAYER member, and the DM fork is 'ready'. One version per player per
@@ -1013,12 +1022,19 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   if (!isFirstEver && dmFork.player_access_status !== 'ready' && req.campaignRole !== 'dm') {
     return res.status(423).json({ error: 'This session is not Ready yet' });
   }
-  // How many versions of this session does the caller already hold? The FIRST is free for everyone,
-  // which is today's behaviour and must not be taken away from a Copper member. Every version AFTER
-  // that needs Gold.
-  const mineRows = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? ORDER BY id ASC').all(sessionId, req.session.userId);
+  // v3.0.456 -- THE GATE MOVED UP A LEVEL, AND NARROWED, and both changes matter.
+  //
+  // COUNTS CAMPAIGN VERSIONS, not forks of this session. Under Model B "your first version is free,
+  // extras need Gold" is a statement about the campaign: a version spans sessions, so counting this
+  // session's forks would charge someone Gold for their SECOND session in their ONLY version.
+  //
+  // ONLY FIRES ON CREATE. Adding a session to a version you already own is not a new version -- it
+  // is that version acquiring a representation of one more session, and gating it would make a
+  // free first version unusable past session one. Branching is free; creating is what costs.
+  const _wantsBranch = !!(req.body && req.body.version_id);
+  const mineRows = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND user_id = ? AND NOT is_canonical ORDER BY id ASC').all(req.params.campaignId, req.session.userId);
   const mineCount = (mineRows || []).length;
-  if (mineCount >= 1) {
+  if (mineCount >= 1 && !_wantsBranch) {
     // EFFECTIVE tier, not the account tier: max(own tier, the campaign Story Master's tier), the
     // same call the art styles use. Ian: "the DM has to be gold or they have to be gold". Extra
     // versions are a per-campaign feature, so inheriting the SM's tier is the right rule here --
@@ -1047,20 +1063,64 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   // A NAME is required from the second version onward, because two rows both reading "You" in the
   // dropdown is indistinguishable. The first stays unnamed and keeps the label it has today.
   let forkName = (req.body && typeof req.body.name === 'string') ? req.body.name.trim().slice(0, 60) : '';
-  if (!forkName && mineCount >= 1) return res.status(400).json({ error: 'Please name this version.' });
-  if (forkName) {
-    const clash = await db.prepare('SELECT id FROM session_forks WHERE session_id = ? AND user_id = ? AND name = ?').get(sessionId, req.session.userId, forkName);
-    if (clash) return res.status(409).json({ error: 'You already have a version of this session called that.' });
+  // v3.0.456 -- TWO DIFFERENT ACTS, ONE ENDPOINT (TD-242 Model B).
+  //   BRANCH  : body.version_id names an EXISTING campaign version -- give it a representation of
+  //             this session. Ian: "the fork is just the session's representation of that version
+  //             on that session." No name is asked for, because the version already has one.
+  //   CREATE  : no version_id -- make a new campaign version and branch this session into it.
+  // Blank names are refused outright rather than defaulted, which is how production ended up with
+  // a nameless fork in campaign 14 and staging with none.
+  let versionId = (req.body && req.body.version_id) ? Number(req.body.version_id) : null;
+  if (versionId) {
+    const want = await db.prepare('SELECT id, campaign_id, user_id, name, is_canonical FROM campaign_versions WHERE id = ?').get(versionId);
+    if (!want || String(want.campaign_id) !== String(req.params.campaignId)) {
+      return res.status(404).json({ error: 'That version does not belong to this campaign' });
+    }
+    if (want.is_canonical || String(want.user_id) !== String(req.session.userId)) {
+      return res.status(403).json({ error: 'You can only add a session to your own version' });
+    }
+    const dupe = await db.prepare('SELECT id FROM session_forks WHERE version_id = ? AND session_id = ?').get(versionId, sessionId);
+    if (dupe) return res.json({ success: true, fork_id: dupe.id, version_id: versionId, already: true });
+    forkName = want.name;
+  } else if (!isFirstEver) {
+    // A caller's FIRST version needs no name -- 'Original' is what the v3.0.439 backfill called
+    // every pre-existing one, so a Copper member pressing the button once behaves exactly as it
+    // does today. From the second onward a name is required, because two rows both reading
+    // "You -- Original" in the dropdown are indistinguishable.
+    if (!forkName && mineCount === 0) forkName = 'Original';
+    if (!forkName) return res.status(400).json({ error: 'Please name this version.' });
+    const clash = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND user_id = ? AND name = ? AND NOT is_canonical')
+      .get(req.params.campaignId, req.session.userId, forkName);
+    if (clash) return res.status(409).json({ error: 'You already have a version of this campaign called that.' });
+    const mkv = await db.prepare(
+      'INSERT INTO campaign_versions (campaign_id, user_id, name, is_canonical, created_at) VALUES (?, ?, ?, false, CURRENT_TIMESTAMP)'
+    ).run(req.params.campaignId, req.session.userId, forkName);
+    versionId = mkv.lastInsertRowid;
   }
   // The FIRST fork a session ever gets is the canonical one -- Ian: "his first fork is the dm fork".
   // Decided from the session, not from the caller's role, and backed by the partial unique index on
   // (session_id) WHERE role='dm' so two canonicals are impossible rather than merely unlikely.
   const newRole = isFirstEver ? 'dm' : 'player';
   const now = new Date().toISOString();
+  // v3.0.456 -- WHICH VERSION THIS FORK BELONGS TO (TD-246). A canonical fork joins the campaign's
+  // canonical version; a named one joins the campaign version created or named just above.
+  const _cvId = await getOrCreateCanonicalVersion(db, req.params.campaignId);
+  const _newVersionId = (newRole === 'dm') ? _cvId : versionId;
+  // v3.0.456 -- SIX MORE COLUMNS COPIED (TD-250). The previous list carried the five narrative
+  // fields and narrative_style and stopped there, which meant a new version silently lost:
+  //   art_style_override   -- the per-session art style, reverting to the campaign default
+  //   narrative_verbosity  -- and this one CHANGES THE OUTPUT: existing rows were backfilled to
+  //                           'high', the column default is 'med', so a copy generated SHORTER
+  //                           narrative than the version it was copied from, with nothing said
+  //   narrative_outline / narrative_outlines / narrative_directions -- the Review tab's planning
+  //                           fields, so a copied version lost its Direction notes
+  //   fork_notes
+  // For a feature whose point is "try different narrative and art options", starting from a copy
+  // that quietly drops the art style, the Direction and the verbosity is the wrong default.
   const created = await db.prepare(
-    "INSERT INTO session_forks (session_id, user_id, role, name, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, created_at) " +
-    "SELECT ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, ? FROM session_forks WHERE id = ?"
-  ).run(sessionId, req.session.userId, newRole, forkName || null, now, sourceForkId);
+    "INSERT INTO session_forks (session_id, user_id, role, name, version_id, player_access_status, narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, created_at) " +
+    "SELECT ?, ?, ?, ?, ?, 'draft', narrative_intro, narrative_sections, narrative_outro, narrative_intro_summary, narrative_outro_summary, narrative_style, narrative_verbosity, narrative_outline, narrative_outlines, narrative_directions, art_style_override, fork_notes, ? FROM session_forks WHERE id = ?"
+  ).run(sessionId, req.session.userId, newRole, forkName || null, _newVersionId, now, sourceForkId);
   const newForkId = created.lastInsertRowid;
   await db.prepare(
     "INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, image, panel_order, cast_explicit, created_at, created_by) " +

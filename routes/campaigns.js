@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile } = require('../storage/storage');
@@ -296,6 +296,46 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     layout_opts: merged.layout_opts || '',
     own_cover: merged.cover_image_url || '', own_back: merged.back_cover_image_url || '', own_title: merged.title_image_url || ''
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// CAMPAIGN VERSIONS (TD-242 Model B, v3.0.456)
+//
+// A version is campaign-level and owns at most one fork per session. These routes are the LIST and
+// the RENAME. Creation lives on the session (POST /sessions/:id/fork), because you always create a
+// version FROM somewhere -- there is no useful empty version.
+//
+// DELETE IS DELIBERATELY NOT HERE. Deleting a version means deleting every fork it owns, and the
+// per-session delete already does that one at a time with the reference-counted image release.
+// Doing it in bulk deserves its own build and its own confirmation, not a route added in passing.
+// ---------------------------------------------------------------------------------------------
+router.get('/:campaignId/versions', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const list = await versionsForCampaign(db, req.params.campaignId, req.session.userId, null);
+  res.json(list);
+});
+
+// RENAME acts on the VERSION, so it renames every session at once -- there is one name, not one per
+// session. The fork name is mirrored for as long as the Session page still reads it; that mirroring
+// is a TRANSITIONAL DUPLICATE and comes out with the client work, because two places holding one
+// fact is how TD-194 happened. The version row is the only writer.
+router.patch('/:campaignId/versions/:versionId', requireAuth, verifyCampaignMember, async function(req, res) {
+  const db = await getDb();
+  const v = await db.prepare('SELECT id, campaign_id, user_id, is_canonical FROM campaign_versions WHERE id = ?').get(req.params.versionId);
+  if (!v || String(v.campaign_id) !== String(req.params.campaignId)) return res.status(404).json({ error: 'Version not found' });
+  if (v.is_canonical) {
+    if (req.campaignRole !== 'dm') return res.status(403).json({ error: 'Only the Story Master can rename the canonical version' });
+  } else if (String(v.user_id) !== String(req.session.userId)) {
+    return res.status(403).json({ error: 'You can only rename your own versions' });
+  }
+  const name = (req.body && typeof req.body.name === 'string') ? req.body.name.trim().slice(0, 60) : '';
+  if (!name) return res.status(400).json({ error: 'Please give this version a name.' });
+  const clash = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND user_id = ? AND name = ? AND id <> ? AND NOT is_canonical')
+    .get(req.params.campaignId, v.user_id, name, v.id);
+  if (clash) return res.status(409).json({ error: 'You already have a version of this campaign called that.' });
+  await db.prepare('UPDATE campaign_versions SET name = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?').run(name, v.id);
+  await db.prepare('UPDATE session_forks SET name = ? WHERE version_id = ?').run(name, v.id);
+  res.json({ success: true, version_id: v.id, name: name });
 });
 
 module.exports = router;

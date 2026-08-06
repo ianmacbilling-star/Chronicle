@@ -1593,15 +1593,97 @@ async function migratePerfIndexes(pool) {
 // getOrCreateDmFork: returns the id of the session's DM fork, creating
 // it if absent. Used by every route that INSERTs moments/session_characters
 // (which now require fork_id) and by session creation / access-status.
+// getOrCreateCanonicalVersion: the campaign's canonical version row, created if absent.
+// The boot migration makes one for every campaign that exists, so this is the path for a campaign
+// created SINCE the last boot. Reads before it writes, so two concurrent callers cannot both insert
+// past idx_campaign_versions_canonical -- and if one loses that race the catch re-reads rather than
+// failing the request.
+async function getOrCreateCanonicalVersion(db, campaignId) {
+  const ex = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND is_canonical').get(campaignId);
+  if (ex) return ex.id;
+  try {
+    const r = await db.prepare(
+      "INSERT INTO campaign_versions (campaign_id, user_id, name, is_canonical, created_at) VALUES (?, NULL, 'Canonical', true, CURRENT_TIMESTAMP)"
+    ).run(campaignId);
+    return r.lastInsertRowid;
+  } catch (e) {
+    const again = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND is_canonical').get(campaignId);
+    if (again) return again.id;
+    throw e;
+  }
+}
+
+// v3.0.456 -- STAMPS version_id AT CREATION (TD-246). Stage 1 backfilled every existing fork on
+// boot, which was enough while nothing read the column. It is not enough now: a session created
+// between two boots would hold a canonical fork belonging to no version, and every book that
+// falls through to it would find nothing. A fork must belong to a version the moment it exists.
 async function getOrCreateDmFork(db, sessionId, dmUserId) {
   const existing = await db.prepare(
-    "SELECT id FROM session_forks WHERE session_id = ? AND role = 'dm'"
+    "SELECT id, version_id FROM session_forks WHERE session_id = ? AND role = 'dm'"
   ).get(sessionId);
-  if (existing) return existing.id;
+  const srow = await db.prepare('SELECT campaign_id FROM sessions WHERE id = ?').get(sessionId);
+  const cvId = srow ? await getOrCreateCanonicalVersion(db, srow.campaign_id) : null;
+  if (existing) {
+    // Self-healing: a fork that predates this and was never stamped gets stamped on first touch.
+    if (!existing.version_id && cvId) {
+      await db.prepare('UPDATE session_forks SET version_id = ? WHERE id = ?').run(cvId, existing.id);
+    }
+    return existing.id;
+  }
   const r = await db.prepare(
-    "INSERT INTO session_forks (session_id, user_id, role, created_at) VALUES (?, ?, 'dm', ?)"
-  ).run(sessionId, dmUserId, new Date().toISOString());
+    "INSERT INTO session_forks (session_id, user_id, role, version_id, created_at) VALUES (?, ?, 'dm', ?, ?)"
+  ).run(sessionId, dmUserId, cvId, new Date().toISOString());
   return r.lastInsertRowid;
+}
+
+// versionsForCampaign: every version a viewer may SELECT in this campaign, with the per-session
+// state the dropdown needs.
+//
+// VISIBILITY. The canonical is visible to everyone. Your own versions are always visible. Someone
+// else's is visible once ANY of its forks is Ready -- a version is not a visibility unit, Draft and
+// Ready stay on the fork, and on the sessions where that version is still draft a viewer falls
+// through to the canonical exactly as they would for a session it never branched.
+//
+// The owner name travels with every row because a NAME DOES NOT IDENTIFY A VERSION (TD-247): on
+// The Strangers four different members each hold one called "Original".
+async function versionsForCampaign(db, campaignId, viewerUserId, sessionId) {
+  const rows = await db.prepare(
+    'SELECT v.id, v.user_id, v.name, v.is_canonical, u.name AS owner_name, u.email AS owner_email ' +
+    'FROM campaign_versions v LEFT JOIN users u ON u.id = v.user_id ' +
+    'WHERE v.campaign_id = ? ORDER BY v.is_canonical DESC, v.id ASC'
+  ).all(campaignId);
+  const dmRow = await db.prepare("SELECT user_id FROM campaign_members WHERE campaign_id = ? AND role = 'dm' LIMIT 1").get(campaignId);
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const v = rows[i];
+    const mine = !v.is_canonical && String(v.user_id) === String(viewerUserId);
+    const forks = await db.prepare(
+      'SELECT id, session_id, player_access_status FROM session_forks WHERE version_id = ?'
+    ).all(v.id);
+    const anyReady = forks.some(function (f) { return f.player_access_status === 'ready'; });
+    if (!v.is_canonical && !mine && !anyReady) continue;
+    const here = sessionId ? forks.filter(function (f) { return String(f.session_id) === String(sessionId); })[0] : null;
+    const owner = v.is_canonical
+      ? 'Story Master'
+      : (mine ? 'You' : (v.owner_name || v.owner_email || 'Player'));
+    out.push({
+      version_id: v.id,
+      name: v.name,
+      is_canonical: !!v.is_canonical,
+      is_mine: mine,
+      owner_user_id: v.is_canonical ? (dmRow ? dmRow.user_id : null) : v.user_id,
+      owner_label: owner,
+      label: owner + ' \u2014 ' + v.name,
+      session_count: forks.length,
+      // For the session on screen: does this version have its OWN representation here, or is it
+      // borrowing the canonical? The dropdown says which, because "the fork is the version's
+      // representation on this session" and "there is no representation here" are different states.
+      fork_id: here ? here.id : null,
+      here: here ? 'own' : 'canonical',
+      status: here ? here.player_access_status : null
+    });
+  }
+  return out;
 }
 
 // getDmForkId: id of the session's DM (canonical) fork, or null. Read-only.
@@ -1891,4 +1973,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope };
+module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign };
