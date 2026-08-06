@@ -4018,9 +4018,15 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   // Load moments and narrative for each session
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
-  var _bmFork = asUser || (req.session && req.session.userId) || null;
-  var _bmChooser = (req.session && req.session.userId) || _bmFork;
-  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
+  // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
+  // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
+  // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
+  // cover, back cover, title image and title colour came from whoever was looking while the
+  // PAGES correctly came from the Story Master. Ian: "it uses my cover not the storymasters.
+  // It has his book in it but not the cover." v3.0.478 fixed the resolver and left these five,
+  // which are the ones that actually render.
+  var _bmSc = await bookPrefsScope(db, req, campaign.id);
+  var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
@@ -4141,9 +4147,15 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
-  var _bmFork = asUser || (req.session && req.session.userId) || null;
-  var _bmChooser = (req.session && req.session.userId) || _bmFork;
-  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
+  // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
+  // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
+  // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
+  // cover, back cover, title image and title colour came from whoever was looking while the
+  // PAGES correctly came from the Story Master. Ian: "it uses my cover not the storymasters.
+  // It has his book in it but not the cover." v3.0.478 fixed the resolver and left these five,
+  // which are the ones that actually render.
+  var _bmSc = await bookPrefsScope(db, req, campaign.id);
+  var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
@@ -4574,9 +4586,15 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
-    var _bmFork = asUser || (req.session && req.session.userId) || null;
-    var _bmChooser = (req.session && req.session.userId) || _bmFork;
-    var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
+    // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
+    // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
+    // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
+    // cover, back cover, title image and title colour came from whoever was looking while the
+    // PAGES correctly came from the Story Master. Ian: "it uses my cover not the storymasters.
+    // It has his book in it but not the cover." v3.0.478 fixed the resolver and left these five,
+    // which are the ones that actually render.
+    var _bmSc = await bookPrefsScope(db, req, campaign.id);
+    var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
     if (_bmFork) {
       const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
       {
@@ -4716,9 +4734,15 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
-  var _bmFork = asUser || (req.session && req.session.userId) || null;
-  var _bmChooser = (req.session && req.session.userId) || _bmFork;
-  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
+  // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
+  // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
+  // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
+  // cover, back cover, title image and title colour came from whoever was looking while the
+  // PAGES correctly came from the Story Master. Ian: "it uses my cover not the storymasters.
+  // It has his book in it but not the cover." v3.0.478 fixed the resolver and left these five,
+  // which are the ones that actually render.
+  var _bmSc = await bookPrefsScope(db, req, campaign.id);
+  var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
@@ -5034,9 +5058,15 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
-  var _bmFork = asUser || (req.session && req.session.userId) || null;
-  var _bmChooser = (req.session && req.session.userId) || _bmFork;
-  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
+  // v3.0.479 -- ONE RESOLVER (database/db.js bookPrefsScope), not five copies of this
+  // derivation (TD-280b). asUser is NULL for a canonical version -- correct for the include
+  // map and for bookForkForSession, wrong here -- so _bmFork defaulted to THE VIEWER and the
+  // cover, back cover, title image and title colour came from whoever was looking while the
+  // PAGES correctly came from the Story Master. Ian: "it uses my cover not the storymasters.
+  // It has his book in it but not the cover." v3.0.478 fixed the resolver and left these five,
+  // which are the ones that actually render.
+  var _bmSc = await bookPrefsScope(db, req, campaign.id);
+  var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
