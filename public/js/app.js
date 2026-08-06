@@ -13008,6 +13008,15 @@ function saveCustomLayoutPrefs(ctx){
 function saveCampaignLayoutOpts(ctx){
   try {
     var c = state.currentCampaign; if (!c || !state.user) return;
+    // v3.0.481 -- DO NOT SAVE ONTO SOMEONE ELSE'S VERSION (TD-282). The server refuses this too;
+    // stopping here as well means the reader is told once, plainly, instead of a 403 arriving from
+    // a background PUT nobody was watching. Layout rides the same prefs blob as the cover, so it
+    // gets the same rule the cover already had -- prepUseMember gates the images, this gates the
+    // layout, and they now agree.
+    if (ctx !== 'session' && typeof novelOwnView === 'function' && !novelOwnView()) {
+      if (typeof showAlert === 'function') showAlert('You are looking at someone else\u2019s version. Switch to your own version to change the layout.');
+      return;
+    }
     var fork = null;
     try { var m = (typeof mpMemberFor === 'function') ? mpMemberFor(ctx === 'session' ? 'session' : 'novel') : null; fork = (m && m.userId) ? m.userId : null; } catch (e) {}
     var body = { layout_opts: JSON.stringify({ opts: customOpts, active: customActive }) };
