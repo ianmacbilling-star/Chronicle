@@ -12163,7 +12163,19 @@ function loadSessionForks(sessionId) {
       // v3.0.446 -- resolve against what the DROPDOWN is actually showing. state.currentForkId is
       // null while the canonical is selected and is not yet set on a first paint, so keying the menu
       // solely on it made the ellipsis vanish -- taking Delete with it.
-      var shownId = state.currentForkId || (sel && sel.value) || (dmFork && dmFork.fork_id);
+      // v3.0.475 -- THE FALLBACK IS WHY IT "DOESN'T ALWAYS SHOW" (TD-278). state.currentForkId is
+      // null on a first paint and after several of the version-switch resets, so shownId fell
+      // through to the CANONICAL -- whose is_mine is false for a member -- and the ellipsis
+      // vanished while that member's own version was the one selected in the dropdown.
+      //
+      // The dropdown is the truth about what is on screen, so it is asked FIRST. Only if it has no
+      // value at all does this fall back, and it falls back to MY fork rather than the canonical:
+      // selId three lines up already prefers currentForkId, so the two agree by construction
+      // instead of by coincidence.
+      //
+      // Third time today a "which version am I acting on" fallback resolved to the wrong fork
+      // (TD-194 was twelve of them; the delete in v3.0.462 was the tenth).
+      var shownId = (sel && sel.value) || state.currentForkId || (mineFork && mineFork.fork_id) || (dmFork && dmFork.fork_id);
       var shownFork = forks.filter(function (f) { return String(f.fork_id) === String(shownId); })[0];
       if (verMenu) verMenu.style.display = (shownFork && shownFork.is_mine) ? '' : 'none';
       // v3.0.448 -- DELETE IS ALWAYS OFFERED ON A VERSION YOU OWN. Ian: it needs to still be there
