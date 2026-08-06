@@ -1115,11 +1115,18 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
     if (dupe) return res.json({ success: true, fork_id: dupe.id, version_id: versionId, already: true });
     forkName = want.name;
   } else if (!isFirstEver) {
-    // A caller's FIRST version needs no name -- 'Original' is what the v3.0.439 backfill called
-    // every pre-existing one, so a Copper member pressing the button once behaves exactly as it
-    // does today. From the second onward a name is required, because two rows both reading
-    // "You -- Original" in the dropdown are indistinguishable.
-    if (!forkName && mineCount === 0) forkName = 'Original';
+    // v3.0.474 -- ALWAYS NAMED. NO EXCEPTION FOR THE FIRST ONE (TD-277).
+    //
+    // This used to read `if (!forkName && mineCount === 0) forkName = 'Original';` -- the first
+    // version was auto-named and only the second onward asked. Ian found what that costs: a member
+    // makes their first version on session one and is never asked, then presses the same button on
+    // session two and is refused with "Please name this version", because mineCount is now 1. The
+    // RULE CHANGED UNDER THEM between two identical actions, and nothing on screen explained why.
+    //
+    // It also produced the unnameable case: a version created as "Original" that the reader never
+    // chose and cannot tell apart from three other members' "Original" in the same dropdown
+    // (TD-247). Under Model B a version is campaign-level and appears on EVERY session, so its
+    // name is not decoration -- it is the only thing identifying which book you are looking at.
     if (!forkName) return res.status(400).json({ error: 'Please name this version.' });
     const clash = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND user_id = ? AND name = ? AND NOT is_canonical')
       .get(req.params.campaignId, req.session.userId, forkName);

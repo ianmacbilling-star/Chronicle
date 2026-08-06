@@ -12409,14 +12409,39 @@ function renameSessionVersion() {
       .catch(function () { showAlert('Could not rename that version. Please try again.'); });
   });
 }
-function makeMyVersion() {
+// v3.0.474 -- ASKS, AND CAN ALSO JOIN AN EXISTING VERSION (TD-277).
+//
+// This posted {} and never asked for anything. It predates versions entirely, from when a member
+// held one fork per session and the name was decoration. Under Model B a version is campaign-level
+// and shows on EVERY session, so an unnamed one is a book the reader cannot identify -- and worse,
+// the server auto-named the first and asked for the second, so pressing the same button on session
+// two was refused for a reason nothing on screen explained.
+//
+// It now uses the SAME dialog as New Version, which means a member on their second session is
+// offered the version they already have rather than being pushed to invent another name for the
+// same book. That was the actual thing Ian was trying to do.
+async function makeMyVersion() {
   if (!state.currentCampaign || !state.currentSession) return;
   var btn = document.getElementById('make-my-version-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Creating\u2026'; }
+  var mine = [];
+  try {
+    var _r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/versions');
+    if (_r.ok) {
+      var _all = await _r.json();
+      mine = (Array.isArray(_all) ? _all : []).filter(function (v) {
+        return v.is_mine && !v.is_canonical && v.here === 'canonical';
+      });
+    }
+  } catch (e) { mine = []; }
+  var pick = await uiVersionPick('Story Master \u2014 Canonical', mine);
+  if (!pick) return;
+  var body = {};
+  if (pick.version_id) body.version_id = pick.version_id; else body.name = pick.name;
+  if (btn) { btn.disabled = true; btn.textContent = pick.version_id ? 'Adding\u2026' : 'Creating\u2026'; }
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/fork', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
+    body: JSON.stringify(body)
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -12425,6 +12450,7 @@ function makeMyVersion() {
       state.currentForkId = data.fork_id;
       loadSessionForks(state.currentSession.id);
       reloadSessionForFork();
+      if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();
     })
     .catch(function(e) {
       if (btn) { btn.disabled = false; btn.textContent = 'Make My Version'; }
