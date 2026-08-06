@@ -644,38 +644,28 @@ router.post('/:id/characters/:characterId/approve-change', requireAuth, verifyCa
       'WHERE fork_id = ? AND character_id = ?'
     ).run(amendedText, imageUrl, detail, momentIndex, 0, 'accepted', now, req.session.userId, fork, characterId);
 
-    // 2. Write the change FORWARD into all later sessions for this character.
-    // Self-contained sessions don't auto-chain, so propagation is explicit.
-    // Propagate only to LATER sessions' DM (canonical) forks that have a
-    // snapshot for this character. Player versions are never touched.
-    // The DM's accepted change carries forward into later CANONICAL (DM)
-    // versions; a player's change carries forward only into THEIR OWN later
-    // versions. Neither ever touches the other's content.
-    let laterRows;
-    if (req.campaignRole === 'dm') {
-      laterRows = await db.prepare(
-        "SELECT sf.id AS fork_id FROM session_forks sf " +
-        "JOIN sessions s ON s.id = sf.session_id " +
-        "WHERE sf.role = 'dm' AND s.campaign_id = ? AND s.session_date > ? " +
-        "AND EXISTS (SELECT 1 FROM session_characters scx WHERE scx.fork_id = sf.id AND scx.character_id = ?)"
-      ).all(thisSession.campaign_id, thisSession.session_date, characterId);
-    } else {
-      laterRows = await db.prepare(
-        "SELECT sf.id AS fork_id FROM session_forks sf " +
-        "JOIN sessions s ON s.id = sf.session_id " +
-        "WHERE sf.user_id = ? AND s.campaign_id = ? AND s.session_date > ? " +
-        "AND EXISTS (SELECT 1 FROM session_characters scx WHERE scx.fork_id = sf.id AND scx.character_id = ?)"
-      ).all(req.session.userId, thisSession.campaign_id, thisSession.session_date, characterId);
-    }
-
-    for (const row of laterRows) {
-      await db.prepare(
-        'UPDATE session_characters SET prompt = ?, reference_url = ?, edited_at = ?, edited_by = ? ' +
-        'WHERE fork_id = ? AND character_id = ?'
-      ).run(amendedText, imageUrl, now, req.session.userId, row.fork_id, characterId);
-    }
-
-    res.json({ success: true, forwarded: laterRows.length });
+    // 2. NOTHING IS WRITTEN FORWARD. (v3.0.467, TD-269.)
+    //
+    // WHAT THIS USED TO DO, AND WHY IT WAS WRONG. It pushed the accepted look into every LATER
+    // session, choosing the forks by req.campaignRole:
+    //     dm     -> WHERE sf.role = 'dm'      (every later CANONICAL fork)
+    //     player -> WHERE sf.user_id = ?      (every later fork of that person's)
+    // Ian is a Story Master, so accepting a change INSIDE his Watercolor version asked "is this
+    // person the DM" -- yes -- and wrote the dark Frumble into the CANONICAL's sessions 12 and 16.
+    // The comment it replaced said "Neither ever touches the other's content", which was true when
+    // a Story Master had exactly one fork per session. The player branch was wrong the same way:
+    // a reader with two versions propagated a change into BOTH.
+    //
+    // AND THE PUSH ITSELF IS THE WRONG MODEL. Ian, 2026-08-06: "If you change a character on
+    // session 2 it shouldn't push that character forward to newer sessions 3, 4, etc. If those
+    // sessions get regenerated then yes, the character would pull in, but we don't do it
+    // automatically." A change belongs to the session it happened in. Later sessions PULL the
+    // current look when they are built -- resolveCarryForward at extraction, and the branch-time
+    // seeding added in v3.0.466 -- so the continuity still works and it works one way.
+    //
+    // Retroactively rewriting sessions a reader has already reviewed is the surprising half, and
+    // removing it removes a whole class of cross-version accident with it.
+    res.json({ success: true, forwarded: 0 });
   } catch(e) {
     console.error('approve-change error:', e.message);
     res.json({ error: 'Could not approve the change.' });

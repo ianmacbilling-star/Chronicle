@@ -356,14 +356,41 @@ function characterInText(character, text) {
 //   1. that character's snapshot from the most recent PRIOR session (by date)
 //   2. the character's canonical_prompt / canonical_reference_url
 //   3. the character's raw description / null
-async function resolveCarryForward(db, character, currentSession) {
-  var prior = await db.prepare(
-    'SELECT sc.prompt, sc.reference_url FROM session_characters sc ' +
-    'JOIN sessions s ON sc.session_id = s.id ' +
-    'WHERE sc.character_id = ? AND s.campaign_id = ? ' +
-    'AND s.session_date < ? ' +
-    'ORDER BY s.session_date DESC LIMIT 1'
-  ).get(character.id, currentSession.campaign_id, currentSession.session_date);
+// v3.0.467 -- SCOPED TO THE VERSION (TD-270). This is the PULL half, and it carried the same flaw
+// as every other backward-looking query in this codebase: the WHERE named only the campaign, so a
+// re-extraction took the most recent look from ANY version. It is now the fifth such query found
+// today (TD-194, TD-252, TD-268, the approve-change push, this).
+//
+// The rule matches everything else: the most recent earlier session IN THIS VERSION, else the
+// CANONICAL's, else the character's campaign-level look. forkId is passed by the one caller;
+// without it this falls back to the canonical rather than guessing across versions.
+async function resolveCarryForward(db, character, currentSession, forkId) {
+  var versionId = null;
+  if (forkId) {
+    var vr = await db.prepare('SELECT version_id FROM session_forks WHERE id = ?').get(forkId);
+    versionId = vr ? vr.version_id : null;
+  }
+  var prior = null;
+  if (versionId) {
+    prior = await db.prepare(
+      'SELECT sc.prompt, sc.reference_url FROM session_characters sc ' +
+      'JOIN session_forks sf ON sf.id = sc.fork_id ' +
+      'JOIN sessions s ON s.id = sf.session_id ' +
+      'WHERE sc.character_id = ? AND sf.version_id = ? AND s.session_date < ? ' +
+      'ORDER BY s.session_date DESC, sf.id DESC LIMIT 1'
+    ).get(character.id, versionId, currentSession.session_date);
+  }
+  if (!prior) {
+    // FALLTHROUGH to the canonical, the same rule the book uses for an unbranched session.
+    prior = await db.prepare(
+      'SELECT sc.prompt, sc.reference_url FROM session_characters sc ' +
+      'JOIN session_forks sf ON sf.id = sc.fork_id ' +
+      'JOIN sessions s ON s.id = sf.session_id ' +
+      "WHERE sc.character_id = ? AND sf.role = 'dm' AND s.campaign_id = ? " +
+      'AND s.session_date < ? ' +
+      'ORDER BY s.session_date DESC LIMIT 1'
+    ).get(character.id, currentSession.campaign_id, currentSession.session_date);
+  }
 
   var prompt = (prior && prior.prompt)
     ? prior.prompt
@@ -410,7 +437,7 @@ async function snapshotSessionCharacters(db, session, campaignId, userId, now, f
     for (const ch of characters) {
       if (!characterInText(ch, text)) continue;
       if (acceptedIds[ch.id]) continue; // decided — leave its row untouched
-      const carry = await resolveCarryForward(db, ch, session);
+      const carry = await resolveCarryForward(db, ch, session, forkId);
       await db.prepare(
         'INSERT INTO session_characters ' +
         '(session_id, fork_id, character_id, prompt, reference_url, change_note, change_flag, change_status, created_at) ' +
