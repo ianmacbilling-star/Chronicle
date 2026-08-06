@@ -945,9 +945,10 @@ async function migrateForkBookPrefs(pool) {
     for (const k in map) {
       const e = map[k];
       await pool.query(
-        'INSERT INTO fork_book_prefs (chooser_user_id, fork_user_id, campaign_id, prefs, updated_at) ' +
-        'VALUES ($1, $1, $2, $3, CURRENT_TIMESTAMP) ' +
-        'ON CONFLICT (chooser_user_id, fork_user_id, campaign_id) DO NOTHING',
+        // v3.0.455 -- version_id 0 (the base book) and an ON CONFLICT matching the new key.
+        'INSERT INTO fork_book_prefs (chooser_user_id, fork_user_id, campaign_id, version_id, prefs, updated_at) ' +
+        'VALUES ($1, $1, $2, 0, $3, CURRENT_TIMESTAMP) ' +
+        'ON CONFLICT (chooser_user_id, fork_user_id, campaign_id, version_id) DO NOTHING',
         [e.u, e.c, JSON.stringify(e.p)]
       );
       n++;
@@ -1078,6 +1079,45 @@ async function migrateForks(pool) {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_fork_book_prefs_lookup ON fork_book_prefs(chooser_user_id, fork_user_id, campaign_id)');
+
+  // v3.0.455 -- BOOK PREFS ARE PER VERSION (TD-242 stage 2b).
+  //
+  // WHY A SENTINEL 0 AND NOT NULL + A COALESCE INDEX. A nullable version_id would need a UNIQUE
+  // INDEX on the expression (chooser, fork, campaign, COALESCE(version_id,0)) and an ON CONFLICT
+  // repeating that expression EXACTLY. v3.0.440 is on record for what happens when a constraint and
+  // an ON CONFLICT drift apart: Postgres refuses the statement, the migration throws, and startup
+  // goes down with it. A NOT NULL column with a plain constraint and a plain ON CONFLICT cannot
+  // drift. 0 is not a version id and never will be -- SERIAL starts at 1.
+  //
+  // 0 MEANS THE BASE BOOK, AND THE CANONICAL VERSION MAPS TO IT. Every row that exists today is
+  // the campaign's canonical book, and it stays exactly where it is: no data moves, no backfill,
+  // and a Story Master's approved layout is not touched by this build. Only a NAMED version gets
+  // rows of its own. That is what stops two versions of one user sharing one lastOptimized entry
+  // -- which is the same prefs row today, so saving the second would overwrite the first's
+  // approved layout and its saved PDF with no error and no way back.
+  await pool.query('ALTER TABLE fork_book_prefs ADD COLUMN IF NOT EXISTS version_id INTEGER NOT NULL DEFAULT 0');
+  // ORDER MATTERS: add the column (existing rows default to 0) BEFORE dropping the old key, so
+  // there is no window in which duplicates could be written.
+  await pool.query('ALTER TABLE fork_book_prefs DROP CONSTRAINT IF EXISTS fork_book_prefs_chooser_user_id_fork_user_id_campaign_id_key');
+  try {
+    await pool.query('ALTER TABLE fork_book_prefs ADD CONSTRAINT fork_book_prefs_scope_key UNIQUE (chooser_user_id, fork_user_id, campaign_id, version_id)');
+  } catch (e) {
+    if (!/already exists/i.test((e && e.message) || '')) {
+      console.error('[versions] fork_book_prefs unique key not applied: ' + ((e && e.message) || e));
+    }
+  }
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_fork_book_prefs_scope ON fork_book_prefs(chooser_user_id, fork_user_id, campaign_id, version_id)');
+
+  // Same treatment for per-session curation: which sessions a VERSION includes in its book.
+  await pool.query('ALTER TABLE session_includes ADD COLUMN IF NOT EXISTS version_id INTEGER NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE session_includes DROP CONSTRAINT IF EXISTS session_includes_user_id_session_id_key');
+  try {
+    await pool.query('ALTER TABLE session_includes ADD CONSTRAINT session_includes_scope_key UNIQUE (user_id, session_id, version_id)');
+  } catch (e) {
+    if (!/already exists/i.test((e && e.message) || '')) {
+      console.error('[versions] session_includes unique key not applied: ' + ((e && e.message) || e));
+    }
+  }
   await migrateForkBookPrefs(pool);
 
   // Pass 1 (narrative rework) — per-version narrative planning fields:
@@ -1661,6 +1701,26 @@ async function resolveBookVersion(db, campaignId, req) {
   return { versionId: version.id, version: version, asUser: asUser };
 }
 
+// prefsVersionId: the version id used to SCOPE BOOK PREFS AND INCLUDES.
+//
+// A CANONICAL VERSION MAPS TO 0, NOT TO ITS OWN ID. The canonical IS the base book -- every prefs
+// and includes row that exists today belongs to it -- so mapping it to 0 means this whole stage
+// moves no data and cannot touch a Story Master's approved layout. Only a NAMED version gets rows.
+function prefsVersionId(bv) {
+  if (!bv || !bv.version) return 0;
+  return bv.version.is_canonical ? 0 : bv.versionId;
+}
+
+// bookPrefsScope: chooser + fork + version for a book request, in ONE place. This replaced five
+// copies of the same three-line derivation in pdf.js and two more in campaigns.js.
+async function bookPrefsScope(db, req, campaignId) {
+  const bv = await resolveBookVersion(db, campaignId, req);
+  const asUser = (bv && bv.asUser) || (req.query && req.query.as_user ? Number(req.query.as_user) : null);
+  const fork = asUser || (req.session && req.session.userId) || null;
+  const chooser = (req.session && req.session.userId) || fork;
+  return { chooser: chooser, fork: fork, versionId: prefsVersionId(bv), bookVersionId: bv ? bv.versionId : null, asUser: bv ? bv.asUser : asUser };
+}
+
 // bookForkForSession: WHICH FORK OF ONE SESSION A BOOK READS. This replaced five byte-identical
 // copies of the same lookup -- four in pdf.js, one in sessions.js.
 //
@@ -1733,7 +1793,11 @@ async function getViewableForkId(db, sessionId, userId, requestedForkId) {
 // book owner in a campaign. ownerUserId null = the SM canonical book (uses
 // sessions.novel_include). For a member, an explicit session_includes row wins;
 // absent = included (members start clean, the SM's choices never cascade).
-async function effectiveIncludeMap(db, campaignId, ownerUserId) {
+// v3.0.455 -- versionId is the FOURTH argument and defaults to 0, so every existing caller keeps
+// its exact behaviour. A named version's own rows WIN over the base rows; where it has expressed no
+// opinion it inherits the base book's choice, which is the same fallthrough the forks use.
+async function effectiveIncludeMap(db, campaignId, ownerUserId, versionId) {
+  const vid = Number(versionId) || 0;
   const isOn = function(v) { return !(v === false || v === 0 || v === 'f' || v === 'false'); };
   const sessions = await db.prepare('SELECT id, novel_include FROM sessions WHERE campaign_id = ?').all(campaignId);
   const map = {};
@@ -1742,10 +1806,12 @@ async function effectiveIncludeMap(db, campaignId, ownerUserId) {
     return map;
   }
   const rows = await db.prepare(
-    'SELECT si.session_id, si.include FROM session_includes si JOIN sessions s ON s.id = si.session_id WHERE si.user_id = ? AND s.campaign_id = ?'
-  ).all(ownerUserId, campaignId);
+    'SELECT si.session_id, si.include, si.version_id FROM session_includes si JOIN sessions s ON s.id = si.session_id WHERE si.user_id = ? AND s.campaign_id = ? AND si.version_id IN (0, ?)'
+  ).all(ownerUserId, campaignId, vid);
   const ov = {};
-  for (let i = 0; i < rows.length; i++) { ov[rows[i].session_id] = isOn(rows[i].include); }
+  // Base rows first, then the version's own on top -- so the version wins wherever it has a row.
+  for (let i = 0; i < rows.length; i++) { if (Number(rows[i].version_id) === 0) ov[rows[i].session_id] = isOn(rows[i].include); }
+  for (let i = 0; i < rows.length; i++) { if (Number(rows[i].version_id) === vid && vid !== 0) ov[rows[i].session_id] = isOn(rows[i].include); }
   for (let i = 0; i < sessions.length; i++) {
     const id = sessions[i].id;
     map[id] = (id in ov) ? ov[id] : true;
@@ -1772,28 +1838,46 @@ async function effectiveBookMeta(db, campaignId, ownerUserId) {
 // if empty and chooser != fork, inherit from the fork owner's own (fork, fork) slot so a
 // first-time overlay starts from the member's look. set: shallow-merges a patch (each
 // top-level key -- covers, title_color, layout_opts, etc. -- is written whole) and upserts.
+// v3.0.455 -- opts.versionId scopes both. 0 (or absent) is the BASE book, which is every row that
+// exists today and is what the canonical version reads and writes.
+//
+// READ ORDER, and each step earns its place:
+//   1. this version's own row                     -- what it has chosen
+//   2. the BASE row for the same (chooser, fork)  -- a new version starts from the book it branched
+//   3. the fork owner's own slot, same two steps  -- the pre-existing overlay inheritance
+// Step 2 is why creating a version does not produce an empty book. It is a READ-time fallback, not
+// a copy: the base row is never written by a version, so the book it branched from cannot change
+// under it by accident.
 async function getForkBookPrefs(db, chooserId, forkId, campaignId, opts) {
   opts = opts || {};
+  const vid = Number(opts.versionId) || 0;
   function parse(row) { if (row && row.prefs) { try { return JSON.parse(row.prefs) || {}; } catch (e) {} } return null; }
-  const own = await db.prepare('SELECT prefs FROM fork_book_prefs WHERE chooser_user_id = ? AND fork_user_id = ? AND campaign_id = ?').get(chooserId, forkId, campaignId);
-  const p = parse(own);
+  async function at(ch, fk, v) {
+    return parse(await db.prepare('SELECT prefs FROM fork_book_prefs WHERE chooser_user_id = ? AND fork_user_id = ? AND campaign_id = ? AND version_id = ?').get(ch, fk, campaignId, v));
+  }
+  let p = await at(chooserId, forkId, vid);
   if (p) return p;
+  if (vid !== 0) { p = await at(chooserId, forkId, 0); if (p) return p; }
   if (opts.inherit && chooserId !== forkId) {
-    const base = await db.prepare('SELECT prefs FROM fork_book_prefs WHERE chooser_user_id = ? AND fork_user_id = ? AND campaign_id = ?').get(forkId, forkId, campaignId);
-    const bp = parse(base);
-    if (bp) return bp;
+    if (vid !== 0) { p = await at(forkId, forkId, vid); if (p) return p; }
+    p = await at(forkId, forkId, 0);
+    if (p) return p;
   }
   return {};
 }
-async function setForkBookPrefs(db, chooserId, forkId, campaignId, patch) {
-  const cur = await getForkBookPrefs(db, chooserId, forkId, campaignId, { inherit: true });
+async function setForkBookPrefs(db, chooserId, forkId, campaignId, patch, versionId) {
+  const vid = Number(versionId) || 0;
+  const cur = await getForkBookPrefs(db, chooserId, forkId, campaignId, { inherit: true, versionId: vid });
   const merged = Object.assign({}, cur, patch || {});
   const json = JSON.stringify(merged);
+  // ON CONFLICT names fork_book_prefs_scope_key's exact column list. If that constraint is ever
+  // changed, THIS STATEMENT MUST CHANGE IN THE SAME COMMIT -- dropping a constraint invalidates
+  // every ON CONFLICT that targets it, which is how v3.0.439 stopped staging booting.
   await db.prepare(
-    'INSERT INTO fork_book_prefs (chooser_user_id, fork_user_id, campaign_id, prefs, updated_at) ' +
-    'VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
-    'ON CONFLICT (chooser_user_id, fork_user_id, campaign_id) DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = CURRENT_TIMESTAMP'
-  ).run(chooserId, forkId, campaignId, json);
+    'INSERT INTO fork_book_prefs (chooser_user_id, fork_user_id, campaign_id, version_id, prefs, updated_at) ' +
+    'VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
+    'ON CONFLICT (chooser_user_id, fork_user_id, campaign_id, version_id) DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = CURRENT_TIMESTAMP'
+  ).run(chooserId, forkId, campaignId, vid, json);
   return merged;
 }
 
@@ -1807,4 +1891,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession };
+module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope };

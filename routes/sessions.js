@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession } = require('../database/db');
+const { getDb, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, resolveActingFork, requestedForkIdOf, resolveBookVersion, bookForkForSession, prefsVersionId } = require('../database/db');
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 const { checkSessionLimit, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -43,7 +43,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC').all(req.params.campaignId);
-  const incMap = await effectiveIncludeMap(db, req.params.campaignId, asUser);
+  const incMap = await effectiveIncludeMap(db, req.params.campaignId, asUser, prefsVersionId(_bv));
   const asUserRow = asUser ? await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser) : null;
   const asUserName = asUserRow ? asUserRow.name : null;
   const result = await Promise.all(sessions.map(async function(s) {
@@ -114,10 +114,15 @@ router.put('/:id/my-novel-include', requireAuth, verifyCampaignMember, async fun
   const include = !(req.body && (req.body.include === false || req.body.include === 'false' || req.body.include === 0));
   const sess = await db.prepare('SELECT id FROM sessions WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
   if (!sess) return res.status(404).json({ error: 'Session not found' });
+  // v3.0.455 -- the choice belongs to a VERSION. 0 is the base book, which is what every existing
+  // row is and what the canonical writes, so an unversioned call behaves exactly as it did.
+  // ON CONFLICT names session_includes_scope_key's exact columns -- change one, change both.
+  const _ibv = await resolveBookVersion(db, Number(req.params.campaignId), req);
+  const _ivid = prefsVersionId(_ibv);
   await db.prepare(
-    'INSERT INTO session_includes (user_id, session_id, include, edited_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ' +
-    'ON CONFLICT (user_id, session_id) DO UPDATE SET include = EXCLUDED.include, edited_at = CURRENT_TIMESTAMP'
-  ).run(req.session.userId, req.params.id, include);
+    'INSERT INTO session_includes (user_id, session_id, version_id, include, edited_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ' +
+    'ON CONFLICT (user_id, session_id, version_id) DO UPDATE SET include = EXCLUDED.include, edited_at = CURRENT_TIMESTAMP'
+  ).run(req.session.userId, req.params.id, _ivid, include);
   res.json({ ok: true, include: include });
 });
 

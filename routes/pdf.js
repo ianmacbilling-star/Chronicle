@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession } = require('../database/db');
+const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
@@ -2551,18 +2551,20 @@ async function stripCoversFromSaved(lastOpt) {
 async function lastOptimizedEntry(req, campaignId, arrange) {
   try {
     var db = await getDb();
-    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
-    var chooser = req.session.userId || fork;
-    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    // v3.0.455 -- ONE scope resolver (database/db.js bookPrefsScope). Was five copies of this pair.
+    var _sc = await bookPrefsScope(db, req, campaignId);
+    var fork = _sc.fork, chooser = _sc.chooser, _vid = _sc.versionId;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false, versionId: _vid });
     return (prefs && prefs.lastOptimized && prefs.lastOptimized[arrange]) || null;
   } catch (e) { return null; }
 }
 async function approvedStateFor(req, campaignId, arrange) {
   try {
     var db = await getDb();
-    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
-    var chooser = req.session.userId || fork;
-    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    // v3.0.455 -- ONE scope resolver (database/db.js bookPrefsScope). Was five copies of this pair.
+    var _sc = await bookPrefsScope(db, req, campaignId);
+    var fork = _sc.fork, chooser = _sc.chooser, _vid = _sc.versionId;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false, versionId: _vid });
     var lo = prefs && prefs.lastOptimized && prefs.lastOptimized[arrange];
     if (!lo || !lo.bodyUrl) return null;
     var st = await approvedStateLoad(lo.bodyUrl);
@@ -4015,11 +4017,12 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   // Load moments and narrative for each session
-  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   var _bmFork = asUser || (req.session && req.session.userId) || null;
   var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
   if (_bmFork) {
-    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).
@@ -4137,11 +4140,12 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
-  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   var _bmFork = asUser || (req.session && req.session.userId) || null;
   var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
   if (_bmFork) {
-    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).
@@ -4572,8 +4576,9 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
     var _bmFork = asUser || (req.session && req.session.userId) || null;
     var _bmChooser = (req.session && req.session.userId) || _bmFork;
+    var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
     if (_bmFork) {
-      const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
+      const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
       {
         var _fbm = _bm || {};
         campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
@@ -4710,11 +4715,12 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   }
   sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
 
-  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   var _bmFork = asUser || (req.session && req.session.userId) || null;
   var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
   if (_bmFork) {
-    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).
@@ -5027,11 +5033,12 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   const _bv = await resolveBookVersion(db, campaign.id, req);
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
-  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser);
+  const _incMap = await effectiveIncludeMap(db, campaign.id, asUser, _bv && _bv.version && !_bv.version.is_canonical ? _bv.versionId : 0);
   var _bmFork = asUser || (req.session && req.session.userId) || null;
   var _bmChooser = (req.session && req.session.userId) || _bmFork;
+  var _bmVid = (_bv && _bv.version && !_bv.version.is_canonical) ? _bv.versionId : 0;
   if (_bmFork) {
-    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true });
+    const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
     {
       // Resolve covers from the fork's own meta, else the campaign tile (the campaign
       // record cover_image_url is vestigial after the per-fork move -- never use it).
@@ -10218,9 +10225,10 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     var pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'optimized');
 
     var db = await getDb();
-    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
-    var chooser = req.session.userId || fork;
-    var prev = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    // v3.0.455 -- ONE scope resolver (database/db.js bookPrefsScope). Was five copies of this pair.
+    var _sc = await bookPrefsScope(db, req, campaignId);
+    var fork = _sc.fork, chooser = _sc.chooser, _vid = _sc.versionId;
+    var prev = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false, versionId: _vid });
     var lastOpt = (prev && prev.lastOptimized && typeof prev.lastOptimized === 'object') ? Object.assign({}, prev.lastOptimized) : {};
     // Best-effort cleanup of the PREVIOUS optimized PDF for THIS layout (avoid orphan accumulation in R2).
     try { if (lastOpt[arrange] && lastOpt[arrange].pdfUrl && lastOpt[arrange].pdfUrl !== pdfUrl) await deleteFile(lastOpt[arrange].pdfUrl); } catch (e) {}
@@ -10231,7 +10239,7 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     lastOpt[arrange] = { pdfUrl: pdfUrl, at: new Date().toISOString(), pages: pages, bookTitle: bookTitle || '',
                          bodyUrl: _stUrl, co: req.query.co || '', layout: req.query.layout || '',
                          frontCovers: _fcN, backCovers: _bcN };   // v3.0.424 -- lets print strip rather than re-render
-    await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt });
+    await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt }, _vid);
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
     // bundle. The user-facing line stays generic; the bundle gets the numbers.
     return res.json({ ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at,
@@ -10256,9 +10264,10 @@ router.get('/last-optimized-file/:campaignId', requireAuth, async function (req,
     var campaignId = req.params.campaignId;
     var arrange = req.query.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
     var db = await getDb();
-    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
-    var chooser = req.session.userId || fork;
-    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    // v3.0.455 -- ONE scope resolver (database/db.js bookPrefsScope). Was five copies of this pair.
+    var _sc = await bookPrefsScope(db, req, campaignId);
+    var fork = _sc.fork, chooser = _sc.chooser, _vid = _sc.versionId;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false, versionId: _vid });
     var lastOpt = prefs && prefs.lastOptimized && prefs.lastOptimized[arrange];
     if (!lastOpt || !lastOpt.pdfUrl) return res.status(404).json({ error: 'no saved optimized version for this book and layout' });
     var buf = await fetchFile(lastOpt.pdfUrl);
@@ -10277,9 +10286,10 @@ router.get('/last-optimized/:campaignId', requireAuth, async function (req, res)
     var campaignId = req.params.campaignId;
     var arrange = req.query.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
     var db = await getDb();
-    var fork = (req.query.as_user ? Number(req.query.as_user) : null) || req.session.userId;
-    var chooser = req.session.userId || fork;
-    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false });
+    // v3.0.455 -- ONE scope resolver (database/db.js bookPrefsScope). Was five copies of this pair.
+    var _sc = await bookPrefsScope(db, req, campaignId);
+    var fork = _sc.fork, chooser = _sc.chooser, _vid = _sc.versionId;
+    var prefs = await getForkBookPrefs(db, chooser, fork, campaignId, { inherit: false, versionId: _vid });
     var lastOpt = prefs && prefs.lastOptimized && prefs.lastOptimized[arrange];
     if (!lastOpt || !lastOpt.pdfUrl) return res.json({ found: false });
     // v3.0.422 -- hasLayout tells the client whether the SAVED LAYOUT is there too, so Load Last

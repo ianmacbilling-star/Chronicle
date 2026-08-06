@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile } = require('../storage/storage');
@@ -252,8 +252,10 @@ router.put('/:campaignId/members/:userId/prefs', requireAuth, verifyCampaignMemb
 // campaign values so every book has a cover. Keyed to the requester.
 router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
-  const fork = req.query.as_user ? Number(req.query.as_user) : req.session.userId;
-  const cur = await getForkBookPrefs(db, req.session.userId, fork, req.params.campaignId, { inherit: true });
+  // v3.0.455 -- version-scoped; bookPrefsScope is the same resolver pdf.js uses.
+  const _sc = await bookPrefsScope(db, req, Number(req.params.campaignId));
+  const fork = _sc.fork;
+  const cur = await getForkBookPrefs(db, req.session.userId, fork, req.params.campaignId, { inherit: true, versionId: _sc.versionId });
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(req.params.campaignId);
   res.json({
     campaign_id: Number(req.params.campaignId),
@@ -281,7 +283,8 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // Layout choices (borders, paper, fonts, drop cap, narrative style, arrange...) ride in the SAME
   // per-(chooser, fork, campaign) prefs blob as the cover art, so they follow the book, not the browser.
   if (b.layout_opts !== undefined) patch.layout_opts = b.layout_opts || null;
-  const merged = await setForkBookPrefs(db, uid, fork, cid, patch);
+  const _scP = await bookPrefsScope(db, req, Number(cid));
+  const merged = await setForkBookPrefs(db, uid, fork, cid, patch, _scP.versionId);
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
     campaign_id: Number(cid),
