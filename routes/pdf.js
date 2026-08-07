@@ -4721,6 +4721,17 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
 
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
   const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+  // v3.0.489 -- DECLARE _bv. It was USED below (the version-aware include map) and
+  // never declared in this route, so publish-story threw a ReferenceError inside an
+  // async handler on EVERY call. Nothing catches that, so the promise rejected, Node
+  // killed the process, and every request in flight returned 502 -- which is why the
+  // symptom looked like the whole app rather than one route. Introduced with the
+  // v3.0.479 / TD-280b resolver collapse; the four other routes that use _bv each
+  // declare their own. Present and broken in the v3.0.482 zip.
+  // DELIBERATELY MINIMAL: asUser above is left exactly as it was. It is computed
+  // differently here (own book only) and re-pointing it at _bv.asUser would change
+  // WHICH book publishes -- a bigger decision than fixing a crash. See TD-290.
+  const _bv = await resolveBookVersion(db, campaign.id, req);
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare(
