@@ -2989,13 +2989,18 @@ function renderReview(data) {
       : '';
     var pOutText = (state.reviewOutlines && state.reviewOutlines[pDirKey]) || '';
     var pOutBtn = canEditNarr ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')" title="The facts you want covered">\u270E Edit Narrative Outline</button>' : '';
-    var pPromptBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Image Prompt</button>' : '';
+    // v3.0.484 -- the OPENING panel gets Edit Image Prompt too. The !_isEstR
+    // exclusion predates Approach B, when the title image lived on
+    // sessions.establishing_image and had no moment row to edit. It is a moment
+    // now, the Storyboard has always offered the pill for it, and openImagePrompt
+    // works purely off a moment id -- so Review was the only surface hiding it.
+    var pPromptBtn = canEditNarr ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Image Prompt</button>' : '';
     var pMenuId = 'review-menu-p' + mid;
     var pMenu = canEditNarr
       ? '<div class="row-menu review-row-menu">' +
         '<button class="row-menu-btn" onclick="toggleRowMenu(\'' + pMenuId + '\', event)">&#8943;</button>' +
         '<div class="row-menu-dropdown" id="' + pMenuId + '">' +
-        ((!_isEstR) ? '<button class="row-menu-item" onclick="openImagePrompt(' + mid + ')">Edit Image Prompt</button>' : '') +
+        '<button class="row-menu-item" onclick="openImagePrompt(' + mid + ')">Edit Image Prompt</button>' +
         '<button class="row-menu-item" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')">Edit Narrative Outline</button>' +
         '<button class="row-menu-item" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')">Edit Narrative Direction</button>' +
         '</div></div>'
@@ -3256,8 +3261,15 @@ function refreshNarrativeDirectionUI(gapKey) {
   if (reviewPane && reviewPane.style.display !== 'none' && typeof loadReview === 'function') {
     loadReview();
   }
-  var sbPane = document.getElementById('session-tab-storyboard');
-  if (sbPane && sbPane.style.display !== 'none') {
+  // v3.0.484 -- NO VISIBILITY GATE. This used to update the Storyboard only
+  // when its pane was on screen, so a Direction set on the REVIEW tab never
+  // reached it -- and switchSessionTab does not re-render the board on the way
+  // in (deliberately: a re-render would clobber in-progress prose edits, which
+  // is the whole reason this function patches one block instead). The stale
+  // "No direction set" line therefore survived until a full reload. A hidden
+  // element is still in the DOM, so the patch works either way, and the if (el)
+  // below already covers a board that has never been rendered.
+  {
     var domKey = gapKey.replace(/[^a-z0-9]/gi, '-');
     var txt = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
     var el = document.getElementById('narr-dir-text-' + domKey);
