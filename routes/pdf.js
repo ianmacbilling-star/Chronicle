@@ -1227,7 +1227,21 @@ function cgBoxInner(mediaHtml, m, opts, outerBare) {
   // picture only, and the caption below it is outside the frame. Comic passes nothing and keeps
   // its border on the panel, so the caption stays inside -- the grid is untouched.
   var _bd = outerBare ? picBorderCss(opts) : '';   // picBorderCss, not cgBorder: the wrapper already carries overflow:hidden
-  return '<div style="' + _bd + 'overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
+  // v3.0.517 -- position:relative IS LOAD-BEARING. picOverlay draws the bronze frame lines and the
+  // corner diamonds as position:absolute;inset:0, so it fills its nearest POSITIONED ancestor.
+  // Without this the wrapper is not one, the overlay resolves against the outer box instead, and it
+  // stretches over the picture AND the caption -- a gold frame drawn around both, which is exactly
+  // what Ian photographed: "still doing it... the frame still is caught under the caption."
+  // It is also why only SOME pictures showed it. gzImgBox v3.0.513 builds its own picture box and
+  // that one already carries position:relative, so every FLOAT looked right; the eight builders
+  // converted in v3.0.515 route through this wrapper, so features, wides and towers did not.
+  // Ian: "Seems like it is the bigger / wider pictures... Tower was fixed too." That was the clue,
+  // and the dump settled it: the picture he photographed is b5, band kind FEATURE, while the one
+  // that looked right is b7, kind FLOAT.
+  // The wrapper does NOT clip the overlay either, for the same reason: an absolutely positioned box
+  // is clipped by overflow only on ancestors between it and its containing block, and the wrapper
+  // was neither. So the overlay escaped a box that had overflow:hidden on it.
+  return '<div style="' + _bd + 'position:relative;overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
       mediaHtml + picOverlay(opts) +
     '</div>' +
     '<div style="height:' + h + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
