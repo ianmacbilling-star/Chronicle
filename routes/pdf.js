@@ -876,12 +876,47 @@ function paneSafeHtml(html) {
     // to say why. Referencing CO_FADE_BG means the two cannot drift.
     .split(CO_FADE_BG).join('transparent');
 }
-function coCaptionOverlay(m, caption) {
+// v3.0.502 -- HOW FAR THE CAPTION MUST BE LIFTED OFF THE BOTTOM OF ITS POSITIONING BOX.
+// THE BUG, measured from Ian's screenshots on 2026-08-07: the composer builds an image as
+//     <div position:relative>            <- the caption's positioning context
+//       <div padding-bottom:0.14in>      <- coMedia's own gap, for the Gallery shadow
+//         <div>the artwork</div>
+//       </div>
+//       <div position:absolute bottom:0>CAPTION</div>
+//     </div>
+// so `bottom:0` is the bottom of the PADDED wrapper, not the bottom of the picture. The caption
+// therefore hangs below the artwork by exactly whatever bottom padding the border uses.
+// Predicted 7.4px in that screenshot's scale (52.8 px/in); MEASURED 8 rows of flat, fully opaque
+// band below the artwork edge (spread 0.3 -- no artwork showing through at all).
+// Ian: "I just don't want the caption to spill over the edge of the image like it currently does."
+// It is border-dependent, which is why it looked like a caption bug rather than a layout one:
+//     Gallery            0.14in  -- plainly visible, and it lands on top of the drop shadow,
+//                                   which is why the shadow read as missing under a caption
+//     Keyline / Bronze   2px     -- Ian: keyline "has the issue a little", bronze "worked"
+//     None/Comic/Fade    0       -- correct already, and Ian confirmed both looked right
+// These values are the bottom padding coMedia emits for each border. THEY MUST MATCH IT; the build
+// asserts each literal against coMedia so the two cannot drift.
+function coMediaPadBottom(border) {
+  if (border === 'gallery') return '0.14in';   // padding-bottom:0.14in
+  if (border === 'frame' || border === 'keyline') return '2px';   // padding:2px 0
+  return '0';
+}
+// The TOP edge matters too: the `plate` caption is anchored top:0, and `padding:2px 0` pads both
+// ends, so it hung 2px ABOVE the artwork on bronze and keyline. Gallery pads only the bottom.
+function coMediaPadTop(border) {
+  if (border === 'frame' || border === 'keyline') return '2px';   // padding:2px 0
+  return '0';
+}
+// `border` is optional: the magazine/comic band renderers position their caption inside the IMAGE
+// box itself (cgBorder is a real CSS border with no padding), so they pass nothing and get 0.
+function coCaptionOverlay(m, caption, border) {
   if (!m.title) return '';
+  var _capB = coMediaPadBottom(border);
+  var _capT = coMediaPadTop(border);
   if (caption === 'plate')
-    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
   if (caption === 'gradient')
-    return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
+    return '<div style="position:absolute;left:0;right:0;bottom:' + _capB + ';padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   return '';
 }
 
@@ -947,7 +982,7 @@ function coDropcap(html) {
 }
 
 function coCell(m, i, pct, opts) {
-  var overlay = coCaptionOverlay(m, opts.caption);
+  var overlay = coCaptionOverlay(m, opts.caption, opts.border);
   var media = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>';
   return '<div style="width:' + pct + '%;page-break-inside:avoid;">' + media + coCaptionBelow(m, i, opts.caption) + '</div>';
 }
@@ -1020,7 +1055,7 @@ function renderStack(moments, sections, intro, outro, opts) {
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var shape = normShape(m);
     var widthPct = isLandscape(shape) ? 100 : (shape === 'square' ? 64 : 54);
-    var overlay = coCaptionOverlay(m, opts.caption);
+    var overlay = coCaptionOverlay(m, opts.caption, opts.border);
     html += '<div style="width:' + widthPct + '%;margin:0.2in auto 0.1in;page-break-inside:avoid;">' +
       '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
       coCaptionBelow(m, i, opts.caption) + '</div>';
@@ -1061,7 +1096,7 @@ function renderSplash(moments, sections, intro, outro, opts) {
     var isHero = (i % 3 === 0) || ['panoramic', 'wide'].indexOf(normShape(m)) >= 0 || (opts.emphasis && m.type === 'combat');
     if (isHero) {
       flushGrid();
-      var overlay = coCaptionOverlay(m, opts.caption);
+      var overlay = coCaptionOverlay(m, opts.caption, opts.border);
       html += '<div style="width:100%;margin:0.2in 0 0.12in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
@@ -1077,7 +1112,7 @@ function renderSplash(moments, sections, intro, outro, opts) {
 
 function pbBesidePanel(m, sec, idx, opts) {
   // A small panel rendered to STACK in the column beside a full-height Picture Book tower.
-  var ov = coCaptionOverlay(m, opts.caption);
+  var ov = coCaptionOverlay(m, opts.caption, opts.border);
   var img = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + ov + '</div>' + coCaptionBelow(m, idx, opts.caption);
   var nb = sec.before ? '<div style="margin-top:0.1in;">' + coNarr(sec.before, opts, false) + '</div>' : '';
   var na = sec.after ? '<div style="margin-top:0.1in;">' + coNarr(sec.after, opts, false) + '</div>' : '';
@@ -1111,7 +1146,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var overlay = coCaptionOverlay(m, opts.caption);
+    var overlay = coCaptionOverlay(m, opts.caption, opts.border);
     // Text-flow (initial phase): a beat flagged `flow` pulls the NEXT beat's intro up to
     // fill its page; that next beat then skips the intro (already shown here). Only fires
     // when the flow signal is set (optimize preview), so normal books are untouched.
@@ -2129,7 +2164,7 @@ function coNarrLen(s){ return s ? String(s).replace(/<[^>]*>/g, ' ').replace(/&[
 function magWrapMin(shape){ if (shape === 'tall' || shape === 'tower') return 480; if (shape === 'square') return 360; return 300; }
 function coFloatImg(m, i, side, opts){
   var media = coMedia(m, opts.border);
-  var overlay = coCaptionOverlay(m, opts.caption);
+  var overlay = coCaptionOverlay(m, opts.caption, opts.border);
   var cap = coCaptionBelow(m, i, opts.caption);
   var mar = (side === 'left') ? 'margin:0.06in 0.3in 0.2in 0;' : 'margin:0.06in 0 0.2in 0.3in;';
   return '<div style="float:' + side + ';width:' + magWidth(normShape(m)) + '%;' + mar + 'page-break-inside:avoid;">' +
@@ -2149,7 +2184,7 @@ function magAsideWidth(shape, nlen, wmin){
 }
 function magAside(m, i, opts, narrText, imgW){
   var imgCol = '<div style="flex:0 0 ' + imgW + '%;width:' + imgW + '%;">' +
-    '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
+    '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption, opts.border) + '</div>' +
     coCaptionBelow(m, i, opts.caption) + '</div>';
   var txtCol = '<div style="flex:1 1 auto;min-width:0;">' + coNarr(narrText, opts, false) + '</div>';
   var imgLeft = (i % 2 === 0);
@@ -6092,7 +6127,7 @@ function composeBook(plan, beats, opts) {
         var _tpi = panelN; panelN += 1;
         inner += '<div style="display:flow-root;margin-bottom:0.1in;break-inside:avoid;page-break-inside:avoid;">' +
           '<div style="float:left;margin:0 0.24in 0.12in 0;width:' + tw.toFixed(2) + 'in;">' +
-            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _tpi, opts.caption) + '</div>' +
+            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption, opts.border) + '</div>' + coCaptionBelow(m, _tpi, opts.caption) + '</div>' +
           '<div style="display:flow-root;">' +
             (b.before ? '<div style="margin-bottom:0.1in;">' + coNarr(b.before, opts, false) + '</div>' : '') +
             (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
@@ -6109,7 +6144,7 @@ function composeBook(plan, beats, opts) {
         var w = Math.min(6.8, Math.round(_visH * asp * 1000) / 1000);   // inline round (round3 is not in this scope)
         var _ipi = panelN; panelN += 1;
         inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' +
-          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _ipi, opts.caption) + '</div>';
+          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption, opts.border) + '</div>' + coCaptionBelow(m, _ipi, opts.caption) + '</div>';
       } else if (pl.kind === 'narr') {
         var full = (pl.part === 'after') ? b.after : b.before;
         if (full) {
