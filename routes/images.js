@@ -1,4 +1,5 @@
 const express = require('express');
+const genresvc = require('../services/genres');   // v3.0.488 -- stage 4, campaign prompt at GENERATION time
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
@@ -128,12 +129,27 @@ var COMPOSITION_IMG = ' COMPOSITION AND EYELINES (IMPORTANT): stage each panel a
 // scene-text cues only (the extraction prose must name the ranged action); melee stays close.
 var RANGED_ATTACK_IMG = ' RANGED ATTACKS: when the scene shows a character or creature making a ranged or projectile attack \u2014 bow, crossbow, thrown spear or knife, sling, firearm, or a ranged spell such as a fireball, lightning bolt, magic missile, or eldritch blast \u2014 stage the attacker and the target SEPARATED BY A CLEAR DISTANCE across the frame, with open ground, air, or terrain between them, and show the projectile, bolt, or spell effect travelling across that gap. Do NOT place a ranged attacker and their target at melee/hand-to-hand range as if trading blows, UNLESS the scene text specifically says they are in close range (a rare, deliberate case). Melee attacks (swords, claws, fists) stay close; ranged attacks read at range.';
 
-function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride) {
+function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
   var ar = shapeAspectRatio(shape);
   var flux = shapeFluxSize(shape);
   var _fade = (isFadeOverride === true || isFadeOverride === false) ? isFadeOverride : isFadeStyle(style);
   var edgeDirective = _fade ? FADE_WHITE : NO_BORDER;
   var hint = COMPOSITION_IMG + RANGED_ATTACK_IMG + shapeCompHint(shape) + edgeDirective;
+  // v3.0.488 -- THE GENERAL CAMPAIGN PROMPT, AT GENERATION TIME.
+  // It must land here and not only in extract.js, because extract writes each
+  // panel prompt ONCE: a regenerate, a hand-edited prompt, or an image made before
+  // the field was filled in would all miss it otherwise. Ian's own example -- put a
+  // bird in every image -- fails on every one of those paths without this.
+  // Appended to `hint` deliberately: all THREE prompt builders below (nano2 edit,
+  // nano2 text-to-image, flux) already end with `hint`, so this is ONE injection
+  // point rather than three copies of the same rule. It therefore lands AFTER
+  // IP_GUARD_IMG and AFTER the reference block in every branch, which is required:
+  // user free text must never outrank the copyright guard or a canonical reference.
+  // RETOUCH IS DELIBERATELY EXCLUDED -- retouchImage() does not call this function.
+  // A retouch means keep this image and change ONE thing; a standing instruction
+  // would fight the single change being asked for. Spec section 5.3.
+  var _cpTxt = genresvc.campaignPrompt(campaignPromptText);
+  if (_cpTxt) hint = hint + ' CAMPAIGN STANDING INSTRUCTION (applies to every image in this campaign, but never at the expense of the rules above): ' + _cpTxt;
 
   // charBlock is { text, refs } (refs may include assets) from the
   // route. Tolerate a plain string or null for safety.
@@ -303,9 +319,9 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
 
 // Synchronous generation (still used by generate-all / retouch until they
 // move to the async queue flow in a later phase).
-async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride) {
+async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
@@ -321,6 +337,16 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, s
 // narrative MOMENT-block steering reads -- so one direction drives both the
 // prose and the image. Here we map it onto each moment by panel_order rank and
 // tack it onto the image prompt at generate/regenerate time.
+// v3.0.488 -- the campaign standing instruction, read once per request. Returns ''
+// for a missing campaign or an empty field, so a caller can pass the result straight
+// through without a guard.
+async function loadCampaignPrompt(db, campaignId) {
+  try {
+    const row = await db.prepare('SELECT campaign_prompt FROM campaigns WHERE id = ?').get(campaignId);
+    return genresvc.campaignPrompt(row && row.campaign_prompt);
+  } catch (e) { return ''; }
+}
+
 async function loadMomentDirections(db, forkId) {
   let dirs = {};
   try {
@@ -340,9 +366,9 @@ function applyMomentDirection(basePrompt, dirText) {
   return (basePrompt || '') + '\n\nDIRECTOR STEERING (you MUST follow this): ' + dirText;
 }
 
-async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape, thinkingLevel, isFadeOverride) {
+async function submitPanelGen(prompt, style, falKey, charBlock, seed, modelKey, webhookUrl, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
   fal.config({ credentials: falKey });
-  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride);
+  const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText);
   const submitted = await fal.queue.submit(built.model, { input: built.input, webhookUrl: webhookUrl });
   return { request_id: submitted.request_id, model: built.model, prompt: built.input.prompt, system_prompt: built.input.system_prompt || '' };
 }
@@ -988,6 +1014,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const prevImg = (await db.prepare('SELECT image FROM moments WHERE id = ?').get(moment_id) || {}).image;
     const userThinking = null;   // TF-04: smarter rendering is a system default now (NANO_THINKING_LEVEL); no per-user toggle.
     const momentDirsS = await loadMomentDirections(db, moment.fork_id);
+    const _campPromptS = await loadCampaignPrompt(db, moment.campaign_id);
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
     if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
     if (process.env.DEBUG_PROMPT) {
@@ -1002,7 +1029,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
         console.log('[DEBUG_PROMPT] body prompt (first 160): ' + (prompt || '').slice(0, 160));
       } catch (_e) {}
     }
-    const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade);
+    const sub = await submitPanelGen(applyMomentDirection(prompt, momentDirsS[moment.id]), _rs.styleForGen, fal_key, panelBlock, randomSeed, modelKey, webhookUrl, moment.shape, userThinking, _rs.isFade, _campPromptS);
 
     await logDebug(req.session.userId, {
       level: 'info', source: 'generation', page: 'Storyboard / moment image', fn: 'POST /generate-moment',
@@ -1251,6 +1278,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
 
   const momentDirs = await loadMomentDirections(db, targetForkId);
+  const _campPromptAll = await loadCampaignPrompt(db, campaign_id);
   // Whole batch shares one art style: resolve + lapse-check once, before the
   // concurrent map (a return inside the map would not abort the batch).
   const _rsAll = await resolveGenStyle(db, style, req.session.userId, campaign_id);
@@ -1274,7 +1302,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
         castNames: castNames
       };
       const _rs = _rsAll;
-      const sub = await submitPanelGen(applyMomentDirection(m.prompt, momentDirs[m.id]), _rs.styleForGen, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll, _rs.isFade);
+      const sub = await submitPanelGen(applyMomentDirection(m.prompt, momentDirs[m.id]), _rs.styleForGen, fal_key, panelBlock, panelSeed, modelKey, webhookUrl, m.shape, userThinkingAll, _rs.isFade, _campPromptAll);
       const nowTs = new Date().toISOString();
       const jobIns = await db.prepare(
         'INSERT INTO image_jobs (request_id, user_id, campaign_id, moment_id, fork_id, kind, status, model, style, cost, prev_image, created_at, updated_at) ' +

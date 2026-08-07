@@ -1,4 +1,5 @@
 const express = require('express');
+const genresvc = require('../services/genres');   // v3.0.488 -- stage 4 steering
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
 const { getTier, getMomentRange, getEffectiveTier } = require('../middleware/tiers');
@@ -18,7 +19,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // Verify membership (any member can load; the fork resolution below
   // decides what they may write to).
   const session = await db.prepare(
-    'SELECT s.*, c.art_style as campaign_style, c.lore as campaign_lore FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
+    'SELECT s.*, c.art_style as campaign_style, c.lore as campaign_lore, c.genres as campaign_genres, c.campaign_prompt as campaign_prompt FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND cm.user_id = ?'
   ).get(req.params.sessionId, req.session.userId);
 
   if (!session) return res.status(403).json({ error: 'Access denied' });
@@ -121,6 +122,9 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'When a DM specifies a visual style or atmosphere, you apply it consistently to every panel. ' +
     'COPYRIGHT & ORIGINALITY \u2014 CRITICAL: Treat this campaign as the user\'s own original fictional world. Keep the names the user gives their characters, creatures, places, and items EXACTLY as written \u2014 a name is the user\'s choice, so use it as-is even when it happens to match something from another franchise. What you must NOT do is borrow that franchise\'s identity: if a name matches a character or property from a third-party copyrighted or trademarked work (for example a video game, film, comic, anime, novel, or another game publisher), treat it as the user\'s OWN original creation that merely shares the name, and never reproduce that franchise\'s visual design, likeness, costume, logo, signature equipment, setting, backstory, or lore. Also, any name YOU invent for a new character, creature, place, or item must be your own original creation \u2014 never a name, character, ally, sidekick, rival, location, or term drawn from a real franchise; when a user-provided name happens to match a franchise character, do NOT add that franchise\'s known companions, sidekicks, enemies, places, or terms. Build only on what the transcript actually contains. Image prompts must describe ONLY the user\'s own characters and scene as referenced, never a recognizable franchise character\'s design. Do NOT copy verbatim or near-verbatim text from any published source (such as a published adventure module, rulebook, or novel) into any title, description, or image prompt \u2014 always describe events in your own original words.';
 
+  // Resolved through services/genres.js and nowhere else.
+  const _genrePanels = genresvc.genreSteering(session && session.campaign_genres, 'panels');
+  const _campPrompt = genresvc.campaignPrompt(session && session.campaign_prompt);
   const userPrompt =
     '## ART STYLE\n' + style + '\n\n' +
     '## KNOWN CHARACTERS (appearance reference only)\n' + charList + '\n' +
@@ -140,6 +144,13 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     'If the session is short on real events, return correspondingly fewer panels. ' +
     'Focus on dramatic combat, emotional revelations, tense standoffs, and memorable character moments. ' +
     'If the director\'s instructions specify particular scenes, those MUST be included as panels.\n\n' +
+    // v3.0.488 -- STAGE 4. These sit at the END of the task, after the transcript,
+    // because the transcript is often thousands of words and anything that must be
+    // live while CHOOSING panels has to come after it. The top of this prompt is
+    // reference material (art style, cast, lore); this is an instruction.
+    // Spec: GENRE_AND_CAMPAIGN_PROMPT_SPEC.md section 5.2.
+    (_genrePanels ? ('## ' + _genrePanels + '\n\n') : '') +
+    (_campPrompt ? ('## GENERAL CAMPAIGN PROMPT (applies to every session in this campaign; follow it unless it conflicts with the COPYRIGHT rule, which always wins)\n' + _campPrompt + '\n\n') : '') +
     'Return ONLY valid JSON with no markdown fences or explanation:\n' +
     '{\n' +
     '  "title": "Session title (4-6 dramatic words)",\n' +
