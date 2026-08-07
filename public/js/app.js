@@ -5910,9 +5910,14 @@ function flushMomentTitleSave(momentId) {
 }
 function saveMomentTitle(momentId) {
   var el = document.getElementById('moment-title-' + momentId);
-  if (!el || !state.currentSession) return;
+  if (!el || !state.currentSession || !state.currentCampaign) return;
   var val = el.value.trim();
-  fetch('/api/sessions/' + state.currentSession.id + '/moments/' + momentId, {
+  // v3.0.509 -- THE ROUTE IS MOUNTED UNDER THE CAMPAIGN. server.js:247 mounts routes/moments.js at
+  // /api/campaigns/:campaignId/sessions/:sessionId/moments -- v3.0.507 posted to /api/sessions/...
+  // with the campaign segment missing, which 404s and surfaced as "Could not save the title".
+  // Every other moment call in this file already uses the full path (cast, prominence, prompt);
+  // this one was written from the route file's own relative path instead of from a working caller.
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + momentId, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: val })
   }).then(function (r) { return r.json(); }).then(function (d) {
     if (!d || d.error) { billingToast((d && (d.message || d.error)) || 'Could not save the title.', 'error'); return; }
@@ -9160,8 +9165,20 @@ function renderStoryboard() {
         // picture -- a tower has about a third the room -- and the server applies the same cap
         // through capTitleForShape, so the box cannot promise more than the server will keep.
         (canEditNarr
-          ? '<input class="moment-title moment-title-edit" id="moment-title-' + m.id + '" value="' + escapeHtml(m.title || '') + '"' +
+          // v3.0.509 -- TELL PASSWORD MANAGERS TO LEAVE IT ALONE. Ian's extension was offering to
+          // fill the panel title, because to an extension any bare <input> in a page is a candidate
+          // field. autocomplete=off alone is widely ignored by them, so this also carries the
+          // vendor opt-outs: 1Password (data-1p-ignore), LastPass (data-lpignore), Bitwarden
+          // (data-bwignore) and Dashlane (data-form-type=other). No `name` attribute either -- a
+          // named field is more attractive to a heuristic filler, and nothing here submits a form.
+          // If a manager still targets it, the guaranteed cure is a contenteditable div, which is
+          // not a form control at all -- bigger change (paste, Enter, maxlength all become manual),
+          // so try the cheap fix first.
+          ? '<input type="text" class="moment-title moment-title-edit" id="moment-title-' + m.id + '"' +
+            ' value="' + escapeHtml(m.title || '') + '"' +
             ' maxlength="' + momentTitleMax(m.shape) + '" placeholder="Untitled panel"' +
+            ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"' +
+            ' data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"' +
             ' oninput="scheduleMomentTitleSave(' + m.id + ')" onblur="flushMomentTitleSave(' + m.id + ')" />'
           : '<span class="moment-title">' + escapeHtml(m.title || '') + '</span>') +
         '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : 'Unknown') + ', ' + (m.type ? ((typeLabel[m.type]||m.type) + ', ') : '') + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +

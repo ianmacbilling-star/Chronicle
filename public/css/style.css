@@ -490,9 +490,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* v3.0.507 -- the storyboard title is an INPUT when you can edit it, and it should not announce
    itself as a form field until you touch it. Transparent until hover/focus, same type as the
    read-only span so nothing shifts when it swaps in. */
-.moment-title-edit{width:100%;background:transparent;border:1px solid transparent;border-radius:4px;
-  padding:2px 5px;margin:0 0 4px -5px;font-family:inherit;font-size:12px;font-weight:600;
-  color:var(--text);line-height:1.4;transition:background 0.15s,border-color 0.15s;}
+/* v3.0.509 -- SITS ON THE SAME ROW AS "Opening" / "Panel 1". Ian: "it's now taking up a lot more
+   vertical space. Can you put the title edit on the same row... then pull the rest of what's below
+   it up tighter underneath it?"
+   The row is already display:flex with flex-wrap:wrap, so the v3.0.507 width:100% was forcing the
+   input onto a line of its own and adding a whole row of height to every panel. flex:1 lets it take
+   the room left beside the panel number instead, and min-width:0 lets it actually shrink -- without
+   it a flex item refuses to go below its content width and wraps anyway. */
+.moment-title-edit{flex:1 1 auto;min-width:0;background:transparent;border:1px solid transparent;
+  border-radius:4px;padding:1px 5px;margin:0 0 0 -5px;font-family:inherit;font-size:12px;
+  font-weight:600;color:var(--text);line-height:1.35;transition:background 0.15s,border-color 0.15s;}
 .moment-title-edit:hover{background:rgba(201,168,76,0.07);border-color:rgba(201,168,76,0.25);}
 .moment-title-edit:focus{outline:none;background:rgba(201,168,76,0.10);border-color:rgba(201,168,76,0.55);}
 .moment-title-edit::placeholder{color:rgba(245,232,200,0.35);font-weight:400;font-style:italic;}
@@ -867,13 +874,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   padding: 24px;
 }
 .storyboard-panel-meta {
-  padding: 10px 14px;
+  /* v3.0.509 -- tightened: the title now shares this row, so the block no longer needs the
+     breathing room it had when the title was its own line. row-gap kept small so the meta list
+     sits close under the title rather than floating. */
+  padding: 7px 14px 6px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 2px 10px;
   border-top: 1px solid rgba(201,168,76,0.1);
   flex-wrap: wrap;
 }
+/* v3.0.509 -- ROW ONE: panel number, title, options button. ROW TWO: the meta list.
+   `order` is what makes that work. In DOM order the meta list sits BEFORE the options button, so
+   giving the list flex-basis:100% would wrap it AND push the button onto a third line -- worse than
+   what we started with. Ordering the list last keeps the button up on row one where it belongs. */
+.storyboard-panel-meta .moment-num{flex:0 0 auto;margin-bottom:0;order:0;}
+.storyboard-panel-meta .moment-opts-btn{order:0;}
+.storyboard-panel-meta .moment-meta-list{order:1;flex:1 1 100%;margin-top:0;}
 .moment-prompt-text {
   padding: 8px 14px;
   font-size: 10px;
