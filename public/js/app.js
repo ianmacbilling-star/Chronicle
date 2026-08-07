@@ -17468,6 +17468,16 @@ function finalizeSaveOptimized(quiet) {
     // v3.0.389 -- the protective save is instant and silent; the real one flattens and takes about
     // 43 seconds on a 49-page book, which is the whole dead-air problem. Ticking line for that one.
     var _live = quiet ? null : optimizeProgressLive('Prepping Book for saving');
+    // v3.0.506 -- RUN THE BAR WHILE THE BOOK SAVES. Ian: "I want the red progress bar at the top of
+    // the optimize tab to run while the book is saving. (While the seconds are ticking away in the
+    // log.) So people know something is happening."
+    // The loop removes its bar the moment the passes end, and the flatten-and-upload that follows
+    // takes about 43 seconds on a 49-page book -- so the one stretch with nothing moving on screen
+    // was the longest one. finalizeFixBusyBar already owns this element for the per-page Fix, so
+    // there is one bar and one animation rather than a second copy to drift.
+    // ONLY THE REAL SAVE. The protective quick save fires the instant the loop ends, while the loop
+    // may still be finishing, and it skips the flatten -- it is fast and silent by design.
+    if (!quiet) { try { finalizeFixBusyBar(true); } catch (e) {} }
     return fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
@@ -17491,6 +17501,10 @@ function finalizeSaveOptimized(quiet) {
           _finalizeSavedReady = true;
           try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
         }
+        // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
+      // forever. Never removes it while a loop is still running: the protective save can overlap
+      // the tail of a run, and the bar belongs to the loop then.
+      try { if (!quiet && !window._aiLoopRunning) finalizeFixBusyBar(false); } catch (e) {}
         if (_live) _live.done('Saved -- this version will be here when you return.');
         else if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
         // v3.0.423 -- Ian: after every save, a line saying it is ready.
@@ -17523,11 +17537,19 @@ function finalizeSaveOptimized(quiet) {
       var _code = (rj.j && rj.j.error) || '';
       var _msg = 'Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error');
       // v3.0.389 -- the ticking line must never be left spinning on a failure.
+      // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
+      // forever. Never removes it while a loop is still running: the protective save can overlap
+      // the tail of a run, and the bar belongs to the loop then.
+      try { if (!quiet && !window._aiLoopRunning) finalizeFixBusyBar(false); } catch (e) {}
       if (_live) _live.fail(_msg);
       else if (!(quiet && _code === 'optimize_required')) { optimizeLogLine(_msg, 'stop'); }
       return false;
     }).catch(function (e) {
       var _m = 'Could not save this version: ' + ((e && e.message) || 'network error');
+      // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
+      // forever. Never removes it while a loop is still running: the protective save can overlap
+      // the tail of a run, and the bar belongs to the loop then.
+      try { if (!quiet && !window._aiLoopRunning) finalizeFixBusyBar(false); } catch (e) {}
       if (_live) _live.fail(_m); else optimizeLogLine(_m, 'stop');   // v3.0.389 -- never leave it spinning
       return false;
     });
@@ -17819,6 +17841,22 @@ function finalizeSaveFixedVersion() {
   }).catch(function () {
     if (b) { b.disabled = false; b.textContent = 'Save this Version'; }
   });
+}
+// v3.0.506 -- THE NEXT STEP, FROM WHERE THEY ARE. Ian, 2026-08-07: "on the Prep and Preview tab
+// at the top a button that says Optimize and takes them to the Optimize tab and fires it off.
+// Kinda like the Go to Publish button does on the Optimize tab. A call to action on the next step."
+// Modelled on finalizeGoToPublish below: switch the tab, then act. It also STARTS the run, which
+// finalizeGoToPublish does not need to do -- so the guard matters more here.
+// NO GUARD OF ITS OWN, deliberately: runLayoutAiDryRun already refuses re-entry at its entry point
+// (v3.0.350, added because the only check lived inside runAiOptimizeLoop and a second click cost a
+// full pre-loop compose and render before being silently dropped). Adding a second, different guard
+// here is how two conditions drift apart. The tab switch still happens either way, so a press
+// during a run takes you to watch it rather than doing nothing.
+// The small delay lets the tab render before the run starts painting into it.
+function prepGoToOptimize() {
+  try { switchNovelTab('finalize'); } catch (e) {}
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { try { window.scrollTo(0, 0); } catch (e2) {} }
+  setTimeout(function () { try { if (typeof runLayoutAiDryRun === 'function') runLayoutAiDryRun(); } catch (e) {} }, 120);
 }
 function finalizeGoToPublish() {
   var b = document.getElementById('layoutai-publish-btn'); if (b) b.disabled = true;

@@ -235,7 +235,14 @@
         <aside class="novel-prep-panel" id="novel-prep-panel">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
             <div class="prep-h" style="margin-bottom:0;">Prepare to Publish</div>
-            <button class="btn btn-primary btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()" style="flex:0 0 auto;">&#8635; Refresh preview</button>
+            <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
+              <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()">&#8635; Refresh preview</button>
+              <!-- v3.0.506 -- CALL TO ACTION FOR THE NEXT STEP, modelled on Go to Publish on the
+                   Optimize tab. Switches to Optimize AND starts the run, so the next step is one
+                   click rather than two. runLayoutAiDryRun guards its own re-entry, so a second
+                   press while a run is in flight is refused there rather than here. -->
+              <button class="btn btn-primary btn-sm" id="prep-optimize-btn" onclick="prepGoToOptimize()">Optimize &#8594;</button>
+            </div>
           </div>
 
           <div class="prep-acc open" id="prep-acc-cover">
