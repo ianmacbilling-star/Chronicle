@@ -125,6 +125,10 @@ function genreSteering(list, which) {
     'the narrative voice, which is set separately and wins on any conflict of style.';
 }
 
+// True for a slug on the fixed list. Used by the Library facet so an arbitrary
+// query string can never reach the SQL.
+function isGenre(slug) { return !!BY_SLUG[String(slug || '').trim().toLowerCase()]; }
+
 function campaignPrompt(value) {
   return String(value || '').trim().slice(0, CAMPAIGN_PROMPT_MAX);
 }
@@ -140,5 +144,6 @@ module.exports = {
   genresToJson: genresToJson,
   genreLabels: genreLabels,
   genreSteering: genreSteering,
+  isGenre: isGenre,
   campaignPrompt: campaignPrompt
 };

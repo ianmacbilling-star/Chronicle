@@ -6,6 +6,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
+const genresvc = require('../services/genres');   // v3.0.487 -- Library genre snapshot
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
 const { uploadFile, deleteFile, fetchFile } = require('../storage/storage');
@@ -4893,10 +4894,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (teaser.length > 500) teaser = teaser.slice(0, 500);
     var snapshotObj = { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
     var snapshotJson = JSON.stringify(snapshotObj);
+    // v3.0.487 -- GENRE SNAPSHOT. Frozen here, at publish time, and never re-read
+    // from the campaign afterwards: a later edit to the campaign genre must not
+    // silently re-file a book that is already in the Library. Same principle as
+    // TD-219 -- the published thing is the thing that was published. Resolved via
+    // services/genres.js so NULL and junk still land as fantasy.
+    var _pubGenres = '{' + genresvc.campaignGenres(campaign && campaign.genres).join(',') + '}';
     var _ins = await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, TRUE, ?, ?)'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, nowIso, nowIso);
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], TRUE, ?, ?)'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, nowIso, nowIso);
     var _newStoryId = _ins ? _ins.lastInsertRowid : null;
   } catch (e) {
     console.error('[publish-story] db upsert failed:', e && e.message ? e.message : e);
