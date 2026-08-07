@@ -5892,6 +5892,40 @@ async function extractMoments() {
 
 // Auto-save narrative with debounce — saves 1.5 seconds after user stops typing
 var narrativeSaveTimer = null;
+// v3.0.507 -- TITLE AUTOSAVE, modelled on scheduleNarrativeSave below.
+// One timer PER MOMENT, because a storyboard shows many panels at once and a single shared timer
+// would let one panel's edit cancel another's pending save.
+// The cap must match routes/extract.js and routes/moments.js: the caption prints the width of the
+// picture, so a tower (or a tall panel) gets roughly a third the characters a wide one does.
+function momentTitleMax(shape) { return (shape === 'tower' || shape === 'tall') ? 36 : 64; }
+var _mTitleTimers = {};
+function scheduleMomentTitleSave(momentId) {
+  if (_mTitleTimers[momentId]) clearTimeout(_mTitleTimers[momentId]);
+  _mTitleTimers[momentId] = setTimeout(function () { _mTitleTimers[momentId] = null; saveMomentTitle(momentId); }, 1200);
+}
+// Blur writes immediately rather than waiting out the debounce -- clicking straight from a title
+// into a Regen must not lose the edit. Same reasoning as the campaign details modal (v3.0.492).
+function flushMomentTitleSave(momentId) {
+  if (_mTitleTimers[momentId]) { clearTimeout(_mTitleTimers[momentId]); _mTitleTimers[momentId] = null; saveMomentTitle(momentId); }
+}
+function saveMomentTitle(momentId) {
+  var el = document.getElementById('moment-title-' + momentId);
+  if (!el || !state.currentSession) return;
+  var val = el.value.trim();
+  fetch('/api/sessions/' + state.currentSession.id + '/moments/' + momentId, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: val })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { billingToast((d && (d.message || d.error)) || 'Could not save the title.', 'error'); return; }
+    // The SERVER's title, not the typed one: it applies the shape cap, so screen and database
+    // cannot disagree. Same rule as the genre/campaign-prompt echo (v3.0.485).
+    var saved = (d.moment && typeof d.moment.title === 'string') ? d.moment.title : val;
+    if (saved !== el.value) el.value = saved;
+    try {
+      var arr = (state.reviewData && state.reviewData.moments) || [];
+      for (var i = 0; i < arr.length; i++) { if (String(arr[i].id) === String(momentId)) { arr[i].title = saved; break; } }
+    } catch (e) {}
+  }).catch(function () { billingToast('Could not save the title.', 'error'); });
+}
 function scheduleNarrativeSave() {
   if (narrativeSaveTimer) clearTimeout(narrativeSaveTimer);
   narrativeSaveTimer = setTimeout(function() {
@@ -9116,7 +9150,20 @@ function renderStoryboard() {
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
-        '<span class="moment-title">' + m.title + '</span>' +
+        // v3.0.507 -- EDIT THE TITLE WHERE YOU SEE IT. Ian, 2026-08-07: "I want to be able to
+        // edit the titles on the storyboard tab... put your cursor on the title you can edit it
+        // just like the narratives." Same behaviour as the narrative boxes beside it: type, and
+        // it saves itself shortly after you stop -- no Save button, nothing to forget.
+        // Same permission rule as everything else on this card (forkOnScreenIsMine), and a LOCKED
+        // panel still allows it: the lock protects the picture, and a title never reaches image
+        // generation. The maxlength is shape-aware because the caption prints the width of the
+        // picture -- a tower has about a third the room -- and the server applies the same cap
+        // through capTitleForShape, so the box cannot promise more than the server will keep.
+        (canEditNarr
+          ? '<input class="moment-title moment-title-edit" id="moment-title-' + m.id + '" value="' + escapeHtml(m.title || '') + '"' +
+            ' maxlength="' + momentTitleMax(m.shape) + '" placeholder="Untitled panel"' +
+            ' oninput="scheduleMomentTitleSave(' + m.id + ')" onblur="flushMomentTitleSave(' + m.id + ')" />'
+          : '<span class="moment-title">' + escapeHtml(m.title || '') + '</span>') +
         '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : 'Unknown') + ', ' + (m.type ? ((typeLabel[m.type]||m.type) + ', ') : '') + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
         optsBtn +
       '</div>' +

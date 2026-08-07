@@ -4,6 +4,21 @@ const { getDb, getOrCreateDmFork, getViewableForkId } = require('../database/db'
 const { releaseImage } = require('../storage/storage');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember } = require('../middleware/auth');
 
+// v3.0.507 -- ONE definition of the title cap, shared with routes/extract.js. A title typed by
+// hand must obey the same rule a generated one does, or the cap is decorative. Kept byte-identical
+// to the extractor's copy on purpose; the build asserts the two match.
+function capTitleForShape(title, shape) {
+  var t = String(title == null ? '' : title).trim().replace(/\s+/g, ' ');
+  if (!t) return t;
+  var narrow = (shape === 'tower' || shape === 'tall');
+  var maxChars = narrow ? 36 : 64;
+  if (t.length <= maxChars) return t;
+  var cut = t.slice(0, maxChars);
+  var sp = cut.lastIndexOf(' ');
+  if (sp > Math.floor(maxChars * 0.5)) cut = cut.slice(0, sp);   // whole words, unless the first word is itself huge
+  return cut.replace(/[\s,;:.\-]+$/, '');
+}
+
 router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const viewForkId = await getViewableForkId(db, req.params.sessionId, req.session.userId, req.query.fork_id);
@@ -45,22 +60,34 @@ router.delete('/:momentId', requireAuth, verifyCampaignDM, async function(req, r
 router.put('/:momentId', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const moment = await db.prepare(
-    'SELECT m.id, m.locked, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
+    'SELECT m.id, m.locked, m.shape, sf.user_id AS fork_owner FROM moments m JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ? AND m.session_id = ?'
   ).get(req.params.momentId, req.params.sessionId);
   if (!moment) return res.status(404).json({ error: 'Moment not found' });
   const ownsThisFork = String(moment.fork_owner) === String(req.session.userId);
   if (!ownsThisFork) return res.status(403).json({ error: 'You can only edit your own version' });
-  if (moment.locked) return res.status(403).json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to edit the prompt.' });
-
-  const { prompt, description } = req.body;
+  const { prompt, description, title } = req.body;
   const hasPrompt = typeof prompt === 'string';
   const hasDesc = typeof description === 'string';
-  if (!hasPrompt && !hasDesc) return res.json({ error: 'Prompt or description required' });
+  const hasTitle = typeof title === 'string';
+  // v3.0.507 -- A LOCK PROTECTS THE PICTURE, NOT ITS CAPTION.
+  // Ian, 2026-08-07: "A locked panel SHOULD allow an edit." The lock exists so a picture the user
+  // is happy with cannot be regenerated out from under them -- its own message says "Unlock it to
+  // edit the prompt". A title drives the CAPTION and never reaches image generation, so refusing a
+  // title edit on a locked panel would protect nothing, and would block the one correction most
+  // likely to be wanted on a panel that is otherwise finished.
+  // The prompt and description remain locked exactly as before.
+  if (moment.locked && (hasPrompt || hasDesc)) {
+    return res.status(403).json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to edit the prompt.' });
+  }
+  if (!hasPrompt && !hasDesc && !hasTitle) return res.json({ error: 'Prompt, description or title required' });
 
   const now = new Date().toISOString();
   const sets = [], vals = [];
   if (hasPrompt) { sets.push('prompt = ?'); vals.push(prompt); }
   if (hasDesc) { sets.push('description = ?'); vals.push(description); }
+  // v3.0.507 -- the same shape-aware cap the extractor applies, so a hand-typed title cannot do
+  // what a generated one is prevented from doing. The moment's OWN shape decides the limit.
+  if (hasTitle) { sets.push('title = ?'); vals.push(capTitleForShape(title, moment.shape)); }
   sets.push('edited_at = ?'); vals.push(now);
   sets.push('edited_by = ?'); vals.push(req.session.userId);
   vals.push(req.params.momentId, req.params.sessionId);

@@ -8,6 +8,30 @@ const { releaseImage } = require('../storage/storage');
 const { computeGenCharge, getBalance, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
 
+// v3.0.507 -- TITLE LENGTH IS A FUNCTION OF THE PICTURE'S WIDTH.
+// Ian, 2026-08-07: "keep the titles short based on the size of the image. So Tower Titles need to
+// be short, the others don't necessarily." The caption is printed the width of the picture, so a
+// tower gets roughly a third of the room a full-width panel does. Measured against a 2.57in tower
+// at 9pt Cinzel, with the panel number now gone (v3.0.498): about 33 characters fit on one line,
+// against ~92 across a 6.8in full-width panel.
+// The prompt above states the rule; this ENFORCES it, because a prompt instruction is a request.
+// Nothing enforced title length at all before this -- not client, not server -- and the observed
+// spread on The Strangers was median 23, mean 25, MAX 43 characters.
+// Trims on a WORD boundary and never adds an ellipsis: a stored title is content the user can now
+// edit on the Storyboard, so it should read as a title rather than as truncated output. The cap is
+// deliberately looser than the measured fit so it only ever catches a runaway.
+function capTitleForShape(title, shape) {
+  var t = String(title == null ? '' : title).trim().replace(/\s+/g, ' ');
+  if (!t) return t;
+  var narrow = (shape === 'tower' || shape === 'tall');
+  var maxChars = narrow ? 36 : 64;
+  if (t.length <= maxChars) return t;
+  var cut = t.slice(0, maxChars);
+  var sp = cut.lastIndexOf(' ');
+  if (sp > Math.floor(maxChars * 0.5)) cut = cut.slice(0, sp);   // whole words, unless the first word is itself huge
+  return cut.replace(/[\s,;:.\-]+$/, '');
+}
+
 router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   const { artStyle } = req.body;
   const key = process.env.ANTHROPIC_API_KEY || req.body.key;
@@ -157,7 +181,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
     '  "establishing_scene": "A vivid 2-3 sentence WIDE ESTABLISHING SHOT that opens the session - the setting, location, environment, time of day, weather, and overall mood as the story begins. A scene-setting TITLE CARD: keep it a wide, scene-setting view, not a close-up portrait. If characters are genuinely present in this opening view you MAY include them, but refer to each KNOWN character BY THEIR EXACT NAME (e.g. \\"Ruk\\", \\"Zara\\") and NEVER by a group term (\\"the party\\") or an anonymous label (\\"a warrior\\") - the exact name lets the system attach the matching reference image so they look like themselves. Name only the characters actually in this opening frame, and show them within the wider scene rather than as a posed portrait. If the opening is an empty landscape or location with no one present, describe it with no people. Style-neutral (do NOT name an art style or medium).",\n' +
     '  "moments": [\n' +
     '    {\n' +
-    '      "title": "Short evocative panel title",\n' +
+    '      "title": "Short evocative panel title. HARD LIMITS, and they depend on the shape you chose for this panel: a TOWER or TALL panel is narrow, so its title must be at most 4 words and 30 characters; every other shape may use up to 7 words and 60 characters. The title is printed as a caption the width of the picture, so a long title on a narrow panel wraps or is cut. Shorter is always safer.",\n' +
     '      "description": "A terse OUTLINE of the panel key facts as short bullet points (one per line, each starting with a dash), NOT prose sentences. Establish who is present, what happens, and the setting. Preserve the EXACT names of any known characters or assets in this panel (this text drives name-matching). Facts and sequence only; leave the flavor to the narration.",\n' +
     '      "type": "combat|drama|discovery|humor",\n' +
     '      "shape": "The frame shape for this panel - choose EXACTLY one of: square, standard, wide, panoramic, tall, tower, or fullpage. Pick the shape that best fits the scene composition, so the printed graphic novel can vary panel sizes for a dynamic, cinematic page. From widest to tallest: panoramic is an ultra-wide cinematic banner - use it only for grand sweeping vistas, a long horizon, or a landscape or army stretching across the view; wide is a broad establishing or action shot; standard is the default balanced frame and should be the most common choice; square is an intimate close-up on a single face or object, or a tight two-shot; tall is a vertical, full-height framing; tower is an extremely tall and narrow shot - use it only for towering subjects, a great height or fall, a dramatic full-body reveal, or a narrow vertical space; fullpage is an upright, full-page proportioned frame (shaped like a whole printed page) for a striking image worth showing large at page size. Reserve the dramatic extremes panoramic, tower, and fullpage for moments whose composition genuinely earns them, and do not overuse any single shape.",\n' +
@@ -271,7 +295,8 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       var _estMomentPrompt = ('Wide establishing shot of the setting, seen from a distance; any characters appear small and far away, never in close-up. ' + (estScene || '')).trim();
       insert.run(session.id, dmForkId, (session.name || 'Title Image'), (estScene || ''), null, _estMomentPrompt, null, 'wide', JSON.stringify({ prominence: 5, focal: 'center', crop_safe: true, group_break: false }), 'establishing', 0, now, req.session.userId);
       parsed.moments.forEach(function(m, i) {
-        insert.run(session.id, dmForkId, m.title, m.description, m.type, m.prompt, m.emphasis || null, (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard'), JSON.stringify({ prominence: (Number(m.prominence) >= 1 && Number(m.prominence) <= 5) ? Math.round(Number(m.prominence)) : 3, focal: (['center','top','bottom','left','right'].indexOf(m.focal) >= 0) ? m.focal : 'center', crop_safe: m.crop_safe === false ? false : true, group_break: m.group_break === true }), 'normal', i + 1, now, req.session.userId);
+        var _shp = (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0) ? m.shape : 'standard';
+        insert.run(session.id, dmForkId, capTitleForShape(m.title, _shp), m.description, m.type, m.prompt, m.emphasis || null, _shp, JSON.stringify({ prominence: (Number(m.prominence) >= 1 && Number(m.prominence) <= 5) ? Math.round(Number(m.prominence)) : 3, focal: (['center','top','bottom','left','right'].indexOf(m.focal) >= 0) ? m.focal : 'center', crop_safe: m.crop_safe === false ? false : true, group_break: m.group_break === true }), 'normal', i + 1, now, req.session.userId);
       });
 
       // Pass 1 — store the per-gap narrative OUTLINE produced in this same

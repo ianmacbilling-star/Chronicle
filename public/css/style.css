@@ -487,6 +487,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .moment-body{padding:10px;}
 .moment-num{font-size:10px;color:var(--text-muted);margin-bottom:3px;}
 .moment-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;line-height:1.4;}
+/* v3.0.507 -- the storyboard title is an INPUT when you can edit it, and it should not announce
+   itself as a form field until you touch it. Transparent until hover/focus, same type as the
+   read-only span so nothing shifts when it swaps in. */
+.moment-title-edit{width:100%;background:transparent;border:1px solid transparent;border-radius:4px;
+  padding:2px 5px;margin:0 0 4px -5px;font-family:inherit;font-size:12px;font-weight:600;
+  color:var(--text);line-height:1.4;transition:background 0.15s,border-color 0.15s;}
+.moment-title-edit:hover{background:rgba(201,168,76,0.07);border-color:rgba(201,168,76,0.25);}
+.moment-title-edit:focus{outline:none;background:rgba(201,168,76,0.10);border-color:rgba(201,168,76,0.55);}
+.moment-title-edit::placeholder{color:rgba(245,232,200,0.35);font-weight:400;font-style:italic;}
 .moment-desc{font-size:11px;color:var(--text-muted);line-height:1.5;}
 .moment-prompt{font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-style:italic;}
 .moment-type{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;margin-top:5px;font-weight:500;}
