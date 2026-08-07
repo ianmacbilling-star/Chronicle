@@ -17543,7 +17543,7 @@ function finalizeRestoreSavedLayout(info) {
         if (j && j.restored) {
           optimizeLogLine('Saved layout loaded -- this is the book that will print and publish.', 'ok');
         } else if (j && j.reason === 'settings_changed') {
-          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved, so this book cannot be ordered or published as it stands. Run Optimize again and Save.', 'stop');
+          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved. Publishing will use the saved version shown above, not these settings. To order a print, or to apply the new settings, run Optimize again and Save.', 'stop');
         } else {
           optimizeLogLine('<strong>Only the saved PDF came back</strong> -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }

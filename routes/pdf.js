@@ -4859,9 +4859,30 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (!_loE || !_loE.pdfUrl) {
       return res.status(409).json({ error: 'optimize_required', message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then publish.' });
     }
+    // v3.0.494 -- PUBLISH NO LONGER REFUSES ON A SETTINGS MISMATCH, and the reason is
+    // that this check became obsolete the moment TD-296 landed.
+    // It existed because publish used to RE-RENDER the book from the request's current
+    // settings, so a mismatch meant we were about to build something other than what the
+    // user approved -- and the comment on the sibling check in print-interior states it
+    // exactly: 'neither answer is safe to pick silently'. That is no longer the situation.
+    // Publish now COPIES the saved file. The current co cannot influence those bytes at
+    // all; the only thing it still selects is WHICH saved book to look up (by arrange),
+    // and if that bucket is empty the optimize_required 409 above already covers it.
+    // So there is nothing left for this to protect against, and it was refusing publishes
+    // of books that were perfectly publishable.
+    // Ian, 2026-08-07: 'It doesnt matter if it is a different book... you can still
+    // publish it.'
+    // ORDERING IS NOT THE SAME CASE AND KEEPS ITS REFUSAL. A print order sends Lulu TWO
+    // files: the interior from the saved layout, and a cover rendered LIVE from the
+    // current settings. A mismatch there really does produce a cover built one way around
+    // an interior built another, and that one is paid for and physical. Do not 'tidy up'
+    // print-interior to match this.
+    // The user is not left uninformed: a mismatch already raises an amber warning on the
+    // Optimize tab, and the only routes to Publish run through Optimize or through Load
+    // Last Optimized File, so it has necessarily been shown. Ian: 'They have already seen
+    // all that.' A second notice on the publish card would be the same warning twice.
     if ((_loE.co || '') !== (req.query.co || '')) {
-      try { console.warn('[publish-story] settings differ from the approved layout. approved co: ' + (_loE.co || '(none)') + ' | requested co: ' + (req.query.co || '(none)')); } catch (e) {}
-      return res.status(409).json({ error: 'layout_changed', message: 'The book settings have changed since this layout was saved. Open the Optimize tab, run Optimize again and Save, then publish.' });
+      try { console.log('[publish-story] publishing the SAVED layout; current settings differ. saved co: ' + (_loE.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
     }
     // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
     // (it is overwritten seconds later by the real one). If the process died in between, the
