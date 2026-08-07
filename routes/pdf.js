@@ -4224,12 +4224,32 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
       return res.status(409).json({ error: 'optimize_required',
         message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then order.' });
     }
-    // Settings changed since the approval -- a different border, preset or paper produces a different
-    // book, and neither answer is safe to pick silently. Say so and send them back through Optimize.
+    // v3.0.496 -- ORDERING NO LONGER REFUSES ON A SETTINGS MISMATCH EITHER.
+    // The previous comment here read: "a different border, preset or paper produces a
+    // different book, and neither answer is safe to pick silently." That reasoning was
+    // kept one version longer than publish's on the grounds that a print is paid for and
+    // physical. It does not survive looking at what the flow actually does.
+    //
+    // 1. THE HUMAN ALREADY SIGNED FOR IT. This route GENERATES the interior the customer
+    //    then reviews on screen, beside the cover, behind a required attestation reading
+    //    "I have reviewed both the interior and cover PDFs and agree they are ready for
+    //    print." The files reviewed are the files ordered. A string comparison refusing
+    //    after a person has looked at both artifacts and signed is a WORSE signal than the
+    //    one already in the flow, arriving later.
+    // 2. IT WAS FIRING ON OPTIONS NOBODY CAN SET. co is compared as a raw string, so a
+    //    book saved before an option existed can never match one ordered after. Five of
+    //    the keys doing this -- pano, aside, companion, emphasis, watermark -- have NO UI
+    //    CONTROL AT ALL in app.html or app.js. They are internal defaults. The customer
+    //    could not have changed them, cannot see them, and cannot clear the refusal by
+    //    changing anything back.
+    // Ian, 2026-08-07: "I don't know what these are... and it shouldn't stop someone from
+    // ordering a book... They have multiple chances to review the book before they place
+    // the order so don't stop them with this stuff."
+    //
+    // Still LOGGED, because which of two layouts shipped is the first question asked when
+    // a printed book comes back wrong, and that answer must not disappear with the refusal.
     if ((_appr.co || '') !== (req.query.co || '')) {
-      try { console.warn('[print-interior] settings differ from the approved layout. approved co: ' + (_appr.co || '(none)') + ' | requested co: ' + (req.query.co || '(none)')); } catch (e) {}
-      return res.status(409).json({ error: 'layout_changed',
-        message: 'The book settings have changed since this layout was saved. Open the Optimize tab, run Optimize again and Save, then order.' });
+      try { console.log('[print-interior] building the SAVED layout; current settings differ. saved co: ' + (_appr.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
     }
     // v3.0.424 -- FIRST, TRY SUBTRACTION. The saved PDF is the approved book with covers on it; if
     // we know exactly how many cover pages it carries, the interior is that file minus those pages,
