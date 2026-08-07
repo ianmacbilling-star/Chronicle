@@ -1124,22 +1124,46 @@ var CG_CAP_OUTSIDE = true;
 // funded by a 0.12in crop plus 0.04in borrowed from the float gap and Ian set the crop: "Only crop
 // by .12 instead of .2." These are two different numbers for two different mechanisms and they
 // must not be collapsed into one -- the inside strip has no margin to borrow from.
-var CG_CAP_OUT_MAX_IN = 0.16;
+// v3.0.514 -- THE CAPTION WAS TOUCHING THE FRAME, AND THE ARITHMETIC SAYS IT HAD TO.
+// Ian, on six screenshots in a row: "the text is a little too close to the frame... Like one
+// pixel", "right up touching the bottom of the frame", "too close and plenty of room to spare."
+// He is right and it was not a judgement call, it was a bad derivation. The v3.0.513 font was
+// sized to FILL the strip (strip x 72 / 1.25) and then line-height 1.2 consumed what was left:
+//     strip 0.16in = 15.4px, a 9.2pt line at 1.2 = 14.7px  ->  0.6px of slack, 0.3px above.
+// Effectively zero. So the numbers move, and the type is sized to leave a REAL gap rather than to
+// fill the box:
+//     strip 0.20in   crop 0.16in   font 8pt   ->  3.8px clear under the frame
+// The crop goes back to 0.16in, which is what the picture can afford: Ian said "plenty of room to
+// spare" on every one of those pages. And 8pt against Picture Book s 9.5pt is honest rather than a
+// compromise -- a Magazine float IS a smaller picture, which is the whole point of TD-331.
+//
+// AND HIS RULE, which is the one to keep: the caption must clear the frame AND still sit above
+// where the neighbouring text line would run if it were extended across. That is why the type is
+// pushed to the TOP of the strip (padding-top, flex-start) rather than centred -- centring splits
+// the slack and spends half of it under the caption where nothing needs it.
+var CG_CAP_OUT_MAX_IN = 0.20;
+var CG_CAP_OUT_PAD_IN = 0.04;   // clear air between the frame and the top of the type
 function cgCapPlan(m, opts, hIn) {
   if (!CG_CAP_OUTSIDE) return null;
   if (!cgCapIsBelow(opts && opts.caption) || !m || !m.title) return null;
   if (!(hIn > 0)) return null;
-  var strip = Math.max(0.08, Math.min(CG_CAP_OUT_MAX_IN, 0.06 * hIn));
+  // Ian: "cap it so a small picture does not pay the price." Never more than 7 percent of the
+  // picture, so a 2in float gives up 0.14in rather than the full 0.20in.
+  var strip = Math.max(0.12, Math.min(CG_CAP_OUT_MAX_IN, 0.07 * hIn));
   var borrow = Math.min(0.04, strip * 0.25);
   var crop = strip - borrow;
-  var pt = Math.min(9.5, Math.round((strip * 72 / 1.25) * 10) / 10);
+  // Type is DERIVED from what is left after the padding, never set independently -- one number
+  // describing one thing. Capped at 8pt so a large picture does not get a shouty caption, floored
+  // at 6pt so a small one stays legible.
+  var pt = Math.max(6, Math.min(8, Math.round(((strip - CG_CAP_OUT_PAD_IN) * 72 / 1.2) * 10) / 10));
   return { strip: strip, borrow: borrow, crop: crop, pt: pt };
 }
 // The caption itself, sitting BELOW the bordered picture box rather than inside it.
 // line-height is explicit for the same reason as everywhere else here: the boxes set it to 0.
 function cgCapOutsideHtml(m, plan) {
   return '<div style="height:' + plan.strip.toFixed(3) + 'in;margin-bottom:-' + plan.borrow.toFixed(3) + 'in;' +
-    'display:flex;align-items:center;justify-content:center;text-align:center;font-family:Cinzel,serif;' +
+    'box-sizing:border-box;padding-top:' + CG_CAP_OUT_PAD_IN.toFixed(3) + 'in;' +
+    'display:flex;align-items:flex-start;justify-content:center;text-align:center;font-family:Cinzel,serif;' +
     'font-size:' + plan.pt + 'pt;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a2a;line-height:1.2;' +
     'overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
 }
@@ -1147,12 +1171,37 @@ function cgBoxInner(mediaHtml, m, opts) {
   var cap = opts && opts.caption;
   if (!cgCapIsBelow(cap) || !m || !m.title)
     return mediaHtml + picOverlay(opts) + coCaptionCover(m, cap);   // byte-identical to before
+  // v3.0.514 -- NOTHING LEAVES NORMAL FLOW. THE ABSOLUTE VERSION DELETED SIX PICTURES.
+  // v3.0.513 put the media in `position:absolute`. In a box with a FIXED height that is fine. In a
+  // box whose height comes FROM the picture -- cgFlowWide and cgFlowFeature s wide branch, both of
+  // which are deliberately height-less so the frame hugs the art -- taking the picture out of flow
+  // collapses the box to nothing, and cgBorder s overflow:hidden hides what is left. The picture
+  // does not render at all. What survives is the border: a full-width BLACK LINE where a wide
+  // picture should be. Ian: "What is that black line at the top... I am getting that black line a
+  // lot." Six feature bands on The Strangers lost 2.9 to 3.8in each and the book fell two pages;
+  // b24 carried a 3.80in picture and the whole band measured 3.21in, which is the tell -- a band
+  // cannot be shorter than the picture inside it.
+  //
+  // THE GALLING PART: this exact hazard is written into cgCapFlow a few lines below, for
+  // huggingImgBox -- "making the picture absolute would collapse the box to nothing." It was
+  // identified, special-cased for the one builder it had been noticed in, and then the same
+  // pattern was applied to two more builders of the same shape without checking them.
+  //
+  // THE FIX MAKES THE MECHANISM HEIGHT-AGNOSTIC, which is the real prize: the wrapper stays IN
+  // FLOW and is clamped with a PERCENTAGE max-height. A percentage height resolves only against a
+  // parent that has one, so the same markup does the right thing both ways with no branch:
+  //    fixed-height parent -> max-height resolves, picture is cropped by the strip, caption sits
+  //                           below it, box total UNCHANGED.
+  //    height-less parent  -> the percentage does not resolve, nothing is clamped, the box hugs
+  //                           the picture as it always did and grows by the strip. Honest, and
+  //                           safe because Magazine MEASURES band heights.
+  // Neither case can collapse, because the picture never leaves the flow.
   var h = CG_CAP_STRIP_IN.toFixed(2);
-  return '<div style="position:absolute;top:0;left:0;right:0;bottom:' + h + 'in;overflow:hidden;line-height:0;">' +
+  return '<div style="overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
       mediaHtml + picOverlay(opts) +
     '</div>' +
-    '<div style="position:absolute;left:0;right:0;bottom:0;height:' + h + 'in;display:flex;align-items:center;justify-content:center;' +
-      'text-align:center;font-family:Cinzel,serif;font-size:9.5pt;letter-spacing:0.12em;text-transform:uppercase;' +
+    '<div style="height:' + h + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
+      'text-align:center;font-family:Cinzel,serif;font-size:8pt;letter-spacing:0.12em;text-transform:uppercase;' +
       'color:#8a6a2a;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
 }
 
