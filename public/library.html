@@ -97,6 +97,10 @@
     .story-card .sc-ph { width:100%; aspect-ratio:17/22; background:#160e06; display:flex; align-items:center; justify-content:center; color:rgba(201,168,76,0.45); font-family:'Cinzel',serif; font-size:13px; text-align:center; padding:10px; }
     .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--parchment); padding:8px 10px 11px; line-height:1.3; }
     .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(201,168,76,0.55); padding:0 10px 10px; margin-top:-5px; }
+    /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
+    .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 10px; margin-top:-3px; }
+    .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:#f7ecd2; background:#6b4a12; border:1px solid #4a3208; border-radius:9px; padding:1px 7px; }
+    #stories-genre { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; margin-left:8px; }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
@@ -135,6 +139,7 @@
 
   <div class="lib-search" id="stories-search" style="display:none;">
     <input type="text" id="stories-q" placeholder="Search by author name..." autocomplete="off" />
+    <select id="stories-genre" aria-label="Filter stories by genre"><option value="">All genres</option></select>
   </div>
 
   <div class="gallery" id="gallery"></div>
@@ -175,7 +180,7 @@
     var gallery = document.getElementById('gallery');
     var statusEl = document.getElementById('status');
     var state = { cursor: 0, offset: 0, seed: Math.floor(Math.random() * 2147483647), window: 'recent', loading: false, done: false, any: false, tab: 'images' };
-    var sstate = { cursor: 0, q: '', loading: false, done: false, any: false };
+    var sstate = { cursor: 0, q: '', genre: '', loading: false, done: false, any: false };
     var storiesEl = document.getElementById('stories');
     var authorSections = {};
 
@@ -309,13 +314,21 @@
         try { d.textContent = new Date(item.created_at).toLocaleDateString(); } catch (e) { d.textContent = ''; }
         a.appendChild(d);
       }
+      if (item.genres && item.genres.length) {
+        var gw = document.createElement('div'); gw.className = 'sc-genres';
+        item.genres.forEach(function (g) {
+          var gp = document.createElement('span'); gp.className = 'sc-genre'; gp.textContent = g;
+          gw.appendChild(gp);
+        });
+        a.appendChild(gw);
+      }
       row.appendChild(a);
     }
 
     function loadStories() {
       if (sstate.loading || sstate.done) return;
       sstate.loading = true; spinner();
-      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
+      var url = '/api/public/stories?limit=36' + (sstate.q ? '&q=' + encodeURIComponent(sstate.q) : '') + (sstate.genre ? '&genre=' + encodeURIComponent(sstate.genre) : '') + (sstate.cursor ? '&beforeId=' + sstate.cursor : '');
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         sstate.loading = false;
         var items = (d && d.items) || [];
@@ -323,12 +336,25 @@
         if (d && d.nextCursor) sstate.cursor = d.nextCursor;
         if (!d || !d.hasMore || !d.nextCursor) {
           sstate.done = true;
-          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>'));
+          setStatus(sstate.any ? '' : (sstate.q ? 'No stories found for that name.' : (sstate.genre ? 'No stories in that genre yet.' : 'No stories have been published yet &mdash; be the first to share your story.<br><a href="/login" class="btn-nav">START FREE</a>')));
         } else { setStatus(''); }
       }).catch(function () {
         sstate.loading = false;
         setStatus('Could not load stories right now. Please try again later.');
       });
+    }
+
+    // v3.0.487 -- the picker is built from /api/public/genres, the SAME list the
+    // server validates against, so the two cannot drift. If the fetch fails the
+    // control simply stays on All genres and the Library still works.
+    var sg = document.getElementById('stories-genre');
+    if (sg) {
+      fetch('/api/public/genres').then(function (r) { return r.json(); }).then(function (d) {
+        ((d && d.genres) || []).forEach(function (g) {
+          var o = document.createElement('option'); o.value = g.slug; o.textContent = g.label; sg.appendChild(o);
+        });
+      }).catch(function () {});
+      sg.addEventListener('change', function () { sstate.genre = sg.value || ''; resetStories(); });
     }
 
     var sq = document.getElementById('stories-q'); var sqTimer = null;

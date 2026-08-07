@@ -402,6 +402,19 @@ async function initPostgres() {
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS allow_player_novel_access BOOLEAN DEFAULT false',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS allow_member_assets BOOLEAN DEFAULT false',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS lore TEXT',
+    // v3.0.485 -- campaign-level steering (GENRE_AND_CAMPAIGN_PROMPT_SPEC.md, TD-217 + TD-189).
+    // genres is an ORDERED JSON array of slugs; the first is primary. Resolve it
+    // ONLY through services/genres.js campaignGenres() -- NULL and [] must both read
+    // as Fantasy, and nothing may re-derive that rule a second time.
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS genres TEXT',
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS campaign_prompt TEXT',
+    // v3.0.487 -- Library genre facet. text[] with a GIN index, NOT a JSON string:
+    // this column is queried ACROSS rows (filter every public story by genre), which
+    // is the one place in this feature where the storage shape matters. A JSON string
+    // would mean LIKE '%horror%' over the whole table -- fine at ten stories, not at
+    // tens of thousands. campaigns.genres stays a JSON string because it is only ever
+    // read whole, one row at a time. SNAPSHOT at publish time, never a live join.
+    'ALTER TABLE public_stories ADD COLUMN IF NOT EXISTS genres text[]',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the
@@ -531,6 +544,30 @@ async function initPostgres() {
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
   }
+
+  // v3.0.485 -- GENRE BACKFILL. Fantasy is the default and is true of very nearly
+  // every campaign that exists. Runs after the ALTERs, is idempotent, and touches
+  // only rows that have never been set. NOTE the reader (services/genres.js
+  // campaignGenres) already resolves NULL and [] to Fantasy, so this backfill is a
+  // convenience for querying, NOT the thing that makes the default work -- a
+  // campaign created between the ALTER and this line still reads correctly.
+  try {
+    const _gb = await pool.query("UPDATE campaigns SET genres = '[\"fantasy\"]' WHERE genres IS NULL OR genres = '' OR genres = '[]'");
+    if (_gb && _gb.rowCount) console.log('[db] genre backfill: ' + _gb.rowCount + ' campaign(s) set to Fantasy');
+  } catch(e) { console.error('[db] genre backfill failed: ' + (e && e.message)); }
+
+  // v3.0.487 -- the Library facet index, and a ONE-OFF snapshot for stories that
+  // were published before genre existed. They take their campaign's genres once;
+  // after this the snapshot stands and is never re-read from the campaign, so
+  // editing a campaign's genre cannot silently re-file a book already published.
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_public_stories_genres ON public_stories USING GIN (genres)'); } catch(e) { console.error('[db] public_stories genre index failed: ' + (e && e.message)); }
+  try {
+    const _sb = await pool.query(
+      "UPDATE public_stories ps SET genres = COALESCE((SELECT ARRAY(SELECT jsonb_array_elements_text(c.genres::jsonb)) FROM campaigns c WHERE c.id = ps.campaign_id), ARRAY['fantasy']) " +
+      'WHERE ps.genres IS NULL'
+    );
+    if (_sb && _sb.rowCount) console.log('[db] public_stories genre snapshot: ' + _sb.rowCount + ' story(ies) back-filled');
+  } catch(e) { console.error('[db] public_stories genre backfill failed: ' + (e && e.message)); }
 
   // Pen name: case-insensitive unique across users, ignoring blanks/NULLs.
   // Public-facing author identity for the Public Library.

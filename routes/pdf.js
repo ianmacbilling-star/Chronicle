@@ -6,6 +6,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
+const genresvc = require('../services/genres');   // v3.0.487 -- Library genre snapshot
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
 const { uploadFile, deleteFile, fetchFile } = require('../storage/storage');
@@ -4720,6 +4721,18 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
 
   // Always the caller's OWN book: DM/owner -> canonical; player -> their fork.
   const asUser = (campaign.my_role === 'dm') ? null : Number(req.session.userId);
+  // v3.0.489 -- DECLARE _bv. It was USED below (the version-aware include map) and
+  // never declared in this route, so publish-story threw a ReferenceError inside an
+  // async handler on EVERY call. Nothing catches that, so the promise rejected, Node
+  // killed the process, and every request in flight returned 502 -- which is why the
+  // symptom looked like the whole app rather than one route. Introduced with the
+  // v3.0.479 / TD-280b resolver collapse; the four other routes that use _bv each
+  // declare their own. Present and broken in the v3.0.482 zip.
+  // DELIBERATELY MINIMAL: asUser above is left exactly as it was. It is computed
+  // differently here (own book only) and re-pointing it at _bv.asUser would change
+  // WHICH book publishes -- a bigger decision than fixing a crash. See TD-290.
+  const _bv = await resolveBookVersion(db, campaign.id, req);
+  const asVersion = _bv ? _bv.versionId : null;   // used by bookForkForSession below; also never declared here
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare(
@@ -4893,10 +4906,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (teaser.length > 500) teaser = teaser.slice(0, 500);
     var snapshotObj = { v: 1, layoutStyle: layoutStyle, co: co, bookTitle: bookTitle, campaign: campaign, characters: characters, sessions: sessionsWithData };
     var snapshotJson = JSON.stringify(snapshotObj);
+    // v3.0.487 -- GENRE SNAPSHOT. Frozen here, at publish time, and never re-read
+    // from the campaign afterwards: a later edit to the campaign genre must not
+    // silently re-file a book that is already in the Library. Same principle as
+    // TD-219 -- the published thing is the thing that was published. Resolved via
+    // services/genres.js so NULL and junk still land as fantasy.
+    var _pubGenres = '{' + genresvc.campaignGenres(campaign && campaign.genres).join(',') + '}';
     var _ins = await db.prepare(
-      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, public, created_at, updated_at) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, TRUE, ?, ?)'
-    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, nowIso, nowIso);
+      'INSERT INTO public_stories (campaign_id, user_id, author_name, title, pdf_url, cover_url, snapshot, slug, blurb, teaser, genres, public, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], TRUE, ?, ?)'
+    ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, nowIso, nowIso);
     var _newStoryId = _ins ? _ins.lastInsertRowid : null;
   } catch (e) {
     console.error('[publish-story] db upsert failed:', e && e.message ? e.message : e);

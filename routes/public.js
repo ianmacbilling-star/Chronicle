@@ -3,6 +3,7 @@
 // Small, read-only endpoints safe to expose to logged-out visitors.
 // ============================================================
 const express = require('express');
+const genresvc = require('../services/genres');   // v3.0.487 -- Library genre facet
 const router = express.Router();
 const { TIERS, getTier } = require('../middleware/tiers');
 const { getDb } = require('../database/db');
@@ -80,6 +81,12 @@ router.get('/library', async function (req, res) {
 // published graphic novel: pen-name author, title, cover thumbnail, and the
 // public PDF url. ?q= filters by author name (substring, case-insensitive).
 // Newest first, keyset-paginated by id (beforeId cursor + nextCursor token).
+// GET /api/public/genres -- the fixed genre list, so the Library filter is built
+// from the SAME source the server validates against and the two cannot drift.
+router.get('/genres', function (req, res) {
+  res.json({ genres: genresvc.GENRES.filter(function (g) { return g.slug !== 'other'; }).map(function (g) { return { slug: g.slug, label: g.label }; }) });
+});
+
 router.get('/stories', async function (req, res) {
   try {
     const db = await getDb();
@@ -88,9 +95,17 @@ router.get('/stories', async function (req, res) {
     if (limit > 60) limit = 60;
     const beforeId = parseInt(req.query.beforeId, 10) || 0;
     const q = (req.query.q || '').trim();
-    let sql = 'SELECT id, author_name, title, cover_url, pdf_url, slug, created_at FROM public_stories WHERE public = TRUE';
+    // v3.0.487 -- genre facet. The value is validated against the fixed list, so an
+    // arbitrary string can never reach the query; an unknown genre is simply ignored
+    // rather than returning nothing, because a bookmarked link with a retired slug
+    // should degrade to the full Library, not to an empty page.
+    const genreRaw = String(req.query.genre || '').trim().toLowerCase();
+    const genre = genresvc.isGenre(genreRaw) ? genreRaw : '';
+    let sql = 'SELECT id, author_name, title, cover_url, pdf_url, slug, genres, created_at FROM public_stories WHERE public = TRUE';
     const params = [];
     if (q) { sql += ' AND author_name ILIKE ?'; params.push('%' + q + '%'); }
+    // ARRAY[?] && genres uses the GIN index; ILIKE on a joined string would not.
+    if (genre) { sql += ' AND genres && ARRAY[?]::text[]'; params.push(genre); }
     if (beforeId > 0) { sql += ' AND id < ?'; params.push(beforeId); }
     sql += ' ORDER BY id DESC LIMIT ?';
     params.push(limit + 1);
@@ -99,7 +114,7 @@ router.get('/stories', async function (req, res) {
     const hasMore = rows.length > limit;
     const slice = rows.slice(0, limit);
     const items = slice.map(function (r) {
-      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', created_at: r.created_at };
+      return { id: r.id, author: r.author_name || '', title: r.title || 'Untitled', cover_url: r.cover_url || '', pdf_url: r.pdf_url, slug: r.slug || '', genres: genresvc.genreLabels(r.genres), created_at: r.created_at };
     });
     const nextCursor = slice.length ? slice[slice.length - 1].id : null;
     res.json({ items: items, hasMore: hasMore, nextCursor: nextCursor });

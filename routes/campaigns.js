@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
+const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile } = require('../storage/storage');
 
@@ -72,11 +73,20 @@ router.put('/:id', requireAuth, async function(req, res) {
     ? (req.body.allow_member_assets === true || req.body.allow_member_assets === 'true' || req.body.allow_member_assets === 1)
     : campaign.allow_member_assets;
   var _lore = (req.body.lore !== undefined) ? String(req.body.lore || '').slice(0, 6000) : campaign.lore;
-  await db.prepare('UPDATE campaigns SET name=?, description=?, lore=?, cover_image_url=?, back_cover_image_url=?, title_image_url=?, campaign_image_url=?, allow_player_novel_access=?, allow_member_assets=?, edited_at=?, edited_by=? WHERE id=?')
+  // v3.0.485 -- genre + campaign prompt. Validation is server-side on purpose:
+  // maxlength is a suggestion, and the 3-cap / exclusive-other rules must hold
+  // against any client. sanitizeGenres returns null for 'not supplied', so a PUT
+  // that omits the field leaves the stored value alone.
+  var _genresIn = genres.sanitizeGenres(req.body.genres);
+  var _genres = (_genresIn === null) ? campaign.genres : JSON.stringify(_genresIn);
+  var _cprompt = (req.body.campaign_prompt !== undefined) ? genres.campaignPrompt(req.body.campaign_prompt) : campaign.campaign_prompt;
+  await db.prepare('UPDATE campaigns SET name=?, description=?, lore=?, genres=?, campaign_prompt=?, cover_image_url=?, back_cover_image_url=?, title_image_url=?, campaign_image_url=?, allow_player_novel_access=?, allow_member_assets=?, edited_at=?, edited_by=? WHERE id=?')
     .run(
       req.body.name || campaign.name,
       req.body.description !== undefined ? req.body.description : campaign.description,
       _lore,
+      _genres,
+      _cprompt,
       req.body.cover_image_url !== undefined ? req.body.cover_image_url : campaign.cover_image_url,
       req.body.back_cover_image_url !== undefined ? req.body.back_cover_image_url : campaign.back_cover_image_url,
       req.body.title_image_url !== undefined ? req.body.title_image_url : campaign.title_image_url,
