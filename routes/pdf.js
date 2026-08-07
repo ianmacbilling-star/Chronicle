@@ -6582,6 +6582,22 @@ function fillMissingMagazineLines(meas, bands) {
 
 // Re-measure the REAL composed pages: returns { pageIndex: realHeightIn } (plus ._error on failure).
 // Same machinery as the band measure, aimed at the composed output (measureComposed -> cp:N markers).
+// v3.0.505 -- NEVER-CLIP ON THE CONSOLE IS OFF BY DEFAULT. Ian, 2026-08-07: "Get rid of these
+// in the log... I don't think these are errors. these are things we know happen and account for."
+// He is right, and the reason is the CALL COUNT. remeasureComposedPaired has TEN call sites and
+// most of them are inside the scale bisection in layout-apply -- one is passed straight in as a
+// `measure:` callback to a search routine. So the detector fires on every THROWAWAY PROBE render,
+// not just on the book that ships. That is why a single run prints the same page half a dozen
+// times with a shrinking overflow (p12 +6.49, +6.26, +6.03, +5.92) -- that is a bisection walking
+// down, working exactly as intended, narrated as if it were six faults.
+// NOTHING DIAGNOSTIC IS LOST. realH._overflows is populated on the line above regardless, and that
+// is what the diagnostics bundle reads (_pdbg.overflows) and reports properly -- per stage, with
+// the reference pack and the final pack separated, which is the form that has actually been useful
+// all evening. The console line was a duplicate of data the dump already carries, minus the context
+// that makes it readable.
+// Set DEBUG_CLIP=1 to bring it back (same convention as DEBUG_PROMPT in routes/images.js) for the
+// case the dump cannot cover: watching a live run that is not going to produce a bundle.
+function clipLogOn() { return !!process.env.DEBUG_CLIP; }
 async function remeasureComposedPages(req, campaignId, pgs, bnds) {
   var realH = {};
   try {
@@ -6622,7 +6638,7 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
       var over = realH[k] - _clipBox;
       if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000, kind: 'over-box' });
     });
-    if (realH._overflows.length) {
+    if (realH._overflows.length && clipLogOn()) {
       try { console.warn('[NEVER-CLIP] ' + realH._overflows.length + ' page(s) over box (' + _clipBox.toFixed(2) + 'in) for campaign ' + campaignId + ': ' +
         realH._overflows.map(function (o) { return 'p' + o.page + ' +' + o.overIn + 'in'; }).join(', ')); } catch (_e) {}
     }
@@ -6658,7 +6674,7 @@ async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
       var over = realH[k] - _clipBox;
       if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000, kind: 'over-box' });
     });
-    if (realH._overflows.length) {
+    if (realH._overflows.length && clipLogOn()) {
       try { console.warn('[NEVER-CLIP] (paired) ' + realH._overflows.length + ' page(s) over box (' + _clipBox.toFixed(2) + 'in) for campaign ' + campaignId + ': ' +
         realH._overflows.map(function (o) { return 'p' + o.page + ' +' + o.overIn + 'in'; }).join(', ')); } catch (_e) {}
     }
