@@ -13127,6 +13127,10 @@ function clMerge(saved){
   // parseCustomOpts; this simply stops the client sending it in the first place.
   // Paper colour now means one thing only: the physical stock, chosen on the order page.
   r.paper = 'white';
+  // v3.0.498 -- TD-168, same reason: the picker is gone but saved layout prefs still
+  // hold narr:'box', and customOpts keeps serialising it into the co string until the
+  // user happens to touch some other control.
+  r.narr = 'plain';
   return r;
 }
 // Normalize a stored layout blob into the UNIFIED shape { opts:<layout>, active:<bool> }.
@@ -17661,7 +17665,8 @@ function finalizeUpdateHeader() {
   // no longer a layout attribute at all -- it is the physical stock picked on the order page.
   parts.push('Body font: ' + optLabel('cl-font', o.font));
   parts.push('Drop cap: ' + (o.dropcap ? 'On' : 'Off'));
-  parts.push('Narrative: ' + optLabel('cl-narr', o.narr));
+  // v3.0.498 -- Narrative removed from this list with the option itself (TD-168).
+  // optLabel reads the option text out of the #cl-narr <select>, which no longer exists.
   var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
     (desc ? ' <span style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
   h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(201,168,76,0.6);">&middot;</span> ') + '</div>';

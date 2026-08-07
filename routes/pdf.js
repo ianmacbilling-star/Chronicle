@@ -234,10 +234,22 @@ function shapedImage(m, border, radius) {
   return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:' + rad + ';display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
 }
 
+// v3.0.498 -- THE PANEL NUMBER IS GONE FROM THE CAPTION.
+// Ian, 2026-08-07, looking at a tower whose title had wrapped onto a second line:
+// "Let's get rid of the Panel # on the panel... that will free up space."
+// It was a diagnostic label rather than content, and on a narrow tower it was eating about
+// a QUARTER of the usable caption width -- the 8pt run plus its 8px gap costs roughly eight
+// characters. Measured against this book's 50 real titles in a 2.57in tower: 19 of 50 wrapped
+// with the prefix, 5 without it.
+// THAT MATTERS MORE THAN IT LOOKS. A full-height tower is built to fill the clip box exactly
+// -- the composer sizes the picture as everything left after the caption -- so it totals
+// 9.240in against a 9.24in box with ZERO headroom. One wrapped caption line is ~0.20in and
+// clips the page outright. This is the cheapest of the four defences against that.
+// `i` is now unused; the parameter is kept so the two call sites need not change and so the
+// panel index remains available if a caption ever wants it again.
 function panelCaption(m, i) {
   return '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:3px;">' +
-    '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i + 1) + '</span>' +
-    '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;margin-left:8px;">' + (m.title || '') + '</span>' +
+    '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;">' + (m.title || '') + '</span>' +
   '</div>';
 }
 
@@ -758,6 +770,9 @@ function parseCustomOpts(str) {
   // NOTE the legacy non-custom novel passes co = null and still renders 'parchment' further
   // down in buildNovelHTML. That path never reaches here and is deliberately untouched.
   o.paper = 'white';
+  // v3.0.498 -- TD-168, same reasoning as the paper rule above: deleting the picker does not
+  // delete `narr:box` from the co strings already saved on existing campaigns.
+  o.narr = 'plain';
   decorStrip(o);   // DECOR_OFF=1 -> chrome removed everywhere, including hand-written URLs
   return o;
 }
@@ -852,7 +867,30 @@ function coCaptionCover(m, caption) {
 
 function coNarr(text, opts, isIntro) {
   if (!text) return '';
-  if (opts.narr === 'box' && !isIntro) return '<div style="margin:0.16in 0;">' + buildClassicTextPanel(text) + '</div>';
+  // v3.0.498 -- TD-168. THE BOXED NARRATIVE OPTION IS GONE, AND IT WAS MEASURED OUT.
+  // Ian decided this on 2026-08-02 ("Let's get rid of the Narrative Text option... It will
+  // mess things up too") on the reasoning that it is the ONE decoration that cannot be made
+  // size-neutral by shrinking a picture: box padding adds height to TEXT, and fewer lines
+  // means a different split. Two runs of the same book on 2026-08-07 put a number on it.
+  //
+  //   est-vs-real, 56 pages WITH boxes    : mean +0.691in, real exceeded est on 55 of 56
+  //   est-vs-real, 54 pages WITHOUT       : mean +0.045in, over-estimating as often as under
+  //   least squares WITH   : gap = 0.358*narrativeBlocks + 0.107*images - 0.099
+  //   least squares WITHOUT: gap = -0.074*narrativeBlocks + 0.103*images + 0.094
+  //   NEVER-CLIP in the reference pack: 16 with boxes, 1 without.
+  //
+  // 0.358in per narrative block against buildClassicTextPanel's padding of 0.18in top and
+  // bottom = 0.360in. That is not a correlation, it is the same number. The packer reserves
+  // TEXT_MARGIN = 0.1in per slice -- correct for a plain paragraph, which has only a top
+  // margin -- and each boxed slice renders as its OWN panel with its own padding, none of
+  // which the registry knows about (it has no entry for the narrative box at all).
+  // The symptom Ian saw was not overfull pages but WHITE ones: the loop answered the
+  // overflow by shrinking pictures (one down to scale 0.55) and fill fell 90 -> 83 percent.
+  // The white space was the optimizer compensating for a lie about how tall the text was.
+  //
+  // Removed here rather than only in the UI so no stored co string, hand-written URL or
+  // future caller can reach it. parseCustomOpts also forces narr to plain, same as paper.
+  // buildClassicTextPanel is left in place -- it is still used by the Gazette family.
   return buildNarrativeHTML(text, isIntro);
 }
 
