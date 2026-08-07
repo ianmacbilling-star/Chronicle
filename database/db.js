@@ -402,6 +402,12 @@ async function initPostgres() {
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS allow_player_novel_access BOOLEAN DEFAULT false',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS allow_member_assets BOOLEAN DEFAULT false',
     'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS lore TEXT',
+    // v3.0.485 -- campaign-level steering (GENRE_AND_CAMPAIGN_PROMPT_SPEC.md, TD-217 + TD-189).
+    // genres is an ORDERED JSON array of slugs; the first is primary. Resolve it
+    // ONLY through services/genres.js campaignGenres() -- NULL and [] must both read
+    // as Fantasy, and nothing may re-derive that rule a second time.
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS genres TEXT',
+    'ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS campaign_prompt TEXT',
     'ALTER TABLE custom_art_styles ADD COLUMN IF NOT EXISTS preview_url TEXT',
     // DM handoff: marks a campaign whose Story Master role was transferred.
     // inherited_at present => exempt from per-tier campaign limits later; the
@@ -531,6 +537,17 @@ async function initPostgres() {
   for (const sql of alterations) {
     try { await pool.query(sql); } catch(e) {}
   }
+
+  // v3.0.485 -- GENRE BACKFILL. Fantasy is the default and is true of very nearly
+  // every campaign that exists. Runs after the ALTERs, is idempotent, and touches
+  // only rows that have never been set. NOTE the reader (services/genres.js
+  // campaignGenres) already resolves NULL and [] to Fantasy, so this backfill is a
+  // convenience for querying, NOT the thing that makes the default work -- a
+  // campaign created between the ALTER and this line still reads correctly.
+  try {
+    const _gb = await pool.query("UPDATE campaigns SET genres = '[\"fantasy\"]' WHERE genres IS NULL OR genres = '' OR genres = '[]'");
+    if (_gb && _gb.rowCount) console.log('[db] genre backfill: ' + _gb.rowCount + ' campaign(s) set to Fantasy');
+  } catch(e) { console.error('[db] genre backfill failed: ' + (e && e.message)); }
 
   // Pen name: case-insensitive unique across users, ignoring blanks/NULLs.
   // Public-facing author identity for the Public Library.

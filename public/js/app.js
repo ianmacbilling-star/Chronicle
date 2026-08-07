@@ -13512,6 +13512,125 @@ function loreCount(el, countId) {
   if (c) c.textContent = words + (words === 1 ? ' word' : ' words') + ' \u00B7 ' + chars + ' / 6000';
 }
 
+// v3.0.485 -- CAMPAIGN GENRE (TD-217). Spec: GENRE_AND_CAMPAIGN_PROMPT_SPEC.md.
+// The slugs and their ORDER must match services/genres.js exactly -- the apply
+// script parses both files and refuses if they diverge, because a slug the server
+// rejects would silently vanish on save with nothing on screen to explain it.
+// Labels live here (display); steering text lives on the server (generation).
+var CS_GENRES = [
+  ['fantasy', 'Fantasy'],
+  ['romance', 'Romance'],
+  ['thriller', 'Thriller / Suspense'],
+  ['scifi', 'Sci Fi'],
+  ['horror', 'Horror'],
+  ['biography', 'Biography'],
+  ['mystery', 'Mystery / Crime'],
+  ['ya', 'Young Adult'],
+  ['historical', 'Historical Fiction'],
+  ['literary', 'Literary Fiction'],
+  ['nonfiction', 'Nonfiction'],
+  ['other', 'Other (use Prompt)']
+];
+var CS_GENRE_MAX = 3;
+var CS_GENRE_EXCLUSIVE = 'other';
+var _csGenres = [];
+
+function csGenreLabel(slug) {
+  for (var i = 0; i < CS_GENRES.length; i++) { if (CS_GENRES[i][0] === slug) return CS_GENRES[i][1]; }
+  return slug;
+}
+
+// Read whatever the campaign row carries into a clean ordered list. Mirrors the
+// server resolver: NULL, '', '[]', junk and unknown slugs all fall back to Fantasy,
+// so a campaign can never open this modal with no genre at all.
+function csGenresFrom(val) {
+  var list = [];
+  if (Array.isArray(val)) list = val;
+  else if (typeof val === 'string' && val.trim()) {
+    try { var p = JSON.parse(val); if (Array.isArray(p)) list = p; } catch (e) { list = []; }
+  }
+  var out = [], seen = {}, known = {};
+  CS_GENRES.forEach(function (g) { known[g[0]] = 1; });
+  list.forEach(function (x) {
+    var k = String(x || '').trim().toLowerCase();
+    if (!known[k] || seen[k]) return;
+    seen[k] = 1; out.push(k);
+  });
+  if (out.indexOf(CS_GENRE_EXCLUSIVE) >= 0) return [CS_GENRE_EXCLUSIVE];
+  out = out.slice(0, CS_GENRE_MAX);
+  return out.length ? out : ['fantasy'];
+}
+
+function csGenreRender() {
+  var chips = document.getElementById('cs-genre-chips');
+  var sel = document.getElementById('cs-genre-add');
+  var note = document.getElementById('cs-genre-note');
+  if (chips) {
+    chips.innerHTML = _csGenres.map(function (slug, i) {
+      var primary = (i === 0 && _csGenres.length > 1);
+      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:12px;' +
+        'border:1px solid rgba(201,168,76,' + (primary ? '0.75' : '0.4') + ');' +
+        'background:rgba(201,168,76,' + (primary ? '0.18' : '0.08') + ');' +
+        'font-size:12px;color:rgba(230,210,160,0.95);">' +
+        escapeHtmlReview(csGenreLabel(slug)) +
+        (primary ? '<span style="font-size:10px;opacity:0.7;">main</span>' : '') +
+        '<button type="button" title="Remove" onclick="csGenreRemove(\'' + slug + '\')" ' +
+        'style="background:none;border:none;color:rgba(230,210,160,0.7);cursor:pointer;padding:0;font-size:13px;line-height:1;">&times;</button>' +
+      '</span>';
+    }).join('');
+  }
+  if (sel) {
+    var full = (_csGenres.length >= CS_GENRE_MAX) || (_csGenres.indexOf(CS_GENRE_EXCLUSIVE) >= 0);
+    var opts = ['<option value="">' + (full ? 'Remove one to add another' : '+ Add a genre') + '</option>'];
+    if (!full) {
+      CS_GENRES.forEach(function (g) {
+        if (_csGenres.indexOf(g[0]) >= 0) return;
+        opts.push('<option value="' + g[0] + '">' + escapeHtmlReview(g[1]) + '</option>');
+      });
+    }
+    sel.innerHTML = opts.join('');
+    sel.value = '';
+    sel.disabled = !!full;
+  }
+  if (note) {
+    // Say WHY the control is closed rather than letting a click do nothing, and
+    // warn when Other is set with no prompt to defer to -- that combination
+    // steers nothing at all, which is not obvious from the screen.
+    var msg = '';
+    if (_csGenres.indexOf(CS_GENRE_EXCLUSIVE) >= 0) {
+      var cp = document.getElementById('cs-cprompt-input');
+      msg = (cp && cp.value.trim())
+        ? 'Other is exclusive -- your General Campaign Prompt below does the steering.'
+        : 'With Other selected, nothing steers the genre unless you write a General Campaign Prompt below.';
+    } else if (_csGenres.length >= CS_GENRE_MAX) {
+      msg = 'Three is the maximum. More than three blend into no direction at all.';
+    }
+    note.textContent = msg;
+  }
+}
+
+function csGenreAdd(sel) {
+  var slug = sel && sel.value;
+  if (!slug) return;
+  if (slug === CS_GENRE_EXCLUSIVE) _csGenres = [CS_GENRE_EXCLUSIVE];
+  else {
+    _csGenres = _csGenres.filter(function (g) { return g !== CS_GENRE_EXCLUSIVE; });
+    if (_csGenres.indexOf(slug) < 0 && _csGenres.length < CS_GENRE_MAX) _csGenres.push(slug);
+  }
+  csGenreRender();
+}
+
+function csGenreRemove(slug) {
+  _csGenres = _csGenres.filter(function (g) { return g !== slug; });
+  csGenreRender();
+}
+
+function cpromptCount(el) {
+  var c = document.getElementById('cs-cprompt-count');
+  if (c) c.textContent = (el ? el.value.length : 0) + ' / 500';
+  csGenreRender();   // the Other-with-no-prompt note depends on this field
+}
+
 function openCampaignSettings(id, ev) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
   _csCampaignId = id;
@@ -13528,6 +13647,10 @@ function openCampaignSettings(id, ev) {
   }
   var loreEl = document.getElementById('cs-lore-input');
   if (loreEl) { loreEl.value = (c && c.lore) ? c.lore : ''; loreCount(loreEl, 'cs-lore-count'); }
+  var cpEl = document.getElementById('cs-cprompt-input');
+  if (cpEl) { cpEl.value = (c && c.campaign_prompt) ? c.campaign_prompt : ''; }
+  _csGenres = csGenresFrom(c && c.genres);
+  if (cpEl) cpromptCount(cpEl); else csGenreRender();
   var err = document.getElementById('campaign-settings-error');
   if (err) err.classList.add('hidden');
   var modal = document.getElementById('campaign-settings-modal');
@@ -13549,13 +13672,16 @@ function saveCampaignSettings() {
   var allowAssets = !!(cba && cba.checked);
   var _loreEl = document.getElementById('cs-lore-input');
   var _loreVal = _loreEl ? _loreEl.value.slice(0, 6000) : undefined;
+  var _cpEl = document.getElementById('cs-cprompt-input');
+  var _cpVal = _cpEl ? _cpEl.value.slice(0, 500) : undefined;
+  var _genreVal = csGenresFrom(_csGenres);
   var btn = document.getElementById('cs-save-btn');
   var err = document.getElementById('campaign-settings-error');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   fetch('/api/campaigns/' + _csCampaignId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal })
+    body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal, genres: _genreVal, campaign_prompt: _cpVal })
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -13565,8 +13691,15 @@ function saveCampaignSettings() {
         return;
       }
       var saveId = _csCampaignId;
-      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; } });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; }
+      // v3.0.485 -- mirror genre and the campaign prompt into local state too. The
+      // modal reads from state.campaigns, so omitting these would show stale values
+      // on the next open with no reload -- the same shape of fault as TD-286.
+      // Store the SERVER's echo where we have it: it has already applied the cap and
+      // the exclusive rule, so screen and database cannot disagree.
+      var _gSaved = (data && data.genres !== undefined) ? data.genres : JSON.stringify(_genreVal);
+      var _cpSaved = (data && data.campaign_prompt !== undefined) ? data.campaign_prompt : _cpVal;
+      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; } });
+      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; }
       closeCampaignSettings();
     })
     .catch(function (e) {

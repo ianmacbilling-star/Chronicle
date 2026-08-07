@@ -2210,10 +2210,23 @@
       </div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Genre</div>
+      <div class="settings-section-desc" style="margin:0 0 8px;">Steers how the story is written and which moments become pictures, and files your book in the Library. Choose up to 3 &mdash; the first one is the main one.</div>
+      <div id="cs-genre-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+      <select id="cs-genre-add" class="camp-edit-textarea" style="min-height:0;height:30px;max-width:260px;margin-top:0;" onchange="csGenreAdd(this)"></select>
+      <div class="settings-section-desc" id="cs-genre-note" style="margin:6px 0 0;"></div>
+    </div>
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Lore / Background</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Describe the world your campaign takes place in — the backstory, key locations, factions, history, and tone. Every session draws on this when its story and image prompts are generated, keeping the whole campaign consistent and connected. Story Master only.</div>
       <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your campaign takes place in..." oninput="loreCount(this, 'cs-lore-count')"></textarea>
       <div class="camp-lore-count" id="cs-lore-count"></div>
+    </div>
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">General Campaign Prompt</div>
+      <div class="settings-section-desc" style="margin:0 0 8px;">Applies to every session in this campaign &mdash; both the writing and the pictures. For example: &quot;Tell the story from Piper's point of view.&quot; or &quot;Put a bird somewhere in every image.&quot;</div>
+      <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best." oninput="cpromptCount(this)"></textarea>
+      <div class="camp-lore-count" id="cs-cprompt-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(217,83,79,0.35);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:#e57373;margin-bottom:8px;">Delete campaign</div>
