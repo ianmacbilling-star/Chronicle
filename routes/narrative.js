@@ -1,4 +1,5 @@
 const express = require('express');
+const genresvc = require('../services/genres');   // v3.0.486 -- TD-217/TD-189 steering
 const router = express.Router({ mergeParams: true });
 const { getDb, getDmForkId, getOrCreateDmFork, getViewableForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
@@ -233,6 +234,10 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
       '  BRIDGE block ("after"): ONLY after this panel\'s depicted action has been told in the MOMENT block above, carry the story forward to ' + (isLast ? 'the end of the session' : 'just before ' + nextLabel) + '. Cover only travel, deliberation, and side events between this panel and the next. Do NOT narrate this panel\'s own depicted action here (that belongs in the MOMENT block above), and do NOT jump ahead into the next panel\'s depicted action (its own MOMENT block covers that).' + aDirLine + aOutlineLine;
   }).join('\n\n');
 
+  // Resolved through services/genres.js and nowhere else -- NULL, [] and junk all
+  // read as Fantasy there, so there is no second place for that rule to live.
+  const _genreProse = genresvc.genreSteering(campaign && campaign.genres, 'prose');
+  const _campPrompt = genresvc.campaignPrompt(campaign && campaign.campaign_prompt);
   const prompt =
     'You are a skilled fantasy author writing the narrative for a graphic novel based on a real TTRPG session.\n\n' +
     'Campaign: ' + campaign.name + '\n' +
@@ -285,8 +290,18 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     ) +
     '- Reference characters by name when relevant\n\n' +
     'COPYRIGHT \u2014 keep the character and place names from the transcript EXACTLY as written, but treat each as the user\'s own original creation: do NOT reproduce any verbatim copyrighted text, and do NOT borrow the backstory, lore, setting, or signature details of any same-named character or world from another franchise, and never invent a new name lifted from a real franchise (do not borrow a same-named character\'s known allies, sidekicks, or places). Tell only the user\'s own story, in your own original words.\n\n' +
+    // v3.0.486 -- CAMPAIGN-LEVEL STEERING, and the ORDER here is the feature.
+    // GENRE sits immediately BEFORE the voice so the two are read adjacently --
+    // that adjacency is what makes "genre owns subject, voice owns style" legible
+    // instead of contradictory (Ian, 2026-08-06). The GENERAL CAMPAIGN PROMPT sits
+    // immediately AFTER both, because it is the user's own explicit instruction and
+    // should be able to bend the presets. All three stay after COPYRIGHT and before
+    // the JSON contract; nothing may come between that contract and the end.
+    // Spec: GENRE_AND_CAMPAIGN_PROMPT_SPEC.md section 5.1.
+    (_genreProse ? (_genreProse + '\n\n') : '') +
     'NARRATIVE VOICE — write the prose in THIS style. This governs tone, tense, and person; the chronological and structural rules still apply regardless of voice:\n' +
     styleBundle.voice + '\n\n' +
+    (_campPrompt ? ('GENERAL CAMPAIGN PROMPT — the author of this campaign asked for this, and it applies to every session. Follow it unless it conflicts with the copyright rule above, which always wins:\n' + _campPrompt + '\n\n') : '') +
     'CRITICAL - continuity and chronology:\n' +
     '- The MOMENT block of each panel narrates what that panel\'s image depicts; describing the picture in prose is REQUIRED here, not forbidden\n' +
     '- Every block picks up exactly where the previous block left off - no gaps, and do not restate what an earlier block already covered\n' +

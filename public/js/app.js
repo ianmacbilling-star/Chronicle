@@ -13525,6 +13525,7 @@ var CS_GENRES = [
   ['horror', 'Horror'],
   ['biography', 'Biography'],
   ['mystery', 'Mystery / Crime'],
+  ['childrens', "Children's"],
   ['ya', 'Young Adult'],
   ['historical', 'Historical Fiction'],
   ['literary', 'Literary Fiction'],
@@ -13567,15 +13568,19 @@ function csGenreRender() {
   var note = document.getElementById('cs-genre-note');
   if (chips) {
     chips.innerHTML = _csGenres.map(function (slug, i) {
+      // v3.0.486 -- SOLID DARK FILLS. The settings modal surface is --surface
+      // (#ffffff), so the original cream-on-faint-gold chips were unreadable there.
+      // A dark fill with cream text reads on white AND on the dark panes, so this
+      // cannot break again if the modal is ever restyled.
       var primary = (i === 0 && _csGenres.length > 1);
-      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:12px;' +
-        'border:1px solid rgba(201,168,76,' + (primary ? '0.75' : '0.4') + ');' +
-        'background:rgba(201,168,76,' + (primary ? '0.18' : '0.08') + ');' +
-        'font-size:12px;color:rgba(230,210,160,0.95);">' +
+      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:12px;' +
+        'border:1px solid ' + (primary ? '#4a3208' : '#6b4a12') + ';' +
+        'background:' + (primary ? '#6b4a12' : '#8a6a2a') + ';' +
+        'font-size:12px;font-weight:600;color:#f7ecd2;">' +
         escapeHtmlReview(csGenreLabel(slug)) +
-        (primary ? '<span style="font-size:10px;opacity:0.7;">main</span>' : '') +
+        (primary ? '<span style="font-size:10px;font-weight:400;opacity:0.8;">main</span>' : '') +
         '<button type="button" title="Remove" onclick="csGenreRemove(\'' + slug + '\')" ' +
-        'style="background:none;border:none;color:rgba(230,210,160,0.7);cursor:pointer;padding:0;font-size:13px;line-height:1;">&times;</button>' +
+        'style="background:none;border:none;color:rgba(247,236,210,0.8);cursor:pointer;padding:0;font-size:13px;line-height:1;">&times;</button>' +
       '</span>';
     }).join('');
   }
