@@ -4732,6 +4732,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // differently here (own book only) and re-pointing it at _bv.asUser would change
   // WHICH book publishes -- a bigger decision than fixing a crash. See TD-290.
   const _bv = await resolveBookVersion(db, campaign.id, req);
+  const asVersion = _bv ? _bv.versionId : null;   // used by bookForkForSession below; also never declared here
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC').all(campaign.id);
   const characters = await db.prepare(
