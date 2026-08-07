@@ -735,6 +735,29 @@ function parseCustomOpts(str) {
   });
   // AUTHORITATIVE GATE: a withheld layout never reaches the packer, however the request was formed.
   if (o.arrange && !layoutIsEnabled(o.arrange)) o.arrange = CO_LAYOUT_FALLBACK;
+  // v3.0.497 -- PAPER COLOUR IS A PHYSICAL STOCK, NOT A RENDER. ALWAYS WHITE.
+  // Ian, 2026-08-07, having found a cream INTERIOR in a print proof: "the interior is
+  // cream... and it should be white. Do away with the paper color on the layout tab... it
+  // doesn't work anyway."
+  //
+  // What went wrong: print-interior sets co.paper='white' precisely because "the Lulu
+  // interior PDF is ALWAYS white; the physical cream paper stock supplies the warmth."
+  // But since v3.0.424 that route prefers SUBTRACTION -- it strips the cover pages off the
+  // SAVED optimized PDF rather than re-rendering -- and save-optimized renders with the
+  // user's own co, which could say cream. So the forced white sat above a branch that never
+  // consulted it, and a cream book went to Lulu with cream painted on every page: ink laid
+  // down on paper that is already that colour, on a product where TD-191 already measures
+  // ink coverage at 296 percent TAC.
+  //
+  // Removing the two pickers is not enough on its own. Existing campaigns have `paper:cream`
+  // baked into saved `co` STRINGS, and customOpts keeps serialising it until the user happens
+  // to touch a layout control. This is the choke point every route funnels through -- the same
+  // one the withheld-layout gate and decorStrip use -- so nothing, including a hand-written
+  // URL or a stored preference, can bring cream back.
+  //
+  // NOTE the legacy non-custom novel passes co = null and still renders 'parchment' further
+  // down in buildNovelHTML. That path never reaches here and is deliberately untouched.
+  o.paper = 'white';
   decorStrip(o);   // DECOR_OFF=1 -> chrome removed everywhere, including hand-written URLs
   return o;
 }
@@ -4257,7 +4280,21 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     // null and we re-render below, exactly as v3.0.423 did.
     try {
       var _loE = await lastOptimizedEntry(req, req.params.campaignId, co.arrange);
-      var _strip = await stripCoversFromSaved(_loE);
+      // v3.0.497 -- A BOOK SAVED BEFORE THIS BUILD MAY BE CREAM. DO NOT STRIP IT.
+      // Forcing paper white in parseCustomOpts fixes every FUTURE render, but the saved
+      // optimized PDFs already in R2 were rendered with whatever the user had picked, and
+      // the strip path ships those bytes verbatim. So a book optimized before today would
+      // still print cream, and the customer would have no way to tell -- the picker that
+      // caused it no longer exists.
+      // save-optimized already records the co the file was rendered under, so this needs no
+      // new data: if it says cream, skip the subtraction and fall through to the re-render
+      // below, which passes paper:'white' explicitly. Costs one render on the first order
+      // from an old book, and only on those.
+      var _savedCream = /(^|,)paper:(cream|linen|parchment)(,|$)/.test(String((_loE && _loE.co) || ''));
+      if (_savedCream) {
+        try { console.log('[print-interior] the saved layout was rendered on tinted paper (' + (_loE.co || '') + ') -- re-rendering white for print rather than stripping it.'); } catch (e) {}
+      }
+      var _strip = _savedCream ? null : await stripCoversFromSaved(_loE);
       if (_strip && _strip.buffer) {
         _apprAt = (_loE && _loE.at) || null;
         _stripped = _strip;

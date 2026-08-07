@@ -287,12 +287,6 @@
                     <option value="none">None (no caption)</option>
                   </select>
                 </label>
-                <label class="cl-field" title="The base paper color"><span>Paper</span>
-                  <select id="pcl-paper">
-                    <option value="white">White</option>
-                    <option value="cream">Cream</option>
-                  </select>
-                </label>
                 <label class="cl-field" title="Plain paragraphs, or text inside a tinted box"><span>Narrative text</span>
                   <select id="pcl-narr">
                     <option value="plain">Plain paragraphs</option>
@@ -463,7 +457,11 @@
                     <div class="ord-f1">
                       <label class="ord-lbl">Paper</label>
                       <select id="print-paper" onchange="quotePrintOrder()" class="ord-in"></select>
-                      <div class="ord-hint">Cream is only recommended for black &amp; white books.</div>
+                      <!-- v3.0.497 -- SAY WHY THE PROOF LOOKS WHITE. The interior PDF is always
+                           rendered white on purpose; the warmth is the physical stock. Without this
+                           line a customer proofing a cream order sees white pages and reasonably
+                           reports it as a bug -- which is exactly how this was found. -->
+                      <div class="ord-hint">Your pages are printed white &mdash; the cream comes from the paper stock itself, not from ink. Only recommended for black &amp; white books.</div>
                     </div>
                     <div class="ord-f2">
                       <label class="ord-lbl">Cover finish</label>
@@ -2280,12 +2278,6 @@
           <option value="engraved">Engraved small-caps (centered under image)</option>
           <option value="gradient">Gradient over image (banner at image bottom)</option>
           <option value="none">None (no caption)</option>
-        </select>
-      </label>
-      <label class="cl-field" title="The base paper color"><span>Paper</span>
-        <select id="cl-paper">
-          <option value="white">White</option>
-          <option value="cream">Cream</option>
         </select>
       </label>
       <label class="cl-field" title="Plain paragraphs, or text inside a tinted box"><span>Narrative text</span>

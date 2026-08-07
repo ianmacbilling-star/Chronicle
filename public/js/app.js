@@ -13117,10 +13117,16 @@ var CL_CONDITION_VALUES = { smoke:1, dirt:1, wrinkle:1, blood:1 };
 function clMerge(saved){
   var r=clClone(CUSTOM_LAYOUT_DEFAULTS);
   if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } }
-  // Legacy migration: old single 'paper' control could hold a condition (smoke/dirt/...).
-  if (CL_CONDITION_VALUES[r.paper]) { r.paper = 'white'; }
-  if (r.paper === 'parchment' || r.paper === 'linen') { r.paper = 'cream'; }
-  if (r.paper === 'grey' || r.paper === 'lightgrey') { r.paper = 'white'; }
+  // v3.0.497 -- PAPER IS ALWAYS WHITE NOW, whatever is stored.
+  // The two layout pickers are gone (Ian: "Do away with the paper color on the layout
+  // tab... it doesn't work anyway"), but removing the controls does not remove the value:
+  // saved layout prefs still hold paper:'cream', and customOpts keeps serialising it into
+  // the co string until the user happens to touch some other control. The old migration
+  // below actively CONVERTED legacy parchment/linen INTO cream, so it was a source rather
+  // than a cleanup. One line replaces all three. The server forces white again in
+  // parseCustomOpts; this simply stops the client sending it in the first place.
+  // Paper colour now means one thing only: the physical stock, chosen on the order page.
+  r.paper = 'white';
   return r;
 }
 // Normalize a stored layout blob into the UNIFIED shape { opts:<layout>, active:<bool> }.
@@ -17650,7 +17656,9 @@ function finalizeUpdateHeader() {
   parts.push('Session dividers: ' + (o.markers ? ('On' + (o.markerbreak ? ' (new page per session)' : '')) : 'Off'));
   parts.push('Captions: ' + optLabel('cl-caption', o.caption));
   parts.push('Borders: ' + optLabel('cl-border', o.border));
-  parts.push('Paper: ' + optLabel('cl-paper', o.paper));
+  // v3.0.497 -- Paper removed from this list. optLabel reads the option text out of the
+  // #cl-paper <select>, which no longer exists, so this printed a blank value; and paper is
+  // no longer a layout attribute at all -- it is the physical stock picked on the order page.
   parts.push('Body font: ' + optLabel('cl-font', o.font));
   parts.push('Drop cap: ' + (o.dropcap ? 'On' : 'Off'));
   parts.push('Narrative: ' + optLabel('cl-narr', o.narr));
