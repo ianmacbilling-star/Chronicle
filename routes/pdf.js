@@ -5031,8 +5031,16 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // ONE line, always, whichever branch ran. If it shows `copy=` this took the v3.0.492
   // fast path; if it shows `renderFlattenUpload=` it did NOT, and that is the first thing
   // to look at before anything else is blamed for the wait.
+  // v3.0.495 -- HAND BACK THE STORY, NOT JUST ITS PDF.
+  // `url` is the raw PDF; the reader wants the Library PAGE (/library/story/:id/:slug),
+  // which is where the cover, blurb, genre pills and the reader itself live. Both values
+  // already existed inside this route and simply were not returned, so the client had no
+  // way to link to what it had just created.
   try { console.log('[publish-story] campaign ' + campaign.id + ' path=' + _pubSrc + ' ' + _ptPhase.join(' ') + ' TOTAL=' + (Date.now() - _pt0) + 'ms'); } catch (e) {}
-  return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null });
+  var _outId = (typeof _newStoryId !== 'undefined') ? _newStoryId : null;
+  return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null,
+    storyId: _outId, slug: slug || null,
+    storyUrl: _outId ? ('/library/story/' + _outId + (slug ? ('/' + slug) : '')) : null });
 });
 
 // Unpublish the caller's OWN story for a campaign (admin moderation is separate).

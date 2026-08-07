@@ -7174,10 +7174,18 @@ async function publishStory() {
         // listing title is just a column. They are allowed to differ -- Ian: "If they change the
         // title after the book has been created then that is on them." -- but the reader is told
         // once, here, rather than finding out from a cover that disagrees with the listing.
+        // NOTE the layout-settings mismatch is deliberately NOT reported here (v3.0.494): the
+        // only ways to reach Publish run through Optimize or Load Last Optimized File, both of
+        // which already raise the amber warning. Ian: "They have already seen all that."
         var _msg = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
         if (d.titleWarning) _msg += ' ' + d.titleWarning;
         if (st) st.textContent = _msg;
-        setStoryPublishedUI(true, d.url);
+        // v3.0.495 -- the button stops being a Publish button. This is both the "do not let
+        // them hit it again" lock Ian asked for and the way to go and look at what they made.
+        // Falls back to the plain reset if the server did not name a story, so the button can
+        // never be left disabled with nothing to click.
+        if (d.storyUrl) novelPublishShowLibraryCta(d.storyUrl);
+        else setStoryPublishedUI(true, d.url);
         var _pt = document.getElementById('print-book-title'); if (_pt && _title) _pt.value = _title;
       } else if (d && d.error === 'optimize_required') {
         if (btn) btn.textContent = 'Publish to Library';
@@ -7223,8 +7231,51 @@ function setStoryPublishedUI(published, url) {
   if (!btn) return;
   // Publishing/unpublishing is managed on the Account page, not here. This button
   // always (re)publishes the current content; it never flips to an unpublish toggle.
+  // v3.0.495 -- AND IT IS ALSO THE RESET. After a successful publish the button becomes
+  // "See it in the Library" (see novelPublishShowLibraryCta), which is what stops a second
+  // click re-publishing the same book by accident. That state has to be undone the next
+  // time the card is used, or the button is a dead link to an old story forever. This is
+  // the one place that restores it, and refreshStoryStatus calls it on every entry to the
+  // Order tab -- which is exactly "whenever they come back".
   btn.textContent = 'Publish to Library';
+  btn.disabled = false;
   btn.onclick = publishStory;
+  btn.removeAttribute('data-story-url');
+}
+
+// v3.0.495 -- the button becomes the way to GO AND LOOK AT IT.
+// Ian: "Maybe change the button to... See it in the Library and take them to the library".
+// It opens in a NEW TAB, matching the "Publishing: <the optimized book>" link directly
+// above it -- navigating the app away would lose their place on the Order tab, and they
+// have just finished a long piece of work here.
+function novelPublishShowLibraryCta(storyUrl) {
+  var btn = document.getElementById('novel-publish-btn');
+  if (!btn || !storyUrl) return;
+  btn.textContent = 'See it in the Library';
+  btn.disabled = false;
+  btn.setAttribute('data-story-url', storyUrl);
+  btn.onclick = function () {
+    var u = btn.getAttribute('data-story-url');
+    if (u) window.open(u, '_blank', 'noopener');
+  };
+}
+
+// v3.0.495 -- "on your Account page" is where you go to unpublish or edit a listing, so
+// make it somewhere you can actually GO. Mirrors goToPlans, including its settle-scroll:
+// the account view fills several panels in asynchronously, so one fixed delay can scroll
+// before the layout settles and land short.
+function goToMyStories() {
+  if (typeof showView === 'function') showView('account');
+  var tries = 0;
+  function settleScrollToStories() {
+    var sec = document.getElementById('my-stories-section');
+    if (sec && sec.scrollIntoView) {
+      sec.scrollIntoView({ behavior: (tries === 0 ? 'smooth' : 'auto'), block: 'start' });
+    }
+    if (++tries < 5) setTimeout(settleScrollToStories, 220);
+  }
+  setTimeout(settleScrollToStories, 120);
+  return false;
 }
 
 function refreshStoryStatus() {
@@ -17543,7 +17594,7 @@ function finalizeRestoreSavedLayout(info) {
         if (j && j.restored) {
           optimizeLogLine('Saved layout loaded -- this is the book that will print and publish.', 'ok');
         } else if (j && j.reason === 'settings_changed') {
-          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved. Publishing will use the saved version shown above, not these settings. To order a print, or to apply the new settings, run Optimize again and Save.', 'stop');
+          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved. Publishing will use the saved version you just pulled up, not these settings. To order a print, or to apply the new settings, run Optimize again and Save.', 'stop');
         } else {
           optimizeLogLine('<strong>Only the saved PDF came back</strong> -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }
