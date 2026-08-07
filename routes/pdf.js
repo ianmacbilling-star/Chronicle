@@ -899,13 +899,47 @@ function paneSafeHtml(html) {
 function coMediaPadBottom(border) {
   if (border === 'gallery') return '0.14in';   // padding-bottom:0.14in
   if (border === 'frame' || border === 'keyline') return '2px';   // padding:2px 0
-  return '0';
+  // UNIT REQUIRED: the brass plate builds calc(<this> + 0.10in), and calc() rejects a bare 0
+  // added to a length -- the whole declaration would be dropped and the plate would sit at the
+  // very bottom edge of the box.
+  return '0px';
 }
 // The TOP edge matters too: the `plate` caption is anchored top:0, and `padding:2px 0` pads both
 // ends, so it hung 2px ABOVE the artwork on bronze and keyline. Gallery pads only the bottom.
 function coMediaPadTop(border) {
   if (border === 'frame' || border === 'keyline') return '2px';   // padding:2px 0
-  return '0';
+  return '0px';
+}
+// v3.0.503 -- BRASS PLATE caption. Ian, 2026-08-07: "Can you do a caption that looks like a brass
+// plate or badge that is on the image?"
+// A small engraved plaque affixed to the bottom of the picture, the way a plate sits on a framed
+// painting. It reuses the palette the bronze frame already established (#c9a84c gold over a dark
+// ground) so it reads as part of the same object rather than a new UI element.
+// COSTS NOTHING IN LAYOUT. It is an absolutely-positioned overlay, so it is `caption:over` in the
+// registry's terms -- zero reserved height. Both places that grant a caption reserved height
+// whitelist 'bar' and 'engraved' explicitly, so this is free by construction rather than by an
+// edit anyone has to remember (pdf.js _capBelowH and _twBelow).
+// SIZED TO THE TITLE, not the picture: inline-block, centred, capped at 78 percent of the width.
+// NO WRAP -- a plaque that runs to two lines stops looking like a plaque, and on a narrow tower
+// that is exactly what a long title would do. A title too long for the plate is ellipsised, which
+// is also why this style sidesteps the tower wrap problem entirely.
+// Lifted clear of the border padding by the same offset every other overlay caption uses, plus a
+// small inset so it sits ON the picture rather than flush to its edge.
+function brassPlateHtml(title, bottomOffset) {
+  var rivet = function (side) {
+    return '<i style="position:absolute;top:50%;' + side + ':5px;width:3px;height:3px;margin-top:-1.5px;' +
+      'border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff4d2,#8a6a2a 70%);' +
+      'box-shadow:0 0 0 0.5px rgba(60,42,10,0.8);"></i>';
+  };
+  return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
+    'transform:translateX(-50%);max-width:78%;padding:4px 20px 5px;border-radius:2px;' +
+    'background:linear-gradient(180deg,#e0c77c 0%,#c9a84c 34%,#a8862f 68%,#8a6a2a 100%);' +
+    'border:1px solid #5f4715;' +
+    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.75),inset 0 -1px 0 rgba(0,0,0,0.3);' +
+    'font-family:Cinzel,serif;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;' +
+    'text-transform:uppercase;color:#2a1c08;text-shadow:0 1px 0 rgba(255,248,220,0.45);' +
+    'line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+    rivet('left') + rivet('right') + title + '</div>';
 }
 // `border` is optional: the magazine/comic band renderers position their caption inside the IMAGE
 // box itself (cgBorder is a real CSS border with no padding), so they pass nothing and get 0.
@@ -915,6 +949,7 @@ function coCaptionOverlay(m, caption, border) {
   var _capT = coMediaPadTop(border);
   if (caption === 'plate')
     return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+  if (caption === 'brass') return brassPlateHtml(m.title, _capB);
   if (caption === 'gradient')
     return '<div style="position:absolute;left:0;right:0;bottom:' + _capB + ';padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   return '';
@@ -933,6 +968,7 @@ function coCaptionBelow(m, i, caption) {
 // they stay readable on a dark photo.
 function coCaptionCover(m, caption) {
   if (!m.title) return '';
+  if (caption === 'brass') return brassPlateHtml(m.title, '0px');   // the band's box IS the image box
   if (caption === 'plate')
     return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
   if (caption === 'gradient')
