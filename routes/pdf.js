@@ -1167,7 +1167,33 @@ function cgCapOutsideHtml(m, plan) {
     'font-size:' + plan.pt + 'pt;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a2a;line-height:1.2;' +
     'overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
 }
-function cgBoxInner(mediaHtml, m, opts) {
+// v3.0.515 -- THE CAPTION GOES OUTSIDE THE FRAME IN EVERY BAND, NOT JUST THE FLOAT.
+// Ian, seeing the converted float beside an unconverted feature: "but this looks better!"
+// v3.0.513 converted ONE builder deliberately, to prove the mechanism before doing thirteen.
+// It is proven: Magazine came back at 38 pages -- exactly the no-caption baseline -- and the three
+// reference clips went to ZERO, because the crop pays back more than the caption costs.
+//
+// THE TRICK IS TO MOVE THE BORDER IN, NOT THE CAPTION OUT. Moving the caption out means splitting
+// every band box into a float wrapper plus a picture box, and the eight boxes are eight different
+// shapes. Moving the BORDER in is the same edit everywhere: the outer box keeps its float, width
+// and height and gives up its border; the picture wrapper takes the border; the caption sits under
+// that wrapper, inside the outer box but OUTSIDE the frame. Identical result, one pattern.
+//
+// AND THE HEIGHT STILL DOES NOT MOVE. The wrapper is content-box, so max-height clamps its CONTENT
+// to (H - strip) and the border adds outside it:
+//     (H - strip) + 2*border + strip  =  H + 2*border  -- exactly what the bordered outer box was.
+// On a height-less box the percentage does not resolve, nothing clamps, and the box hugs the
+// picture and grows by the strip. Same as v3.0.514, same reason, no branch.
+//
+// COMIC IS DELIBERATELY NOT CONVERTED. Its panels are flush-packed with 5px borders touching each
+// other and that grid IS the look; a caption outside the panel border would break it. Ian,
+// 2026-08-07: "Do not worry about comic... That one is hidden and deprecated for now." Comic keeps
+// the inside strip, which is why cgBoxInner still supports BOTH -- hence outerBare.
+function cgBoxCss(m, opts) {
+  if (cgCapIsBelow(opts && opts.caption) && m && m.title) return 'overflow:hidden;';   // border moves to the picture wrapper
+  return cgBorder(opts);
+}
+function cgBoxInner(mediaHtml, m, opts, outerBare) {
   var cap = opts && opts.caption;
   if (!cgCapIsBelow(cap) || !m || !m.title)
     return mediaHtml + picOverlay(opts) + coCaptionCover(m, cap);   // byte-identical to before
@@ -1197,7 +1223,11 @@ function cgBoxInner(mediaHtml, m, opts) {
   //                           safe because Magazine MEASURES band heights.
   // Neither case can collapse, because the picture never leaves the flow.
   var h = CG_CAP_STRIP_IN.toFixed(2);
-  return '<div style="overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
+  // outerBare: the caller gave up its border (cgBoxCss) so the frame draws HERE, around the
+  // picture only, and the caption below it is outside the frame. Comic passes nothing and keeps
+  // its border on the panel, so the caption stays inside -- the grid is untouched.
+  var _bd = outerBare ? picBorderCss(opts) : '';   // picBorderCss, not cgBorder: the wrapper already carries overflow:hidden
+  return '<div style="' + _bd + 'overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
       mediaHtml + picOverlay(opts) +
     '</div>' +
     '<div style="height:' + h + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
@@ -2064,8 +2094,8 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
     // img keeps width:100 percent + height:auto, there is no overflow:hidden and no object-fit here,
     // so the box can only grow to the picture. This cannot crop a tower.
     ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH)
-    : ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-       'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts) + '</div>');
+    : ('<div style="' + fl + cgBoxCss(m, opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
+       'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>');
   var col = (wrapBelow && !besideHtml)
     ? cgAlignFirstPara(narrHtml || '')                                      // wraps beside the float, then continues below it
     : '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
@@ -2092,7 +2122,7 @@ function mzColTextH(html, colW) {
 }
 function cgBesidePanel(m, opts, narrHtml) {
   // A small panel rendered to STACK in the column beside a full-height tower (NOT floated).
-  var box = '<div style="' + cgBorder(opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:transparent;line-height:0;margin-bottom:0.06in;">' + cgBoxInner(cgImgMedia(m, opts), m, opts) + '</div>';
+  var box = '<div style="' + cgBoxCss(m, opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:transparent;line-height:0;margin-bottom:0.06in;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>';
   return '<div style="margin-bottom:0.12in;">' + box + gzNarrBox(narrHtml, opts) + '</div>';
 }
 
@@ -2119,9 +2149,9 @@ function cgFlowWide(m, opts, narrHtml, sideLeft, mul) {
     : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
   var _ww = (mul < 0.999) ? (mul * 100).toFixed(1) + '%' : '100%';
   var _wc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
-  var box = '<div style="' + cgBorder(opts) + 'width:' + _ww + ';' + _wc + 'position:relative;line-height:0;' +
+  var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + _ww + ';' + _wc + 'position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgBoxInner(media, m, opts) + '</div>';
+    cgBoxInner(media, m, opts, true) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -2131,8 +2161,8 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var availW = CG_W - CG_GAP;
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
-    return '<div style="' + cgBorder(opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts) + '</div>';
+    return '<div style="' + cgBoxCss(m, opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
+      'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
@@ -2194,9 +2224,9 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
       : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
     var _fw = (mul < 0.999) ? (mul * 100).toFixed(1) + '%' : '100%';
     var _fc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
-    var wbox = '<div style="' + cgBorder(opts) + 'width:' + _fw + ';' + _fc + 'position:relative;line-height:0;' +
+    var wbox = '<div style="' + cgBoxCss(m, opts) + 'width:' + _fw + ';' + _fc + 'position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-      cgBoxInner(media, m, opts) + '</div>';
+      cgBoxInner(media, m, opts, true) + '</div>';
     return wbox + gzNarrBox(narrHtml, opts);
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
@@ -2213,14 +2243,14 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
   if (opts && opts.mzFloatShrunk && W <= CG_W - 2.0) {
     var _fside = sideLeft ? 'left' : 'right';
     var _fmar = sideLeft ? '0 0.26in 0.06in 0' : '0 0 0.06in 0.26in';
-    var fbox = '<div style="' + cgBorder(opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
+    var fbox = '<div style="' + cgBoxCss(m, opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
       'in;position:relative;background:transparent;line-height:0;page-break-inside:avoid;break-inside:avoid;">' +
-      cgBoxInner(img, m, opts) + '</div>';
+      cgBoxInner(img, m, opts, true) + '</div>';
     return '<div style="display:flow-root;margin-bottom:0.10in;">' + fbox + gzNarrBox(cgAlignFirstPara(narrHtml), opts) + '</div>';
   }
-  var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
+  var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgBoxInner(img, m, opts) + '</div>';
+    cgBoxInner(img, m, opts, true) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -3220,7 +3250,7 @@ function cgImageBox(m, wIn, hIn, opts, fullWidth) {
     ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var wCss = fullWidth ? 'width:100%;' : ('width:' + wIn.toFixed(2) + 'in;');
-  return '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(media, m, opts) + '</div>';
+  return '<div style="' + cgBoxCss(m, opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(media, m, opts, true) + '</div>';
 }
 function _engineRow(cellsHtml) {
   return '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:flex-start;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + cellsHtml + '</div>';
