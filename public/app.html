@@ -2193,12 +2193,12 @@
     </div>
     <div id="campaign-settings-error" class="alert alert-error hidden"></div>
     <label class="cs-toggle">
-      <input type="checkbox" id="cs-allow-novel" />
+      <input type="checkbox" id="cs-allow-novel" onchange="csDirty(true)" />
       <span>Allow Members access to graphic novel</span>
     </label>
     <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can view and export this campaign's graphic novel. Off by default.</div>
     <label class="cs-toggle" style="margin-top:14px;">
-      <input type="checkbox" id="cs-allow-assets" />
+      <input type="checkbox" id="cs-allow-assets" onchange="csDirty(true)" />
       <span>Allow Members to add assets</span>
     </label>
     <div class="settings-section-desc" style="margin:6px 0 0 28px;">When on, members can add assets (locations, NPCs, items) to this campaign. Asset limits still apply. Off by default.</div>
@@ -2219,13 +2219,13 @@
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Lore / Background</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Describe the world your campaign takes place in — the backstory, key locations, factions, history, and tone. Every session draws on this when its story and image prompts are generated, keeping the whole campaign consistent and connected. Story Master only.</div>
-      <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your campaign takes place in..." oninput="loreCount(this, 'cs-lore-count')"></textarea>
+      <textarea id="cs-lore-input" class="camp-edit-textarea" style="max-width:none;min-height:130px;" maxlength="6000" placeholder="Describe the world your campaign takes place in..." oninput="loreCount(this, 'cs-lore-count');csDirty()" onblur="csFlush()"></textarea>
       <div class="camp-lore-count" id="cs-lore-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">General Campaign Prompt</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Applies to every session in this campaign &mdash; both the writing and the pictures. For example: &quot;Tell the story from Piper's point of view.&quot; or &quot;Put a bird somewhere in every image.&quot;</div>
-      <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best." oninput="cpromptCount(this)"></textarea>
+      <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best." oninput="cpromptCount(this);csDirty()" onblur="csFlush()"></textarea>
       <div class="camp-lore-count" id="cs-cprompt-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(217,83,79,0.35);padding-top:16px;">
@@ -2234,9 +2234,9 @@
       <button class="btn" id="cs-delete-btn" onclick="deleteCampaign()" style="border-color:rgba(217,83,79,0.6);color:#e57373;">Delete this campaign</button>
       <div id="cs-delete-msg" class="settings-section-desc" style="margin-top:8px;"></div>
     </div>
-    <div class="modal-footer" style="margin-top:20px;">
-      <button class="btn" onclick="closeCampaignSettings()">Cancel</button>
-      <button class="btn btn-primary" id="cs-save-btn" onclick="saveCampaignSettings()">Save</button>
+    <div class="modal-footer" style="margin-top:20px;justify-content:space-between;align-items:center;">
+      <span id="cs-save-state" class="settings-section-desc" style="margin:0;" aria-live="polite"></span>
+      <button class="btn btn-primary" onclick="closeCampaignSettings()">Close</button>
     </div>
   </div>
 </div>

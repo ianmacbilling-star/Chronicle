@@ -7147,7 +7147,10 @@ async function publishStory() {
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
-  if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
+  // v3.0.492 -- no longer 'this can take a moment'. The optimized book is copied, not re-rendered
+  // (TD-296), so the honest wording is short. The flow (admin Before) book still renders, but that
+  // path is not reachable from the user UI.
+  if (st) { st.style.display = 'block'; st.textContent = 'Publishing your book...'; }
   // v3.0.491 -- ROUTE THIS THROUGH novelAsUserQ() LIKE EVERY OTHER BOOK URL.
   // This call was the one book URL that did NOT, so the POST carried no as_user and
   // no as_version. The server then fell back to the canonical for EVERYTHING that
@@ -7167,7 +7170,13 @@ async function publishStory() {
     .then(function(d){
       if (btn) btn.disabled = false;
       if (d && d.success) {
-        if (st) st.textContent = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
+        // v3.0.492 -- TD-296. The printed title is baked into the approved PDF; the Library
+        // listing title is just a column. They are allowed to differ -- Ian: "If they change the
+        // title after the book has been created then that is on them." -- but the reader is told
+        // once, here, rather than finding out from a cover that disagrees with the listing.
+        var _msg = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
+        if (d.titleWarning) _msg += ' ' + d.titleWarning;
+        if (st) st.textContent = _msg;
         setStoryPublishedUI(true, d.url);
         var _pt = document.getElementById('print-book-title'); if (_pt && _title) _pt.value = _title;
       } else if (d && d.error === 'optimize_required') {
@@ -13636,11 +13645,13 @@ function csGenreAdd(sel) {
     if (_csGenres.indexOf(slug) < 0 && _csGenres.length < CS_GENRE_MAX) _csGenres.push(slug);
   }
   csGenreRender();
+  csDirty(true);   // v3.0.492 -- a chip is a click, not typing: write it at once
 }
 
 function csGenreRemove(slug) {
   _csGenres = _csGenres.filter(function (g) { return g !== slug; });
   csGenreRender();
+  csDirty(true);   // v3.0.492
 }
 
 function cpromptCount(el) {
@@ -13651,6 +13662,14 @@ function cpromptCount(el) {
 
 function openCampaignSettings(id, ev) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
+  // v3.0.492 -- DISARMED WHILE POPULATING. Every assignment below fires the same events a user
+  // edit does; with autosave armed, opening the modal would immediately write the values it had
+  // just read, and any field that failed to populate would be written back as empty. Nothing may
+  // save until the last field is in place. This is TD-284's fault class, guarded at the source.
+  _csReady = false;
+  if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; }
+  _csSaveAgain = false;
+  csSaveState('');
   _csCampaignId = id;
   var c = (state.campaigns || []).filter(function (x) { return x.id === id; })[0];
   var cb = document.getElementById('cs-allow-novel');
@@ -13674,16 +13693,66 @@ function openCampaignSettings(id, ev) {
   var modal = document.getElementById('campaign-settings-modal');
   if (modal) modal.classList.remove('hidden');
   renderCampaignSettingsThumb();
+  _csReady = true;   // every field is populated -- edits from here are the user's
 }
 
 function closeCampaignSettings() {
+  // v3.0.492 -- WRITE WHAT IS OWED BEFORE THE MODAL GOES. Typing and closing inside the debounce
+  // window would otherwise silently discard the last edit, which is a worse failure than the
+  // forgotten Save button this replaced. csFlush reads the fields synchronously, so it must run
+  // while they still hold this campaign's values and while _csReady is still true.
+  try { csFlush(); } catch (e) {}
+  _csReady = false;
+  if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; }
   var modal = document.getElementById('campaign-settings-modal');
   if (modal) modal.classList.add('hidden');
   _csCampaignId = null;
 }
 
-function saveCampaignSettings() {
-  if (!_csCampaignId) { closeCampaignSettings(); return; }
+// ===== v3.0.492 -- CAMPAIGN DETAILS SAVES ITSELF ==================================
+// Ian, 2026-08-07: "Make the Campaign Detail Modal Save Automatically... The save button is at
+// the bottom and I always forget it." Half this modal already behaved that way -- the campaign
+// image picker writes immediately -- so the Save button was only load-bearing for the other half.
+// It is gone; the footer now carries Close and a quiet state line.
+//
+// THE HAZARD THIS GUARDS AGAINST IS TD-284's. A debounced write that fires before the fields
+// have been populated saves EMPTY over stored lore. So nothing can write until _csReady, which
+// openCampaignSettings sets only after it has filled every field, and which closeCampaignSettings
+// clears before it tears the modal down.
+var _csSaveTimer = null;      // pending debounce, or null
+var _csSaving = false;        // a PUT is in flight
+var _csSaveAgain = false;     // an edit landed mid-flight -- save once more when it returns
+var _csReady = false;         // the fields hold this campaign's values and may be read
+var CS_AUTOSAVE_MS = 1200;    // long enough to not write on every keystroke, short enough to beat a close
+
+function csSaveState(msg, kind) {
+  var el = document.getElementById('cs-save-state');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = (kind === 'error') ? '#e57373' : '';
+}
+
+// now === true writes immediately (a toggle, or a flush); otherwise it debounces.
+function csDirty(now) {
+  if (!_csReady || !_csCampaignId) return;
+  if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; }
+  csSaveState('Saving...');
+  if (now) csCommitCampaignSettings();
+  else _csSaveTimer = setTimeout(function () { _csSaveTimer = null; csCommitCampaignSettings(); }, CS_AUTOSAVE_MS);
+}
+
+// Write a pending edit NOW rather than waiting out the debounce -- on blur, and on close.
+function csFlush() {
+  if (_csSaveTimer) csDirty(true);
+}
+
+function csCommitCampaignSettings() {
+  if (!_csReady || !_csCampaignId) return;
+  // One write at a time. A second edit while a PUT is in flight is remembered and replayed when
+  // it returns, rather than racing it -- two overlapping PUTs can land out of order and the loser
+  // is whichever the server finished last, not whichever the user typed last.
+  if (_csSaving) { _csSaveAgain = true; return; }
+  var saveId = _csCampaignId;
   var cb = document.getElementById('cs-allow-novel');
   var allow = !!(cb && cb.checked);
   var cba = document.getElementById('cs-allow-assets');
@@ -13693,22 +13762,23 @@ function saveCampaignSettings() {
   var _cpEl = document.getElementById('cs-cprompt-input');
   var _cpVal = _cpEl ? _cpEl.value.slice(0, 500) : undefined;
   var _genreVal = csGenresFrom(_csGenres);
-  var btn = document.getElementById('cs-save-btn');
   var err = document.getElementById('campaign-settings-error');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-  fetch('/api/campaigns/' + _csCampaignId, {
+  _csSaving = true;
+  fetch('/api/campaigns/' + saveId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal, genres: _genreVal, campaign_prompt: _cpVal })
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      _csSaving = false;
       if (!data || data.error) {
+        csSaveState('Not saved', 'error');
         if (err) { err.textContent = (data && data.error) || 'Could not save settings.'; err.classList.remove('hidden'); }
         return;
       }
-      var saveId = _csCampaignId;
+      if (err) err.classList.add('hidden');
+      csSaveState('Saved');
       // v3.0.485 -- mirror genre and the campaign prompt into local state too. The
       // modal reads from state.campaigns, so omitting these would show stale values
       // on the next open with no reload -- the same shape of fault as TD-286.
@@ -13718,13 +13788,22 @@ function saveCampaignSettings() {
       var _cpSaved = (data && data.campaign_prompt !== undefined) ? data.campaign_prompt : _cpVal;
       (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; } });
       if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; }
-      closeCampaignSettings();
+      // An edit that arrived while this PUT was in flight has not been written yet. Replay it,
+      // but only while the modal is still the same campaign -- if it has been closed, the close
+      // already flushed and there is nothing owed.
+      if (_csSaveAgain) { _csSaveAgain = false; if (_csReady && _csCampaignId === saveId) csCommitCampaignSettings(); }
     })
     .catch(function (e) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      _csSaving = false;
+      _csSaveAgain = false;
+      csSaveState('Not saved', 'error');
       if (err) { err.textContent = 'Could not save settings: ' + e.message; err.classList.remove('hidden'); }
     });
 }
+
+// The Save button is gone, but keep the name working: it was the modal's only entry point for
+// two versions and anything that still calls it should write, not throw.
+function saveCampaignSettings() { csDirty(true); }
 
 // ----- Admin: run the weekly metrics snapshot on demand -----
 function runSnapshotNow() {
@@ -15604,6 +15683,11 @@ async function deleteCampaign() {
 function _doDeleteCampaign(id) {
   var msg = document.getElementById('cs-delete-msg');
   var btn = document.getElementById('cs-delete-btn');
+  // v3.0.492 -- DROP ANY PENDING AUTOSAVE FIRST. closeCampaignSettings flushes on the way out,
+  // and on a successful delete that flush would PUT settings to a campaign that no longer exists
+  // -- harmless, but it paints a red 'Not saved' over a modal that is closing because the delete
+  // WORKED. Nothing is owed to a row that is about to go.
+  try { if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; } _csSaveAgain = false; csSaveState(''); } catch (e) {}
   if (btn) btn.disabled = true;
   fetch('/api/campaigns/' + id, { method: 'DELETE' })
     .then(function(r){ return r.json().then(function(d){ return { status: r.status, d: d }; }); })

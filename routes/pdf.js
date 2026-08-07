@@ -9,7 +9,7 @@ const { TEXT_MODEL } = require('../config/models');
 const genresvc = require('../services/genres');   // v3.0.487 -- Library genre snapshot
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const path = require('path');
-const { uploadFile, deleteFile, fetchFile } = require('../storage/storage');
+const { uploadFile, deleteFile, fetchFile, copyObject } = require('../storage/storage');
 const { renderHtmlToPdf } = require('../services/printing/renderPdf');
 const { flattenPdf } = require('../services/printing/flattenPdf');
 const { measureDocument } = require('../services/printing/measureLayout');
@@ -4804,76 +4804,129 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var pageOpts = { publicMode: true, bookTitle: bookTitle };
 
   // Which render the reader chose on the Optimize tab: 'composed' = the optimized (After) book,
-  // anything else = the original flow (Before) book. The optimized option is only offered once
-  // Optimize has run, so its composed body is already cached -- we reuse it verbatim (byte-identical
-  // to the After pane, no re-pack, no extra token) rather than recomputing it here.
+  // anything else = the original flow (Before) book. 'composed' is what every user publishes --
+  // it is armed automatically when the Optimize loop completes and when a saved book is loaded --
+  // and since v3.0.492 it publishes the SAVED FILE ITSELF rather than a fresh render of the same
+  // layout. 'flow' is the admin-only Before book and still takes the full render below.
   var _pubSrc = String((req.body && req.body.source) || req.query.source || 'flow');
   var html = null;
+  let pdfUrl = null;
+  var _titleWarning = null;
   if (_pubSrc === 'composed') {
-    // v3.0.341 -- same rule for the optimized book: the library gets the covers. See above.
+    // ===== v3.0.492 -- TD-296. PUBLISH THE BOOK THAT ALREADY EXISTS. =========================
+    // save-optimized has ALREADY rendered this exact layout with publicMode='1', flattened it,
+    // uploaded it to R2 and recorded {pdfUrl, pages, bookTitle, co} under lastOptimized[arrange].
+    // This route used to re-assemble the HTML, re-render it in Chromium, re-count, re-flatten
+    // and re-upload -- five expensive steps to manufacture a file that was already on disk.
+    // The precedent was in save-optimized itself: v3.0.424 records coverPages so the POD interior
+    // can be produced by REMOVING them from this exact PDF rather than rendering the book twice.
+    // Print already reused the approved render; publish was the one route that did not.
+    //
+    // Now it COPIES the object and inserts the row. No Chromium, no flatten, no re-upload -- and
+    // it publishes THE EXACT BYTES THE USER APPROVED rather than a second render that merely
+    // ought to match, which is a correctness gain and not only a speed one.
+    //
+    // COPY, never reference: save-optimized DELETES the previous pdfUrl when it saves a new one
+    // (see the cleanup below its upload), so a published story pointing at the optimize artifact
+    // would have its file deleted out from under it the next time the author re-optimized. A
+    // published book is immutable and owned by the Library -- the same principle as the genre
+    // snapshot (v3.0.487) and TD-219.
+    //
+    // Publishing wants the file UNMODIFIED: v3.0.341 established that a published story is the
+    // whole book, covers included, and the saved optimize PDF already carries them. That makes
+    // this simpler than the POD interior path, which has to strip them.
+    //
+    // The 'flow' branch below keeps the original full render, untouched. That is the admin-only
+    // Before book; nobody is waiting on it, and leaving it alone means the worst case here is
+    // 'the fast path did not engage', never 'publishing broke'.
     req.query.publicMode = '1';
     if (bookTitle) req.query.bookTitle = bookTitle;
-    // v3.0.422 -- THE PUBLISHED BOOK IS THE SAVED BOOK. Same change as print-interior, same reason.
-    // This read the in-memory composed cache, and it wrote bookTitle into req.query on the line ABOVE
-    // the lookup -- while composedCacheKey includes bookTitle and every writer of that cache sends
-    // none. That is byte-for-byte the fault save-optimized fixed for itself and left live here, so
-    // publishing an optimized book with a title 409d Run Optimize first on a book already optimized.
     var _pubArr = (co && co.arrange) ? co.arrange : 'magazine';
-    var _pubSt = await approvedStateFor(req, req.params.campaignId, _pubArr);
-    if (!_pubSt || !_pubSt.body) {
+    // The raw entry, not approvedStateFor: that loads the approved LAYOUT BODY out of R2 to
+    // rebuild HTML, and nothing here rebuilds anything any more. The entry carries the same
+    // `co` (both are written by save-optimized from the same req.query.co in the same call),
+    // so the staleness check is unchanged in meaning while costing one fetch less.
+    var _loE = await lastOptimizedEntry(req, req.params.campaignId, _pubArr);
+    if (!_loE || !_loE.pdfUrl) {
       return res.status(409).json({ error: 'optimize_required', message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then publish.' });
     }
-    if ((_pubSt.co || '') !== (req.query.co || '')) {
-      try { console.warn('[publish-story] settings differ from the approved layout. approved co: ' + (_pubSt.co || '(none)') + ' | requested co: ' + (req.query.co || '(none)')); } catch (e) {}
+    if ((_loE.co || '') !== (req.query.co || '')) {
+      try { console.warn('[publish-story] settings differ from the approved layout. approved co: ' + (_loE.co || '(none)') + ' | requested co: ' + (req.query.co || '(none)')); } catch (e) {}
       return res.status(409).json({ error: 'layout_changed', message: 'The book settings have changed since this layout was saved. Open the Optimize tab, run Optimize again and Save, then publish.' });
     }
-    try {
-      var _pubBuilt = await assembleNovelHtml(req, req.params.campaignId, null, {
-        arrange: _pubSt.arrange || _pubArr, packComposedBody: _pubSt.body, campaignName: _pubSt.campaignName || ''
-      });
-      html = _pubBuilt && _pubBuilt.html;
-    } catch (e) {
-      console.error('[publish-story] rebuild of the approved layout failed:', (e && e.message) || e);
-      html = null;
+    // v3.0.492 -- the protective save taken the instant the Optimize loop ends skips the flatten
+    // (it is overwritten seconds later by the real one). If the process died in between, the
+    // surviving entry is the unflattened one. Still correct, just larger, so this reports rather
+    // than refuses -- refusing would block a publish over file size alone.
+    if (_loE.flattened === false) {
+      try { console.warn('[publish-story] the saved layout for campaign ' + campaign.id + ' was a quick save and is not flattened. Publishing it as-is.'); } catch (e) {}
     }
-    if (!html) return res.status(500).json({ error: 'Could not build the optimized layout. Re-run Optimize and try again.' });
+    // Page limit BEFORE the copy, so a refusal cannot leave an orphan object in the bucket.
+    // The count is the one save-optimized recorded off the rendered file -- the same number a
+    // re-count would produce, without the file.
+    try {
+      var _maxPPc = await getAppSettingInt('max_pages_per_print', 250);
+      var _ppC = Number(_loE.pages || 0);
+      if (_ppC > _maxPPc) {
+        return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppC, maxPages: _maxPPc, message: 'This book is ' + _ppC + ' pages, which is over the current ' + _maxPPc + '-page limit for a single book. To make it fit, open your Sessions list and uncheck some sessions using the "Include in Print" checkbox, then try again, or split it into multiple smaller books.' });
+      }
+    } catch (e) { console.error('[page-limit] check failed:', e && e.message ? e.message : e); }
+    try {
+      var _cpName = 'story-' + campaign.id + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
+      pdfUrl = await copyObject(_loE.pdfUrl, _cpName, 'story');
+    } catch (e) {
+      console.error('[publish-story] copy of the approved PDF failed:', e && e.message ? e.message : e);
+      return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
+    }
+    // v3.0.492 -- TWO TITLES, AND THEY ARE ALLOWED TO DIFFER. Ian, 2026-08-07: "If they change
+    // the title after the book has been created then that is on them. Not our problem... give a
+    // warning. but Allow it."
+    // The PRINTED title is baked into the approved PDF (cover and title page) and can only change
+    // by re-approving the layout. public_stories.title is a database column and is free to change
+    // at any time. So a mismatch is reported once, in the response, and never blocks. No new data
+    // is needed -- save-optimized already records the title it rendered under.
+    var _printedT = String(_loE.bookTitle || '').trim();
+    if (!_printedT) _printedT = String(campaign._memberBookTitle || campaign.name || '').trim();
+    var _listingT = String((bookTitle || campaign._memberBookTitle || campaign.name) || '').trim();
+    if (_printedT && _listingT && _printedT !== _listingT) {
+      _titleWarning = 'The cover of this book reads "' + _printedT + '" but the Library listing says "' + _listingT + '". Run Optimize again if you want them to match.';
+      try { console.warn('[publish-story] title mismatch. printed: ' + _printedT + ' | listing: ' + _listingT); } catch (e) {}
+    }
   } else {
     html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
-  }
-  var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-  if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+    var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
 
-  let pdfBuffer;
-  try {
-    pdfBuffer = await renderHtmlToPdf(html, {});
-  } catch (e) {
-    console.error('[publish-story] render failed:', e && e.message ? e.message : e);
-    return res.status(500).json({ error: 'Could not render your story PDF. Please try again.' });
-  }
-
-  try {
-    var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
-    var _ppCount = await countPdfPages(pdfBuffer);
-    if (_ppCount > _maxPP) {
-      return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, which is over the current ' + _maxPP + '-page limit for a single book. To make it fit, open your Sessions list and uncheck some sessions using the "Include in Print" checkbox, then try again, or split it into multiple smaller books.' });
+    let pdfBuffer;
+    try {
+      pdfBuffer = await renderHtmlToPdf(html, {});
+    } catch (e) {
+      console.error('[publish-story] render failed:', e && e.message ? e.message : e);
+      return res.status(500).json({ error: 'Could not render your story PDF. Please try again.' });
     }
-  } catch (e) { console.error('[page-limit] count failed:', e && e.message ? e.message : e); }
 
-  let pdfUrl;
-  try {
-    var fname = 'story-' + campaign.id + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
-    // v3.0.388 -- EVERY STORED PDF IS FLATTENED, not just the print-bound pair.
-    // This one is read by strangers from the public Library, so it is stored AND served on every
-    // view: the 62 percent it sheds is egress as well as storage. It also means the book someone
-    // reads in the Library and the book its author downloads to print are the same file, encoded
-    // the same way, rather than two artifacts that merely came from the same source.
-    // 43s on a 49-page book, absorbed by an operation that already says 'this can take a moment'.
-    var _flatS = await flattenPdf(pdfBuffer, 'story');
-    pdfBuffer = _flatS.buffer;
-    pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'story');
-  } catch (e) {
-    console.error('[publish-story] upload failed:', e && e.message ? e.message : e);
-    return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
+    try {
+      var _maxPP = await getAppSettingInt('max_pages_per_print', 250);
+      var _ppCount = await countPdfPages(pdfBuffer);
+      if (_ppCount > _maxPP) {
+        return res.status(413).json({ error: 'PAGE_LIMIT', pages: _ppCount, maxPages: _maxPP, message: 'This book is ' + _ppCount + ' pages, which is over the current ' + _maxPP + '-page limit for a single book. To make it fit, open your Sessions list and uncheck some sessions using the "Include in Print" checkbox, then try again, or split it into multiple smaller books.' });
+      }
+    } catch (e) { console.error('[page-limit] count failed:', e && e.message ? e.message : e); }
+
+    try {
+      var fname = 'story-' + campaign.id + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
+      // v3.0.388 -- EVERY STORED PDF IS FLATTENED, not just the print-bound pair.
+      // This one is read by strangers from the public Library, so it is stored AND served on every
+      // view: the 62 percent it sheds is egress as well as storage. It also means the book someone
+      // reads in the Library and the book its author downloads to print are the same file, encoded
+      // the same way, rather than two artifacts that merely came from the same source.
+      var _flatS = await flattenPdf(pdfBuffer, 'story');
+      pdfBuffer = _flatS.buffer;
+      pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'story');
+    } catch (e) {
+      console.error('[publish-story] upload failed:', e && e.message ? e.message : e);
+      return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
+    }
   }
 
   // Cover thumbnail: campaign cover image, else the first available panel image.
@@ -4941,7 +4994,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     try { await logDebug(req.session.userId, { level: 'error', source: 'api', page: 'Publish to library', fn: 'POST /publish-story', message: 'Publish image-index rebuild failed (non-fatal): ' + (e && e.message), detail: { campaign_id: campaign.id, note: 'story published but public page may be missing panel images' } }); } catch (_le) {}
   }
 
-  return res.json({ success: true, url: pdfUrl, author: authorName });
+  return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null });
 });
 
 // Unpublish the caller's OWN story for a campaign (admin moderation is separate).
@@ -10287,7 +10340,13 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     // route can tell a stale approval from a current one instead of printing either blind.
     lastOpt[arrange] = { pdfUrl: pdfUrl, at: new Date().toISOString(), pages: pages, bookTitle: bookTitle || '',
                          bodyUrl: _stUrl, co: req.query.co || '', layout: req.query.layout || '',
-                         frontCovers: _fcN, backCovers: _bcN };   // v3.0.424 -- lets print strip rather than re-render
+                         frontCovers: _fcN, backCovers: _bcN,     // v3.0.424 -- lets print strip rather than re-render
+                         // v3.0.492 -- TD-296. Publish now COPIES this exact object rather than
+                         // rendering a second one, so a downstream reader has to be able to tell a
+                         // protective quick save (not flattened, overwritten seconds later) from
+                         // the real one. Absent on entries written before this build, which is why
+                         // publish tests `=== false` rather than falsiness.
+                         flattened: !_quick };
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt }, _vid);
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
     // bundle. The user-facing line stays generic; the bundle gets the numbers.

@@ -16,7 +16,14 @@ function initStorage() {
   }
 }
 
-function signRequest(method, key, contentType, body) {
+// v3.0.492 -- `extra` carries ADDITIONAL headers that must be signed as well as sent
+// (today: x-amz-copy-source for a server-side copy). Passing nothing reproduces the
+// previous canonical string byte for byte: the sorted header set for the no-extra case
+// is content-type, host, x-amz-content-sha256, x-amz-date -- exactly the order this
+// function used to hardcode. Building it from a sorted map instead of a literal is what
+// lets a new signed header be added without a second copy of the signer, which is the
+// fault class this codebase keeps paying for (TD-284, TD-293, TD-295, TD-296).
+function signRequest(method, key, contentType, body, extra) {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -26,8 +33,11 @@ function signRequest(method, key, contentType, body) {
   const dateStamp = amzDate.slice(0, 8);
   const payloadHash = crypto.createHash('sha256').update(body).digest('hex');
 
-  const canonicalHeaders = 'content-type:' + contentType + '\nhost:' + host + '\nx-amz-content-sha256:' + payloadHash + '\nx-amz-date:' + amzDate + '\n';
-  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+  const hdrs = { 'content-type': contentType, 'host': host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate };
+  if (extra) Object.keys(extra).forEach(function (k) { hdrs[String(k).toLowerCase()] = String(extra[k]); });
+  const names = Object.keys(hdrs).sort();
+  const canonicalHeaders = names.map(function (n) { return n + ':' + hdrs[n] + '\n'; }).join('');
+  const signedHeaders = names.join(';');
   const canonicalRequest = [method, '/' + BUCKET_NAME + '/' + key, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
   const credentialScope = dateStamp + '/auto/s3/aws4_request';
   const stringToSign = 'AWS4-HMAC-SHA256\n' + amzDate + '\n' + credentialScope + '\n' + crypto.createHash('sha256').update(canonicalRequest).digest('hex');
@@ -36,15 +46,20 @@ function signRequest(method, key, contentType, body) {
   const signingKey = hmac(hmac(hmac(hmac('AWS4' + secretKey, dateStamp), 'auto'), 's3'), 'aws4_request');
   const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
 
+  const outHeaders = {
+    'Authorization': 'AWS4-HMAC-SHA256 Credential=' + accessKeyId + '/' + credentialScope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature,
+    'Content-Type': contentType,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+    'Content-Length': body.length
+  };
+  // Send every extra header with EXACTLY the value that was signed. A header that is
+  // signed and not sent (or sent with a different value) is a SignatureDoesNotMatch.
+  if (extra) Object.keys(extra).forEach(function (k) { outHeaders[String(k).toLowerCase()] = String(extra[k]); });
+
   return {
     url: 'https://' + host + '/' + BUCKET_NAME + '/' + key,
-    headers: {
-      'Authorization': 'AWS4-HMAC-SHA256 Credential=' + accessKeyId + '/' + credentialScope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature,
-      'Content-Type': contentType,
-      'x-amz-content-sha256': payloadHash,
-      'x-amz-date': amzDate,
-      'Content-Length': body.length
-    }
+    headers: outHeaders
   };
 }
 
@@ -91,7 +106,11 @@ function keyFromUrl(fileUrl) {
   if (!fileUrl) return null;
   const base = process.env.R2_PUBLIC_URL || '';
   if (base && fileUrl.indexOf(base) === 0) return fileUrl.slice(base.length).replace(/^\/+/, '');
-  const m = fileUrl.match(/\/((?:uploads|archives|optimized)\/[^?#]+)$/);
+  // v3.0.492 -- `story` added. It is a real prefix (publish-story has written under it since
+  // v3.0.341) and this derivation did not know it, so a published book could not be resolved
+  // back to a key unless R2_PUBLIC_URL matched the URL. Keep this list in step with every
+  // prefix uploadFile is ever called with.
+  const m = fileUrl.match(/\/((?:uploads|archives|optimized|story)\/[^?#]+)$/);
   return m ? m[1] : null;
 }
 // Read an object back OUT of the bucket. The bucket is private -- uploads are AWS-signed PUTs -- so a
@@ -108,19 +127,79 @@ async function fetchFile(fileUrl) {
   const res = await axios.get(signed.url, { headers: signed.headers, responseType: 'arraybuffer', timeout: 60000 });
   return Buffer.from(res.data);
 }
+// v3.0.492 -- SERVER-SIDE COPY (TD-296).
+// Duplicate an object that is ALREADY in our bucket under a new key, without the bytes
+// travelling through this process. Publishing a book copies a 20-60MB PDF; pulling that
+// down and pushing it back up would put the whole file in Node memory on the one route
+// whose memory pressure has already crashed the process once (TD-293).
+//
+// Two paths, deliberately:
+//   1. Native CopyObject -- a PUT to the destination carrying x-amz-copy-source. R2 does
+//      the duplication internally. No egress, no memory, effectively instant.
+//   2. Fallback: download and re-upload. Slower and memory-heavy, but it is the mechanism
+//      archiveCopy and restoreCopy have used all along, so it is proven.
+// The fallback exists because a copy that fails must not fail the PUBLISH. Anything that
+// makes the fast path unavailable (a permissions change, a source in another bucket, an R2
+// behaviour change) degrades to slow rather than to broken.
+//
+// Returns the new public URL. NOT fail-soft beyond the fallback: if both paths fail it
+// throws, because a published story row pointing at a file that was never written is worse
+// than a publish that reports an error.
+async function copyObject(sourceUrl, filename, prefix) {
+  if (!sourceUrl) throw new Error('No source object to copy');
+  prefix = prefix || 'uploads';
+  if (!useCloud) {
+    // Local disk mode: read the file out of uploads/ and write it back under the new name.
+    const srcName = String(sourceUrl).replace(/^.*\//, '');
+    const uploadsDir = path.join(__dirname, '../uploads');
+    const srcPath = path.join(uploadsDir, srcName);
+    if (!fs.existsSync(srcPath)) throw new Error('Source object not found: ' + srcName);
+    fs.copyFileSync(srcPath, path.join(uploadsDir, filename));
+    return '/uploads/' + filename;
+  }
+  const srcKey = keyFromUrl(sourceUrl);
+  if (!srcKey) throw new Error('Could not derive a bucket key from the source URL');
+  const dstKey = prefix + '/' + filename;
+  try {
+    const body = Buffer.alloc(0);
+    // The copy source is /<bucket>/<key>. It is signed AND sent, so both must be the same
+    // string -- see the note in signRequest.
+    const signed = signRequest('PUT', dstKey, 'application/octet-stream', body, {
+      'x-amz-copy-source': '/' + BUCKET_NAME + '/' + srcKey
+    });
+    const axios = require('axios');
+    const https = require('https');
+    const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+    const resp = await axios.put(signed.url, body, { headers: signed.headers, httpsAgent: agent, timeout: 60000 });
+    // CopyObject answers 200 with a CopyObjectResult body -- and S3 can report a FAILURE
+    // inside a 200 body. Treat an Error element as a failure so it falls through rather
+    // than recording a story row for an object that was never written.
+    const bodyTxt = (resp && resp.data) ? String(resp.data) : '';
+    if (bodyTxt.indexOf('<Error') >= 0) throw new Error('copy reported an error in a 200 body');
+    const url = (process.env.R2_PUBLIC_URL || '') + '/' + dstKey;
+    console.log('  R2 copied:', srcKey, '->', dstKey);
+    return url;
+  } catch (e) {
+    const msg = e.response ? (e.response.status + ' ' + JSON.stringify(e.response.data)) : e.message;
+    console.warn('  R2 server-side copy failed, falling back to download and re-upload:', msg);
+    const buf = await fetchFile(sourceUrl);
+    if (!buf || !buf.length) throw new Error('Copy fallback failed: could not read the source object');
+    return await uploadFile(buf, filename, 'application/pdf', prefix);
+  }
+}
+
 async function deleteFile(fileUrl) {
   if (!fileUrl) return;
   if (useCloud) {
     // Real R2 object delete. Derive the bucket key from the public URL.
+    // v3.0.492 -- ONE derivation (keyFromUrl), not a second copy of it. This had its own
+    // inline version that knew only uploads/ and archives/, so with R2_PUBLIC_URL unset it
+    // silently refused to delete an optimized/ or story/ object -- unpublish-story left the
+    // PDF in the bucket. keyFromUrl is a strict superset of what this did, so routing through
+    // it can only widen what resolves. Same shape as TD-295: a rule consolidated in one place
+    // with one caller never routed through it.
     try {
-      const base = process.env.R2_PUBLIC_URL || '';
-      let key = null;
-      if (base && fileUrl.indexOf(base) === 0) {
-        key = fileUrl.slice(base.length).replace(/^\/+/, '');
-      } else {
-        const m = fileUrl.match(/\/((?:uploads|archives)\/[^?#]+)$/);
-        if (m) key = m[1];
-      }
+      const key = keyFromUrl(fileUrl);
       if (!key) { console.error('R2 delete: could not derive key from', fileUrl); return; }
       const body = Buffer.alloc(0);
       const signed = signRequest('DELETE', key, 'application/octet-stream', body);
@@ -239,4 +318,4 @@ async function restoreCopy(sourceUrl) {
   return await uploadFile(buf, filename, ct);
 }
 
-module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy };
+module.exports = { initStorage, uploadFile, fetchFile, keyFromUrl, copyObject, deleteFile, releaseImage, persistToR2, archiveCopy, restoreCopy };
