@@ -1249,8 +1249,12 @@ function cgBoxInner(mediaHtml, m, opts, outerBare) {
 function cgCapFlow(m, opts) {
   var cap = opts && opts.caption;
   if (!cgCapIsBelow(cap) || !m || !m.title) return '';
-  return '<div style="height:' + CG_CAP_STRIP_IN.toFixed(2) + 'in;display:flex;align-items:center;justify-content:center;' +
-    'text-align:center;font-family:Cinzel,serif;font-size:9.5pt;letter-spacing:0.12em;text-transform:uppercase;' +
+  // v3.0.516 -- MATCH THE OTHER STRIP. v3.0.514 respaced the caption (8pt, pushed off the frame by
+  // a fixed 0.04in) and this copy was not changed with it, so the one path that reaches it rendered
+  // a 9.5pt centred caption while every other band rendered 8pt. Two copies of one style, which is
+  // the fault this whole session keeps re-finding.
+  return '<div style="height:' + CG_CAP_STRIP_IN.toFixed(2) + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
+    'text-align:center;font-family:Cinzel,serif;font-size:8pt;letter-spacing:0.12em;text-transform:uppercase;' +
     'color:#8a6a2a;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
 }
 
@@ -1932,10 +1936,17 @@ function gzNarrBox(narrHtml, opts) {
 function huggingImgBox(m, opts, outerCss, floorH) {
   return '<div style="' + outerCss + 'min-height:' + floorH.toFixed(2) + 'in;' +
       'position:relative;background:transparent;line-height:0;">' +
+    // v3.0.516 -- THE CAPTION GOES OUTSIDE THIS FRAME TOO. It was emitted INSIDE the bordered
+    // div, so the frame wrapped the picture AND the caption. Ian, on a bronze-framed library
+    // picture: "Not quite doing it." Eight builders were converted in v3.0.515 and this one was
+    // not, because v3.0.512 had given it a special case and nothing went back for it. It only
+    // shows on NON-CROP-SAFE pictures, which is the only kind that reaches this function, which
+    // is why it survived a whole round of eyeballing. Ninth of nine.
     '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-      picOverlay(opts) + coCaptionCover(m, opts.caption) + cgCapFlow(m, opts) +
+      picOverlay(opts) + coCaptionCover(m, opts.caption) +
     '</div>' +
+    cgCapFlow(m, opts) +
   '</div>';
 }
 function gzImgBox(m, opts, fl, w, h) {
