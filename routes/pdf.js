@@ -896,6 +896,26 @@ function paneSafeHtml(html) {
 //     None/Comic/Fade    0       -- correct already, and Ian confirmed both looked right
 // These values are the bottom padding coMedia emits for each border. THEY MUST MATCH IT; the build
 // asserts each literal against coMedia so the two cannot drift.
+// v3.0.508 -- CAPTION FURNITURE SCALES WITH THE PICTURE.
+// Ian, 2026-08-07, looking at a Magazine spread: "The title style is a little big for smaller
+// pictures in magazine" and then "if you can resize the title plate based on the picture size that
+// would be great... Do it for your new bronze one too, it has the same issue."
+// The plate and the brass plaque were both fixed at 8.5pt with fixed padding, so on a narrow tower
+// or a small float they take a large bite out of the picture, while on a 6.8in panoramic they look
+// undersized. SHAPE is the size proxy this whole system already uses -- magWidth, the float sizer
+// and the title cap all key on it -- so scaling on shape needs no new parameter threaded through
+// eleven call sites, and it cannot disagree with the width the layout actually chose.
+// Same three buckets as the title cap (v3.0.507): narrow shapes get the small furniture.
+// PURELY COSMETIC AND SIZE-NEUTRAL: these captions are absolutely positioned overlays, so nothing
+// here can move a page boundary whatever the numbers say.
+function capScaleForShape(shape) {
+  if (shape === 'tower' || shape === 'tall') return 0.78;      // narrow: a big plate eats the art
+  if (shape === 'panoramic' || shape === 'wide' || shape === 'fullpage') return 1.12;   // large
+  return 1;                                                    // standard, square
+}
+// Round to a sensible CSS value so the emitted string stays short and stable.
+function capPt(base, sc) { return (Math.round(base * sc * 10) / 10) + 'pt'; }
+function capPx(base, sc) { return Math.max(1, Math.round(base * sc)) + 'px'; }
 function coMediaPadBottom(border) {
   if (border === 'gallery') return '0.14in';   // padding-bottom:0.14in
   if (border === 'frame' || border === 'keyline') return '2px';   // padding:2px 0
@@ -925,18 +945,20 @@ function coMediaPadTop(border) {
 // is also why this style sidesteps the tower wrap problem entirely.
 // Lifted clear of the border padding by the same offset every other overlay caption uses, plus a
 // small inset so it sits ON the picture rather than flush to its edge.
-function brassPlateHtml(title, bottomOffset) {
+function brassPlateHtml(title, bottomOffset, sc) {
+  sc = sc || 1;   // v3.0.508 -- scaled with the picture, same buckets as the plate
+  var _rv = Math.max(2, Math.round(3 * sc));
   var rivet = function (side) {
-    return '<i style="position:absolute;top:50%;' + side + ':5px;width:3px;height:3px;margin-top:-1.5px;' +
+    return '<i style="position:absolute;top:50%;' + side + ':' + capPx(5, sc) + ';width:' + _rv + 'px;height:' + _rv + 'px;margin-top:-' + (_rv / 2) + 'px;' +
       'border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff4d2,#8a6a2a 70%);' +
       'box-shadow:0 0 0 0.5px rgba(60,42,10,0.8);"></i>';
   };
   return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
-    'transform:translateX(-50%);max-width:78%;padding:4px 20px 5px;border-radius:2px;' +
+    'transform:translateX(-50%);max-width:78%;padding:' + capPx(4, sc) + ' ' + capPx(20, sc) + ' ' + capPx(5, sc) + ';border-radius:2px;' +
     'background:linear-gradient(180deg,#e0c77c 0%,#c9a84c 34%,#a8862f 68%,#8a6a2a 100%);' +
     'border:1px solid #5f4715;' +
     'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.75),inset 0 -1px 0 rgba(0,0,0,0.3);' +
-    'font-family:Cinzel,serif;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;' +
+    'font-family:Cinzel,serif;font-size:' + capPt(8.5, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#2a1c08;text-shadow:0 1px 0 rgba(255,248,220,0.45);' +
     'line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
     rivet('left') + rivet('right') + title + '</div>';
@@ -947,9 +969,10 @@ function coCaptionOverlay(m, caption, border) {
   if (!m.title) return '';
   var _capB = coMediaPadBottom(border);
   var _capT = coMediaPadTop(border);
+  var _capSc = capScaleForShape(m && m.shape);   // v3.0.508 -- furniture scales with the picture
   if (caption === 'plate')
-    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
-  if (caption === 'brass') return brassPlateHtml(m.title, _capB);
+    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:80%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(9, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+  if (caption === 'brass') return brassPlateHtml(m.title, _capB, _capSc);
   if (caption === 'gradient')
     return '<div style="position:absolute;left:0;right:0;bottom:' + _capB + ';padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   return '';
@@ -968,9 +991,10 @@ function coCaptionBelow(m, i, caption) {
 // they stay readable on a dark photo.
 function coCaptionCover(m, caption) {
   if (!m.title) return '';
-  if (caption === 'brass') return brassPlateHtml(m.title, '0px');   // the band's box IS the image box
+  var _capSc = capScaleForShape(m && m.shape);   // v3.0.508
+  if (caption === 'brass') return brassPlateHtml(m.title, '0px', _capSc);   // the band's box IS the image box
   if (caption === 'plate')
-    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(9, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
   if (caption === 'gradient')
     return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   if (caption === 'bar')
@@ -6611,7 +6635,11 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     // BOX-OVERFLOW: elements clipping their own content INSIDE a cell. The page/cell heights cannot
     // see these -- they report the box, not what is inside it -- which is why a visibly chopped
     // Gazette tower reported 7.89in and NEVER-CLIP said [OK] on the same render.
-    if (_cmeas.boxOverflows && _cmeas.boxOverflows.length) realH._boxOverflows = _cmeas.boxOverflows;
+    // v3.0.508 -- carry NULL (scan retired, see measureLayout.js) all the way through. The old
+    // form only assigned when the array was non-empty, so 'off' and 'clean' both arrived as
+    // undefined and the dump printed [OK] for both.
+    if (_cmeas.boxOverflows === null) realH._boxOverflows = null;
+    else if (_cmeas.boxOverflows && _cmeas.boxOverflows.length) realH._boxOverflows = _cmeas.boxOverflows;
     cblocks.forEach(function (bl) {
       var mm = /^cp:(\d+)$/.exec(bl.id || '');
       if (mm) { realH[+mm[1]] = bl.heightIn; return; }
@@ -7168,7 +7196,9 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
           });
         });
         _dbg.overflows = realH._overflows || [];   // NEVER-CLIP: pages whose real height clips the box
-        _dbg.boxOverflows = realH._boxOverflows || [];   // BOX-OVERFLOW: elements clipping INSIDE a cell
+        // v3.0.508 -- carry NULL through when the scan is off, so the dump can tell 'not measured'
+        // from 'measured and clean'. Coercing to [] here would resurrect the false [OK].
+        _dbg.boxOverflows = (realH._boxOverflows === null) ? null : (realH._boxOverflows || []);
         if (realH._towerProbes) _dbg.towerProbes = realH._towerProbes;   // tower geometry: planned vs real box height
         if (realH._imgProbes) _dbg.imgProbes = realH._imgProbes;         // universal per-image geometry (AI input contract)
         // NEVER-CLIP (at-risk): also flag pages that fit the box TOTAL but render much taller than
@@ -8176,7 +8206,12 @@ function magazinePlanText(packed) {
   // height, and everything downstream (the tower merge rung ladder, REAL-CELL, the AI's reasoning)
   // believes it. This walks the composed DOM instead of the plan and names the element doing the
   // cutting. Permanent guardrail, like NEVER-CLIP and ORDER-BREAK.
-  var _box = (d.boxOverflows || []);
+  // v3.0.508 -- RETIRED. null means the scan did not run (see measureLayout.js for why and for
+  // the evidence); [] means it ran and found nothing. Print nothing at all in the first case --
+  // an [OK] from a check that never executed is the one outcome worse than its false alarms.
+  var _box = d.boxOverflows;
+  var _boxRan = Array.isArray(_box);
+  if (!_boxRan) _box = [];
   if (_box.length) {
     L.push('');
     L.push('!!! BOX-OVERFLOW: ' + _box.length + ' ELEMENT(S) CLIP THEIR OWN CONTENT !!!');
@@ -8189,7 +8224,7 @@ function magazinePlanText(packed) {
         o.scrollIn.toFixed(2) + 'in  -> CUT by ' + o.overIn.toFixed(2) + 'in  [overflow:' + o.overflow + ']');
     });
     if (_box.length > 40) L.push('    ... and ' + (_box.length - 40) + ' more');
-  } else if (d.remeasured) {
+  } else if (_boxRan && d.remeasured) {
     L.push('BOX-OVERFLOW: no element clips its own content. [OK]');
   }
   // ORDER-BREAK: text must NEVER render out of narrative order, on any layout. Walk the plan in

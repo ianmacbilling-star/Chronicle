@@ -337,8 +337,29 @@ async function measureDocument(html, options) {
       // element inside each measured block and flag any whose scroll extent exceeds its client box
       // while its computed overflow actually HIDES the excess. Deliberately cause-agnostic: it names
       // the element that is clipping without assuming why it clips.
+      // ===== BOX-OVERFLOW -- RETIRED 2026-08-07 (v3.0.508) ==========================================
+      // Ian, after checking the rendered PDF against six of these warnings: "I'm not seeing what you
+      // are seeing... What do you mean by cut."
+      // HE WAS RIGHT AND THE CHECK IS WRONG. On The Strangers (Magazine, v3.0.507) it reported
+      // "6 ELEMENT(S) CLIP THEIR OWN CONTENT" -- all six identical in shape, box 0.17in against
+      // content 0.25in or 0.40in. Rasterising the flagged pages showed nothing clipped at all:
+      // viewer p.11 "The Teleportation Circle Is Drawn" and p.40 "Cold Hand of Fate" both wrap onto
+      // a second line and BOTH LINES ARE FULLY VISIBLE. 0.25in is a one-line title plate and 0.40in
+      // is a two-line one, so the scan is comparing the plate's scroll extent against a box measured
+      // before the plate grows to hold the wrap. The mismatch never reaches the page.
+      // So it fires on every wrapped caption plate and finds nothing real -- six false alarms on a
+      // healthy book, which is worse than no check at all: a warning that is usually wrong trains
+      // everyone to ignore the one that is not.
+      // NOT DELETED. The scan and its reasoning are intact behind DEBUG_BOXOVERFLOW=1 (same
+      // convention as DEBUG_CLIP and DEBUG_PROMPT) so it can be fixed rather than rewritten. The
+      // fault to fix first is the timing: measure the box AFTER layout settles, or exclude
+      // absolutely-positioned overlays, which cannot clip their parent by growing.
+      // While it is off, the dump prints NOTHING for it rather than "[OK]" -- claiming a clean
+      // result from a check that did not run is the one outcome worse than the false alarms.
       var boxOverflows = [];
+      var _boxScanOn = !!process.env.DEBUG_BOXOVERFLOW;
       try {
+        if (!_boxScanOn) throw { __skip: 1 };
         nodes.forEach(function (n) {
           var bid = n.getAttribute('data-mblk') || '';
           var all = Array.prototype.slice.call(n.querySelectorAll('*'));
@@ -368,6 +389,7 @@ async function measureDocument(html, options) {
           });
         });
       } catch (e) { boxOverflows = []; }
+      if (!_boxScanOn) boxOverflows = null;   // null = NOT MEASURED, distinct from [] = measured and clean
       return { blocks: blocks, towerProbes: probes, imgProbes: imgProbes, boxOverflows: boxOverflows };
     });
 
