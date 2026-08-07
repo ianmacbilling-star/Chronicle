@@ -7148,7 +7148,20 @@ async function publishStory() {
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
   if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
-  var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + customOptsQ('novel','&') + '&source=' + encodeURIComponent(_publishSource);
+  // v3.0.491 -- ROUTE THIS THROUGH novelAsUserQ() LIKE EVERY OTHER BOOK URL.
+  // This call was the one book URL that did NOT, so the POST carried no as_user and
+  // no as_version. The server then fell back to the canonical for EVERYTHING that
+  // reads the request -- the pages (bookForkForSession), the included sessions
+  // (effectiveIncludeMap) and the cover, title image and title colour
+  // (bookPrefsScope) -- so a Story Master publishing a NAMED version silently put
+  // the canonical book on the public Library instead, with the canonical cover.
+  // The on-screen link was right because it is rendered client-side from the
+  // selected version; only the request was wrong. Ian, 2026-08-06: "it says it
+  // published... but it didn't publish the book that was in the link."
+  // novelAsUserQ's own comment calls itself the choke point for eleven book URLs.
+  // This was the twelfth. Same shape as TD-284 and the six queries: a rule
+  // consolidated in one place, with one caller never routed through it.
+  var url = '/api/pdf/publish-story/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&source=' + encodeURIComponent(_publishSource);
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: _publishSource, title: _title, blurb: _blurb, attested: _attested }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
