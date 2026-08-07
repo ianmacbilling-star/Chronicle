@@ -2989,13 +2989,18 @@ function renderReview(data) {
       : '';
     var pOutText = (state.reviewOutlines && state.reviewOutlines[pDirKey]) || '';
     var pOutBtn = canEditNarr ? '<button class="review-dir-btn" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')" title="The facts you want covered">\u270E Edit Narrative Outline</button>' : '';
-    var pPromptBtn = (canEditNarr && !_isEstR) ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Image Prompt</button>' : '';
+    // v3.0.484 -- the OPENING panel gets Edit Image Prompt too. The !_isEstR
+    // exclusion predates Approach B, when the title image lived on
+    // sessions.establishing_image and had no moment row to edit. It is a moment
+    // now, the Storyboard has always offered the pill for it, and openImagePrompt
+    // works purely off a moment id -- so Review was the only surface hiding it.
+    var pPromptBtn = canEditNarr ? '<button class="review-dir-btn" onclick="openImagePrompt(' + mid + ')" title="Edit the image prompt for this panel">\u270E Edit Image Prompt</button>' : '';
     var pMenuId = 'review-menu-p' + mid;
     var pMenu = canEditNarr
       ? '<div class="row-menu review-row-menu">' +
         '<button class="row-menu-btn" onclick="toggleRowMenu(\'' + pMenuId + '\', event)">&#8943;</button>' +
         '<div class="row-menu-dropdown" id="' + pMenuId + '">' +
-        ((!_isEstR) ? '<button class="row-menu-item" onclick="openImagePrompt(' + mid + ')">Edit Image Prompt</button>' : '') +
+        '<button class="row-menu-item" onclick="openImagePrompt(' + mid + ')">Edit Image Prompt</button>' +
         '<button class="row-menu-item" onclick="openGapOutline(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num + ' narration')) + '\')">Edit Narrative Outline</button>' +
         '<button class="row-menu-item" onclick="openNarrDirection(\'' + pDirKey + '\', \'' + (_isEstR ? 'Opening' : ('Panel ' + num)) + ' direction\')">Edit Narrative Direction</button>' +
         '</div></div>'
@@ -3256,8 +3261,15 @@ function refreshNarrativeDirectionUI(gapKey) {
   if (reviewPane && reviewPane.style.display !== 'none' && typeof loadReview === 'function') {
     loadReview();
   }
-  var sbPane = document.getElementById('session-tab-storyboard');
-  if (sbPane && sbPane.style.display !== 'none') {
+  // v3.0.484 -- NO VISIBILITY GATE. This used to update the Storyboard only
+  // when its pane was on screen, so a Direction set on the REVIEW tab never
+  // reached it -- and switchSessionTab does not re-render the board on the way
+  // in (deliberately: a re-render would clobber in-progress prose edits, which
+  // is the whole reason this function patches one block instead). The stale
+  // "No direction set" line therefore survived until a full reload. A hidden
+  // element is still in the DOM, so the patch works either way, and the if (el)
+  // below already covers a board that has never been rendered.
+  {
     var domKey = gapKey.replace(/[^a-z0-9]/gi, '-');
     var txt = (state.narrativeDirections && state.narrativeDirections[gapKey]) || '';
     var el = document.getElementById('narr-dir-text-' + domKey);
@@ -5979,7 +5991,21 @@ function regenNarrativeSection(type, panelIndex) {
   if (box) box.disabled = true;
   showBusyOverlay(panelId, 'Regenerating');
 
-  // Regenerate full narrative and extract the relevant section
+  // v3.0.483 -- THE GENERATE ENDPOINT IS ASYNC AND THIS FUNCTION DID NOT KNOW.
+  // It inserts a narrative_jobs row, responds { job_id } in milliseconds, and
+  // writes the prose in a background job that must be collected from
+  // GET /api/narrative/job/:id. This read data.intro / data.sections / data.outro
+  // straight off the job_id response -- all undefined -- so every Regen button
+  // on the storyboard spun briefly, reported no error, BLANKED its box and wiped
+  // state.narrativeData, while the background job quietly saved the real prose.
+  // The full-narrative caller carries a comment describing this exact fault and
+  // its fix; this caller was missed, in both of its copies. Same fix, same shape.
+  var _regenEnd = function(ok, msg) {
+    hideBusyOverlay(panelId);
+    if (box) box.disabled = false;
+    if (!ok && msg) showAlert(msg);
+  };
+
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -5987,35 +6013,48 @@ function regenNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    hideBusyOverlay(panelId);
-    if (box) box.disabled = false;
-    if (data.error) {
-      showAlert('Error: ' + data.error);
-      return;
-    }
+    if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
+    if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
+    var jobId = data.job_id;
+    var tries = 0;
+    var poll = function() {
+      // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
+      if (tries++ > 100) { _regenEnd(false, 'The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
+      fetch('/api/narrative/job/' + jobId)
+        .then(function(r) { return r.json(); })
+        .then(function(j) {
+          if (!j) { setTimeout(poll, 3000); return; }
+          if (j.status === 'pending') { setTimeout(poll, 3000); return; }
+          if (j.status === 'error') { _regenEnd(false, 'Could not generate narrative: ' + (j.error || 'unknown error')); return; }
 
-    state.narrativeData = {
-      intro: data.intro || '',
-      sections: data.sections || [],
-      outro: data.outro || ''
+          state.narrativeData = {
+            intro: j.intro || '',
+            sections: j.sections || [],
+            outro: j.outro || ''
+          };
+
+          // Update just the relevant box. The job regenerated the WHOLE
+          // narrative and saved it; only the requested section is painted
+          // here, deliberately, so a regenerate cannot stomp an unsaved edit
+          // sitting in a neighbouring box.
+          if (type === 'opening' && box) box.value = j.intro || '';
+          else if (type === 'closing' && box) box.value = j.outro || '';
+          else if (type === 'moment' && box) {
+            var msec = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
+            box.value = msec ? (msec.before || '') : '';
+          }
+          else if (type === 'between' && box) {
+            var section = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
+            box.value = section ? (section.after || '') : '';
+          }
+          _regenEnd(true);
+        })
+        .catch(function() { setTimeout(poll, 3000); });
     };
-
-    // Update just the relevant box
-    if (type === 'opening' && box) box.value = data.intro || '';
-    else if (type === 'closing' && box) box.value = data.outro || '';
-    else if (type === 'moment' && box) {
-      var msec = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-      box.value = msec ? (msec.before || '') : '';
-    }
-    else if (type === 'between' && box) {
-      var section = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-      box.value = section ? (section.after || '') : '';
-    }
+    poll();
   })
   .catch(function(e) {
-    hideBusyOverlay(panelId);
-    if (box) box.disabled = false;
-    showAlert('Error: ' + e.message);
+    _regenEnd(false, 'Error: ' + e.message);
   });
 }
 
@@ -10174,7 +10213,21 @@ function regenNarrativeSection(type, panelIndex) {
   if (box) box.disabled = true;
   showBusyOverlay(panelId, 'Regenerating');
 
-  // Regenerate full narrative and extract the relevant section
+  // v3.0.483 -- THE GENERATE ENDPOINT IS ASYNC AND THIS FUNCTION DID NOT KNOW.
+  // It inserts a narrative_jobs row, responds { job_id } in milliseconds, and
+  // writes the prose in a background job that must be collected from
+  // GET /api/narrative/job/:id. This read data.intro / data.sections / data.outro
+  // straight off the job_id response -- all undefined -- so every Regen button
+  // on the storyboard spun briefly, reported no error, BLANKED its box and wiped
+  // state.narrativeData, while the background job quietly saved the real prose.
+  // The full-narrative caller carries a comment describing this exact fault and
+  // its fix; this caller was missed, in both of its copies. Same fix, same shape.
+  var _regenEnd = function(ok, msg) {
+    hideBusyOverlay(panelId);
+    if (box) box.disabled = false;
+    if (!ok && msg) showAlert(msg);
+  };
+
   fetch('/api/narrative/generate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -10182,35 +10235,48 @@ function regenNarrativeSection(type, panelIndex) {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    hideBusyOverlay(panelId);
-    if (box) box.disabled = false;
-    if (data.error) {
-      showAlert('Error: ' + data.error);
-      return;
-    }
+    if (!data || data.error) { _regenEnd(false, 'Error: ' + ((data && data.error) || 'unknown error')); return; }
+    if (!data.job_id) { _regenEnd(false, 'Could not start narrative: no job id returned'); return; }
+    var jobId = data.job_id;
+    var tries = 0;
+    var poll = function() {
+      // Same ceiling as the full-narrative poll: 100 tries at 3s is ~5 minutes.
+      if (tries++ > 100) { _regenEnd(false, 'The narrative is taking longer than expected. Reload the session in a moment to see it.'); return; }
+      fetch('/api/narrative/job/' + jobId)
+        .then(function(r) { return r.json(); })
+        .then(function(j) {
+          if (!j) { setTimeout(poll, 3000); return; }
+          if (j.status === 'pending') { setTimeout(poll, 3000); return; }
+          if (j.status === 'error') { _regenEnd(false, 'Could not generate narrative: ' + (j.error || 'unknown error')); return; }
 
-    state.narrativeData = {
-      intro: data.intro || '',
-      sections: data.sections || [],
-      outro: data.outro || ''
+          state.narrativeData = {
+            intro: j.intro || '',
+            sections: j.sections || [],
+            outro: j.outro || ''
+          };
+
+          // Update just the relevant box. The job regenerated the WHOLE
+          // narrative and saved it; only the requested section is painted
+          // here, deliberately, so a regenerate cannot stomp an unsaved edit
+          // sitting in a neighbouring box.
+          if (type === 'opening' && box) box.value = j.intro || '';
+          else if (type === 'closing' && box) box.value = j.outro || '';
+          else if (type === 'moment' && box) {
+            var msec = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
+            box.value = msec ? (msec.before || '') : '';
+          }
+          else if (type === 'between' && box) {
+            var section = (j.sections||[]).find(function(s){return s.panel_index===panelIndex;});
+            box.value = section ? (section.after || '') : '';
+          }
+          _regenEnd(true);
+        })
+        .catch(function() { setTimeout(poll, 3000); });
     };
-
-    // Update just the relevant box
-    if (type === 'opening' && box) box.value = data.intro || '';
-    else if (type === 'closing' && box) box.value = data.outro || '';
-    else if (type === 'moment' && box) {
-      var msec = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-      box.value = msec ? (msec.before || '') : '';
-    }
-    else if (type === 'between' && box) {
-      var section = (data.sections||[]).find(function(s){return s.panel_index===panelIndex;});
-      box.value = section ? (section.after || '') : '';
-    }
+    poll();
   })
   .catch(function(e) {
-    hideBusyOverlay(panelId);
-    if (box) box.disabled = false;
-    showAlert('Error: ' + e.message);
+    _regenEnd(false, 'Error: ' + e.message);
   });
 }
 
