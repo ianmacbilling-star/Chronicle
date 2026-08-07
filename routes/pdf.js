@@ -902,15 +902,35 @@ function paneSafeHtml(html) {
 // would be great... Do it for your new bronze one too, it has the same issue."
 // The plate and the brass plaque were both fixed at 8.5pt with fixed padding, so on a narrow tower
 // or a small float they take a large bite out of the picture, while on a 6.8in panoramic they look
-// undersized. SHAPE is the size proxy this whole system already uses -- magWidth, the float sizer
-// and the title cap all key on it -- so scaling on shape needs no new parameter threaded through
-// eleven call sites, and it cannot disagree with the width the layout actually chose.
-// Same three buckets as the title cap (v3.0.507): narrow shapes get the small furniture.
+// undersized.
+// v3.0.511 -- TD-331. THE GROWTH HALF OF THAT WAS WRONG AND IS REVERTED.
+// SHAPE IS ASPECT RATIO. IT IS NOT SIZE. magWidth disproves it outright: a Magazine float takes
+// 44 percent of the column for tall/tower, 50 for square and 54 for everything else -- so a wide
+// picture there is one of the SMALLER pictures on the page, and the 1.12 multiplier made exactly
+// the tight ones tighter. Ian sent a screenshot of a two-line plate covering the corner of a
+// landscape float and said: "yes... Let us fix that."
+// THE SHRINK STAYS at 0.78 for narrow shapes. That was the whole of the original request and a
+// tower really is narrow in every layout. Only the growth was invented.
+// Sizing on the picture RENDERED WIDTH is the correct fix and is the remainder of TD-331. It is
+// a separate build because the optimizer rescales images per run, so the true width is known
+// only at compose time -- not here, and not when a band is built.
 // PURELY COSMETIC AND SIZE-NEUTRAL: these captions are absolutely positioned overlays, so nothing
 // here can move a page boundary whatever the numbers say.
+// v3.0.511 -- TD-331, THE OTHER HALF: THE COMIC PLATE WRAPPED WHERE THE BRASS PLATE DID NOT.
+// A wrapped plate is twice the plate, which is most of why it ate the corner of that float. The
+// brass plaque has always been white-space:nowrap with an ellipsis; the comic plate had neither,
+// so it grew downward instead of stopping. Three changes, cheapest first, and the order matters
+// because each one buys room before the next one has to cut anything:
+//   max-width 80 -> 90 percent   (Ian capped it at 90: at 95 it reads as a banner, not a label)
+//   side padding 9px -> 6px      (scaled, so a tower keeps its proportions)
+//   white-space:nowrap + ellipsis as the BACKSTOP, not the mechanism
+// On the reported title -- INVISIBLE AMONG THE DAMNED, 26 characters, breaking after about 19 --
+// the first two changes are worth roughly a third more room, so it should sit on one line
+// untouched. The ellipsis exists so that NOTHING can ever wrap again, not to trim this one.
+// Long titles are legacy: TD-319 caps new ones on the picture shape at generation time.
 function capScaleForShape(shape) {
   if (shape === 'tower' || shape === 'tall') return 0.78;      // narrow: a big plate eats the art
-  if (shape === 'panoramic' || shape === 'wide' || shape === 'fullpage') return 1.12;   // large
+  if (shape === 'panoramic' || shape === 'wide' || shape === 'fullpage') return 1.0;    // REVERTED v3.0.511 -- see TD-331
   return 1;                                                    // standard, square
 }
 // Round to a sensible CSS value so the emitted string stays short and stable.
@@ -971,7 +991,7 @@ function coCaptionOverlay(m, caption, border) {
   var _capT = coMediaPadTop(border);
   var _capSc = capScaleForShape(m && m.shape);   // v3.0.508 -- furniture scales with the picture
   if (caption === 'plate')
-    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:80%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(9, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'brass') return brassPlateHtml(m.title, _capB, _capSc);
   if (caption === 'gradient')
     return '<div style="position:absolute;left:0;right:0;bottom:' + _capB + ';padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
@@ -994,7 +1014,7 @@ function coCaptionCover(m, caption) {
   var _capSc = capScaleForShape(m && m.shape);   // v3.0.508
   if (caption === 'brass') return brassPlateHtml(m.title, '0px', _capSc);   // the band's box IS the image box
   if (caption === 'plate')
-    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(9, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:0;left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'gradient')
     return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   if (caption === 'bar')
