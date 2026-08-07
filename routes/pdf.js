@@ -52,6 +52,48 @@ async function pdfPageCount(buf) {
 var CO_IMG_SHADOW = '7px 7px 10px -2px rgba(0,0,0,0.5), 18px 18px 30px -10px rgba(0,0,0,0.5)';
 
 // ============================================================
+// v3.0.500 -- THE SOFT FADE ("vignette") EDGE, DEFINED ONCE.
+// Ian, 2026-08-07: "The Fade frame needs to be much tighter. On small pictures there is
+// almost no picture left. It should very rapidly get to faded out... it's really there to
+// hide the hard edge of the picture."
+//
+// WHAT WAS WRONG, and it was two separate things stacked:
+//   1. `box-shadow: inset 0 0 0.45in 0.4in #fff` -- 0.4in of SPREAD plus 0.45in of blur, so
+//      white reached ~0.62in in from every edge. On a 2.0in picture that is 62 PERCENT of
+//      the width gone before the gradient below even starts.
+//   2. `radial-gradient(ellipse ...)` beginning its fade at 46 PERCENT of the radius. That
+//      is not an edge treatment, it is a spotlight -- it dims the picture from just outside
+//      the centre outwards.
+//
+// WHY AN ELLIPSE IS THE WRONG SHAPE FOR THIS JOB. A radial ellipse stretches to the box, so
+// its band is proportional on BOTH axes independently. At the same stop:
+//      6.8 x 3.0in  -> sides 1.84in, top/bottom 0.81in   (2.3 : 1)
+//      2.25 x 9.0in -> sides 0.61in, top/bottom 2.43in   (0.3 : 1)
+// A tower was having its top and bottom faded four times harder than its sides.
+//
+// WHAT IT IS NOW: four linear gradients, one per edge, each a FIXED band. Hiding a hard
+// edge is a fixed-width job -- it does not want to scale with the picture -- so an absolute
+// unit is the correct answer to "can you control it based on the size of the picture": the
+// band stays the same physical width whether the picture is 2in or 6.8in, which is exactly
+// what stops a small one being eaten. The `min()` caps it as a fraction as well, so a very
+// small picture never loses more than 7 percent per side.
+// Corners receive two overlapping bands, which is right -- corners should be the softest
+// part of the edge.
+var CO_FADE_BAND = 'min(0.14in, 7%)';
+var CO_FADE_BG =
+  'linear-gradient(to right,  #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + '),' +
+  'linear-gradient(to left,   #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + '),' +
+  'linear-gradient(to bottom, #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + '),' +
+  'linear-gradient(to top,    #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + ')';
+// A hairline inset shadow underneath, only wide enough to kill a dark edge ROW on an image
+// whose own border pixels are dark. Nothing like the old 0.4in spread.
+var CO_FADE_SHADOW = 'inset 0 0 0.05in 0.02in #ffffff';
+function fadeEdgeOverlayHtml() {
+  return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:' + CO_FADE_SHADOW + ';"></div>' +
+    '<div style="position:absolute;inset:0;pointer-events:none;background:' + CO_FADE_BG + ';"></div>';
+}
+
+// ============================================================
 // Date helper - handles both PostgreSQL Date objects and SQLite strings
 // ============================================================
 function toDate(dateVal) {
@@ -360,8 +402,7 @@ function vignetteMedia(m) {
   if (m.image) {
     return '<div style="position:relative;width:' + widthPct + '%;margin:0.3in auto 0.1in;page-break-inside:avoid;">' +
       momentImgAspectBox(m, ratio, '', '') +
-      '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.6in 0.36in #ffffff;"></div>' +
-      '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 80%, rgba(255,255,255,1) 100%);"></div>' +
+      fadeEdgeOverlayHtml() +   // v3.0.500 -- was a THIRD copy of the fade, with its own stops
     '</div>';
   }
   return '<div style="width:' + widthPct + '%;margin:0.3in auto 0.1in;aspect-ratio:' + ratio + ';background:#f0e8d0;"></div>';
@@ -458,8 +499,7 @@ function portraitMedia(m, kind) {
   }
   if (kind === 'vignette') {
     return '<div style="position:relative;width:100%;">' + img +
-      '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.5in 0.3in #ffffff;"></div>' +
-      '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 50%, rgba(255,255,255,0.5) 82%, rgba(255,255,255,0.95) 100%);"></div>' +
+      fadeEdgeOverlayHtml() +   // v3.0.500 -- was a SECOND copy of the fade, with its own stops
     '</div>';
   }
   if (kind === 'gallery') {
@@ -830,7 +870,11 @@ function paneSafeHtml(html) {
   return html
     .split('linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0))').join('rgba(10,8,6,0.82)')
     .split('linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.45) 45%,rgba(10,8,6,0))').join('rgba(10,8,6,0.82)')
-    .split('radial-gradient(ellipse at center, rgba(255,255,255,0) 46%, rgba(255,255,255,0.7) 76%, rgba(255,255,255,1) 92%)').join('transparent');
+    // v3.0.500 -- MATCH THE CONSTANT, NOT A COPY OF IT. This split on a verbatim copy of the
+    // vignette gradient. Change the gradient by one character and this silently stops firing,
+    // and the preview panes render a pink placeholder instead of the picture -- with nothing
+    // to say why. Referencing CO_FADE_BG means the two cannot drift.
+    .split(CO_FADE_BG).join('transparent');
 }
 function coCaptionOverlay(m, caption) {
   if (!m.title) return '';
@@ -1324,9 +1368,10 @@ function cgBorder(opts){ return picBorderCss(opts) + 'overflow:hidden;'; }
 // Every IMAGE box still goes through cgBorder(), so the user's frame choice is untouched there.
 var GZ_TEXT_BORDER = 'border:1px solid rgba(120,90,30,0.35);';   // same hairline as the 'keyline' preset
 function vignetteOverlayHtml(){
-  // Strong fade so the rectangular edge is fully gone -- image looks drawn on the page.
-  return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.45in 0.4in #ffffff;"></div>' +
-    '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 46%, rgba(255,255,255,0.7) 76%, rgba(255,255,255,1) 92%);"></div>';
+  // v3.0.500 -- ONE definition (CO_FADE_BG, near CO_IMG_SHADOW). There were THREE copies of
+  // this fade with three different sets of stops, and the pane-safe swap below matched only
+  // one of them by verbatim string. See the note on CO_FADE_BAND for what changed and why.
+  return fadeEdgeOverlayHtml();
 }
 function picOverlay(opts){
   var b = opts && opts.border;
