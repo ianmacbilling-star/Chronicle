@@ -7147,7 +7147,10 @@ async function publishStory() {
   var st = document.getElementById('novel-publish-status');
   if (!_attested) { if (st) { st.style.display = 'block'; st.textContent = 'Please confirm you own the rights and the content is suitable before publishing.'; } return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
-  if (st) { st.style.display = 'block'; st.textContent = 'Rendering and publishing your book... this can take a moment.'; }
+  // v3.0.492 -- no longer 'this can take a moment'. The optimized book is copied, not re-rendered
+  // (TD-296), so the honest wording is short. The flow (admin Before) book still renders, but that
+  // path is not reachable from the user UI.
+  if (st) { st.style.display = 'block'; st.textContent = 'Publishing your book...'; }
   // v3.0.491 -- ROUTE THIS THROUGH novelAsUserQ() LIKE EVERY OTHER BOOK URL.
   // This call was the one book URL that did NOT, so the POST carried no as_user and
   // no as_version. The server then fell back to the canonical for EVERYTHING that
@@ -7167,8 +7170,22 @@ async function publishStory() {
     .then(function(d){
       if (btn) btn.disabled = false;
       if (d && d.success) {
-        if (st) st.textContent = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
-        setStoryPublishedUI(true, d.url);
+        // v3.0.492 -- TD-296. The printed title is baked into the approved PDF; the Library
+        // listing title is just a column. They are allowed to differ -- Ian: "If they change the
+        // title after the book has been created then that is on them." -- but the reader is told
+        // once, here, rather than finding out from a cover that disagrees with the listing.
+        // NOTE the layout-settings mismatch is deliberately NOT reported here (v3.0.494): the
+        // only ways to reach Publish run through Optimize or Load Last Optimized File, both of
+        // which already raise the amber warning. Ian: "They have already seen all that."
+        var _msg = d.author ? ('Published a new entry to the Library, listed as ' + d.author + '.') : 'Published a new entry to the Library. You have no pen name set, so it is listed without a name.';
+        if (d.titleWarning) _msg += ' ' + d.titleWarning;
+        if (st) st.textContent = _msg;
+        // v3.0.495 -- the button stops being a Publish button. This is both the "do not let
+        // them hit it again" lock Ian asked for and the way to go and look at what they made.
+        // Falls back to the plain reset if the server did not name a story, so the button can
+        // never be left disabled with nothing to click.
+        if (d.storyUrl) novelPublishShowLibraryCta(d.storyUrl);
+        else setStoryPublishedUI(true, d.url);
         var _pt = document.getElementById('print-book-title'); if (_pt && _title) _pt.value = _title;
       } else if (d && d.error === 'optimize_required') {
         if (btn) btn.textContent = 'Publish to Library';
@@ -7214,8 +7231,51 @@ function setStoryPublishedUI(published, url) {
   if (!btn) return;
   // Publishing/unpublishing is managed on the Account page, not here. This button
   // always (re)publishes the current content; it never flips to an unpublish toggle.
+  // v3.0.495 -- AND IT IS ALSO THE RESET. After a successful publish the button becomes
+  // "See it in the Library" (see novelPublishShowLibraryCta), which is what stops a second
+  // click re-publishing the same book by accident. That state has to be undone the next
+  // time the card is used, or the button is a dead link to an old story forever. This is
+  // the one place that restores it, and refreshStoryStatus calls it on every entry to the
+  // Order tab -- which is exactly "whenever they come back".
   btn.textContent = 'Publish to Library';
+  btn.disabled = false;
   btn.onclick = publishStory;
+  btn.removeAttribute('data-story-url');
+}
+
+// v3.0.495 -- the button becomes the way to GO AND LOOK AT IT.
+// Ian: "Maybe change the button to... See it in the Library and take them to the library".
+// It opens in a NEW TAB, matching the "Publishing: <the optimized book>" link directly
+// above it -- navigating the app away would lose their place on the Order tab, and they
+// have just finished a long piece of work here.
+function novelPublishShowLibraryCta(storyUrl) {
+  var btn = document.getElementById('novel-publish-btn');
+  if (!btn || !storyUrl) return;
+  btn.textContent = 'See it in the Library';
+  btn.disabled = false;
+  btn.setAttribute('data-story-url', storyUrl);
+  btn.onclick = function () {
+    var u = btn.getAttribute('data-story-url');
+    if (u) window.open(u, '_blank', 'noopener');
+  };
+}
+
+// v3.0.495 -- "on your Account page" is where you go to unpublish or edit a listing, so
+// make it somewhere you can actually GO. Mirrors goToPlans, including its settle-scroll:
+// the account view fills several panels in asynchronously, so one fixed delay can scroll
+// before the layout settles and land short.
+function goToMyStories() {
+  if (typeof showView === 'function') showView('account');
+  var tries = 0;
+  function settleScrollToStories() {
+    var sec = document.getElementById('my-stories-section');
+    if (sec && sec.scrollIntoView) {
+      sec.scrollIntoView({ behavior: (tries === 0 ? 'smooth' : 'auto'), block: 'start' });
+    }
+    if (++tries < 5) setTimeout(settleScrollToStories, 220);
+  }
+  setTimeout(settleScrollToStories, 120);
+  return false;
 }
 
 function refreshStoryStatus() {
@@ -10332,7 +10392,8 @@ async function generateAllImages(fromChain) {
   fetch('/api/images/generate-all', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
+    body: JSON.stringify({
+
       // v3.0.447 -- SECOND COPY of generateAllImages. app.js duplicates functions on purpose and
       // every copy has to be patched; v3.0.445 fixed only the first and the Storyboard button calls
       // this one, so images kept landing on the canonical.
@@ -12224,7 +12285,8 @@ function forkOnScreenIsMine() {
 function forkOwnNonCanonical() {
   return forkOnScreenIsMine() && !forkOnScreenIsCanonical();
 }
-function updateForkEditability() {
+function updateForkEditability() {
+
   var role = state.currentCampaign && state.currentCampaign.my_role;
   var editable = forkOnScreenIsMine();
   // can-edit-fork means "editing a version that is NOT the canonical" -- it turns on the per-panel
@@ -13055,10 +13117,16 @@ var CL_CONDITION_VALUES = { smoke:1, dirt:1, wrinkle:1, blood:1 };
 function clMerge(saved){
   var r=clClone(CUSTOM_LAYOUT_DEFAULTS);
   if(saved){ for (var k in CUSTOM_LAYOUT_DEFAULTS){ if(saved.hasOwnProperty(k)) r[k]=saved[k]; } }
-  // Legacy migration: old single 'paper' control could hold a condition (smoke/dirt/...).
-  if (CL_CONDITION_VALUES[r.paper]) { r.paper = 'white'; }
-  if (r.paper === 'parchment' || r.paper === 'linen') { r.paper = 'cream'; }
-  if (r.paper === 'grey' || r.paper === 'lightgrey') { r.paper = 'white'; }
+  // v3.0.497 -- PAPER IS ALWAYS WHITE NOW, whatever is stored.
+  // The two layout pickers are gone (Ian: "Do away with the paper color on the layout
+  // tab... it doesn't work anyway"), but removing the controls does not remove the value:
+  // saved layout prefs still hold paper:'cream', and customOpts keeps serialising it into
+  // the co string until the user happens to touch some other control. The old migration
+  // below actively CONVERTED legacy parchment/linen INTO cream, so it was a source rather
+  // than a cleanup. One line replaces all three. The server forces white again in
+  // parseCustomOpts; this simply stops the client sending it in the first place.
+  // Paper colour now means one thing only: the physical stock, chosen on the order page.
+  r.paper = 'white';
   return r;
 }
 // Normalize a stored layout blob into the UNIFIED shape { opts:<layout>, active:<bool> }.
@@ -13636,11 +13704,13 @@ function csGenreAdd(sel) {
     if (_csGenres.indexOf(slug) < 0 && _csGenres.length < CS_GENRE_MAX) _csGenres.push(slug);
   }
   csGenreRender();
+  csDirty(true);   // v3.0.492 -- a chip is a click, not typing: write it at once
 }
 
 function csGenreRemove(slug) {
   _csGenres = _csGenres.filter(function (g) { return g !== slug; });
   csGenreRender();
+  csDirty(true);   // v3.0.492
 }
 
 function cpromptCount(el) {
@@ -13651,6 +13721,14 @@ function cpromptCount(el) {
 
 function openCampaignSettings(id, ev) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
+  // v3.0.492 -- DISARMED WHILE POPULATING. Every assignment below fires the same events a user
+  // edit does; with autosave armed, opening the modal would immediately write the values it had
+  // just read, and any field that failed to populate would be written back as empty. Nothing may
+  // save until the last field is in place. This is TD-284's fault class, guarded at the source.
+  _csReady = false;
+  if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; }
+  _csSaveAgain = false;
+  csSaveState('');
   _csCampaignId = id;
   var c = (state.campaigns || []).filter(function (x) { return x.id === id; })[0];
   var cb = document.getElementById('cs-allow-novel');
@@ -13674,16 +13752,66 @@ function openCampaignSettings(id, ev) {
   var modal = document.getElementById('campaign-settings-modal');
   if (modal) modal.classList.remove('hidden');
   renderCampaignSettingsThumb();
+  _csReady = true;   // every field is populated -- edits from here are the user's
 }
 
 function closeCampaignSettings() {
+  // v3.0.492 -- WRITE WHAT IS OWED BEFORE THE MODAL GOES. Typing and closing inside the debounce
+  // window would otherwise silently discard the last edit, which is a worse failure than the
+  // forgotten Save button this replaced. csFlush reads the fields synchronously, so it must run
+  // while they still hold this campaign's values and while _csReady is still true.
+  try { csFlush(); } catch (e) {}
+  _csReady = false;
+  if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; }
   var modal = document.getElementById('campaign-settings-modal');
   if (modal) modal.classList.add('hidden');
   _csCampaignId = null;
 }
 
-function saveCampaignSettings() {
-  if (!_csCampaignId) { closeCampaignSettings(); return; }
+// ===== v3.0.492 -- CAMPAIGN DETAILS SAVES ITSELF ==================================
+// Ian, 2026-08-07: "Make the Campaign Detail Modal Save Automatically... The save button is at
+// the bottom and I always forget it." Half this modal already behaved that way -- the campaign
+// image picker writes immediately -- so the Save button was only load-bearing for the other half.
+// It is gone; the footer now carries Close and a quiet state line.
+//
+// THE HAZARD THIS GUARDS AGAINST IS TD-284's. A debounced write that fires before the fields
+// have been populated saves EMPTY over stored lore. So nothing can write until _csReady, which
+// openCampaignSettings sets only after it has filled every field, and which closeCampaignSettings
+// clears before it tears the modal down.
+var _csSaveTimer = null;      // pending debounce, or null
+var _csSaving = false;        // a PUT is in flight
+var _csSaveAgain = false;     // an edit landed mid-flight -- save once more when it returns
+var _csReady = false;         // the fields hold this campaign's values and may be read
+var CS_AUTOSAVE_MS = 1200;    // long enough to not write on every keystroke, short enough to beat a close
+
+function csSaveState(msg, kind) {
+  var el = document.getElementById('cs-save-state');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = (kind === 'error') ? '#e57373' : '';
+}
+
+// now === true writes immediately (a toggle, or a flush); otherwise it debounces.
+function csDirty(now) {
+  if (!_csReady || !_csCampaignId) return;
+  if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; }
+  csSaveState('Saving...');
+  if (now) csCommitCampaignSettings();
+  else _csSaveTimer = setTimeout(function () { _csSaveTimer = null; csCommitCampaignSettings(); }, CS_AUTOSAVE_MS);
+}
+
+// Write a pending edit NOW rather than waiting out the debounce -- on blur, and on close.
+function csFlush() {
+  if (_csSaveTimer) csDirty(true);
+}
+
+function csCommitCampaignSettings() {
+  if (!_csReady || !_csCampaignId) return;
+  // One write at a time. A second edit while a PUT is in flight is remembered and replayed when
+  // it returns, rather than racing it -- two overlapping PUTs can land out of order and the loser
+  // is whichever the server finished last, not whichever the user typed last.
+  if (_csSaving) { _csSaveAgain = true; return; }
+  var saveId = _csCampaignId;
   var cb = document.getElementById('cs-allow-novel');
   var allow = !!(cb && cb.checked);
   var cba = document.getElementById('cs-allow-assets');
@@ -13693,22 +13821,23 @@ function saveCampaignSettings() {
   var _cpEl = document.getElementById('cs-cprompt-input');
   var _cpVal = _cpEl ? _cpEl.value.slice(0, 500) : undefined;
   var _genreVal = csGenresFrom(_csGenres);
-  var btn = document.getElementById('cs-save-btn');
   var err = document.getElementById('campaign-settings-error');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-  fetch('/api/campaigns/' + _csCampaignId, {
+  _csSaving = true;
+  fetch('/api/campaigns/' + saveId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal, genres: _genreVal, campaign_prompt: _cpVal })
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      _csSaving = false;
       if (!data || data.error) {
+        csSaveState('Not saved', 'error');
         if (err) { err.textContent = (data && data.error) || 'Could not save settings.'; err.classList.remove('hidden'); }
         return;
       }
-      var saveId = _csCampaignId;
+      if (err) err.classList.add('hidden');
+      csSaveState('Saved');
       // v3.0.485 -- mirror genre and the campaign prompt into local state too. The
       // modal reads from state.campaigns, so omitting these would show stale values
       // on the next open with no reload -- the same shape of fault as TD-286.
@@ -13718,13 +13847,22 @@ function saveCampaignSettings() {
       var _cpSaved = (data && data.campaign_prompt !== undefined) ? data.campaign_prompt : _cpVal;
       (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; } });
       if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; }
-      closeCampaignSettings();
+      // An edit that arrived while this PUT was in flight has not been written yet. Replay it,
+      // but only while the modal is still the same campaign -- if it has been closed, the close
+      // already flushed and there is nothing owed.
+      if (_csSaveAgain) { _csSaveAgain = false; if (_csReady && _csCampaignId === saveId) csCommitCampaignSettings(); }
     })
     .catch(function (e) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      _csSaving = false;
+      _csSaveAgain = false;
+      csSaveState('Not saved', 'error');
       if (err) { err.textContent = 'Could not save settings: ' + e.message; err.classList.remove('hidden'); }
     });
 }
+
+// The Save button is gone, but keep the name working: it was the modal's only entry point for
+// two versions and anything that still calls it should write, not throw.
+function saveCampaignSettings() { csDirty(true); }
 
 // ----- Admin: run the weekly metrics snapshot on demand -----
 function runSnapshotNow() {
@@ -15604,6 +15742,11 @@ async function deleteCampaign() {
 function _doDeleteCampaign(id) {
   var msg = document.getElementById('cs-delete-msg');
   var btn = document.getElementById('cs-delete-btn');
+  // v3.0.492 -- DROP ANY PENDING AUTOSAVE FIRST. closeCampaignSettings flushes on the way out,
+  // and on a successful delete that flush would PUT settings to a campaign that no longer exists
+  // -- harmless, but it paints a red 'Not saved' over a modal that is closing because the delete
+  // WORKED. Nothing is owed to a row that is about to go.
+  try { if (_csSaveTimer) { clearTimeout(_csSaveTimer); _csSaveTimer = null; } _csSaveAgain = false; csSaveState(''); } catch (e) {}
   if (btn) btn.disabled = true;
   fetch('/api/campaigns/' + id, { method: 'DELETE' })
     .then(function(r){ return r.json().then(function(d){ return { status: r.status, d: d }; }); })
@@ -15865,7 +16008,24 @@ function pickPublishSource(src) {
 function finalizeUpdatePublishPick() {
   var wrap = document.getElementById('layoutai-publish-pick');
   var after = document.getElementById('pub-pick-after');
-  var ready = !!(_finalizeAfterDone && _finalizeAfterPages > 0);
+  // v3.0.493 -- THE OPTIMIZED BOOK IS READY WHEN A SAVED ONE IS ON SCREEN, NOT ONLY
+  // WHILE A RENDER HAPPENS TO HAVE FINISHED.
+  // This read `_finalizeAfterDone && _finalizeAfterPages > 0` alone, and this function is
+  // called from renderPdfInto's completion handler FOURTEEN LINES BEFORE that flag is set.
+  // So `ready` was false every single time, and the demotion below then erased the armed
+  // choice: Load Last Optimized File set _publishSource to 'composed', the render it had
+  // just started completed, and this quietly put it back to 'flow'. Publish then rebuilt
+  // the whole book in Chromium and published the UN-OPTIMIZED layout -- 20-30 seconds to
+  // produce the wrong artifact, with nothing on screen saying so.
+  // v3.0.392 found this exact fault, wrote it down in the comment on _finalizeSavedReady,
+  // and fixed it FOR THE BUTTON ONLY -- moving the button onto the durable flag and leaving
+  // _publishSource reading the transient one. The visible symptom was cured and the
+  // invisible one shipped. Sixth instance of that pattern; the diagnosis was already in
+  // the file, four lines above the code that still had the bug.
+  // _finalizeSavedReady means: a saved optimized file exists AND is what the pane is
+  // showing. That is precisely the condition under which publishing 'composed' is valid,
+  // so it belongs in this test rather than beside it.
+  var ready = !!((_finalizeAfterDone && _finalizeAfterPages > 0) || _finalizeSavedReady);
   // Only the admin diagnostic view shows the dual publish-pick buttons; users publish the optimized
   // version automatically, so keep the block hidden for them (it must not re-show mid-Optimize).
   var _showPick = !!(optimizeIsAdmin() && window._optimizeAdminView);
@@ -16186,7 +16346,18 @@ function optimizeProgress(msg, opts) {
   if (box.style.display === 'none') box.style.display = 'block';
   var line = document.createElement('div');
   line.style.cssText = 'opacity:0;transition:opacity 0.3s;';
-  line.innerHTML = (opts.done ? '&#10003; ' : '&#8226; ') + msg;
+  // v3.0.493 -- A WARNING MUST LOOK LIKE A WARNING.
+  // optimizeLogLine has always had a 'stop' kind and styled it red in the ADMIN log panel,
+  // which is behind an easter egg. The user-facing list this writes to rendered it as an
+  // ordinary bullet, so the one line telling somebody their saved layout was stale looked
+  // exactly like 'Polished your book'. Ian never saw it, and published anyway.
+  // The kind was already being passed here as opts.done; it just had no warning branch.
+  if (opts.warn) {
+    line.className = 'opt-line-warn';
+    line.innerHTML = '&#9888; ' + msg;
+  } else {
+    line.innerHTML = (opts.done ? '&#10003; ' : '&#8226; ') + msg;
+  }
   box.appendChild(line);
   box.scrollTop = box.scrollHeight;
   requestAnimationFrame(function () { line.style.opacity = opts.dim ? '0.55' : '1'; });
@@ -17259,7 +17430,10 @@ function optimizeLogLine(txt, kind) {
   // the easter-egg view, so 'Saved' reached the downloadable bundle and the admin panel and never the
   // place anyone actually watches -- the run appeared to end at 'Polished your book' with no word on
   // whether the version had been kept.
-  try { if (typeof optimizeProgress === 'function') optimizeProgress(txt, { done: kind === 'ok' }); } catch (e) {}
+  // v3.0.493 -- carry the KIND through. This passed only `done`, so a 'stop' line arrived
+  // in the user-facing list indistinguishable from an ordinary progress step. The admin
+  // panel below already coloured it; the place people actually watch did not.
+  try { if (typeof optimizeProgress === 'function') optimizeProgress(txt, { done: kind === 'ok', warn: kind === 'stop' }); } catch (e) {}
   try {
     var p = document.getElementById('__aiLoopLog');
     if (p) {
@@ -17414,7 +17588,7 @@ function finalizeLoadLastOptimized(manual) {
 function finalizeRestoreSavedLayout(info) {
   if (!state.currentCampaign) return;
   if (info && info.hasLayout === false) {
-    optimizeLogLine('This version was saved before layouts were kept, so only the PDF came back. Run Optimize and Save again before ordering or publishing.', 'stop');
+    optimizeLogLine('<strong>This version was saved before layouts were kept</strong>, so only the PDF came back. Run Optimize and Save again before ordering or publishing.', 'stop');
     return;
   }
   try {
@@ -17426,9 +17600,9 @@ function finalizeRestoreSavedLayout(info) {
         if (j && j.restored) {
           optimizeLogLine('Saved layout loaded -- this is the book that will print and publish.', 'ok');
         } else if (j && j.reason === 'settings_changed') {
-          optimizeLogLine('Your book settings have changed since this version was saved. Run Optimize again and Save before ordering or publishing.', 'stop');
+          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved. Publishing and printing will both use the saved version you just pulled up, not these settings. Run Optimize again and Save if you want the new settings applied.', 'stop');
         } else {
-          optimizeLogLine('Only the saved PDF came back -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
+          optimizeLogLine('<strong>Only the saved PDF came back</strong> -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }
       }).catch(function () {});
   } catch (e) { _finalizeRestoreWait = null; }
@@ -17482,7 +17656,9 @@ function finalizeUpdateHeader() {
   parts.push('Session dividers: ' + (o.markers ? ('On' + (o.markerbreak ? ' (new page per session)' : '')) : 'Off'));
   parts.push('Captions: ' + optLabel('cl-caption', o.caption));
   parts.push('Borders: ' + optLabel('cl-border', o.border));
-  parts.push('Paper: ' + optLabel('cl-paper', o.paper));
+  // v3.0.497 -- Paper removed from this list. optLabel reads the option text out of the
+  // #cl-paper <select>, which no longer exists, so this printed a blank value; and paper is
+  // no longer a layout attribute at all -- it is the physical stock picked on the order page.
   parts.push('Body font: ' + optLabel('cl-font', o.font));
   parts.push('Drop cap: ' + (o.dropcap ? 'On' : 'Off'));
   parts.push('Narrative: ' + optLabel('cl-narr', o.narr));
@@ -18813,6 +18989,13 @@ function renderPdfInto(url, containerId, isBefore) {
         if (containerId === 'finalize-after-scroll') { var _st = document.getElementById('finalize-after-progress'); if (_st && !_st.querySelector('#__aiLoopBar')) _st.style.display = 'none'; }
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
         else { finalizeBuildAfterNav(first, last); finalizeApplyAfterZoom(); }   // user-view right spine + zoom follow the After render
+        // v3.0.493 -- SET THE DONE FLAG BEFORE THE THING THAT READS IT.
+        // finalizeUpdatePublishPick asks whether the After render has finished. It was called
+        // here while the answer was still 'no', because the flag was not set until fourteen
+        // lines further down -- so it was told the opposite of the truth on every completion,
+        // and acted on it by disarming the optimized publish. Moving the assignment up is the
+        // whole ordering fix; nothing between here and its old position reads either flag.
+        if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;   // every page rasterised
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();
         // v3.0.438 -- THIS is the label the reader looks at, and v3.0.437 changed the wrong one.
         // The two delta readouts were switched to the height metric; this per-pane page count was
@@ -18827,7 +19010,8 @@ function renderPdfInto(url, containerId, isBefore) {
           _wcnt.ondblclick = function () { window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery() + '&flow=1', '_blank'); };
         }
         finalizeAttachSync();
-        if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;   // every page rasterised
+        // v3.0.493 -- the done flags are now set ABOVE, before finalizeUpdatePublishPick reads
+        // them. Setting them again here would be harmless but would hide the ordering.
         if (!isBefore && typeof _finalizeAfterOnDone === 'function') { var _cb = _finalizeAfterOnDone; _finalizeAfterOnDone = null; try { _cb(); } catch (e) {} }
       });
     });
