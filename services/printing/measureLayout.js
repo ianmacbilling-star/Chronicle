@@ -217,7 +217,18 @@ async function measureDocument(html, options) {
     }
     }   // end: not yet confirmed on this browser
 
-    var data = await page.evaluate(function () {
+    // v3.0.510 -- READ THE ENV VAR IN NODE AND PASS IT IN.
+    // v3.0.508 put `process.env.DEBUG_BOXOVERFLOW` INSIDE this evaluate body, which runs in the
+    // BROWSER: `ReferenceError: process is not defined`, thrown on the very first measure, so every
+    // magazine pack died instantly with a 500 (`[pack-queue] campaign 1 pack FAILED after 0s`).
+    // THE LINT SWEEP CANNOT SEE THIS, and that is the lesson. The eslint no-undef config treats
+    // browser globals inside a page.evaluate body as correct -- because they are -- which means it
+    // equally accepts NODE globals there, where they are not. The sweep ran clean an hour after this
+    // shipped. An evaluate body needs a BROWSER lint environment, not the Node one.
+    // Anything from Node must cross the boundary as an ARGUMENT. Nothing else in this body reads a
+    // Node global; the build now asserts that.
+    var _boxScanOn = !!process.env.DEBUG_BOXOVERFLOW;
+    var data = await page.evaluate(function (_boxScanOn) {
       var PX = 96; // CSS px per inch
       var round3 = function (n) { return Math.round(n * 1000) / 1000; };
       var nodes = Array.prototype.slice.call(document.querySelectorAll('[data-mblk]'));
@@ -357,7 +368,6 @@ async function measureDocument(html, options) {
       // While it is off, the dump prints NOTHING for it rather than "[OK]" -- claiming a clean
       // result from a check that did not run is the one outcome worse than the false alarms.
       var boxOverflows = [];
-      var _boxScanOn = !!process.env.DEBUG_BOXOVERFLOW;
       try {
         if (!_boxScanOn) throw { __skip: 1 };
         nodes.forEach(function (n) {
@@ -391,7 +401,7 @@ async function measureDocument(html, options) {
       } catch (e) { boxOverflows = []; }
       if (!_boxScanOn) boxOverflows = null;   // null = NOT MEASURED, distinct from [] = measured and clean
       return { blocks: blocks, towerProbes: probes, imgProbes: imgProbes, boxOverflows: boxOverflows };
-    });
+    }, _boxScanOn);
 
     var total = 0;
     data.blocks.forEach(function (b) { total += b.heightIn; });
