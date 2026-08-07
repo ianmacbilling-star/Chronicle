@@ -5946,7 +5946,25 @@ async function computePairedPack(req, campaignId, packOpts) {
       (pg.placements || []).forEach(function (pl) {
         var b = null; for (var _bi = 0; _bi < packBeats.length; _bi++) { if (packBeats[_bi].idx === pl.beat) { b = packBeats[_bi]; break; } }
         if (!b) return;
-        if (pl.kind === 'image' || pl.kind === 'tower') est += (b.imageH || 0) + (b.imgOver || 0) + (b.capBelowH || 0);
+        // v3.0.499 -- TD-306. COUNT THE CAPTION ONCE.
+        // `imgOver` ALREADY contains the below-image caption for any titled image (see where
+        // packBeats is built: imgOver = _imgOver + (title ? _capBelowH : 0)). `capBelowH` is
+        // set SEPARATELY, for towers only, and holds the same _capBelowH. So a titled TOWER
+        // was reserving its caption twice here -- 0.589in of pure arithmetic added to the
+        // estimate of exactly the pages the decoration work is being judged on.
+        // It was invisible until 2026-08-07 because DECOR_OFF made both terms zero.
+        //
+        // THE PACKER IS CORRECT AND IS NOT TOUCHED. Both fields are load-bearing, in
+        // different branches, which is why the fix is here and not at the source:
+        //   packPaired.js:220  tower path      -> uses capBelowH ONLY (returns early)
+        //   packPaired.js:241/279 non-tower    -> uses imgOver ONLY
+        // Neither double-counts. Removing capBelowH from the BEAT would strip the tower
+        // path's only caption reserve; folding it out of imgOver would strip the non-tower
+        // path's. So the diagnostic accumulator is the one place that must choose, and it
+        // takes imgOver, which is populated for both shapes.
+        //
+        // DO NOT "restore" capBelowH to this line. It is not missing; it is the duplicate.
+        if (pl.kind === 'image' || pl.kind === 'tower') est += (b.imageH || 0) + (b.imgOver || 0);
         else if (pl.kind === 'narr') est += (pl.part === 'after') ? (b.textAfterH || 0) : (b.textBeforeH || 0);
         else if (pl.kind === 'section-header') est += (b.headerH || 0);
       });
