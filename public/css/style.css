@@ -69,6 +69,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .panel-dark .alert-success{background:rgba(15,110,86,0.3);border-color:rgba(134,212,186,0.4);color:#86d4ba;}
 .panel-dark .alert-warning{background:rgba(120,80,0,0.32);border-color:rgba(230,190,120,0.4);color:#e6be78;}
 .panel-dark .alert-info{background:rgba(40,60,80,0.4);border-color:rgba(150,180,200,0.4);color:#a8c4d6;}
+/* v3.0.493 -- A WARNING IN THE OPTIMIZE PROGRESS LIST SHOULD LOOK LIKE ONE.
+   The stale-layout notice was written into #optimize-progress as an ordinary bullet,
+   identical to every other line, so it read as one more progress step and was never
+   noticed. Ian: "make it look a little more like a warning... look at how we do other
+   warnings in the CSS and mimic that."
+   These are the .panel-dark .alert-warning colours above, verbatim. They are restated
+   rather than inherited because #optimize-progress is not inside a .panel-dark ancestor,
+   and a style that depends on where it happens to sit is a style that stops working when
+   the box moves. */
+.opt-line-warn{display:block;background:rgba(120,80,0,0.32);border:1px solid rgba(230,190,120,0.4);color:#e6be78;border-radius:var(--radius);padding:8px 12px;margin:8px 0;line-height:1.5;}
+.opt-line-warn strong{color:#f0d9a8;}
 
 /* ===== APP HEADER ===== */
 .app-header{

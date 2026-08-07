@@ -10341,7 +10341,8 @@ async function generateAllImages(fromChain) {
   fetch('/api/images/generate-all', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
+    body: JSON.stringify({
+
       // v3.0.447 -- SECOND COPY of generateAllImages. app.js duplicates functions on purpose and
       // every copy has to be patched; v3.0.445 fixed only the first and the Storyboard button calls
       // this one, so images kept landing on the canonical.
@@ -12233,7 +12234,8 @@ function forkOnScreenIsMine() {
 function forkOwnNonCanonical() {
   return forkOnScreenIsMine() && !forkOnScreenIsCanonical();
 }
-function updateForkEditability() {
+function updateForkEditability() {
+
   var role = state.currentCampaign && state.currentCampaign.my_role;
   var editable = forkOnScreenIsMine();
   // can-edit-fork means "editing a version that is NOT the canonical" -- it turns on the per-panel
@@ -15949,7 +15951,24 @@ function pickPublishSource(src) {
 function finalizeUpdatePublishPick() {
   var wrap = document.getElementById('layoutai-publish-pick');
   var after = document.getElementById('pub-pick-after');
-  var ready = !!(_finalizeAfterDone && _finalizeAfterPages > 0);
+  // v3.0.493 -- THE OPTIMIZED BOOK IS READY WHEN A SAVED ONE IS ON SCREEN, NOT ONLY
+  // WHILE A RENDER HAPPENS TO HAVE FINISHED.
+  // This read `_finalizeAfterDone && _finalizeAfterPages > 0` alone, and this function is
+  // called from renderPdfInto's completion handler FOURTEEN LINES BEFORE that flag is set.
+  // So `ready` was false every single time, and the demotion below then erased the armed
+  // choice: Load Last Optimized File set _publishSource to 'composed', the render it had
+  // just started completed, and this quietly put it back to 'flow'. Publish then rebuilt
+  // the whole book in Chromium and published the UN-OPTIMIZED layout -- 20-30 seconds to
+  // produce the wrong artifact, with nothing on screen saying so.
+  // v3.0.392 found this exact fault, wrote it down in the comment on _finalizeSavedReady,
+  // and fixed it FOR THE BUTTON ONLY -- moving the button onto the durable flag and leaving
+  // _publishSource reading the transient one. The visible symptom was cured and the
+  // invisible one shipped. Sixth instance of that pattern; the diagnosis was already in
+  // the file, four lines above the code that still had the bug.
+  // _finalizeSavedReady means: a saved optimized file exists AND is what the pane is
+  // showing. That is precisely the condition under which publishing 'composed' is valid,
+  // so it belongs in this test rather than beside it.
+  var ready = !!((_finalizeAfterDone && _finalizeAfterPages > 0) || _finalizeSavedReady);
   // Only the admin diagnostic view shows the dual publish-pick buttons; users publish the optimized
   // version automatically, so keep the block hidden for them (it must not re-show mid-Optimize).
   var _showPick = !!(optimizeIsAdmin() && window._optimizeAdminView);
@@ -16270,7 +16289,18 @@ function optimizeProgress(msg, opts) {
   if (box.style.display === 'none') box.style.display = 'block';
   var line = document.createElement('div');
   line.style.cssText = 'opacity:0;transition:opacity 0.3s;';
-  line.innerHTML = (opts.done ? '&#10003; ' : '&#8226; ') + msg;
+  // v3.0.493 -- A WARNING MUST LOOK LIKE A WARNING.
+  // optimizeLogLine has always had a 'stop' kind and styled it red in the ADMIN log panel,
+  // which is behind an easter egg. The user-facing list this writes to rendered it as an
+  // ordinary bullet, so the one line telling somebody their saved layout was stale looked
+  // exactly like 'Polished your book'. Ian never saw it, and published anyway.
+  // The kind was already being passed here as opts.done; it just had no warning branch.
+  if (opts.warn) {
+    line.className = 'opt-line-warn';
+    line.innerHTML = '&#9888; ' + msg;
+  } else {
+    line.innerHTML = (opts.done ? '&#10003; ' : '&#8226; ') + msg;
+  }
   box.appendChild(line);
   box.scrollTop = box.scrollHeight;
   requestAnimationFrame(function () { line.style.opacity = opts.dim ? '0.55' : '1'; });
@@ -17343,7 +17373,10 @@ function optimizeLogLine(txt, kind) {
   // the easter-egg view, so 'Saved' reached the downloadable bundle and the admin panel and never the
   // place anyone actually watches -- the run appeared to end at 'Polished your book' with no word on
   // whether the version had been kept.
-  try { if (typeof optimizeProgress === 'function') optimizeProgress(txt, { done: kind === 'ok' }); } catch (e) {}
+  // v3.0.493 -- carry the KIND through. This passed only `done`, so a 'stop' line arrived
+  // in the user-facing list indistinguishable from an ordinary progress step. The admin
+  // panel below already coloured it; the place people actually watch did not.
+  try { if (typeof optimizeProgress === 'function') optimizeProgress(txt, { done: kind === 'ok', warn: kind === 'stop' }); } catch (e) {}
   try {
     var p = document.getElementById('__aiLoopLog');
     if (p) {
@@ -17498,7 +17531,7 @@ function finalizeLoadLastOptimized(manual) {
 function finalizeRestoreSavedLayout(info) {
   if (!state.currentCampaign) return;
   if (info && info.hasLayout === false) {
-    optimizeLogLine('This version was saved before layouts were kept, so only the PDF came back. Run Optimize and Save again before ordering or publishing.', 'stop');
+    optimizeLogLine('<strong>This version was saved before layouts were kept</strong>, so only the PDF came back. Run Optimize and Save again before ordering or publishing.', 'stop');
     return;
   }
   try {
@@ -17510,9 +17543,9 @@ function finalizeRestoreSavedLayout(info) {
         if (j && j.restored) {
           optimizeLogLine('Saved layout loaded -- this is the book that will print and publish.', 'ok');
         } else if (j && j.reason === 'settings_changed') {
-          optimizeLogLine('Your book settings have changed since this version was saved. Run Optimize again and Save before ordering or publishing.', 'stop');
+          optimizeLogLine('<strong>Your Layout Settings have changed</strong> since this version was saved, so this book cannot be ordered or published as it stands. Run Optimize again and Save.', 'stop');
         } else {
-          optimizeLogLine('Only the saved PDF came back -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
+          optimizeLogLine('<strong>Only the saved PDF came back</strong> -- the layout could not be loaded. Run Optimize and Save again before ordering or publishing.', 'stop');
         }
       }).catch(function () {});
   } catch (e) { _finalizeRestoreWait = null; }
@@ -18897,6 +18930,13 @@ function renderPdfInto(url, containerId, isBefore) {
         if (containerId === 'finalize-after-scroll') { var _st = document.getElementById('finalize-after-progress'); if (_st && !_st.querySelector('#__aiLoopBar')) _st.style.display = 'none'; }
         if (isBefore) { finalizeBuildNav(first, last); finalizeShowFreeAnalysis(flagged, total); }
         else { finalizeBuildAfterNav(first, last); finalizeApplyAfterZoom(); }   // user-view right spine + zoom follow the After render
+        // v3.0.493 -- SET THE DONE FLAG BEFORE THE THING THAT READS IT.
+        // finalizeUpdatePublishPick asks whether the After render has finished. It was called
+        // here while the answer was still 'no', because the flag was not set until fourteen
+        // lines further down -- so it was told the opposite of the truth on every completion,
+        // and acted on it by disarming the optimized publish. Moving the assignment up is the
+        // whole ordering fix; nothing between here and its old position reads either flag.
+        if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;   // every page rasterised
         if (typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();
         // v3.0.438 -- THIS is the label the reader looks at, and v3.0.437 changed the wrong one.
         // The two delta readouts were switched to the height metric; this per-pane page count was
@@ -18911,7 +18951,8 @@ function renderPdfInto(url, containerId, isBefore) {
           _wcnt.ondblclick = function () { window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery() + '&flow=1', '_blank'); };
         }
         finalizeAttachSync();
-        if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;   // every page rasterised
+        // v3.0.493 -- the done flags are now set ABOVE, before finalizeUpdatePublishPick reads
+        // them. Setting them again here would be harmless but would hide the ordering.
         if (!isBefore && typeof _finalizeAfterOnDone === 'function') { var _cb = _finalizeAfterOnDone; _finalizeAfterOnDone = null; try { _cb(); } catch (e) {} }
       });
     });

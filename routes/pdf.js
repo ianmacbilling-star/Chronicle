@@ -4683,6 +4683,13 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
 // publish someone else's fork -- any client as_user is ignored.
 // ============================================================
 router.post('/publish-story/:campaignId', requireAuth, async function(req, res) {
+  // v3.0.493 -- MEASURE, DO NOT ESTIMATE.
+  // v3.0.492 was described as making publishing sub-second on the strength of reading the
+  // code rather than watching it run, and the real number was 20-30s -- on a path that
+  // never entered the new code at all. Neither of us could tell where the time went from
+  // the log. Now the route says so itself, in one line, every time.
+  var _pt0 = Date.now(), _ptMark = _pt0, _ptPhase = [];
+  function _ptLap(name) { var n = Date.now(); _ptPhase.push(name + '=' + (n - _ptMark) + 'ms'); _ptMark = n; }
   const db = await getDb();
 
   // Publishing to the public Library requires a paid plan -- free-trial users
@@ -4783,6 +4790,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     });
   }));
 
+  _ptLap('gather');
   if (!sessionsWithData.length) {
     return res.status(400).json({ error: 'No sessions are included. Enable at least one session under Include in Print before publishing.' });
   }
@@ -4847,6 +4855,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // `co` (both are written by save-optimized from the same req.query.co in the same call),
     // so the staleness check is unchanged in meaning while costing one fetch less.
     var _loE = await lastOptimizedEntry(req, req.params.campaignId, _pubArr);
+    _ptLap('lookup');
     if (!_loE || !_loE.pdfUrl) {
       return res.status(409).json({ error: 'optimize_required', message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then publish.' });
     }
@@ -4874,6 +4883,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     try {
       var _cpName = 'story-' + campaign.id + '-u' + req.session.userId + '-' + Date.now() + '.pdf';
       pdfUrl = await copyObject(_loE.pdfUrl, _cpName, 'story');
+      _ptLap('copy');
     } catch (e) {
       console.error('[publish-story] copy of the approved PDF failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
@@ -4923,6 +4933,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
       var _flatS = await flattenPdf(pdfBuffer, 'story');
       pdfBuffer = _flatS.buffer;
       pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'story');
+      _ptLap('renderFlattenUpload');
     } catch (e) {
       console.error('[publish-story] upload failed:', e && e.message ? e.message : e);
       return res.status(500).json({ error: 'Could not save your story PDF. Please try again.' });
@@ -4970,6 +4981,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
       'VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::text[], TRUE, ?, ?)'
     ).run(campaign.id, req.session.userId, authorName, title, pdfUrl, coverUrl || null, snapshotJson, slug, blurb || null, teaser || null, _pubGenres, nowIso, nowIso);
     var _newStoryId = _ins ? _ins.lastInsertRowid : null;
+    _ptLap('insertRow');
   } catch (e) {
     console.error('[publish-story] db upsert failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Could not record your published story. Please try again.' });
@@ -4994,6 +5006,11 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     try { await logDebug(req.session.userId, { level: 'error', source: 'api', page: 'Publish to library', fn: 'POST /publish-story', message: 'Publish image-index rebuild failed (non-fatal): ' + (e && e.message), detail: { campaign_id: campaign.id, note: 'story published but public page may be missing panel images' } }); } catch (_le) {}
   }
 
+  _ptLap('imageIndex');
+  // ONE line, always, whichever branch ran. If it shows `copy=` this took the v3.0.492
+  // fast path; if it shows `renderFlattenUpload=` it did NOT, and that is the first thing
+  // to look at before anything else is blamed for the wait.
+  try { console.log('[publish-story] campaign ' + campaign.id + ' path=' + _pubSrc + ' ' + _ptPhase.join(' ') + ' TOTAL=' + (Date.now() - _pt0) + 'ms'); } catch (e) {}
   return res.json({ success: true, url: pdfUrl, author: authorName, titleWarning: _titleWarning || null });
 });
 
