@@ -1601,6 +1601,41 @@ function gzNarrBox(narrHtml, opts) {
 // stored aspect -- leaving a thin parchment strip when the stored aspect is slightly
 // off (the "border bigger than the picture"). For those, the frame HUGS the image's
 // true height (width fixed, height:auto) so the border can never exceed the picture.
+// v3.0.504 -- THE BORDER ENDS WHERE THE PICTURE ENDS.
+// Ian, 2026-08-07, on a tower whose frame ran on past the art: "the picture ends but the border
+// continues." Measured from his screenshot: artwork stops at y354, the border's bottom rail sits at
+// y380 -- a 25px strip of PURE WHITE (mean 255, colourfulness 0) inside the frame.
+//
+// THE CAUSE. A non-crop-safe image renders at width:100% + height:auto, so its height comes from
+// its OWN intrinsic aspect. The box around it carries min-height: <planned h>, derived from the
+// STORED momentAspect. When the stored aspect is stale the picture renders shorter than the floor,
+// the box stays at the floor, and cgBorder -- drawn on that same box -- wraps the leftover white.
+// The floor's own comment predicted exactly this: "it adds NO dead space unless that stored aspect
+// is stale." It is stale. Ian's dump: tower#0 planned imgH8.96 asp0.248, tower#1 imgH7.17 asp0.25.
+//
+// THE FLOOR MUST STAY, and this is the trap. measureLayout ABORTS every image request so layout
+// never waits on R2, so with height:auto and NO floor the box measures ~zero and the tower measures
+// TEXT-ONLY -- band height, the tower-merge ladder, REAL-CELL, NEVER-CLIP and BOX-OVERFLOW all go
+// blind on a page that visibly chops its text. That cost a week (v3.0.266). The same dump shows it
+// live: "img-real 0.17" in the measure pass, against a box held at 8.96in.
+//
+// SO: keep the floor on the OUTER box -- measurement is untouched, nothing downstream moves -- and
+// move the BORDER and the overlays onto an INNER wrapper that hugs the image. The frame then ends
+// at the picture in both passes. When the aspect is accurate the two boxes coincide and nothing
+// changes at all; when it is stale you get a little plain white below an intact frame instead of an
+// empty bordered box.
+// TWO CALLERS, ONE FIX: gzImgBox and cgFlowTower had byte-similar copies of this branch. gzImgBox's
+// comment records the same complaint already reported once -- "the border should come down to meet
+// the picture's edge" -- fixed there for the letterbox case and never for the stale-aspect one.
+function huggingImgBox(m, opts, outerCss, floorH) {
+  return '<div style="' + outerCss + 'min-height:' + floorH.toFixed(2) + 'in;' +
+      'position:relative;background:transparent;line-height:0;">' +
+    '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
+      '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
+      picOverlay(opts) + coCaptionCover(m, opts.caption) +
+    '</div>' +
+  '</div>';
+}
 function gzImgBox(m, opts, fl, w, h) {
   // A non-crop-safe image renders object-fit:contain, which LETTERBOXES inside a fixed-height box.
   // The box background is transparent, so those bands showed the page through and the border stood
@@ -1612,8 +1647,7 @@ function gzImgBox(m, opts, fl, w, h) {
     // does NOT collapse when image loads are aborted during the magazine measure pass -- without
     // this the band measures short and the deterministic composer clips its overflow. When the
     // image loads (compose/flow render) it renders at its natural height (>= the floor).
-    return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;min-height:' + h.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;">' +
-      '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    return huggingImgBox(m, opts, fl + 'width:' + w.toFixed(2) + 'in;', h);
   }
   return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;height:' + h.toFixed(2) +
     'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
@@ -1745,15 +1779,7 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
     // adds NO dead space unless that stored aspect is stale. It is a FLOOR, never a ceiling: the
     // img keeps width:100 percent + height:auto, there is no overflow:hidden and no object-fit here,
     // so the box can only grow to the picture. This cannot crop a tower.
-    ? ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) +
-       'in;min-height:' + imgH.toFixed(2) +
-       'in;position:relative;background:transparent;line-height:0;">' +
-       // Tower box is WIDTH-driven with no fixed height, so the image must use height:auto (the box
-       // grows to the image). The primitive's contain path uses height:100%, which behaves
-       // differently in an auto-height box -- so the tower keeps its own emit here. (Its cover
-       // branch below DOES go through the primitive via cgImgMedia.)
-       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-       picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>')
+    ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH)
     : ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>');
   var col = (wrapBelow && !besideHtml)
