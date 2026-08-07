@@ -1082,6 +1082,67 @@ function coCaptionBelow(m, i, caption) {
 // used to paint over the artwork. An UNTITLED picture keeps its full height: no title, no strip.
 var CG_CAP_STRIP_IN = 0.20;   // one 9.5pt Cinzel line (0.158in) plus breathing room
 function cgCapIsBelow(caption) { return caption === 'engraved'; }
+// v3.0.513 -- THE ENGRAVED CAPTION MOVES OUTSIDE THE FRAME ON A FLOATED PICTURE.
+// Ian, 2026-08-07, from a Magazine spread: "For magazine... the caption needs to be outside the
+// frame." Picture Book has always put it outside; the band strip put it inside. Same style, two
+// looks, which is the thing he ruled out an hour earlier.
+//
+// WHO PAYS. Ian chose CROP: "Let us try A... Only crop by .12 instead of .2. There is room most of
+// the time." He is right that there is room -- a float already carries a 0.10in bottom margin, and
+// once a caption sits under the picture that gap is doing much less work. So the strip is funded
+// from TWO places and the band height does not move at all:
+//     crop from the picture      0.12in
+//     borrowed from the margin   0.04in   (a negative margin under the caption)
+//     strip                      0.16in
+// Before: wrapper = h + 2*border. After: (h - 0.12 + 2*border) + 0.16 - 0.04 = h + 2*border.
+// IDENTICAL. That is the standing rule of TD-166 with the arithmetic actually closed.
+//
+// WHY 0.16 AND NOT 0.12. The strip bounds the type: a line needs about its size times 1.2, so a
+// 0.12in strip caps out near 7pt while 0.16in reaches 9pt. Picture Book sets this caption at
+// 9.5pt. At 0.12 the two layouts would visibly disagree, which is the whole thing being fixed.
+//
+// THE CAP IS IAN. "Cap it so a small picture does not pay the price" -- the strip is never more
+// than 6 percent of the picture, so a 2in float gives up 0.09in rather than 0.12in. And "you could
+// lower the font too on smaller pictures": the font is DERIVED from the strip rather than being a
+// second knob, so the two cannot drift apart. That is the registry mistake (TD-326) not repeated:
+// one number describing one thing, in one place.
+//     picture   strip   crop   font
+//     2.0in     0.120   0.090  6.9pt
+//     2.5in     0.150   0.112  8.6pt
+//     2.67in+   0.160   0.120  9.2pt
+//
+// SCOPE, DELIBERATELY: gzImgBox ONLY this build -- the floated picture, which is what Ian
+// photographed and much the commonest band. The other twelve box builders still use the inside
+// strip, so a float and a feature band look different until this is judged. That is a KNOWN
+// inconsistency for one round, taken on purpose: five of those twelve size themselves from the
+// picture (aspect-ratio, no fixed height) and need a different shape of fix, and shipping thirteen
+// unrendered restructurings in one build is how v3.0.508 happened.
+//
+// ROLLBACK: set CG_CAP_OUTSIDE to false. The inside-strip path is untouched and still works.
+var CG_CAP_OUTSIDE = true;
+// The OUTSIDE strip is 0.16in, not the 0.20in the inside strip uses, because the outside one is
+// funded by a 0.12in crop plus 0.04in borrowed from the float gap and Ian set the crop: "Only crop
+// by .12 instead of .2." These are two different numbers for two different mechanisms and they
+// must not be collapsed into one -- the inside strip has no margin to borrow from.
+var CG_CAP_OUT_MAX_IN = 0.16;
+function cgCapPlan(m, opts, hIn) {
+  if (!CG_CAP_OUTSIDE) return null;
+  if (!cgCapIsBelow(opts && opts.caption) || !m || !m.title) return null;
+  if (!(hIn > 0)) return null;
+  var strip = Math.max(0.08, Math.min(CG_CAP_OUT_MAX_IN, 0.06 * hIn));
+  var borrow = Math.min(0.04, strip * 0.25);
+  var crop = strip - borrow;
+  var pt = Math.min(9.5, Math.round((strip * 72 / 1.25) * 10) / 10);
+  return { strip: strip, borrow: borrow, crop: crop, pt: pt };
+}
+// The caption itself, sitting BELOW the bordered picture box rather than inside it.
+// line-height is explicit for the same reason as everywhere else here: the boxes set it to 0.
+function cgCapOutsideHtml(m, plan) {
+  return '<div style="height:' + plan.strip.toFixed(3) + 'in;margin-bottom:-' + plan.borrow.toFixed(3) + 'in;' +
+    'display:flex;align-items:center;justify-content:center;text-align:center;font-family:Cinzel,serif;' +
+    'font-size:' + plan.pt + 'pt;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a2a;line-height:1.2;' +
+    'overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
+}
 function cgBoxInner(mediaHtml, m, opts) {
   var cap = opts && opts.caption;
   if (!cgCapIsBelow(cap) || !m || !m.title)
@@ -1810,6 +1871,18 @@ function gzImgBox(m, opts, fl, w, h) {
     // this the band measures short and the deterministic composer clips its overflow. When the
     // image loads (compose/flow render) it renders at its natural height (>= the floor).
     return huggingImgBox(m, opts, fl + 'width:' + w.toFixed(2) + 'in;', h);
+  }
+  // v3.0.513 -- caption OUTSIDE the frame. The float and the width move to a wrapper; the border
+  // stays on the picture box, which is 0.12in shorter; the caption sits under it, outside the
+  // border, with a negative margin that hands 0.04in back to the float gap. Wrapper total is
+  // unchanged, so the band, the page and the pack are unchanged. See cgCapPlan.
+  var _cp = cgCapPlan(m, opts, h);
+  if (_cp) {
+    return '<div style="' + fl + 'width:' + w.toFixed(2) + 'in;position:relative;">' +
+      '<div style="' + cgBorder(opts) + 'width:100%;height:' + (h - _cp.crop).toFixed(3) +
+        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + '</div>' +
+      cgCapOutsideHtml(m, _cp) +
+    '</div>';
   }
   return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;height:' + h.toFixed(2) +
     'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts) + '</div>';
