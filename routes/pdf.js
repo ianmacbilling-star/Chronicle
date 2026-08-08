@@ -4919,7 +4919,13 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // allows 4.2in and a five-character row only reaches 2.4. The figures are WIDTH-limited: n figures
   // overlapping by OV occupy w * (n - (n-1)*OV), so the less they overlap the narrower each must be,
   // and the box aspect then holds the height down with them.
-  // 0.12 to 0.30 makes every figure about 19 percent taller at no cost in page space.
+  // v3.0.567 -- 0.30 to 0.42. Ian: "they need to be bigger overall and maybe closer together."
+  // BOTH ASKS ARE THE SAME NUMBER, which is the useful thing here: more overlap moves the figures
+  // closer AND makes each one wider, and the box aspect turns that width into height. 0.12 to 0.42
+  // is 44 percent taller than where the day started, at no cost in page space.
+  // The mask is gone as of this build, so nothing is being faded at the edges any more -- and with
+  // the art cut out on white and short characters not filling their boxes, the BOXES overlap far
+  // more than the figures inside them ever do.
   // AND IT IS ONLY SAFE NOW. Overlap used to be risky because every portrait carried its own
   // background, so tucking figures together meant tucking RECTANGLES together. Since v3.0.559 they
   // are cut out on white, and height scaling (v3.0.563) means a short character does not fill its
@@ -4935,7 +4941,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     var first = raw.split('/')[0].trim();
     return first || raw.trim();
   }
-  var CAST_OV = 0.30;                 // how much of each figure the next one covers
+  var CAST_OV = 0.42;                 // how much of each figure the next one covers
   var CAST_ASP = 0.62;                // figure box, width over height -- a standing figure
   var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);
   // Height cap so a one or two-character party does not produce a figure taller than the page.
@@ -4997,13 +5003,23 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       // it would lift a 2ft child as far as a 7ft goliath, which on a short figure is a visible
       // float rather than a hint of distance.
       var _drop = _near ? 0 : (_fh * 0.035);              // farther feet sit a touch higher
-      // THE MASK IS THE WHOLE REASON THIS WORKS. The character art is NOT cut out -- every portrait
-      // carries its own background -- so removing the frame would otherwise leave four rectangles of
-      // grey. The edges are faded to GENUINE TRANSPARENCY rather than to page colour: fading to page
-      // colour would paint white over the figure behind and make overlap look like damage; fading to
-      // transparent lets the figure behind show through, which is what makes a group read as a group.
-      // Same mechanism as the scalloped plaque (v3.0.518).
-      var _mask = '-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 0,#000 15%,#000 85%,rgba(0,0,0,0) 100%),linear-gradient(180deg,rgba(0,0,0,0) 0,#000 9%,#000 94%,rgba(0,0,0,0) 100%);-webkit-mask-composite:source-in;mask:linear-gradient(90deg,rgba(0,0,0,0) 0,#000 15%,#000 85%,rgba(0,0,0,0) 100%),linear-gradient(180deg,rgba(0,0,0,0) 0,#000 9%,#000 94%,rgba(0,0,0,0) 100%);mask-composite:intersect;';
+      // v3.0.567 -- THE MASK IS GONE, AND ITS ABSENCE IS THE FIX FOR TWO THINGS AT ONCE.
+      // Ian: "on the final Optimize they were gone. They were there throughout the process and
+      // looping but on the final loop they disappeared." His screenshot of the saved page shows the
+      // CONTACT SHADOWS still in place with no figures above them -- and the shadows are pure CSS
+      // while the figures are <img> elements carrying this mask. A mask that fails to resolve does
+      // not show the image unmasked; IT HIDES THE IMAGE ENTIRELY.
+      // This is TD-352, and it is the same two-layer -webkit-mask with mask-composite that was
+      // measured dead in the print path twice today -- once on the plaque scallops (TD-347) and once
+      // in the frame probe. It survived the Optimize pane, which is a browser, and died in the save,
+      // which is not. Ian guessed it before I did.
+      // AND IT NO LONGER HAS ANYTHING TO DO. Its own comment said why it existed: "the character art
+      // is NOT cut out -- every portrait carries its own background -- so removing the frame would
+      // otherwise leave four rectangles of grey." Since v3.0.559 every reference is generated on pure
+      // white with no floor and no ground shadow, so there are no rectangles of grey to hide. The
+      // mask was protecting against a problem that no longer exists, using a mechanism that no longer
+      // works, and deleting it fixes the disappearance rather than working around it.
+      var _mask = '';
       // A flattened, blurred ellipse under the feet. This is what sells STANDING; without it the
       // figures float. It is scaled and dimmed with distance like everything else.
       // v3.0.565 -- THE SHADOW RISES WITH THE FIGURE. Ian: "I don't understand why Humble has their
@@ -5021,7 +5037,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         '<div class="cast-stage" style="height:' + _castH.toFixed(2) + 'in;padding-bottom:' + _drop.toFixed(3) + 'in;">' +
           _shadow + _fig +
         '</div>' +
-        '<div class="cast-label" style="width:' + _castStep.toFixed(2) + 'in;">' +
+        // v3.0.567 -- THE CAPTION STAGGERS WITH ITS FIGURE. Ian: "maybe move them closer and stagger
+        // their captions." At 0.42 overlap the caption slots are narrow and adjacent names crowd each
+        // other; dropping every other one clears them completely and reinforces the near/far reading
+        // the figures already have -- a caption that steps back with its figure looks deliberate,
+        // where two captions colliding looks broken.
+        '<div class="cast-label" style="width:' + _castStep.toFixed(2) + 'in;margin-top:' + (_near ? 0 : 0.13).toFixed(2) + 'in;">' +
           '<div class="cast-name">' + _fmEsc(castFirstName(c.name)) + '</div>' +
           '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
           ((((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '')) +
