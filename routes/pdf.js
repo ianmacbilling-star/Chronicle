@@ -2115,7 +2115,80 @@ function keylineMatMaxPx() { return keylineMatPx(99); }
 // The seven other presets append their declarations to .cover-art-title and .cover-art-dates in a
 // later build; the shape is a lookup so adding a ninth is a data change, not a UI change, and
 // user-authored presets are the same object stored per user (see COVER_TITLE_SPEC.md section 8).
-var COVER_TITLE_PRESETS = { chronicle: "" };
+// v3.0.555 -- TD-346 step 5: THE PRESETS THEMSELVES.
+// Each is ONE object describing one look -- font, weight, case, letterspacing and the shadow stack
+// together -- and each targets BOTH cover layouts, so a book with cover art and a book without
+// change together instead of drifting into two different products.
+//
+// OUTLINES ARE LAYERED text-shadow, NOT -webkit-text-stroke. A stroke is painted OVER the glyph and
+// eats into thin serifs at small sizes, and it is the kind of property that has failed the print
+// path twice this week. Four offset shadows are a primitive that cannot be dropped without dropping
+// text shadows entirely, and they land outside the letterform where an outline belongs.
+//
+// GILDED IS NOT HERE, DELIBERATELY -- see COVER_TITLE_GILDED_NOTE below.
+var COVER_TITLE_PRESETS = {
+  // The cover as it has always been. Contributing nothing is what makes every existing book
+  // byte-identical BY CONSTRUCTION rather than by comparison.
+  chronicle: "",
+
+  // ENGRAVED -- cut into stone. Cinzel at its heaviest, a dark rim and a four-step extrude that
+  // steps DOWN through the bronze ramp, so the letter reads as standing proud of the cover rather
+  // than as type with a shadow behind it.
+  engraved:
+    '.cover-art-title, .cover-title { ' + 'font-weight:900;letter-spacing:0.06em;' +
+      'text-shadow:0 1px 0 #6b5119,0 2px 0 #5a4415,0 3px 0 #4a3810,0 4px 0 #2c1e10,0 6px 10px rgba(0,0,0,0.85);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + 'font-weight:600;letter-spacing:0.14em;text-shadow:0 1px 0 #4a3810,0 2px 6px rgba(0,0,0,0.85);' + '}',
+
+  // PULP -- poster energy. Bangers is already in every document (baseFontCss), so this costs no
+  // extra face. The four offset shadows are the outline; the fifth is the hard drop.
+  pulp:
+    '.cover-art-title, .cover-title { ' + "font-family:'Bangers',cursive;font-weight:400;letter-spacing:0.03em;" +
+      'text-shadow:-1.5px -1.5px 0 #0a0806,1.5px -1.5px 0 #0a0806,-1.5px 1.5px 0 #0a0806,1.5px 1.5px 0 #0a0806,4px 4px 0 rgba(0,0,0,0.7);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + "font-family:'Bangers',cursive;letter-spacing:0.1em;" +
+      'text-shadow:-1px -1px 0 #0a0806,1px -1px 0 #0a0806,-1px 1px 0 #0a0806,1px 1px 0 #0a0806;' + '}',
+
+  // MANUSCRIPT -- restrained and wide. Small-caps feel through letterspacing rather than a
+  // synthesised small-caps font, and a hairline rule above and below the title in the same gold the
+  // rest of the book uses.
+  manuscript:
+    '.cover-art-title, .cover-title { ' + "font-family:'EB Garamond',Georgia,serif;font-weight:600;letter-spacing:0.24em;" +
+      'text-transform:uppercase;padding:0.06in 0;' +
+      'border-top:1px solid rgba(201,168,76,0.55);border-bottom:1px solid rgba(201,168,76,0.55);' +
+      'text-shadow:0 1px 8px rgba(0,0,0,0.9);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + "font-family:'EB Garamond',Georgia,serif;font-style:italic;letter-spacing:0.05em;" +
+      'text-transform:none;text-shadow:0 1px 6px rgba(0,0,0,0.85);' + '}',
+
+  // QUILL -- a hand, not a face. Dancing Script has no capitals worth shouting with, so the case is
+  // released and the letterspacing goes to nothing; forcing uppercase on a script is what makes
+  // script covers look like a mistake.
+  quill:
+    '.cover-art-title, .cover-title { ' + "font-family:'Dancing Script',cursive;font-weight:700;letter-spacing:0;" +
+      'text-transform:none;line-height:1.05;text-shadow:0 2px 12px rgba(0,0,0,0.9);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + "font-family:'Dancing Script',cursive;font-weight:500;letter-spacing:0.02em;" +
+      'text-transform:none;text-shadow:0 1px 8px rgba(0,0,0,0.85);' + '}'
+};
+// WHY GILDED IS NOT IN THAT LIST YET. It needs a metallic fill, which means background-clip:text
+// with -webkit-text-fill-color:transparent. IF THE CLIP IS NOT HONOURED BUT THE TRANSPARENT FILL
+// IS, THE TITLE DISAPPEARS -- on the cover, which is the first page anyone sees. That is exactly the
+// failure mode that deleted the whole plaque at v3.0.545, and this week has already found three CSS
+// features that render in the browser and degrade or vanish in print. Shipping a preset that can
+// make a title invisible in a printed book, unproven, is not a trade worth making against a
+// deadline. Prove it on the TD-351 probe page first, then add it here. -> TD-356.
+// WHICH FACE EACH PRESET NEEDS INLINED. Cinzel, Crimson Text and Bangers ship in EVERY document
+// already (baseFontCss), so most of these cost nothing. EB Garamond and Dancing Script do not --
+// they load only when chosen as the BODY font, so a cover using one without this would silently
+// fall back to a system face and render at different metrics than the preview. null means
+// "already present".
+var COVER_TITLE_FACE = { chronicle: null, engraved: null, pulp: null, manuscript: 'garamond', quill: 'script' };
+function coverTitleFaceCss(key) {
+  var k = String(key || 'chronicle');
+  var f = Object.prototype.hasOwnProperty.call(COVER_TITLE_FACE, k) ? COVER_TITLE_FACE[k] : null;
+  return f ? bookFontCss(f) : '';
+}
 // v3.0.553 -- TD-346 step 3: TITLE PLACEMENT, AND THE TWO THINGS THAT HAVE TO MOVE WITH IT.
 // Placement is not just moving a block. Two other things must follow, and one of them is not
 // obvious from looking at the markup.
@@ -4676,6 +4749,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
+  ${titleFaceImp}
   ${coverTitleCss(co && co.titleStyle)}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
@@ -4781,6 +4855,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fWmark  = false; // OFF for now; set to (user is on free trial) later. Under-fill scan samples the paper background, so the watermark never affects optimization even when on.
   var paperCSS = coPaperCSS(co ? co.paper : 'parchment', co ? co.condition : 'none');
   var fontImp = coFontImport(co ? co.font : '');
+  // v3.0.555 -- the title preset's face, inlined the same way the body font is. Empty unless the
+  // chosen preset needs a face that is not already in every document.
+  var titleFaceImp = coverTitleFaceCss(co ? co.titleStyle : '');
   var fontFam = coFontFamily(co ? co.font : '');
   var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
   // When paginated, render only one session. page is 1-indexed.
@@ -5055,6 +5132,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
+  ${titleFaceImp}
   ${coverTitleCss(co && co.titleStyle)}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
