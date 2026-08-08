@@ -266,12 +266,12 @@ function packRows(items) {
 // An uncropped image sized to its shape's true aspect ratio. Because the image
 // was generated at this exact ratio, object-fit:cover fills the box with no
 // cropping; placeholders use the same ratio so empty panels keep their shape.
-function shapedImage(m, border, radius) {
+function shapedImage(m, border, radius, innerHtml) {
   var ratio = dispRatioCSS(m);
   var b = border || '';
   var rad = (radius == null) ? '3px' : radius;
   if (m.image) {
-    return momentImgAspectBox(m, ratio, 'border-radius:' + rad + ';' + b, '');
+    return momentImgAspectBox(m, ratio, 'border-radius:' + rad + ';' + b, '', innerHtml);
   }
   return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:' + rad + ';display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
 }
@@ -883,7 +883,8 @@ function coMedia(m, border) {
       return '<div style="line-height:0;padding-bottom:0.14in;">' +
         momentImgAspectBox(m, ratio, 'border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';', '') + '</div>';
     case 'keyline':
-      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px') + '</div>';
+      // v3.0.535 -- the mat rides in as the overlay child; the bands get theirs from picOverlay.
+      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px', picOverlay({ border: 'keyline' })) + '</div>';
     case 'none':
     default:
       return img;
@@ -1101,13 +1102,13 @@ function brassPlateHtml(title, bottomOffset, sc) {
 var CO_CAP_GAP_PX = 2;
 function coInsetX(border) {
   if (border === 'frame') return 13;
-  if (border === 'keyline') return 1;
+  if (border === 'keyline') return 1 + KEYLINE_MAT_PX;   // v3.0.535 -- 1px border plus the mat
   if (border === 'comic') return 5;
   return 0;
 }
 function coInsetY(border) {
   if (border === 'frame') return 15;
-  if (border === 'keyline') return 3;
+  if (border === 'keyline') return 3 + KEYLINE_MAT_PX;   // v3.0.535 -- border + wrapper padding + the mat
   if (border === 'comic') return 5;
   return 0;   // gallery bottom gap comes from coMediaPadBottom, which the caller already applies
 }
@@ -1890,10 +1891,20 @@ function picFrameBorderCss(bd, leadShadow) {
     'inset 0 ' + _b + 'px 6px -2px rgba(0,0,0,0.60),' +
     'inset ' + _b + 'px 0 6px -3px rgba(0,0,0,0.45);';
 }
+// v3.0.535 -- ONE PLACE FOR THE KEYLINE MAT. Two numbers, and coInsetX / coInsetY are derived from
+// KEYLINE_MAT_PX below rather than carrying their own copy of it, so a change here moves the
+// captions with it instead of leaving them sitting on the mat.
+var KEYLINE_MAT = '#f7f5ef';   // matte, not paper white: it reads as board rather than as a gap
+// v3.0.536 -- 2px -> 1px. Ian, on the 2px version: "maybe half that." He had already hedged when
+// he asked for it ("the white does not have to be that wide"), and at 1px it reads as a mount line
+// between the keyline and the art rather than as a white border in its own right.
+// ONE NUMBER. coInsetX and coInsetY derive from this, so the keyline captions moved from 3/5 back
+// to 2/4 without being touched -- which is the entire reason they were written that way.
+var KEYLINE_MAT_PX = 1;
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
-    case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';
+    case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';   // v3.0.535 -- the mat is drawn by picOverlay, not here: an inset ring on this box would sit behind the image
     // v3.0.520 -- THE BAND BRONZE FRAME WAS FOUR FLAT RINGS AND NOTHING ELSE.
     // Ian, on a zoomed screenshot: "It is really not 3D at all.. It is a series of black and bronze
     // lines, No shading." He is right, and it was not a tuning problem -- there was nothing there to
@@ -2257,6 +2268,16 @@ function bronzeMouldingHtml(railPx, matPx) {
 function picOverlay(opts, sizeIn){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
+  // v3.0.535 -- A MATTE WHITE MAT INSIDE THE KEYLINE. Ian: "on the thin keyline border add a two
+  // pixel matte white on the inside of the line. If a picture goes all the way to the edge you
+  // cannot even see it." Exactly right -- a 1px hairline at 35 percent alpha against a picture that
+  // reaches its own edge is invisible, and the whole point of the preset is that hairline.
+  // FLAT, NOT LIT, and that is deliberate rather than an oversight. The bronze mat is shaded
+  // because it sits in a modelled moulding; keyline is the minimal preset whose entire identity is
+  // one thin line, and a lit bevel two pixels inside it would fight that. Ian asked for matte white
+  // and matte white is also the right answer.
+  // IT COVERS THE OUTERMOST 2px OF THE ARTWORK rather than moving it -- TD-166, the picture pays.
+  if (b === 'keyline') return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 ' + KEYLINE_MAT_PX + 'px ' + KEYLINE_MAT + ';"></div>';
   if (b === 'frame') {
     // v3.0.531 -- the whole moulding moved to bronzeMouldingHtml so Picture Book and the title
     // page can draw the SAME object. This branch is now only the two numbers that describe it.
@@ -2330,10 +2351,17 @@ function momentImgMedia(m, mopts) {
 // clips to the aspect; a non-crop-safe image gets contain and the box background stays dark. This
 // gives Picture Book the crop-safe + focal handling it never had (it hard-cropped everything).
 // extraImgCss is appended to the media wrapper (e.g. a shadow); boxCss to the outer box (border).
-function momentImgAspectBox(m, ratio, boxCss, extraImgCss) {
+// v3.0.535 -- innerHtml is a trailing optional overlay drawn AFTER the picture, inside the box.
+// It exists because AN INSET BOX-SHADOW CANNOT BE USED HERE: the box already carries the border,
+// and a child paints ABOVE a box-shadow, so an inset ring on this element would be hidden behind
+// the image. That is TD-341 read the other way round -- the same paint-order rule that buried the
+// bronze moulding is what makes an overlay the only reliable way to draw ON the picture.
+// The box is already position:relative, so an absolutely positioned child at inset:0 lands inside
+// the border by definition. Trailing and optional, so all ten existing callers are unaffected.
+function momentImgAspectBox(m, ratio, boxCss, extraImgCss, innerHtml) {
   if (!m || !m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;' + (boxCss || '') + '"></div>';
   return '<div style="width:100%;aspect-ratio:' + ratio + ';overflow:hidden;line-height:0;position:relative;' + (boxCss || '') + (extraImgCss || '') + '">' +
-    momentImgMedia(m, {}) + '</div>';
+    momentImgMedia(m, {}) + (innerHtml || '') + '</div>';
 }
 
 function cgImgCell(m, opts, heightIn, widthPct) {
