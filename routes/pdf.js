@@ -4985,7 +4985,14 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       var _mask = '-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 0,#000 15%,#000 85%,rgba(0,0,0,0) 100%),linear-gradient(180deg,rgba(0,0,0,0) 0,#000 9%,#000 94%,rgba(0,0,0,0) 100%);-webkit-mask-composite:source-in;mask:linear-gradient(90deg,rgba(0,0,0,0) 0,#000 15%,#000 85%,rgba(0,0,0,0) 100%),linear-gradient(180deg,rgba(0,0,0,0) 0,#000 9%,#000 94%,rgba(0,0,0,0) 100%);mask-composite:intersect;';
       // A flattened, blurred ellipse under the feet. This is what sells STANDING; without it the
       // figures float. It is scaled and dimmed with distance like everything else.
-      var _shadow = '<div class="cast-shadow" style="width:' + (_fw * 0.55).toFixed(2) + 'in;height:' + (_fh * 0.045).toFixed(3) + 'in;opacity:' + (_near ? 0.42 : 0.30) + ';"></div>';
+      // v3.0.565 -- THE SHADOW RISES WITH THE FIGURE. Ian: "I don't understand why Humble has their
+      // shadow below their feet." Humble and Dumble are the two FAR figures, and v3.0.562 lifts a far
+      // figure with padding-bottom on the stage so it reads as standing further back -- but the
+      // shadow is position:absolute against that stage, so padding does not move it. The figure rose
+      // and its shadow stayed on the ground line, leaving it sitting below the boots.
+      // Its offset is now the SAME _drop the figure gets, minus the 1.5 percent raise that lets the
+      // boots sit into it. One number driving both, rather than two that have to be kept in step.
+      var _shadow = '<div class="cast-shadow" style="width:' + (_fw * 0.55).toFixed(2) + 'in;height:' + (_fh * 0.045).toFixed(3) + 'in;bottom:' + (_drop - _castH * 0.015).toFixed(3) + 'in;opacity:' + (_near ? 0.42 : 0.30) + ';"></div>';
       var _fig = primaryImg
         ? '<img class="cast-fig" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;' + _mask + '" src="' + primaryImg + '" alt="" />'
         : '<div class="cast-no-img" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>';
