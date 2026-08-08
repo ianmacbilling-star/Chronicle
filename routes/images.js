@@ -797,11 +797,47 @@ async function logImageGeneration(db, userId, source, refId, forkId) {
 // portrait, the editing model conditions on it; otherwise it's pure
 // text-to-image. Returns the image URL. Caller stores it + logs it.
 function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
+  // v3.0.559 -- TD-342: THE STAGING IS DICTATED, NOT SUGGESTED.
+  // It used to say 'plain neutral background', and 'neutral' was read loosely -- grey studio
+  // sweeps, warm backdrops, and worst of all A FLOOR. Shumble came back standing on stone tiles,
+  // Frumble on a grey floor. That is the root cause of BOTH open Company-page faults:
+  //   TD-343 feet float above the contact shadow -- object-position:center bottom puts the bottom
+  //          of the IMAGE on the stage floor, so a figure whose art includes ground sits however
+  //          high the artist's ground happens to be, and the gap differs per image so no single
+  //          crop constant can fix it;
+  //   TD-343 the grey haze around every figure -- there is nothing to cut out cleanly against.
+  // WHY THIS CAN BE DICTATED AT ALL, which is what makes it cheap. Ian: "the Canonical image only
+  // appears here. It is used as a reference everywhere else." It is DISPLAYED in exactly one place,
+  // the Company page; everywhere else it is an INPUT to generation, where a plain white ground is
+  // if anything better because no backdrop bleeds into the scene it seeds. So there is no user
+  // preference to respect here and no reason to offer one.
+  // PURE WHITE, NOT 'NEUTRAL'. A named colour is checkable and cut-outable; an adjective is neither.
+  // FEET ON THE BOTTOM EDGE is the other half: it is what lets the Company page place a figure on
+  // the shadow by construction instead of by per-image nudging.
   const refPrompt =
     IP_GUARD_IMG +
-    'Full-body character reference portrait. Neutral standing pose, ' +
-    'facing forward, plain neutral background, even soft lighting, ' +
-    'comic book art style.\n\n' +
+    'Full-body character reference portrait. Neutral standing pose, facing forward, ' +
+    'comic book art style, even soft lighting.\n\n' +
+    'STAGING - follow exactly:\n' +
+    '- Background must be PURE WHITE (#FFFFFF), completely empty, edge to edge.\n' +
+    '- NO floor, NO ground, NO stage, NO horizon line, NO cast shadow on the ground, ' +
+    'NO scenery, NO props, NO texture, NO gradient, NO vignette.\n' +
+    '- The character is cut out against white, as if on a blank page.\n' +
+    '- Show the ENTIRE body from the top of the head to the soles of both feet.\n' +
+    // v3.0.562 -- ASK FOR THE MARGIN, DO NOT FORBID IT. v3.0.559 demanded feet flush to the bottom
+    // edge; the model left 4.8 percent of white beneath them anyway, and Ian was right that flush
+    // would look CROPPED on the character card where the image is seen on its own.
+    // A PROPORTION, NOT A PIXEL COUNT. The model does not reason reliably in pixels but composes
+    // well, and one twentieth is almost exactly what it produced unprompted -- so this asks for the
+    // thing it already does rather than for a thing it ignores.
+    // IT DOES NOT NEED TO BE EXACT. The Company page assumes this margin and the contact shadow is a
+    // soft ellipse the boots overlap, so a percent or two of variance disappears into the shadow
+    // instead of showing as a float. Deliberately no pixel-scanning of the image: a scan that is
+    // right most of the time would eventually put one character through the floor, and nobody would
+    // know until the book was printed.
+    '- Both feet must be visible, and there must be a SMALL EVEN MARGIN of empty white below ' +
+    'them -- roughly one twentieth of the image height. Do not let the feet touch the bottom edge.\n' +
+    '- Do not crop any part of the character. Do not add text, labels or borders.\n\n' +
     'CHARACTER: ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   let model = IMAGE_MODELS[key];
@@ -1443,7 +1479,10 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       .run(new Date().toISOString(), job.id);
     if (!claim || claim.changes === 0) return res.status(200).json({ ok: true });
     try {
-      const imageUrl = await persistToR2(falUrl);
+      // v3.0.573 -- TD-362. A character reference is generated on a white ground BY SPEC and is the
+      // only image this product composites over another, so it is the only one whose ground is cut to
+      // real alpha. A scene image has a real background and must keep every pixel of it.
+      const imageUrl = await persistToR2(falUrl, { cutWhite: job.kind === 'char_ref' });
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3

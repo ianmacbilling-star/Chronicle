@@ -266,12 +266,12 @@ function packRows(items) {
 // An uncropped image sized to its shape's true aspect ratio. Because the image
 // was generated at this exact ratio, object-fit:cover fills the box with no
 // cropping; placeholders use the same ratio so empty panels keep their shape.
-function shapedImage(m, border, radius) {
+function shapedImage(m, border, radius, innerHtml) {
   var ratio = dispRatioCSS(m);
   var b = border || '';
   var rad = (radius == null) ? '3px' : radius;
   if (m.image) {
-    return momentImgAspectBox(m, ratio, 'border-radius:' + rad + ';' + b, '');
+    return momentImgAspectBox(m, ratio, 'border-radius:' + rad + ';' + b, '', innerHtml);
   }
   return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:' + rad + ';display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
 }
@@ -436,38 +436,78 @@ function companionEligible(m) { var s = normShape(m); return s === 'standard' ||
 // everywhere. inline=true makes the frame hug a fixed-size image (title/cast);
 // the default is a full-width block (interior columns).
 function bronzeFrame(inner, inline, scale, ratio) {
-  // scale (default 1) shrinks the whole frame proportionally. The interior story
-  // images are large so the full-size frame reads thin; the title image and the
-  // (often small) cast portraits pass a smaller scale so the frame stays in
-  // proportion instead of swallowing the picture.
+  // v3.0.531 -- TD-336 CLOSED. This drew its own frame -- an 8px flat 135-degree gradient, a black
+  // mat, a 2px gold keyline and four rotated diamonds -- while the bands drew picOverlay. Two
+  // objects, one menu item, and they never looked alike. It now draws the SAME moulding the bands
+  // do, from the same function, so Picture Book, the session title page and Magazine agree.
+  //
+  // THE TOTAL INWARD THICKNESS IS UNCHANGED AND THAT IS LOAD-BEARING. It was 1px border + 8px pad
+  // + 2px mat + 2px gold = 13px at scale 1, and coInsetX / coInsetY carry 13 and 15 as MEASURED
+  // CONSTANTS that position every overlay caption in the classic composer (TD-312). Change the
+  // depth and every caption on a bronze picture moves. So the depth is held at 13 and only the
+  // painting inside it changes: picFrameSplit turns 13 into a 10px rail and a 3px mat.
+  //
+  // GEOMETRY IS UNTOUCHED IN BOTH BRANCHES. The ratio branch was border-box with the padding drawn
+  // inward, so the frame added nothing; it still adds nothing, with the artwork in an absolutely
+  // positioned box inset by the same 13px. The inline branch added 13px per side outward and still
+  // does. The old outer 1px border is gone because the moulding paints its own outer hairline --
+  // which is why the depths still match rather than being one pixel short.
   var sc = scale || 1;
-  var padO = Math.max(1, Math.round(8 * sc));
-  var padM = Math.max(1, Math.round(2 * sc));
-  var gold = Math.max(1, Math.round(2 * sc));
-  var dia = Math.max(3, Math.round(6 * sc));
-  var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:' + dia + 'px;height:' + dia + 'px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
-  var _dia = _d('top:0;left:0;', 'translate(-50%,-50%)') + _d('top:0;right:0;', 'translate(50%,-50%)') + _d('bottom:0;left:0;', 'translate(-50%,50%)') + _d('bottom:0;right:0;', 'translate(50%,50%)');
+  // v3.0.533 -- THE DARK OUTER BORDER IS BACK, AND ITS ABSENCE WAS A v3.0.531 REGRESSION.
+  // Ian: "the frames are not quite as good now... the dark outer border is not there, it is like
+  // the stuff is out of order." Then, crucially, the correction that found it: "Magazine s interior
+  // pics look good, but the title pics look messed up like Picture Book does."
+  // THAT NARROWED IT FROM THE PROFILE TO THIS FUNCTION. Magazine interiors and bronzeFrame draw the
+  // same moulding since v3.0.531, so a profile fault would have shown in all three. It showed in
+  // exactly the two bronzeFrame consumers, which means the difference is the box, not the paint.
+  // AND IT IS: a band s image box carries picBorderCss, which for `frame` is a 3px solid #2a1d0c
+  // border plus an inset hairline, with picOverlay drawing INSIDE it. bronzeFrame had its own
+  // `border:1px solid #0a0806` doing that job and v3.0.531 deleted it when four nested divs became
+  // one shell -- on the reasoning that the moulding paints its own hairline. It does, at 1px and
+  // 0.85 alpha, which measured 86 against the 42 of the border it replaced.
+  // The border below reproduces picBorderCss(frame) EXACTLY at scale 1 -- same width, same colour,
+  // same three inset shadows -- so the two paths are now the same object all the way out to the
+  // page. The apply script asserts that string equality rather than trusting this comment.
+  // v3.0.543 -- THE DEPTH IS BUILT UP FROM THE RAIL NOW, NOT DIVIDED DOWN FROM A CONSTANT.
+  // Ian: "on the bigger pictures the whole frame could be bigger. When I do picture book and
+  // everything is big it looks a little skimpy." Measured off his PDF blow-up, scaling from the
+  // border: Picture Book was running a 7px rail while a large picture in a Magazine band gets 11.
+  // THE BIGGEST PICTURES IN THE PRODUCT HAD THE SECOND-THINNEST FRAME, and the cause was
+  // structural: the bands size the frame from the picture (picRailPx) while this divided a fixed
+  // 13px total three ways, so it could never grow no matter how large the picture was.
+  // NOW IT READS FORWARD: rail first, mat as a RATIO of the rail, border, and the total is whatever
+  // those come to. Ian: "I am ok with the mat growing as the frame / picture grows. So ratio it,
+  // do not hard code it." picMatPx has always been a ratio -- 0.25 of the rail -- so nothing there
+  // changed. What was hard-coded was this total, and it is gone.
+  // 11px is deliberately the same rail a large band picture gets, because Picture Book pictures ARE
+  // large. 4 + 11 + 3 = 18, against the 13 it was.
+  var _fr = bronzeFrameParts(sc);
+  var _bd = _fr.bd, _tot = _fr.total;
+  var _sp = { rail: _fr.rail, mat: _fr.mat };
+  var _moulding = bronzeMouldingHtml(_sp.rail, _sp.mat);
+  // #0a0806 stays as the ground behind the moulding: if a gradient is ever not honoured the frame
+  // degrades to a dark band rather than to a transparent one, which would delete it outright.
+  // v3.0.534 -- the border comes from the shared function now, with bronzeFrame s own drop shadow
+  // handed in as the leading layer. The two paths cannot drift by a character.
+  var _shell = 'position:relative;line-height:0;background:#0a0806;border-radius:2px;' +
+    picFrameBorderCss(_bd, '0 2px 6px rgba(0,0,0,0.4)');
   if (ratio) {
-    // INSET frame: the outer box IS the image box (fixed to the image aspect ratio); all the
-    // frame padding is drawn INWARD via border-box, so the frame adds zero height/width -- it
-    // just covers the outermost sliver of the image. Keeps the packer's geometry exact.
-    return '<div style="' + (inline ? 'display:inline-block;' : '') + 'width:100%;aspect-ratio:' + ratio + ';box-sizing:border-box;padding:' + padO + 'px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-      '<div style="width:100%;height:100%;box-sizing:border-box;padding:' + padM + 'px;background:#0a0806;">' +
-      '<div style="position:relative;width:100%;height:100%;box-sizing:border-box;border:' + gold + 'px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
-      '</div>' +
+    return '<div style="' + (inline ? 'display:inline-block;' : '') + 'width:100%;aspect-ratio:' + ratio + ';box-sizing:border-box;' + _shell + '">' +
+      '<div style="position:absolute;inset:' + (_tot - _bd) + 'px;line-height:0;overflow:hidden;">' + inner + '</div>' +   // inset resolves against the PADDING box, so the border is already outside it
+      _moulding +
     '</div>';
   }
-  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + padO + 'px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-    '<div style="padding:' + padM + 'px;background:#0a0806;">' +
-    '<div style="position:relative;border:' + gold + 'px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
-    '</div>' +
+  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + (_tot - _bd) + 'px;' + _shell + '">' +
+    inner + _moulding +
   '</div>';
 }
 function framedMedia(m) {
   var ratio = dispRatioCSS(m);
-  // NOTE: bronzeFrame has no overflow:hidden, so the primitive's 1px overscan would bleed past the
-  // gold border. This emitter keeps its own exact height:100% cover img (no overscan) -- a genuine
-  // special case left out of the primitive on purpose.
+  // NOTE: this emitter keeps its own exact height:100% cover img with no overscan -- a genuine
+  // special case left out of the primitive on purpose. v3.0.531 changed the REASON but not the
+  // conclusion: bronzeFrame now clips its artwork box, so an overscan would no longer bleed past
+  // the moulding. It would instead be cropped, which for a cover-fitted image is a silent loss of
+  // edge rather than a visible fault -- worse to debug, not better. Leave it exact.
   var inner = m.image
     ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#160e06;"></div>';
@@ -739,7 +779,15 @@ var CO_DEFAULTS = {
   font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
   cover: 1, cast: 1, toc: 1, header: 1, markers: 1, markerbreak: 0, watermark: 1,
-  hidelogo: 0
+  hidelogo: 0,
+  // v3.0.551 -- TD-346 step 1. The cover title settings ride the SAME co string as border, caption
+  // and paper, so they reach every render path automatically and persist through layout_opts with
+  // NO schema change. The subtitle cannot come this way -- parseCustomOpts splits on comma and
+  // colon, and a subtitle like "Book Two: The Long Road" would corrupt the whole options string and
+  // silently drop every other setting in it -- so it has its own field beside book_title.
+  titleStyle: 'chronicle',   // chronicle | engraved | gilded | pulp | manuscript | quill | runestone | blackletter
+  titlePlace: 'bottom',      // top | middle | bottom
+  titleSize: 'medium'        // small | medium | large
 };
 
 var CO_FONTS = {
@@ -854,7 +902,13 @@ function coMedia(m, border) {
       return '<div style="line-height:0;padding-bottom:0.14in;">' +
         momentImgAspectBox(m, ratio, 'border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';', '') + '</div>';
     case 'keyline':
-      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px') + '</div>';
+      // v3.0.535 -- the mat rides in as the overlay child; the bands get theirs from picOverlay.
+      // v3.0.538 -- SQUARE CORNERS. Ian: "make the corners squared off, not rounded." Only THIS
+      // path ever rounded them: picBorderCss carries no radius, so every band has always been
+      // square, and the 4px here came from the preset family this branch was copied from. It also
+      // fixed a mismatch nobody had named -- the mat overlay is a plain box with square corners, so
+      // at 3px of white against a 4px radius the mat and the border disagreed at all four corners.
+      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '0', picOverlay({ border: 'keyline' }, CO_CLASSIC_PIC_IN)) + '</div>';   // v3.0.544 -- see CO_CLASSIC_PIC_IN
     case 'none':
     default:
       return img;
@@ -989,16 +1043,128 @@ function brassPlateHtml(title, bottomOffset, sc) {
   // v3.0.518 -- SCALLOPED CORNERS. Ian: "if you can scallop the corners that would be cool."
   // Four concave quarter-round bites taken out of the corners with radial-gradient masks, which is
   // how a cast plaque is actually shaped. Done with -webkit-mask rather than clip-path on purpose:
-  // clip-path would also cut the drop shadow and the 1px border, flattening the plaque into a
-  // sticker. A mask leaves the border painted along the scalloped edge.
+  // clip-path would also cut the drop shadow, flattening the plaque into a sticker; the mask leaves
+  // the drop shadow intact.
+  // BUT THE OLD CLAIM HERE WAS WRONG AND IT COST SOMETHING. It said a mask "leaves the border
+  // painted along the scalloped edge." It does not -- a mask removes pixels, and the border is a
+  // rectangle, so biting a quarter-disc out of a corner takes the border with it and leaves the
+  // curve raw. That is why the scallops had no edge while the straight edges had two. v3.0.537
+  // draws the edge back on deliberately; see the rims below.
   // GRACEFUL BY CONSTRUCTION: if the mask is not honoured the plaque simply renders as the
   // rounded rectangle it is today. Nothing depends on it.
-  var _sc = Math.max(3, Math.round(5 * sc));   // scallop radius, tied to the plate size
-  var _bite = 'radial-gradient(circle ' + _sc + 'px at ';
-  var _mask = _bite + '0 0, transparent 99%, #000 100%), ' +
-    _bite + '100% 0, transparent 99%, #000 100%), ' +
-    _bite + '0 100%, transparent 99%, #000 100%), ' +
-    _bite + '100% 100%, transparent 99%, #000 100%)';
+  // v3.0.534 -- THE SCALLOP IS A PROPORTION OF THE PLATE, NOT A CONSTANT. Ian: "the scallops
+  // before looked better, they were shaded better or something, these look unfinished."
+  // v3.0.528 shortened the plate from 18.5px to 16.5px and left this radius pinned at 5px, so the
+  // four bites went from eating 54 percent of the plate s height to 61 percent. There is almost no
+  // straight edge left between the top and bottom bites, which is why the ends read as a chewed
+  // lozenge rather than a plate with scalloped corners. Nothing at v3.0.529, .530 or .531 touched
+  // this function at all -- verified by diffing it against the v3.0.526 baseline, where the ONLY
+  // two differences are the padding and the shadow, both from v3.0.528.
+  // The height is now DERIVED from the same numbers that draw the plate, so the two cannot drift:
+  // two 1px borders, the two paddings, and the line box (CAP_BASE_PT at 96dpi times line-height).
+  var _plateH = 2 + Math.max(1, Math.round(2 * sc)) + Math.max(1, Math.round(1 * sc)) +
+    (CAP_BASE_PT * sc * 96 / 72) * 1.15;
+  var _sc = Math.max(3, Math.round(_plateH * 0.27));   // scallop radius, a proportion of the plate
+  // v3.0.545 -- THE SCALLOPS ARE GEOMETRY NOW. THE MASK NEVER PRINTED.
+  // Measured off Ian s PDFs twice: in the Optimize pane exactly ONE corner was bitten -- the last
+  // mask layer declared, with `mask-composite: intersect` dropped -- and in the downloadable PDF the
+  // plate edge was dead straight top and bottom, so the mask was ignored outright. The scallops have
+  // never reached a printed page. That is TD-347.
+  // WHY CAPS RATHER THAN A MASK, A CLIP OR A BORDER-IMAGE:
+  //   a mask and a clip-path are the same family as the thing that already failed;
+  //   border-image would put the scallop radius into the BORDER WIDTH, and this plate is 16.5px
+  //   tall carrying an 11.5px line box -- a 4px border top and bottom does not fit, it would force
+  //   the plate to 22px. Measured before choosing, not after.
+  // So the plate is drawn as THREE background layers: a fixed-width SVG cap at each end carrying
+  // the corner bites as a real path, and the body inset between them. Nothing is cut, nothing is
+  // composited, and it costs no layout at all.
+  // THE BITES ARE A PATH, so the plate outline is stroked ALONG the curve -- which is what the
+  // v3.0.537 rims were faking, and why they are deleted here rather than converted.
+  var _pg = '<linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#c2a55f"/><stop offset="0.34" stop-color="#a8862f"/>' +
+    '<stop offset="0.68" stop-color="#8a6a2a"/><stop offset="1" stop-color="#6b5119"/></linearGradient>';
+  // THE CAP VIEWBOX IS THE PLATE HEIGHT, NOT A NOMINAL ONE, and the first version got this wrong.
+  // It used 40 and let preserveAspectRatio=none stretch it onto a 16.5px plate -- a vertical scale
+  // of 0.41, which turns every circular bite into a squashed ellipse. The scallop would have been
+  // flattened on every plate. _plateH is already computed a few lines up for the bite radius; using
+  // it here makes the vertical scale exactly 1 and the arcs stay circular.
+  var _capH = Math.round(_plateH);
+  // v3.0.550 -- THE CAP IS ONE PIXEL WIDER THAN ITS BITE, and that pixel is what lets the outline
+  // be drawn INSIDE the shape. See the outline path below for why that matters.
+  var _capR = _sc + 1;
+  function _cap(left) {
+    // THE BITE RADIUS IS _sc, NOT THE CAP WIDTH. They were the same number until v3.0.550 widened
+    // the cap by a pixel, and reading r from _capR meant widening the cap silently widened the BITE
+    // -- which put the inset arc back outside the shape and brought the degenerate segments with it.
+    // Two numbers that were equal by coincidence, one of which then moved.
+    var w = _capR, h = _capH, r = _sc;
+    // v3.0.550 -- THE FILL AND THE OUTLINE ARE SEPARATE PATHS, AND THE OUTLINE IS INSET HALF A PIXEL.
+    // Ian: "the scallops still have the little hairs sticking off."
+    // v3.0.548 removed the zero-length segments and that WAS a real fault -- a miter join on a
+    // segment with no direction spikes. It was not the whole fault. A stroke is centred on its path,
+    // so HALF OF EVERY STROKE LAY OUTSIDE THE SHAPE, and at the point where the arc met the cap s
+    // inner edge the outline reversed through 180 degrees. A stroke doubling back on itself, with
+    // half its width already outside the artwork, is where a renderer leaves stray marks.
+    // THE FIX IS GEOMETRIC RATHER THAN ANOTHER TWEAK. The fill is drawn exactly, unstroked. The
+    // outline is a SEPARATE OPEN path following only the OUTER boundary -- never the inner edge,
+    // which is internal and was never meant to have an edge -- and every point of it is moved half a
+    // pixel into the plate. The bite arc keeps its centre and grows by 0.5; the straight edges come
+    // in by 0.5. The entire stroke then lies inside the drawn area and there is nothing left to
+    // spill, at any renderer, whatever it does with joins.
+    // THIS IS WHY THE CAP GAINED A PIXEL. The inset arc meets the top edge at sqrt(R*R - 0.25),
+    // which for a 4px bite is 4.47 -- beyond a 4px cap. At _sc + 1 it fits, and the fill gains real
+    // straight runs at top and bottom, so the degenerate segments cannot come back either.
+    var _R = r + 0.5;
+    var _q = Math.sqrt(_R * _R - 0.25).toFixed(3);
+    var fill = left
+      ? 'M0,' + r + ' A' + r + ',' + r + ' 0 0 0 ' + r + ',0 L' + w + ',0 L' + w + ',' + h + ' L' + r + ',' + h +
+        ' A' + r + ',' + r + ' 0 0 0 0,' + (h - r) + ' Z'
+      : 'M' + w + ',' + r + ' A' + r + ',' + r + ' 0 0 1 ' + (w - r) + ',0 L0,0 L0,' + h + ' L' + (w - r) + ',' + h +
+        ' A' + r + ',' + r + ' 0 0 1 ' + w + ',' + (h - r) + ' Z';
+    var line = left
+      ? 'M' + w + ',0.5 L' + _q + ',0.5 A' + _R + ',' + _R + ' 0 0 1 0.5,' + _q +
+        ' L0.5,' + (h - _q).toFixed(3) + ' A' + _R + ',' + _R + ' 0 0 1 ' + _q + ',' + (h - 0.5) + ' L' + w + ',' + (h - 0.5)
+      : 'M0,0.5 L' + (w - _q).toFixed(3) + ',0.5 A' + _R + ',' + _R + ' 0 0 0 ' + (w - 0.5) + ',' + _q +
+        ' L' + (w - 0.5) + ',' + (h - _q).toFixed(3) + ' A' + _R + ',' + _R + ' 0 0 0 ' + (w - _q).toFixed(3) + ',' + (h - 0.5) + ' L0,' + (h - 0.5);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
+      '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><defs>' + _pg + '</defs>' +
+      // v3.0.552 -- the 1px highlight and shade, as rects that run only from the inner edge to where
+      // the bite begins. That is the whole fix: they stop at the scallop because the SHAPE stops
+      // there, rather than running to a rectangle corner that is not drawn.
+      '<path d="' + fill + '" fill="url(#pg)"/>' +
+      '<rect x="' + (left ? _q : 0) + '" y="1" width="' + (w - _q) + '" height="1" fill="rgba(255,248,220,0.40)" shape-rendering="crispEdges"/>' +
+      '<rect x="' + (left ? _q : 0) + '" y="' + (h - 2) + '" width="' + (w - _q) + '" height="1" fill="rgba(0,0,0,0.35)" shape-rendering="crispEdges"/>' +
+      '<path d="' + line + '" fill="none" stroke="#4a3810" stroke-width="1" stroke-linejoin="round" stroke-linecap="butt"/></svg>';
+    // v3.0.547 -- SINGLE QUOTES, AND THE DOUBLE ONES DELETED THE ENTIRE PLATE.
+    // v3.0.545 emitted url("data:...") into an inline HTML style="..." attribute. The first double
+    // quote CLOSED THE ATTRIBUTE -- at character 130 of 2,927 -- so the background, the padding, the
+    // font and the colour were all parsed as stray attributes and discarded. Ian: "the bronze plate
+    // is gone, on html and pdf, just text." It was, and the rivets survived only because they are
+    // separate elements carrying their own style.
+    // THE PATTERN ITSELF IS FINE AND IS USED TWICE MORE IN THIS FILE -- CO_SMOKE_URL and
+    // CO_DIRT_URL both write url("data:...") and both work, because they are emitted into a <style>
+    // BLOCK, where a double quote is legal. Copying a working idiom into a different container is
+    // what broke it.
+    // THE GUARDS MISSED IT BECAUSE THEY CHECKED THE PAYLOAD, NOT THE CONTAINER. The SVG was parsed
+    // and confirmed well-formed, the caps were counted, the arcs were measured for circularity --
+    // and none of that asks whether the result survives being placed inside a quoted attribute.
+    return "url('data:image/svg+xml," + encodeURIComponent(svg).replace(/\(/g, '%28').replace(/\)/g, '%29') + "')";
+  }
+  var _edge = 'linear-gradient(#4a3810,#4a3810)';
+  var _body = 'linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%)';
+  var _mid = 'calc(100% - ' + (_capR * 2) + 'px)';
+  // v3.0.552 -- the middle section s highlight and shade, one pixel in from its edges. Declared
+  // BEFORE the edge lines so those still paint on top, and inset by the cap width at both ends so
+  // they cannot reach a corner.
+  var _hi = 'linear-gradient(rgba(255,248,220,0.40),rgba(255,248,220,0.40))';
+  var _lo = 'linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.35))';
+  var _plateBg = _cap(true) + ' 0 0 / ' + _capR + 'px 100% no-repeat, ' +
+    _cap(false) + ' 100% 0 / ' + _capR + 'px 100% no-repeat, ' +
+    _edge + ' ' + _capR + 'px 0 / ' + _mid + ' 1px no-repeat, ' +
+    _hi + ' ' + _capR + 'px 1px / ' + _mid + ' 1px no-repeat, ' +
+    _lo + ' ' + _capR + 'px calc(100% - 2px) / ' + _mid + ' 1px no-repeat, ' +
+    _edge + ' ' + _capR + 'px 100% / ' + _mid + ' 1px no-repeat, ' +
+    _body + ' ' + _capR + 'px 0 / ' + _mid + ' 100% no-repeat';
   return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
     // v3.0.519 -- CALMER, SHADED AND SHORTER. Ian: "can you darken the plate a little... it is a
     // little in your face", "maybe shadow the lower half of it a little", "you might be able to make
@@ -1012,18 +1178,52 @@ function brassPlateHtml(title, bottomOffset, sc) {
     //            type runs to y14.5 and the shading starts at y13.5.
     //   SHORTER  vertical padding 4/5px -> 2/3px and line-height 1.3 -> 1.15. 24.0px -> 18.5px, a
     //            23 percent reduction, and the type does not change size at all.
+    // v3.0.528 -- SHORTER AGAIN, AND THE TYPE SITS LOWER. Ian, on a rendered plate: "the text can
+    // come down a hair more and the plate made shorter a little too. It is still borderline too
+    // big / tall." The type is ALL CAPS, so the bottom of the line box is dead space -- there are no
+    // descenders to fill it. Measured at the reference size: 1px border + 2px pad + 11.5px line box
+    // + 3px pad + 1px border = 18.5px, with the caps landing about 5.2px below the top edge and
+    // 6.2px above the bottom. More air under the type than over it, and the padding was asymmetric
+    // the wrong way. PADDING-BOTTOM 3px -> 1px does both things he asked with ONE number: the plate
+    // loses 2px (18.5 -> 16.5, another 11 percent off) and because only the space BELOW goes away
+    // the type ends up sitting lower. Gaps become roughly 5.2 above and 4.2 below.
+    // AND THE SHADOW HAD TO FOLLOW, which is the knock-on that would otherwise have been walked
+    // into: v3.0.519 tuned `inset 0 -5px` so the shading sits UNDER the type at 18.5px tall. Shorten
+    // the plate and leave it alone and it climbs onto the letters. -5px -> -3px restores the same
+    // 1.25px clearance. Derived from the height change, not guessed.
+    // The Cinzel metrics behind those gap figures are ESTIMATES. The direction is certain, the exact
+    // hair is not -- this is one iteration, not a final answer.
     // Contrast was checked rather than assumed: the type crosses the 16-78 percent band of the ramp,
     // where the darkened plate gives 7.4 down to 3.5 against #241703. The darkest stop sits BELOW
     // the type. Side padding and max-width are untouched -- the width is the text s to decide.
-    'transform:translateX(-50%);max-width:78%;padding:' + capPx(2, sc) + ' ' + capPx(16, sc) + ' ' + capPx(3, sc) + ';border-radius:2px;' +
-    'background:linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%);' +
-    'border:1px solid #4a3810;' +
-    '-webkit-mask:' + _mask + ';-webkit-mask-composite:source-in;mask:' + _mask + ';mask-composite:intersect;' +
-    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -5px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
+    // v3.0.545 -- THE PADDING ABSORBS THE BORDER THAT WENT AWAY. It was 1px border + 2px pad above
+    // and 1px pad + 1px border below; the caps carry the edge now, so the padding takes those two
+    // pixels back and the plate measures exactly what it measured before. Checked, not assumed:
+    // 3 + 11.5 + 2 = 16.5, the same total v3.0.528 arrived at.
+    'transform:translateX(-50%);max-width:78%;padding:' + capPx(3, sc) + ' ' + capPx(16, sc) + ' ' + capPx(2, sc) + ';' +
+    'background:' + _plateBg + ';' +
+    // A DROP-SHADOW FILTER, NOT A BOX-SHADOW. A box-shadow follows the element s RECTANGLE and would
+    // draw a square shadow behind a scalloped plate, announcing the shape as fake. A filter follows
+    // the rendered alpha, so it hugs the bites.
+    'filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45));' +
+    // v3.0.552 -- THE TWO HARD 1px LINES ARE GONE FROM HERE, AND THEY WERE THE HAIRS.
+    // Ian: "I think it is the highlight line and the shadow line going too far." He is right, and it
+    // is why two fixes to the cap STROKE changed nothing -- the stroke was never it.
+    // AN INSET BOX-SHADOW FOLLOWS THE ELEMENT S RECTANGLE. The scallops are not cut out of the
+    // element; they are cut out of the BACKGROUND, by the cap images. So the box is still a box, and
+    // `inset 0 1px 0` and `inset 0 -1px 0` ran its FULL WIDTH -- straight across the four corners
+    // that had been bitten away. Each overhang is exactly the bite radius, which is the length of
+    // the marks in his blow-up. It also explains the one measurement that made no sense: the mark
+    // read NEUTRAL GREY, and nothing in this plate is neutral grey -- but rgba(255,248,220,0.40)
+    // over dark artwork is.
+    // They move into the shapes that already stop at the scallop: 1px rects inside each cap, and two
+    // more background layers across the middle. The soft bottom shading stays here -- it is blurred
+    // and inset by 4px, so it has no hard edge to leave a mark with.
+    'box-shadow:inset 0 -4px 6px -4px rgba(0,0,0,0.50);' +
     'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
     'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-    rivet('left') + rivet('right') + title + '</div>';
+    rivet('left') + rivet('right') + title + '</div>';   // v3.0.545 -- _rims deleted: the cap path is STROKED along the curve, so there is no bare edge left to fake
 }
 // v3.0.512 -- HOW FAR IN THE PICTURE ACTUALLY STARTS, MEASURED FROM THE POSITIONING BOX.
 // Ian, 2026-08-07, from a screenshot of a bronze-framed picture whose bottom rail was washed out
@@ -1044,14 +1244,14 @@ function brassPlateHtml(title, bottomOffset, sc) {
 // CO_CAP_GAP_PX is Ian few pixels: the caption stops just short of the rail instead of touching it.
 var CO_CAP_GAP_PX = 2;
 function coInsetX(border) {
-  if (border === 'frame') return 13;
-  if (border === 'keyline') return 1;
+  if (border === 'frame') return bronzeFrameParts(1).total;   // v3.0.543 -- DERIVED, so the caption cannot end up on the moulding
+  if (border === 'keyline') return 1 + keylineMatMaxPx();   // v3.0.535 border + mat; v3.0.544 the mat varies, so clear the widest
   if (border === 'comic') return 5;
   return 0;
 }
 function coInsetY(border) {
-  if (border === 'frame') return 15;
-  if (border === 'keyline') return 3;
+  if (border === 'frame') return bronzeFrameParts(1).total + 2;   // v3.0.543 -- derived, plus the 2px wrapper padding coMedia adds
+  if (border === 'keyline') return 3 + keylineMatMaxPx();   // v3.0.535 border + wrapper + mat; v3.0.544 the widest mat
   if (border === 'comic') return 5;
   return 0;   // gallery bottom gap comes from coMediaPadBottom, which the caller already applies
 }
@@ -1235,7 +1435,7 @@ function cgBoxCss(m, opts) {
   if (cgCapIsBelow(opts && opts.caption) && m && m.title) return 'overflow:hidden;';   // border moves to the picture wrapper
   return cgBorder(opts);
 }
-function cgBoxInner(mediaHtml, m, opts, outerBare) {
+function cgBoxInner(mediaHtml, m, opts, outerBare, sizeIn) {   // sizeIn v3.0.520: the box short side, for the frame scale
   var cap = opts && opts.caption;
   if (!cgCapIsBelow(cap) || !m || !m.title)
     // v3.0.518 -- THE FRAME IS DRAWN LAST. Ian, on a caption sitting under the frame line:
@@ -1246,7 +1446,7 @@ function cgBoxInner(mediaHtml, m, opts, outerBare) {
     // overlays and picOverlay is pointer-events:none, so this is paint order only -- it cannot move
     // anything. This is the on-image caption path (brass, plate, gradient); the below-image path a
     // few lines down keeps the caption outside the frame entirely.
-    return mediaHtml + coCaptionCover(m, cap) + picOverlay(opts);
+    return mediaHtml + coCaptionCover(m, cap, opts, sizeIn) + picOverlay(opts, sizeIn);
   // v3.0.514 -- NOTHING LEAVES NORMAL FLOW. THE ABSOLUTE VERSION DELETED SIX PICTURES.
   // v3.0.513 put the media in `position:absolute`. In a box with a FIXED height that is fine. In a
   // box whose height comes FROM the picture -- cgFlowWide and cgFlowFeature s wide branch, both of
@@ -1292,7 +1492,7 @@ function cgBoxInner(mediaHtml, m, opts, outerBare) {
   // is clipped by overflow only on ancestors between it and its containing block, and the wrapper
   // was neither. So the overlay escaped a box that had overflow:hidden on it.
   return '<div style="' + _bd + 'position:relative;overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
-      mediaHtml + picOverlay(opts) +
+      mediaHtml + picOverlay(opts, sizeIn) +
     '</div>' +
     '<div style="height:' + h + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
       'text-align:center;font-family:Cinzel,serif;font-size:8pt;letter-spacing:0.12em;text-transform:uppercase;' +
@@ -1325,10 +1525,26 @@ function cgCapFlow(m, opts) {
 // Caption for cover-filled cells (Comic / Magazine): every style renders ON the image,
 // since there is no 'below the image' room. bar/engraved get their own backgrounds so
 // they stay readable on a dark photo.
-function coCaptionCover(m, caption) {
+function coCaptionCover(m, caption, opts, sizeIn) {
   if (!m.title) return '';
   var _capSc = capScaleForShape(m && m.shape);   // v3.0.508
-  if (caption === 'brass') return brassPlateHtml(m.title, '0px', _capSc);   // the band's box IS the image box
+  if (caption === 'brass') {
+    // v3.0.529 -- THE PLAQUE CLEARS THE FRAME, WHATEVER THE FRAME IS DOING. Ian: "the plaque can
+    // sit one pixel above the frame, but the frame should never cover the plaque." The plate parks
+    // itself at calc(bottomOffset + 0.10in) and 0.10in is 9.6px, which cleared a 9px rail by 0.6px
+    // and would have been buried by the wider rail v3.0.529 gives large pictures. The frame paints
+    // LAST (v3.0.518), so an overlap is the plaque losing, not the frame. Derived from picRailPx
+    // rather than from a second copy of the rail arithmetic.
+    var _bo = '0px';
+    if (opts && opts.border === 'frame') {
+      // v3.0.530 -- rail + mat - 1, NOT rail + 1. At a 2px mat these are the same number, which is
+      // the placement Ian approved at v3.0.529; where the mat gains a pixel the plate gains one too.
+      var _r = picRailPx(sizeIn);
+      var _need = _r + picMatPx(_r) - 1;
+      if (_need > 9.6) _bo = (Math.round((_need - 9.6) * 10) / 10) + 'px';
+    }
+    return brassPlateHtml(m.title, _bo, _capSc);   // the band's box IS the image box
+  }
   if (caption === 'plate')
     return '<div style="position:absolute;top:0;left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'gradient')
@@ -1790,11 +2006,305 @@ function _coCapH(h, opts) {
 }
 var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
 var CG_FRAME  = 'border:12px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
+// v3.0.534 -- THE DARK OUTER BAND WAS THE ONLY FLAT THING LEFT ON THE FRAME.
+// Ian: "everything looks 3D but that dark outer band... a one pixel solid black line on the very
+// outside edge... maybe dark on top and left and lighter on bottom and right?"
+// THE LINE: yes, and it was nearly free -- a hairline already sat at the outer edge at
+// rgba(0,0,0,0.85). It is now solid #000, so the frame has a crisp silhouette against the page.
+// THE DIRECTION: the OTHER way, and the distinction is the one the mat already turns on.
+// The mat inverts because it is CONCAVE -- a bevel cut inward, whose top face turns away from the
+// light. This band is not concave. It is the outside of a solid object, exactly like the moulding:
+// its top edge faces up INTO the light and its bottom edge faces down away from it. So it lights
+// the SAME way as the moulding -- lighter top and left, darker bottom and right. Shaded the other
+// way it would fight the moulding two pixels away and the frame would stop reading as one object
+// lit from one place. Ian asked for thoughts and this is the disagreement, offered with reasons.
+// ONE DEFINITION. This string lived in two places -- picBorderCss for the bands and a copy inside
+// bronzeFrame -- which is the drift trap TD-336 was closed to stop. bronzeFrame passes its own
+// scaled width and its outer drop shadow; everything else about the two is now literally the same
+// characters.
+function picFrameBorderCss(bd, leadShadow) {
+  var _b = Math.max(1, bd);
+  // The shorthand first, so an engine that does not honour the per-side longhands degrades to the
+  // old flat band rather than to no border at all.
+  // v3.0.545 -- ONE COLOUR AGAIN, AND THE LIGHT MOVES INSIDE. Ian: "the brown / wood band on the
+  // outside sometimes overshoots by a pixel", circling two corners of a PDF.
+  // THE CAUSE IS THE MITRE. A CSS border with different colours per side is mitred DIAGONALLY at
+  // every corner, so where the light left rail meets the dark bottom one there is a wedge of light
+  // colour running out to the corner point. On a 4px border that is a 4x4 triangle, and at a
+  // fractional box size it antialiases into exactly the one-pixel overshoot he circled. It arrived
+  // with the per-side colours at v3.0.534 and nobody connected the two.
+  // The band is one flat colour now and CANNOT mitre. The light direction is not lost -- it moves
+  // into the moulding as a scribe line, where the rails are SVG rects and the corner block covers
+  // the join, so there is no diagonal to give away.
+  // v3.0.549 -- A SECOND DASHED LINE, ON THE OUTERMOST EDGE. Ian: "I guess there was no way to get
+  // that on the outside of the outer edge of the frame was there? If there is, leave this one and
+  // add another one to the outer edge, but make the colour closer to what is there already -- it
+  // should be subtle."
+  // THERE IS, AND I HAD SAID OTHERWISE. Nothing can paint INSIDE a border s own area -- an inset
+  // box-shadow starts at the padding box and an absolutely positioned child is bounded by it, which
+  // is why the first scribe line ended up at the moulding s edge instead of the wood s. But OUTLINE
+  // is painted by the element itself, outside the border, takes no layout space, and has a native
+  // dashed style. outline-offset:-1px pulls it onto the frame s outermost pixel rather than letting
+  // it float beyond -- which also means it sits inside the element s own bounds and cannot be
+  // clipped by the overflow:hidden the band boxes carry.
+  // #3d2c14 against the wood at #2a1d0c is 19 points -- present, not loud. Deliberately a fraction
+  // of the inner scribe s 29, because that one marks a real junction and this one is texture.
+  // OFFSET -2, NOT -1, AND THAT ONE PIXEL IS DELIBERATE. At -1 the dash lands on the SAME pixel as
+  // the solid black silhouette line (the inset 0 0 0 1px #000 below), and an outline paints ABOVE a
+  // box-shadow -- so it would replace the crisp outer edge with dashes. At -2 the order outward is:
+  // wood, dashed line, solid black. The outermost pixel of the WOOD, with the silhouette intact.
+  return 'outline:1px dashed #3d2c14;outline-offset:-2px;' +
+    'border:' + _b + 'px solid #2a1d0c;' +
+    'box-shadow:' + (leadShadow ? leadShadow + ',' : '') +
+    'inset 0 0 0 1px #000,' +
+    'inset 0 ' + _b + 'px 6px -2px rgba(0,0,0,0.60),' +
+    'inset ' + _b + 'px 0 6px -3px rgba(0,0,0,0.45);';
+}
+// v3.0.535 -- ONE PLACE FOR THE KEYLINE MAT. Two numbers, and coInsetX / coInsetY are derived from
+// KEYLINE_MAT_PX below rather than carrying their own copy of it, so a change here moves the
+// captions with it instead of leaving them sitting on the mat.
+var KEYLINE_MAT = '#f7f5ef';   // matte, not paper white: it reads as board rather than as a gap
+// v3.0.536 -- 2px -> 1px. Ian, on the 2px version: "maybe half that." He had already hedged when
+// he asked for it ("the white does not have to be that wide"), and at 1px it reads as a mount line
+// between the keyline and the art rather than as a white border in its own right.
+// ONE NUMBER. coInsetX and coInsetY derive from this, so the keyline captions moved from 3/5 back
+// to 2/4 without being touched -- which is the entire reason they were written that way.
+// v3.0.538 -- 1px -> 3px. Ian: "add two more pixels of white." Third and final call on this width
+// (2 -> 1 -> 3), and the caption insets have tracked it every time without being touched, which is
+// the whole return on deriving them at v3.0.535 instead of hardcoding a matching pair.
+// v3.0.544 -- HOW BIG A CLASSIC-COMPOSER PICTURE IS, for the two places that need a size and have
+// no way to measure one. coMedia is handed a moment and a border, never inches, and the picture is
+// laid out at whatever its column happens to be. But Picture Book puts ONE image per block at full
+// column width, so they are uniformly large -- which is the same reasoning that lets bronzeFrame
+// use a fixed rail of 11 there rather than scaling per picture (v3.0.543).
+// If Picture Book ever gains a genuinely small image, this becomes a real measurement instead.
+var CO_CLASSIC_PIC_IN = 6.5;
+// v3.0.544 -- THE KEYLINE MAT SCALES WITH THE PICTURE. Ian, comparing two keyline pictures on one
+// page: "small pic leave the white as is, med pics add a pixel, and big pics double current size."
+// His words, as three bands. sizeIn is the picture s SHORT side in inches -- the same measurement
+// picFrameScale takes, so the product has ONE notion of how big a picture is rather than two.
+//   under 3in     3px   a float or a small aside: unchanged, and he said so
+//   3in to 5.5in  4px   the middle of the range
+//   5.5in and up  6px   double, which is the case he was looking at
+// A caller that does not know its size gets 3, the small case -- the same fail-safe direction
+// picFrameScale uses, because a mat that is too thin is a smaller fault than one that eats the art.
+function keylineMatPx(sizeIn) {
+  if (!(sizeIn > 0)) return 3;
+  if (sizeIn >= 5.5) return 6;
+  if (sizeIn >= 3.0) return 4;
+  return 3;
+}
+// The widest the mat can ever be. The caption insets use THIS rather than a per-picture value,
+// because coInsetX and coInsetY are reached from call sites that do not know their picture size --
+// so a caption stops clear of the widest mat on every picture. On a small one it therefore stops a
+// few pixels inside the artwork, which is invisible; the alternative is a caption sitting ON the
+// mat of a large one, which is the fault these functions exist to prevent (TD-312).
+function keylineMatMaxPx() { return keylineMatPx(99); }
+// v3.0.551 -- TD-346: THE COVER TITLE PRESETS. Step 1 ships the MECHANISM and Chronicle only.
+// ONE LOOK, NOT SEVEN DECISIONS. Ian: "I do not want this to turn into Word... it needs to be easy."
+// Font, case, letterspacing, stroke, shadow, extrude and fill are not seven controls -- they are one
+// look, and this is how the rest of the product already works: border is Bronze / Keyline / Comic,
+// caption is Engraved Classic / Bronze plate / Gradient, art styles are named. A panel of individual
+// effect toggles would be the only place in Campaignia that worked differently, and it would sit on
+// the first page anyone sees.
+// CHRONICLE RETURNS THE EMPTY STRING, AND THAT IS LOAD-BEARING. It is the default, every existing
+// book gets it, and if it emitted its own copy of the current declarations then this feature would
+// silently restyle every cover ever made the first time one character drifted. Returning nothing
+// means the existing rules are untouched and the output is byte-identical BY CONSTRUCTION rather
+// than by comparison. The apply script asserts that emptiness.
+// The seven other presets append their declarations to .cover-art-title and .cover-art-dates in a
+// later build; the shape is a lookup so adding a ninth is a data change, not a UI change, and
+// user-authored presets are the same object stored per user (see COVER_TITLE_SPEC.md section 8).
+// v3.0.555 -- TD-346 step 5: THE PRESETS THEMSELVES.
+// Each is ONE object describing one look -- font, weight, case, letterspacing and the shadow stack
+// together -- and each targets BOTH cover layouts, so a book with cover art and a book without
+// change together instead of drifting into two different products.
+//
+// OUTLINES ARE LAYERED text-shadow, NOT -webkit-text-stroke. A stroke is painted OVER the glyph and
+// eats into thin serifs at small sizes, and it is the kind of property that has failed the print
+// path twice this week. Four offset shadows are a primitive that cannot be dropped without dropping
+// text shadows entirely, and they land outside the letterform where an outline belongs.
+//
+// GILDED IS NOT HERE, DELIBERATELY -- see COVER_TITLE_GILDED_NOTE below.
+var COVER_TITLE_PRESETS = {
+  // The cover as it has always been. Contributing nothing is what makes every existing book
+  // byte-identical BY CONSTRUCTION rather than by comparison.
+  chronicle: "",
+
+  // ENGRAVED -- cut into stone. Cinzel at its heaviest, a dark rim and a four-step extrude that
+  // steps DOWN through the bronze ramp, so the letter reads as standing proud of the cover rather
+  // than as type with a shadow behind it.
+  engraved:
+    '.cover-art-title, .cover-title { ' + 'font-weight:900;letter-spacing:0.06em;' +
+      'text-shadow:0 1px 0 #6b5119,0 2px 0 #5a4415,0 3px 0 #4a3810,0 4px 0 #2c1e10,0 6px 10px rgba(0,0,0,0.85);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + 'font-weight:600;letter-spacing:0.14em;text-shadow:0 1px 0 #4a3810,0 2px 6px rgba(0,0,0,0.85);' + '}',
+
+  // PULP -- poster energy. Bangers is already in every document (baseFontCss), so this costs no
+  // extra face. The four offset shadows are the outline; the fifth is the hard drop.
+  pulp:
+    '.cover-art-title, .cover-title { ' + "font-family:'Bangers',cursive;font-weight:400;letter-spacing:0.03em;" +
+      'text-shadow:-1.5px -1.5px 0 #0a0806,1.5px -1.5px 0 #0a0806,-1.5px 1.5px 0 #0a0806,1.5px 1.5px 0 #0a0806,4px 4px 0 rgba(0,0,0,0.7);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + "font-family:'Bangers',cursive;letter-spacing:0.1em;" +
+      'text-shadow:-1px -1px 0 #0a0806,1px -1px 0 #0a0806,-1px 1px 0 #0a0806,1px 1px 0 #0a0806;' + '}',
+
+  // MANUSCRIPT -- restrained and wide. Small-caps feel through letterspacing rather than a
+  // synthesised small-caps font, and a hairline rule above and below the title in the same gold the
+  // rest of the book uses.
+  manuscript:
+    '.cover-art-title, .cover-title { ' + "font-family:'EB Garamond',Georgia,serif;font-weight:600;letter-spacing:0.24em;" +
+      'text-transform:uppercase;padding:0.06in 0;' +
+      'border-top:1px solid rgba(201,168,76,0.55);border-bottom:1px solid rgba(201,168,76,0.55);' +
+      'text-shadow:0 1px 8px rgba(0,0,0,0.9);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + "font-family:'EB Garamond',Georgia,serif;font-style:italic;letter-spacing:0.05em;" +
+      'text-transform:none;text-shadow:0 1px 6px rgba(0,0,0,0.85);' + '}',
+
+  // QUILL -- a hand, not a face. Dancing Script has no capitals worth shouting with, so the case is
+  // released and the letterspacing goes to nothing; forcing uppercase on a script is what makes
+  // script covers look like a mistake.
+  quill:
+    '.cover-art-title, .cover-title { ' + "font-family:'Dancing Script',cursive;font-weight:700;letter-spacing:0;" +
+      'text-transform:none;line-height:1.05;text-shadow:0 2px 12px rgba(0,0,0,0.9);' +
+    '}' +
+    '.cover-art-dates, .cover-dates { ' + "font-family:'Dancing Script',cursive;font-weight:500;letter-spacing:0.02em;" +
+      'text-transform:none;text-shadow:0 1px 8px rgba(0,0,0,0.85);' + '}'
+};
+// WHY GILDED IS NOT IN THAT LIST YET. It needs a metallic fill, which means background-clip:text
+// with -webkit-text-fill-color:transparent. IF THE CLIP IS NOT HONOURED BUT THE TRANSPARENT FILL
+// IS, THE TITLE DISAPPEARS -- on the cover, which is the first page anyone sees. That is exactly the
+// failure mode that deleted the whole plaque at v3.0.545, and this week has already found three CSS
+// features that render in the browser and degrade or vanish in print. Shipping a preset that can
+// make a title invisible in a printed book, unproven, is not a trade worth making against a
+// deadline. Prove it on the TD-351 probe page first, then add it here. -> TD-356.
+// WHICH FACE EACH PRESET NEEDS INLINED. Cinzel, Crimson Text and Bangers ship in EVERY document
+// already (baseFontCss), so most of these cost nothing. EB Garamond and Dancing Script do not --
+// they load only when chosen as the BODY font, so a cover using one without this would silently
+// fall back to a system face and render at different metrics than the preview. null means
+// "already present".
+var COVER_TITLE_FACE = { chronicle: null, engraved: null, pulp: null, manuscript: 'garamond', quill: 'script' };
+function coverTitleFaceCss(key) {
+  var k = String(key || 'chronicle');
+  var f = Object.prototype.hasOwnProperty.call(COVER_TITLE_FACE, k) ? COVER_TITLE_FACE[k] : null;
+  return f ? bookFontCss(f) : '';
+}
+// v3.0.553 -- TD-346 step 3: TITLE PLACEMENT, AND THE TWO THINGS THAT HAVE TO MOVE WITH IT.
+// Placement is not just moving a block. Two other things must follow, and one of them is not
+// obvious from looking at the markup.
+//
+// THE SCRIM MUST CHANGE DIRECTION. `.cover-art-caption` carries a gradient behind the type and it
+// is the ONLY reason a title is readable over arbitrary generated art. It fades upward from the
+// bottom edge. At the top it has to fade downward; in the middle it needs a band fading both ways.
+// If the scrim did not follow, a top-placed title would sit on raw artwork and be unreadable on a
+// large fraction of covers. That is why placement is a single control and the scrim is not exposed
+// separately -- it is the thing a user would break first.
+//
+// AND THE ART ANCHORING MUST FLIP. `object-position:center top` is deliberate: a generated image
+// puts its subject in the upper two-thirds, and the bottom is the part the title is allowed to
+// cover. Put the title at the top WITHOUT flipping this and you are covering exactly the part that
+// was being protected.
+//
+// BOTTOM RETURNS THE EMPTY STRING, for the same reason chronicle does: it is the default, every
+// existing book has it, and contributing nothing means those covers are untouched BY CONSTRUCTION
+// rather than by comparison. The apply script asserts that emptiness.
+//
+// The scrim stops are the SAME three values in every direction -- 0.95, 0.6, 0 -- so the three
+// placements are one scrim pointed three ways rather than three scrims that can drift apart.
+// v3.0.554 -- TD-346 step 4: TITLE SIZE.
+// THE FOUR BASE SIZES ARE NAMED HERE AND THE CSS INTERPOLATES THEM, so the scaled rules are
+// computed FROM the base rather than being a second set of numbers beside it. Writing "medium is
+// 30pt" in one place and "small is 23pt" in another is the fault this codebase has re-found at
+// every scale today; a ratio applied to a named base cannot drift from it.
+// TWO COVER LAYOUTS, TWO BASES. The art cover and the plain cover have never used the same sizes
+// (30/11 against 34/10) and that is deliberate -- type over a picture needs different weight from
+// type on a dark ground. Scaling by RATIO keeps both looking like themselves at every size, where a
+// single absolute number per size would have quietly unified them.
+var COVER_PT = { artTitle: 30, artSub: 11, plainTitle: 34, plainSub: 10 };
+// MEDIUM RETURNS THE EMPTY STRING. Same reason as Chronicle and Bottom: it is the default, every
+// existing book has it, and contributing nothing means those covers are untouched BY CONSTRUCTION.
+var COVER_SIZE_RATIO = { small: 0.78, medium: 1, large: 1.35 };
+function coverSizeCss(size) {
+  var k = String(size || 'medium');
+  var r = Object.prototype.hasOwnProperty.call(COVER_SIZE_RATIO, k) ? COVER_SIZE_RATIO[k] : 1;
+  if (r === 1) return '';
+  function pt(base) { return (Math.round(base * r * 10) / 10) + 'pt'; }
+  return '.cover-art-title { font-size:' + pt(COVER_PT.artTitle) + '; }' +
+    ' .cover-art-dates { font-size:' + pt(COVER_PT.artSub) + '; }' +
+    ' .cover-title { font-size:' + pt(COVER_PT.plainTitle) + '; }' +
+    ' .cover-dates { font-size:' + pt(COVER_PT.plainSub) + '; }';
+}
+var COVER_PLACE = {
+  bottom: '',
+  top: '.cover-art-caption { top:0; bottom:auto; justify-content:flex-start; padding:0.5in 0.4in 0;' +
+    ' background:linear-gradient(to bottom, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }' +
+    ' .cover-art-img { object-position:center bottom; }',
+  middle: '.cover-art-caption { top:50%; bottom:auto; height:46%; transform:translateY(-50%);' +
+    ' justify-content:center; padding:0 0.4in;' +
+    ' background:linear-gradient(to bottom, rgba(10,6,4,0) 0%, rgba(10,6,4,0.6) 18%, rgba(10,6,4,0.95) 50%, rgba(10,6,4,0.6) 82%, rgba(10,6,4,0) 100%); }' +
+    ' .cover-art-img { object-position:center center; }'
+};
+function coverPlaceCss(place) {
+  var k = String(place || 'bottom');
+  return Object.prototype.hasOwnProperty.call(COVER_PLACE, k) ? COVER_PLACE[k] : COVER_PLACE.bottom;
+}
+function coverTitleCss(key) {
+  var k = String(key || 'chronicle');
+  return Object.prototype.hasOwnProperty.call(COVER_TITLE_PRESETS, k) ? COVER_TITLE_PRESETS[k] : COVER_TITLE_PRESETS.chronicle;
+}
+// v3.0.551 -- BLANK MEANS THE DATES, and blank is a REAL state rather than an unset one.
+// Ian: "put the dates in there as they are now as a default, then once they change it we treat it
+// just like the title." So the subtitle is not SEEDED with the date string the way book_title is
+// seeded with the campaign name -- if it were, the user could never get back to automatic, and a
+// book whose sessions later changed would be stuck showing a stale range nobody typed. The input
+// carries the current dates as a PLACEHOLDER; the stored value stays empty until someone types one.
+// It also means a fork that has not set a subtitle follows its OWN dates rather than inheriting a
+// typed string from whoever set one first.
+// v3.0.552 -- NULL MEANS THE DATES; EMPTY MEANS EMPTY. The two are different states now.
+// Ian: "go ahead and put the dates in there and let them change it. Then if they blank it out it
+// will not do anything. They may not want a sub title -- currently there is no way to blank it out."
+// v3.0.551 collapsed both to "use the dates", which made the subtitle a one-way door: settable,
+// never removable. Three states rather than two:
+//   null / absent   the book has never had one    -> the date range, exactly as before
+//   ''              deliberately cleared          -> NOTHING
+//   a string        set                           -> that string
+// Existing books are all in the first state, so nothing visibly changes for any of them -- and the
+// field is now seeded with the dates so clearing it is a thing a user can actually do.
+// THE EMPTY STRING HAS TO SURVIVE THE ROUND TRIP, which is why the PUT in campaigns.js no longer
+// writes `b.subtitle || null`: that collapses the two states back together at the database.
+// v3.0.552 -- THE DATE RANGE, IN ONE PLACE. It was inline in the novel builder, and the Prep panel
+// now has to seed the subtitle field with exactly the same string. Two copies of a date format is
+// the fault this file has re-found at every scale today, so it is a function and campaigns.js calls
+// THIS one rather than growing its own.
+function formatDateRange(dts) {
+  if (!dts || !dts.length) return '';
+  var minDate = new Date(Math.min.apply(null, dts));
+  var maxDate = new Date(Math.max.apply(null, dts));
+  var _df = { year: 'numeric', month: 'long', day: 'numeric' };
+  return minDate.toLocaleDateString('en-US', _df) +
+    (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', _df) : '');
+}
+function coverSubtitle(pageOpts, dateRange) {
+  var raw = (pageOpts && pageOpts.subtitle != null) ? String(pageOpts.subtitle).trim() : null;
+  if (raw === null) return dateRange || '';   // never set: the legacy default
+  return raw;                                 // set, including deliberately empty
+}
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
-    case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';
-    case 'frame':    return 'border:3px solid #2c1e10;box-shadow:inset 0 0 0 1.5px #c9a84c;';
+    case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';   // v3.0.535 -- the mat is drawn by picOverlay, not here: an inset ring on this box would sit behind the image
+    // v3.0.520 -- THE BAND BRONZE FRAME WAS FOUR FLAT RINGS AND NOTHING ELSE.
+    // Ian, on a zoomed screenshot: "It is really not 3D at all.. It is a series of black and bronze
+    // lines, No shading." He is right, and it was not a tuning problem -- there was nothing there to
+    // tune. Outside in it emitted: 3px flat #2c1e10, ~1px flat #c9a84c, 1px flat #2c1e10, 1px flat
+    // #c9a84c. Four solid colours, no gradient, no light direction, no shadow.
+    // This half is the STRUCTURE: a dark outer edge, and the WELL the artwork sits in -- an inset
+    // shadow along the top and left where the frame meets the picture, so the picture reads as being
+    // set INTO the frame rather than printed behind it. picOverlay draws the lit bezel on top.
+    // Palette pulled onto the brass plaque ramp (#c2a55f -> #6b5119) so the frame and the plaque
+    // read as one object rather than two gold things. Costs nothing: border was already 3px and the
+    // rest is inset.
+    case 'frame':    return picFrameBorderCss(4);   // v3.0.534 one definition; v3.0.542 3px -> 4px, Ian: the outside dark part should be bigger
     case 'comic':    return 'border:5px solid #0a0806;';
     case 'gallery':  return 'box-shadow:' + CO_IMG_SHADOW + ';';
     case 'vignette': return '';
@@ -1814,16 +2324,341 @@ function vignetteOverlayHtml(){
   // one of them by verbatim string. See the note on CO_FADE_BAND for what changed and why.
   return fadeEdgeOverlayHtml();
 }
-function picOverlay(opts){
+// v3.0.520 -- THE FRAME SCALES WITH THE PICTURE. Ian: "can you make the bronze frame size according
+// to the picture size." `sizeIn` is the picture s SHORT side in inches -- the dimension the frame
+// competes with -- and it is a real measurement the caller already holds, not a shape guess. That
+// distinction is the whole of TD-331 and it is not being repeated here.
+//   2.0in float   -> 0.81x  bezel 3px   a small picture keeps its art
+//   3.5in         -> 1.01x  bezel 4px   the reference
+//   6.8in feature -> 1.35x  bezel 5px   a big picture gets a frame it can carry
+// Clamped 0.7 to 1.35 so the extremes stay recognisably the same frame. Callers that do not know
+// their size pass nothing and get 1, which is exactly today s frame -- comic and cgBesidePanel.
+// v3.0.529 -- THE CEILING LIFTS, THE FLOOR AND THE SLOPE DO NOT. Ian: "the frame on the larger
+// pictures could be a pixel or two bigger. Not Much! It is great on the mid to small images." The
+// upper clamp was 1.35 and it is the ONLY thing that changed, so nothing at or below a 6in picture
+// moves at all:  5in -> 8px (was 8), 6in -> 9px (was 9), 7in -> 10px (was 9), 8.5in -> 11px (was 9).
+function picFrameScale(sizeIn) {
+  if (!(sizeIn > 0)) return 1;
+  return Math.max(0.7, Math.min(1.50, 0.55 + 0.13 * sizeIn));
+}
+// HOW WIDE THE RAIL ACTUALLY IS, IN ONE PLACE. It was computed inside picOverlay and ASSUMED by
+// the brass plaque, which parked itself a flat 0.10in (9.6px) above the picture bottom. At a 9px
+// rail that cleared by 0.6px; at 11px the frame -- which paints LAST -- would have covered the
+// bottom of the plaque. That is one rule living in two places by assumption, which is the fault
+// this file keeps re-finding, so it is now a function both of them call.
+function picRailPx(sizeIn) { return Math.max(5, Math.round(7 * picFrameScale(sizeIn))); }
+// v3.0.530 -- AND THE MAT IS A FUNCTION FOR THE SAME REASON THE RAIL IS. The plaque has to know
+// how deep the mat runs, because Ian fixed the RELATIONSHIP rather than the number: "the bronze
+// plate placement was really good too. If the matte gets bigger it will need to go up by the same
+// amount, because it is perfect now." At v3.0.529 the plate bottom sat at rail+1 with a 2px mat --
+// one pixel INTO the mat band -- and that is the look he approved. So the offset is expressed as
+// rail + mat - 1, which reproduces rail+1 exactly at a 2px mat and rises by precisely one pixel
+// wherever the mat gains one. Nothing to remember and nothing to keep in step by hand.
+// 0.20 -> 0.25: Ian, "add one more pixel to the matte weight on larger images." That factor gives
+// 2px at rails 5 through 9 and 3px at rails 10 and 11, so ONLY the large pictures gain anything.
+function picMatPx(railPx) { return Math.max(2, Math.round(railPx * 0.25)); }
+// v3.0.531 -- GIVEN A TOTAL DEPTH, WHAT RAIL AND MAT ADD UP TO IT EXACTLY?
+// bronzeFrame has a FIXED inward thickness it is not allowed to change (see there), so it cannot
+// derive the rail from a picture size the way the bands do -- it has to work backwards from the
+// depth it already owns. Solved by search rather than algebra because picMatPx rounds, and a
+// closed form that disagrees with the function by one pixel is exactly the kind of second copy
+// this build exists to delete. 13px resolves to a 10px rail and a 3px mat; 8px to 6 and 2.
+// v3.0.543 -- WHAT bronzeFrame IS MADE OF, IN ONE PLACE, so the frame and the caption insets
+// cannot disagree. coInsetX and coInsetY used to carry 13 and 15 as LITERALS measured off the
+// emitted CSS -- correct when written, and silently wrong the moment the frame changed. That is the
+// same fault as the inner hairline at rail+1 (v3.0.542) and the caption insets before v3.0.535:
+// two numbers that must agree, written down twice. They are derived from this now.
+function bronzeFrameParts(sc) {
+  var _s = sc || 1;
+  var bd = Math.max(1, Math.round(4 * _s));      // the dark outer band, matching picFrameBorderCss
+  var rail = Math.max(3, Math.round(11 * _s));   // the moulding, sized like a large band picture
+  var mat = picMatPx(rail);                      // a RATIO of the rail, never a constant
+  return { bd: bd, rail: rail, mat: mat, total: bd + rail + mat };
+}
+function picFrameSplit(totalPx) {
+  for (var r = totalPx - 2; r >= 3; r--) { if (r + picMatPx(r) === totalPx) return { rail: r, mat: totalPx - r }; }
+  var rr = Math.max(3, totalPx - 2);
+  return { rail: rr, mat: Math.max(1, totalPx - rr) };
+}
+// v3.0.531 -- TD-336: ONE MOULDING, DRAWN IN ONE PLACE.
+// "Bronze picture frame" was TWO unrelated implementations. The Magazine and Comic bands drew
+// picOverlay; Picture Book and the session title page drew bronzeFrame -- nested divs, an 8px
+// flat gradient, a black mat, a 2px gold keyline and rotated diamonds. One menu item, one name,
+// two emitters that never looked alike. It also cost debugging time twice: a picture was
+// attributed to the wrong builder from its frame, and one dump grep was what settled it.
+// Ian: "can you do it on picture book and on the session title images too... would prefer them
+// all to be uniform."
+// THE MOULDING IS NOW THIS FUNCTION AND ONLY THIS FUNCTION. Both callers hand it a rail width
+// and a mat width and get identical HTML back. The body below was LIFTED VERBATIM out of
+// picOverlay rather than retyped -- the only two lines changed are the ones that used to derive
+// _bw and _mw from sizeIn, which are now parameters. That is deliberate: a retyped copy is how
+// this became two implementations in the first place.
+// It returns an absolutely-positioned inset:0 overlay with pointer-events:none, so it can only
+// PAINT. It cannot move anything, whichever box it is dropped into.
+function bronzeMouldingHtml(railPx, matPx) {
+  // v3.0.540 -- THE MOULDING IS FLAT SVG SHAPES NOW, AND IT IS NOT A STYLE CHANGE.
+  // Same profile, same numbers, same five planes. What changed is that they are RECTANGLES
+  // instead of gradient stops, because gradient stops do not survive the print path.
+  //
+  // THE EVIDENCE, from the TD-351 probe rendered as a real PDF. Left rail, one row:
+  //   gradients   151,140,107  223,199,124  209,184,111  178,149,73  186,160,88  147,120,56
+  //   flat shapes 244,230,184 x2  223,199,124  167,134,46 x3  121,92,33 x2  60,45,12
+  // Every value differs under gradients -- no plateau anywhere, and #f4e6b8, the HIGHLIGHT,
+  // never appears at all. Under flat shapes every plane lands on its exact hex in a run.
+  // The same page in HTML shows plateaus for BOTH, so the print path is the variable: a PDF
+  // shading function interpolates through coincident stops instead of stepping between them.
+  //
+  // WHICH SILENTLY UNDID v3.0.528. That build re-cut nine planes to five precisely because the
+  // eye reads the BREAKS between faces, not the shading within them -- and v3.0.521 had already
+  // proved the other half, that a smooth roll across a narrow rail is just an uneven line. The
+  // PDF was converting our stack of planes back into exactly that. Ian, on a rendered book:
+  // "the frame is blurry." It was, and not because of resolution -- the frame edge transitions
+  // in 3px in his screenshot, identical to vector type on the same page.
+  //
+  // WHAT IS SVG AND WHAT IS NOT. Hard edges go in the SVG, where they cannot be interpolated.
+  // The soft inner shading stays a CSS box-shadow on the child below, because a blur is a ramp
+  // by intent -- interpolation cannot hurt something that was never meant to step.
+  //
+  // NO viewBox, DELIBERATELY. With no viewBox the SVG user unit IS the CSS pixel, so a rail is
+  // the same thickness whatever the picture measures, and percentages resolve against the
+  // viewport. Rail thicknesses are absolute px; only the LENGTHS are percentages. A viewBox with
+  // preserveAspectRatio would stretch the rails to the picture aspect, which is the one thing
+  // this must never do.
+  var _bw = railPx;      // rail width, supplied by the caller
+  var _mw = matPx;       // mat width, supplied by the caller
+  // v3.0.543 -- THE BLOCK FILLS THE CORNER NOW, 0.70 OF THE RAIL TO ALL OF IT.
+  // Ian, on a PDF blow-up with the corner circled: "make the corner not have the seam. See how the
+  // bronze frame ends with a line and the bottom protrudes out from under the rivet. Make the rivet
+  // bigger if need be to cover it all."
+  // THE SEAM IS REAL AND STRUCTURAL. The rails are drawn left and right first, then top and bottom,
+  // so top and bottom own the corners -- which means at every corner a lit rail butts into a shadow
+  // rail and the join is a visible line. The block exists to cover it. At 0.70 with a centred
+  // offset it left 2px showing at the outer edge and 1px at the inner on an 11px rail, which is
+  // exactly the line he circled and the bottom rail poking out beneath it.
+  // v3.0.522 warned that a full-width block "swallows the corner". It does, and that is the point:
+  // a corner block on a real moulding IS the full width of the rail. The seam is the worse problem,
+  // and this is the third time it has been asked for -- 0.45 to 0.57 to 0.70 and now the whole rail.
+  var _dw = _bw;   // corner block size -- the full rail, so no join can show beside it
+  var _di = 0;
+  var _bt = Math.max(3, Math.round(_bw * 0.38));   // bead tile
+  var _by = Math.max(1, Math.round((_bw * 0.50 - _bt / 2) * 10) / 10);   // bead bed centre, 50 percent
+
+  // THE PROFILE, unchanged from v3.0.528 and now expressed as data rather than as a stop list.
+  // Percentages of the rail, outer edge to artwork. The apply script asserts these against the
+  // numbers the gradient version carried, because a re-typed profile is a different frame.
+  // v3.0.542 -- THE OUTER FACE WIDENS, 20 percent to 28. Ian: "the outside dark / wood part of the
+  // frame should be bigger." That part is the CSS border, and it widens too (see picFrameBorderCss)
+  // -- but the moulding s own outermost plane widening with it is what makes the whole outer band
+  // read as one thicker thing rather than a wide border with a thin edge stuck on it.
+  // THE BEAD BED STAYS CENTRED ON 50 PERCENT. 36-64 rather than 34-66, because the bead offset is a
+  // single number serving all four rails and a bed that is not symmetric needs two (v3.0.530).
+  // AND THE FIRST ATTEMPT AT THIS WAS WRONG. Widening the outer face to 28 percent took the width
+  // out of the STEP, which fell to 0.64px at a rail of 8 -- sub-pixel, the very trap this build
+  // exists to close, self-inflicted while closing it. Caught by printing the plane widths before
+  // shipping rather than by Ian looking at a page. 23 percent is the most the outer face can take
+  // while every plane still holds a whole pixel at rail 8, which is the common size.
+  var _lit  = [[0, 23, '#f4e6b8'], [23, 36, '#e0c77c'], [36, 64, '#a8862f'], [64, 82, '#7a5d22'], [82, 100, '#3d2d0c']];
+  // v3.0.542 -- THE SHADOW RAIL S OUTER FACE WAS BLACK, SO IT VANISHED INTO THE BORDER.
+  // Ian: "there is a solid bronze band that runs on the left and top outside the rivet band, but on
+  // the right and bottom there is no similar band. It should be there and be darker, shadowed a
+  // little." The band WAS there. Measured off his screenshot, border against the face beside it:
+  //     left and top     74,52,24  ->  244,230,184     a 170-point jump, unmistakable
+  //     right and bottom 21,14,4   ->   36,23,8        a 15-point jump, one black mass
+  // #241708 is not dark bronze, it is black with a hint of brown. Raised to #6b5119, which clears
+  // the shadow border by 86 points -- comparable to the lit side -- while staying far below the lit
+  // face at 244, so the light direction is untouched. THIS IS v3.0.524 RECURRING ON THE OTHER RAIL:
+  // that build found the frame reading olive-brown because near-black steps do not read as steps,
+  // fixed it on the lit rails, and nobody looked at the shadow ones.
+  var _shad = [[0, 23, '#6b5119'], [23, 36, '#5f4715'], [36, 64, '#8a6a2a'], [64, 82, '#e0c77c'], [82, 100, '#3d2d0c']];
+  var _matSh = ['#c9c1af', '#dcd5c6'];   // top and left: the shadowed bevel
+  var _matLt = ['#ece7d9', '#f8f5ec'];   // bottom and right: the lit bevel
+
+  // shape-rendering:crispEdges keeps a rect edge on a whole device pixel instead of antialiasing
+  // it into its neighbour, which is the whole point of using rectangles.
+  function _r(x, y, w, h, col, extra) {
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h +
+      '" fill="' + col + '" shape-rendering="crispEdges"' + (extra || '') + '/>';
+  }
+  // Bottom and right shapes are placed at 100 percent and pulled back by a transform, because SVG
+  // attributes take no calc(). Same intent as the CSS version, none of the percentage-resolution
+  // trap that put the bead courses a whole band out at v3.0.526 -- a translate is just arithmetic.
+  function _up(k) { return ' transform="translate(0,-' + k + ')"'; }
+  function _lf(k) { return ' transform="translate(-' + k + ',0)"'; }
+
+  var _svg = '';
+
+  // 1. THE MAT, innermost, drawn first.
+  var _mh = _mw / 2;
+  _svg += _r(0, _bw, '100%', _mh, _matSh[0]) + _r(0, _bw + _mh, '100%', _mh, _matSh[1]);
+  _svg += _r(_bw, 0, _mh, '100%', _matSh[0]) + _r(_bw + _mh, 0, _mh, '100%', _matSh[1]);
+  _svg += _r(0, '100%', '100%', _mh, _matLt[1], _up(_bw + _mw)) + _r(0, '100%', '100%', _mh, _matLt[0], _up(_bw + _mh));
+  _svg += _r('100%', 0, _mh, '100%', _matLt[1], _lf(_bw + _mw)) + _r('100%', 0, _mh, '100%', _matLt[0], _lf(_bw + _mh));
+
+  // 2. THE FOUR RAILS. Left and right first, then top and bottom, so top and bottom own the
+  // corners -- the same paint order the background-layer version had, where the first layer won.
+  _lit.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r(a, 0, b - a, '100%', p[2]);
+  });
+  _shad.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r('100%', 0, b - a, '100%', p[2], _lf(b));
+  });
+  _lit.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r(0, a, '100%', b - a, p[2]);
+  });
+  _shad.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r(0, '100%', '100%', b - a, p[2], _up(b));
+  });
+
+  // 3. THE BEAD COURSE. A pattern in userSpaceOnUse tiles for ever without anyone computing how
+  // many beads fit, which is the one thing the CSS version and this agree on completely.
+  // The radial gradient becomes three flat circles. Its stops were percentages of the
+  // FARTHEST CORNER, which on a square tile is 0.707 of the tile -- so 14/38/62 percent are
+  // 0.099, 0.269 and 0.438 of the tile. Reproduced rather than eyeballed.
+  // v3.0.542 -- THE BEADS ARE WHOLE-PIXEL SQUARES NOW, AND THIS IS THE SUB-PIXEL LESSON FOR THE
+  // THIRD TIME IN ONE DAY. Ian, on the same picture at the same size in both renderers: "look at
+  // the rivets, barely there on pdf." Measured down one column of the bead bed:
+  //     HTML  127 186 213 127 143 213 169 127 200 212 ...   range 86, std 35
+  //     PDF   144 141 130 146 138 128 137 135 129 130 ...   range 20, std  6
+  // Eighty-five percent of the contrast, gone. The bead was three concentric circles carried over
+  // verbatim from the CSS radial-gradient at v3.0.540 -- and at a 4px tile their radii resolve to
+  // 1.75, 1.08 and 0.40 PIXELS. The bright core is 0.8px across. Chrome s screen rasteriser
+  // antialiases that into a visible blob; the print path averages it away.
+  // v3.0.528 fixed exactly this for the rail planes. The bead was converted without anyone asking
+  // what its stops resolve to, one function away from the comment saying not to.
+  // THE CONSTRAINT IS BRUTAL: _bt is max(3, round(rail * 0.38)), so the tile is only ever 3 or 4
+  // pixels. Three tones cannot live in three pixels. So: one bead of (tile - 1) with a one-pixel
+  // gap, a bright face and a one-pixel shade along its bottom and right. Every feature a whole
+  // pixel, nothing to average away. It loses internal modelling the measurement shows was never
+  // reaching the page.
+  var _bs = Math.max(2, _bt - 1);        // bead size, a whole number of pixels
+  var _bead = '<pattern id="bd" patternUnits="userSpaceOnUse" width="' + _bt + '" height="' + _bt + '">' +
+    '<rect x="0" y="0" width="' + _bs + '" height="' + _bs + '" fill="#fff3cf" shape-rendering="crispEdges"/>' +
+    '<rect x="0" y="' + (_bs - 1) + '" width="' + _bs + '" height="1" fill="#8a6a2a" shape-rendering="crispEdges"/>' +
+    '<rect x="' + (_bs - 1) + '" y="0" width="1" height="' + _bs + '" fill="#8a6a2a" shape-rendering="crispEdges"/>' +
+    '</pattern>';
+  _svg += _r(0, _by, '100%', _bt, 'url(#bd)');
+  _svg += _r(0, '100%', '100%', _bt, 'url(#bd)', _up(_by + _bt));
+  _svg += _r(_by, 0, _bt, '100%', 'url(#bd)');
+  _svg += _r('100%', 0, _bt, '100%', 'url(#bd)', _lf(_by + _bt));
+
+  // 4. THE CORNER BLOCKS, last, so they cover the butt seam where the rails meet. The 135-degree
+  // gradient becomes three flat faces: a body, a lit triangle toward the top-left and a shaded one
+  // toward the bottom-right. Plus the half-pixel rim the CSS version carried as an inset shadow.
+  // 4. THE CORNER BLOCKS, last, so they cover the butt seam where the rails meet. The 135-degree
+  // gradient becomes three flat faces: a body, a lit triangle toward the top-left and a shaded one
+  // toward the bottom-right, plus the half-pixel rim the CSS version carried as an inset shadow.
+  //
+  // POSITIONED WITH A NESTED <svg>, AND THE FIRST ATTEMPT WAS WRONG. It used
+  // transform="translate(100%,0)" -- and an SVG transform takes NO percentages, so all four blocks
+  // would have stacked in the top-left corner. Caught by parsing the emitted SVG and grepping the
+  // transforms rather than by looking at a render, which is the only reason it is not a build Ian
+  // has to find. A nested svg DOES take a percentage for x and y, so it anchors to the far edge and
+  // a numeric translate inside it does the arithmetic. overflow:visible is load-bearing: the
+  // content is translated to a negative local coordinate and would otherwise be clipped away.
+  // The checkered punch, as its own function so the four rects are written once rather than four
+  // times -- the fault this file keeps re-finding, at the smallest scale it has yet appeared.
+  function _pun(x, y) {
+    return _r(x, y, 1, 1, '#f4e6b8') + _r(x + 1, y, 1, 1, '#3d2d0c') +
+      _r(x, y + 1, 1, 1, '#3d2d0c') + _r(x + 1, y + 1, 1, 1, '#f4e6b8');
+  }
+  function _block() {
+    return _r(0, 0, _dw, _dw, '#c9a84c') +
+      '<path d="M0 0 l' + _dw + ' 0 l-' + _dw + ' ' + _dw + ' z" fill="#f4e6b8"/>' +
+      '<path d="M' + _dw + ' ' + _dw + ' l-' + _dw + ' 0 l' + _dw + ' -' + _dw + ' z" fill="#7a5d22"/>' +
+      '<rect x="0" y="0" width="' + _dw + '" height="' + _dw +
+        '" fill="none" stroke="rgba(255,248,220,0.55)" stroke-width="0.5"/>' +
+      // v3.0.546 -- FOUR PIXELS, CHECKERED. Ian: "put 4 pixels in a square, two lighter and two
+      // darker, checkerboarded." Placed from the block s own measurement so the pair stays centred
+      // at every rail width rather than being positioned for one of them. The two colours are the
+      // block s own highlight and shade, so the punch reads as part of the same casting rather than
+      // as something dropped on top of it.
+      _pun(Math.max(0, Math.floor(_dw / 2) - 1), Math.max(0, Math.floor(_dw / 2) - 1));
+  }
+  function _corner(xa, ya, dx, dy) {
+    return '<svg x="' + xa + '" y="' + ya + '" overflow="visible">' +
+      '<g transform="translate(' + dx + ',' + dy + ')">' + _block() + '</g></svg>';
+  }
+  // v3.0.545 -- A 1px SCRIBE LINE AT THE OUTER EDGE OF THE MOULDING. Ian: "on that outer brown /
+  // wood part add a 1 pixel wide run -- on the left and top make it a hair darker and on the bottom
+  // and right make it a hair lighter."
+  // DARK top-left and LIGHT bottom-right is the CONCAVE direction -- the mat s logic, not the
+  // moulding s. That is correct and it is what he asked for: a line scribed INTO the wood is a
+  // groove, and a groove s top face turns away from the light. The moulding beside it is convex and
+  // lights the other way. Both are right; see the mat note at v3.0.530.
+  // Drawn AFTER the rails so it overlays the first pixel of the outer face rather than costing the
+  // profile a plane -- a plane expressed in percentages cannot be a fixed pixel.
+  // v3.0.546 -- THE DARK HALF OF THE SCRIBE WAS INVISIBLE, AND IT WAS THE COLOUR, NOT THE CODE.
+  // Ian, on a 7x blow-up: "I do not see it." Measured off that same image, the LIGHT half was
+  // rendering perfectly -- 138,106,41 against the wood at 41,28,12, a 97-point jump, one pixel wide.
+  // The DARK half was #241708 at 36,23,8 against a wood band of #2a1d0c at 42,29,12. A SIX-POINT
+  // DIFFERENCE. It was drawn, it was the right width, and it could not be seen. So he was looking at
+  // a line on two sides and nothing on the other two, which reads as nothing at all.
+  // #0d0904 clears the wood by 28 points, which is still "a hair darker" but is a hair you can see.
+  // AND IT IS DASHED NOW. Ian: "if you can make it a dotted or dashed line that would be even
+  // better -- trying to give it some texture." Two pixels on, two off. NOT one and one: at print
+  // scale a 1px period sits exactly at the resolution limit and averages into a flat 50 percent
+  // grey, which is the sub-pixel trap that cost this frame three separate builds. A 4px period with
+  // whole-pixel marks cannot average away.
+  var _sdD = '#0d0904', _sdL = '#8a6a2a';
+  function _dash(id, horiz, col) {
+    return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="' + (horiz ? 4 : 1) +
+      '" height="' + (horiz ? 1 : 4) + '"><rect x="0" y="0" width="' + (horiz ? 2 : 1) +
+      '" height="' + (horiz ? 1 : 2) + '" fill="' + col + '" shape-rendering="crispEdges"/></pattern>';
+  }
+  var _scribePats = _dash('sdh', true, _sdD) + _dash('sdv', false, _sdD) +
+    _dash('slh', true, _sdL) + _dash('slv', false, _sdL);
+  _svg += _r(0, 0, '100%', 1, 'url(#sdh)') + _r(0, 0, 1, '100%', 'url(#sdv)');
+  _svg += _r(0, '100%', '100%', 1, 'url(#slh)', _up(1)) + _r('100%', 0, 1, '100%', 'url(#slv)', _lf(1));
+
+  var _far = -(_di + _dw);
+  _svg += _corner('0',      '0',      _di,  _di);
+  _svg += _corner('100%',   '0',      _far, _di);
+  _svg += _corner('0',      '100%',   _di,  _far);
+  _svg += _corner('100%',   '100%',   _far, _far);
+
+  // v3.0.527 TD-341 -- ONE hairline at the outer edge, ONE at the moulding/artwork boundary.
+  // `inset 0 0 0 Npx` is a solid ring N pixels THICK, not a line N pixels in, and a box-shadow
+  // paints ABOVE the background. The old second shadow was therefore a dark ring the FULL width
+  // of the rail at 0.75 alpha, covering every rail gradient and the whole bead course from
+  // v3.0.521 to v3.0.526. Only the OUTER hairline belongs on this element. The inner hairline
+  // moved onto the shading child below, whose own edge already sits at the boundary -- and
+  // being a CHILD it paints ABOVE the rails rather than over them. Do not merge these back.
+  var _edges = 'inset 0 0 0 1px rgba(28,18,4,0.85)';
+  return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:' + _edges + ';">' +
+    '<svg width="100%" height="100%" style="position:absolute;inset:0;display:block;" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs>' + _bead + _scribePats + '</defs>' + _svg +
+    '</svg>' +
+    // v3.0.542 -- rail + mat, NOT rail + 1. v3.0.527 put this at the moulding/artwork boundary and
+    // it WAS the boundary -- the mat did not exist until v3.0.529. Since then the mat has occupied
+    // rail to rail+mat, so rail+1 lands one pixel INSIDE it and has been drawing a dark line across
+    // the mat on every picture. Found by measuring a PDF: the mat reads 134,128,114 / 66,58,45 /
+    // 190,185,172 where it should be a clean 201 and 220. A constant that was correct when written
+    // and became wrong when something moved underneath it, which is this file s standing fault.
+    '<div style="position:absolute;inset:' + (_bw + _mw) + 'px;box-shadow:inset 0 0 0 1px rgba(28,18,4,0.75),inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
+  '</div>';
+}
+function picOverlay(opts, sizeIn){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
+  // v3.0.535 -- A MATTE WHITE MAT INSIDE THE KEYLINE. Ian: "on the thin keyline border add a two
+  // pixel matte white on the inside of the line. If a picture goes all the way to the edge you
+  // cannot even see it." Exactly right -- a 1px hairline at 35 percent alpha against a picture that
+  // reaches its own edge is invisible, and the whole point of the preset is that hairline.
+  // FLAT, NOT LIT, and that is deliberate rather than an oversight. The bronze mat is shaded
+  // because it sits in a modelled moulding; keyline is the minimal preset whose entire identity is
+  // one thin line, and a lit bevel two pixels inside it would fight that. Ian asked for matte white
+  // and matte white is also the right answer.
+  // IT COVERS THE OUTERMOST 2px OF THE ARTWORK rather than moving it -- TD-166, the picture pays.
+  if (b === 'keyline') return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 ' + keylineMatPx(sizeIn) + 'px ' + KEYLINE_MAT + ';"></div>';   // v3.0.544 -- sizeIn is already a parameter of this function; it was simply never used on this branch
   if (b === 'frame') {
-    // Two thin gold lines + a small diamond node tucked into each corner where the
-    // lines meet, so the corner reads as part of the frame line. The cell clips,
-    // so the diamonds sit just inside the corner rather than centred on the edge.
-    var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:5px;height:5px;background:#c9a84c;transform:rotate(45deg);box-shadow:0 0 0 1px #2c1e10;"></i>'; };
-    var _diamonds = _d('top:1px;left:1px;') + _d('top:1px;right:1px;') + _d('bottom:1px;left:1px;') + _d('bottom:1px;right:1px;');
-    return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px #c9a84c, inset 0 0 0 2px #2c1e10, inset 0 0 0 3px #c9a84c;">' + _diamonds + '</div>';
+    // v3.0.531 -- the whole moulding moved to bronzeMouldingHtml so Picture Book and the title
+    // page can draw the SAME object. This branch is now only the two numbers that describe it.
+    var _r = picRailPx(sizeIn);
+    return bronzeMouldingHtml(_r, picMatPx(_r));
   }
   return '';
 }
@@ -1892,10 +2727,17 @@ function momentImgMedia(m, mopts) {
 // clips to the aspect; a non-crop-safe image gets contain and the box background stays dark. This
 // gives Picture Book the crop-safe + focal handling it never had (it hard-cropped everything).
 // extraImgCss is appended to the media wrapper (e.g. a shadow); boxCss to the outer box (border).
-function momentImgAspectBox(m, ratio, boxCss, extraImgCss) {
+// v3.0.535 -- innerHtml is a trailing optional overlay drawn AFTER the picture, inside the box.
+// It exists because AN INSET BOX-SHADOW CANNOT BE USED HERE: the box already carries the border,
+// and a child paints ABOVE a box-shadow, so an inset ring on this element would be hidden behind
+// the image. That is TD-341 read the other way round -- the same paint-order rule that buried the
+// bronze moulding is what makes an overlay the only reliable way to draw ON the picture.
+// The box is already position:relative, so an absolutely positioned child at inset:0 lands inside
+// the border by definition. Trailing and optional, so all ten existing callers are unaffected.
+function momentImgAspectBox(m, ratio, boxCss, extraImgCss, innerHtml) {
   if (!m || !m.image) return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#1a0f06;' + (boxCss || '') + '"></div>';
   return '<div style="width:100%;aspect-ratio:' + ratio + ';overflow:hidden;line-height:0;position:relative;' + (boxCss || '') + (extraImgCss || '') + '">' +
-    momentImgMedia(m, {}) + '</div>';
+    momentImgMedia(m, {}) + (innerHtml || '') + '</div>';
 }
 
 function cgImgCell(m, opts, heightIn, widthPct) {
@@ -1997,7 +2839,19 @@ function gzNarrBox(narrHtml, opts) {
 // TWO CALLERS, ONE FIX: gzImgBox and cgFlowTower had byte-similar copies of this branch. gzImgBox's
 // comment records the same complaint already reported once -- "the border should come down to meet
 // the picture's edge" -- fixed there for the letterbox case and never for the stale-aspect one.
-function huggingImgBox(m, opts, outerCss, floorH) {
+// v3.0.532 -- THE FRAME WAS SIZED TO A TOWER S LONG SIDE. Ian: "can you dial back the thickness of
+// the bronze frame on tower pictures, it is a little big for them because they are thin pics."
+// picFrameScale takes the picture s SHORT side -- the dimension the frame competes with, and its
+// own header says so. This function was handed floorH, which is the HEIGHT. On a tower that is the
+// long side, so a 2.8in-wide picture 9.2in tall asked for the frame a 9.2in picture should get:
+// scale clamped to 1.50 and an 11px rail, against the 6px its real short side calls for.
+// THE PROOF IS TWO LINES APART. Both callers sit in a ternary whose OTHER branch already passes
+// Math.min(imgW, imgH). Same decision, same function, two lines away, and only one of them was
+// right -- which is this file s standing fault written down one more time.
+// floorH keeps doing its own job (the min-height that stops the box collapsing during the measure
+// pass); shortIn is a separate argument because they are separate measurements that happened to be
+// the same number on a landscape picture, which is exactly why nobody noticed.
+function huggingImgBox(m, opts, outerCss, floorH, shortIn) {
   return '<div style="' + outerCss + 'min-height:' + floorH.toFixed(2) + 'in;' +
       'position:relative;background:transparent;line-height:0;">' +
     // v3.0.516 -- THE CAPTION GOES OUTSIDE THIS FRAME TOO. It was emitted INSIDE the bordered
@@ -2008,7 +2862,7 @@ function huggingImgBox(m, opts, outerCss, floorH) {
     // is why it survived a whole round of eyeballing. Ninth of nine.
     '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-      coCaptionCover(m, opts.caption) + picOverlay(opts) +   // v3.0.518 -- frame last, see cgBoxInner
+      coCaptionCover(m, opts.caption, opts, shortIn) + picOverlay(opts, shortIn) +   // v3.0.518 frame last; v3.0.520 sized; v3.0.529 plaque clears the rail; v3.0.532 SHORT side, not the floor
     '</div>' +
     cgCapFlow(m, opts) +
   '</div>';
@@ -2024,7 +2878,7 @@ function gzImgBox(m, opts, fl, w, h) {
     // does NOT collapse when image loads are aborted during the magazine measure pass -- without
     // this the band measures short and the deterministic composer clips its overflow. When the
     // image loads (compose/flow render) it renders at its natural height (>= the floor).
-    return huggingImgBox(m, opts, fl + 'width:' + w.toFixed(2) + 'in;', h);
+    return huggingImgBox(m, opts, fl + 'width:' + w.toFixed(2) + 'in;', h, Math.min(w, h));
   }
   // v3.0.513 -- caption OUTSIDE the frame. The float and the width move to a wrapper; the border
   // stays on the picture box, which is 0.12in shorter; the caption sits under it, outside the
@@ -2034,12 +2888,12 @@ function gzImgBox(m, opts, fl, w, h) {
   if (_cp) {
     return '<div style="' + fl + 'width:' + w.toFixed(2) + 'in;position:relative;">' +
       '<div style="' + cgBorder(opts) + 'width:100%;height:' + (h - _cp.crop).toFixed(3) +
-        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + '</div>' +
+        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts, Math.min(w, h - _cp.crop)) + '</div>' +
       cgCapOutsideHtml(m, _cp) +
     '</div>';
   }
   return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;height:' + h.toFixed(2) +
-    'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts) + '</div>';
+    'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, false, Math.min(w, h)) + '</div>';
 }
 function gzFloatPanel(m, opts, narrHtml, iw, ih, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0.02in 0.22in 0.10in 0;' : 'float:right;margin:0.02in 0 0.10in 0.22in;';
@@ -2168,9 +3022,9 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
     // adds NO dead space unless that stored aspect is stale. It is a FLOOR, never a ceiling: the
     // img keeps width:100 percent + height:auto, there is no overflow:hidden and no object-fit here,
     // so the box can only grow to the picture. This cannot crop a tower.
-    ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH)
+    ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH, Math.min(imgW, imgH))
     : ('<div style="' + fl + cgBoxCss(m, opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-       'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>');
+       'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true, Math.min(imgW, imgH)) + '</div>');
   var col = (wrapBelow && !besideHtml)
     ? cgAlignFirstPara(narrHtml || '')                                      // wraps beside the float, then continues below it
     : '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
@@ -2226,7 +3080,7 @@ function cgFlowWide(m, opts, narrHtml, sideLeft, mul) {
   var _wc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
   var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + _ww + ';' + _wc + 'position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgBoxInner(media, m, opts, true) + '</div>';
+    cgBoxInner(media, m, opts, true, Math.min(CG_W * mul, CG_W * mul / Math.max(0.3, aspW))) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -2237,7 +3091,7 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
     return '<div style="' + cgBoxCss(m, opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>';
+      'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true, Math.min(asp * H, H)) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
@@ -2301,7 +3155,7 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
     var _fc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
     var wbox = '<div style="' + cgBoxCss(m, opts) + 'width:' + _fw + ';' + _fc + 'position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-      cgBoxInner(media, m, opts, true) + '</div>';
+      cgBoxInner(media, m, opts, true, Math.min(CG_W * mul, CG_W * mul / Math.max(0.3, asp))) + '</div>';
     return wbox + gzNarrBox(narrHtml, opts);
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
@@ -2320,12 +3174,12 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
     var _fmar = sideLeft ? '0 0.26in 0.06in 0' : '0 0 0.06in 0.26in';
     var fbox = '<div style="' + cgBoxCss(m, opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
       'in;position:relative;background:transparent;line-height:0;page-break-inside:avoid;break-inside:avoid;">' +
-      cgBoxInner(img, m, opts, true) + '</div>';
+      cgBoxInner(img, m, opts, true, Math.min(W, H)) + '</div>';
     return '<div style="display:flow-root;margin-bottom:0.10in;">' + fbox + gzNarrBox(cgAlignFirstPara(narrHtml), opts) + '</div>';
   }
   var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgBoxInner(img, m, opts, true) + '</div>';
+    cgBoxInner(img, m, opts, true, Math.min(W, H)) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -2474,7 +3328,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var twMedia = m.image
         ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
         : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
-      var twBox = '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + cgBoxInner(twMedia, m, opts) + '</div>';
+      var twBox = '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + cgBoxInner(twMedia, m, opts, false, Math.min(twW, CO_TOWER_H)) + '</div>';   // v3.0.532 -- sized to the SHORT side; it passed nothing and took the 1.0 default, which is a 7px rail on a 2.3in-wide picture
       var twNarr = '';
       if (sec.before) twNarr += buildNarrativeHTML(sec.before, false);
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
@@ -3325,7 +4179,7 @@ function cgImageBox(m, wIn, hIn, opts, fullWidth) {
     ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var wCss = fullWidth ? 'width:100%;' : ('width:' + wIn.toFixed(2) + 'in;');
-  return '<div style="' + cgBoxCss(m, opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(media, m, opts, true) + '</div>';
+  return '<div style="' + cgBoxCss(m, opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(media, m, opts, true, Math.min(fullWidth ? CG_W : wIn, hIn)) + '</div>';
 }
 function _engineRow(cellsHtml) {
   return '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:flex-start;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + cellsHtml + '</div>';
@@ -3890,9 +4744,28 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
-  .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
-  .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
+  .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
+  .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
+  /* v3.0.554 -- THE LOGO DOES NOT MOVE WITH THE TITLE. Ian: "never move the Campaignia logo, put
+     it back where it was and lower it. And leave it there -- it should not move. Just the title."
+     It was a child of .cover-art-caption, which is the block placement moves, so at Top it went to
+     the top of the cover with the title. That was a bug in v3.0.553, not a decision.
+     It is pinned to the FRAME now, at 0.25in -- halfway from the 0.5in it sat at to the inner edge.
+     THE GHOST TWIN IS WHY THE TITLE DID NOT SHIFT. The logo was the last child of a flex-end
+     column, so simply removing it would have let the title and subtitle fall by exactly its height.
+     Its height is auto and depends on the artwork, so there is no number to compensate with. A twin
+     left in flow at visibility:hidden occupies exactly the right space, whatever that turns out to
+     be -- measured by the browser rather than guessed by me. */
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
+  /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
+     Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
+  ${titleFaceImp}
+  ${coverTitleCss(co && co.titleStyle)}
+  /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
+  ${coverPlaceCss(co && co.titlePlace)}
+  /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
+  ${coverSizeCss(co && co.titleSize)}
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
   .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
   .backcover-default { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
@@ -3915,8 +4788,9 @@ ${fCover ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-art-title">${campaign.name}</div>
         <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
-        ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
+        ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
+      ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     </div>
   </div>` : `<div class="cover-content">
     ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
@@ -3993,6 +4867,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var fWmark  = false; // OFF for now; set to (user is on free trial) later. Under-fill scan samples the paper background, so the watermark never affects optimization even when on.
   var paperCSS = coPaperCSS(co ? co.paper : 'parchment', co ? co.condition : 'none');
   var fontImp = coFontImport(co ? co.font : '');
+  // v3.0.555 -- the title preset's face, inlined the same way the body font is. Empty unless the
+  // chosen preset needs a face that is not already in every document.
+  var titleFaceImp = coverTitleFaceCss(co ? co.titleStyle : '');
   var fontFam = coFontFamily(co ? co.font : '');
   var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
   // When paginated, render only one session. page is 1-indexed.
@@ -4005,14 +4882,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     : sessions;
   // Date range
   const _dts = sessions.map(function(s) { return toDate(s.session_date); }).filter(Boolean).map(function(d){ return d.getTime(); });
-  let dateRange = '';
-  if (_dts.length) {
-    const minDate = new Date(Math.min.apply(null, _dts));
-    const maxDate = new Date(Math.max.apply(null, _dts));
-    const _df = {year:'numeric', month:'long', day:'numeric'};
-    dateRange = minDate.toLocaleDateString('en-US', _df) +
-      (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', _df) : '');
-  }
+  let dateRange = formatDateRange(_dts);   // v3.0.552 -- one source, shared with the book-meta endpoint that seeds the subtitle field
   const coverImg = campaign.cover_image_url || '';
 
   // Cast page -- "The Company". Density scales with the number of characters so
@@ -4023,11 +4893,142 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // The Company page lists player characters only -- NPCs still appear in panels.
   var castChars = characters.filter(function (c) { return !_isNpc(c); });
   var _castN = castChars.length;
-  var _castCols, _castPort, _castGap, _castFields;
-  if (_castN <= 12)      { _castCols = 3; _castPort = 1.1;  _castGap = 0.25; _castFields = 'full'; }
-  else if (_castN <= 30) { _castCols = 4; _castPort = 0.85; _castGap = 0.16; _castFields = 'mid';  }
-  else if (_castN <= 60) { _castCols = 6; _castPort = 0.55; _castGap = 0.10; _castFields = 'name'; }
-  else                   { _castCols = 0; _castPort = 0;    _castGap = 0;    _castFields = 'list'; }
+  // v3.0.525 -- THE COMPANY IS A LINE-UP, NOT A GRID OF CARDS.
+  // Ian, looking at a four-character page that rendered 3 + 1 with 40 percent of the page empty:
+  // "take them out of the frame... put the full picture of the characters standing next to each
+  // other.. even overlapping. with just captions underneath them... not frame or border. Maybe a
+  // little shadow under each of them." And then: "Feet line up... almost like a line up", with
+  // "some slightly closer than others" so it is not a perfect straight line.
+  //
+  // WHAT WAS ACTUALLY WRONG, and both faults are the same one -- a constant where a derivation
+  // belongs. Columns were HARDCODED at 3 for any cast up to twelve, so four characters could only
+  // ever render 3 + 1 with an orphan. And the portrait was a FIXED 1.1in square regardless of how
+  // many there were, so a four-person party got the same tiny picture twelve would, and the page
+  // sat 40 percent empty. Both now fall out of the count.
+  //
+  // ROWS ARE BALANCED. Never an orphan: 4 goes 2+2, not 3+1; 7 goes 4+3; 5 stays 3+2, which reads
+  // as a deliberate pyramid rather than a leftover.
+  var _castRows = (_castN <= 6) ? 1 : (_castN <= 14 ? 2 : (_castN <= 27 ? 3 : 4));
+  var _castPerRow = Math.ceil(_castN / _castRows);
+  var _castFields = (_castN <= 12) ? 'full' : (_castN <= 30 ? 'mid' : (_castN <= 60 ? 'name' : 'list'));
+  // OVERLAP. Figures tuck behind one another so the group reads as a company standing together
+  // rather than as a contact sheet. n figures at width w overlapping by OV occupy
+  // w * (n - (n-1)*OV), so w falls straight out of the content width.
+  // v3.0.566 -- MORE OVERLAP, WHICH IS WHAT MAKES THE FIGURES BIGGER. Ian: "can they be bigger? The
+  // text is bigger than the characters." He is right, and the cause is not the height cap -- that
+  // allows 4.2in and a five-character row only reaches 2.4. The figures are WIDTH-limited: n figures
+  // overlapping by OV occupy w * (n - (n-1)*OV), so the less they overlap the narrower each must be,
+  // and the box aspect then holds the height down with them.
+  // v3.0.567 -- 0.30 to 0.42. Ian: "they need to be bigger overall and maybe closer together."
+  // BOTH ASKS ARE THE SAME NUMBER, which is the useful thing here: more overlap moves the figures
+  // closer AND makes each one wider, and the box aspect turns that width into height. 0.12 to 0.42
+  // is 44 percent taller than where the day started, at no cost in page space.
+  // The mask is gone as of this build, so nothing is being faded at the edges any more -- and with
+  // the art cut out on white and short characters not filling their boxes, the BOXES overlap far
+  // more than the figures inside them ever do.
+  // AND IT IS ONLY SAFE NOW. Overlap used to be risky because every portrait carried its own
+  // background, so tucking figures together meant tucking RECTANGLES together. Since v3.0.559 they
+  // are cut out on white, and height scaling (v3.0.563) means a short character does not fill its
+  // box either -- so the boxes overlap far more than the figures inside them ever do.
+  // v3.0.566 -- ONE NAME ON THE LINE-UP. Ian: "can we just take the first name in the Name array."
+  // A character's name field carries every alias the player uses -- "Lumen / Elias / Elias Ward" --
+  // which is right on a character sheet and wrong under a portrait: it wrapped to three lines and
+  // made the caption taller than the figure above it.
+  // Split on the slash, take the first, fall back to the whole string if there is no slash or the
+  // first segment is empty, so a name like "/ Elias" can never render as nothing.
+  function castFirstName(n) {
+    var raw = String(n == null ? '' : n);
+    var first = raw.split('/')[0].trim();
+    return first || raw.trim();
+  }
+  // v3.0.568 -- 0.42 to 0.60, and THE CAPTIONS ARE WHAT WAS HOLDING IT BACK. Ian offered the way
+  // out: "if need be you could do From left to right, Shumble Gnome Fighter, Humble Gnome Cleric...
+  // at the bottom." Per-figure captions need a slot each, and the slot is the figure width times
+  // (1 - overlap) -- so every increase in overlap narrowed the captions until names stopped fitting.
+  // A single roster line under the row needs no slots at all, so the only remaining limit on overlap
+  // is the figures themselves. At 0.60 a five-character row is 4.22in tall against 2.43in this
+  // morning: SEVENTY-FOUR PERCENT taller.
+  var CAST_OV = 0.60;                 // how much of each figure the next one covers
+  var _castStepOverride = null;       // set for single rows, which size from a height target instead
+  // v3.0.574 -- 0.62 TO 0.75, TO MATCH THE ART. The references are generated at 3:4 (0.75) but the
+  // box was 0.62, so object-fit:contain letterboxed EVERY figure: the drawn art was only 83 percent
+  // of the box height and the top 17 percent was empty. That is why the figures looked smaller than
+  // the numbers said, and it is also why a couple of shadows looked wrong -- the shadow is sized
+  // from the BOX width, and a letterboxed figure does not fill its box.
+  // Matching the box to the art means no letterboxing, so the figure IS the box and the shadow lands
+  // on the real silhouette.
+  var CAST_ASP = 0.75;                // figure box, width over height -- matches the reference aspect
+  var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);   // the overlap-driven width, used when a row has captions
+  // Height cap so a one or two-character party does not produce a figure taller than the page.
+  // The whole block must leave room for the title, the captions and the contents that follow.
+  // v3.0.568 -- a single row loses its per-figure captions (see the roster below), so it needs less
+  // room beneath and can afford more above. 4.2 to 6.0. Multi-row casts keep their captions and
+  // their caps unchanged.
+  // v3.0.570 -- 6.0 to 5.2, because 6.0 did not fit. A cast page is 9.55in of printable height; the
+  // title block takes about 1.3, the pushed-down row took 1.6 more, and the roster needs its foot.
+  // The figures ran off the bottom. 5.2in plus the title plus the roster leaves real margin, and it
+  // is still more than double where the day started.
+  // v3.0.572 -- 5.2 BACK TO 3.1, AND IT IS A RETREAT WITH A REASON. Ian: "we lost two characters."
+  // Humble and Dumble -- the two FAR figures -- vanished entirely from a five-gnome page.
+  // THE BOXES ARE STILL OPAQUE. The white grounds measure 251,251,252 rather than pure white, so
+  // mix-blend-mode:multiply does not clear them (v3.0.570), and at 5.2in the box is 3.22in wide with
+  // only 0.89in of step -- so a near figure's rectangle is nearly four times the gap to its
+  // neighbour and paints over that neighbour COMPLETELY. Not crowding: erasure.
+  // SIZE AND COMPLETENESS ARE IN DIRECT CONFLICT UNTIL THE GROUNDS ARE REALLY TRANSPARENT, and
+  // losing two of five characters is far worse than smaller figures. 3.1in is the largest height at
+  // which a box cannot swallow its neighbour: it leaves the step at 62 percent of the box width.
+  // THIS IS TEMPORARY. TD-362 cuts the white to alpha once at generation; the moment images carry
+  // real transparency this number goes straight back up, because nothing else was wrong with 5.2.
+  // v3.0.572 -- THE SINGLE-ROW HEIGHT IS DERIVED FROM THE PARTY SIZE, NOT PICKED.
+  // Ian: "we lost two characters." Humble and Dumble -- the two FAR figures -- vanished from a
+  // five-gnome page. THE BOXES ARE STILL OPAQUE: the generated grounds measure 251,251,252 rather
+  // than pure white, so mix-blend-mode:multiply does not clear them (v3.0.570 assumed it would). At
+  // a 5.2in cap the box is 3.22in wide with 0.89in of step, so a near figure's rectangle is nearly
+  // four times the gap to its neighbour and paints over it COMPLETELY. Not crowding: erasure.
+  // A FIXED CAP IS THE WRONG SHAPE. 3.1in is safe for five figures and NOT for six -- caught by the
+  // guard in this build's own apply script, which swept party sizes rather than checking the one on
+  // Ian's screen. Solving for the constraint instead gives every party the largest height that still
+  // leaves a neighbour visible: CG_W >= h * ASP * (1 + 0.6 * (n - 1)).
+  //     2 figures  6.6in      4 figures  3.9in      6 figures  2.7in
+  //     3 figures  5.0in      5 figures  3.2in      7 figures  2.4in
+  // Small parties get BIGGER figures than the old flat 4.2in ever allowed, which is the opposite of
+  // what a constant could do.
+  // TEMPORARY, AND THE 0.6 IS THE ONLY REASON FOR IT. TD-362 cuts the white to alpha once at
+  // generation; with real transparency a box can overlap freely and this reverts to the page budget.
+  // v3.0.573 -- 0.60 to 0.26, BECAUSE THE BOXES ARE NOT OPAQUE ANY MORE. The 0.60 floor existed for
+  // exactly one reason: a white rectangle erases whatever it covers, so figures could not be allowed
+  // to overlap far. TD-362 cuts that white to real alpha when the reference is stored, so a box now
+  // contains only the figure -- and figures may overlap as hard as the composition wants.
+  // NOT ZERO. Even with alpha, two figures at the same spot is a huddle rather than a line-up, and
+  // the near/far stagger needs somewhere to read. 0.26 gives a five-person party a 5.2in figure,
+  // which is where v3.0.569 was before the occlusion forced the retreat.
+  // OLD REFERENCES STILL HAVE OPAQUE GROUNDS until they are regenerated or restaged, so a cast that
+  // has not been through TD-360 will still show boxes -- at this overlap, badly. That is the cost of
+  // going back up, and it is the right trade: new and restaged casts are the ones that matter now.
+  // v3.0.574 -- 0.26 to 0.12. The alpha cut is confirmed working in a printed PDF, so a figure now
+  // occludes nothing at all and the only reason to limit overlap is composition. Ian marked roughly
+  // six inches on a printed page; 0.12 reaches it.
+  var CAST_MIN_STEP_RATIO = 0.12;     // with real alpha, overlap is a composition choice again
+  var _castHFit = CG_W / (CAST_ASP * (1 + CAST_MIN_STEP_RATIO * Math.max(1, _castPerRow - 1)));
+  var _castHCap = (_castRows === 1) ? Math.min(6.0, _castHFit) : (_castRows === 2 ? 2.6 : 1.9);
+  if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
+  var _castH = _castW / CAST_ASP;
+  // v3.0.569 -- A SINGLE ROW IS SIZED FROM ITS HEIGHT TARGET, NOT FROM AN OVERLAP CONSTANT.
+  // Ian marked on a printed page roughly where the tallest figure should reach: about six inches.
+  // Chasing that by raising CAST_OV was the wrong direction -- the overlap number is a MEANS, and
+  // solving for it backwards gave 0.79, which is meaningless to read and impossible to tune.
+  // So: take the height, derive the width from the box aspect, and derive the SPACING from what is
+  // left of the content width. The figures then always fit the row exactly, at whatever height is
+  // asked for, and the overlap becomes an OUTPUT rather than a knob.
+  // Only single rows do this -- they are the ones with a roster instead of captions, so nothing
+  // below them constrains the spacing.
+  if (_castRows === 1 && _castPerRow > 1) {
+    _castH = _castHCap;
+    _castW = _castH * CAST_ASP;
+    _castStepOverride = (CG_W - _castW) / (_castPerRow - 1);
+  }
+  var _castStep = (_castStepOverride != null) ? _castStepOverride : _castW * (1 - CAST_OV);   // centre-to-centre, and the caption width
+  var _castPort = _castW;   // kept for the no-image fallback font sizing below
   var castBlockHTML;
   if (_castFields === 'list') {
     castBlockHTML = '<div class="cast-names">' + castChars.map(function(c){
@@ -4037,32 +5038,114 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     }).join('') + '</div>';
   } else {
     var _noImgFont = Math.max(9, Math.round(_castPort * 21));
-    var _members = castChars.map(function(c) {
+    // DEPTH STAGGER. Ian: "you could stagger them a little so some are slightly closer than
+    // others. That way they are not on a perfect straight line." Their FEET still land on one
+    // ground line -- he asked for a line-up -- but alternate figures step FORWARD: slightly larger,
+    // sitting a little lower because closer to the viewer is lower on a receding ground plane, and
+    // in front in paint order. That is depth, not jitter, so the row reads as people standing at
+    // slightly different distances rather than as a wobbly row.
+    // v3.0.563 -- TD-345 stage 2: FIGURES ARE SCALED BY THEIR RECORDED HEIGHT.
+    // Measured off the page before this: all five figures rendered within 7 percent of each other,
+    // and the gnome CHILD came out the tallest of the party -- because every figure got the same box
+    // and each image simply filled it, so the rendered height said nothing about the character.
+    // LINEAR, WITH A FLOOR -- not the square root the to-do first proposed. Square root was chosen to
+    // stop one giant crushing everyone, but it also flattens the ordinary case: on this cast a 2.1ft
+    // child beside a 3.7ft fighter would render at 75 percent, which reads as an inconsistent
+    // picture rather than as a child. LINEAR gives 57 percent, which reads as a child.
+    // The floor does the job square root was brought in for, and only when it is actually needed:
+    // a 6ft human beside a 25ft dog would be 24 percent -- an ant -- so nothing drops below 35, and
+    // the giant still towers at nearly three times the human. Ordinary parties never reach the floor
+    // and keep TRUE proportion; only genuinely extreme casts get compressed, which is the right way
+    // round.
+    // NO HEIGHTS SET MEANS NOTHING CHANGES. A cast where nobody has a height renders exactly as it
+    // did, because the tallest is then undefined and every figure keeps its full size. Mixed casts
+    // work too: an unset character is treated as the tallest, so it never shrinks by accident.
+    var _CAST_MIN_REL = 0.35;
+    var _hts = castChars.map(function (c) { return (c.height_ft != null && +c.height_ft > 0) ? +c.height_ft : null; });
+    var _anyH = _hts.some(function (h) { return h !== null; });
+    var _tallest = _anyH ? Math.max.apply(null, _hts.filter(function (h) { return h !== null; })) : 0;
+    function _heightRel(i) {
+      if (!_anyH || !_tallest) return 1;
+      if (_hts[i] === null) return 1;                  // unset: full size, never shrunk by accident
+      return Math.max(_CAST_MIN_REL, _hts[i] / _tallest);
+    }
+    // v3.0.569 -- DECLARED BEFORE THE MAP THAT READS IT, and v3.0.568 got this wrong. The flag was
+    // declared BELOW this map, and the map runs immediately -- so `var` hoisting made it `undefined`
+    // at the moment every caption was built. undefined is falsy, so the ternary took the wrong branch
+    // and EVERY CAPTION RENDERED ANYWAY, beneath a roster that was also rendering. No syntax error,
+    // no warning, and node --check cannot see it: the only symptom was Ian's page showing both.
+    var _castRoster = (_castRows === 1);
+    var _members = castChars.map(function(c, _ci) {
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
-      var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
-      // Frame scale follows the portrait size, tuned so a portrait's frame is the
-      // same proportion of the picture as the (large) interior story frames -- a thin
-      // gold line, not a thick dark band. Smaller portrait -> thinner frame.
-      var _fsc = Math.max(0.13, Math.min(0.18, _castPort * 0.15));
-      return '<div class="cast-member">' +
-        ((co && co.border === 'frame' && co.arrange !== 'comicpage')
-          ? '<div style="margin-bottom:0.08in;">' + bronzeFrame(
-              (primaryImg
-                ? '<img style="' + _ps + 'object-fit:cover;object-position:center top;display:block;" src="' + primaryImg + '" alt="" />'
-                : '<div style="' + _ps + 'background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:\'Cinzel\',serif;font-weight:700;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>'),
-              true, _fsc) + '</div>'
-          : '<div class="cast-portrait-frame" style="' + _ps + picBorderCss(co) + '">' +
-              (primaryImg
-                ? '<img class="cast-portrait" src="' + primaryImg + '" alt="" />'
-                : '<div class="cast-no-img" style="font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
-              picOverlay(co) +
-            '</div>') +
-        '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
-        '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
-        (((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '') +
+      var _near = (_ci % 2 === 0);                       // alternate: near, far, near, far
+      // The depth step and the height scale MULTIPLY: a short character standing forward is still
+      // short, and a tall one standing back is still tall. Folding them into one number would let
+      // the stagger silently cancel a real height difference.
+      var _sc   = (_near ? 1 : 0.92) * _heightRel(_ci);   // depth step, then the character's own height
+      var _fw   = _castW * _sc, _fh = _castH * _sc;
+      // v3.0.563 -- the step is a fraction of THIS figure's height, not of the box. Against the box
+      // it would lift a 2ft child as far as a 7ft goliath, which on a short figure is a visible
+      // float rather than a hint of distance.
+      var _drop = _near ? 0 : (_fh * 0.035);              // farther feet sit a touch higher
+      // v3.0.567 -- THE MASK IS GONE, AND ITS ABSENCE IS THE FIX FOR TWO THINGS AT ONCE.
+      // Ian: "on the final Optimize they were gone. They were there throughout the process and
+      // looping but on the final loop they disappeared." His screenshot of the saved page shows the
+      // CONTACT SHADOWS still in place with no figures above them -- and the shadows are pure CSS
+      // while the figures are <img> elements carrying this mask. A mask that fails to resolve does
+      // not show the image unmasked; IT HIDES THE IMAGE ENTIRELY.
+      // This is TD-352, and it is the same two-layer -webkit-mask with mask-composite that was
+      // measured dead in the print path twice today -- once on the plaque scallops (TD-347) and once
+      // in the frame probe. It survived the Optimize pane, which is a browser, and died in the save,
+      // which is not. Ian guessed it before I did.
+      // AND IT NO LONGER HAS ANYTHING TO DO. Its own comment said why it existed: "the character art
+      // is NOT cut out -- every portrait carries its own background -- so removing the frame would
+      // otherwise leave four rectangles of grey." Since v3.0.559 every reference is generated on pure
+      // white with no floor and no ground shadow, so there are no rectangles of grey to hide. The
+      // mask was protecting against a problem that no longer exists, using a mechanism that no longer
+      // works, and deleting it fixes the disappearance rather than working around it.
+      var _mask = '';
+      // A flattened, blurred ellipse under the feet. This is what sells STANDING; without it the
+      // figures float. It is scaled and dimmed with distance like everything else.
+      // v3.0.565 -- THE SHADOW RISES WITH THE FIGURE. Ian: "I don't understand why Humble has their
+      // shadow below their feet." Humble and Dumble are the two FAR figures, and v3.0.562 lifts a far
+      // figure with padding-bottom on the stage so it reads as standing further back -- but the
+      // shadow is position:absolute against that stage, so padding does not move it. The figure rose
+      // and its shadow stayed on the ground line, leaving it sitting below the boots.
+      // Its offset is now the SAME _drop the figure gets, minus the 1.5 percent raise that lets the
+      // boots sit into it. One number driving both, rather than two that have to be kept in step.
+      var _shadow = '<div class="cast-shadow" style="width:' + (_fw * 0.42).toFixed(2) + 'in;height:' + (_fh * 0.030).toFixed(3) + 'in;bottom:' + (_drop - _castH * 0.015).toFixed(3) + 'in;opacity:' + (_near ? 0.42 : 0.30) + ';"></div>';
+      var _fig = primaryImg
+        ? '<img class="cast-fig" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;' + _mask + '" src="' + primaryImg + '" alt="" />'
+        : '<div class="cast-no-img" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>';
+      return '<div class="cast-member" style="width:' + _castW.toFixed(2) + 'in;margin-left:' + (_ci === 0 ? 0 : -(_castW - _castStep)).toFixed(3) + 'in;z-index:' + (_near ? 3 : 2) + ';">' +
+        '<div class="cast-stage" style="height:' + _castH.toFixed(2) + 'in;padding-bottom:' + _drop.toFixed(3) + 'in;">' +
+          _shadow + _fig +
+        '</div>' +
+        // v3.0.568 -- ON A SINGLE ROW THE CAPTIONS MOVE TO ONE ROSTER LINE BELOW (see _castRoster).
+        // Per-figure captions are kept for multi-row casts, where the figures are small, the names
+        // are the only way to tell them apart, and a roster of a dozen would be unreadable prose.
+        (_castRoster ? '' :
+        '<div class="cast-label" style="width:' + _castStep.toFixed(2) + 'in;margin-top:' + (_near ? 0 : 0.13).toFixed(2) + 'in;">' +
+          '<div class="cast-name">' + _fmEsc(castFirstName(c.name)) + '</div>' +
+          '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
+          ((((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '')) +
+        '</div>') +
       '</div>';
-    }).join('');
-    castBlockHTML = '<div class="cast-grid" style="grid-template-columns:repeat(' + _castCols + ',1fr);gap:' + _castGap + 'in;">' + _members + '</div>';
+    });
+    // Rows are balanced, so a stray fourth character never stands alone under three others.
+    var _rowsHtml = '';
+    for (var _r = 0; _r < _castRows; _r++) {
+      var _slice = _members.slice(_r * _castPerRow, (_r + 1) * _castPerRow);
+      if (!_slice.length) continue;
+      _rowsHtml += '<div class="cast-lineup' + (_castRoster ? ' cast-lineup-push' : '') + '">' + _slice.join('') + '</div>';
+    }
+    // v3.0.568 -- the roster, in reading order, as one sentence. Ian's own phrasing.
+    if (_castRoster) {
+      _rowsHtml += '<div class="cast-roster">From left to right: ' + castChars.map(function (c) {
+        return '<b>' + _fmEsc(castFirstName(c.name)) + '</b>' + (c.cls ? ', ' + _fmEsc(c.cls) : '');
+      }).join(' &middot; ') + '</div>';
+    }
+    castBlockHTML = _rowsHtml;
   }
 
   // Get DM name from campaign
@@ -4158,6 +5241,18 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // is byte-identical when no valid color is supplied.
   var _coverTitleColor = (pageOpts && pageOpts.titleColor && /^#[0-9a-fA-F]{3,8}$/.test(pageOpts.titleColor)) ? pageOpts.titleColor : '';
   var _coverTitleStyle = _coverTitleColor ? (' style="color:' + _coverTitleColor + '"') : '';
+  // v3.0.557 -- THE COLOUR CARRIES TO THE SUBTITLE TOO. Ian: "the color should change the sub title
+  // too." The picker is labelled title colour, but the title and subtitle are one unit on the cover
+  // -- recolouring one and leaving the other reads as a mistake rather than as a choice.
+  // THE OPACITY IS WHY THIS IS NOT SIMPLY THE SAME STRING. Both subtitles are deliberately quieter
+  // than their titles, and that quiet is baked into an rgba ALPHA in the stylesheet:
+  //     .cover-art-dates  rgba(240,217,138,0.78)   the art cover
+  //     .cover-dates      rgba(201,168,76,0.40)    the plain cover
+  // A flat colour: override would throw that alpha away and bring both subtitles up to full
+  // strength, quietly undoing a deliberate hierarchy. The alpha is re-applied as opacity, per
+  // layout, so a recoloured cover keeps exactly the relationship the default one has.
+  var _coverSubStyleArt   = _coverTitleColor ? (' style="color:' + _coverTitleColor + ';opacity:0.78"') : '';
+  var _coverSubStylePlain = _coverTitleColor ? (' style="color:' + _coverTitleColor + ';opacity:0.40"') : '';
   var titlePageHTML =
     '<div class="titlepage">' +
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
@@ -4214,10 +5309,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-content { position:relative;z-index:1;text-align:center;padding:1in;width:100%; }
   .cover-logo { width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};margin-bottom:0.4in; }
   .cover-eyebrow { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.5);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.1in; }
-  .cover-title { font-family:'Cinzel',serif;font-size:34pt;font-weight:700;color:#c9a84c;letter-spacing:0.05em;line-height:1.2;margin-bottom:0.15in;text-shadow:0 2px 20px rgba(201,168,76,0.3); }
+  .cover-title { font-family:'Cinzel',serif;font-size:${COVER_PT.plainTitle}pt;font-weight:700;color:#c9a84c;letter-spacing:0.05em;line-height:1.2;margin-bottom:0.15in;text-shadow:0 2px 20px rgba(201,168,76,0.3); }
   .cover-divider { width:80px;height:1px;background:rgba(201,168,76,0.5);margin:0.25in auto; }
   .cover-subtitle { font-family:'Crimson Text',serif;font-size:13pt;color:rgba(201,168,76,0.6);font-style:italic;margin-bottom:0.08in; }
-  .cover-dates { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
+  .cover-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.plainSub}pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
   .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translate(-50%,50%);font-family:'Cinzel',serif;font-size:8pt;line-height:1;color:rgba(201,168,76,0.4);background:#0a0604;padding:0 0.12in;letter-spacing:0.15em;z-index:1; }
   /* Cover-art layout: framed cover image fills the page; title, dates, and centered logo overlaid in the lower half. */
   .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in;text-align:center; }
@@ -4225,22 +5320,109 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
-  .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
-  .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
+  .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
+  .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
+  /* v3.0.554 -- THE LOGO DOES NOT MOVE WITH THE TITLE. Ian: "never move the Campaignia logo, put
+     it back where it was and lower it. And leave it there -- it should not move. Just the title."
+     It was a child of .cover-art-caption, which is the block placement moves, so at Top it went to
+     the top of the cover with the title. That was a bug in v3.0.553, not a decision.
+     It is pinned to the FRAME now, at 0.25in -- halfway from the 0.5in it sat at to the inner edge.
+     THE GHOST TWIN IS WHY THE TITLE DID NOT SHIFT. The logo was the last child of a flex-end
+     column, so simply removing it would have let the title and subtitle fall by exactly its height.
+     Its height is auto and depends on the artwork, so there is no number to compensate with. A twin
+     left in flow at visibility:hidden occupies exactly the right space, whatever that turns out to
+     be -- measured by the browser rather than guessed by me. */
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
+  /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
+     Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
+  ${titleFaceImp}
+  ${coverTitleCss(co && co.titleStyle)}
+  /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
+  ${coverPlaceCss(co && co.titlePlace)}
+  /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
+  ${coverSizeCss(co && co.titleSize)}
 
   /* CAST PAGE */
-  .cast-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
+  .cast-page { position:relative;width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
   .cast-page-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .cast-page-subtitle { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;text-align:center;font-style:italic;margin-bottom:0.05in; }
   .cast-page-dm { font-family:'Cinzel',serif;font-size:10pt;color:#8a6a2a;text-align:center;margin-bottom:0.35in;letter-spacing:0.05em; }
   .cast-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.2in auto; }
-  .cast-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:0.25in;margin-top:0.1in; }
-  .cast-member { text-align:center;padding:0.15in;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:#fff; }
-  .cast-portrait-frame { box-sizing:border-box;position:relative;display:block;overflow:hidden;line-height:0;border-radius:4px;margin:0 auto 0.08in; }
-  .cast-portrait { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
-  .cast-no-img { width:100%;height:100%;background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-weight:700; }
-  .cast-name { font-family:'Cinzel',serif;font-size:11pt;font-weight:600;color:#2c1810;margin-bottom:0.03in; }
+  /* v3.0.525 -- THE COMPANY IS A LINE-UP. No cards, no borders, no white boxes: the figures stand
+     on the page and the only furniture is a ground shadow and the caption underneath. */
+  /* v3.0.564 -- ALIGNED AT THE TOP, NOT THE BOTTOM. Ian, on a cast with long names: "little weird".
+     A member is a fixed-height STAGE plus a caption, and the caption is as tall as the name needs.
+     Bottom-aligning the row therefore aligned the bottom of the CAPTION, so a name that wrapped to
+     three lines pushed its whole block upward and its text climbed into the figure area -- measured
+     at 25px above the ground line on a 3-line name, while the feet themselves stayed put.
+     Top-aligning fixes it without moving anything else: the stage has an explicit height, so the
+     feet still share a ground line, and every caption now starts at the same y and grows DOWNWARD.
+     The row is ragged at the bottom instead of the top, which is what a caption row should do. */
+  .cast-lineup { display:flex;align-items:flex-start;justify-content:center;margin-top:0.14in; }
+  /* v3.0.568 -- the roster line. Ian: "From left to right... Shumble, Gnome Fighter, Humble, Gnome
+     Cleric..." One sentence in reading order, so a name is still findable without a caption under
+     every figure -- which is what frees the figures to overlap properly. */
+  /* v3.0.569 -- pinned to the foot of the page rather than trailing the figures. Ian: "push the
+     From left to right text down to the bottom of the page." */
+  /* v3.0.571 -- ON THE BOTTOM MARGIN ITSELF. Ian: "put the text at the very bottom margin." The
+     page pads 0.75in, so 0.75 puts the roster exactly on that line rather than floating above it. */
+  .cast-roster { position:absolute;left:0.85in;right:0.85in;bottom:0.75in;z-index:4;
+     font-family:'Crimson Text',serif;font-size:10.5pt;color:#5b4a37;text-align:center;
+     margin:0;line-height:1.5; }
+  .cast-roster b { font-family:'Cinzel',serif;font-weight:600;color:#2c1810; }
+  /* Ian: "they should be placed closer to the bottom of the page." A single row is the only case
+     with room to spare, so it is the only case that gets pushed down. */
+  /* v3.0.570 -- 1.6in to 0.5in. A 5.2in row already fills most of the page, so the push that made
+     sense under a 2.4in row now shoves the figures through the roster and off the sheet. */
+  /* v3.0.571 -- Ian: "the characters up at like 25 percent." A cast page is 9.55in printable and
+     the title block takes about 1.3 of it, so the figures already begin near a quarter down. Pulling
+     the push to zero puts their heads there instead of a half-inch lower, and hands that half inch
+     back to the gap above the roster. */
+  .cast-lineup-push { margin-top:0; }
+  .cast-member { text-align:center;position:relative; }
+  /* The stage is a fixed-height box the figure sits at the BOTTOM of, which is what puts every
+     pair of feet on one ground line however tall the art happens to be. padding-bottom lifts the
+     farther figures a touch, so the ground recedes instead of being a ruled line. */
+  .cast-stage { position:relative;display:flex;align-items:flex-end;justify-content:center;line-height:0; }
+  /* v3.0.562 -- TD-343: THE FIGURE IS PUSHED DOWN BY THE MARGIN ITS ART CARRIES.
+     Every reference now leaves about one twentieth of empty white beneath the feet (v3.0.562), so
+     object-position:center bottom stands the figure on the bottom of the IMAGE and leaves the boots
+     that far above the ground line. Shifting down by the same proportion puts them back on it.
+     A PERCENTAGE, NOT A PIXEL VALUE, so it holds at every figure size on the page -- the line-up
+     scales figures by cast count, and a constant would be right at one size only.
+     THIS IS NOT EXACT AND IS NOT MEANT TO BE. The margin the model leaves varies by a percent or
+     two; the contact shadow below is deliberately soft and wide enough that the boots overlap it,
+     so the variance lands INSIDE the shadow. Overlapping a shadow always reads as grounded; a gap
+     never does, which is why the error is aimed downward rather than centred. */
+  /* v3.0.570 -- MULTIPLY, BECAUSE WHITE IS NOT TRANSPARENT. Ian: "they need to now be transparent."
+     v3.0.559 made every reference white-ground, and v3.0.567 deleted the edge mask on the grounds
+     that the art was cut out. It is cut out ON WHITE -- which is not the same thing. At the 79
+     percent overlap this page now runs, each figure's white RECTANGLE covers the figure behind it,
+     and it was covering the contact shadows too, which is why they looked missing.
+     multiply maps white to whatever is underneath and leaves dark ink alone, so a white ground
+     disappears against paper of any colour without the image needing real alpha. ONE property, not
+     a two-layer composite -- which matters, because the composite is exactly what died in print
+     (TD-352) and took the figures with it at v3.0.567.
+     If this does not survive the print path either, the fallback is not another blend: it is to cut
+     the white to alpha server-side once, at generation, and store the image with transparency. */
+  .cast-fig { display:block;object-fit:contain;object-position:center bottom;position:relative;z-index:1;
+     mix-blend-mode:multiply;
+     transform:translateY(4.8%); }
+  /* The contact shadow, centred on the feet and sitting UNDER the figure. */
+  /* v3.0.562 -- the shadow rises slightly so the boots sit INTO it rather than on top of it, which
+     is what absorbs the per-image variance in the margin above. */
+  .cast-shadow { position:absolute;left:50%;bottom:-1.5%;transform:translateX(-50%);border-radius:50%;
+          /* v3.0.569 -- STRONGER AND WIDER. Ian: "put the shadows back." They were still being drawn,
+        but the figures grew 74 percent at v3.0.568 while the shadow's blur stayed at 1.2px and its
+        height stayed a flat 4.5 percent of the figure -- so what read as a contact shadow under a
+        2.4in figure was a faint smear under a 6in one. Scaled up and darkened to match. */
+     background:radial-gradient(ellipse at 50% 50%,rgba(20,12,4,0.92) 0%,rgba(20,12,4,0.55) 42%,rgba(20,12,4,0) 74%);filter:blur(2.2px);z-index:0; }
+  /* The caption is the STEP width, not the figure width, so neighbouring captions can never collide
+     however much the figures overlap. */
+  .cast-label { margin:0.07in auto 0;position:relative;z-index:4; }
+  .cast-no-img { background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-weight:700;border-radius:3px; }
+  .cast-name { font-family:'Cinzel',serif;font-size:10.5pt;font-weight:600;color:#2c1810;margin-bottom:0.02in;line-height:1.15; }
   .cast-cls { font-family:'Crimson Text',serif;font-size:10pt;color:#8a6a2a;font-style:italic;margin-bottom:0.03in; }
   .cast-player { font-family:'Cinzel',serif;font-size:8pt;color:#9e9088;letter-spacing:0.05em;margin-bottom:0.05in; }
   .cast-desc { font-family:'Crimson Text',serif;font-size:9pt;color:#6b5f55;line-height:1.4; }
@@ -4345,9 +5527,10 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
         <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
-        <div class="cover-art-dates">${dateRange}</div>
-        ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
+        <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
+        ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
+      ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     </div>
   </div>` : `<div class="cover-content">
     ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
@@ -4355,7 +5538,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
     <div class="cover-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
-    <div class="cover-dates">${dateRange}</div>
+    <div class="cover-dates"${_coverSubStylePlain}>${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
   </div>`}
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
@@ -4659,6 +5842,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     pageOpts.page = pageNum;
   }
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
+  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);   // v3.0.551 -- blank is meaningful: it means use the dates
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   res.set('X-Total-Sessions', String(sessionsWithData.length));
   // v3.0.333 -- the INCLUDED count above has been on the wire since it was written and nothing ever
@@ -5843,6 +7027,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (req.query.nocover === '1') pageOpts.noCover = true;   // optimize/interior renders never include covers
   if (req.query.publicMode === '1') pageOpts.publicMode = true;   // published books mask real names to pen names
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
+  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);   // v3.0.551 -- blank is meaningful: it means use the dates
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
 
   // Book-wide panel index (reading order): a manifest the AI keys its signals to, and the
@@ -11292,3 +12477,8 @@ router.get('/measure-paired/:campaignId', requireAuth, async function (req, res)
 module.exports = router;
 module.exports.buildNovelHTML = buildNovelHTML;
 module.exports.assembleNovelHtml = assembleNovelHtml;
+// v3.0.539 -- exported for the frame fidelity probe (TD-351) so its control arm calls the SHIPPING
+// emitter rather than a copy of it. A probe whose control has drifted from the code answers a
+// question nobody asked.
+module.exports.bronzeMouldingHtml = bronzeMouldingHtml;
+module.exports.formatDateRange = formatDateRange;   // v3.0.552 -- campaigns.js seeds the subtitle field from this, so the two cannot drift

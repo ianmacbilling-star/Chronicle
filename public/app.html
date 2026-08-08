@@ -193,6 +193,7 @@
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
             <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower)." style="display:none">Quick View</button>
+            <button class="btn btn-sm" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;margin-left:4px;" title="Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View &mdash; admin only</button>
             <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
               <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
               <span id="novel-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">100%</span>
@@ -250,10 +251,32 @@
             <div class="prep-acc-body">
               <div class="prep-field-label">Title</div>
               <input type="text" id="prep-title" maxlength="200" placeholder="e.g. The Shattered Crown" class="prep-input" />
+              <div class="prep-field-label">Subtitle</div>
+              <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Starts as your session date range -- change it, or clear it for no subtitle at all." />
               <div class="prep-color-row">
                 <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
                 <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
               </div>
+              <div class="prep-field-label">Title style</div>
+              <select id="pcl-titleStyle" class="prep-input" title="One named look for the cover title and subtitle: the font, weight, spacing and shading together. Applies to both cover layouts.">
+                <option value="chronicle">Chronicle &mdash; the classic Campaignia cover</option>
+                <option value="engraved">Engraved &mdash; heavy, cut into stone</option>
+                <option value="pulp">Pulp &mdash; bold outline, poster energy</option>
+                <option value="manuscript">Manuscript &mdash; wide, restrained, ruled</option>
+                <option value="quill">Quill &mdash; a flowing hand</option>
+              </select>
+              <div class="prep-field-label">Title placement</div>
+              <select id="pcl-titlePlace" class="prep-input" title="Where the title and subtitle sit on the cover. The dark scrim behind the type and the framing of the artwork both follow this, so the title stays readable and never covers the part of the picture worth keeping.">
+                <option value="bottom">Bottom</option>
+                <option value="middle">Middle</option>
+                <option value="top">Top</option>
+              </select>
+              <div class="prep-field-label">Title size</div>
+              <select id="pcl-titleSize" class="prep-input" title="How large the title and subtitle are drawn. Both cover layouts scale by the same ratio, so each keeps its own proportions.">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
               <div class="prep-field-label">Cover, Back &amp; Title images</div>
               <div class="prep-img-slots">
                 <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-cover" onclick="openPrepImagePicker('cover')"></div><div class="prep-img-cap">Cover</div></div>
@@ -292,7 +315,7 @@
                     <option value="engraved">Engraved Classic (Centered Under Image)</option>
                     <option value="gradient">Gradient over image (banner at image bottom)</option>
                     <option value="gradtop">Gradient over image (banner at image top)</option>
-                    <option value="brass">Brass plate (engraved plaque on the image)</option>
+                    <option value="brass">Bronze plate (engraved plaque on the image)</option>
                     <option value="none">None (no caption)</option>
                   </select>
                 </label>
@@ -1682,6 +1705,15 @@
       <input class="form-input" id="char-cls" placeholder="e.g. Half-elf Ranger" />
     </div>
     <div class="form-group">
+      <label class="form-label">Height <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">Optional. Sets how tall this character is drawn next to the others, and tells the artist their size in every scene.</span></label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="range" id="char-height" min="0" max="1000" step="1" value="0" oninput="charHeightSync()" style="flex:1;" />
+        <div id="char-height-out" class="form-label" style="margin-bottom:0;min-width:64px;text-align:left;white-space:nowrap;">Not set</div>
+        <button type="button" class="btn btn-sm" onclick="charHeightClear()" title="Leave the height unset. The character is drawn as it is today.">Clear</button>
+      </div>
+      <datalist id="char-height-ticks"></datalist>
+    </div>
+    <div class="form-group">
       <label class="form-label">Visual &amp; Personality Traits</label>
       <textarea class="form-textarea" id="char-desc" style="min-height:100px;" placeholder="Describe appearance and personality in detail — hair, skin, clothing, weapons, distinctive features, temperament, mannerisms, speech patterns..."></textarea>
     </div>
@@ -2281,7 +2313,7 @@
           <option value="engraved">Engraved Classic (Centered Under Image)</option>
           <option value="gradient">Gradient over image (banner at image bottom)</option>
                     <option value="gradtop">Gradient over image (banner at image top)</option>
-          <option value="brass">Brass plate (engraved plaque on the image)</option>
+          <option value="brass">Bronze plate (engraved plaque on the image)</option>
           <option value="none">None (no caption)</option>
         </select>
       </label>

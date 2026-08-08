@@ -253,6 +253,7 @@ app.use('/api/images', imagesRoutes.webhookRouter);
 app.use('/api/images', aiLimiter, imagesRoutes);
 app.use('/api/narrative', aiLimiter, require('./routes/narrative'));
 app.use('/api/pdf', require('./routes/pdf'));
+app.use('/api/frameprobe', require('./routes/frameprobe'));   // TD-351 dev probe -- admin-gated, remove with TF-02 / GL-11
 app.use('/api/layout-ai', require('./routes/layoutAI'));  // AI layout-optimization dry run (admin + flag gated; rollback = remove this line)
 app.use('/api/print', require('./routes/print'));
 // Phase 3 — invite endpoints. Mounted at /api so the router can serve
