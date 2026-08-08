@@ -1235,7 +1235,7 @@ function cgBoxCss(m, opts) {
   if (cgCapIsBelow(opts && opts.caption) && m && m.title) return 'overflow:hidden;';   // border moves to the picture wrapper
   return cgBorder(opts);
 }
-function cgBoxInner(mediaHtml, m, opts, outerBare) {
+function cgBoxInner(mediaHtml, m, opts, outerBare, sizeIn) {   // sizeIn v3.0.520: the box short side, for the frame scale
   var cap = opts && opts.caption;
   if (!cgCapIsBelow(cap) || !m || !m.title)
     // v3.0.518 -- THE FRAME IS DRAWN LAST. Ian, on a caption sitting under the frame line:
@@ -1246,7 +1246,7 @@ function cgBoxInner(mediaHtml, m, opts, outerBare) {
     // overlays and picOverlay is pointer-events:none, so this is paint order only -- it cannot move
     // anything. This is the on-image caption path (brass, plate, gradient); the below-image path a
     // few lines down keeps the caption outside the frame entirely.
-    return mediaHtml + coCaptionCover(m, cap) + picOverlay(opts);
+    return mediaHtml + coCaptionCover(m, cap) + picOverlay(opts, sizeIn);
   // v3.0.514 -- NOTHING LEAVES NORMAL FLOW. THE ABSOLUTE VERSION DELETED SIX PICTURES.
   // v3.0.513 put the media in `position:absolute`. In a box with a FIXED height that is fine. In a
   // box whose height comes FROM the picture -- cgFlowWide and cgFlowFeature s wide branch, both of
@@ -1292,7 +1292,7 @@ function cgBoxInner(mediaHtml, m, opts, outerBare) {
   // is clipped by overflow only on ancestors between it and its containing block, and the wrapper
   // was neither. So the overlay escaped a box that had overflow:hidden on it.
   return '<div style="' + _bd + 'position:relative;overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
-      mediaHtml + picOverlay(opts) +
+      mediaHtml + picOverlay(opts, sizeIn) +
     '</div>' +
     '<div style="height:' + h + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
       'text-align:center;font-family:Cinzel,serif;font-size:8pt;letter-spacing:0.12em;text-transform:uppercase;' +
@@ -1794,7 +1794,18 @@ function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
     case 'keyline':  return 'border:1px solid rgba(120,90,30,0.35);';
-    case 'frame':    return 'border:3px solid #2c1e10;box-shadow:inset 0 0 0 1.5px #c9a84c;';
+    // v3.0.520 -- THE BAND BRONZE FRAME WAS FOUR FLAT RINGS AND NOTHING ELSE.
+    // Ian, on a zoomed screenshot: "It is really not 3D at all.. It is a series of black and bronze
+    // lines, No shading." He is right, and it was not a tuning problem -- there was nothing there to
+    // tune. Outside in it emitted: 3px flat #2c1e10, ~1px flat #c9a84c, 1px flat #2c1e10, 1px flat
+    // #c9a84c. Four solid colours, no gradient, no light direction, no shadow.
+    // This half is the STRUCTURE: a dark outer edge, and the WELL the artwork sits in -- an inset
+    // shadow along the top and left where the frame meets the picture, so the picture reads as being
+    // set INTO the frame rather than printed behind it. picOverlay draws the lit bezel on top.
+    // Palette pulled onto the brass plaque ramp (#c2a55f -> #6b5119) so the frame and the plaque
+    // read as one object rather than two gold things. Costs nothing: border was already 3px and the
+    // rest is inset.
+    case 'frame':    return 'border:3px solid #2a1d0c;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.85),inset 0 3px 6px -2px rgba(0,0,0,0.60),inset 3px 0 6px -3px rgba(0,0,0,0.45);';
     case 'comic':    return 'border:5px solid #0a0806;';
     case 'gallery':  return 'box-shadow:' + CO_IMG_SHADOW + ';';
     case 'vignette': return '';
@@ -1814,16 +1825,48 @@ function vignetteOverlayHtml(){
   // one of them by verbatim string. See the note on CO_FADE_BAND for what changed and why.
   return fadeEdgeOverlayHtml();
 }
-function picOverlay(opts){
+// v3.0.520 -- THE FRAME SCALES WITH THE PICTURE. Ian: "can you make the bronze frame size according
+// to the picture size." `sizeIn` is the picture s SHORT side in inches -- the dimension the frame
+// competes with -- and it is a real measurement the caller already holds, not a shape guess. That
+// distinction is the whole of TD-331 and it is not being repeated here.
+//   2.0in float   -> 0.81x  bezel 3px   a small picture keeps its art
+//   3.5in         -> 1.01x  bezel 4px   the reference
+//   6.8in feature -> 1.35x  bezel 5px   a big picture gets a frame it can carry
+// Clamped 0.7 to 1.35 so the extremes stay recognisably the same frame. Callers that do not know
+// their size pass nothing and get 1, which is exactly today s frame -- comic and cgBesidePanel.
+function picFrameScale(sizeIn) {
+  if (!(sizeIn > 0)) return 1;
+  return Math.max(0.7, Math.min(1.35, 0.55 + 0.13 * sizeIn));
+}
+function picOverlay(opts, sizeIn){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
   if (b === 'frame') {
-    // Two thin gold lines + a small diamond node tucked into each corner where the
-    // lines meet, so the corner reads as part of the frame line. The cell clips,
-    // so the diamonds sit just inside the corner rather than centred on the edge.
-    var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:5px;height:5px;background:#c9a84c;transform:rotate(45deg);box-shadow:0 0 0 1px #2c1e10;"></i>'; };
-    var _diamonds = _d('top:1px;left:1px;') + _d('top:1px;right:1px;') + _d('bottom:1px;left:1px;') + _d('bottom:1px;right:1px;');
-    return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px #c9a84c, inset 0 0 0 2px #2c1e10, inset 0 0 0 3px #c9a84c;">' + _diamonds + '</div>';
+    // v3.0.520 -- A LIT BEZEL INSTEAD OF FLAT RINGS.
+    // THE BEZEL is a border-image gradient running at 135 degrees, so light falls from the top-left:
+    // bright brass on the top and left rails, the value rolling down through the corner turn to a
+    // dark trough, then lifting again on the bottom-right. A single gradient does what four flat
+    // rings could never do, because nothing in those rings varied.
+    // FALLBACK IS THE FIRST DECLARATION, DELIBERATELY: border is set to a solid brass BEFORE
+    // border-image, so if border-image is ever not honoured the frame degrades to a plain brass edge
+    // rather than to a transparent one. A transparent border would delete the frame outright.
+    // COSTS NOTHING: this div is position:absolute with inset:0, so its border is drawn INSIDE the
+    // box. Not a pixel of layout moves, which is why the whole frame family can be reworked freely.
+    // THE STUDS get the brass plaque treatment -- a lit face and a contact shadow -- so they read as
+    // raised hardware rather than as rotated squares. The plaque rivets already proved that reads.
+    var _fs = picFrameScale(sizeIn);
+    var _bw = Math.max(2, Math.round(4 * _fs));      // bezel width
+    var _dw = Math.max(4, Math.round(6 * _fs));      // stud size
+    var _di = Math.max(1, Math.round(2 * _fs));      // stud inset
+    var _bez = 'linear-gradient(135deg,#e6cf94 0%,#c2a55f 18%,#a8862f 38%,#6b5119 52%,#4a3810 58%,#8a6a2a 74%,#c2a55f 100%)';
+    var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:' + _dw + 'px;height:' + _dw + 'px;transform:rotate(45deg);' +
+      'background:linear-gradient(135deg,#f4e6b8 0%,#c9a84c 45%,#7a5d22 100%);' +
+      'box-shadow:0 1px 1.5px rgba(0,0,0,0.65),inset 0 0 0 0.5px rgba(255,248,220,0.55);"></i>'; };
+    var _p = _di + 'px;';
+    var _diamonds = _d('top:' + _p + 'left:' + _p) + _d('top:' + _p + 'right:' + _p) + _d('bottom:' + _p + 'left:' + _p) + _d('bottom:' + _p + 'right:' + _p);
+    return '<div style="position:absolute;inset:0;pointer-events:none;border:' + _bw + 'px solid #a8862f;border-image:' + _bez + ' 1;">' +
+      '<div style="position:absolute;inset:0;box-shadow:inset 0 0 0 1px rgba(30,20,6,0.9),inset 0 2px 4px -1px rgba(0,0,0,0.55);"></div>' +
+      _diamonds + '</div>';
   }
   return '';
 }
@@ -2008,7 +2051,7 @@ function huggingImgBox(m, opts, outerCss, floorH) {
     // is why it survived a whole round of eyeballing. Ninth of nine.
     '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-      coCaptionCover(m, opts.caption) + picOverlay(opts) +   // v3.0.518 -- frame last, see cgBoxInner
+      coCaptionCover(m, opts.caption) + picOverlay(opts, floorH) +   // v3.0.518 frame last; v3.0.520 sized
     '</div>' +
     cgCapFlow(m, opts) +
   '</div>';
@@ -2034,12 +2077,12 @@ function gzImgBox(m, opts, fl, w, h) {
   if (_cp) {
     return '<div style="' + fl + 'width:' + w.toFixed(2) + 'in;position:relative;">' +
       '<div style="' + cgBorder(opts) + 'width:100%;height:' + (h - _cp.crop).toFixed(3) +
-        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + '</div>' +
+        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts, Math.min(w, h - _cp.crop)) + '</div>' +
       cgCapOutsideHtml(m, _cp) +
     '</div>';
   }
   return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;height:' + h.toFixed(2) +
-    'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts) + '</div>';
+    'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, false, Math.min(w, h)) + '</div>';
 }
 function gzFloatPanel(m, opts, narrHtml, iw, ih, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0.02in 0.22in 0.10in 0;' : 'float:right;margin:0.02in 0 0.10in 0.22in;';
@@ -2170,7 +2213,7 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
     // so the box can only grow to the picture. This cannot crop a tower.
     ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH)
     : ('<div style="' + fl + cgBoxCss(m, opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-       'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>');
+       'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true, Math.min(imgW, imgH)) + '</div>');
   var col = (wrapBelow && !besideHtml)
     ? cgAlignFirstPara(narrHtml || '')                                      // wraps beside the float, then continues below it
     : '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
@@ -2226,7 +2269,7 @@ function cgFlowWide(m, opts, narrHtml, sideLeft, mul) {
   var _wc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
   var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + _ww + ';' + _wc + 'position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgBoxInner(media, m, opts, true) + '</div>';
+    cgBoxInner(media, m, opts, true, Math.min(CG_W * mul, CG_W * mul / Math.max(0.3, aspW))) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -2237,7 +2280,7 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
     return '<div style="' + cgBoxCss(m, opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>';
+      'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true, Math.min(asp * H, H)) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
@@ -2301,7 +2344,7 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
     var _fc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
     var wbox = '<div style="' + cgBoxCss(m, opts) + 'width:' + _fw + ';' + _fc + 'position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-      cgBoxInner(media, m, opts, true) + '</div>';
+      cgBoxInner(media, m, opts, true, Math.min(CG_W * mul, CG_W * mul / Math.max(0.3, asp))) + '</div>';
     return wbox + gzNarrBox(narrHtml, opts);
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
@@ -2320,12 +2363,12 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
     var _fmar = sideLeft ? '0 0.26in 0.06in 0' : '0 0 0.06in 0.26in';
     var fbox = '<div style="' + cgBoxCss(m, opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
       'in;position:relative;background:transparent;line-height:0;page-break-inside:avoid;break-inside:avoid;">' +
-      cgBoxInner(img, m, opts, true) + '</div>';
+      cgBoxInner(img, m, opts, true, Math.min(W, H)) + '</div>';
     return '<div style="display:flow-root;margin-bottom:0.10in;">' + fbox + gzNarrBox(cgAlignFirstPara(narrHtml), opts) + '</div>';
   }
   var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    cgBoxInner(img, m, opts, true) + '</div>';
+    cgBoxInner(img, m, opts, true, Math.min(W, H)) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -3325,7 +3368,7 @@ function cgImageBox(m, wIn, hIn, opts, fullWidth) {
     ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var wCss = fullWidth ? 'width:100%;' : ('width:' + wIn.toFixed(2) + 'in;');
-  return '<div style="' + cgBoxCss(m, opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(media, m, opts, true) + '</div>';
+  return '<div style="' + cgBoxCss(m, opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(media, m, opts, true, Math.min(fullWidth ? CG_W : wIn, hIn)) + '</div>';
 }
 function _engineRow(cellsHtml) {
   return '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:flex-start;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + cellsHtml + '</div>';
