@@ -4746,7 +4746,18 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
+  /* v3.0.554 -- THE LOGO DOES NOT MOVE WITH THE TITLE. Ian: "never move the Campaignia logo, put
+     it back where it was and lower it. And leave it there -- it should not move. Just the title."
+     It was a child of .cover-art-caption, which is the block placement moves, so at Top it went to
+     the top of the cover with the title. That was a bug in v3.0.553, not a decision.
+     It is pinned to the FRAME now, at 0.25in -- halfway from the 0.5in it sat at to the inner edge.
+     THE GHOST TWIN IS WHY THE TITLE DID NOT SHIFT. The logo was the last child of a flex-end
+     column, so simply removing it would have let the title and subtitle fall by exactly its height.
+     Its height is auto and depends on the artwork, so there is no number to compensate with. A twin
+     left in flow at visibility:hidden occupies exactly the right space, whatever that turns out to
+     be -- measured by the browser rather than guessed by me. */
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${titleFaceImp}
@@ -4777,8 +4788,9 @@ ${fCover ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-art-title">${campaign.name}</div>
         <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
-        ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
+        ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
+      ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     </div>
   </div>` : `<div class="cover-content">
     ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
@@ -5129,7 +5141,18 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
+  /* v3.0.554 -- THE LOGO DOES NOT MOVE WITH THE TITLE. Ian: "never move the Campaignia logo, put
+     it back where it was and lower it. And leave it there -- it should not move. Just the title."
+     It was a child of .cover-art-caption, which is the block placement moves, so at Top it went to
+     the top of the cover with the title. That was a bug in v3.0.553, not a decision.
+     It is pinned to the FRAME now, at 0.25in -- halfway from the 0.5in it sat at to the inner edge.
+     THE GHOST TWIN IS WHY THE TITLE DID NOT SHIFT. The logo was the last child of a flex-end
+     column, so simply removing it would have let the title and subtitle fall by exactly its height.
+     Its height is auto and depends on the artwork, so there is no number to compensate with. A twin
+     left in flow at visibility:hidden occupies exactly the right space, whatever that turns out to
+     be -- measured by the browser rather than guessed by me. */
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${titleFaceImp}
@@ -5267,8 +5290,9 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
         <div class="cover-art-dates">${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
-        ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
+        ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
+      ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     </div>
   </div>` : `<div class="cover-content">
     ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
