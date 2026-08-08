@@ -1081,32 +1081,47 @@ function brassPlateHtml(title, bottomOffset, sc) {
   // flattened on every plate. _plateH is already computed a few lines up for the bite radius; using
   // it here makes the vertical scale exactly 1 and the arcs stay circular.
   var _capH = Math.round(_plateH);
-  var _capR = _sc;
+  // v3.0.550 -- THE CAP IS ONE PIXEL WIDER THAN ITS BITE, and that pixel is what lets the outline
+  // be drawn INSIDE the shape. See the outline path below for why that matters.
+  var _capR = _sc + 1;
   function _cap(left) {
-    var w = _capR, h = _capH, r = _capR;
-    // v3.0.548 -- THE ZERO-LENGTH SEGMENTS ARE GONE, AND THEY WERE THE SPUR.
-    // Ian: "on darker pictures there is that little line coming off the scallop."
-    // THE CAP WIDTH EQUALS THE BITE RADIUS, so the old path drew "L w,0" immediately after the arc
-    // had already arrived at (r,0) -- the SAME POINT -- and the same again before the second arc.
-    // Two zero-length segments. A zero-length segment has no direction, so the join at it is
-    // undefined, and a MITER join on an undefined direction is exactly how a renderer produces a
-    // spike. It showed on dark pictures because that is where a thin light spur off the bite has
-    // anything to contrast against.
-    // The degenerate moves are removed rather than worked around, and the join is round so that no
-    // future change to the cap width can bring the spike back.
-    // The straight top and bottom runs are emitted ONLY when the cap is wider than its bite. Today
-    // it is not -- the cap width IS the radius -- so those moves would land on the point the arc
-    // already reached, and a zero-length segment has no direction for the join to work from. The
-    // guard is written as a condition rather than deleted, so a wider cap still draws correctly.
-    var _flat = (w > r);
-    var d = left
-      ? 'M0,' + r + ' A' + r + ',' + r + ' 0 0 0 ' + r + ',0 ' + (_flat ? 'L' + w + ',0 ' : '') + 'L' + w + ',' + h + ' ' +
-        (_flat ? 'L' + r + ',' + h + ' ' : '') + 'A' + r + ',' + r + ' 0 0 0 0,' + (h - r) + ' Z'
-      : 'M' + w + ',' + r + ' A' + r + ',' + r + ' 0 0 1 ' + (w - r) + ',0 ' + (_flat ? 'L0,0 ' : '') + 'L0,' + h + ' ' +
-        (_flat ? 'L' + (w - r) + ',' + h + ' ' : '') + 'A' + r + ',' + r + ' 0 0 1 ' + w + ',' + (h - r) + ' Z';
+    // THE BITE RADIUS IS _sc, NOT THE CAP WIDTH. They were the same number until v3.0.550 widened
+    // the cap by a pixel, and reading r from _capR meant widening the cap silently widened the BITE
+    // -- which put the inset arc back outside the shape and brought the degenerate segments with it.
+    // Two numbers that were equal by coincidence, one of which then moved.
+    var w = _capR, h = _capH, r = _sc;
+    // v3.0.550 -- THE FILL AND THE OUTLINE ARE SEPARATE PATHS, AND THE OUTLINE IS INSET HALF A PIXEL.
+    // Ian: "the scallops still have the little hairs sticking off."
+    // v3.0.548 removed the zero-length segments and that WAS a real fault -- a miter join on a
+    // segment with no direction spikes. It was not the whole fault. A stroke is centred on its path,
+    // so HALF OF EVERY STROKE LAY OUTSIDE THE SHAPE, and at the point where the arc met the cap s
+    // inner edge the outline reversed through 180 degrees. A stroke doubling back on itself, with
+    // half its width already outside the artwork, is where a renderer leaves stray marks.
+    // THE FIX IS GEOMETRIC RATHER THAN ANOTHER TWEAK. The fill is drawn exactly, unstroked. The
+    // outline is a SEPARATE OPEN path following only the OUTER boundary -- never the inner edge,
+    // which is internal and was never meant to have an edge -- and every point of it is moved half a
+    // pixel into the plate. The bite arc keeps its centre and grows by 0.5; the straight edges come
+    // in by 0.5. The entire stroke then lies inside the drawn area and there is nothing left to
+    // spill, at any renderer, whatever it does with joins.
+    // THIS IS WHY THE CAP GAINED A PIXEL. The inset arc meets the top edge at sqrt(R*R - 0.25),
+    // which for a 4px bite is 4.47 -- beyond a 4px cap. At _sc + 1 it fits, and the fill gains real
+    // straight runs at top and bottom, so the degenerate segments cannot come back either.
+    var _R = r + 0.5;
+    var _q = Math.sqrt(_R * _R - 0.25).toFixed(3);
+    var fill = left
+      ? 'M0,' + r + ' A' + r + ',' + r + ' 0 0 0 ' + r + ',0 L' + w + ',0 L' + w + ',' + h + ' L' + r + ',' + h +
+        ' A' + r + ',' + r + ' 0 0 0 0,' + (h - r) + ' Z'
+      : 'M' + w + ',' + r + ' A' + r + ',' + r + ' 0 0 1 ' + (w - r) + ',0 L0,0 L0,' + h + ' L' + (w - r) + ',' + h +
+        ' A' + r + ',' + r + ' 0 0 1 ' + w + ',' + (h - r) + ' Z';
+    var line = left
+      ? 'M' + w + ',0.5 L' + _q + ',0.5 A' + _R + ',' + _R + ' 0 0 1 0.5,' + _q +
+        ' L0.5,' + (h - _q).toFixed(3) + ' A' + _R + ',' + _R + ' 0 0 1 ' + _q + ',' + (h - 0.5) + ' L' + w + ',' + (h - 0.5)
+      : 'M0,0.5 L' + (w - _q).toFixed(3) + ',0.5 A' + _R + ',' + _R + ' 0 0 0 ' + (w - 0.5) + ',' + _q +
+        ' L' + (w - 0.5) + ',' + (h - _q).toFixed(3) + ' A' + _R + ',' + _R + ' 0 0 0 ' + (w - _q).toFixed(3) + ',' + (h - 0.5) + ' L0,' + (h - 0.5);
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
       '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><defs>' + _pg + '</defs>' +
-      '<path d="' + d + '" fill="url(#pg)" stroke="#4a3810" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+      '<path d="' + fill + '" fill="url(#pg)"/>' +
+      '<path d="' + line + '" fill="none" stroke="#4a3810" stroke-width="1" stroke-linejoin="round" stroke-linecap="butt"/></svg>';
     // v3.0.547 -- SINGLE QUOTES, AND THE DOUBLE ONES DELETED THE ENTIRE PLATE.
     // v3.0.545 emitted url("data:...") into an inline HTML style="..." attribute. The first double
     // quote CLOSED THE ATTRIBUTE -- at character 130 of 2,927 -- so the background, the padding, the
