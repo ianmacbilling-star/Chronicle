@@ -5892,6 +5892,45 @@ async function extractMoments() {
 
 // Auto-save narrative with debounce — saves 1.5 seconds after user stops typing
 var narrativeSaveTimer = null;
+// v3.0.507 -- TITLE AUTOSAVE, modelled on scheduleNarrativeSave below.
+// One timer PER MOMENT, because a storyboard shows many panels at once and a single shared timer
+// would let one panel's edit cancel another's pending save.
+// The cap must match routes/extract.js and routes/moments.js: the caption prints the width of the
+// picture, so a tower (or a tall panel) gets roughly a third the characters a wide one does.
+function momentTitleMax(shape) { return (shape === 'tower' || shape === 'tall') ? 36 : 64; }
+var _mTitleTimers = {};
+function scheduleMomentTitleSave(momentId) {
+  if (_mTitleTimers[momentId]) clearTimeout(_mTitleTimers[momentId]);
+  _mTitleTimers[momentId] = setTimeout(function () { _mTitleTimers[momentId] = null; saveMomentTitle(momentId); }, 1200);
+}
+// Blur writes immediately rather than waiting out the debounce -- clicking straight from a title
+// into a Regen must not lose the edit. Same reasoning as the campaign details modal (v3.0.492).
+function flushMomentTitleSave(momentId) {
+  if (_mTitleTimers[momentId]) { clearTimeout(_mTitleTimers[momentId]); _mTitleTimers[momentId] = null; saveMomentTitle(momentId); }
+}
+function saveMomentTitle(momentId) {
+  var el = document.getElementById('moment-title-' + momentId);
+  if (!el || !state.currentSession || !state.currentCampaign) return;
+  var val = el.value.trim();
+  // v3.0.509 -- THE ROUTE IS MOUNTED UNDER THE CAMPAIGN. server.js:247 mounts routes/moments.js at
+  // /api/campaigns/:campaignId/sessions/:sessionId/moments -- v3.0.507 posted to /api/sessions/...
+  // with the campaign segment missing, which 404s and surfaced as "Could not save the title".
+  // Every other moment call in this file already uses the full path (cast, prominence, prompt);
+  // this one was written from the route file's own relative path instead of from a working caller.
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/' + momentId, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: val })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { billingToast((d && (d.message || d.error)) || 'Could not save the title.', 'error'); return; }
+    // The SERVER's title, not the typed one: it applies the shape cap, so screen and database
+    // cannot disagree. Same rule as the genre/campaign-prompt echo (v3.0.485).
+    var saved = (d.moment && typeof d.moment.title === 'string') ? d.moment.title : val;
+    if (saved !== el.value) el.value = saved;
+    try {
+      var arr = (state.reviewData && state.reviewData.moments) || [];
+      for (var i = 0; i < arr.length; i++) { if (String(arr[i].id) === String(momentId)) { arr[i].title = saved; break; } }
+    } catch (e) {}
+  }).catch(function () { billingToast('Could not save the title.', 'error'); });
+}
 function scheduleNarrativeSave() {
   if (narrativeSaveTimer) clearTimeout(narrativeSaveTimer);
   narrativeSaveTimer = setTimeout(function() {
@@ -9116,7 +9155,32 @@ function renderStoryboard() {
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
-        '<span class="moment-title">' + m.title + '</span>' +
+        // v3.0.507 -- EDIT THE TITLE WHERE YOU SEE IT. Ian, 2026-08-07: "I want to be able to
+        // edit the titles on the storyboard tab... put your cursor on the title you can edit it
+        // just like the narratives." Same behaviour as the narrative boxes beside it: type, and
+        // it saves itself shortly after you stop -- no Save button, nothing to forget.
+        // Same permission rule as everything else on this card (forkOnScreenIsMine), and a LOCKED
+        // panel still allows it: the lock protects the picture, and a title never reaches image
+        // generation. The maxlength is shape-aware because the caption prints the width of the
+        // picture -- a tower has about a third the room -- and the server applies the same cap
+        // through capTitleForShape, so the box cannot promise more than the server will keep.
+        (canEditNarr
+          // v3.0.509 -- TELL PASSWORD MANAGERS TO LEAVE IT ALONE. Ian's extension was offering to
+          // fill the panel title, because to an extension any bare <input> in a page is a candidate
+          // field. autocomplete=off alone is widely ignored by them, so this also carries the
+          // vendor opt-outs: 1Password (data-1p-ignore), LastPass (data-lpignore), Bitwarden
+          // (data-bwignore) and Dashlane (data-form-type=other). No `name` attribute either -- a
+          // named field is more attractive to a heuristic filler, and nothing here submits a form.
+          // If a manager still targets it, the guaranteed cure is a contenteditable div, which is
+          // not a form control at all -- bigger change (paste, Enter, maxlength all become manual),
+          // so try the cheap fix first.
+          ? '<input type="text" class="moment-title moment-title-edit" id="moment-title-' + m.id + '"' +
+            ' value="' + escapeHtml(m.title || '') + '"' +
+            ' maxlength="' + momentTitleMax(m.shape) + '" placeholder="Untitled panel"' +
+            ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"' +
+            ' data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"' +
+            ' oninput="scheduleMomentTitleSave(' + m.id + ')" onblur="flushMomentTitleSave(' + m.id + ')" />'
+          : '<span class="moment-title">' + escapeHtml(m.title || '') + '</span>') +
         '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : 'Unknown') + ', ' + (m.type ? ((typeLabel[m.type]||m.type) + ', ') : '') + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
         optsBtn +
       '</div>' +
@@ -13127,6 +13191,10 @@ function clMerge(saved){
   // parseCustomOpts; this simply stops the client sending it in the first place.
   // Paper colour now means one thing only: the physical stock, chosen on the order page.
   r.paper = 'white';
+  // v3.0.498 -- TD-168, same reason: the picker is gone but saved layout prefs still
+  // hold narr:'box', and customOpts keeps serialising it into the co string until the
+  // user happens to touch some other control.
+  r.narr = 'plain';
   return r;
 }
 // Normalize a stored layout blob into the UNIFIED shape { opts:<layout>, active:<bool> }.
@@ -17464,6 +17532,16 @@ function finalizeSaveOptimized(quiet) {
     // v3.0.389 -- the protective save is instant and silent; the real one flattens and takes about
     // 43 seconds on a 49-page book, which is the whole dead-air problem. Ticking line for that one.
     var _live = quiet ? null : optimizeProgressLive('Prepping Book for saving');
+    // v3.0.506 -- RUN THE BAR WHILE THE BOOK SAVES. Ian: "I want the red progress bar at the top of
+    // the optimize tab to run while the book is saving. (While the seconds are ticking away in the
+    // log.) So people know something is happening."
+    // The loop removes its bar the moment the passes end, and the flatten-and-upload that follows
+    // takes about 43 seconds on a 49-page book -- so the one stretch with nothing moving on screen
+    // was the longest one. finalizeFixBusyBar already owns this element for the per-page Fix, so
+    // there is one bar and one animation rather than a second copy to drift.
+    // ONLY THE REAL SAVE. The protective quick save fires the instant the loop ends, while the loop
+    // may still be finishing, and it skips the flatten -- it is fast and silent by design.
+    if (!quiet) { try { finalizeFixBusyBar(true); } catch (e) {} }
     return fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
@@ -17487,6 +17565,10 @@ function finalizeSaveOptimized(quiet) {
           _finalizeSavedReady = true;
           try { finalizeSyncPublishBtn(); finalizeUpdatePublishLink(); } catch (e) {}
         }
+        // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
+      // forever. Never removes it while a loop is still running: the protective save can overlap
+      // the tail of a run, and the bar belongs to the loop then.
+      try { if (!quiet && !window._aiLoopRunning) finalizeFixBusyBar(false); } catch (e) {}
         if (_live) _live.done('Saved -- this version will be here when you return.');
         else if (!quiet) optimizeLogLine('Saved -- this version will be here when you return.', 'ok');
         // v3.0.423 -- Ian: after every save, a line saying it is ready.
@@ -17519,11 +17601,19 @@ function finalizeSaveOptimized(quiet) {
       var _code = (rj.j && rj.j.error) || '';
       var _msg = 'Could not save this version: ' + ((rj.j && (rj.j.message || rj.j.error)) || 'unknown error');
       // v3.0.389 -- the ticking line must never be left spinning on a failure.
+      // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
+      // forever. Never removes it while a loop is still running: the protective save can overlap
+      // the tail of a run, and the bar belongs to the loop then.
+      try { if (!quiet && !window._aiLoopRunning) finalizeFixBusyBar(false); } catch (e) {}
       if (_live) _live.fail(_msg);
       else if (!(quiet && _code === 'optimize_required')) { optimizeLogLine(_msg, 'stop'); }
       return false;
     }).catch(function (e) {
       var _m = 'Could not save this version: ' + ((e && e.message) || 'network error');
+      // v3.0.506 -- and take it down on EVERY exit, or a failed save leaves the page animating
+      // forever. Never removes it while a loop is still running: the protective save can overlap
+      // the tail of a run, and the bar belongs to the loop then.
+      try { if (!quiet && !window._aiLoopRunning) finalizeFixBusyBar(false); } catch (e) {}
       if (_live) _live.fail(_m); else optimizeLogLine(_m, 'stop');   // v3.0.389 -- never leave it spinning
       return false;
     });
@@ -17661,7 +17751,8 @@ function finalizeUpdateHeader() {
   // no longer a layout attribute at all -- it is the physical stock picked on the order page.
   parts.push('Body font: ' + optLabel('cl-font', o.font));
   parts.push('Drop cap: ' + (o.dropcap ? 'On' : 'Off'));
-  parts.push('Narrative: ' + optLabel('cl-narr', o.narr));
+  // v3.0.498 -- Narrative removed from this list with the option itself (TD-168).
+  // optLabel reads the option text out of the #cl-narr <select>, which no longer exists.
   var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
     (desc ? ' <span style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
   h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(201,168,76,0.6);">&middot;</span> ') + '</div>';
@@ -17814,6 +17905,22 @@ function finalizeSaveFixedVersion() {
   }).catch(function () {
     if (b) { b.disabled = false; b.textContent = 'Save this Version'; }
   });
+}
+// v3.0.506 -- THE NEXT STEP, FROM WHERE THEY ARE. Ian, 2026-08-07: "on the Prep and Preview tab
+// at the top a button that says Optimize and takes them to the Optimize tab and fires it off.
+// Kinda like the Go to Publish button does on the Optimize tab. A call to action on the next step."
+// Modelled on finalizeGoToPublish below: switch the tab, then act. It also STARTS the run, which
+// finalizeGoToPublish does not need to do -- so the guard matters more here.
+// NO GUARD OF ITS OWN, deliberately: runLayoutAiDryRun already refuses re-entry at its entry point
+// (v3.0.350, added because the only check lived inside runAiOptimizeLoop and a second click cost a
+// full pre-loop compose and render before being silently dropped). Adding a second, different guard
+// here is how two conditions drift apart. The tab switch still happens either way, so a press
+// during a run takes you to watch it rather than doing nothing.
+// The small delay lets the tab render before the run starts painting into it.
+function prepGoToOptimize() {
+  try { switchNovelTab('finalize'); } catch (e) {}
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { try { window.scrollTo(0, 0); } catch (e2) {} }
+  setTimeout(function () { try { if (typeof runLayoutAiDryRun === 'function') runLayoutAiDryRun(); } catch (e) {} }, 120);
 }
 function finalizeGoToPublish() {
   var b = document.getElementById('layoutai-publish-btn'); if (b) b.disabled = true;

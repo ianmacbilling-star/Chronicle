@@ -52,6 +52,48 @@ async function pdfPageCount(buf) {
 var CO_IMG_SHADOW = '7px 7px 10px -2px rgba(0,0,0,0.5), 18px 18px 30px -10px rgba(0,0,0,0.5)';
 
 // ============================================================
+// v3.0.500 -- THE SOFT FADE ("vignette") EDGE, DEFINED ONCE.
+// Ian, 2026-08-07: "The Fade frame needs to be much tighter. On small pictures there is
+// almost no picture left. It should very rapidly get to faded out... it's really there to
+// hide the hard edge of the picture."
+//
+// WHAT WAS WRONG, and it was two separate things stacked:
+//   1. `box-shadow: inset 0 0 0.45in 0.4in #fff` -- 0.4in of SPREAD plus 0.45in of blur, so
+//      white reached ~0.62in in from every edge. On a 2.0in picture that is 62 PERCENT of
+//      the width gone before the gradient below even starts.
+//   2. `radial-gradient(ellipse ...)` beginning its fade at 46 PERCENT of the radius. That
+//      is not an edge treatment, it is a spotlight -- it dims the picture from just outside
+//      the centre outwards.
+//
+// WHY AN ELLIPSE IS THE WRONG SHAPE FOR THIS JOB. A radial ellipse stretches to the box, so
+// its band is proportional on BOTH axes independently. At the same stop:
+//      6.8 x 3.0in  -> sides 1.84in, top/bottom 0.81in   (2.3 : 1)
+//      2.25 x 9.0in -> sides 0.61in, top/bottom 2.43in   (0.3 : 1)
+// A tower was having its top and bottom faded four times harder than its sides.
+//
+// WHAT IT IS NOW: four linear gradients, one per edge, each a FIXED band. Hiding a hard
+// edge is a fixed-width job -- it does not want to scale with the picture -- so an absolute
+// unit is the correct answer to "can you control it based on the size of the picture": the
+// band stays the same physical width whether the picture is 2in or 6.8in, which is exactly
+// what stops a small one being eaten. The `min()` caps it as a fraction as well, so a very
+// small picture never loses more than 7 percent per side.
+// Corners receive two overlapping bands, which is right -- corners should be the softest
+// part of the edge.
+var CO_FADE_BAND = 'min(0.14in, 7%)';
+var CO_FADE_BG =
+  'linear-gradient(to right,  #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + '),' +
+  'linear-gradient(to left,   #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + '),' +
+  'linear-gradient(to bottom, #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + '),' +
+  'linear-gradient(to top,    #ffffff, rgba(255,255,255,0) ' + CO_FADE_BAND + ')';
+// A hairline inset shadow underneath, only wide enough to kill a dark edge ROW on an image
+// whose own border pixels are dark. Nothing like the old 0.4in spread.
+var CO_FADE_SHADOW = 'inset 0 0 0.05in 0.02in #ffffff';
+function fadeEdgeOverlayHtml() {
+  return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:' + CO_FADE_SHADOW + ';"></div>' +
+    '<div style="position:absolute;inset:0;pointer-events:none;background:' + CO_FADE_BG + ';"></div>';
+}
+
+// ============================================================
 // Date helper - handles both PostgreSQL Date objects and SQLite strings
 // ============================================================
 function toDate(dateVal) {
@@ -234,10 +276,22 @@ function shapedImage(m, border, radius) {
   return '<div style="width:100%;aspect-ratio:' + ratio + ';background:#f0e8d0;border:1px solid rgba(201,168,76,0.3);border-radius:' + rad + ';display:flex;align-items:center;justify-content:center;"><span style="font-size:24pt;opacity:0.3;">&#128444;</span></div>';
 }
 
+// v3.0.498 -- THE PANEL NUMBER IS GONE FROM THE CAPTION.
+// Ian, 2026-08-07, looking at a tower whose title had wrapped onto a second line:
+// "Let's get rid of the Panel # on the panel... that will free up space."
+// It was a diagnostic label rather than content, and on a narrow tower it was eating about
+// a QUARTER of the usable caption width -- the 8pt run plus its 8px gap costs roughly eight
+// characters. Measured against this book's 50 real titles in a 2.57in tower: 19 of 50 wrapped
+// with the prefix, 5 without it.
+// THAT MATTERS MORE THAN IT LOOKS. A full-height tower is built to fill the clip box exactly
+// -- the composer sizes the picture as everything left after the caption -- so it totals
+// 9.240in against a 9.24in box with ZERO headroom. One wrapped caption line is ~0.20in and
+// clips the page outright. This is the cheapest of the four defences against that.
+// `i` is now unused; the parameter is kept so the two call sites need not change and so the
+// panel index remains available if a caption ever wants it again.
 function panelCaption(m, i) {
   return '<div style="padding:4px 6px;background:#f9f4e8;border-left:3px solid #c9a84c;margin-top:3px;">' +
-    '<span style="font-family:Cinzel,serif;font-size:8pt;color:#8a6a2a;">Panel ' + (i + 1) + '</span>' +
-    '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;margin-left:8px;">' + (m.title || '') + '</span>' +
+    '<span style="font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;">' + (m.title || '') + '</span>' +
   '</div>';
 }
 
@@ -348,8 +402,7 @@ function vignetteMedia(m) {
   if (m.image) {
     return '<div style="position:relative;width:' + widthPct + '%;margin:0.3in auto 0.1in;page-break-inside:avoid;">' +
       momentImgAspectBox(m, ratio, '', '') +
-      '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.6in 0.36in #ffffff;"></div>' +
-      '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 52%, rgba(255,255,255,0.6) 80%, rgba(255,255,255,1) 100%);"></div>' +
+      fadeEdgeOverlayHtml() +   // v3.0.500 -- was a THIRD copy of the fade, with its own stops
     '</div>';
   }
   return '<div style="width:' + widthPct + '%;margin:0.3in auto 0.1in;aspect-ratio:' + ratio + ';background:#f0e8d0;"></div>';
@@ -446,8 +499,7 @@ function portraitMedia(m, kind) {
   }
   if (kind === 'vignette') {
     return '<div style="position:relative;width:100%;">' + img +
-      '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.5in 0.3in #ffffff;"></div>' +
-      '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 50%, rgba(255,255,255,0.5) 82%, rgba(255,255,255,0.95) 100%);"></div>' +
+      fadeEdgeOverlayHtml() +   // v3.0.500 -- was a SECOND copy of the fade, with its own stops
     '</div>';
   }
   if (kind === 'gallery') {
@@ -758,6 +810,9 @@ function parseCustomOpts(str) {
   // NOTE the legacy non-custom novel passes co = null and still renders 'parchment' further
   // down in buildNovelHTML. That path never reaches here and is deliberately untouched.
   o.paper = 'white';
+  // v3.0.498 -- TD-168, same reasoning as the paper rule above: deleting the picker does not
+  // delete `narr:box` from the co strings already saved on existing campaigns.
+  o.narr = 'plain';
   decorStrip(o);   // DECOR_OFF=1 -> chrome removed everywhere, including hand-written URLs
   return o;
 }
@@ -815,14 +870,223 @@ function paneSafeHtml(html) {
   return html
     .split('linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0))').join('rgba(10,8,6,0.82)')
     .split('linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.45) 45%,rgba(10,8,6,0))').join('rgba(10,8,6,0.82)')
-    .split('radial-gradient(ellipse at center, rgba(255,255,255,0) 46%, rgba(255,255,255,0.7) 76%, rgba(255,255,255,1) 92%)').join('transparent');
+    // v3.0.500 -- MATCH THE CONSTANT, NOT A COPY OF IT. This split on a verbatim copy of the
+    // vignette gradient. Change the gradient by one character and this silently stops firing,
+    // and the preview panes render a pink placeholder instead of the picture -- with nothing
+    // to say why. Referencing CO_FADE_BG means the two cannot drift.
+    .split(CO_FADE_BG).join('transparent');
 }
-function coCaptionOverlay(m, caption) {
+// v3.0.502 -- HOW FAR THE CAPTION MUST BE LIFTED OFF THE BOTTOM OF ITS POSITIONING BOX.
+// THE BUG, measured from Ian's screenshots on 2026-08-07: the composer builds an image as
+//     <div position:relative>            <- the caption's positioning context
+//       <div padding-bottom:0.14in>      <- coMedia's own gap, for the Gallery shadow
+//         <div>the artwork</div>
+//       </div>
+//       <div position:absolute bottom:0>CAPTION</div>
+//     </div>
+// so `bottom:0` is the bottom of the PADDED wrapper, not the bottom of the picture. The caption
+// therefore hangs below the artwork by exactly whatever bottom padding the border uses.
+// Predicted 7.4px in that screenshot's scale (52.8 px/in); MEASURED 8 rows of flat, fully opaque
+// band below the artwork edge (spread 0.3 -- no artwork showing through at all).
+// Ian: "I just don't want the caption to spill over the edge of the image like it currently does."
+// It is border-dependent, which is why it looked like a caption bug rather than a layout one:
+//     Gallery            0.14in  -- plainly visible, and it lands on top of the drop shadow,
+//                                   which is why the shadow read as missing under a caption
+//     Keyline / Bronze   2px     -- Ian: keyline "has the issue a little", bronze "worked"
+//     None/Comic/Fade    0       -- correct already, and Ian confirmed both looked right
+// These values are the bottom padding coMedia emits for each border. THEY MUST MATCH IT; the build
+// asserts each literal against coMedia so the two cannot drift.
+// v3.0.508 -- CAPTION FURNITURE SCALES WITH THE PICTURE.
+// Ian, 2026-08-07, looking at a Magazine spread: "The title style is a little big for smaller
+// pictures in magazine" and then "if you can resize the title plate based on the picture size that
+// would be great... Do it for your new bronze one too, it has the same issue."
+// The plate and the brass plaque were both fixed at 8.5pt with fixed padding, so on a narrow tower
+// or a small float they take a large bite out of the picture, while on a 6.8in panoramic they look
+// undersized.
+// v3.0.511 -- TD-331. THE GROWTH HALF OF THAT WAS WRONG AND IS REVERTED.
+// SHAPE IS ASPECT RATIO. IT IS NOT SIZE. magWidth disproves it outright: a Magazine float takes
+// 44 percent of the column for tall/tower, 50 for square and 54 for everything else -- so a wide
+// picture there is one of the SMALLER pictures on the page, and the 1.12 multiplier made exactly
+// the tight ones tighter. Ian sent a screenshot of a two-line plate covering the corner of a
+// landscape float and said: "yes... Let us fix that."
+// THE SHRINK STAYS at 0.78 for narrow shapes. That was the whole of the original request and a
+// tower really is narrow in every layout. Only the growth was invented.
+// Sizing on the picture RENDERED WIDTH is the correct fix and is the remainder of TD-331. It is
+// a separate build because the optimizer rescales images per run, so the true width is known
+// only at compose time -- not here, and not when a band is built.
+// PURELY COSMETIC AND SIZE-NEUTRAL: these captions are absolutely positioned overlays, so nothing
+// here can move a page boundary whatever the numbers say.
+// v3.0.511 -- TD-331, THE OTHER HALF: THE COMIC PLATE WRAPPED WHERE THE BRASS PLATE DID NOT.
+// A wrapped plate is twice the plate, which is most of why it ate the corner of that float. The
+// brass plaque has always been white-space:nowrap with an ellipsis; the comic plate had neither,
+// so it grew downward instead of stopping. Three changes, cheapest first, and the order matters
+// because each one buys room before the next one has to cut anything:
+//   max-width 80 -> 90 percent   (Ian capped it at 90: at 95 it reads as a banner, not a label)
+//   side padding 9px -> 6px      (scaled, so a tower keeps its proportions)
+//   white-space:nowrap + ellipsis as the BACKSTOP, not the mechanism
+// On the reported title -- INVISIBLE AMONG THE DAMNED, 26 characters, breaking after about 19 --
+// the first two changes are worth roughly a third more room, so it should sit on one line
+// untouched. The ellipsis exists so that NOTHING can ever wrap again, not to trim this one.
+// Long titles are legacy: TD-319 caps new ones on the picture shape at generation time.
+// v3.0.518 -- RETIRED. TD-331 IS CLOSED BY DELETING THE MECHANISM, NOT BY IMPROVING IT.
+// Ian sent the two pictures that settle it, and they fail in OPPOSITE directions:
+//   a TOWER  -- the biggest picture in the book -- got 0.78 and a plate too small for it
+//   a landscape FLOAT -- 54 percent of a column -- got 1.00 and a plate too big for it
+// Ian: "pic 1.. it is small on a big pic... Pic 2 it is big on a small pic."
+// SHAPE IS ASPECT RATIO. IT IS NOT SIZE. That was said in v3.0.511 when the growth half was
+// reverted, and the shrink half was left in place because it had been asked for. It is the same
+// error and it survived because it happened to look right on the one picture it was judged on.
+// Removing it makes BOTH of Ian pictures better at once -- the tower plate grows to the common
+// size, the float plate shrinks to it -- and it costs nothing to thread, unlike sizing on the
+// real rendered width, which is only known at compose time.
+// If a uniform plate still reads wrong on a tower once seen, THEN thread the width. Do not build
+// the expensive half to fix a problem that deleting the wrong half may already have solved.
+function capScaleForShape() { return 1; }   // kept as a no-op so no call site can be missed
+// Round to a sensible CSS value so the emitted string stays short and stable.
+// v3.0.518 -- CAP_BASE_PT is the ONE size both the comic plate and the brass plaque are drawn at.
+// Ian: "Ultimately I would like the plate smaller." 8.5pt -> 7.5pt. One number, one place, so it
+// cannot drift the way the caption strip and cgCapFlow did.
+var CAP_BASE_PT = 7.5;
+function capPt(base, sc) { return (Math.round(base * sc * 10) / 10) + 'pt'; }
+function capPx(base, sc) { return Math.max(1, Math.round(base * sc)) + 'px'; }
+function coMediaPadBottom(border) {
+  if (border === 'gallery') return '0.14in';   // padding-bottom:0.14in
+  if (border === 'frame' || border === 'keyline') return '2px';   // padding:2px 0
+  // UNIT REQUIRED: the brass plate builds calc(<this> + 0.10in), and calc() rejects a bare 0
+  // added to a length -- the whole declaration would be dropped and the plate would sit at the
+  // very bottom edge of the box.
+  return '0px';
+}
+// The TOP edge matters too: the `plate` caption is anchored top:0, and `padding:2px 0` pads both
+// ends, so it hung 2px ABOVE the artwork on bronze and keyline. Gallery pads only the bottom.
+function coMediaPadTop(border) {
+  if (border === 'frame' || border === 'keyline') return '2px';   // padding:2px 0
+  return '0px';
+}
+// v3.0.503 -- BRASS PLATE caption. Ian, 2026-08-07: "Can you do a caption that looks like a brass
+// plate or badge that is on the image?"
+// A small engraved plaque affixed to the bottom of the picture, the way a plate sits on a framed
+// painting. It reuses the palette the bronze frame already established (#c9a84c gold over a dark
+// ground) so it reads as part of the same object rather than a new UI element.
+// COSTS NOTHING IN LAYOUT. It is an absolutely-positioned overlay, so it is `caption:over` in the
+// registry's terms -- zero reserved height. Both places that grant a caption reserved height
+// whitelist 'bar' and 'engraved' explicitly, so this is free by construction rather than by an
+// edit anyone has to remember (pdf.js _capBelowH and _twBelow).
+// SIZED TO THE TITLE, not the picture: inline-block, centred, capped at 78 percent of the width.
+// NO WRAP -- a plaque that runs to two lines stops looking like a plaque, and on a narrow tower
+// that is exactly what a long title would do. A title too long for the plate is ellipsised, which
+// is also why this style sidesteps the tower wrap problem entirely.
+// Lifted clear of the border padding by the same offset every other overlay caption uses, plus a
+// small inset so it sits ON the picture rather than flush to its edge.
+function brassPlateHtml(title, bottomOffset, sc) {
+  sc = sc || 1;   // v3.0.508 -- scaled with the picture, same buckets as the plate
+  var _rv = Math.max(2, Math.round(3 * sc));
+  var rivet = function (side) {
+    return '<i style="position:absolute;top:50%;' + side + ':' + capPx(5, sc) + ';width:' + _rv + 'px;height:' + _rv + 'px;margin-top:-' + (_rv / 2) + 'px;' +
+      'border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff4d2,#8a6a2a 70%);' +
+      'box-shadow:0 0 0 0.5px rgba(60,42,10,0.8);"></i>';
+  };
+  // v3.0.518 -- SCALLOPED CORNERS. Ian: "if you can scallop the corners that would be cool."
+  // Four concave quarter-round bites taken out of the corners with radial-gradient masks, which is
+  // how a cast plaque is actually shaped. Done with -webkit-mask rather than clip-path on purpose:
+  // clip-path would also cut the drop shadow and the 1px border, flattening the plaque into a
+  // sticker. A mask leaves the border painted along the scalloped edge.
+  // GRACEFUL BY CONSTRUCTION: if the mask is not honoured the plaque simply renders as the
+  // rounded rectangle it is today. Nothing depends on it.
+  var _sc = Math.max(3, Math.round(5 * sc));   // scallop radius, tied to the plate size
+  var _bite = 'radial-gradient(circle ' + _sc + 'px at ';
+  var _mask = _bite + '0 0, transparent 99%, #000 100%), ' +
+    _bite + '100% 0, transparent 99%, #000 100%), ' +
+    _bite + '0 100%, transparent 99%, #000 100%), ' +
+    _bite + '100% 100%, transparent 99%, #000 100%)';
+  return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
+    // v3.0.519 -- CALMER, SHADED AND SHORTER. Ian: "can you darken the plate a little... it is a
+    // little in your face", "maybe shadow the lower half of it a little", "you might be able to make
+    // it shorter... the text has room below it." Three changes, none of them the size of the type:
+    //   DARKER   the whole ramp drops about one stop, so it reads as aged brass rather than gold
+    //            leaf, and the top highlight comes down from 0.75 to 0.40 -- that highlight was
+    //            most of the glare.
+    //   SHADED   a soft inset shadow rising off the bottom edge, which is what a cast plaque does
+    //            under a light from above. Inset, so it cannot spill onto the picture, and pulled
+    //            back to 5px so it sits UNDER the type rather than behind it: at 18.5px tall the
+    //            type runs to y14.5 and the shading starts at y13.5.
+    //   SHORTER  vertical padding 4/5px -> 2/3px and line-height 1.3 -> 1.15. 24.0px -> 18.5px, a
+    //            23 percent reduction, and the type does not change size at all.
+    // Contrast was checked rather than assumed: the type crosses the 16-78 percent band of the ramp,
+    // where the darkened plate gives 7.4 down to 3.5 against #241703. The darkest stop sits BELOW
+    // the type. Side padding and max-width are untouched -- the width is the text s to decide.
+    'transform:translateX(-50%);max-width:78%;padding:' + capPx(2, sc) + ' ' + capPx(16, sc) + ' ' + capPx(3, sc) + ';border-radius:2px;' +
+    'background:linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%);' +
+    'border:1px solid #4a3810;' +
+    '-webkit-mask:' + _mask + ';-webkit-mask-composite:source-in;mask:' + _mask + ';mask-composite:intersect;' +
+    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -5px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
+    'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
+    'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
+    'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+    rivet('left') + rivet('right') + title + '</div>';
+}
+// v3.0.512 -- HOW FAR IN THE PICTURE ACTUALLY STARTS, MEASURED FROM THE POSITIONING BOX.
+// Ian, 2026-08-07, from a screenshot of a bronze-framed picture whose bottom rail was washed out
+// by the gradient caption: "see how the bottom bronze frame is blurred because of the gradient...
+// The frame should remain intact... If you have to move it to the interior of the picture a little
+// more that would be fine.. few pixels."
+// THE CAUSE IS THE SAME ONE AS TD-312 AND IT IS ONLY BROKEN IN PICTURE BOOK. In the classic
+// composer the bronze frame is not a CSS border at all -- it is nested divs with padding -- and the
+// caption positions against the wrapper OUTSIDE all of it, so left:0 lands on the outside of a
+// 13px frame. In the Magazine and Comic bands the frame IS a real CSS border, and an absolutely
+// positioned child sits inside a border by definition, so those were already right.
+// Measured from the emitted CSS, box edge to artwork:
+//   frame (bronze)  13px sides (1 border + 8 pad + 2 mat + 2 gold), 15px top/bottom (+2 wrapper)
+//   keyline          1px sides (1 border),                           3px top/bottom (+2 wrapper)
+//   comic            5px all round (inset overlay border)
+//   gallery          0 sides, 0.14in bottom (the shadow gap -- already handled by coMediaPadBottom)
+//   vignette / none  0
+// CO_CAP_GAP_PX is Ian few pixels: the caption stops just short of the rail instead of touching it.
+var CO_CAP_GAP_PX = 2;
+function coInsetX(border) {
+  if (border === 'frame') return 13;
+  if (border === 'keyline') return 1;
+  if (border === 'comic') return 5;
+  return 0;
+}
+function coInsetY(border) {
+  if (border === 'frame') return 15;
+  if (border === 'keyline') return 3;
+  if (border === 'comic') return 5;
+  return 0;   // gallery bottom gap comes from coMediaPadBottom, which the caller already applies
+}
+function coInsetXCss(border) { return (coInsetX(border) + CO_CAP_GAP_PX) + 'px'; }
+function coInsetTopCss(border) { return (coInsetY(border) + CO_CAP_GAP_PX) + 'px'; }
+// The BOTTOM offset already carries coMediaPadBottom (the wrapper padding, TD-312). Add the frame
+// thickness on top of it -- as a calc, because gallery contribution is in inches and the frame is
+// in pixels and the two must not be added by hand at two different scales.
+function coInsetBottomCss(border, padBottom) {
+  var extra = coInsetY(border) - ((border === 'frame' || border === 'keyline') ? 2 : 0) + CO_CAP_GAP_PX;
+  return 'calc(' + padBottom + ' + ' + extra + 'px)';
+}
+
+// `border` is optional: the magazine/comic band renderers position their caption inside the IMAGE
+// box itself (cgBorder is a real CSS border with no padding), so they pass nothing and get 0.
+function coCaptionOverlay(m, caption, border) {
   if (!m.title) return '';
+  var _capB = coMediaPadBottom(border);
+  var _capT = coMediaPadTop(border);
+  var _capSc = capScaleForShape(m && m.shape);   // v3.0.508 -- furniture scales with the picture
   if (caption === 'plate')
-    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
+  if (caption === 'brass') return brassPlateHtml(m.title, _capB, _capSc);
+  // v3.0.512 -- INSET SO THE FRAME STAYS INTACT. left/right/bottom now stop at the artwork
+  // instead of at the outside of the frame. See coInsetX / coInsetBottomCss.
+  var _capIX = coInsetXCss(border);
   if (caption === 'gradient')
-    return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
+    return '<div style="position:absolute;left:' + _capIX + ';right:' + _capIX + ';bottom:' + coInsetBottomCss(border, _capB) + ';padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
+  // v3.0.512 -- NEW CAPTION: the same gradient banner, at the TOP of the picture.
+  // Ian, 2026-08-07: "Make a new caption that behaves just like Gradient over Image ... but put it
+  // at the top please." Identical treatment, mirrored: the fade runs downward from the top edge and
+  // the padding is flipped so the text sits clear of the frame with the soft end below it.
+  // Zero layout cost, same as the bottom one -- it is an absolute overlay.
+  if (caption === 'gradtop')
+    return '<div style="position:absolute;left:' + _capIX + ';right:' + _capIX + ';top:' + coInsetTopCss(border) + ';padding:0.12in 0.22in 0.4in;background:linear-gradient(to bottom,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   return '';
 }
 
@@ -834,25 +1098,284 @@ function coCaptionBelow(m, i, caption) {
   return '';
 }
 
+// v3.0.512 -- THE ENGRAVED CAPTION SITS UNDER THE PICTURE, INSIDE THE FRAME, AND COSTS NOTHING.
+//
+// WHAT WAS WRONG: coFloatImg and magAside -- the ORIGINAL Magazine renderers -- put this caption
+// below the picture with coCaptionBelow. Both have had ZERO callers since Magazine was rebuilt on
+// bands, and the band path renders every caption ON the image. So the caption moved onto the
+// artwork days ago and nobody saw it, because DECOR_OFF meant no caption rendered at all. Turning
+// decorations on made a five-day-old change visible. Ian: "Something changed because it was under
+// it... I thought you did it on purpose last session." He was right about the change and right
+// that it was not deliberate.
+//
+// WHY IT COSTS NOTHING, which was his actual question -- "can we squeeze it in there in Magazine?"
+// The band box is a FIXED-HEIGHT box. The strip is carved out of it and the picture is inset by
+// exactly the strip height, so the BOX geometry is untouched: same height, same width, same band,
+// same page. Nothing the packer measured changes. That is the standing rule of TD-166 applied
+// literally -- Ian, 2026-08-01: "we actually do not change the space the image takes up -- crop or
+// shrink pictures to account for whatever changes we make to them." The picture pays, not the page.
+//
+// LINE-HEIGHT IS LOAD-BEARING. Every band box sets line-height:0 so the media has no baseline gap.
+// A text strip inheriting that renders as a zero-height sliver with the glyphs overlapping. The
+// strip therefore sets its own line-height, explicitly, and must keep doing so.
+//
+// The strip background is left transparent so it takes the box background -- which is the page --
+// giving the same gold-on-paper engraving Picture Book has, rather than the cream bar this style
+// used to paint over the artwork. An UNTITLED picture keeps its full height: no title, no strip.
+var CG_CAP_STRIP_IN = 0.20;   // one 9.5pt Cinzel line (0.158in) plus breathing room
+function cgCapIsBelow(caption) { return caption === 'engraved'; }
+// v3.0.513 -- THE ENGRAVED CAPTION MOVES OUTSIDE THE FRAME ON A FLOATED PICTURE.
+// Ian, 2026-08-07, from a Magazine spread: "For magazine... the caption needs to be outside the
+// frame." Picture Book has always put it outside; the band strip put it inside. Same style, two
+// looks, which is the thing he ruled out an hour earlier.
+//
+// WHO PAYS. Ian chose CROP: "Let us try A... Only crop by .12 instead of .2. There is room most of
+// the time." He is right that there is room -- a float already carries a 0.10in bottom margin, and
+// once a caption sits under the picture that gap is doing much less work. So the strip is funded
+// from TWO places and the band height does not move at all:
+//     crop from the picture      0.12in
+//     borrowed from the margin   0.04in   (a negative margin under the caption)
+//     strip                      0.16in
+// Before: wrapper = h + 2*border. After: (h - 0.12 + 2*border) + 0.16 - 0.04 = h + 2*border.
+// IDENTICAL. That is the standing rule of TD-166 with the arithmetic actually closed.
+//
+// WHY 0.16 AND NOT 0.12. The strip bounds the type: a line needs about its size times 1.2, so a
+// 0.12in strip caps out near 7pt while 0.16in reaches 9pt. Picture Book sets this caption at
+// 9.5pt. At 0.12 the two layouts would visibly disagree, which is the whole thing being fixed.
+//
+// THE CAP IS IAN. "Cap it so a small picture does not pay the price" -- the strip is never more
+// than 6 percent of the picture, so a 2in float gives up 0.09in rather than 0.12in. And "you could
+// lower the font too on smaller pictures": the font is DERIVED from the strip rather than being a
+// second knob, so the two cannot drift apart. That is the registry mistake (TD-326) not repeated:
+// one number describing one thing, in one place.
+//     picture   strip   crop   font
+//     2.0in     0.120   0.090  6.9pt
+//     2.5in     0.150   0.112  8.6pt
+//     2.67in+   0.160   0.120  9.2pt
+//
+// SCOPE, DELIBERATELY: gzImgBox ONLY this build -- the floated picture, which is what Ian
+// photographed and much the commonest band. The other twelve box builders still use the inside
+// strip, so a float and a feature band look different until this is judged. That is a KNOWN
+// inconsistency for one round, taken on purpose: five of those twelve size themselves from the
+// picture (aspect-ratio, no fixed height) and need a different shape of fix, and shipping thirteen
+// unrendered restructurings in one build is how v3.0.508 happened.
+//
+// ROLLBACK: set CG_CAP_OUTSIDE to false. The inside-strip path is untouched and still works.
+var CG_CAP_OUTSIDE = true;
+// The OUTSIDE strip is 0.16in, not the 0.20in the inside strip uses, because the outside one is
+// funded by a 0.12in crop plus 0.04in borrowed from the float gap and Ian set the crop: "Only crop
+// by .12 instead of .2." These are two different numbers for two different mechanisms and they
+// must not be collapsed into one -- the inside strip has no margin to borrow from.
+// v3.0.514 -- THE CAPTION WAS TOUCHING THE FRAME, AND THE ARITHMETIC SAYS IT HAD TO.
+// Ian, on six screenshots in a row: "the text is a little too close to the frame... Like one
+// pixel", "right up touching the bottom of the frame", "too close and plenty of room to spare."
+// He is right and it was not a judgement call, it was a bad derivation. The v3.0.513 font was
+// sized to FILL the strip (strip x 72 / 1.25) and then line-height 1.2 consumed what was left:
+//     strip 0.16in = 15.4px, a 9.2pt line at 1.2 = 14.7px  ->  0.6px of slack, 0.3px above.
+// Effectively zero. So the numbers move, and the type is sized to leave a REAL gap rather than to
+// fill the box:
+//     strip 0.20in   crop 0.16in   font 8pt   ->  3.8px clear under the frame
+// The crop goes back to 0.16in, which is what the picture can afford: Ian said "plenty of room to
+// spare" on every one of those pages. And 8pt against Picture Book s 9.5pt is honest rather than a
+// compromise -- a Magazine float IS a smaller picture, which is the whole point of TD-331.
+//
+// AND HIS RULE, which is the one to keep: the caption must clear the frame AND still sit above
+// where the neighbouring text line would run if it were extended across. That is why the type is
+// pushed to the TOP of the strip (padding-top, flex-start) rather than centred -- centring splits
+// the slack and spends half of it under the caption where nothing needs it.
+var CG_CAP_OUT_MAX_IN = 0.20;
+var CG_CAP_OUT_PAD_IN = 0.04;   // clear air between the frame and the top of the type
+function cgCapPlan(m, opts, hIn) {
+  if (!CG_CAP_OUTSIDE) return null;
+  if (!cgCapIsBelow(opts && opts.caption) || !m || !m.title) return null;
+  if (!(hIn > 0)) return null;
+  // Ian: "cap it so a small picture does not pay the price." Never more than 7 percent of the
+  // picture, so a 2in float gives up 0.14in rather than the full 0.20in.
+  var strip = Math.max(0.12, Math.min(CG_CAP_OUT_MAX_IN, 0.07 * hIn));
+  var borrow = Math.min(0.04, strip * 0.25);
+  var crop = strip - borrow;
+  // Type is DERIVED from what is left after the padding, never set independently -- one number
+  // describing one thing. Capped at 8pt so a large picture does not get a shouty caption, floored
+  // at 6pt so a small one stays legible.
+  var pt = Math.max(6, Math.min(8, Math.round(((strip - CG_CAP_OUT_PAD_IN) * 72 / 1.2) * 10) / 10));
+  return { strip: strip, borrow: borrow, crop: crop, pt: pt };
+}
+// The caption itself, sitting BELOW the bordered picture box rather than inside it.
+// line-height is explicit for the same reason as everywhere else here: the boxes set it to 0.
+function cgCapOutsideHtml(m, plan) {
+  return '<div style="height:' + plan.strip.toFixed(3) + 'in;margin-bottom:-' + plan.borrow.toFixed(3) + 'in;' +
+    'box-sizing:border-box;padding-top:' + CG_CAP_OUT_PAD_IN.toFixed(3) + 'in;' +
+    'display:flex;align-items:flex-start;justify-content:center;text-align:center;font-family:Cinzel,serif;' +
+    'font-size:' + plan.pt + 'pt;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a2a;line-height:1.2;' +
+    'overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
+}
+// v3.0.515 -- THE CAPTION GOES OUTSIDE THE FRAME IN EVERY BAND, NOT JUST THE FLOAT.
+// Ian, seeing the converted float beside an unconverted feature: "but this looks better!"
+// v3.0.513 converted ONE builder deliberately, to prove the mechanism before doing thirteen.
+// It is proven: Magazine came back at 38 pages -- exactly the no-caption baseline -- and the three
+// reference clips went to ZERO, because the crop pays back more than the caption costs.
+//
+// THE TRICK IS TO MOVE THE BORDER IN, NOT THE CAPTION OUT. Moving the caption out means splitting
+// every band box into a float wrapper plus a picture box, and the eight boxes are eight different
+// shapes. Moving the BORDER in is the same edit everywhere: the outer box keeps its float, width
+// and height and gives up its border; the picture wrapper takes the border; the caption sits under
+// that wrapper, inside the outer box but OUTSIDE the frame. Identical result, one pattern.
+//
+// AND THE HEIGHT STILL DOES NOT MOVE. The wrapper is content-box, so max-height clamps its CONTENT
+// to (H - strip) and the border adds outside it:
+//     (H - strip) + 2*border + strip  =  H + 2*border  -- exactly what the bordered outer box was.
+// On a height-less box the percentage does not resolve, nothing clamps, and the box hugs the
+// picture and grows by the strip. Same as v3.0.514, same reason, no branch.
+//
+// COMIC IS DELIBERATELY NOT CONVERTED. Its panels are flush-packed with 5px borders touching each
+// other and that grid IS the look; a caption outside the panel border would break it. Ian,
+// 2026-08-07: "Do not worry about comic... That one is hidden and deprecated for now." Comic keeps
+// the inside strip, which is why cgBoxInner still supports BOTH -- hence outerBare.
+function cgBoxCss(m, opts) {
+  if (cgCapIsBelow(opts && opts.caption) && m && m.title) return 'overflow:hidden;';   // border moves to the picture wrapper
+  return cgBorder(opts);
+}
+function cgBoxInner(mediaHtml, m, opts, outerBare) {
+  var cap = opts && opts.caption;
+  if (!cgCapIsBelow(cap) || !m || !m.title)
+    // v3.0.518 -- THE FRAME IS DRAWN LAST. Ian, on a caption sitting under the frame line:
+    // "maybe put the frame on there last... is there an order of events that could help?" There is,
+    // and this is it. picOverlay is the bronze frame lines and corner diamonds; emitting it AFTER
+    // the caption puts it on top in paint order, so the frame reads as one continuous line across
+    // the plaque instead of the plaque sitting on a broken one. Both are absolutely positioned
+    // overlays and picOverlay is pointer-events:none, so this is paint order only -- it cannot move
+    // anything. This is the on-image caption path (brass, plate, gradient); the below-image path a
+    // few lines down keeps the caption outside the frame entirely.
+    return mediaHtml + coCaptionCover(m, cap) + picOverlay(opts);
+  // v3.0.514 -- NOTHING LEAVES NORMAL FLOW. THE ABSOLUTE VERSION DELETED SIX PICTURES.
+  // v3.0.513 put the media in `position:absolute`. In a box with a FIXED height that is fine. In a
+  // box whose height comes FROM the picture -- cgFlowWide and cgFlowFeature s wide branch, both of
+  // which are deliberately height-less so the frame hugs the art -- taking the picture out of flow
+  // collapses the box to nothing, and cgBorder s overflow:hidden hides what is left. The picture
+  // does not render at all. What survives is the border: a full-width BLACK LINE where a wide
+  // picture should be. Ian: "What is that black line at the top... I am getting that black line a
+  // lot." Six feature bands on The Strangers lost 2.9 to 3.8in each and the book fell two pages;
+  // b24 carried a 3.80in picture and the whole band measured 3.21in, which is the tell -- a band
+  // cannot be shorter than the picture inside it.
+  //
+  // THE GALLING PART: this exact hazard is written into cgCapFlow a few lines below, for
+  // huggingImgBox -- "making the picture absolute would collapse the box to nothing." It was
+  // identified, special-cased for the one builder it had been noticed in, and then the same
+  // pattern was applied to two more builders of the same shape without checking them.
+  //
+  // THE FIX MAKES THE MECHANISM HEIGHT-AGNOSTIC, which is the real prize: the wrapper stays IN
+  // FLOW and is clamped with a PERCENTAGE max-height. A percentage height resolves only against a
+  // parent that has one, so the same markup does the right thing both ways with no branch:
+  //    fixed-height parent -> max-height resolves, picture is cropped by the strip, caption sits
+  //                           below it, box total UNCHANGED.
+  //    height-less parent  -> the percentage does not resolve, nothing is clamped, the box hugs
+  //                           the picture as it always did and grows by the strip. Honest, and
+  //                           safe because Magazine MEASURES band heights.
+  // Neither case can collapse, because the picture never leaves the flow.
+  var h = CG_CAP_STRIP_IN.toFixed(2);
+  // outerBare: the caller gave up its border (cgBoxCss) so the frame draws HERE, around the
+  // picture only, and the caption below it is outside the frame. Comic passes nothing and keeps
+  // its border on the panel, so the caption stays inside -- the grid is untouched.
+  var _bd = outerBare ? picBorderCss(opts) : '';   // picBorderCss, not cgBorder: the wrapper already carries overflow:hidden
+  // v3.0.517 -- position:relative IS LOAD-BEARING. picOverlay draws the bronze frame lines and the
+  // corner diamonds as position:absolute;inset:0, so it fills its nearest POSITIONED ancestor.
+  // Without this the wrapper is not one, the overlay resolves against the outer box instead, and it
+  // stretches over the picture AND the caption -- a gold frame drawn around both, which is exactly
+  // what Ian photographed: "still doing it... the frame still is caught under the caption."
+  // It is also why only SOME pictures showed it. gzImgBox v3.0.513 builds its own picture box and
+  // that one already carries position:relative, so every FLOAT looked right; the eight builders
+  // converted in v3.0.515 route through this wrapper, so features, wides and towers did not.
+  // Ian: "Seems like it is the bigger / wider pictures... Tower was fixed too." That was the clue,
+  // and the dump settled it: the picture he photographed is b5, band kind FEATURE, while the one
+  // that looked right is b7, kind FLOAT.
+  // The wrapper does NOT clip the overlay either, for the same reason: an absolutely positioned box
+  // is clipped by overflow only on ancestors between it and its containing block, and the wrapper
+  // was neither. So the overlay escaped a box that had overflow:hidden on it.
+  return '<div style="' + _bd + 'position:relative;overflow:hidden;line-height:0;max-height:calc(100% - ' + h + 'in);">' +
+      mediaHtml + picOverlay(opts) +
+    '</div>' +
+    '<div style="height:' + h + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
+      'text-align:center;font-family:Cinzel,serif;font-size:8pt;letter-spacing:0.12em;text-transform:uppercase;' +
+      'color:#8a6a2a;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
+}
+
+// THE HUGGING BOX IS THE ONE EXCEPTION AND IT GETS A DIFFERENT TREATMENT.
+// huggingImgBox has NO fixed height -- it hugs a non-crop-safe picture that renders height:auto,
+// which is the whole point of it (a letterboxed image left bands of page showing through, so the
+// box was made to come down to the artwork). There is no fixed box to carve a strip out of: making
+// the picture absolute would collapse the box to nothing, which is exactly the v3.0.266 failure
+// that blinded the measure pass for a week.
+// So here the caption goes in NORMAL FLOW under the picture and the box really does grow by the
+// strip height. That is honest rather than free, and it is safe because Magazine MEASURES its band
+// heights (buildMagazineMeasureBody) instead of estimating them from the registry -- the packer
+// sees the true height and plans around it. It only affects non-crop-safe pictures.
+// line-height must be set here for the same reason as the strip: the box sets line-height:0.
+function cgCapFlow(m, opts) {
+  var cap = opts && opts.caption;
+  if (!cgCapIsBelow(cap) || !m || !m.title) return '';
+  // v3.0.516 -- MATCH THE OTHER STRIP. v3.0.514 respaced the caption (8pt, pushed off the frame by
+  // a fixed 0.04in) and this copy was not changed with it, so the one path that reaches it rendered
+  // a 9.5pt centred caption while every other band rendered 8pt. Two copies of one style, which is
+  // the fault this whole session keeps re-finding.
+  return '<div style="height:' + CG_CAP_STRIP_IN.toFixed(2) + 'in;box-sizing:border-box;padding-top:0.04in;display:flex;align-items:flex-start;justify-content:center;' +
+    'text-align:center;font-family:Cinzel,serif;font-size:8pt;letter-spacing:0.12em;text-transform:uppercase;' +
+    'color:#8a6a2a;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + m.title + '</div>';
+}
+
 // Caption for cover-filled cells (Comic / Magazine): every style renders ON the image,
 // since there is no 'below the image' room. bar/engraved get their own backgrounds so
 // they stay readable on a dark photo.
 function coCaptionCover(m, caption) {
   if (!m.title) return '';
+  var _capSc = capScaleForShape(m && m.shape);   // v3.0.508
+  if (caption === 'brass') return brassPlateHtml(m.title, '0px', _capSc);   // the band's box IS the image box
   if (caption === 'plate')
-    return '<div style="position:absolute;top:0;left:0;max-width:80%;background:#f0e8d0;border:3px solid #0a0806;border-top:none;border-left:none;padding:3px 9px 4px;font-family:Cinzel,serif;font-size:8.5pt;font-weight:600;color:#0a0806;line-height:1.25;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:0;left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'gradient')
     return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
+  // v3.0.512 -- the top-anchored twin. No inset here: in a band the frame is a real CSS border
+  // and an absolutely positioned child is already inside it.
+  if (caption === 'gradtop')
+    return '<div style="position:absolute;left:0;right:0;top:0;padding:0.12in 0.22in 0.4in;background:linear-gradient(to bottom,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   if (caption === 'bar')
     return '<div style="position:absolute;left:0;right:0;bottom:0;background:#f9f4e8;border-top:3px solid #c9a84c;padding:4px 9px;font-family:Cinzel,serif;font-size:9pt;font-weight:600;color:#2c1810;line-height:1.2;">' + m.title + '</div>';
-  if (caption === 'engraved')
-    return '<div style="position:absolute;left:0;right:0;bottom:0;background:rgba(245,239,225,0.92);padding:4px 6px;text-align:center;font-family:Cinzel,serif;font-size:9pt;letter-spacing:0.12em;text-transform:uppercase;color:#7a5d22;line-height:1.2;">' + m.title + '</div>';
+  // v3.0.512 -- ENGRAVED IS NO LONGER DRAWN ON THE PICTURE. It is rendered BELOW the artwork by
+  // cgBoxInner, in a strip the picture yields, so Magazine and Picture Book agree.
+  // Ian, 2026-08-07: "It needs to be below on both... Cannot behave differently."
+  // Returning empty here is load-bearing: cgBoxInner owns this style now, and every band builder
+  // goes through it. If a new band builder is ever added that calls coCaptionCover directly, the
+  // caption will VANISH there rather than render in the wrong place -- which is the failure mode
+  // that gets noticed. The apply script asserts the call-site count for exactly this reason.
+  if (caption === 'engraved') return '';
   return '';
 }
 
 function coNarr(text, opts, isIntro) {
   if (!text) return '';
-  if (opts.narr === 'box' && !isIntro) return '<div style="margin:0.16in 0;">' + buildClassicTextPanel(text) + '</div>';
+  // v3.0.498 -- TD-168. THE BOXED NARRATIVE OPTION IS GONE, AND IT WAS MEASURED OUT.
+  // Ian decided this on 2026-08-02 ("Let's get rid of the Narrative Text option... It will
+  // mess things up too") on the reasoning that it is the ONE decoration that cannot be made
+  // size-neutral by shrinking a picture: box padding adds height to TEXT, and fewer lines
+  // means a different split. Two runs of the same book on 2026-08-07 put a number on it.
+  //
+  //   est-vs-real, 56 pages WITH boxes    : mean +0.691in, real exceeded est on 55 of 56
+  //   est-vs-real, 54 pages WITHOUT       : mean +0.045in, over-estimating as often as under
+  //   least squares WITH   : gap = 0.358*narrativeBlocks + 0.107*images - 0.099
+  //   least squares WITHOUT: gap = -0.074*narrativeBlocks + 0.103*images + 0.094
+  //   NEVER-CLIP in the reference pack: 16 with boxes, 1 without.
+  //
+  // 0.358in per narrative block against buildClassicTextPanel's padding of 0.18in top and
+  // bottom = 0.360in. That is not a correlation, it is the same number. The packer reserves
+  // TEXT_MARGIN = 0.1in per slice -- correct for a plain paragraph, which has only a top
+  // margin -- and each boxed slice renders as its OWN panel with its own padding, none of
+  // which the registry knows about (it has no entry for the narrative box at all).
+  // The symptom Ian saw was not overfull pages but WHITE ones: the loop answered the
+  // overflow by shrinking pictures (one down to scale 0.55) and fill fell 90 -> 83 percent.
+  // The white space was the optimizer compensating for a lie about how tall the text was.
+  //
+  // Removed here rather than only in the UI so no stored co string, hand-written URL or
+  // future caller can reach it. parseCustomOpts also forces narr to plain, same as paper.
+  // buildClassicTextPanel is left in place -- it is still used by the Gazette family.
   return buildNarrativeHTML(text, isIntro);
 }
 
@@ -865,7 +1388,7 @@ function coDropcap(html) {
 }
 
 function coCell(m, i, pct, opts) {
-  var overlay = coCaptionOverlay(m, opts.caption);
+  var overlay = coCaptionOverlay(m, opts.caption, opts.border);
   var media = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>';
   return '<div style="width:' + pct + '%;page-break-inside:avoid;">' + media + coCaptionBelow(m, i, opts.caption) + '</div>';
 }
@@ -938,7 +1461,7 @@ function renderStack(moments, sections, intro, outro, opts) {
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
     var shape = normShape(m);
     var widthPct = isLandscape(shape) ? 100 : (shape === 'square' ? 64 : 54);
-    var overlay = coCaptionOverlay(m, opts.caption);
+    var overlay = coCaptionOverlay(m, opts.caption, opts.border);
     html += '<div style="width:' + widthPct + '%;margin:0.2in auto 0.1in;page-break-inside:avoid;">' +
       '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
       coCaptionBelow(m, i, opts.caption) + '</div>';
@@ -979,7 +1502,7 @@ function renderSplash(moments, sections, intro, outro, opts) {
     var isHero = (i % 3 === 0) || ['panoramic', 'wide'].indexOf(normShape(m)) >= 0 || (opts.emphasis && m.type === 'combat');
     if (isHero) {
       flushGrid();
-      var overlay = coCaptionOverlay(m, opts.caption);
+      var overlay = coCaptionOverlay(m, opts.caption, opts.border);
       html += '<div style="width:100%;margin:0.2in 0 0.12in;page-break-inside:avoid;">' +
         '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>' +
         coCaptionBelow(m, i, opts.caption) + '</div>';
@@ -995,7 +1518,7 @@ function renderSplash(moments, sections, intro, outro, opts) {
 
 function pbBesidePanel(m, sec, idx, opts) {
   // A small panel rendered to STACK in the column beside a full-height Picture Book tower.
-  var ov = coCaptionOverlay(m, opts.caption);
+  var ov = coCaptionOverlay(m, opts.caption, opts.border);
   var img = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + ov + '</div>' + coCaptionBelow(m, idx, opts.caption);
   var nb = sec.before ? '<div style="margin-top:0.1in;">' + coNarr(sec.before, opts, false) + '</div>' : '';
   var na = sec.after ? '<div style="margin-top:0.1in;">' + coNarr(sec.after, opts, false) + '</div>' : '';
@@ -1029,7 +1552,7 @@ function renderPaired(moments, sections, intro, outro, opts) {
   for (var i = 0; i < moments.length; i++) {
     var m = moments[i];
     var section = sections.find(function (s) { return s.panel_index === i; }) || {};
-    var overlay = coCaptionOverlay(m, opts.caption);
+    var overlay = coCaptionOverlay(m, opts.caption, opts.border);
     // Text-flow (initial phase): a beat flagged `flow` pulls the NEXT beat's intro up to
     // fill its page; that next beat then skips the intro (already shown here). Only fires
     // when the flow signal is set (optimize preview), so normal books are untouched.
@@ -1286,9 +1809,10 @@ function cgBorder(opts){ return picBorderCss(opts) + 'overflow:hidden;'; }
 // Every IMAGE box still goes through cgBorder(), so the user's frame choice is untouched there.
 var GZ_TEXT_BORDER = 'border:1px solid rgba(120,90,30,0.35);';   // same hairline as the 'keyline' preset
 function vignetteOverlayHtml(){
-  // Strong fade so the rectangular edge is fully gone -- image looks drawn on the page.
-  return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0.45in 0.4in #ffffff;"></div>' +
-    '<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 46%, rgba(255,255,255,0.7) 76%, rgba(255,255,255,1) 92%);"></div>';
+  // v3.0.500 -- ONE definition (CO_FADE_BG, near CO_IMG_SHADOW). There were THREE copies of
+  // this fade with three different sets of stops, and the pane-safe swap below matched only
+  // one of them by verbatim string. See the note on CO_FADE_BAND for what changed and why.
+  return fadeEdgeOverlayHtml();
 }
 function picOverlay(opts){
   var b = opts && opts.border;
@@ -1447,6 +1971,48 @@ function gzNarrBox(narrHtml, opts) {
 // stored aspect -- leaving a thin parchment strip when the stored aspect is slightly
 // off (the "border bigger than the picture"). For those, the frame HUGS the image's
 // true height (width fixed, height:auto) so the border can never exceed the picture.
+// v3.0.504 -- THE BORDER ENDS WHERE THE PICTURE ENDS.
+// Ian, 2026-08-07, on a tower whose frame ran on past the art: "the picture ends but the border
+// continues." Measured from his screenshot: artwork stops at y354, the border's bottom rail sits at
+// y380 -- a 25px strip of PURE WHITE (mean 255, colourfulness 0) inside the frame.
+//
+// THE CAUSE. A non-crop-safe image renders at width:100% + height:auto, so its height comes from
+// its OWN intrinsic aspect. The box around it carries min-height: <planned h>, derived from the
+// STORED momentAspect. When the stored aspect is stale the picture renders shorter than the floor,
+// the box stays at the floor, and cgBorder -- drawn on that same box -- wraps the leftover white.
+// The floor's own comment predicted exactly this: "it adds NO dead space unless that stored aspect
+// is stale." It is stale. Ian's dump: tower#0 planned imgH8.96 asp0.248, tower#1 imgH7.17 asp0.25.
+//
+// THE FLOOR MUST STAY, and this is the trap. measureLayout ABORTS every image request so layout
+// never waits on R2, so with height:auto and NO floor the box measures ~zero and the tower measures
+// TEXT-ONLY -- band height, the tower-merge ladder, REAL-CELL, NEVER-CLIP and BOX-OVERFLOW all go
+// blind on a page that visibly chops its text. That cost a week (v3.0.266). The same dump shows it
+// live: "img-real 0.17" in the measure pass, against a box held at 8.96in.
+//
+// SO: keep the floor on the OUTER box -- measurement is untouched, nothing downstream moves -- and
+// move the BORDER and the overlays onto an INNER wrapper that hugs the image. The frame then ends
+// at the picture in both passes. When the aspect is accurate the two boxes coincide and nothing
+// changes at all; when it is stale you get a little plain white below an intact frame instead of an
+// empty bordered box.
+// TWO CALLERS, ONE FIX: gzImgBox and cgFlowTower had byte-similar copies of this branch. gzImgBox's
+// comment records the same complaint already reported once -- "the border should come down to meet
+// the picture's edge" -- fixed there for the letterbox case and never for the stale-aspect one.
+function huggingImgBox(m, opts, outerCss, floorH) {
+  return '<div style="' + outerCss + 'min-height:' + floorH.toFixed(2) + 'in;' +
+      'position:relative;background:transparent;line-height:0;">' +
+    // v3.0.516 -- THE CAPTION GOES OUTSIDE THIS FRAME TOO. It was emitted INSIDE the bordered
+    // div, so the frame wrapped the picture AND the caption. Ian, on a bronze-framed library
+    // picture: "Not quite doing it." Eight builders were converted in v3.0.515 and this one was
+    // not, because v3.0.512 had given it a special case and nothing went back for it. It only
+    // shows on NON-CROP-SAFE pictures, which is the only kind that reaches this function, which
+    // is why it survived a whole round of eyeballing. Ninth of nine.
+    '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
+      '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
+      coCaptionCover(m, opts.caption) + picOverlay(opts) +   // v3.0.518 -- frame last, see cgBoxInner
+    '</div>' +
+    cgCapFlow(m, opts) +
+  '</div>';
+}
 function gzImgBox(m, opts, fl, w, h) {
   // A non-crop-safe image renders object-fit:contain, which LETTERBOXES inside a fixed-height box.
   // The box background is transparent, so those bands showed the page through and the border stood
@@ -1458,11 +2024,22 @@ function gzImgBox(m, opts, fl, w, h) {
     // does NOT collapse when image loads are aborted during the magazine measure pass -- without
     // this the band measures short and the deterministic composer clips its overflow. When the
     // image loads (compose/flow render) it renders at its natural height (>= the floor).
-    return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;min-height:' + h.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;">' +
-      '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    return huggingImgBox(m, opts, fl + 'width:' + w.toFixed(2) + 'in;', h);
+  }
+  // v3.0.513 -- caption OUTSIDE the frame. The float and the width move to a wrapper; the border
+  // stays on the picture box, which is 0.12in shorter; the caption sits under it, outside the
+  // border, with a negative margin that hands 0.04in back to the float gap. Wrapper total is
+  // unchanged, so the band, the page and the pack are unchanged. See cgCapPlan.
+  var _cp = cgCapPlan(m, opts, h);
+  if (_cp) {
+    return '<div style="' + fl + 'width:' + w.toFixed(2) + 'in;position:relative;">' +
+      '<div style="' + cgBorder(opts) + 'width:100%;height:' + (h - _cp.crop).toFixed(3) +
+        'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + '</div>' +
+      cgCapOutsideHtml(m, _cp) +
+    '</div>';
   }
   return '<div style="' + fl + cgBorder(opts) + 'width:' + w.toFixed(2) + 'in;height:' + h.toFixed(2) +
-    'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts) + '</div>';
 }
 function gzFloatPanel(m, opts, narrHtml, iw, ih, sideLeft) {
   var fl = sideLeft ? 'float:left;margin:0.02in 0.22in 0.10in 0;' : 'float:right;margin:0.02in 0 0.10in 0.22in;';
@@ -1591,17 +2168,9 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
     // adds NO dead space unless that stored aspect is stale. It is a FLOOR, never a ceiling: the
     // img keeps width:100 percent + height:auto, there is no overflow:hidden and no object-fit here,
     // so the box can only grow to the picture. This cannot crop a tower.
-    ? ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) +
-       'in;min-height:' + imgH.toFixed(2) +
-       'in;position:relative;background:transparent;line-height:0;">' +
-       // Tower box is WIDTH-driven with no fixed height, so the image must use height:auto (the box
-       // grows to the image). The primitive's contain path uses height:100%, which behaves
-       // differently in an auto-height box -- so the tower keeps its own emit here. (Its cover
-       // branch below DOES go through the primitive via cgImgMedia.)
-       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-       picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>')
-    : ('<div style="' + fl + cgBorder(opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
-       'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>');
+    ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH)
+    : ('<div style="' + fl + cgBoxCss(m, opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
+       'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>');
   var col = (wrapBelow && !besideHtml)
     ? cgAlignFirstPara(narrHtml || '')                                      // wraps beside the float, then continues below it
     : '<div style="display:flow-root;">' + cgAlignFirstPara(narrHtml || '') + (besideHtml || '') + '</div>';
@@ -1628,7 +2197,7 @@ function mzColTextH(html, colW) {
 }
 function cgBesidePanel(m, opts, narrHtml) {
   // A small panel rendered to STACK in the column beside a full-height tower (NOT floated).
-  var box = '<div style="' + cgBorder(opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:transparent;line-height:0;margin-bottom:0.06in;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  var box = '<div style="' + cgBoxCss(m, opts) + 'width:100%;aspect-ratio:' + dispRatioCSS(m) + ';position:relative;background:transparent;line-height:0;margin-bottom:0.06in;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>';
   return '<div style="margin-bottom:0.12in;">' + box + gzNarrBox(narrHtml, opts) + '</div>';
 }
 
@@ -1655,9 +2224,9 @@ function cgFlowWide(m, opts, narrHtml, sideLeft, mul) {
     : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
   var _ww = (mul < 0.999) ? (mul * 100).toFixed(1) + '%' : '100%';
   var _wc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
-  var box = '<div style="' + cgBorder(opts) + 'width:' + _ww + ';' + _wc + 'position:relative;line-height:0;' +
+  var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + _ww + ';' + _wc + 'position:relative;line-height:0;' +
     'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    cgBoxInner(media, m, opts, true) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -1667,8 +2236,8 @@ function cgFlowPair(a, b, opts, narrHtml) {
   var availW = CG_W - CG_GAP;
   var H = Math.min(3.2, availW / (aspA + aspB));
   function cell(m, asp) {
-    return '<div style="' + cgBorder(opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
-      'in;position:relative;background:transparent;line-height:0;">' + cgImgMedia(m, opts) + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    return '<div style="' + cgBoxCss(m, opts) + 'width:' + (asp * H).toFixed(2) + 'in;height:' + H.toFixed(2) +
+      'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true) + '</div>';
   }
   var row = '<div style="display:flex;gap:' + CG_GAP + 'in;margin-bottom:0.10in;justify-content:center;' +
     'page-break-inside:avoid;break-inside:avoid;">' + cell(a, aspA) + cell(b, aspB) + '</div>';
@@ -1730,9 +2299,9 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
       : '<div style="width:100%;aspect-ratio:' + shapeRatioCSS(normShape(m)) + ';background:#1a0f06;"></div>';
     var _fw = (mul < 0.999) ? (mul * 100).toFixed(1) + '%' : '100%';
     var _fc = (mul < 0.999) ? 'margin-left:auto;margin-right:auto;' : '';
-    var wbox = '<div style="' + cgBorder(opts) + 'width:' + _fw + ';' + _fc + 'position:relative;line-height:0;' +
+    var wbox = '<div style="' + cgBoxCss(m, opts) + 'width:' + _fw + ';' + _fc + 'position:relative;line-height:0;' +
       'margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-      media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      cgBoxInner(media, m, opts, true) + '</div>';
     return wbox + gzNarrBox(narrHtml, opts);
   }
   // Non-wide feature blows up toward full page; box matches the image aspect and
@@ -1749,14 +2318,14 @@ function cgFlowFeature(m, opts, narrHtml, sideLeft, mul) {
   if (opts && opts.mzFloatShrunk && W <= CG_W - 2.0) {
     var _fside = sideLeft ? 'left' : 'right';
     var _fmar = sideLeft ? '0 0.26in 0.06in 0' : '0 0 0.06in 0.26in';
-    var fbox = '<div style="' + cgBorder(opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
+    var fbox = '<div style="' + cgBoxCss(m, opts) + 'float:' + _fside + ';margin:' + _fmar + ';width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) +
       'in;position:relative;background:transparent;line-height:0;page-break-inside:avoid;break-inside:avoid;">' +
-      img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      cgBoxInner(img, m, opts, true) + '</div>';
     return '<div style="display:flow-root;margin-bottom:0.10in;">' + fbox + gzNarrBox(cgAlignFirstPara(narrHtml), opts) + '</div>';
   }
-  var box = '<div style="' + cgBorder(opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
+  var box = '<div style="' + cgBoxCss(m, opts) + 'width:' + W.toFixed(2) + 'in;height:' + H.toFixed(2) + 'in;' + ctr +
     'position:relative;background:transparent;line-height:0;margin-bottom:0.10in;page-break-inside:avoid;break-inside:avoid;">' +
-    img + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+    cgBoxInner(img, m, opts, true) + '</div>';
   return box + gzNarrBox(narrHtml, opts);
 }
 
@@ -1885,7 +2454,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
     var sizeCss = (span === 'tall' && boxW) ? ('width:' + boxW.toFixed(2) + 'in;max-width:100%;justify-self:center;') : '';
     return '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' +
       'height:' + h.toFixed(2) + 'in;align-self:start;break-inside:avoid;page-break-inside:avoid;' +
-      spanCss + sizeCss + '">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      spanCss + sizeCss + '">' + cgBoxInner(media, m, opts) + '</div>';
   }
 
   var _MT = !!(opts && opts.measureTag);
@@ -1905,7 +2474,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var twMedia = m.image
         ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
         : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
-      var twBox = '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + twMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+      var twBox = '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + cgBoxInner(twMedia, m, opts) + '</div>';
       var twNarr = '';
       if (sec.before) twNarr += buildNarrativeHTML(sec.before, false);
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
@@ -1927,12 +2496,12 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var _fImgBox;
       if (_fAsp >= 1.5) {
         var _fH = _coCapH(CG_W / _fAsp, opts);
-        _fImgBox = '<div style="' + cgBorder(opts) + 'width:100%;height:' + _fH.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + _fMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+        _fImgBox = '<div style="' + cgBorder(opts) + 'width:100%;height:' + _fH.toFixed(2) + 'in;position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(_fMedia, m, opts) + '</div>';
       } else {
         var _fH2 = _coCapH(Math.min(8.4, CG_W / _fAsp), opts);
         var _fW2 = Math.min(CG_W, _fH2 * _fAsp);
         var _fCtr = (_fW2 < CG_W - 0.01) ? 'margin-left:auto;margin-right:auto;' : '';
-        _fImgBox = '<div style="' + cgBorder(opts) + 'width:' + _fW2.toFixed(2) + 'in;height:' + _fH2.toFixed(2) + 'in;' + _fCtr + 'position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + _fMedia + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+        _fImgBox = '<div style="' + cgBorder(opts) + 'width:' + _fW2.toFixed(2) + 'in;height:' + _fH2.toFixed(2) + 'in;' + _fCtr + 'position:relative;background:transparent;line-height:0;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(_fMedia, m, opts) + '</div>';
       }
       var _fParts = [];
       if (sec.before) _fParts = _fParts.concat(cgSplitNarr(sec.before));
@@ -2046,7 +2615,7 @@ function coNarrLen(s){ return s ? String(s).replace(/<[^>]*>/g, ' ').replace(/&[
 function magWrapMin(shape){ if (shape === 'tall' || shape === 'tower') return 480; if (shape === 'square') return 360; return 300; }
 function coFloatImg(m, i, side, opts){
   var media = coMedia(m, opts.border);
-  var overlay = coCaptionOverlay(m, opts.caption);
+  var overlay = coCaptionOverlay(m, opts.caption, opts.border);
   var cap = coCaptionBelow(m, i, opts.caption);
   var mar = (side === 'left') ? 'margin:0.06in 0.3in 0.2in 0;' : 'margin:0.06in 0 0.2in 0.3in;';
   return '<div style="float:' + side + ';width:' + magWidth(normShape(m)) + '%;' + mar + 'page-break-inside:avoid;">' +
@@ -2066,7 +2635,7 @@ function magAsideWidth(shape, nlen, wmin){
 }
 function magAside(m, i, opts, narrText, imgW){
   var imgCol = '<div style="flex:0 0 ' + imgW + '%;width:' + imgW + '%;">' +
-    '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' +
+    '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption, opts.border) + '</div>' +
     coCaptionBelow(m, i, opts.caption) + '</div>';
   var txtCol = '<div style="flex:1 1 auto;min-width:0;">' + coNarr(narrText, opts, false) + '</div>';
   var imgLeft = (i % 2 === 0);
@@ -2756,7 +3325,7 @@ function cgImageBox(m, wIn, hIn, opts, fullWidth) {
     ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
   var wCss = fullWidth ? 'width:100%;' : ('width:' + wIn.toFixed(2) + 'in;');
-  return '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + media + picOverlay(opts) + coCaptionCover(m, opts.caption) + '</div>';
+  return '<div style="' + cgBoxCss(m, opts) + 'background:transparent;position:relative;overflow:hidden;line-height:0;' + wCss + 'height:' + hIn.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' + cgBoxInner(media, m, opts, true) + '</div>';
 }
 function _engineRow(cellsHtml) {
   return '<div style="display:flex;gap:' + CG_GAP + 'in;align-items:flex-start;break-inside:avoid;page-break-inside:avoid;margin-bottom:' + CG_GAP + 'in;">' + cellsHtml + '</div>';
@@ -3622,7 +4191,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
           // whether they used recordings, played at a table at all, or simply wrote the story. The
           // notice should state what is certainly true and nothing more.
           // No apostrophe in the new text: pdf.js strings are single-quoted (file invariant).
-          'This story was created on Campaignia.com. Narrative text and illustrations were produced with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
+          'This story was created on Campaignia.com. Narrative text and illustrations were produced in part or entirely with the assistance of AI tools. All characters and original content remain the property of their respective players and creators.</div>' +
       '</div>' +
     '</div>';
 
@@ -5908,7 +6477,25 @@ async function computePairedPack(req, campaignId, packOpts) {
       (pg.placements || []).forEach(function (pl) {
         var b = null; for (var _bi = 0; _bi < packBeats.length; _bi++) { if (packBeats[_bi].idx === pl.beat) { b = packBeats[_bi]; break; } }
         if (!b) return;
-        if (pl.kind === 'image' || pl.kind === 'tower') est += (b.imageH || 0) + (b.imgOver || 0) + (b.capBelowH || 0);
+        // v3.0.499 -- TD-306. COUNT THE CAPTION ONCE.
+        // `imgOver` ALREADY contains the below-image caption for any titled image (see where
+        // packBeats is built: imgOver = _imgOver + (title ? _capBelowH : 0)). `capBelowH` is
+        // set SEPARATELY, for towers only, and holds the same _capBelowH. So a titled TOWER
+        // was reserving its caption twice here -- 0.589in of pure arithmetic added to the
+        // estimate of exactly the pages the decoration work is being judged on.
+        // It was invisible until 2026-08-07 because DECOR_OFF made both terms zero.
+        //
+        // THE PACKER IS CORRECT AND IS NOT TOUCHED. Both fields are load-bearing, in
+        // different branches, which is why the fix is here and not at the source:
+        //   packPaired.js:220  tower path      -> uses capBelowH ONLY (returns early)
+        //   packPaired.js:241/279 non-tower    -> uses imgOver ONLY
+        // Neither double-counts. Removing capBelowH from the BEAT would strip the tower
+        // path's only caption reserve; folding it out of imgOver would strip the non-tower
+        // path's. So the diagnostic accumulator is the one place that must choose, and it
+        // takes imgOver, which is populated for both shapes.
+        //
+        // DO NOT "restore" capBelowH to this line. It is not missing; it is the duplicate.
+        if (pl.kind === 'image' || pl.kind === 'tower') est += (b.imageH || 0) + (b.imgOver || 0);
         else if (pl.kind === 'narr') est += (pl.part === 'after') ? (b.textAfterH || 0) : (b.textBeforeH || 0);
         else if (pl.kind === 'section-header') est += (b.headerH || 0);
       });
@@ -5991,7 +6578,7 @@ function composeBook(plan, beats, opts) {
         var _tpi = panelN; panelN += 1;
         inner += '<div style="display:flow-root;margin-bottom:0.1in;break-inside:avoid;page-break-inside:avoid;">' +
           '<div style="float:left;margin:0 0.24in 0.12in 0;width:' + tw.toFixed(2) + 'in;">' +
-            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _tpi, opts.caption) + '</div>' +
+            '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption, opts.border) + '</div>' + coCaptionBelow(m, _tpi, opts.caption) + '</div>' +
           '<div style="display:flow-root;">' +
             (b.before ? '<div style="margin-bottom:0.1in;">' + coNarr(b.before, opts, false) + '</div>' : '') +
             (b.after ? '<div>' + coNarr(b.after, opts, false) + '</div>' : '') +
@@ -6008,7 +6595,7 @@ function composeBook(plan, beats, opts) {
         var w = Math.min(6.8, Math.round(_visH * asp * 1000) / 1000);   // inline round (round3 is not in this scope)
         var _ipi = panelN; panelN += 1;
         inner += '<div style="margin:0.05in auto 0.13in;width:' + w.toFixed(2) + 'in;break-inside:avoid;page-break-inside:avoid;">' +
-          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption) + '</div>' + coCaptionBelow(m, _ipi, opts.caption) + '</div>';
+          '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + coCaptionOverlay(m, opts.caption, opts.border) + '</div>' + coCaptionBelow(m, _ipi, opts.caption) + '</div>';
       } else if (pl.kind === 'narr') {
         var full = (pl.part === 'after') ? b.after : b.before;
         if (full) {
@@ -6384,6 +6971,22 @@ function fillMissingMagazineLines(meas, bands) {
 
 // Re-measure the REAL composed pages: returns { pageIndex: realHeightIn } (plus ._error on failure).
 // Same machinery as the band measure, aimed at the composed output (measureComposed -> cp:N markers).
+// v3.0.505 -- NEVER-CLIP ON THE CONSOLE IS OFF BY DEFAULT. Ian, 2026-08-07: "Get rid of these
+// in the log... I don't think these are errors. these are things we know happen and account for."
+// He is right, and the reason is the CALL COUNT. remeasureComposedPaired has TEN call sites and
+// most of them are inside the scale bisection in layout-apply -- one is passed straight in as a
+// `measure:` callback to a search routine. So the detector fires on every THROWAWAY PROBE render,
+// not just on the book that ships. That is why a single run prints the same page half a dozen
+// times with a shrinking overflow (p12 +6.49, +6.26, +6.03, +5.92) -- that is a bisection walking
+// down, working exactly as intended, narrated as if it were six faults.
+// NOTHING DIAGNOSTIC IS LOST. realH._overflows is populated on the line above regardless, and that
+// is what the diagnostics bundle reads (_pdbg.overflows) and reports properly -- per stage, with
+// the reference pack and the final pack separated, which is the form that has actually been useful
+// all evening. The console line was a duplicate of data the dump already carries, minus the context
+// that makes it readable.
+// Set DEBUG_CLIP=1 to bring it back (same convention as DEBUG_PROMPT in routes/images.js) for the
+// case the dump cannot cover: watching a live run that is not going to produce a bundle.
+function clipLogOn() { return !!process.env.DEBUG_CLIP; }
 async function remeasureComposedPages(req, campaignId, pgs, bnds) {
   var realH = {};
   try {
@@ -6397,7 +7000,11 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
     // BOX-OVERFLOW: elements clipping their own content INSIDE a cell. The page/cell heights cannot
     // see these -- they report the box, not what is inside it -- which is why a visibly chopped
     // Gazette tower reported 7.89in and NEVER-CLIP said [OK] on the same render.
-    if (_cmeas.boxOverflows && _cmeas.boxOverflows.length) realH._boxOverflows = _cmeas.boxOverflows;
+    // v3.0.508 -- carry NULL (scan retired, see measureLayout.js) all the way through. The old
+    // form only assigned when the array was non-empty, so 'off' and 'clean' both arrived as
+    // undefined and the dump printed [OK] for both.
+    if (_cmeas.boxOverflows === null) realH._boxOverflows = null;
+    else if (_cmeas.boxOverflows && _cmeas.boxOverflows.length) realH._boxOverflows = _cmeas.boxOverflows;
     cblocks.forEach(function (bl) {
       var mm = /^cp:(\d+)$/.exec(bl.id || '');
       if (mm) { realH[+mm[1]] = bl.heightIn; return; }
@@ -6424,7 +7031,7 @@ async function remeasureComposedPages(req, campaignId, pgs, bnds) {
       var over = realH[k] - _clipBox;
       if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000, kind: 'over-box' });
     });
-    if (realH._overflows.length) {
+    if (realH._overflows.length && clipLogOn()) {
       try { console.warn('[NEVER-CLIP] ' + realH._overflows.length + ' page(s) over box (' + _clipBox.toFixed(2) + 'in) for campaign ' + campaignId + ': ' +
         realH._overflows.map(function (o) { return 'p' + o.page + ' +' + o.overIn + 'in'; }).join(', ')); } catch (_e) {}
     }
@@ -6460,7 +7067,7 @@ async function remeasureComposedPaired(req, campaignId, plan, beats, cOpts) {
       var over = realH[k] - _clipBox;
       if (over > _clipTol) realH._overflows.push({ page: +k, realIn: realH[k], boxIn: _clipBox, overIn: Math.round(over * 1000) / 1000, kind: 'over-box' });
     });
-    if (realH._overflows.length) {
+    if (realH._overflows.length && clipLogOn()) {
       try { console.warn('[NEVER-CLIP] (paired) ' + realH._overflows.length + ' page(s) over box (' + _clipBox.toFixed(2) + 'in) for campaign ' + campaignId + ': ' +
         realH._overflows.map(function (o) { return 'p' + o.page + ' +' + o.overIn + 'in'; }).join(', ')); } catch (_e) {}
     }
@@ -6954,7 +7561,9 @@ async function _computeMagazinePackInner(req, campaignId, packOpts) {
           });
         });
         _dbg.overflows = realH._overflows || [];   // NEVER-CLIP: pages whose real height clips the box
-        _dbg.boxOverflows = realH._boxOverflows || [];   // BOX-OVERFLOW: elements clipping INSIDE a cell
+        // v3.0.508 -- carry NULL through when the scan is off, so the dump can tell 'not measured'
+        // from 'measured and clean'. Coercing to [] here would resurrect the false [OK].
+        _dbg.boxOverflows = (realH._boxOverflows === null) ? null : (realH._boxOverflows || []);
         if (realH._towerProbes) _dbg.towerProbes = realH._towerProbes;   // tower geometry: planned vs real box height
         if (realH._imgProbes) _dbg.imgProbes = realH._imgProbes;         // universal per-image geometry (AI input contract)
         // NEVER-CLIP (at-risk): also flag pages that fit the box TOTAL but render much taller than
@@ -7962,7 +8571,12 @@ function magazinePlanText(packed) {
   // height, and everything downstream (the tower merge rung ladder, REAL-CELL, the AI's reasoning)
   // believes it. This walks the composed DOM instead of the plan and names the element doing the
   // cutting. Permanent guardrail, like NEVER-CLIP and ORDER-BREAK.
-  var _box = (d.boxOverflows || []);
+  // v3.0.508 -- RETIRED. null means the scan did not run (see measureLayout.js for why and for
+  // the evidence); [] means it ran and found nothing. Print nothing at all in the first case --
+  // an [OK] from a check that never executed is the one outcome worse than its false alarms.
+  var _box = d.boxOverflows;
+  var _boxRan = Array.isArray(_box);
+  if (!_boxRan) _box = [];
   if (_box.length) {
     L.push('');
     L.push('!!! BOX-OVERFLOW: ' + _box.length + ' ELEMENT(S) CLIP THEIR OWN CONTENT !!!');
@@ -7975,7 +8589,7 @@ function magazinePlanText(packed) {
         o.scrollIn.toFixed(2) + 'in  -> CUT by ' + o.overIn.toFixed(2) + 'in  [overflow:' + o.overflow + ']');
     });
     if (_box.length > 40) L.push('    ... and ' + (_box.length - 40) + ' more');
-  } else if (d.remeasured) {
+  } else if (_boxRan && d.remeasured) {
     L.push('BOX-OVERFLOW: no element clips its own content. [OK]');
   }
   // ORDER-BREAK: text must NEVER render out of narrative order, on any layout. Walk the plan in

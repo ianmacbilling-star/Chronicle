@@ -27,6 +27,10 @@
 // and the next call relaunches, so a crash costs one measure rather than the process.
 var _mBrowser = null;
 var _mIdleTimer = null;
+// v3.0.501 -- TD-136. Set once the CURRENT browser has confirmed every declared face loads.
+// Reset whenever the browser handle is dropped. See the note at the font wait below.
+var _mFontsOk = false;
+var MEASURE_FONT_WAIT_MS = 750;   // was 5000, and 5000 was pure waste -- see below
 var MEASURE_BROWSER_IDLE_MS = 5 * 60 * 1000;   // release the browser after five idle minutes
 function _mLaunchOpts() {
   var o = {
@@ -46,6 +50,7 @@ function _mTouchIdle() {
   if (_mIdleTimer) clearTimeout(_mIdleTimer);
   _mIdleTimer = setTimeout(function () {
     var b = _mBrowser; _mBrowser = null; _mIdleTimer = null;
+    _mFontsOk = false;   // v3.0.501 -- a fresh browser has a cold font cache
     if (b) { try { b.close(); } catch (e) {} }
   }, MEASURE_BROWSER_IDLE_MS);
   if (_mIdleTimer && _mIdleTimer.unref) _mIdleTimer.unref();   // never hold the process open
@@ -60,7 +65,12 @@ async function _mGetBrowser() {
   }
   const puppeteer = require('puppeteer');
   _mBrowser = await puppeteer.launch(_mLaunchOpts());
-  try { _mBrowser.on('disconnected', function () { _mBrowser = null; }); } catch (e) {}
+  // v3.0.501 -- the font check is confirmed PER BROWSER, not per process. A browser caches the
+  // font files it has fetched, so once one page has loaded every declared face the next page on
+  // the same browser has them already. A NEW browser has an empty cache and must check again, so
+  // this flag is cleared here and wherever the handle is dropped (idle timer, disconnect).
+  _mFontsOk = false;
+  try { _mBrowser.on('disconnected', function () { _mBrowser = null; _mFontsOk = false; }); } catch (e) {}
   _mTouchIdle();
   return _mBrowser;
 }
@@ -68,16 +78,34 @@ async function _mGetBrowser() {
 // forever if a webfont never settles -- and because it hangs, the cleanup below never runs and the
 // browser leaks. Measuring with fallback metrics is far better than never returning.
 function _mWithTimeout(p, ms, label) {
+  // v3.0.501 -- WHAT THIS DOES AND DOES NOT FIX. Recorded because a wrong theory was written
+  // here first and nearly shipped as a comment, which is worse than shipping no comment at all.
+  // THE THEORY (WRONG): when the timer wins, the page.evaluate() left in flight is orphaned;
+  // `finally { page.close() }` later rejects it with 'Protocol error: Target closed'; and
+  // server.js makes an unhandled rejection FATAL (process.on('unhandledRejection', handleFatal)
+  // -> process.exit(1)). So a timed-out font wait would take the process down and 502 every
+  // request in flight.
+  // WHY IT IS WRONG: Promise.race SUBSCRIBES TO BOTH promises. The loser therefore has a handler
+  // attached from the moment the race is constructed, and a later rejection is handled-and-ignored
+  // rather than unhandled. Tested against the v3.0.491 helper: a late rejection fires no
+  // unhandledRejection there either. Nothing was ever leaking here.
+  // WHAT IS ACTUALLY CHANGED: the timer is now CLEARED when the real promise wins. Previously
+  // every measure left a live 5-second timer behind that would still fire and print a misleading
+  // 'timed out' line after a wait that had already succeeded. The .catch below is belt and braces
+  // for a non-promise thenable and costs nothing; it is not load-bearing.
+  var _p = Promise.resolve(p);
+  _p.catch(function () {});
+  var _timer = null;
   return Promise.race([
-    Promise.resolve(p),
+    _p,
     new Promise(function (resolve) {
-      var t = setTimeout(function () {
+      _timer = setTimeout(function () {
         try { console.warn('[measure] ' + label + ' timed out after ' + ms + 'ms -- continuing'); } catch (e) {}
         resolve(null);
       }, ms);
-      if (t && t.unref) t.unref();
+      if (_timer && _timer.unref) _timer.unref();
     })
-  ]);
+  ]).then(function (v) { if (_timer) clearTimeout(_timer); return v; });
 }
 async function measureDocument(html, options) {
   options = options || {};
@@ -119,6 +147,27 @@ async function measureDocument(html, options) {
     // catch below swallowed whatever went wrong with it. Neither its timeout message nor its result
     // has ever been seen, which means page.evaluate is THROWING and nobody was told.
     // Nothing here changes behaviour. It only makes the next occurrence answerable.
+    // v3.0.501 -- TD-136. STOP ASKING A QUESTION THAT NEVER GETS ANSWERED.
+    // THE MEASUREMENT, from Ian's Railway log of 2026-08-07:
+    //     [measure] first font wait: 17ms, result 8/8 faces, status=loading, readyState=complete
+    // Every face loaded, in SEVENTEEN MILLISECONDS. And then every later measure in that process
+    // burned the full 5000ms ceiling. ~56 timeouts in one range = 4.7 MINUTES of dead wait, and a
+    // single layout-apply with 20 ops paid it dozens of times over (the note above records that one
+    // shrinkImage costs four whole-book measures while it bisects). The request outlived the proxy
+    // and the client got a 502 while the server was still grinding -- the run "stopped at pass 2"
+    // with the process perfectly healthy and still logging.
+    // So the 5000ms wait was not a symptom of the stall. It WAS the stall.
+    //
+    // WHY IT NEVER SETTLES IS STILL UNKNOWN, and that is deliberate wording. Four explanations have
+    // now been wrong (three in the comment below, plus a fifth-attempt crash theory on 2026-08-07
+    // that the logs disproved). What changes here is that it stops mattering: we confirm ONCE per
+    // browser that every declared face loads, and thereafter trust the browser's own font cache --
+    // which is the same cache the render will use.
+    // The faces are self-hosted (26 at boot), so this is a local read, not a network fetch.
+    if (_mFontsOk) {
+      // Already confirmed on this browser. The files are cached; a new page does not refetch them.
+      // Nothing is skipped that affects metrics -- the same faces are available to this page.
+    } else {
     var _fT0 = Date.now();
     var _fs = await _mWithTimeout(page.evaluate(function () {
       if (!document.fonts) return 'no-font-api';
@@ -133,7 +182,7 @@ async function measureDocument(html, options) {
         return okN + '/' + r.length + ' faces, status=' + String(document.fonts.status || '?') +
                ', readyState=' + String(document.readyState || '?');
       });
-    }), 5000, 'font loading');
+    }), MEASURE_FONT_WAIT_MS, 'font loading');
     var _fMs = Date.now() - _fT0;
     // Report ONCE per process, whatever happened. A timeout tells us it hung; a success at 4900ms
     // tells us it is merely slow; a success at 30ms with 0 faces tells us it never had anything to
@@ -161,9 +210,25 @@ async function measureDocument(html, options) {
     } else if (String(_fs).indexOf('no-') !== 0 && String(_fs).indexOf('/') > 0 &&
                String(_fs).split('/')[0] !== String(_fs).split(' ')[0].split('/')[1]) {
       try { console.warn('[measure] not every face loaded: ' + _fs + ' -- text metrics may not match the render'); } catch (e) {}
+    } else if (_fs != null && String(_fs).indexOf('no-') !== 0) {
+      // Every declared face reported loaded. Do not ask this browser again -- see above.
+      _mFontsOk = true;
+      try { console.log('[measure] fonts confirmed on this browser in ' + _fMs + 'ms (' + _fs + ') -- later measures skip the wait'); } catch (e) {}
     }
+    }   // end: not yet confirmed on this browser
 
-    var data = await page.evaluate(function () {
+    // v3.0.510 -- READ THE ENV VAR IN NODE AND PASS IT IN.
+    // v3.0.508 put `process.env.DEBUG_BOXOVERFLOW` INSIDE this evaluate body, which runs in the
+    // BROWSER: `ReferenceError: process is not defined`, thrown on the very first measure, so every
+    // magazine pack died instantly with a 500 (`[pack-queue] campaign 1 pack FAILED after 0s`).
+    // THE LINT SWEEP CANNOT SEE THIS, and that is the lesson. The eslint no-undef config treats
+    // browser globals inside a page.evaluate body as correct -- because they are -- which means it
+    // equally accepts NODE globals there, where they are not. The sweep ran clean an hour after this
+    // shipped. An evaluate body needs a BROWSER lint environment, not the Node one.
+    // Anything from Node must cross the boundary as an ARGUMENT. Nothing else in this body reads a
+    // Node global; the build now asserts that.
+    var _boxScanOn = !!process.env.DEBUG_BOXOVERFLOW;
+    var data = await page.evaluate(function (_boxScanOn) {
       var PX = 96; // CSS px per inch
       var round3 = function (n) { return Math.round(n * 1000) / 1000; };
       var nodes = Array.prototype.slice.call(document.querySelectorAll('[data-mblk]'));
@@ -283,8 +348,28 @@ async function measureDocument(html, options) {
       // element inside each measured block and flag any whose scroll extent exceeds its client box
       // while its computed overflow actually HIDES the excess. Deliberately cause-agnostic: it names
       // the element that is clipping without assuming why it clips.
+      // ===== BOX-OVERFLOW -- RETIRED 2026-08-07 (v3.0.508) ==========================================
+      // Ian, after checking the rendered PDF against six of these warnings: "I'm not seeing what you
+      // are seeing... What do you mean by cut."
+      // HE WAS RIGHT AND THE CHECK IS WRONG. On The Strangers (Magazine, v3.0.507) it reported
+      // "6 ELEMENT(S) CLIP THEIR OWN CONTENT" -- all six identical in shape, box 0.17in against
+      // content 0.25in or 0.40in. Rasterising the flagged pages showed nothing clipped at all:
+      // viewer p.11 "The Teleportation Circle Is Drawn" and p.40 "Cold Hand of Fate" both wrap onto
+      // a second line and BOTH LINES ARE FULLY VISIBLE. 0.25in is a one-line title plate and 0.40in
+      // is a two-line one, so the scan is comparing the plate's scroll extent against a box measured
+      // before the plate grows to hold the wrap. The mismatch never reaches the page.
+      // So it fires on every wrapped caption plate and finds nothing real -- six false alarms on a
+      // healthy book, which is worse than no check at all: a warning that is usually wrong trains
+      // everyone to ignore the one that is not.
+      // NOT DELETED. The scan and its reasoning are intact behind DEBUG_BOXOVERFLOW=1 (same
+      // convention as DEBUG_CLIP and DEBUG_PROMPT) so it can be fixed rather than rewritten. The
+      // fault to fix first is the timing: measure the box AFTER layout settles, or exclude
+      // absolutely-positioned overlays, which cannot clip their parent by growing.
+      // While it is off, the dump prints NOTHING for it rather than "[OK]" -- claiming a clean
+      // result from a check that did not run is the one outcome worse than the false alarms.
       var boxOverflows = [];
       try {
+        if (!_boxScanOn) throw { __skip: 1 };
         nodes.forEach(function (n) {
           var bid = n.getAttribute('data-mblk') || '';
           var all = Array.prototype.slice.call(n.querySelectorAll('*'));
@@ -314,8 +399,9 @@ async function measureDocument(html, options) {
           });
         });
       } catch (e) { boxOverflows = []; }
+      if (!_boxScanOn) boxOverflows = null;   // null = NOT MEASURED, distinct from [] = measured and clean
       return { blocks: blocks, towerProbes: probes, imgProbes: imgProbes, boxOverflows: boxOverflows };
-    });
+    }, _boxScanOn);
 
     var total = 0;
     data.blocks.forEach(function (b) { total += b.heightIn; });
