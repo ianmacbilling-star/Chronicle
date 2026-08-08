@@ -1855,17 +1855,52 @@ function picOverlay(opts, sizeIn){
     // THE STUDS get the brass plaque treatment -- a lit face and a contact shadow -- so they read as
     // raised hardware rather than as rotated squares. The plaque rivets already proved that reads.
     var _fs = picFrameScale(sizeIn);
-    var _bw = Math.max(2, Math.round(4 * _fs));      // bezel width
-    var _dw = Math.max(4, Math.round(6 * _fs));      // stud size
-    var _di = Math.max(1, Math.round(2 * _fs));      // stud inset
-    var _bez = 'linear-gradient(135deg,#e6cf94 0%,#c2a55f 18%,#a8862f 38%,#6b5119 52%,#4a3810 58%,#8a6a2a 74%,#c2a55f 100%)';
-    var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:' + _dw + 'px;height:' + _dw + 'px;transform:rotate(45deg);' +
+    // v3.0.521 -- WIDER, because a bevel needs room to be a bevel. At 4px there are four pixels to
+    // carry the whole light-to-dark roll and it reads as a line. 6px at the reference size is the
+    // narrowest that still looks like a moulding.
+    var _bw = Math.max(4, Math.round(6 * _fs));      // rail width
+    // The studs sit ON the rail and are centred across it, so they read as hardware set into the
+    // moulding rather than as decorations floating near the corner.
+    var _dw = Math.max(3, Math.round(_bw * 0.8));    // stud size
+    var _di = Math.max(0, Math.round((_bw - _dw) / 2));
+    // v3.0.521 -- THE GRADIENT HAS TO RUN ACROSS EACH RAIL, NOT ALONG IT.
+    // v3.0.520 used ONE border-image gradient at 135 degrees. border-image slices a single image
+    // into nine pieces, so the TOP rail receives the top STRIP of that gradient: it varies left to
+    // right ALONG its length and is one flat colour ACROSS its thickness. Four flat bands again,
+    // just four different ones. IAN NAMED THE SIGNATURE EXACTLY: "you can see that the top right is
+    // darker than the top Left... but the frame itself is still very flat." That is a diagonal
+    // gradient painted over a frame, not a lit moulding.
+    // A SURFACE READS AS TILTED WHEN ITS VALUE CHANGES ACROSS ITS WIDTH. So each rail now gets its
+    // OWN gradient running from its outer edge to its inner edge, painted as four background layers
+    // sized to the rails and no-repeat, leaving the middle transparent so the picture shows through.
+    // Light from the top-left: top and left run bright outer to mid inner (facing the light), bottom
+    // and right run dark outer to mid inner (turned away). The difference BETWEEN opposite rails
+    // gives the object its direction; the change WITHIN each rail is what makes it look like metal.
+    var _railT = 'linear-gradient(180deg,#f7ead0 0%,#dcc07a 22%,#c2a55f 55%,#8a6a2a 100%)';
+    var _railL = 'linear-gradient(90deg,#f2e2bc 0%,#d3b76e 22%,#b8974a 55%,#7f6224 100%)';
+    var _railB = 'linear-gradient(0deg,#3d2d0c 0%,#5f4715 30%,#7f6224 70%,#a8862f 100%)';
+    var _railR = 'linear-gradient(270deg,#42310e 0%,#664d18 30%,#856727 70%,#a8862f 100%)';
+    var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:' + _dw + 'px;height:' + _dw + 'px;' +
       'background:linear-gradient(135deg,#f4e6b8 0%,#c9a84c 45%,#7a5d22 100%);' +
       'box-shadow:0 1px 1.5px rgba(0,0,0,0.65),inset 0 0 0 0.5px rgba(255,248,220,0.55);"></i>'; };
+    // v3.0.521 -- the studs are SQUARE, not diamonds. Ian: "turn the squares in the corners a
+    // quarter turn so the corners are in the corner of the paintings." A 45-degree square points
+    // its vertices up, down, left and right -- away from the corner it is sitting in. Unrotated,
+    // its corners aim into the corner of the frame, which is how a real corner block is set.
     var _p = _di + 'px;';
     var _diamonds = _d('top:' + _p + 'left:' + _p) + _d('top:' + _p + 'right:' + _p) + _d('bottom:' + _p + 'left:' + _p) + _d('bottom:' + _p + 'right:' + _p);
-    return '<div style="position:absolute;inset:0;pointer-events:none;border:' + _bw + 'px solid #a8862f;border-image:' + _bez + ' 1;">' +
-      '<div style="position:absolute;inset:0;box-shadow:inset 0 0 0 1px rgba(30,20,6,0.9),inset 0 2px 4px -1px rgba(0,0,0,0.55);"></div>' +
+    // The four rails as background layers. First layer paints on top, so top and bottom own the
+    // corners and the side rails butt into them -- at 4-8px a mitre is not resolvable anyway.
+    var _bg = _railT + ' top left / 100% ' + _bw + 'px no-repeat, ' +
+      _railB + ' bottom left / 100% ' + _bw + 'px no-repeat, ' +
+      _railL + ' top left / ' + _bw + 'px 100% no-repeat, ' +
+      _railR + ' top right / ' + _bw + 'px 100% no-repeat';
+    // Two hard lines define the moulding: one at the outer edge, one where it meets the artwork.
+    // Without them the bevel has no edges and reads as a smudge rather than a machined face.
+    var _edges = 'inset 0 0 0 1px rgba(28,18,4,0.85),' +
+      'inset 0 0 0 ' + (_bw + 1) + 'px rgba(28,18,4,0.75)';
+    return '<div style="position:absolute;inset:0;pointer-events:none;background:' + _bg + ';box-shadow:' + _edges + ';">' +
+      '<div style="position:absolute;inset:' + (_bw + 1) + 'px;box-shadow:inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
       _diamonds + '</div>';
   }
   return '';
