@@ -1057,39 +1057,51 @@ function brassPlateHtml(title, bottomOffset, sc) {
   var _plateH = 2 + Math.max(1, Math.round(2 * sc)) + Math.max(1, Math.round(1 * sc)) +
     (CAP_BASE_PT * sc * 96 / 72) * 1.15;
   var _sc = Math.max(3, Math.round(_plateH * 0.27));   // scallop radius, a proportion of the plate
-  var _bite = 'radial-gradient(circle ' + _sc + 'px at ';
-  // v3.0.537 -- THE SCALLOPS GET THE EDGE THE STRAIGHT SIDES ALREADY HAD. Ian: "can you give the
-  // scallops on the bronze plate shading? The top and bottom of the plate has it but the scallops
-  // does not." Exactly right, and it is structural rather than a missed detail: the plate s
-  // highlight and shade are `inset 0 1px 0` and `inset 0 -1px 0` box-shadows, which follow the
-  // element s RECTANGLE. The mask then bites the corners out, so along every curve there is no
-  // border, no highlight and no shade -- four raw edges on an object whose other edges are modelled.
-  // HOW: a thin ring centred on each corner at exactly the bite radius, as an <i> child. A mask
-  // applies to the element AND its children as one group, so the part of the ring inside the bite
-  // is cut away with everything else and what survives is a crescent hugging the scalloped edge.
-  // The ring sits from radius _sc to _sc+1, entirely OUTSIDE the bite, so nothing depends on the
-  // mask being honoured -- if it is not, the plate renders square with four faint arcs on it rather
-  // than losing anything. Graceful by construction, same as the mask itself.
-  // LIT LIKE THE PLATE, NOT LIKE THE FRAME. The plate is lit from directly above -- highlight along
-  // its top edge, shade along its bottom -- so the two top arcs take the highlight and the two
-  // bottom arcs take the shade. No left/right distinction, because the plate has none.
-  var _rimW = _sc + 2;
-  var _rA = (100 * _sc / _rimW).toFixed(1);
-  var _rB = (100 * (_sc + 1) / _rimW).toFixed(1);
-  var _rim = function (pos, at, col) {
-    return '<i style="position:absolute;' + pos + 'width:' + _rimW + 'px;height:' + _rimW + 'px;pointer-events:none;' +
-      'background:radial-gradient(circle ' + _rimW + 'px at ' + at + ',rgba(0,0,0,0) ' + _rA + '%,' + col + ' ' + _rA + '% ' + _rB + '%,rgba(0,0,0,0) ' + _rB + '%);"></i>';
-  };
-  var _rimLit = 'rgba(255,248,220,0.55)';
-  var _rimSh  = 'rgba(0,0,0,0.45)';
-  var _rims = _rim('top:0;left:0;', '0 0', _rimLit) +
-    _rim('top:0;right:0;', '100% 0', _rimLit) +
-    _rim('bottom:0;left:0;', '0 100%', _rimSh) +
-    _rim('bottom:0;right:0;', '100% 100%', _rimSh);
-  var _mask = _bite + '0 0, transparent 99%, #000 100%), ' +
-    _bite + '100% 0, transparent 99%, #000 100%), ' +
-    _bite + '0 100%, transparent 99%, #000 100%), ' +
-    _bite + '100% 100%, transparent 99%, #000 100%)';
+  // v3.0.545 -- THE SCALLOPS ARE GEOMETRY NOW. THE MASK NEVER PRINTED.
+  // Measured off Ian s PDFs twice: in the Optimize pane exactly ONE corner was bitten -- the last
+  // mask layer declared, with `mask-composite: intersect` dropped -- and in the downloadable PDF the
+  // plate edge was dead straight top and bottom, so the mask was ignored outright. The scallops have
+  // never reached a printed page. That is TD-347.
+  // WHY CAPS RATHER THAN A MASK, A CLIP OR A BORDER-IMAGE:
+  //   a mask and a clip-path are the same family as the thing that already failed;
+  //   border-image would put the scallop radius into the BORDER WIDTH, and this plate is 16.5px
+  //   tall carrying an 11.5px line box -- a 4px border top and bottom does not fit, it would force
+  //   the plate to 22px. Measured before choosing, not after.
+  // So the plate is drawn as THREE background layers: a fixed-width SVG cap at each end carrying
+  // the corner bites as a real path, and the body inset between them. Nothing is cut, nothing is
+  // composited, and it costs no layout at all.
+  // THE BITES ARE A PATH, so the plate outline is stroked ALONG the curve -- which is what the
+  // v3.0.537 rims were faking, and why they are deleted here rather than converted.
+  var _pg = '<linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#c2a55f"/><stop offset="0.34" stop-color="#a8862f"/>' +
+    '<stop offset="0.68" stop-color="#8a6a2a"/><stop offset="1" stop-color="#6b5119"/></linearGradient>';
+  // THE CAP VIEWBOX IS THE PLATE HEIGHT, NOT A NOMINAL ONE, and the first version got this wrong.
+  // It used 40 and let preserveAspectRatio=none stretch it onto a 16.5px plate -- a vertical scale
+  // of 0.41, which turns every circular bite into a squashed ellipse. The scallop would have been
+  // flattened on every plate. _plateH is already computed a few lines up for the bite radius; using
+  // it here makes the vertical scale exactly 1 and the arcs stay circular.
+  var _capH = Math.round(_plateH);
+  var _capR = _sc;
+  function _cap(left) {
+    var w = _capR, h = _capH, r = _capR;
+    var d = left
+      ? 'M0,' + r + ' A' + r + ',' + r + ' 0 0 0 ' + r + ',0 L' + w + ',0 L' + w + ',' + h +
+        ' L' + r + ',' + h + ' A' + r + ',' + r + ' 0 0 0 0,' + (h - r) + ' Z'
+      : 'M' + w + ',' + r + ' A' + r + ',' + r + ' 0 0 1 ' + (w - r) + ',0 L0,0 L0,' + h +
+        ' L' + (w - r) + ',' + h + ' A' + r + ',' + r + ' 0 0 1 ' + w + ',' + (h - r) + ' Z';
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
+      '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><defs>' + _pg + '</defs>' +
+      '<path d="' + d + '" fill="url(#pg)" stroke="#4a3810" stroke-width="1"/></svg>';
+    return 'url("data:image/svg+xml,' + encodeURIComponent(svg).replace(/\(/g, '%28').replace(/\)/g, '%29') + '")';
+  }
+  var _edge = 'linear-gradient(#4a3810,#4a3810)';
+  var _body = 'linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%)';
+  var _mid = 'calc(100% - ' + (_capR * 2) + 'px)';
+  var _plateBg = _cap(true) + ' 0 0 / ' + _capR + 'px 100% no-repeat, ' +
+    _cap(false) + ' 100% 0 / ' + _capR + 'px 100% no-repeat, ' +
+    _edge + ' ' + _capR + 'px 0 / ' + _mid + ' 1px no-repeat, ' +
+    _edge + ' ' + _capR + 'px 100% / ' + _mid + ' 1px no-repeat, ' +
+    _body + ' ' + _capR + 'px 0 / ' + _mid + ' 100% no-repeat';
   return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
     // v3.0.519 -- CALMER, SHADED AND SHORTER. Ian: "can you darken the plate a little... it is a
     // little in your face", "maybe shadow the lower half of it a little", "you might be able to make
@@ -1121,15 +1133,21 @@ function brassPlateHtml(title, bottomOffset, sc) {
     // Contrast was checked rather than assumed: the type crosses the 16-78 percent band of the ramp,
     // where the darkened plate gives 7.4 down to 3.5 against #241703. The darkest stop sits BELOW
     // the type. Side padding and max-width are untouched -- the width is the text s to decide.
-    'transform:translateX(-50%);max-width:78%;padding:' + capPx(2, sc) + ' ' + capPx(16, sc) + ' ' + capPx(1, sc) + ';border-radius:2px;' +
-    'background:linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%);' +
-    'border:1px solid #4a3810;' +
-    '-webkit-mask:' + _mask + ';-webkit-mask-composite:source-in;mask:' + _mask + ';mask-composite:intersect;' +
-    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -4px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
+    // v3.0.545 -- THE PADDING ABSORBS THE BORDER THAT WENT AWAY. It was 1px border + 2px pad above
+    // and 1px pad + 1px border below; the caps carry the edge now, so the padding takes those two
+    // pixels back and the plate measures exactly what it measured before. Checked, not assumed:
+    // 3 + 11.5 + 2 = 16.5, the same total v3.0.528 arrived at.
+    'transform:translateX(-50%);max-width:78%;padding:' + capPx(3, sc) + ' ' + capPx(16, sc) + ' ' + capPx(2, sc) + ';' +
+    'background:' + _plateBg + ';' +
+    // A DROP-SHADOW FILTER, NOT A BOX-SHADOW. A box-shadow follows the element s RECTANGLE and would
+    // draw a square shadow behind a scalloped plate, announcing the shape as fake. A filter follows
+    // the rendered alpha, so it hugs the bites.
+    'filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45));' +
+    'box-shadow:inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -4px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
     'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
     'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-    rivet('left') + rivet('right') + _rims + title + '</div>';
+    rivet('left') + rivet('right') + title + '</div>';   // v3.0.545 -- _rims deleted: the cap path is STROKED along the curve, so there is no bare edge left to fake
 }
 // v3.0.512 -- HOW FAR IN THE PICTURE ACTUALLY STARTS, MEASURED FROM THE POSITIONING BOX.
 // Ian, 2026-08-07, from a screenshot of a bronze-framed picture whose bottom rail was washed out
@@ -1932,9 +1950,17 @@ function picFrameBorderCss(bd, leadShadow) {
   var _b = Math.max(1, bd);
   // The shorthand first, so an engine that does not honour the per-side longhands degrades to the
   // old flat band rather than to no border at all.
+  // v3.0.545 -- ONE COLOUR AGAIN, AND THE LIGHT MOVES INSIDE. Ian: "the brown / wood band on the
+  // outside sometimes overshoots by a pixel", circling two corners of a PDF.
+  // THE CAUSE IS THE MITRE. A CSS border with different colours per side is mitred DIAGONALLY at
+  // every corner, so where the light left rail meets the dark bottom one there is a wedge of light
+  // colour running out to the corner point. On a 4px border that is a 4x4 triangle, and at a
+  // fractional box size it antialiases into exactly the one-pixel overshoot he circled. It arrived
+  // with the per-side colours at v3.0.534 and nobody connected the two.
+  // The band is one flat colour now and CANNOT mitre. The light direction is not lost -- it moves
+  // into the moulding as a scribe line, where the rails are SVG rects and the corner block covers
+  // the join, so there is no diagonal to give away.
   return 'border:' + _b + 'px solid #2a1d0c;' +
-    'border-top-color:#4a3418;border-left-color:#4a3418;' +
-    'border-bottom-color:#150e04;border-right-color:#150e04;' +
     'box-shadow:' + (leadShadow ? leadShadow + ',' : '') +
     'inset 0 0 0 1px #000,' +
     'inset 0 ' + _b + 'px 6px -2px rgba(0,0,0,0.60),' +
@@ -2255,12 +2281,28 @@ function bronzeMouldingHtml(railPx, matPx) {
       '<path d="M0 0 l' + _dw + ' 0 l-' + _dw + ' ' + _dw + ' z" fill="#f4e6b8"/>' +
       '<path d="M' + _dw + ' ' + _dw + ' l-' + _dw + ' 0 l' + _dw + ' -' + _dw + ' z" fill="#7a5d22"/>' +
       '<rect x="0" y="0" width="' + _dw + '" height="' + _dw +
-        '" fill="none" stroke="rgba(255,248,220,0.55)" stroke-width="0.5"/>';
+        '" fill="none" stroke="rgba(255,248,220,0.55)" stroke-width="0.5"/>' +
+      // v3.0.545 -- a single punched pixel at the centre. Ian: "can you add a 1 pixel square on the
+      // rivet to break it up a little." One rect, at the middle of whatever the block measures, so
+      // it stays centred at every rail width instead of being placed for one of them.
+      _r(Math.floor(_dw / 2), Math.floor(_dw / 2), 1, 1, '#3d2d0c');
   }
   function _corner(xa, ya, dx, dy) {
     return '<svg x="' + xa + '" y="' + ya + '" overflow="visible">' +
       '<g transform="translate(' + dx + ',' + dy + ')">' + _block() + '</g></svg>';
   }
+  // v3.0.545 -- A 1px SCRIBE LINE AT THE OUTER EDGE OF THE MOULDING. Ian: "on that outer brown /
+  // wood part add a 1 pixel wide run -- on the left and top make it a hair darker and on the bottom
+  // and right make it a hair lighter."
+  // DARK top-left and LIGHT bottom-right is the CONCAVE direction -- the mat s logic, not the
+  // moulding s. That is correct and it is what he asked for: a line scribed INTO the wood is a
+  // groove, and a groove s top face turns away from the light. The moulding beside it is convex and
+  // lights the other way. Both are right; see the mat note at v3.0.530.
+  // Drawn AFTER the rails so it overlays the first pixel of the outer face rather than costing the
+  // profile a plane -- a plane expressed in percentages cannot be a fixed pixel.
+  _svg += _r(0, 0, '100%', 1, '#241708') + _r(0, 0, 1, '100%', '#241708');
+  _svg += _r(0, '100%', '100%', 1, '#8a6a2a', _up(1)) + _r('100%', 0, 1, '100%', '#8a6a2a', _lf(1));
+
   var _far = -(_di + _dw);
   _svg += _corner('0',      '0',      _di,  _di);
   _svg += _corner('100%',   '0',      _far, _di);
