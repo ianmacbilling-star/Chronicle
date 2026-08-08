@@ -1092,7 +1092,20 @@ function brassPlateHtml(title, bottomOffset, sc) {
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
       '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><defs>' + _pg + '</defs>' +
       '<path d="' + d + '" fill="url(#pg)" stroke="#4a3810" stroke-width="1"/></svg>';
-    return 'url("data:image/svg+xml,' + encodeURIComponent(svg).replace(/\(/g, '%28').replace(/\)/g, '%29') + '")';
+    // v3.0.547 -- SINGLE QUOTES, AND THE DOUBLE ONES DELETED THE ENTIRE PLATE.
+    // v3.0.545 emitted url("data:...") into an inline HTML style="..." attribute. The first double
+    // quote CLOSED THE ATTRIBUTE -- at character 130 of 2,927 -- so the background, the padding, the
+    // font and the colour were all parsed as stray attributes and discarded. Ian: "the bronze plate
+    // is gone, on html and pdf, just text." It was, and the rivets survived only because they are
+    // separate elements carrying their own style.
+    // THE PATTERN ITSELF IS FINE AND IS USED TWICE MORE IN THIS FILE -- CO_SMOKE_URL and
+    // CO_DIRT_URL both write url("data:...") and both work, because they are emitted into a <style>
+    // BLOCK, where a double quote is legal. Copying a working idiom into a different container is
+    // what broke it.
+    // THE GUARDS MISSED IT BECAUSE THEY CHECKED THE PAYLOAD, NOT THE CONTAINER. The SVG was parsed
+    // and confirmed well-formed, the caps were counted, the arcs were measured for circularity --
+    // and none of that asks whether the result survives being placed inside a quoted attribute.
+    return "url('data:image/svg+xml," + encodeURIComponent(svg).replace(/\(/g, '%28').replace(/\)/g, '%29') + "')";
   }
   var _edge = 'linear-gradient(#4a3810,#4a3810)';
   var _body = 'linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%)';
