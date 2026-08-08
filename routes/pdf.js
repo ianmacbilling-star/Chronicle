@@ -4914,7 +4914,28 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // OVERLAP. Figures tuck behind one another so the group reads as a company standing together
   // rather than as a contact sheet. n figures at width w overlapping by OV occupy
   // w * (n - (n-1)*OV), so w falls straight out of the content width.
-  var CAST_OV = 0.12;                 // how much of each figure the next one covers
+  // v3.0.566 -- MORE OVERLAP, WHICH IS WHAT MAKES THE FIGURES BIGGER. Ian: "can they be bigger? The
+  // text is bigger than the characters." He is right, and the cause is not the height cap -- that
+  // allows 4.2in and a five-character row only reaches 2.4. The figures are WIDTH-limited: n figures
+  // overlapping by OV occupy w * (n - (n-1)*OV), so the less they overlap the narrower each must be,
+  // and the box aspect then holds the height down with them.
+  // 0.12 to 0.30 makes every figure about 19 percent taller at no cost in page space.
+  // AND IT IS ONLY SAFE NOW. Overlap used to be risky because every portrait carried its own
+  // background, so tucking figures together meant tucking RECTANGLES together. Since v3.0.559 they
+  // are cut out on white, and height scaling (v3.0.563) means a short character does not fill its
+  // box either -- so the boxes overlap far more than the figures inside them ever do.
+  // v3.0.566 -- ONE NAME ON THE LINE-UP. Ian: "can we just take the first name in the Name array."
+  // A character's name field carries every alias the player uses -- "Lumen / Elias / Elias Ward" --
+  // which is right on a character sheet and wrong under a portrait: it wrapped to three lines and
+  // made the caption taller than the figure above it.
+  // Split on the slash, take the first, fall back to the whole string if there is no slash or the
+  // first segment is empty, so a name like "/ Elias" can never render as nothing.
+  function castFirstName(n) {
+    var raw = String(n == null ? '' : n);
+    var first = raw.split('/')[0].trim();
+    return first || raw.trim();
+  }
+  var CAST_OV = 0.30;                 // how much of each figure the next one covers
   var CAST_ASP = 0.62;                // figure box, width over height -- a standing figure
   var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);
   // Height cap so a one or two-character party does not produce a figure taller than the page.
@@ -5001,7 +5022,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
           _shadow + _fig +
         '</div>' +
         '<div class="cast-label" style="width:' + _castStep.toFixed(2) + 'in;">' +
-          '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
+          '<div class="cast-name">' + _fmEsc(castFirstName(c.name)) + '</div>' +
           '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
           ((((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '')) +
         '</div>' +
