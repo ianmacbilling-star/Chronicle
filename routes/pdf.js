@@ -1984,12 +1984,16 @@ function picOverlay(opts, sizeIn){
       _railB + ' bottom left / 100% ' + _bw + 'px no-repeat, ' +
       _railL + ' top left / ' + _bw + 'px 100% no-repeat, ' +
       _railR + ' top right / ' + _bw + 'px 100% no-repeat';
-    // Two hard lines define the moulding: one at the outer edge, one where it meets the artwork.
-    // Without them the bevel has no edges and reads as a smudge rather than a machined face.
-    var _edges = 'inset 0 0 0 1px rgba(28,18,4,0.85),' +
-      'inset 0 0 0 ' + (_bw + 1) + 'px rgba(28,18,4,0.75)';
+    // v3.0.527 TD-341 -- ONE hairline at the outer edge, ONE at the moulding/artwork boundary.
+    // `inset 0 0 0 Npx` is a solid ring N pixels THICK, not a line N pixels in, and a box-shadow
+    // paints ABOVE the background. The old second shadow was therefore a dark ring the FULL width
+    // of the rail at 0.75 alpha, covering every rail gradient and the whole bead course from
+    // v3.0.521 to v3.0.526. Only the OUTER hairline belongs on this element. The inner hairline
+    // moved onto the shading child below, whose own edge already sits at the boundary -- and
+    // being a CHILD it paints ABOVE the rails rather than over them. Do not merge these back.
+    var _edges = 'inset 0 0 0 1px rgba(28,18,4,0.85)';
     return '<div style="position:absolute;inset:0;pointer-events:none;background:' + _bg + ';box-shadow:' + _edges + ';">' +
-      '<div style="position:absolute;inset:' + (_bw + 1) + 'px;box-shadow:inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
+      '<div style="position:absolute;inset:' + (_bw + 1) + 'px;box-shadow:inset 0 0 0 1px rgba(28,18,4,0.75),inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
       _diamonds + '</div>';
   }
   return '';
