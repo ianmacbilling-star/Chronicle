@@ -1988,7 +1988,25 @@ function picFrameBorderCss(bd, leadShadow) {
   // The band is one flat colour now and CANNOT mitre. The light direction is not lost -- it moves
   // into the moulding as a scribe line, where the rails are SVG rects and the corner block covers
   // the join, so there is no diagonal to give away.
-  return 'border:' + _b + 'px solid #2a1d0c;' +
+  // v3.0.549 -- A SECOND DASHED LINE, ON THE OUTERMOST EDGE. Ian: "I guess there was no way to get
+  // that on the outside of the outer edge of the frame was there? If there is, leave this one and
+  // add another one to the outer edge, but make the colour closer to what is there already -- it
+  // should be subtle."
+  // THERE IS, AND I HAD SAID OTHERWISE. Nothing can paint INSIDE a border s own area -- an inset
+  // box-shadow starts at the padding box and an absolutely positioned child is bounded by it, which
+  // is why the first scribe line ended up at the moulding s edge instead of the wood s. But OUTLINE
+  // is painted by the element itself, outside the border, takes no layout space, and has a native
+  // dashed style. outline-offset:-1px pulls it onto the frame s outermost pixel rather than letting
+  // it float beyond -- which also means it sits inside the element s own bounds and cannot be
+  // clipped by the overflow:hidden the band boxes carry.
+  // #3d2c14 against the wood at #2a1d0c is 19 points -- present, not loud. Deliberately a fraction
+  // of the inner scribe s 29, because that one marks a real junction and this one is texture.
+  // OFFSET -2, NOT -1, AND THAT ONE PIXEL IS DELIBERATE. At -1 the dash lands on the SAME pixel as
+  // the solid black silhouette line (the inset 0 0 0 1px #000 below), and an outline paints ABOVE a
+  // box-shadow -- so it would replace the crisp outer edge with dashes. At -2 the order outward is:
+  // wood, dashed line, solid black. The outermost pixel of the WOOD, with the silhouette intact.
+  return 'outline:1px dashed #3d2c14;outline-offset:-2px;' +
+    'border:' + _b + 'px solid #2a1d0c;' +
     'box-shadow:' + (leadShadow ? leadShadow + ',' : '') +
     'inset 0 0 0 1px #000,' +
     'inset 0 ' + _b + 'px 6px -2px rgba(0,0,0,0.60),' +
