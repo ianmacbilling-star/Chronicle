@@ -2138,6 +2138,29 @@ var COVER_TITLE_PRESETS = { chronicle: "" };
 //
 // The scrim stops are the SAME three values in every direction -- 0.95, 0.6, 0 -- so the three
 // placements are one scrim pointed three ways rather than three scrims that can drift apart.
+// v3.0.554 -- TD-346 step 4: TITLE SIZE.
+// THE FOUR BASE SIZES ARE NAMED HERE AND THE CSS INTERPOLATES THEM, so the scaled rules are
+// computed FROM the base rather than being a second set of numbers beside it. Writing "medium is
+// 30pt" in one place and "small is 23pt" in another is the fault this codebase has re-found at
+// every scale today; a ratio applied to a named base cannot drift from it.
+// TWO COVER LAYOUTS, TWO BASES. The art cover and the plain cover have never used the same sizes
+// (30/11 against 34/10) and that is deliberate -- type over a picture needs different weight from
+// type on a dark ground. Scaling by RATIO keeps both looking like themselves at every size, where a
+// single absolute number per size would have quietly unified them.
+var COVER_PT = { artTitle: 30, artSub: 11, plainTitle: 34, plainSub: 10 };
+// MEDIUM RETURNS THE EMPTY STRING. Same reason as Chronicle and Bottom: it is the default, every
+// existing book has it, and contributing nothing means those covers are untouched BY CONSTRUCTION.
+var COVER_SIZE_RATIO = { small: 0.78, medium: 1, large: 1.35 };
+function coverSizeCss(size) {
+  var k = String(size || 'medium');
+  var r = Object.prototype.hasOwnProperty.call(COVER_SIZE_RATIO, k) ? COVER_SIZE_RATIO[k] : 1;
+  if (r === 1) return '';
+  function pt(base) { return (Math.round(base * r * 10) / 10) + 'pt'; }
+  return '.cover-art-title { font-size:' + pt(COVER_PT.artTitle) + '; }' +
+    ' .cover-art-dates { font-size:' + pt(COVER_PT.artSub) + '; }' +
+    ' .cover-title { font-size:' + pt(COVER_PT.plainTitle) + '; }' +
+    ' .cover-dates { font-size:' + pt(COVER_PT.plainSub) + '; }';
+}
 var COVER_PLACE = {
   bottom: '',
   top: '.cover-art-caption { top:0; bottom:auto; justify-content:flex-start; padding:0.5in 0.4in 0;' +
@@ -4648,14 +4671,16 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
-  .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
-  .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
+  .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
+  .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${coverTitleCss(co && co.titleStyle)}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
+  /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
+  ${coverSizeCss(co && co.titleSize)}
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
   .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
   .backcover-default { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
@@ -5014,10 +5039,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-content { position:relative;z-index:1;text-align:center;padding:1in;width:100%; }
   .cover-logo { width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};margin-bottom:0.4in; }
   .cover-eyebrow { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.5);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:0.1in; }
-  .cover-title { font-family:'Cinzel',serif;font-size:34pt;font-weight:700;color:#c9a84c;letter-spacing:0.05em;line-height:1.2;margin-bottom:0.15in;text-shadow:0 2px 20px rgba(201,168,76,0.3); }
+  .cover-title { font-family:'Cinzel',serif;font-size:${COVER_PT.plainTitle}pt;font-weight:700;color:#c9a84c;letter-spacing:0.05em;line-height:1.2;margin-bottom:0.15in;text-shadow:0 2px 20px rgba(201,168,76,0.3); }
   .cover-divider { width:80px;height:1px;background:rgba(201,168,76,0.5);margin:0.25in auto; }
   .cover-subtitle { font-family:'Crimson Text',serif;font-size:13pt;color:rgba(201,168,76,0.6);font-style:italic;margin-bottom:0.08in; }
-  .cover-dates { font-family:'Cinzel',serif;font-size:10pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
+  .cover-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.plainSub}pt;color:rgba(201,168,76,0.4);letter-spacing:0.05em; }
   .cover-watermark { position:absolute;bottom:0.5in;left:50%;transform:translate(-50%,50%);font-family:'Cinzel',serif;font-size:8pt;line-height:1;color:rgba(201,168,76,0.4);background:#0a0604;padding:0 0.12in;letter-spacing:0.15em;z-index:1; }
   /* Cover-art layout: framed cover image fills the page; title, dates, and centered logo overlaid in the lower half. */
   .cover-content.cover-image-layout { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in;text-align:center; }
@@ -5025,14 +5050,16 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
-  .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
-  .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
+  .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
+  .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${coverTitleCss(co && co.titleStyle)}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
+  /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
+  ${coverSizeCss(co && co.titleSize)}
 
   /* CAST PAGE */
   .cast-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }

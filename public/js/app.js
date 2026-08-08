@@ -13235,7 +13235,7 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
   // untouched.
-  titlePlace:'bottom'
+  titlePlace:'bottom', titleSize:'medium'
 };
 function clClone(o){ var r={}; for (var k in o) { if (o.hasOwnProperty(k)) r[k]=o[k]; } return r; }
 var customOpts = clClone(CUSTOM_LAYOUT_DEFAULTS);   // ONE unified layout (session & novel share it); stored per (user, fork, campaign)
@@ -13386,7 +13386,7 @@ function finalizeClearStats(){
     if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace'];   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
+var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize'];   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
 var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','hidelogo'];
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
