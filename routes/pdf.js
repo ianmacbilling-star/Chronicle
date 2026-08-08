@@ -5072,6 +5072,18 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // is byte-identical when no valid color is supplied.
   var _coverTitleColor = (pageOpts && pageOpts.titleColor && /^#[0-9a-fA-F]{3,8}$/.test(pageOpts.titleColor)) ? pageOpts.titleColor : '';
   var _coverTitleStyle = _coverTitleColor ? (' style="color:' + _coverTitleColor + '"') : '';
+  // v3.0.557 -- THE COLOUR CARRIES TO THE SUBTITLE TOO. Ian: "the color should change the sub title
+  // too." The picker is labelled title colour, but the title and subtitle are one unit on the cover
+  // -- recolouring one and leaving the other reads as a mistake rather than as a choice.
+  // THE OPACITY IS WHY THIS IS NOT SIMPLY THE SAME STRING. Both subtitles are deliberately quieter
+  // than their titles, and that quiet is baked into an rgba ALPHA in the stylesheet:
+  //     .cover-art-dates  rgba(240,217,138,0.78)   the art cover
+  //     .cover-dates      rgba(201,168,76,0.40)    the plain cover
+  // A flat colour: override would throw that alpha away and bring both subtitles up to full
+  // strength, quietly undoing a deliberate hierarchy. The alpha is re-applied as opacity, per
+  // layout, so a recoloured cover keeps exactly the relationship the default one has.
+  var _coverSubStyleArt   = _coverTitleColor ? (' style="color:' + _coverTitleColor + ';opacity:0.78"') : '';
+  var _coverSubStylePlain = _coverTitleColor ? (' style="color:' + _coverTitleColor + ';opacity:0.40"') : '';
   var titlePageHTML =
     '<div class="titlepage">' +
       '<div class="tp-title">' + _fmEsc(_bookTitleFM) + '</div>' +
@@ -5289,7 +5301,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
         <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
-        <div class="cover-art-dates">${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
+        <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
         ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
       ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
@@ -5300,7 +5312,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
     <div class="cover-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
-    <div class="cover-dates">${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
+    <div class="cover-dates"${_coverSubStylePlain}>${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
   </div>`}
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
