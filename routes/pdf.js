@@ -1012,14 +1012,29 @@ function brassPlateHtml(title, bottomOffset, sc) {
     //            type runs to y14.5 and the shading starts at y13.5.
     //   SHORTER  vertical padding 4/5px -> 2/3px and line-height 1.3 -> 1.15. 24.0px -> 18.5px, a
     //            23 percent reduction, and the type does not change size at all.
+    // v3.0.528 -- SHORTER AGAIN, AND THE TYPE SITS LOWER. Ian, on a rendered plate: "the text can
+    // come down a hair more and the plate made shorter a little too. It is still borderline too
+    // big / tall." The type is ALL CAPS, so the bottom of the line box is dead space -- there are no
+    // descenders to fill it. Measured at the reference size: 1px border + 2px pad + 11.5px line box
+    // + 3px pad + 1px border = 18.5px, with the caps landing about 5.2px below the top edge and
+    // 6.2px above the bottom. More air under the type than over it, and the padding was asymmetric
+    // the wrong way. PADDING-BOTTOM 3px -> 1px does both things he asked with ONE number: the plate
+    // loses 2px (18.5 -> 16.5, another 11 percent off) and because only the space BELOW goes away
+    // the type ends up sitting lower. Gaps become roughly 5.2 above and 4.2 below.
+    // AND THE SHADOW HAD TO FOLLOW, which is the knock-on that would otherwise have been walked
+    // into: v3.0.519 tuned `inset 0 -5px` so the shading sits UNDER the type at 18.5px tall. Shorten
+    // the plate and leave it alone and it climbs onto the letters. -5px -> -3px restores the same
+    // 1.25px clearance. Derived from the height change, not guessed.
+    // The Cinzel metrics behind those gap figures are ESTIMATES. The direction is certain, the exact
+    // hair is not -- this is one iteration, not a final answer.
     // Contrast was checked rather than assumed: the type crosses the 16-78 percent band of the ramp,
     // where the darkened plate gives 7.4 down to 3.5 against #241703. The darkest stop sits BELOW
     // the type. Side padding and max-width are untouched -- the width is the text s to decide.
-    'transform:translateX(-50%);max-width:78%;padding:' + capPx(2, sc) + ' ' + capPx(16, sc) + ' ' + capPx(3, sc) + ';border-radius:2px;' +
+    'transform:translateX(-50%);max-width:78%;padding:' + capPx(2, sc) + ' ' + capPx(16, sc) + ' ' + capPx(1, sc) + ';border-radius:2px;' +
     'background:linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%);' +
     'border:1px solid #4a3810;' +
     '-webkit-mask:' + _mask + ';-webkit-mask-composite:source-in;mask:' + _mask + ';mask-composite:intersect;' +
-    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -5px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
+    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -3px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
     'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
     'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
@@ -1941,8 +1956,62 @@ function picOverlay(opts, sizeIn){
     // inner band moves outward: dark edge 4, highlight 5, outer ogee 13 (was 20), dark step 5,
     // channel 9, BEAD BED 30 (the middle band, and now genuinely in the middle on all four rails),
     // step 6, inner flat band 16, lip 12.
-    var _lit  = '#3d2d0c 0 4%,#f4e6b8 4% 9%,#e8d295 9%,#c9a84c 22%,#a8862f 22% 27%,#2a1d0c 27% 36%,#e0c77c 36%,#c9a84c 66%,#7a5d22 66% 72%,#d9bd6a 72% 88%,#3d2d0c 88% 100%';
-    var _shad = '#241708 0 4%,#c9a84c 4% 9%,#b8974a 9%,#a8862f 22%,#8a6a2a 22% 27%,#1a1206 27% 36%,#b8974a 36%,#a8862f 66%,#5f4715 66% 72%,#a8862f 72% 88%,#241708 88% 100%';
+    // v3.0.528 -- NINE PLANES WENT IN, ONE CAME OUT. THE PROFILE IS RE-CUT TO FIVE.
+    // Ian, on v3.0.527 with the dark ring finally gone: "It is sorta 3D. It is hard to tell really.
+    // I cannot tell if it is shading or just all the detail playing tricks on me." He was reading it
+    // correctly. The nine-plane profile was MEASURED against the rail widths it actually renders at:
+    //
+    //     plane            typical (7px rail)     feature (9px rail)
+    //     dark edge          0.28px                 0.36px
+    //     HIGHLIGHT          0.35px                 0.45px
+    //     ogee roll          0.91px                 1.17px
+    //     dark step          0.35px                 0.45px
+    //     black channel      0.63px                 0.81px
+    //     bead bed           2.10px                 2.70px
+    //     step               0.42px                 0.54px
+    //     inner flat         1.12px                 1.44px
+    //     dark lip           0.84px                 1.08px
+    //
+    // EIGHT OF THE NINE WERE SUB-PIXEL AT EVERY SIZE, and the highlight -- the one cue that says
+    // LIT -- was between a quarter and a half of a pixel everywhere. It cannot paint as a band; it
+    // is antialiased into its neighbours before it reaches the eye. The only plane with real estate
+    // was the bead bed. So what was actually painted was beads and a wash, which is precisely what
+    // Ian described. THIS IS TD-341 IN A DIFFERENT COSTUME: nine planes authored, one painted.
+    // v3.0.524 even noticed the near-black steps were sub-pixel and treated it as a colour-averaging
+    // problem. It was a resolution problem all along.
+    // FIVE PLANES, each at least a pixel at the reference rail. Four breaks you can see beats eight
+    // you cannot. Real carved mouldings do not have many planes either.
+    //
+    // AND THE LIGHT DIRECTION IS NOW CORRECT, WHICH IS IAN S CALL AND IT IS THE PHYSICS.
+    // Ian: "the left and top need the light part on the outside of the frame... and the bottom and
+    // right sides the lighter part needs to be on the inside. As it is the darker shadow is always
+    // on the outside all the way around." Exactly right. With light from the upper-left, the TOP
+    // rail s outer face tilts up INTO the light (bright outside) while the BOTTOM rail s outer face
+    // tilts down AWAY from it (dark outside) and its INNER face tilts up into it (bright inside).
+    // Same for left versus right. Before this the two palettes shared one value ORDER and differed
+    // only in brightness, which reads as a groove, not as a lit object.
+    //
+    // DONE BY AUTHORING THE VALUES, NOT BY FLIPPING THE GRADIENT DIRECTION. Reversing the shadow
+    // rails would also reverse the bead bed, and the bead course is positioned from each rail s
+    // OUTER edge by a single number -- so a flip would need a second number for two of the four,
+    // which is the one-rule-in-two-places trap this file keeps falling into. Instead all four rails
+    // still run outer edge to artwork, the bead bed is CENTRED on 50 percent so it is identical on
+    // every side, and only the value distribution differs. One geometry, two palettes, one _by.
+    //
+    //   band          outer->inner    lit rail (top/left)      shadow rail (bottom/right)
+    //   outer face     0-20%          #f4e6b8  brightest        #241708  darkest
+    //   step          20-34%          #e0c77c                   #5f4715
+    //   BEAD BED      34-66%          #a8862f                   #8a6a2a      <- centred on 50%
+    //   inner face    66-86%          #7a5d22  turning away     #e0c77c  BRIGHT, faces the light
+    //   lip           86-100%         #3d2d0c                   #3d2d0c      <- same on all four
+    //
+    // The lip stays dark on ALL four sides: it is where the moulding meets the artwork and the frame
+    // has to terminate crisply against the picture whichever way the light falls. The outer edge is
+    // NOT dark on the lit rails -- it does not need to be, because v3.0.527 s 1px outer hairline is
+    // still there doing exactly that job. Every colour continues to come off the corner-block ramp
+    // (#f4e6b8 / #c9a84c / #7a5d22) so frame, blocks and plaque remain one material.
+    var _lit  = '#f4e6b8 0 20%,#e0c77c 20% 34%,#a8862f 34% 66%,#7a5d22 66% 86%,#3d2d0c 86% 100%';
+    var _shad = '#241708 0 20%,#5f4715 20% 34%,#8a6a2a 34% 66%,#e0c77c 66% 86%,#3d2d0c 86% 100%';
     var _railT = 'linear-gradient(180deg,' + _lit  + ')';
     var _railL = 'linear-gradient(90deg,'  + _lit  + ')';
     var _railB = 'linear-gradient(0deg,'   + _shad + ')';
@@ -1955,7 +2024,13 @@ function picOverlay(opts, sizeIn){
     // 46-72 percent band above. If the profile stops move, this must move with them -- one number
     // describing one thing, which is the rule this file keeps re-learning.
     var _bt = Math.max(3, Math.round(_bw * 0.38));      // bead tile
-    var _by = Math.max(1, Math.round(_bw * 0.51 - _bt / 2));   // centred on the bead bed (36-66 percent)
+    // v3.0.528 -- KEPT TO ONE DECIMAL RATHER THAN ROUNDED TO A WHOLE PIXEL, and the apply-script
+    // sweep is what forced it. _bt has a floor of 3px, so on a 6px rail Math.round(1.5) went UP to
+    // 2 and pushed the whole bead course half a pixel past the inner edge of its bed. Three sample
+    // sizes did not catch it; sweeping every rail width the scale can produce did. A tenth of a
+    // pixel in a background-position is perfectly legal and centres the course exactly at every
+    // width, which is what one-number-describing-one-thing is supposed to mean.
+    var _by = Math.max(1, Math.round((_bw * 0.50 - _bt / 2) * 10) / 10);   // centred on the bead bed (34-66 percent, midpoint 50)
     var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:' + _dw + 'px;height:' + _dw + 'px;' +
       'background:linear-gradient(135deg,#f4e6b8 0%,#c9a84c 45%,#7a5d22 100%);' +
       'box-shadow:0 1px 1.5px rgba(0,0,0,0.65),inset 0 0 0 0.5px rgba(255,248,220,0.55);"></i>'; };
