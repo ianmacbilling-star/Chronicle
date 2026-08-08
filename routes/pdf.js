@@ -884,7 +884,12 @@ function coMedia(m, border) {
         momentImgAspectBox(m, ratio, 'border-radius:2px;box-shadow:' + CO_IMG_SHADOW + ';', '') + '</div>';
     case 'keyline':
       // v3.0.535 -- the mat rides in as the overlay child; the bands get theirs from picOverlay.
-      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '4px', picOverlay({ border: 'keyline' })) + '</div>';
+      // v3.0.538 -- SQUARE CORNERS. Ian: "make the corners squared off, not rounded." Only THIS
+      // path ever rounded them: picBorderCss carries no radius, so every band has always been
+      // square, and the 4px here came from the preset family this branch was copied from. It also
+      // fixed a mismatch nobody had named -- the mat overlay is a plain box with square corners, so
+      // at 3px of white against a 4px radius the mat and the border disagreed at all four corners.
+      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '0', picOverlay({ border: 'keyline' })) + '</div>';
     case 'none':
     default:
       return img;
@@ -1933,7 +1938,10 @@ var KEYLINE_MAT = '#f7f5ef';   // matte, not paper white: it reads as board rath
 // between the keyline and the art rather than as a white border in its own right.
 // ONE NUMBER. coInsetX and coInsetY derive from this, so the keyline captions moved from 3/5 back
 // to 2/4 without being touched -- which is the entire reason they were written that way.
-var KEYLINE_MAT_PX = 1;
+// v3.0.538 -- 1px -> 3px. Ian: "add two more pixels of white." Third and final call on this width
+// (2 -> 1 -> 3), and the caption insets have tracked it every time without being touched, which is
+// the whole return on deriving them at v3.0.535 instead of hardcoding a matching pair.
+var KEYLINE_MAT_PX = 3;
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
