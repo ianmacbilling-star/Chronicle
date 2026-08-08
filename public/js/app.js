@@ -5396,15 +5396,41 @@ function renderCharacters() {
 // A power curve puts 1-8ft across the first 58 percent of the travel and opens up fast above it.
 // AND IT DOES NOT SNAP. Ian: "if you can slide anywhere in those then maybe less markers." Half a
 // cast is 5ft6, and notching to whole feet would make that unreachable. The marks are LABELS.
-var CHAR_H_MIN = 1, CHAR_H_MAX = 25, CHAR_H_POW = 2.2;
+// v3.0.560 -- THE CURVE IS PIECEWISE NOW, AND THE FIRST ONE WAS WRONG.
+// Ian: "you have way too much room from 1ft to 3ft." He is right and the numbers say so: the 2.2
+// power curve gave 1-3ft THIRTY-TWO PERCENT of the track -- a third of the travel spent on pixies --
+// while 3-8ft, where essentially every character actually lives, got only twenty-five.
+// A single exponent cannot fix that: it controls the shape of the whole range at once, so buying
+// room in the middle always costs it at one end. THREE STRAIGHT SEGMENTS with the breakpoints
+// chosen deliberately does exactly what is wanted and is far easier to reason about:
+//     0 - 12 percent    1 to 3 ft     rare, and small differences down here do not matter
+//    12 - 70 percent    3 to 8 ft     FIFTY-EIGHT PERCENT, where the cast is
+//    70 - 100 percent   8 to 25 ft    giants: coarse is fine, nobody needs 19 versus 19.5
+// Still free-sliding, still monotonic, and every labelled height still lands exactly.
+var CHAR_H_MIN = 1, CHAR_H_MAX = 25;
+var CHAR_H_STOPS = [[0, 1], [0.12, 3], [0.70, 8], [1, 25]];
 var CHAR_H_TICKS = [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25];
 function charHeightFromSlider(v) {
   var t = Math.max(0, Math.min(1, (+v || 0) / 1000));
-  return Math.round((CHAR_H_MIN + (CHAR_H_MAX - CHAR_H_MIN) * Math.pow(t, CHAR_H_POW)) * 10) / 10;
+  for (var i = 1; i < CHAR_H_STOPS.length; i++) {
+    var a = CHAR_H_STOPS[i - 1], b = CHAR_H_STOPS[i];
+    if (t <= b[0] || i === CHAR_H_STOPS.length - 1) {
+      var f = (b[0] === a[0]) ? 0 : (t - a[0]) / (b[0] - a[0]);
+      return Math.round((a[1] + (b[1] - a[1]) * f) * 10) / 10;
+    }
+  }
+  return CHAR_H_MIN;
 }
 function charSliderFromHeight(ft) {
   var f = Math.max(CHAR_H_MIN, Math.min(CHAR_H_MAX, +ft || CHAR_H_MIN));
-  return Math.round(1000 * Math.pow((f - CHAR_H_MIN) / (CHAR_H_MAX - CHAR_H_MIN), 1 / CHAR_H_POW));
+  for (var i = 1; i < CHAR_H_STOPS.length; i++) {
+    var a = CHAR_H_STOPS[i - 1], b = CHAR_H_STOPS[i];
+    if (f <= b[1] || i === CHAR_H_STOPS.length - 1) {
+      var r = (b[1] === a[1]) ? 0 : (f - a[1]) / (b[1] - a[1]);
+      return Math.round(1000 * (a[0] + (b[0] - a[0]) * r));
+    }
+  }
+  return 0;
 }
 // Feet and inches up to 8ft, because that is how anyone describes a person; plain feet above it,
 // because nobody says a dragon is twenty-four feet seven.
@@ -5415,16 +5441,55 @@ function charHeightLabel(ft) {
   if (inch === 12) { whole += 1; inch = 0; }
   return whole + "' " + inch + '"';
 }
+// v3.0.560 -- A LIVE SCALE, NOT A CHART. Ian sent a D&D height comparison and asked for something
+// like it, "a little more neutral... just normal humanoid figures, not this cast of characters."
+// A STATIC STRIP OF FIGURES CANNOT WORK HERE, and it is worth saying why rather than half-building
+// one: drawn to true proportion against a 25ft giant, a 3ft halfling is barely a smudge, so the
+// small end -- the end that needs the most help -- is exactly where a fixed strip goes blind.
+// So: TWO figures. A fixed grey human at 6ft, and the character in gold at whatever the slider
+// says, both at true proportion, with the drawing rescaled so the taller of the two always fills
+// the panel. It answers the only question actually being asked -- how big is this next to a person
+// -- at every height from a pixie to a Clifford, and it needs no race names at all.
+var CHAR_H_REF_FT = 6;
+function charFigurePath(cx, hPx, color) {
+  var head = hPx * 0.13, sh = hPx * 0.20, hip = hPx * 0.52, w = hPx * 0.16;
+  return '<circle cx="' + cx.toFixed(1) + '" cy="' + (head * 0.9).toFixed(1) + '" r="' + head.toFixed(1) + '" fill="' + color + '"/>' +
+    '<path d="M' + (cx - w).toFixed(1) + ',' + hip.toFixed(1) + ' L' + (cx - w * 0.85).toFixed(1) + ',' + sh.toFixed(1) +
+    ' Q' + cx.toFixed(1) + ',' + (sh - hPx * 0.04).toFixed(1) + ' ' + (cx + w * 0.85).toFixed(1) + ',' + sh.toFixed(1) +
+    ' L' + (cx + w).toFixed(1) + ',' + hip.toFixed(1) + ' Z" fill="' + color + '"/>' +
+    '<rect x="' + (cx - w * 0.72).toFixed(1) + '" y="' + (hip - hPx * 0.02).toFixed(1) + '" width="' + (w * 0.55).toFixed(1) + '" height="' + (hPx - hip).toFixed(1) + '" fill="' + color + '"/>' +
+    '<rect x="' + (cx + w * 0.17).toFixed(1) + '" y="' + (hip - hPx * 0.02).toFixed(1) + '" width="' + (w * 0.55).toFixed(1) + '" height="' + (hPx - hip).toFixed(1) + '" fill="' + color + '"/>';
+}
+function charHeightScale(ft) {
+  var box = document.getElementById('char-height-scale');
+  if (!box) return;
+  var H = 84, W = 150, pad = 10;
+  var tall = Math.max(CHAR_H_REF_FT, ft || CHAR_H_REF_FT);
+  var k = (H - pad) / tall;
+  var refH = CHAR_H_REF_FT * k, chH = (ft || 0) * k;
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg">' +
+    '<line x1="0" y1="' + (H - 1) + '" x2="' + W + '" y2="' + (H - 1) + '" stroke="rgba(201,168,76,0.45)" stroke-width="1"/>' +
+    '<g transform="translate(42,' + (H - 1 - refH).toFixed(1) + ')">' + charFigurePath(0, refH, 'rgba(255,255,255,0.30)') + '</g>' +
+    '<text x="42" y="' + (H - 1 - refH - 4).toFixed(1) + '" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.45)">6ft</text>';
+  if (ft) {
+    svg += '<g transform="translate(104,' + (H - 1 - chH).toFixed(1) + ')">' + charFigurePath(0, chH, 'var(--gold)') + '</g>' +
+      '<text x="104" y="' + (H - 1 - chH - 4).toFixed(1) + '" text-anchor="middle" font-size="9" fill="var(--gold)">' + charHeightLabel(ft) + '</text>';
+  }
+  box.innerHTML = svg + '</svg>';
+}
 function charHeightSync() {
   var el = document.getElementById('char-height'), out = document.getElementById('char-height-out');
   if (!el || !out) return;
   el.dataset.set = '1';
-  out.textContent = charHeightLabel(charHeightFromSlider(el.value));
+  var _ft = charHeightFromSlider(el.value);
+  out.textContent = charHeightLabel(_ft);
+  charHeightScale(_ft);
 }
 function charHeightClear() {
   var el = document.getElementById('char-height'), out = document.getElementById('char-height-out');
   if (!el || !out) return;
   el.value = 0; el.dataset.set = ''; out.textContent = 'Not set';
+  charHeightScale(null);
 }
 // Blank stays blank. Ian ruled that existing characters get no default, so a character with no
 // height sends NOTHING and the server leaves the column alone.
@@ -5441,6 +5506,7 @@ function charHeightLoad(ft) {
   if (ft == null || ft === '') { charHeightClear(); return; }
   el.value = charSliderFromHeight(ft); el.dataset.set = '1';
   out.textContent = charHeightLabel(Math.round((+ft) * 10) / 10);
+  charHeightScale(Math.round((+ft) * 10) / 10);
 }
 function openCharModal(editId) {
   var char = editId ? state.characters.find(function(c){return c.id===editId;}) : null;
