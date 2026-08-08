@@ -1261,7 +1261,7 @@ function cgBoxInner(mediaHtml, m, opts, outerBare, sizeIn) {   // sizeIn v3.0.52
     // overlays and picOverlay is pointer-events:none, so this is paint order only -- it cannot move
     // anything. This is the on-image caption path (brass, plate, gradient); the below-image path a
     // few lines down keeps the caption outside the frame entirely.
-    return mediaHtml + coCaptionCover(m, cap) + picOverlay(opts, sizeIn);
+    return mediaHtml + coCaptionCover(m, cap, opts, sizeIn) + picOverlay(opts, sizeIn);
   // v3.0.514 -- NOTHING LEAVES NORMAL FLOW. THE ABSOLUTE VERSION DELETED SIX PICTURES.
   // v3.0.513 put the media in `position:absolute`. In a box with a FIXED height that is fine. In a
   // box whose height comes FROM the picture -- cgFlowWide and cgFlowFeature s wide branch, both of
@@ -1340,10 +1340,23 @@ function cgCapFlow(m, opts) {
 // Caption for cover-filled cells (Comic / Magazine): every style renders ON the image,
 // since there is no 'below the image' room. bar/engraved get their own backgrounds so
 // they stay readable on a dark photo.
-function coCaptionCover(m, caption) {
+function coCaptionCover(m, caption, opts, sizeIn) {
   if (!m.title) return '';
   var _capSc = capScaleForShape(m && m.shape);   // v3.0.508
-  if (caption === 'brass') return brassPlateHtml(m.title, '0px', _capSc);   // the band's box IS the image box
+  if (caption === 'brass') {
+    // v3.0.529 -- THE PLAQUE CLEARS THE FRAME, WHATEVER THE FRAME IS DOING. Ian: "the plaque can
+    // sit one pixel above the frame, but the frame should never cover the plaque." The plate parks
+    // itself at calc(bottomOffset + 0.10in) and 0.10in is 9.6px, which cleared a 9px rail by 0.6px
+    // and would have been buried by the wider rail v3.0.529 gives large pictures. The frame paints
+    // LAST (v3.0.518), so an overlap is the plaque losing, not the frame. Derived from picRailPx
+    // rather than from a second copy of the rail arithmetic.
+    var _bo = '0px';
+    if (opts && opts.border === 'frame') {
+      var _need = picRailPx(sizeIn) + 1;                       // one pixel of daylight, his number
+      if (_need > 9.6) _bo = (Math.round((_need - 9.6) * 10) / 10) + 'px';
+    }
+    return brassPlateHtml(m.title, _bo, _capSc);   // the band's box IS the image box
+  }
   if (caption === 'plate')
     return '<div style="position:absolute;top:0;left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'gradient')
@@ -1849,10 +1862,20 @@ function vignetteOverlayHtml(){
 //   6.8in feature -> 1.35x  bezel 5px   a big picture gets a frame it can carry
 // Clamped 0.7 to 1.35 so the extremes stay recognisably the same frame. Callers that do not know
 // their size pass nothing and get 1, which is exactly today s frame -- comic and cgBesidePanel.
+// v3.0.529 -- THE CEILING LIFTS, THE FLOOR AND THE SLOPE DO NOT. Ian: "the frame on the larger
+// pictures could be a pixel or two bigger. Not Much! It is great on the mid to small images." The
+// upper clamp was 1.35 and it is the ONLY thing that changed, so nothing at or below a 6in picture
+// moves at all:  5in -> 8px (was 8), 6in -> 9px (was 9), 7in -> 10px (was 9), 8.5in -> 11px (was 9).
 function picFrameScale(sizeIn) {
   if (!(sizeIn > 0)) return 1;
-  return Math.max(0.7, Math.min(1.35, 0.55 + 0.13 * sizeIn));
+  return Math.max(0.7, Math.min(1.50, 0.55 + 0.13 * sizeIn));
 }
+// HOW WIDE THE RAIL ACTUALLY IS, IN ONE PLACE. It was computed inside picOverlay and ASSUMED by
+// the brass plaque, which parked itself a flat 0.10in (9.6px) above the picture bottom. At a 9px
+// rail that cleared by 0.6px; at 11px the frame -- which paints LAST -- would have covered the
+// bottom of the plaque. That is one rule living in two places by assumption, which is the fault
+// this file keeps re-finding, so it is now a function both of them call.
+function picRailPx(sizeIn) { return Math.max(5, Math.round(7 * picFrameScale(sizeIn))); }
 function picOverlay(opts, sizeIn){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
@@ -1869,7 +1892,6 @@ function picOverlay(opts, sizeIn){
     // box. Not a pixel of layout moves, which is why the whole frame family can be reworked freely.
     // THE STUDS get the brass plaque treatment -- a lit face and a contact shadow -- so they read as
     // raised hardware rather than as rotated squares. The plaque rivets already proved that reads.
-    var _fs = picFrameScale(sizeIn);
     // v3.0.521 -- WIDER, because a bevel needs room to be a bevel. At 4px there are four pixels to
     // carry the whole light-to-dark roll and it reads as a line. 6px at the reference size is the
     // narrowest that still looks like a moulding.
@@ -1882,13 +1904,21 @@ function picOverlay(opts, sizeIn){
     // v3.0.526 -- THINNER AGAIN. Ian: "make the outer flat band a little thinner... pull the inner
     // bands closer to the edge to thin the whole thing up a little more." 8px -> 7px at reference,
     // and the profile below is re-cut so the outer ogee gives up most of the width.
-    var _bw = Math.max(5, Math.round(7 * _fs));      // rail width
+    var _bw = picRailPx(sizeIn);      // rail width -- shared with the plaque clearance
     // The studs sit ON the rail and are centred across it, so they read as hardware set into the
     // moulding rather than as decorations floating near the corner.
     // v3.0.522 -- the corner blocks shrink to sit IN the moulding rather than across it. At 0.8 of
     // a 10px rail a stud is nearly the whole rail and it swallows the corner; at 0.45 it reads as a
     // block set into the bead bed, which is where a real one goes.
-    var _dw = Math.max(3, Math.round(_bw * 0.45));   // corner block size
+    // v3.0.529 -- 0.45 -> 0.57. Ian: "make the corner rivets just a little bigger... I want to make
+    // sure they cover the seams behind them", then, on how far to go: "I just want to cover the
+    // inside bronze parts of the frame, not the dark exterior frame band." THE SEAM is where the
+    // left and right rails butt into the top and bottom ones -- the rails are background layers and
+    // at 5-11px a mitre is not resolvable, so the block is the cover. Centred at 0.57 the block
+    // starts about 21 percent in, which is just inside the outer face, so the dark exterior band
+    // stays visible and the bronze interior is covered. Full coverage would need about 0.85 and
+    // v3.0.522 warned that near-full-width swallows the corner; this is deliberately short of that.
+    var _dw = Math.max(3, Math.round(_bw * 0.57));   // corner block size
     var _di = Math.max(1, Math.round((_bw - _dw) / 2));
     // v3.0.521 -- THE GRADIENT HAS TO RUN ACROSS EACH RAIL, NOT ALONG IT.
     // v3.0.520 used ONE border-image gradient at 135 degrees. border-image slices a single image
@@ -2023,6 +2053,27 @@ function picOverlay(opts, sizeIn){
     // The bead course follows its bed: centred on 59 percent of the rail, which is the middle of the
     // 46-72 percent band above. If the profile stops move, this must move with them -- one number
     // describing one thing, which is the rule this file keeps re-learning.
+    // v3.0.529 -- AN OFF-WHITE MAT INSIDE THE FRAME. Ian, from a picture whose artwork happened to
+    // carry a white border: "on the inside of the bronze frame add an off white colored border
+    // similar to this. It is like a Matting. Maybe it could be shaded properly too. The top here
+    // looks good, the sides are just a little too wide."
+    // HIS REFERENCE WAS MEASURED RATHER THAN GUESSED AT. Scanning across the frame edge of that
+    // screenshot: an 11px rail, then the band at 4px on the sides and 2px on the top -- and the
+    // band was already shaded, running 208 -> 232 -> 246 -> 229 outward to inward. Darkest where it
+    // meets the moulding, brightest just inside that. "Top good, sides too wide" therefore means
+    // ABOUT A FIFTH OF THE RAIL, not a third: a bright fillet, not a broad mat.
+    // TWO BANDS, NOT A RAMP, and for the same reason the profile was re-cut at v3.0.528: at 2px a
+    // three-stop gradient is three sub-pixel stops and paints as one flat smear. A hard 50 percent
+    // split lands on whole pixels and actually reads as a bevel catching the light.
+    // IT COVERS THE OUTERMOST SLIVER OF THE ARTWORK rather than moving it. picOverlay is inset:0
+    // and pointer-events:none -- it can only paint. That is TD-166 applied literally: the picture
+    // pays, not the page. At 2px the crop is nothing, but it is a crop and it is deliberate.
+    var _mw = Math.max(2, Math.round(_bw * 0.20));      // mat width
+    var _matStops = '#dcd5c6 0 50%,#f4f0e5 50% 100%';   // outer (against the moulding) -> inner
+    var _matT = 'linear-gradient(180deg,' + _matStops + ')';
+    var _matB = 'linear-gradient(0deg,'   + _matStops + ')';
+    var _matL = 'linear-gradient(90deg,'  + _matStops + ')';
+    var _matR = 'linear-gradient(270deg,' + _matStops + ')';
     var _bt = Math.max(3, Math.round(_bw * 0.38));      // bead tile
     // v3.0.528 -- KEPT TO ONE DECIMAL RATHER THAN ROUNDED TO A WHOLE PIXEL, and the apply-script
     // sweep is what forced it. _bt has a floor of 3px, so on a 6px rail Math.round(1.5) went UP to
@@ -2058,7 +2109,16 @@ function picOverlay(opts, sizeIn){
       _railT + ' top left / 100% ' + _bw + 'px no-repeat, ' +
       _railB + ' bottom left / 100% ' + _bw + 'px no-repeat, ' +
       _railL + ' top left / ' + _bw + 'px 100% no-repeat, ' +
-      _railR + ' top right / ' + _bw + 'px 100% no-repeat';
+      _railR + ' top right / ' + _bw + 'px 100% no-repeat, ' +
+      // THE MAT IS DECLARED LAST so every rail paints on top of it and the moulding keeps its own
+      // inner lip. Note the bottom and right positions: the SAME percentage-resolution trap that
+      // put the bead courses a whole band out at v3.0.526. In background-position a percentage
+      // resolves against (container - image), so with an image _mw tall, 100% already means
+      // (containerH - _mw). Subtract only the rail -- the percentage has done the rest.
+      _matT + ' 0 ' + _bw + 'px / 100% ' + _mw + 'px no-repeat, ' +
+      _matB + ' 0 calc(100% - ' + _bw + 'px) / 100% ' + _mw + 'px no-repeat, ' +
+      _matL + ' ' + _bw + 'px 0 / ' + _mw + 'px 100% no-repeat, ' +
+      _matR + ' calc(100% - ' + _bw + 'px) 0 / ' + _mw + 'px 100% no-repeat';
     // v3.0.527 TD-341 -- ONE hairline at the outer edge, ONE at the moulding/artwork boundary.
     // `inset 0 0 0 Npx` is a solid ring N pixels THICK, not a line N pixels in, and a box-shadow
     // paints ABOVE the background. The old second shadow was therefore a dark ring the FULL width
@@ -2254,7 +2314,7 @@ function huggingImgBox(m, opts, outerCss, floorH) {
     // is why it survived a whole round of eyeballing. Ninth of nine.
     '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-      coCaptionCover(m, opts.caption) + picOverlay(opts, floorH) +   // v3.0.518 frame last; v3.0.520 sized
+      coCaptionCover(m, opts.caption, opts, floorH) + picOverlay(opts, floorH) +   // v3.0.518 frame last; v3.0.520 sized; v3.0.529 plaque clears the rail
     '</div>' +
     cgCapFlow(m, opts) +
   '</div>';
