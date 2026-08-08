@@ -1352,7 +1352,10 @@ function coCaptionCover(m, caption, opts, sizeIn) {
     // rather than from a second copy of the rail arithmetic.
     var _bo = '0px';
     if (opts && opts.border === 'frame') {
-      var _need = picRailPx(sizeIn) + 1;                       // one pixel of daylight, his number
+      // v3.0.530 -- rail + mat - 1, NOT rail + 1. At a 2px mat these are the same number, which is
+      // the placement Ian approved at v3.0.529; where the mat gains a pixel the plate gains one too.
+      var _r = picRailPx(sizeIn);
+      var _need = _r + picMatPx(_r) - 1;
       if (_need > 9.6) _bo = (Math.round((_need - 9.6) * 10) / 10) + 'px';
     }
     return brassPlateHtml(m.title, _bo, _capSc);   // the band's box IS the image box
@@ -1876,6 +1879,16 @@ function picFrameScale(sizeIn) {
 // bottom of the plaque. That is one rule living in two places by assumption, which is the fault
 // this file keeps re-finding, so it is now a function both of them call.
 function picRailPx(sizeIn) { return Math.max(5, Math.round(7 * picFrameScale(sizeIn))); }
+// v3.0.530 -- AND THE MAT IS A FUNCTION FOR THE SAME REASON THE RAIL IS. The plaque has to know
+// how deep the mat runs, because Ian fixed the RELATIONSHIP rather than the number: "the bronze
+// plate placement was really good too. If the matte gets bigger it will need to go up by the same
+// amount, because it is perfect now." At v3.0.529 the plate bottom sat at rail+1 with a 2px mat --
+// one pixel INTO the mat band -- and that is the look he approved. So the offset is expressed as
+// rail + mat - 1, which reproduces rail+1 exactly at a 2px mat and rises by precisely one pixel
+// wherever the mat gains one. Nothing to remember and nothing to keep in step by hand.
+// 0.20 -> 0.25: Ian, "add one more pixel to the matte weight on larger images." That factor gives
+// 2px at rails 5 through 9 and 3px at rails 10 and 11, so ONLY the large pictures gain anything.
+function picMatPx(railPx) { return Math.max(2, Math.round(railPx * 0.25)); }
 function picOverlay(opts, sizeIn){
   var b = opts && opts.border;
   if (b === 'vignette') return vignetteOverlayHtml();
@@ -1918,7 +1931,12 @@ function picOverlay(opts, sizeIn){
     // starts about 21 percent in, which is just inside the outer face, so the dark exterior band
     // stays visible and the bronze interior is covered. Full coverage would need about 0.85 and
     // v3.0.522 warned that near-full-width swallows the corner; this is deliberately short of that.
-    var _dw = Math.max(3, Math.round(_bw * 0.57));   // corner block size
+    // v3.0.530 -- 0.57 -> 0.70. Ian, after looking at it: "you were right, 57 percent did not cut
+    // it on the rivet size, can we go to 70 percent instead?" It did not: centred at 0.57 the block
+    // started about 21 percent in, which left the seam showing at both ends of the corner. At 0.70
+    // the margin drops to about 15 percent a side, so the block reaches the rail s inner lip while
+    // the dark exterior band still shows outside it -- which was his actual requirement.
+    var _dw = Math.max(3, Math.round(_bw * 0.70));   // corner block size
     var _di = Math.max(1, Math.round((_bw - _dw) / 2));
     // v3.0.521 -- THE GRADIENT HAS TO RUN ACROSS EACH RAIL, NOT ALONG IT.
     // v3.0.520 used ONE border-image gradient at 135 degrees. border-image slices a single image
@@ -2068,12 +2086,25 @@ function picOverlay(opts, sizeIn){
     // IT COVERS THE OUTERMOST SLIVER OF THE ARTWORK rather than moving it. picOverlay is inset:0
     // and pointer-events:none -- it can only paint. That is TD-166 applied literally: the picture
     // pays, not the page. At 2px the crop is nothing, but it is a crop and it is deliberate.
-    var _mw = Math.max(2, Math.round(_bw * 0.20));      // mat width
-    var _matStops = '#dcd5c6 0 50%,#f4f0e5 50% 100%';   // outer (against the moulding) -> inner
-    var _matT = 'linear-gradient(180deg,' + _matStops + ')';
-    var _matB = 'linear-gradient(0deg,'   + _matStops + ')';
-    var _matL = 'linear-gradient(90deg,'  + _matStops + ')';
-    var _matR = 'linear-gradient(270deg,' + _matStops + ')';
+    // v3.0.530 -- THE MAT SHADES THE OPPOSITE WAY TO THE FRAME, AND IAN CAUGHT IT: "I think you
+    // have the shading reversed on it. The top and left should be the darker one and bottom right
+    // the lighter one." He is right, and it is worth writing down WHY, because it looks like a
+    // contradiction sitting one line away from the moulding that does the opposite.
+    // THE MOULDING IS CONVEX -- a raised ridge. Light from the upper-left strikes its top and left
+    // faces, so those are bright (v3.0.528).
+    // THE MAT APERTURE IS CONCAVE -- a bevel cut INWARD to the picture. The bevel at the TOP of the
+    // opening faces DOWN, away from the light, so it is in shadow; the bevel at the BOTTOM faces UP
+    // into it, so it is the bright one. Exactly inverted, and both are correct. This is why a real
+    // mounted print reads as a window rather than as a second frame.
+    // Same two hard 1px bands as v3.0.529 -- at 2 to 3px a three-stop ramp is three sub-pixel stops
+    // and paints as one flat smear, which is the v3.0.528 lesson and it has not stopped being true.
+    var _mw = picMatPx(_bw);      // mat width -- shared with the plaque offset
+    var _matSh = '#c9c1af 0 50%,#dcd5c6 50% 100%';   // top and left: the shadowed bevel
+    var _matLt = '#ece7d9 0 50%,#f8f5ec 50% 100%';   // bottom and right: the lit bevel
+    var _matT = 'linear-gradient(180deg,' + _matSh + ')';
+    var _matL = 'linear-gradient(90deg,'  + _matSh + ')';
+    var _matB = 'linear-gradient(0deg,'   + _matLt + ')';
+    var _matR = 'linear-gradient(270deg,' + _matLt + ')';
     var _bt = Math.max(3, Math.round(_bw * 0.38));      // bead tile
     // v3.0.528 -- KEPT TO ONE DECIMAL RATHER THAN ROUNDED TO A WHOLE PIXEL, and the apply-script
     // sweep is what forced it. _bt has a floor of 3px, so on a 6px rail Math.round(1.5) went UP to
