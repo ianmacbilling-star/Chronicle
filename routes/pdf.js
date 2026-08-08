@@ -4950,7 +4950,14 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // morning: SEVENTY-FOUR PERCENT taller.
   var CAST_OV = 0.60;                 // how much of each figure the next one covers
   var _castStepOverride = null;       // set for single rows, which size from a height target instead
-  var CAST_ASP = 0.62;                // figure box, width over height -- a standing figure
+  // v3.0.574 -- 0.62 TO 0.75, TO MATCH THE ART. The references are generated at 3:4 (0.75) but the
+  // box was 0.62, so object-fit:contain letterboxed EVERY figure: the drawn art was only 83 percent
+  // of the box height and the top 17 percent was empty. That is why the figures looked smaller than
+  // the numbers said, and it is also why a couple of shadows looked wrong -- the shadow is sized
+  // from the BOX width, and a letterboxed figure does not fill its box.
+  // Matching the box to the art means no letterboxing, so the figure IS the box and the shadow lands
+  // on the real silhouette.
+  var CAST_ASP = 0.75;                // figure box, width over height -- matches the reference aspect
   var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);   // the overlap-driven width, used when a row has captions
   // Height cap so a one or two-character party does not produce a figure taller than the page.
   // The whole block must leave room for the title, the captions and the contents that follow.
@@ -4998,7 +5005,10 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // OLD REFERENCES STILL HAVE OPAQUE GROUNDS until they are regenerated or restaged, so a cast that
   // has not been through TD-360 will still show boxes -- at this overlap, badly. That is the cost of
   // going back up, and it is the right trade: new and restaged casts are the ones that matter now.
-  var CAST_MIN_STEP_RATIO = 0.26;     // with real alpha, overlap is a composition choice again
+  // v3.0.574 -- 0.26 to 0.12. The alpha cut is confirmed working in a printed PDF, so a figure now
+  // occludes nothing at all and the only reason to limit overlap is composition. Ian marked roughly
+  // six inches on a printed page; 0.12 reaches it.
+  var CAST_MIN_STEP_RATIO = 0.12;     // with real alpha, overlap is a composition choice again
   var _castHFit = CG_W / (CAST_ASP * (1 + CAST_MIN_STEP_RATIO * Math.max(1, _castPerRow - 1)));
   var _castHCap = (_castRows === 1) ? Math.min(6.0, _castHFit) : (_castRows === 2 ? 2.6 : 1.9);
   if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
