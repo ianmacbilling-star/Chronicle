@@ -5213,7 +5213,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.2in auto; }
   /* v3.0.525 -- THE COMPANY IS A LINE-UP. No cards, no borders, no white boxes: the figures stand
      on the page and the only furniture is a ground shadow and the caption underneath. */
-  .cast-lineup { display:flex;align-items:flex-end;justify-content:center;margin-top:0.14in; }
+  /* v3.0.564 -- ALIGNED AT THE TOP, NOT THE BOTTOM. Ian, on a cast with long names: "little weird".
+     A member is a fixed-height STAGE plus a caption, and the caption is as tall as the name needs.
+     Bottom-aligning the row therefore aligned the bottom of the CAPTION, so a name that wrapped to
+     three lines pushed its whole block upward and its text climbed into the figure area -- measured
+     at 25px above the ground line on a 3-line name, while the feet themselves stayed put.
+     Top-aligning fixes it without moving anything else: the stage has an explicit height, so the
+     feet still share a ground line, and every caption now starts at the same y and grows DOWNWARD.
+     The row is ragged at the bottom instead of the top, which is what a caption row should do. */
+  .cast-lineup { display:flex;align-items:flex-start;justify-content:center;margin-top:0.14in; }
   .cast-member { text-align:center;position:relative; }
   /* The stage is a fixed-height box the figure sits at the BOTTOM of, which is what puts every
      pair of feet on one ground line however tall the art happens to be. padding-bottom lifts the
