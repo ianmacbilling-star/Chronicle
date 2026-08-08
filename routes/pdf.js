@@ -1858,11 +1858,17 @@ function picOverlay(opts, sizeIn){
     // v3.0.521 -- WIDER, because a bevel needs room to be a bevel. At 4px there are four pixels to
     // carry the whole light-to-dark roll and it reads as a line. 6px at the reference size is the
     // narrowest that still looks like a moulding.
-    var _bw = Math.max(4, Math.round(6 * _fs));      // rail width
+    // v3.0.522 -- WIDER AGAIN, and this time it is load-bearing rather than cosmetic: eight planes
+    // and a bead course need somewhere to live. 10px at the reference size, 8px on a small float,
+    // 14px on a feature. Ian, on the reference photographs: "I know those are wider etc."
+    var _bw = Math.max(6, Math.round(10 * _fs));     // rail width
     // The studs sit ON the rail and are centred across it, so they read as hardware set into the
     // moulding rather than as decorations floating near the corner.
-    var _dw = Math.max(3, Math.round(_bw * 0.8));    // stud size
-    var _di = Math.max(0, Math.round((_bw - _dw) / 2));
+    // v3.0.522 -- the corner blocks shrink to sit IN the moulding rather than across it. At 0.8 of
+    // a 10px rail a stud is nearly the whole rail and it swallows the corner; at 0.45 it reads as a
+    // block set into the bead bed, which is where a real one goes.
+    var _dw = Math.max(3, Math.round(_bw * 0.45));   // corner block size
+    var _di = Math.max(1, Math.round((_bw - _dw) / 2));
     // v3.0.521 -- THE GRADIENT HAS TO RUN ACROSS EACH RAIL, NOT ALONG IT.
     // v3.0.520 used ONE border-image gradient at 135 degrees. border-image slices a single image
     // into nine pieces, so the TOP rail receives the top STRIP of that gradient: it varies left to
@@ -1876,10 +1882,35 @@ function picOverlay(opts, sizeIn){
     // Light from the top-left: top and left run bright outer to mid inner (facing the light), bottom
     // and right run dark outer to mid inner (turned away). The difference BETWEEN opposite rails
     // gives the object its direction; the change WITHIN each rail is what makes it look like metal.
-    var _railT = 'linear-gradient(180deg,#f7ead0 0%,#dcc07a 22%,#c2a55f 55%,#8a6a2a 100%)';
-    var _railL = 'linear-gradient(90deg,#f2e2bc 0%,#d3b76e 22%,#b8974a 55%,#7f6224 100%)';
-    var _railB = 'linear-gradient(0deg,#3d2d0c 0%,#5f4715 30%,#7f6224 70%,#a8862f 100%)';
-    var _railR = 'linear-gradient(270deg,#42310e 0%,#664d18 30%,#856727 70%,#a8862f 100%)';
+    // v3.0.522 -- A PROFILE WITH HARD PLANE BREAKS, AND A BEAD COURSE.
+    // Ian sent three photographs of real carved mouldings: "honestly I want this... something that is
+    // closer to that than straight lines." Looking at them properly, what makes them read is NOT
+    // smooth shading -- it is (a) HARD STEPS between distinct planes and (b) a REPEATING ORNAMENT.
+    // v3.0.521 gave every rail a smooth roll ACROSS its thickness, which was the right diagnosis of
+    // the v3.0.520 failure and still produced something flat, because a smooth roll over 6px is a
+    // slightly uneven line. A carved moulding is a stack of FLAT FACES at different angles and the
+    // eye reads the BREAKS between them, not the shading within them.
+    // So each rail is now ONE gradient with HARD stops -- outer edge, highlight, ogee, dark base,
+    // recessed black channel, bead bed, bright gold fillet, dark lip onto the artwork: eight planes
+    // instead of a ramp. And a tiled bead course runs in the bead bed, which is the repeating
+    // ornament that stops the whole thing reading as lines.
+    // AN SVG MOULDING WAS BUILT AND MEASURED FIRST, and rejected on COST, not on looks: a mitred
+    // nine-slice frame comes to 12.1KB per picture as a data URI -- 710KB of extra HTML on a
+    // 60-picture book. Moving it into a stylesheet instead means writing it into THREE separate
+    // style blocks, which is the exact drift trap this file keeps falling into. This does the same
+    // job for 2.5KB per picture, 147KB per book, with no new asset to maintain.
+    var _lit  = '#100b03 0 8%,#f7ead0 8% 13%,#e6cf94 13%,#b8974a 33%,#8a6a2a 33% 39%,#0d0a06 39% 50%,#c9a84c 50%,#7f6224 72%,#f7ead0 72% 79%,#241708 79% 100%';
+    var _shad = '#050402 0 8%,#8a6a2a 8% 13%,#7f6224 13%,#4a3810 33%,#3d2d0c 33% 39%,#050402 39% 50%,#6b5119 50%,#4a3810 72%,#a8862f 72% 79%,#120d05 79% 100%';
+    var _railT = 'linear-gradient(180deg,' + _lit  + ')';
+    var _railL = 'linear-gradient(90deg,'  + _lit  + ')';
+    var _railB = 'linear-gradient(0deg,'   + _shad + ')';
+    var _railR = 'linear-gradient(270deg,' + _shad + ')';
+    // The bead course: one tiled radial gradient per side, sitting in the bead bed (50-72 percent of
+    // the rail). Transparent past 64 percent of the tile so the beads are separate objects with the
+    // bed showing between them, not a sausage.
+    var _bead = 'radial-gradient(circle at 50% 50%,#fff3cf 0 14%,#d9bd6a 38%,#6b5119 62%,rgba(0,0,0,0) 64%)';
+    var _bt = Math.max(3, Math.round(_bw * 0.42));      // bead tile
+    var _by = Math.max(1, Math.round(_bw * 0.61) - Math.round(_bt / 2));   // where the bead bed sits
     var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:' + _dw + 'px;height:' + _dw + 'px;' +
       'background:linear-gradient(135deg,#f4e6b8 0%,#c9a84c 45%,#7a5d22 100%);' +
       'box-shadow:0 1px 1.5px rgba(0,0,0,0.65),inset 0 0 0 0.5px rgba(255,248,220,0.55);"></i>'; };
@@ -1891,7 +1922,12 @@ function picOverlay(opts, sizeIn){
     var _diamonds = _d('top:' + _p + 'left:' + _p) + _d('top:' + _p + 'right:' + _p) + _d('bottom:' + _p + 'left:' + _p) + _d('bottom:' + _p + 'right:' + _p);
     // The four rails as background layers. First layer paints on top, so top and bottom own the
     // corners and the side rails butt into them -- at 4-8px a mitre is not resolvable anyway.
-    var _bg = _railT + ' top left / 100% ' + _bw + 'px no-repeat, ' +
+    // Beads are declared FIRST so they paint on top of the rail they sit in.
+    var _bg = _bead + ' 0 ' + _by + 'px / ' + _bt + 'px ' + _bt + 'px repeat-x, ' +
+      _bead + ' 0 calc(100% - ' + (_by + _bt) + 'px) / ' + _bt + 'px ' + _bt + 'px repeat-x, ' +
+      _bead + ' ' + _by + 'px 0 / ' + _bt + 'px ' + _bt + 'px repeat-y, ' +
+      _bead + ' calc(100% - ' + (_by + _bt) + 'px) 0 / ' + _bt + 'px ' + _bt + 'px repeat-y, ' +
+      _railT + ' top left / 100% ' + _bw + 'px no-repeat, ' +
       _railB + ' bottom left / 100% ' + _bw + 'px no-repeat, ' +
       _railL + ' top left / ' + _bw + 'px 100% no-repeat, ' +
       _railR + ' top right / ' + _bw + 'px 100% no-repeat';
