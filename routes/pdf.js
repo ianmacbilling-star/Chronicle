@@ -1019,8 +1019,13 @@ function brassPlateHtml(title, bottomOffset, sc) {
   // v3.0.518 -- SCALLOPED CORNERS. Ian: "if you can scallop the corners that would be cool."
   // Four concave quarter-round bites taken out of the corners with radial-gradient masks, which is
   // how a cast plaque is actually shaped. Done with -webkit-mask rather than clip-path on purpose:
-  // clip-path would also cut the drop shadow and the 1px border, flattening the plaque into a
-  // sticker. A mask leaves the border painted along the scalloped edge.
+  // clip-path would also cut the drop shadow, flattening the plaque into a sticker; the mask leaves
+  // the drop shadow intact.
+  // BUT THE OLD CLAIM HERE WAS WRONG AND IT COST SOMETHING. It said a mask "leaves the border
+  // painted along the scalloped edge." It does not -- a mask removes pixels, and the border is a
+  // rectangle, so biting a quarter-disc out of a corner takes the border with it and leaves the
+  // curve raw. That is why the scallops had no edge while the straight edges had two. v3.0.537
+  // draws the edge back on deliberately; see the rims below.
   // GRACEFUL BY CONSTRUCTION: if the mask is not honoured the plaque simply renders as the
   // rounded rectangle it is today. Nothing depends on it.
   // v3.0.534 -- THE SCALLOP IS A PROPORTION OF THE PLATE, NOT A CONSTANT. Ian: "the scallops
@@ -1037,6 +1042,34 @@ function brassPlateHtml(title, bottomOffset, sc) {
     (CAP_BASE_PT * sc * 96 / 72) * 1.15;
   var _sc = Math.max(3, Math.round(_plateH * 0.27));   // scallop radius, a proportion of the plate
   var _bite = 'radial-gradient(circle ' + _sc + 'px at ';
+  // v3.0.537 -- THE SCALLOPS GET THE EDGE THE STRAIGHT SIDES ALREADY HAD. Ian: "can you give the
+  // scallops on the bronze plate shading? The top and bottom of the plate has it but the scallops
+  // does not." Exactly right, and it is structural rather than a missed detail: the plate s
+  // highlight and shade are `inset 0 1px 0` and `inset 0 -1px 0` box-shadows, which follow the
+  // element s RECTANGLE. The mask then bites the corners out, so along every curve there is no
+  // border, no highlight and no shade -- four raw edges on an object whose other edges are modelled.
+  // HOW: a thin ring centred on each corner at exactly the bite radius, as an <i> child. A mask
+  // applies to the element AND its children as one group, so the part of the ring inside the bite
+  // is cut away with everything else and what survives is a crescent hugging the scalloped edge.
+  // The ring sits from radius _sc to _sc+1, entirely OUTSIDE the bite, so nothing depends on the
+  // mask being honoured -- if it is not, the plate renders square with four faint arcs on it rather
+  // than losing anything. Graceful by construction, same as the mask itself.
+  // LIT LIKE THE PLATE, NOT LIKE THE FRAME. The plate is lit from directly above -- highlight along
+  // its top edge, shade along its bottom -- so the two top arcs take the highlight and the two
+  // bottom arcs take the shade. No left/right distinction, because the plate has none.
+  var _rimW = _sc + 2;
+  var _rA = (100 * _sc / _rimW).toFixed(1);
+  var _rB = (100 * (_sc + 1) / _rimW).toFixed(1);
+  var _rim = function (pos, at, col) {
+    return '<i style="position:absolute;' + pos + 'width:' + _rimW + 'px;height:' + _rimW + 'px;pointer-events:none;' +
+      'background:radial-gradient(circle ' + _rimW + 'px at ' + at + ',rgba(0,0,0,0) ' + _rA + '%,' + col + ' ' + _rA + '% ' + _rB + '%,rgba(0,0,0,0) ' + _rB + '%);"></i>';
+  };
+  var _rimLit = 'rgba(255,248,220,0.55)';
+  var _rimSh  = 'rgba(0,0,0,0.45)';
+  var _rims = _rim('top:0;left:0;', '0 0', _rimLit) +
+    _rim('top:0;right:0;', '100% 0', _rimLit) +
+    _rim('bottom:0;left:0;', '0 100%', _rimSh) +
+    _rim('bottom:0;right:0;', '100% 100%', _rimSh);
   var _mask = _bite + '0 0, transparent 99%, #000 100%), ' +
     _bite + '100% 0, transparent 99%, #000 100%), ' +
     _bite + '0 100%, transparent 99%, #000 100%), ' +
@@ -1080,7 +1113,7 @@ function brassPlateHtml(title, bottomOffset, sc) {
     'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
     'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-    rivet('left') + rivet('right') + title + '</div>';
+    rivet('left') + rivet('right') + _rims + title + '</div>';
 }
 // v3.0.512 -- HOW FAR IN THE PICTURE ACTUALLY STARTS, MEASURED FROM THE POSITIONING BOX.
 // Ian, 2026-08-07, from a screenshot of a bronze-framed picture whose bottom rail was washed out
