@@ -2276,16 +2276,24 @@ function bronzeMouldingHtml(railPx, matPx) {
   // has to find. A nested svg DOES take a percentage for x and y, so it anchors to the far edge and
   // a numeric translate inside it does the arithmetic. overflow:visible is load-bearing: the
   // content is translated to a negative local coordinate and would otherwise be clipped away.
+  // The checkered punch, as its own function so the four rects are written once rather than four
+  // times -- the fault this file keeps re-finding, at the smallest scale it has yet appeared.
+  function _pun(x, y) {
+    return _r(x, y, 1, 1, '#f4e6b8') + _r(x + 1, y, 1, 1, '#3d2d0c') +
+      _r(x, y + 1, 1, 1, '#3d2d0c') + _r(x + 1, y + 1, 1, 1, '#f4e6b8');
+  }
   function _block() {
     return _r(0, 0, _dw, _dw, '#c9a84c') +
       '<path d="M0 0 l' + _dw + ' 0 l-' + _dw + ' ' + _dw + ' z" fill="#f4e6b8"/>' +
       '<path d="M' + _dw + ' ' + _dw + ' l-' + _dw + ' 0 l' + _dw + ' -' + _dw + ' z" fill="#7a5d22"/>' +
       '<rect x="0" y="0" width="' + _dw + '" height="' + _dw +
         '" fill="none" stroke="rgba(255,248,220,0.55)" stroke-width="0.5"/>' +
-      // v3.0.545 -- a single punched pixel at the centre. Ian: "can you add a 1 pixel square on the
-      // rivet to break it up a little." One rect, at the middle of whatever the block measures, so
-      // it stays centred at every rail width instead of being placed for one of them.
-      _r(Math.floor(_dw / 2), Math.floor(_dw / 2), 1, 1, '#3d2d0c');
+      // v3.0.546 -- FOUR PIXELS, CHECKERED. Ian: "put 4 pixels in a square, two lighter and two
+      // darker, checkerboarded." Placed from the block s own measurement so the pair stays centred
+      // at every rail width rather than being positioned for one of them. The two colours are the
+      // block s own highlight and shade, so the punch reads as part of the same casting rather than
+      // as something dropped on top of it.
+      _pun(Math.max(0, Math.floor(_dw / 2) - 1), Math.max(0, Math.floor(_dw / 2) - 1));
   }
   function _corner(xa, ya, dx, dy) {
     return '<svg x="' + xa + '" y="' + ya + '" overflow="visible">' +
@@ -2300,8 +2308,28 @@ function bronzeMouldingHtml(railPx, matPx) {
   // lights the other way. Both are right; see the mat note at v3.0.530.
   // Drawn AFTER the rails so it overlays the first pixel of the outer face rather than costing the
   // profile a plane -- a plane expressed in percentages cannot be a fixed pixel.
-  _svg += _r(0, 0, '100%', 1, '#241708') + _r(0, 0, 1, '100%', '#241708');
-  _svg += _r(0, '100%', '100%', 1, '#8a6a2a', _up(1)) + _r('100%', 0, 1, '100%', '#8a6a2a', _lf(1));
+  // v3.0.546 -- THE DARK HALF OF THE SCRIBE WAS INVISIBLE, AND IT WAS THE COLOUR, NOT THE CODE.
+  // Ian, on a 7x blow-up: "I do not see it." Measured off that same image, the LIGHT half was
+  // rendering perfectly -- 138,106,41 against the wood at 41,28,12, a 97-point jump, one pixel wide.
+  // The DARK half was #241708 at 36,23,8 against a wood band of #2a1d0c at 42,29,12. A SIX-POINT
+  // DIFFERENCE. It was drawn, it was the right width, and it could not be seen. So he was looking at
+  // a line on two sides and nothing on the other two, which reads as nothing at all.
+  // #0d0904 clears the wood by 28 points, which is still "a hair darker" but is a hair you can see.
+  // AND IT IS DASHED NOW. Ian: "if you can make it a dotted or dashed line that would be even
+  // better -- trying to give it some texture." Two pixels on, two off. NOT one and one: at print
+  // scale a 1px period sits exactly at the resolution limit and averages into a flat 50 percent
+  // grey, which is the sub-pixel trap that cost this frame three separate builds. A 4px period with
+  // whole-pixel marks cannot average away.
+  var _sdD = '#0d0904', _sdL = '#8a6a2a';
+  function _dash(id, horiz, col) {
+    return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="' + (horiz ? 4 : 1) +
+      '" height="' + (horiz ? 1 : 4) + '"><rect x="0" y="0" width="' + (horiz ? 2 : 1) +
+      '" height="' + (horiz ? 1 : 2) + '" fill="' + col + '" shape-rendering="crispEdges"/></pattern>';
+  }
+  var _scribePats = _dash('sdh', true, _sdD) + _dash('sdv', false, _sdD) +
+    _dash('slh', true, _sdL) + _dash('slv', false, _sdL);
+  _svg += _r(0, 0, '100%', 1, 'url(#sdh)') + _r(0, 0, 1, '100%', 'url(#sdv)');
+  _svg += _r(0, '100%', '100%', 1, 'url(#slh)', _up(1)) + _r('100%', 0, 1, '100%', 'url(#slv)', _lf(1));
 
   var _far = -(_di + _dw);
   _svg += _corner('0',      '0',      _di,  _di);
@@ -2319,7 +2347,7 @@ function bronzeMouldingHtml(railPx, matPx) {
   var _edges = 'inset 0 0 0 1px rgba(28,18,4,0.85)';
   return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:' + _edges + ';">' +
     '<svg width="100%" height="100%" style="position:absolute;inset:0;display:block;" xmlns="http://www.w3.org/2000/svg">' +
-      '<defs>' + _bead + '</defs>' + _svg +
+      '<defs>' + _bead + _scribePats + '</defs>' + _svg +
     '</svg>' +
     // v3.0.542 -- rail + mat, NOT rail + 1. v3.0.527 put this at the moulding/artwork boundary and
     // it WAS the boundary -- the mat did not exist until v3.0.529. Since then the mat has occupied
