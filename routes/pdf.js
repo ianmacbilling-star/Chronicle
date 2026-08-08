@@ -779,7 +779,15 @@ var CO_DEFAULTS = {
   font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
   cover: 1, cast: 1, toc: 1, header: 1, markers: 1, markerbreak: 0, watermark: 1,
-  hidelogo: 0
+  hidelogo: 0,
+  // v3.0.551 -- TD-346 step 1. The cover title settings ride the SAME co string as border, caption
+  // and paper, so they reach every render path automatically and persist through layout_opts with
+  // NO schema change. The subtitle cannot come this way -- parseCustomOpts splits on comma and
+  // colon, and a subtitle like "Book Two: The Long Road" would corrupt the whole options string and
+  // silently drop every other setting in it -- so it has its own field beside book_title.
+  titleStyle: 'chronicle',   // chronicle | engraved | gilded | pulp | manuscript | quill | runestone | blackletter
+  titlePlace: 'bottom',      // top | middle | bottom
+  titleSize: 'medium'        // small | medium | large
 };
 
 var CO_FONTS = {
@@ -2067,6 +2075,38 @@ function keylineMatPx(sizeIn) {
 // few pixels inside the artwork, which is invisible; the alternative is a caption sitting ON the
 // mat of a large one, which is the fault these functions exist to prevent (TD-312).
 function keylineMatMaxPx() { return keylineMatPx(99); }
+// v3.0.551 -- TD-346: THE COVER TITLE PRESETS. Step 1 ships the MECHANISM and Chronicle only.
+// ONE LOOK, NOT SEVEN DECISIONS. Ian: "I do not want this to turn into Word... it needs to be easy."
+// Font, case, letterspacing, stroke, shadow, extrude and fill are not seven controls -- they are one
+// look, and this is how the rest of the product already works: border is Bronze / Keyline / Comic,
+// caption is Engraved Classic / Bronze plate / Gradient, art styles are named. A panel of individual
+// effect toggles would be the only place in Campaignia that worked differently, and it would sit on
+// the first page anyone sees.
+// CHRONICLE RETURNS THE EMPTY STRING, AND THAT IS LOAD-BEARING. It is the default, every existing
+// book gets it, and if it emitted its own copy of the current declarations then this feature would
+// silently restyle every cover ever made the first time one character drifted. Returning nothing
+// means the existing rules are untouched and the output is byte-identical BY CONSTRUCTION rather
+// than by comparison. The apply script asserts that emptiness.
+// The seven other presets append their declarations to .cover-art-title and .cover-art-dates in a
+// later build; the shape is a lookup so adding a ninth is a data change, not a UI change, and
+// user-authored presets are the same object stored per user (see COVER_TITLE_SPEC.md section 8).
+var COVER_TITLE_PRESETS = { chronicle: "" };
+function coverTitleCss(key) {
+  var k = String(key || 'chronicle');
+  return Object.prototype.hasOwnProperty.call(COVER_TITLE_PRESETS, k) ? COVER_TITLE_PRESETS[k] : COVER_TITLE_PRESETS.chronicle;
+}
+// v3.0.551 -- BLANK MEANS THE DATES, and blank is a REAL state rather than an unset one.
+// Ian: "put the dates in there as they are now as a default, then once they change it we treat it
+// just like the title." So the subtitle is not SEEDED with the date string the way book_title is
+// seeded with the campaign name -- if it were, the user could never get back to automatic, and a
+// book whose sessions later changed would be stuck showing a stale range nobody typed. The input
+// carries the current dates as a PLACEHOLDER; the stored value stays empty until someone types one.
+// It also means a fork that has not set a subtitle follows its OWN dates rather than inheriting a
+// typed string from whoever set one first.
+function coverSubtitle(pageOpts, dateRange) {
+  var v = (pageOpts && pageOpts.subtitle != null) ? String(pageOpts.subtitle).trim() : '';
+  return v || dateRange || '';
+}
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
@@ -4525,6 +4565,9 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
+  /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
+     Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
+  ${coverTitleCss(co && co.titleStyle)}
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
   .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
   .backcover-default { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
@@ -4904,6 +4947,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cover-art-title { font-family:'Cinzel',serif;font-size:30pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:11pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   .cover-art-logo { width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY}; }
+  /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
+     Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
+  ${coverTitleCss(co && co.titleStyle)}
 
   /* CAST PAGE */
   .cast-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
@@ -5032,7 +5078,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
         <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
-        <div class="cover-art-dates">${dateRange}</div>
+        <div class="cover-art-dates">${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
         ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
       </div>
     </div>
@@ -5042,7 +5088,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
     <div class="cover-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
-    <div class="cover-dates">${dateRange}</div>
+    <div class="cover-dates">${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
   </div>`}
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
@@ -5346,6 +5392,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     pageOpts.page = pageNum;
   }
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
+  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);   // v3.0.551 -- blank is meaningful: it means use the dates
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
   res.set('X-Total-Sessions', String(sessionsWithData.length));
   // v3.0.333 -- the INCLUDED count above has been on the wire since it was written and nothing ever
@@ -6530,6 +6577,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (req.query.nocover === '1') pageOpts.noCover = true;   // optimize/interior renders never include covers
   if (req.query.publicMode === '1') pageOpts.publicMode = true;   // published books mask real names to pen names
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
+  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);   // v3.0.551 -- blank is meaningful: it means use the dates
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
 
   // Book-wide panel index (reading order): a manifest the AI keys its signals to, and the

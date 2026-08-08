@@ -251,6 +251,8 @@
             <div class="prep-acc-body">
               <div class="prep-field-label">Title</div>
               <input type="text" id="prep-title" maxlength="200" placeholder="e.g. The Shattered Crown" class="prep-input" />
+              <div class="prep-field-label">Subtitle</div>
+              <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="Leave blank to use your session dates" class="prep-input" title="Sits under the title on the cover. Leave it empty and the cover shows your session date range, exactly as it does today." />
               <div class="prep-color-row">
                 <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
                 <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>

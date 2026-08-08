@@ -273,6 +273,7 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
     book_title: cur.book_title || '',
+    subtitle: cur.subtitle || '',   // v3.0.551 -- TD-346; blank means the cover falls back to the date range
     title_color: cur.title_color || '',
     layout_opts: cur.layout_opts || '',   // per (chooser, fork, campaign) layout choices -- stored beside the cover art
     own_cover: cur.cover_image_url || '', own_back: cur.back_cover_image_url || '', own_title: cur.title_image_url || ''
@@ -289,6 +290,7 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
   if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
+  if (b.subtitle !== undefined) patch.subtitle = b.subtitle || null;   // v3.0.551 -- null and empty both mean 'use the dates'
   if (b.title_color !== undefined) patch.title_color = b.title_color || null;
   // Layout choices (borders, paper, fonts, drop cap, narrative style, arrange...) ride in the SAME
   // per-(chooser, fork, campaign) prefs blob as the cover art, so they follow the book, not the browser.

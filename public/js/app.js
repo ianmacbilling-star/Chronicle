@@ -6745,6 +6745,7 @@ function loadNovelPreview(layout) {
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
   var _ptEl = document.getElementById('prep-title');
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
+  var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -6974,6 +6975,7 @@ function prepTrueView() {
   // The live fields, not the saved ones, so a title being typed is reflected without a save first.
   var _t = document.getElementById('prep-title');
   if (_t && _t.value && _t.value.trim()) url += '&bookTitle=' + encodeURIComponent(_t.value.trim());
+  var _s2 = document.getElementById('prep-subtitle'); if (_s2) url += '&subtitle=' + encodeURIComponent(_s2.value.trim());
   var _c = document.getElementById('print-title-color');
   if (_c && _c.value) url += '&titleColor=' + encodeURIComponent(_c.value);
   window.open(url, '_blank');
@@ -7033,6 +7035,11 @@ function prepSeedCoverFromCampaignImage() {
 function prepSyncTitle() {
   // v3.0.541 -- the admin-only True View button rides in here because prepSyncTitle is single-copy
   // and already runs on tab entry. loadNovelPreview has TWO copies and would need both patched.
+  // v3.0.551 -- the subtitle field. NOT seeded with the date range: the placeholder says what blank
+  // does, and the stored value stays empty until someone types one. Seeding it would make automatic
+  // unreachable and freeze a stale range into a book whose sessions later change.
+  var _sub = document.getElementById('prep-subtitle');
+  if (_sub) _sub.value = (state.bookMeta && state.bookMeta.subtitle) ? state.bookMeta.subtitle : '';
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
@@ -7056,6 +7063,19 @@ function prepSyncTitle() {
   if (_cEl) _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
 }
 // Persist the title color per user (campaign + user) via /my-book-meta, mirroring the title text.
+// v3.0.551 -- TD-346. Saves like the title colour: same route, same per-fork rules (TD-282 -- you
+// may read anyone s book settings and write only your own).
+// AN EMPTY VALUE IS SENT, NOT SKIPPED. Blank is a real state meaning "use the session dates", so
+// clearing the field has to reach the server and clear it there. Skipping empties would make the
+// subtitle a one-way door: settable, never unsettable.
+function prepSaveSubtitle() {
+  var el = document.getElementById('prep-subtitle');
+  if (!el || !state.currentCampaign) return;
+  if (typeof prepUseMember === 'function' && prepUseMember()) {
+    var _sB = { subtitle: el.value.trim() }; if (state.novelAsUser) _sB.fork_user = state.novelAsUser;
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_sB) });
+  }
+}
 function prepSaveTitleColor() {
   var el = document.getElementById('print-title-color');
   if (!el || !state.currentCampaign) return;
@@ -10651,6 +10671,7 @@ function loadNovelPreview(layout) {
     (novelPreviewMode === 'wysiwyg' ? '&format=pdf' : '');
   var _ptEl = document.getElementById('prep-title');
   if (_ptEl && _ptEl.value && _ptEl.value.trim()) url += '&bookTitle=' + encodeURIComponent(_ptEl.value.trim());
+  var _psEl = document.getElementById('prep-subtitle'); if (_psEl) url += '&subtitle=' + encodeURIComponent(_psEl.value.trim());
   var _tcEl = document.getElementById('print-title-color');
   if (_tcEl && _tcEl.value) url += '&titleColor=' + encodeURIComponent(_tcEl.value);
   // Paginate by session only in Quick View; True View renders the whole
@@ -16205,6 +16226,7 @@ function loadFinalize() {
   if (window._aiLoopRunning || window._aiPreloop || window._aiFinishing) return;
   var url = '/api/pdf/novel/' + state.currentCampaign.id + finalizeBookQuery() + '&format=pdf';
   var _pt = document.getElementById('prep-title'); if (_pt && _pt.value && _pt.value.trim()) url += '&bookTitle=' + encodeURIComponent(_pt.value.trim());
+  var _ps = document.getElementById('prep-subtitle'); if (_ps) url += '&subtitle=' + encodeURIComponent(_ps.value.trim());
   var _tc = document.getElementById('print-title-color'); if (_tc && _tc.value) url += '&titleColor=' + encodeURIComponent(_tc.value);
   if (loadFinalize._lastUrl === url) { finalizeLoadLastOptimized(); return; }   // came back: reveal the 'Load Last Optimized File' button if one is saved
   loadFinalize._lastUrl = url;
