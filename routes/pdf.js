@@ -928,12 +928,25 @@ function paneSafeHtml(html) {
 // the first two changes are worth roughly a third more room, so it should sit on one line
 // untouched. The ellipsis exists so that NOTHING can ever wrap again, not to trim this one.
 // Long titles are legacy: TD-319 caps new ones on the picture shape at generation time.
-function capScaleForShape(shape) {
-  if (shape === 'tower' || shape === 'tall') return 0.78;      // narrow: a big plate eats the art
-  if (shape === 'panoramic' || shape === 'wide' || shape === 'fullpage') return 1.0;    // REVERTED v3.0.511 -- see TD-331
-  return 1;                                                    // standard, square
-}
+// v3.0.518 -- RETIRED. TD-331 IS CLOSED BY DELETING THE MECHANISM, NOT BY IMPROVING IT.
+// Ian sent the two pictures that settle it, and they fail in OPPOSITE directions:
+//   a TOWER  -- the biggest picture in the book -- got 0.78 and a plate too small for it
+//   a landscape FLOAT -- 54 percent of a column -- got 1.00 and a plate too big for it
+// Ian: "pic 1.. it is small on a big pic... Pic 2 it is big on a small pic."
+// SHAPE IS ASPECT RATIO. IT IS NOT SIZE. That was said in v3.0.511 when the growth half was
+// reverted, and the shrink half was left in place because it had been asked for. It is the same
+// error and it survived because it happened to look right on the one picture it was judged on.
+// Removing it makes BOTH of Ian pictures better at once -- the tower plate grows to the common
+// size, the float plate shrinks to it -- and it costs nothing to thread, unlike sizing on the
+// real rendered width, which is only known at compose time.
+// If a uniform plate still reads wrong on a tower once seen, THEN thread the width. Do not build
+// the expensive half to fix a problem that deleting the wrong half may already have solved.
+function capScaleForShape() { return 1; }   // kept as a no-op so no call site can be missed
 // Round to a sensible CSS value so the emitted string stays short and stable.
+// v3.0.518 -- CAP_BASE_PT is the ONE size both the comic plate and the brass plaque are drawn at.
+// Ian: "Ultimately I would like the plate smaller." 8.5pt -> 7.5pt. One number, one place, so it
+// cannot drift the way the caption strip and cgCapFlow did.
+var CAP_BASE_PT = 7.5;
 function capPt(base, sc) { return (Math.round(base * sc * 10) / 10) + 'pt'; }
 function capPx(base, sc) { return Math.max(1, Math.round(base * sc)) + 'px'; }
 function coMediaPadBottom(border) {
@@ -973,12 +986,26 @@ function brassPlateHtml(title, bottomOffset, sc) {
       'border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff4d2,#8a6a2a 70%);' +
       'box-shadow:0 0 0 0.5px rgba(60,42,10,0.8);"></i>';
   };
+  // v3.0.518 -- SCALLOPED CORNERS. Ian: "if you can scallop the corners that would be cool."
+  // Four concave quarter-round bites taken out of the corners with radial-gradient masks, which is
+  // how a cast plaque is actually shaped. Done with -webkit-mask rather than clip-path on purpose:
+  // clip-path would also cut the drop shadow and the 1px border, flattening the plaque into a
+  // sticker. A mask leaves the border painted along the scalloped edge.
+  // GRACEFUL BY CONSTRUCTION: if the mask is not honoured the plaque simply renders as the
+  // rounded rectangle it is today. Nothing depends on it.
+  var _sc = Math.max(3, Math.round(5 * sc));   // scallop radius, tied to the plate size
+  var _bite = 'radial-gradient(circle ' + _sc + 'px at ';
+  var _mask = _bite + '0 0, transparent 99%, #000 100%), ' +
+    _bite + '100% 0, transparent 99%, #000 100%), ' +
+    _bite + '0 100%, transparent 99%, #000 100%), ' +
+    _bite + '100% 100%, transparent 99%, #000 100%)';
   return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
-    'transform:translateX(-50%);max-width:78%;padding:' + capPx(4, sc) + ' ' + capPx(20, sc) + ' ' + capPx(5, sc) + ';border-radius:2px;' +
+    'transform:translateX(-50%);max-width:78%;padding:' + capPx(4, sc) + ' ' + capPx(16, sc) + ' ' + capPx(5, sc) + ';border-radius:2px;' +
     'background:linear-gradient(180deg,#e0c77c 0%,#c9a84c 34%,#a8862f 68%,#8a6a2a 100%);' +
     'border:1px solid #5f4715;' +
+    '-webkit-mask:' + _mask + ';-webkit-mask-composite:source-in;mask:' + _mask + ';mask-composite:intersect;' +
     'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.75),inset 0 -1px 0 rgba(0,0,0,0.3);' +
-    'font-family:Cinzel,serif;font-size:' + capPt(8.5, sc) + ';font-weight:700;letter-spacing:0.08em;' +
+    'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#2a1c08;text-shadow:0 1px 0 rgba(255,248,220,0.45);' +
     'line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
     rivet('left') + rivet('right') + title + '</div>';
@@ -1031,7 +1058,7 @@ function coCaptionOverlay(m, caption, border) {
   var _capT = coMediaPadTop(border);
   var _capSc = capScaleForShape(m && m.shape);   // v3.0.508 -- furniture scales with the picture
   if (caption === 'plate')
-    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'brass') return brassPlateHtml(m.title, _capB, _capSc);
   // v3.0.512 -- INSET SO THE FRAME STAYS INTACT. left/right/bottom now stop at the artwork
   // instead of at the outside of the frame. See coInsetX / coInsetBottomCss.
@@ -1196,7 +1223,15 @@ function cgBoxCss(m, opts) {
 function cgBoxInner(mediaHtml, m, opts, outerBare) {
   var cap = opts && opts.caption;
   if (!cgCapIsBelow(cap) || !m || !m.title)
-    return mediaHtml + picOverlay(opts) + coCaptionCover(m, cap);   // byte-identical to before
+    // v3.0.518 -- THE FRAME IS DRAWN LAST. Ian, on a caption sitting under the frame line:
+    // "maybe put the frame on there last... is there an order of events that could help?" There is,
+    // and this is it. picOverlay is the bronze frame lines and corner diamonds; emitting it AFTER
+    // the caption puts it on top in paint order, so the frame reads as one continuous line across
+    // the plaque instead of the plaque sitting on a broken one. Both are absolutely positioned
+    // overlays and picOverlay is pointer-events:none, so this is paint order only -- it cannot move
+    // anything. This is the on-image caption path (brass, plate, gradient); the below-image path a
+    // few lines down keeps the caption outside the frame entirely.
+    return mediaHtml + coCaptionCover(m, cap) + picOverlay(opts);
   // v3.0.514 -- NOTHING LEAVES NORMAL FLOW. THE ABSOLUTE VERSION DELETED SIX PICTURES.
   // v3.0.513 put the media in `position:absolute`. In a box with a FIXED height that is fine. In a
   // box whose height comes FROM the picture -- cgFlowWide and cgFlowFeature s wide branch, both of
@@ -1280,7 +1315,7 @@ function coCaptionCover(m, caption) {
   var _capSc = capScaleForShape(m && m.shape);   // v3.0.508
   if (caption === 'brass') return brassPlateHtml(m.title, '0px', _capSc);   // the band's box IS the image box
   if (caption === 'plate')
-    return '<div style="position:absolute;top:0;left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(8.5, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:0;left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'gradient')
     return '<div style="position:absolute;left:0;right:0;bottom:0;padding:0.4in 0.22in 0.12in;background:linear-gradient(to top,rgba(10,8,6,0.88),rgba(10,8,6,0.4) 55%,rgba(10,8,6,0));color:#f3e7c8;font-family:Cinzel,serif;font-size:10pt;font-weight:600;letter-spacing:0.03em;line-height:1.3;">' + m.title + '</div>';
   // v3.0.512 -- the top-anchored twin. No inset here: in a band the frame is a real CSS border
@@ -1958,7 +1993,7 @@ function huggingImgBox(m, opts, outerCss, floorH) {
     // is why it survived a whole round of eyeballing. Ninth of nine.
     '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-      picOverlay(opts) + coCaptionCover(m, opts.caption) +
+      coCaptionCover(m, opts.caption) + picOverlay(opts) +   // v3.0.518 -- frame last, see cgBoxInner
     '</div>' +
     cgCapFlow(m, opts) +
   '</div>';
