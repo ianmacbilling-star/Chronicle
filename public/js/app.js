@@ -13230,7 +13230,12 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   narr:'plain', font:'classic', dropcap:0, paper:'white',
   pano:1, aside:1, companion:1, emphasis:0,
   cover:1, cast:1, toc:1, header:1, markers:1, markerbreak:0, watermark:1,
-  hidelogo:0
+  hidelogo:0,
+  // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
+  // serialises into the co string, persists through layout_opts and reaches every render path with
+  // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
+  // untouched.
+  titlePlace:'bottom'
 };
 function clClone(o){ var r={}; for (var k in o) { if (o.hasOwnProperty(k)) r[k]=o[k]; } return r; }
 var customOpts = clClone(CUSTOM_LAYOUT_DEFAULTS);   // ONE unified layout (session & novel share it); stored per (user, fork, campaign)
@@ -13381,7 +13386,7 @@ function finalizeClearStats(){
     if (_norm) { customOpts = _norm.opts; customActive = _norm.active; }
   } catch (e) {}
 })();
-var CL_SELECTS = ['arrange','border','caption','paper','narr','font'];
+var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace'];   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
 var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','hidelogo'];
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
@@ -13483,6 +13488,12 @@ function prepLayoutLoad(){
   // Commit panel selections to the unified customOpts the moment any control changes, so a plain
   // Refresh (not just Apply) reflects the chosen arrangement. Programmatic .value sets above
   // don't fire 'change', so this never clobbers on load.
+  // v3.0.553 -- the Title & Cover panel commits too. prepLayoutCommit reads pcl-* controls by ID,
+  // so a control there is read correctly wherever it sits -- but the change LISTENER is bound to the
+  // Layout panel, so without this a placement change would be read only when something in Layout
+  // happened to change as well.
+  var _cp = document.getElementById('prep-acc-cover');
+  if (_cp && !_cp._commitWired) { _cp._commitWired = true; _cp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
   var _lp = document.getElementById('prep-acc-layout');
   if (_lp && !_lp._commitWired) { _lp._commitWired = true; _lp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
 }

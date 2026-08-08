@@ -2116,6 +2116,42 @@ function keylineMatMaxPx() { return keylineMatPx(99); }
 // later build; the shape is a lookup so adding a ninth is a data change, not a UI change, and
 // user-authored presets are the same object stored per user (see COVER_TITLE_SPEC.md section 8).
 var COVER_TITLE_PRESETS = { chronicle: "" };
+// v3.0.553 -- TD-346 step 3: TITLE PLACEMENT, AND THE TWO THINGS THAT HAVE TO MOVE WITH IT.
+// Placement is not just moving a block. Two other things must follow, and one of them is not
+// obvious from looking at the markup.
+//
+// THE SCRIM MUST CHANGE DIRECTION. `.cover-art-caption` carries a gradient behind the type and it
+// is the ONLY reason a title is readable over arbitrary generated art. It fades upward from the
+// bottom edge. At the top it has to fade downward; in the middle it needs a band fading both ways.
+// If the scrim did not follow, a top-placed title would sit on raw artwork and be unreadable on a
+// large fraction of covers. That is why placement is a single control and the scrim is not exposed
+// separately -- it is the thing a user would break first.
+//
+// AND THE ART ANCHORING MUST FLIP. `object-position:center top` is deliberate: a generated image
+// puts its subject in the upper two-thirds, and the bottom is the part the title is allowed to
+// cover. Put the title at the top WITHOUT flipping this and you are covering exactly the part that
+// was being protected.
+//
+// BOTTOM RETURNS THE EMPTY STRING, for the same reason chronicle does: it is the default, every
+// existing book has it, and contributing nothing means those covers are untouched BY CONSTRUCTION
+// rather than by comparison. The apply script asserts that emptiness.
+//
+// The scrim stops are the SAME three values in every direction -- 0.95, 0.6, 0 -- so the three
+// placements are one scrim pointed three ways rather than three scrims that can drift apart.
+var COVER_PLACE = {
+  bottom: '',
+  top: '.cover-art-caption { top:0; bottom:auto; justify-content:flex-start; padding:0.5in 0.4in 0;' +
+    ' background:linear-gradient(to bottom, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }' +
+    ' .cover-art-img { object-position:center bottom; }',
+  middle: '.cover-art-caption { top:50%; bottom:auto; height:46%; transform:translateY(-50%);' +
+    ' justify-content:center; padding:0 0.4in;' +
+    ' background:linear-gradient(to bottom, rgba(10,6,4,0) 0%, rgba(10,6,4,0.6) 18%, rgba(10,6,4,0.95) 50%, rgba(10,6,4,0.6) 82%, rgba(10,6,4,0) 100%); }' +
+    ' .cover-art-img { object-position:center center; }'
+};
+function coverPlaceCss(place) {
+  var k = String(place || 'bottom');
+  return Object.prototype.hasOwnProperty.call(COVER_PLACE, k) ? COVER_PLACE[k] : COVER_PLACE.bottom;
+}
 function coverTitleCss(key) {
   var k = String(key || 'chronicle');
   return Object.prototype.hasOwnProperty.call(COVER_TITLE_PRESETS, k) ? COVER_TITLE_PRESETS[k] : COVER_TITLE_PRESETS.chronicle;
@@ -4618,6 +4654,8 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${coverTitleCss(co && co.titleStyle)}
+  /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
+  ${coverPlaceCss(co && co.titlePlace)}
   .backcover-page { width:8.5in;height:11in;background:#1a0f08;page:backcover;page-break-before:always;position:relative;overflow:hidden; }
   .backcover-inner { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:0.7in; }
   .backcover-default { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
@@ -4993,6 +5031,8 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${coverTitleCss(co && co.titleStyle)}
+  /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
+  ${coverPlaceCss(co && co.titlePlace)}
 
   /* CAST PAGE */
   .cast-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
