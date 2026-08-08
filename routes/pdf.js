@@ -4961,7 +4961,36 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // title block takes about 1.3, the pushed-down row took 1.6 more, and the roster needs its foot.
   // The figures ran off the bottom. 5.2in plus the title plus the roster leaves real margin, and it
   // is still more than double where the day started.
-  var _castHCap = (_castRows === 1) ? 5.2 : (_castRows === 2 ? 2.6 : 1.9);
+  // v3.0.572 -- 5.2 BACK TO 3.1, AND IT IS A RETREAT WITH A REASON. Ian: "we lost two characters."
+  // Humble and Dumble -- the two FAR figures -- vanished entirely from a five-gnome page.
+  // THE BOXES ARE STILL OPAQUE. The white grounds measure 251,251,252 rather than pure white, so
+  // mix-blend-mode:multiply does not clear them (v3.0.570), and at 5.2in the box is 3.22in wide with
+  // only 0.89in of step -- so a near figure's rectangle is nearly four times the gap to its
+  // neighbour and paints over that neighbour COMPLETELY. Not crowding: erasure.
+  // SIZE AND COMPLETENESS ARE IN DIRECT CONFLICT UNTIL THE GROUNDS ARE REALLY TRANSPARENT, and
+  // losing two of five characters is far worse than smaller figures. 3.1in is the largest height at
+  // which a box cannot swallow its neighbour: it leaves the step at 62 percent of the box width.
+  // THIS IS TEMPORARY. TD-362 cuts the white to alpha once at generation; the moment images carry
+  // real transparency this number goes straight back up, because nothing else was wrong with 5.2.
+  // v3.0.572 -- THE SINGLE-ROW HEIGHT IS DERIVED FROM THE PARTY SIZE, NOT PICKED.
+  // Ian: "we lost two characters." Humble and Dumble -- the two FAR figures -- vanished from a
+  // five-gnome page. THE BOXES ARE STILL OPAQUE: the generated grounds measure 251,251,252 rather
+  // than pure white, so mix-blend-mode:multiply does not clear them (v3.0.570 assumed it would). At
+  // a 5.2in cap the box is 3.22in wide with 0.89in of step, so a near figure's rectangle is nearly
+  // four times the gap to its neighbour and paints over it COMPLETELY. Not crowding: erasure.
+  // A FIXED CAP IS THE WRONG SHAPE. 3.1in is safe for five figures and NOT for six -- caught by the
+  // guard in this build's own apply script, which swept party sizes rather than checking the one on
+  // Ian's screen. Solving for the constraint instead gives every party the largest height that still
+  // leaves a neighbour visible: CG_W >= h * ASP * (1 + 0.6 * (n - 1)).
+  //     2 figures  6.6in      4 figures  3.9in      6 figures  2.7in
+  //     3 figures  5.0in      5 figures  3.2in      7 figures  2.4in
+  // Small parties get BIGGER figures than the old flat 4.2in ever allowed, which is the opposite of
+  // what a constant could do.
+  // TEMPORARY, AND THE 0.6 IS THE ONLY REASON FOR IT. TD-362 cuts the white to alpha once at
+  // generation; with real transparency a box can overlap freely and this reverts to the page budget.
+  var CAST_MIN_STEP_RATIO = 0.60;     // a step below this and the near figure erases its neighbour
+  var _castHFit = CG_W / (CAST_ASP * (1 + CAST_MIN_STEP_RATIO * Math.max(1, _castPerRow - 1)));
+  var _castHCap = (_castRows === 1) ? Math.min(6.0, _castHFit) : (_castRows === 2 ? 2.6 : 1.9);
   if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
   var _castH = _castW / CAST_ASP;
   // v3.0.569 -- A SINGLE ROW IS SIZED FROM ITS HEIGHT TARGET, NOT FROM AN OVERLAP CONSTANT.
