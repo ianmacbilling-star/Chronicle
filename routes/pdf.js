@@ -2037,274 +2037,150 @@ function picFrameSplit(totalPx) {
 // It returns an absolutely-positioned inset:0 overlay with pointer-events:none, so it can only
 // PAINT. It cannot move anything, whichever box it is dropped into.
 function bronzeMouldingHtml(railPx, matPx) {
-    // v3.0.520 -- A LIT BEZEL INSTEAD OF FLAT RINGS.
-    // THE BEZEL is a border-image gradient running at 135 degrees, so light falls from the top-left:
-    // bright brass on the top and left rails, the value rolling down through the corner turn to a
-    // dark trough, then lifting again on the bottom-right. A single gradient does what four flat
-    // rings could never do, because nothing in those rings varied.
-    // FALLBACK IS THE FIRST DECLARATION, DELIBERATELY: border is set to a solid brass BEFORE
-    // border-image, so if border-image is ever not honoured the frame degrades to a plain brass edge
-    // rather than to a transparent one. A transparent border would delete the frame outright.
-    // COSTS NOTHING: this div is position:absolute with inset:0, so its border is drawn INSIDE the
-    // box. Not a pixel of layout moves, which is why the whole frame family can be reworked freely.
-    // THE STUDS get the brass plaque treatment -- a lit face and a contact shadow -- so they read as
-    // raised hardware rather than as rotated squares. The plaque rivets already proved that reads.
-    // v3.0.521 -- WIDER, because a bevel needs room to be a bevel. At 4px there are four pixels to
-    // carry the whole light-to-dark roll and it reads as a line. 6px at the reference size is the
-    // narrowest that still looks like a moulding.
-    // v3.0.522 -- WIDER AGAIN, and this time it is load-bearing rather than cosmetic: eight planes
-    // and a bead course need somewhere to live. 10px at the reference size, 8px on a small float,
-    // 14px on a feature. Ian, on the reference photographs: "I know those are wider etc."
-    // v3.0.523 -- NARROWER. Ian: "in general the frame is just a little too wide." 10px -> 8px at
-    // the reference size. The profile keeps all its planes; they each get proportionally less room,
-    // which is fine now that the ORDER is right and the eye has the plane breaks to read.
-    // v3.0.526 -- THINNER AGAIN. Ian: "make the outer flat band a little thinner... pull the inner
-    // bands closer to the edge to thin the whole thing up a little more." 8px -> 7px at reference,
-    // and the profile below is re-cut so the outer ogee gives up most of the width.
-    var _bw = railPx;      // rail width, supplied by the caller
-    // The studs sit ON the rail and are centred across it, so they read as hardware set into the
-    // moulding rather than as decorations floating near the corner.
-    // v3.0.522 -- the corner blocks shrink to sit IN the moulding rather than across it. At 0.8 of
-    // a 10px rail a stud is nearly the whole rail and it swallows the corner; at 0.45 it reads as a
-    // block set into the bead bed, which is where a real one goes.
-    // v3.0.529 -- 0.45 -> 0.57. Ian: "make the corner rivets just a little bigger... I want to make
-    // sure they cover the seams behind them", then, on how far to go: "I just want to cover the
-    // inside bronze parts of the frame, not the dark exterior frame band." THE SEAM is where the
-    // left and right rails butt into the top and bottom ones -- the rails are background layers and
-    // at 5-11px a mitre is not resolvable, so the block is the cover. Centred at 0.57 the block
-    // starts about 21 percent in, which is just inside the outer face, so the dark exterior band
-    // stays visible and the bronze interior is covered. Full coverage would need about 0.85 and
-    // v3.0.522 warned that near-full-width swallows the corner; this is deliberately short of that.
-    // v3.0.530 -- 0.57 -> 0.70. Ian, after looking at it: "you were right, 57 percent did not cut
-    // it on the rivet size, can we go to 70 percent instead?" It did not: centred at 0.57 the block
-    // started about 21 percent in, which left the seam showing at both ends of the corner. At 0.70
-    // the margin drops to about 15 percent a side, so the block reaches the rail s inner lip while
-    // the dark exterior band still shows outside it -- which was his actual requirement.
-    var _dw = Math.max(3, Math.round(_bw * 0.70));   // corner block size
-    var _di = Math.max(1, Math.round((_bw - _dw) / 2));
-    // v3.0.521 -- THE GRADIENT HAS TO RUN ACROSS EACH RAIL, NOT ALONG IT.
-    // v3.0.520 used ONE border-image gradient at 135 degrees. border-image slices a single image
-    // into nine pieces, so the TOP rail receives the top STRIP of that gradient: it varies left to
-    // right ALONG its length and is one flat colour ACROSS its thickness. Four flat bands again,
-    // just four different ones. **Ian named the signature exactly**: "you can see that the top right
-    // is darker than the top Left... but the frame itself is still very flat." That is a diagonal
-    // gradient painted over a frame, not a lit moulding.
-    // A SURFACE READS AS TILTED WHEN ITS VALUE CHANGES ACROSS ITS WIDTH. So each rail now gets its
-    // OWN gradient running from its outer edge to its inner edge, as four background layers sized
-    // to the rails and no-repeat, leaving the middle transparent so the picture shows through.
-    // Light from the top-left: the top and left rails run bright outer to mid inner (facing the
-    // light), the bottom and right run dark outer to mid inner (turned away). The value difference
-    // BETWEEN opposite rails gives the object its direction; the value change WITHIN each rail is
-    // what makes it look like metal with a curve on it.
-    // v3.0.522 -- A PROFILE WITH HARD PLANE BREAKS, AND A BEAD COURSE.
-    // Ian sent three photographs of real carved mouldings and said: "honestly I want this... something
-    // that is closer to that than straight lines." Looking at them properly, what makes them read is
-    // NOT smooth shading -- it is (a) HARD STEPS between distinct planes and (b) a REPEATING ORNAMENT.
-    // v3.0.521 gave every rail a smooth roll across its thickness, which was the right diagnosis of
-    // the v3.0.520 failure and still produced something flat, because a smooth roll over 6px is a
-    // slightly uneven line. A carved moulding is a stack of FLAT FACES at different angles, and the
-    // eye reads the BREAKS between them.
-    // So each rail is now ONE gradient with hard stops -- outer edge, highlight, ogee, dark base,
-    // recessed black channel, bead bed, bright gold fillet, dark lip onto the artwork -- eight planes
-    // instead of a ramp. And a tiled bead course runs in the bead bed, which is the repeating
-    // ornament that stops the whole thing reading as lines.
-    // AN SVG MOULDING WAS BUILT AND MEASURED FIRST and rejected on cost, not on looks: a mitred
-    // nine-slice frame is 12.1KB per picture as a data URI, 710KB of extra HTML on a 60-picture book.
-    // Putting it in a stylesheet instead means writing it into THREE separate style blocks, which is
-    // the exact drift trap this codebase keeps falling into. This does the same job for 1.3KB.
-    // v3.0.523 -- THE ORDER OF THE PLANES CHANGED, AND THE BRONZE WARMED.
-    // Ian, on the first version that read as a real moulding: "make the bronze parts a little
-    // bronzer closer to the plate and the corner pieces. And put the more ornate part of the frame
-    // as the inner / middle band. And move the flat band to the inside and make it a little thinner."
-    // COLOUR: every bronze stop now comes off the brass plaque ramp (#f4e6b8 / #e0c77c / #c2a55f /
-    // #a8862f / #8a6a2a / #6b5119) and the corner-block highlight, so the frame, the corner blocks
-    // and the plaque are one material instead of three golds that nearly match.
-    // ORDER, outer edge to artwork: thin dark edge, highlight, outer ogee, dark step, recessed black
-    // channel, THE BEAD COURSE (now the middle band, was sitting further out), a dark step, then a
-    // THIN FLAT bronze band against the picture, and the dark lip. The ornament is in the middle
-    // where it reads, and the flat band is the last thing before the artwork, which is how a real
-    // moulding steps down to the rebate.
-    // v3.0.524 -- THE FRAME READ BROWN, NOT BRONZE, AND IT WAS MEASURABLE.
-    // Ian, after v3.0.523 warmed the individual stops: "I can see that the frame is smaller but the
-    // color is not any better." He was right and warming the bronzes was the wrong lever. Averaging
-    // each rail by how much of its width every plane occupies:
-    //     lit rail    #8f783f      shadow rail  #574318      WHOLE FRAME  #735e2c
-    //     brass plaque                                                    #a7883e
-    // The frame averaged THIRTY PERCENT darker than the plaque, and the cause was BLACK: 32 percent
-    // of the lit rail and 38 percent of the shadow rail were near-black step colours. The plaque has
-    // none. At an 8px rail those sub-pixel dark planes do not read as STEPS at all -- they just drag
-    // the average down, which is exactly the olive-brown Ian saw.
-    // TWO CHANGES, both structural rather than cosmetic:
-    //   the dark steps are THINNER and are dark BRONZE rather than black. A step only has to be
-    //   darker than its neighbours to read as a break; it does not have to be a hole.
-    //   the shadow rails come up out of charcoal. The unlit side of a brass frame is still brass.
-    // Result: frame #987f42 against plaque #a7883e -- 5 percent apart, down from 30. Near-black
-    // falls from 32/38 percent to 21/26.
-    // v3.0.526 -- ONE BRONZE, TAKEN FROM THE CORNER BLOCKS. Ian: "make the bronze parts the same
-    // color as the corner squares. So it is consistent." The blocks are
-    // linear-gradient(135deg,#f4e6b8 -> #c9a84c -> #7a5d22), so those three are now the rail s
-    // highlight, body and shade. Frame, blocks and plaque finally come off one ramp.
-    // AND THE PROFILE IS RE-CUT, outer edge to artwork, so the outer flat band is thinner and every
-    // inner band moves outward: dark edge 4, highlight 5, outer ogee 13 (was 20), dark step 5,
-    // channel 9, BEAD BED 30 (the middle band, and now genuinely in the middle on all four rails),
-    // step 6, inner flat band 16, lip 12.
-    // v3.0.528 -- NINE PLANES WENT IN, ONE CAME OUT. THE PROFILE IS RE-CUT TO FIVE.
-    // Ian, on v3.0.527 with the dark ring finally gone: "It is sorta 3D. It is hard to tell really.
-    // I cannot tell if it is shading or just all the detail playing tricks on me." He was reading it
-    // correctly. The nine-plane profile was MEASURED against the rail widths it actually renders at:
-    //
-    //     plane            typical (7px rail)     feature (9px rail)
-    //     dark edge          0.28px                 0.36px
-    //     HIGHLIGHT          0.35px                 0.45px
-    //     ogee roll          0.91px                 1.17px
-    //     dark step          0.35px                 0.45px
-    //     black channel      0.63px                 0.81px
-    //     bead bed           2.10px                 2.70px
-    //     step               0.42px                 0.54px
-    //     inner flat         1.12px                 1.44px
-    //     dark lip           0.84px                 1.08px
-    //
-    // EIGHT OF THE NINE WERE SUB-PIXEL AT EVERY SIZE, and the highlight -- the one cue that says
-    // LIT -- was between a quarter and a half of a pixel everywhere. It cannot paint as a band; it
-    // is antialiased into its neighbours before it reaches the eye. The only plane with real estate
-    // was the bead bed. So what was actually painted was beads and a wash, which is precisely what
-    // Ian described. THIS IS TD-341 IN A DIFFERENT COSTUME: nine planes authored, one painted.
-    // v3.0.524 even noticed the near-black steps were sub-pixel and treated it as a colour-averaging
-    // problem. It was a resolution problem all along.
-    // FIVE PLANES, each at least a pixel at the reference rail. Four breaks you can see beats eight
-    // you cannot. Real carved mouldings do not have many planes either.
-    //
-    // AND THE LIGHT DIRECTION IS NOW CORRECT, WHICH IS IAN S CALL AND IT IS THE PHYSICS.
-    // Ian: "the left and top need the light part on the outside of the frame... and the bottom and
-    // right sides the lighter part needs to be on the inside. As it is the darker shadow is always
-    // on the outside all the way around." Exactly right. With light from the upper-left, the TOP
-    // rail s outer face tilts up INTO the light (bright outside) while the BOTTOM rail s outer face
-    // tilts down AWAY from it (dark outside) and its INNER face tilts up into it (bright inside).
-    // Same for left versus right. Before this the two palettes shared one value ORDER and differed
-    // only in brightness, which reads as a groove, not as a lit object.
-    //
-    // DONE BY AUTHORING THE VALUES, NOT BY FLIPPING THE GRADIENT DIRECTION. Reversing the shadow
-    // rails would also reverse the bead bed, and the bead course is positioned from each rail s
-    // OUTER edge by a single number -- so a flip would need a second number for two of the four,
-    // which is the one-rule-in-two-places trap this file keeps falling into. Instead all four rails
-    // still run outer edge to artwork, the bead bed is CENTRED on 50 percent so it is identical on
-    // every side, and only the value distribution differs. One geometry, two palettes, one _by.
-    //
-    //   band          outer->inner    lit rail (top/left)      shadow rail (bottom/right)
-    //   outer face     0-20%          #f4e6b8  brightest        #241708  darkest
-    //   step          20-34%          #e0c77c                   #5f4715
-    //   BEAD BED      34-66%          #a8862f                   #8a6a2a      <- centred on 50%
-    //   inner face    66-86%          #7a5d22  turning away     #e0c77c  BRIGHT, faces the light
-    //   lip           86-100%         #3d2d0c                   #3d2d0c      <- same on all four
-    //
-    // The lip stays dark on ALL four sides: it is where the moulding meets the artwork and the frame
-    // has to terminate crisply against the picture whichever way the light falls. The outer edge is
-    // NOT dark on the lit rails -- it does not need to be, because v3.0.527 s 1px outer hairline is
-    // still there doing exactly that job. Every colour continues to come off the corner-block ramp
-    // (#f4e6b8 / #c9a84c / #7a5d22) so frame, blocks and plaque remain one material.
-    var _lit  = '#f4e6b8 0 20%,#e0c77c 20% 34%,#a8862f 34% 66%,#7a5d22 66% 86%,#3d2d0c 86% 100%';
-    var _shad = '#241708 0 20%,#5f4715 20% 34%,#8a6a2a 34% 66%,#e0c77c 66% 86%,#3d2d0c 86% 100%';
-    var _railT = 'linear-gradient(180deg,' + _lit  + ')';
-    var _railL = 'linear-gradient(90deg,'  + _lit  + ')';
-    var _railB = 'linear-gradient(0deg,'   + _shad + ')';
-    var _railR = 'linear-gradient(270deg,' + _shad + ')';
-    // The bead course: one tiled radial gradient per side, sitting in the bead bed (50-72 percent of
-    // the rail). Transparent past 64 percent of the tile so the beads are separate objects with the
-    // bed showing between them, not a sausage.
-    var _bead = 'radial-gradient(circle at 50% 50%,#fff3cf 0 14%,#d9bd6a 38%,#6b5119 62%,rgba(0,0,0,0) 64%)';
-    // The bead course follows its bed: centred on 59 percent of the rail, which is the middle of the
-    // 46-72 percent band above. If the profile stops move, this must move with them -- one number
-    // describing one thing, which is the rule this file keeps re-learning.
-    // v3.0.529 -- AN OFF-WHITE MAT INSIDE THE FRAME. Ian, from a picture whose artwork happened to
-    // carry a white border: "on the inside of the bronze frame add an off white colored border
-    // similar to this. It is like a Matting. Maybe it could be shaded properly too. The top here
-    // looks good, the sides are just a little too wide."
-    // HIS REFERENCE WAS MEASURED RATHER THAN GUESSED AT. Scanning across the frame edge of that
-    // screenshot: an 11px rail, then the band at 4px on the sides and 2px on the top -- and the
-    // band was already shaded, running 208 -> 232 -> 246 -> 229 outward to inward. Darkest where it
-    // meets the moulding, brightest just inside that. "Top good, sides too wide" therefore means
-    // ABOUT A FIFTH OF THE RAIL, not a third: a bright fillet, not a broad mat.
-    // TWO BANDS, NOT A RAMP, and for the same reason the profile was re-cut at v3.0.528: at 2px a
-    // three-stop gradient is three sub-pixel stops and paints as one flat smear. A hard 50 percent
-    // split lands on whole pixels and actually reads as a bevel catching the light.
-    // IT COVERS THE OUTERMOST SLIVER OF THE ARTWORK rather than moving it. picOverlay is inset:0
-    // and pointer-events:none -- it can only paint. That is TD-166 applied literally: the picture
-    // pays, not the page. At 2px the crop is nothing, but it is a crop and it is deliberate.
-    // v3.0.530 -- THE MAT SHADES THE OPPOSITE WAY TO THE FRAME, AND IAN CAUGHT IT: "I think you
-    // have the shading reversed on it. The top and left should be the darker one and bottom right
-    // the lighter one." He is right, and it is worth writing down WHY, because it looks like a
-    // contradiction sitting one line away from the moulding that does the opposite.
-    // THE MOULDING IS CONVEX -- a raised ridge. Light from the upper-left strikes its top and left
-    // faces, so those are bright (v3.0.528).
-    // THE MAT APERTURE IS CONCAVE -- a bevel cut INWARD to the picture. The bevel at the TOP of the
-    // opening faces DOWN, away from the light, so it is in shadow; the bevel at the BOTTOM faces UP
-    // into it, so it is the bright one. Exactly inverted, and both are correct. This is why a real
-    // mounted print reads as a window rather than as a second frame.
-    // Same two hard 1px bands as v3.0.529 -- at 2 to 3px a three-stop ramp is three sub-pixel stops
-    // and paints as one flat smear, which is the v3.0.528 lesson and it has not stopped being true.
-    var _mw = matPx;      // mat width, supplied by the caller
-    var _matSh = '#c9c1af 0 50%,#dcd5c6 50% 100%';   // top and left: the shadowed bevel
-    var _matLt = '#ece7d9 0 50%,#f8f5ec 50% 100%';   // bottom and right: the lit bevel
-    var _matT = 'linear-gradient(180deg,' + _matSh + ')';
-    var _matL = 'linear-gradient(90deg,'  + _matSh + ')';
-    var _matB = 'linear-gradient(0deg,'   + _matLt + ')';
-    var _matR = 'linear-gradient(270deg,' + _matLt + ')';
-    var _bt = Math.max(3, Math.round(_bw * 0.38));      // bead tile
-    // v3.0.528 -- KEPT TO ONE DECIMAL RATHER THAN ROUNDED TO A WHOLE PIXEL, and the apply-script
-    // sweep is what forced it. _bt has a floor of 3px, so on a 6px rail Math.round(1.5) went UP to
-    // 2 and pushed the whole bead course half a pixel past the inner edge of its bed. Three sample
-    // sizes did not catch it; sweeping every rail width the scale can produce did. A tenth of a
-    // pixel in a background-position is perfectly legal and centres the course exactly at every
-    // width, which is what one-number-describing-one-thing is supposed to mean.
-    var _by = Math.max(1, Math.round((_bw * 0.50 - _bt / 2) * 10) / 10);   // centred on the bead bed (34-66 percent, midpoint 50)
-    var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:' + _dw + 'px;height:' + _dw + 'px;' +
-      'background:linear-gradient(135deg,#f4e6b8 0%,#c9a84c 45%,#7a5d22 100%);' +
-      'box-shadow:0 1px 1.5px rgba(0,0,0,0.65),inset 0 0 0 0.5px rgba(255,248,220,0.55);"></i>'; };
-    // v3.0.521 -- the studs are SQUARE, not diamonds. Ian: "turn the squares in the corners a
-    // quarter turn so the corners are in the corner of the paintings." A 45-degree square points
-    // its vertices up, down, left and right -- away from the corner it is sitting in. Unrotated,
-    // its corners aim into the corner of the frame, which is how a real corner block is set.
-    var _p = _di + 'px;';
-    var _diamonds = _d('top:' + _p + 'left:' + _p) + _d('top:' + _p + 'right:' + _p) + _d('bottom:' + _p + 'left:' + _p) + _d('bottom:' + _p + 'right:' + _p);
-    // The four rails as background layers. First layer paints on top, so top and bottom own the
-    // corners and the side rails butt into them -- at 4-8px a mitre is not resolvable anyway.
-    // Beads are declared FIRST so they paint on top of the rail they sit in.
-    var _bg = _bead + ' 0 ' + _by + 'px / ' + _bt + 'px ' + _bt + 'px repeat-x, ' +
-      // v3.0.526 -- THE BOTTOM AND RIGHT BEAD COURSES WERE IN THE WRONG BAND, AND IT IS A CSS TRAP.
-      // Ian, from a 250 percent blow-up of a corner: "it consists of 4 bands.. the beaded band is on
-      // the inside. The side is different. The beaded band is in the middle."
-      // In background-position a PERCENTAGE resolves against (container - image), NOT container. So
-      // calc(100% - Npx) is already short by the tile height before the subtraction happens. On an
-      // 8px rail with a 3px bead the bottom course landed 6px from the outer edge instead of 3 --
-      // a whole band inward. Top and left used a plain length and were right all along, which is
-      // exactly the asymmetry he saw. Subtract only the inset; the percentage has done the rest.
-      _bead + ' 0 calc(100% - ' + _by + 'px) / ' + _bt + 'px ' + _bt + 'px repeat-x, ' +
-      _bead + ' ' + _by + 'px 0 / ' + _bt + 'px ' + _bt + 'px repeat-y, ' +
-      _bead + ' calc(100% - ' + _by + 'px) 0 / ' + _bt + 'px ' + _bt + 'px repeat-y, ' +
-      _railT + ' top left / 100% ' + _bw + 'px no-repeat, ' +
-      _railB + ' bottom left / 100% ' + _bw + 'px no-repeat, ' +
-      _railL + ' top left / ' + _bw + 'px 100% no-repeat, ' +
-      _railR + ' top right / ' + _bw + 'px 100% no-repeat, ' +
-      // THE MAT IS DECLARED LAST so every rail paints on top of it and the moulding keeps its own
-      // inner lip. Note the bottom and right positions: the SAME percentage-resolution trap that
-      // put the bead courses a whole band out at v3.0.526. In background-position a percentage
-      // resolves against (container - image), so with an image _mw tall, 100% already means
-      // (containerH - _mw). Subtract only the rail -- the percentage has done the rest.
-      _matT + ' 0 ' + _bw + 'px / 100% ' + _mw + 'px no-repeat, ' +
-      _matB + ' 0 calc(100% - ' + _bw + 'px) / 100% ' + _mw + 'px no-repeat, ' +
-      _matL + ' ' + _bw + 'px 0 / ' + _mw + 'px 100% no-repeat, ' +
-      _matR + ' calc(100% - ' + _bw + 'px) 0 / ' + _mw + 'px 100% no-repeat';
-    // v3.0.527 TD-341 -- ONE hairline at the outer edge, ONE at the moulding/artwork boundary.
-    // `inset 0 0 0 Npx` is a solid ring N pixels THICK, not a line N pixels in, and a box-shadow
-    // paints ABOVE the background. The old second shadow was therefore a dark ring the FULL width
-    // of the rail at 0.75 alpha, covering every rail gradient and the whole bead course from
-    // v3.0.521 to v3.0.526. Only the OUTER hairline belongs on this element. The inner hairline
-    // moved onto the shading child below, whose own edge already sits at the boundary -- and
-    // being a CHILD it paints ABOVE the rails rather than over them. Do not merge these back.
-    var _edges = 'inset 0 0 0 1px rgba(28,18,4,0.85)';
-    return '<div style="position:absolute;inset:0;pointer-events:none;background:' + _bg + ';box-shadow:' + _edges + ';">' +
-      '<div style="position:absolute;inset:' + (_bw + 1) + 'px;box-shadow:inset 0 0 0 1px rgba(28,18,4,0.75),inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
-      _diamonds + '</div>';
+  // v3.0.540 -- THE MOULDING IS FLAT SVG SHAPES NOW, AND IT IS NOT A STYLE CHANGE.
+  // Same profile, same numbers, same five planes. What changed is that they are RECTANGLES
+  // instead of gradient stops, because gradient stops do not survive the print path.
+  //
+  // THE EVIDENCE, from the TD-351 probe rendered as a real PDF. Left rail, one row:
+  //   gradients   151,140,107  223,199,124  209,184,111  178,149,73  186,160,88  147,120,56
+  //   flat shapes 244,230,184 x2  223,199,124  167,134,46 x3  121,92,33 x2  60,45,12
+  // Every value differs under gradients -- no plateau anywhere, and #f4e6b8, the HIGHLIGHT,
+  // never appears at all. Under flat shapes every plane lands on its exact hex in a run.
+  // The same page in HTML shows plateaus for BOTH, so the print path is the variable: a PDF
+  // shading function interpolates through coincident stops instead of stepping between them.
+  //
+  // WHICH SILENTLY UNDID v3.0.528. That build re-cut nine planes to five precisely because the
+  // eye reads the BREAKS between faces, not the shading within them -- and v3.0.521 had already
+  // proved the other half, that a smooth roll across a narrow rail is just an uneven line. The
+  // PDF was converting our stack of planes back into exactly that. Ian, on a rendered book:
+  // "the frame is blurry." It was, and not because of resolution -- the frame edge transitions
+  // in 3px in his screenshot, identical to vector type on the same page.
+  //
+  // WHAT IS SVG AND WHAT IS NOT. Hard edges go in the SVG, where they cannot be interpolated.
+  // The soft inner shading stays a CSS box-shadow on the child below, because a blur is a ramp
+  // by intent -- interpolation cannot hurt something that was never meant to step.
+  //
+  // NO viewBox, DELIBERATELY. With no viewBox the SVG user unit IS the CSS pixel, so a rail is
+  // the same thickness whatever the picture measures, and percentages resolve against the
+  // viewport. Rail thicknesses are absolute px; only the LENGTHS are percentages. A viewBox with
+  // preserveAspectRatio would stretch the rails to the picture aspect, which is the one thing
+  // this must never do.
+  var _bw = railPx;      // rail width, supplied by the caller
+  var _mw = matPx;       // mat width, supplied by the caller
+  var _dw = Math.max(3, Math.round(_bw * 0.70));   // corner block size
+  var _di = Math.max(1, Math.round((_bw - _dw) / 2));
+  var _bt = Math.max(3, Math.round(_bw * 0.38));   // bead tile
+  var _by = Math.max(1, Math.round((_bw * 0.50 - _bt / 2) * 10) / 10);   // bead bed centre, 50 percent
+
+  // THE PROFILE, unchanged from v3.0.528 and now expressed as data rather than as a stop list.
+  // Percentages of the rail, outer edge to artwork. The apply script asserts these against the
+  // numbers the gradient version carried, because a re-typed profile is a different frame.
+  var _lit  = [[0, 20, '#f4e6b8'], [20, 34, '#e0c77c'], [34, 66, '#a8862f'], [66, 86, '#7a5d22'], [86, 100, '#3d2d0c']];
+  var _shad = [[0, 20, '#241708'], [20, 34, '#5f4715'], [34, 66, '#8a6a2a'], [66, 86, '#e0c77c'], [86, 100, '#3d2d0c']];
+  var _matSh = ['#c9c1af', '#dcd5c6'];   // top and left: the shadowed bevel
+  var _matLt = ['#ece7d9', '#f8f5ec'];   // bottom and right: the lit bevel
+
+  // shape-rendering:crispEdges keeps a rect edge on a whole device pixel instead of antialiasing
+  // it into its neighbour, which is the whole point of using rectangles.
+  function _r(x, y, w, h, col, extra) {
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h +
+      '" fill="' + col + '" shape-rendering="crispEdges"' + (extra || '') + '/>';
+  }
+  // Bottom and right shapes are placed at 100 percent and pulled back by a transform, because SVG
+  // attributes take no calc(). Same intent as the CSS version, none of the percentage-resolution
+  // trap that put the bead courses a whole band out at v3.0.526 -- a translate is just arithmetic.
+  function _up(k) { return ' transform="translate(0,-' + k + ')"'; }
+  function _lf(k) { return ' transform="translate(-' + k + ',0)"'; }
+
+  var _svg = '';
+
+  // 1. THE MAT, innermost, drawn first.
+  var _mh = _mw / 2;
+  _svg += _r(0, _bw, '100%', _mh, _matSh[0]) + _r(0, _bw + _mh, '100%', _mh, _matSh[1]);
+  _svg += _r(_bw, 0, _mh, '100%', _matSh[0]) + _r(_bw + _mh, 0, _mh, '100%', _matSh[1]);
+  _svg += _r(0, '100%', '100%', _mh, _matLt[1], _up(_bw + _mw)) + _r(0, '100%', '100%', _mh, _matLt[0], _up(_bw + _mh));
+  _svg += _r('100%', 0, _mh, '100%', _matLt[1], _lf(_bw + _mw)) + _r('100%', 0, _mh, '100%', _matLt[0], _lf(_bw + _mh));
+
+  // 2. THE FOUR RAILS. Left and right first, then top and bottom, so top and bottom own the
+  // corners -- the same paint order the background-layer version had, where the first layer won.
+  _lit.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r(a, 0, b - a, '100%', p[2]);
+  });
+  _shad.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r('100%', 0, b - a, '100%', p[2], _lf(b));
+  });
+  _lit.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r(0, a, '100%', b - a, p[2]);
+  });
+  _shad.forEach(function (p) {
+    var a = _bw * p[0] / 100, b = _bw * p[1] / 100;
+    _svg += _r(0, '100%', '100%', b - a, p[2], _up(b));
+  });
+
+  // 3. THE BEAD COURSE. A pattern in userSpaceOnUse tiles for ever without anyone computing how
+  // many beads fit, which is the one thing the CSS version and this agree on completely.
+  // The radial gradient becomes three flat circles. Its stops were percentages of the
+  // FARTHEST CORNER, which on a square tile is 0.707 of the tile -- so 14/38/62 percent are
+  // 0.099, 0.269 and 0.438 of the tile. Reproduced rather than eyeballed.
+  var _bc = (_bt / 2).toFixed(2);
+  var _bead = '<pattern id="bd" patternUnits="userSpaceOnUse" width="' + _bt + '" height="' + _bt + '">' +
+    '<circle cx="' + _bc + '" cy="' + _bc + '" r="' + (_bt * 0.438).toFixed(2) + '" fill="#6b5119"/>' +
+    '<circle cx="' + _bc + '" cy="' + _bc + '" r="' + (_bt * 0.269).toFixed(2) + '" fill="#d9bd6a"/>' +
+    '<circle cx="' + _bc + '" cy="' + _bc + '" r="' + (_bt * 0.099).toFixed(2) + '" fill="#fff3cf"/>' +
+    '</pattern>';
+  _svg += _r(0, _by, '100%', _bt, 'url(#bd)');
+  _svg += _r(0, '100%', '100%', _bt, 'url(#bd)', _up(_by + _bt));
+  _svg += _r(_by, 0, _bt, '100%', 'url(#bd)');
+  _svg += _r('100%', 0, _bt, '100%', 'url(#bd)', _lf(_by + _bt));
+
+  // 4. THE CORNER BLOCKS, last, so they cover the butt seam where the rails meet. The 135-degree
+  // gradient becomes three flat faces: a body, a lit triangle toward the top-left and a shaded one
+  // toward the bottom-right. Plus the half-pixel rim the CSS version carried as an inset shadow.
+  // 4. THE CORNER BLOCKS, last, so they cover the butt seam where the rails meet. The 135-degree
+  // gradient becomes three flat faces: a body, a lit triangle toward the top-left and a shaded one
+  // toward the bottom-right, plus the half-pixel rim the CSS version carried as an inset shadow.
+  //
+  // POSITIONED WITH A NESTED <svg>, AND THE FIRST ATTEMPT WAS WRONG. It used
+  // transform="translate(100%,0)" -- and an SVG transform takes NO percentages, so all four blocks
+  // would have stacked in the top-left corner. Caught by parsing the emitted SVG and grepping the
+  // transforms rather than by looking at a render, which is the only reason it is not a build Ian
+  // has to find. A nested svg DOES take a percentage for x and y, so it anchors to the far edge and
+  // a numeric translate inside it does the arithmetic. overflow:visible is load-bearing: the
+  // content is translated to a negative local coordinate and would otherwise be clipped away.
+  function _block() {
+    return _r(0, 0, _dw, _dw, '#c9a84c') +
+      '<path d="M0 0 l' + _dw + ' 0 l-' + _dw + ' ' + _dw + ' z" fill="#f4e6b8"/>' +
+      '<path d="M' + _dw + ' ' + _dw + ' l-' + _dw + ' 0 l' + _dw + ' -' + _dw + ' z" fill="#7a5d22"/>' +
+      '<rect x="0" y="0" width="' + _dw + '" height="' + _dw +
+        '" fill="none" stroke="rgba(255,248,220,0.55)" stroke-width="0.5"/>';
+  }
+  function _corner(xa, ya, dx, dy) {
+    return '<svg x="' + xa + '" y="' + ya + '" overflow="visible">' +
+      '<g transform="translate(' + dx + ',' + dy + ')">' + _block() + '</g></svg>';
+  }
+  var _far = -(_di + _dw);
+  _svg += _corner('0',      '0',      _di,  _di);
+  _svg += _corner('100%',   '0',      _far, _di);
+  _svg += _corner('0',      '100%',   _di,  _far);
+  _svg += _corner('100%',   '100%',   _far, _far);
+
+  // v3.0.527 TD-341 -- ONE hairline at the outer edge, ONE at the moulding/artwork boundary.
+  // `inset 0 0 0 Npx` is a solid ring N pixels THICK, not a line N pixels in, and a box-shadow
+  // paints ABOVE the background. The old second shadow was therefore a dark ring the FULL width
+  // of the rail at 0.75 alpha, covering every rail gradient and the whole bead course from
+  // v3.0.521 to v3.0.526. Only the OUTER hairline belongs on this element. The inner hairline
+  // moved onto the shading child below, whose own edge already sits at the boundary -- and
+  // being a CHILD it paints ABOVE the rails rather than over them. Do not merge these back.
+  var _edges = 'inset 0 0 0 1px rgba(28,18,4,0.85)';
+  return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:' + _edges + ';">' +
+    '<svg width="100%" height="100%" style="position:absolute;inset:0;display:block;" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs>' + _bead + '</defs>' + _svg +
+    '</svg>' +
+    '<div style="position:absolute;inset:' + (_bw + 1) + 'px;box-shadow:inset 0 0 0 1px rgba(28,18,4,0.75),inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
+  '</div>';
 }
 function picOverlay(opts, sizeIn){
   var b = opts && opts.border;
