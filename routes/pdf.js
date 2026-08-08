@@ -1861,7 +1861,10 @@ function picOverlay(opts, sizeIn){
     // v3.0.522 -- WIDER AGAIN, and this time it is load-bearing rather than cosmetic: eight planes
     // and a bead course need somewhere to live. 10px at the reference size, 8px on a small float,
     // 14px on a feature. Ian, on the reference photographs: "I know those are wider etc."
-    var _bw = Math.max(6, Math.round(10 * _fs));     // rail width
+    // v3.0.523 -- NARROWER. Ian: "in general the frame is just a little too wide." 10px -> 8px at
+    // the reference size. The profile keeps all its planes; they each get proportionally less room,
+    // which is fine now that the ORDER is right and the eye has the plane breaks to read.
+    var _bw = Math.max(5, Math.round(8 * _fs));      // rail width
     // The studs sit ON the rail and are centred across it, so they read as hardware set into the
     // moulding rather than as decorations floating near the corner.
     // v3.0.522 -- the corner blocks shrink to sit IN the moulding rather than across it. At 0.8 of
@@ -1899,8 +1902,20 @@ function picOverlay(opts, sizeIn){
     // 60-picture book. Moving it into a stylesheet instead means writing it into THREE separate
     // style blocks, which is the exact drift trap this file keeps falling into. This does the same
     // job for 2.5KB per picture, 147KB per book, with no new asset to maintain.
-    var _lit  = '#100b03 0 8%,#f7ead0 8% 13%,#e6cf94 13%,#b8974a 33%,#8a6a2a 33% 39%,#0d0a06 39% 50%,#c9a84c 50%,#7f6224 72%,#f7ead0 72% 79%,#241708 79% 100%';
-    var _shad = '#050402 0 8%,#8a6a2a 8% 13%,#7f6224 13%,#4a3810 33%,#3d2d0c 33% 39%,#050402 39% 50%,#6b5119 50%,#4a3810 72%,#a8862f 72% 79%,#120d05 79% 100%';
+    // v3.0.523 -- THE ORDER OF THE PLANES CHANGED, AND THE BRONZE WARMED.
+    // Ian, on the first version that read as a real moulding: "make the bronze parts a little
+    // bronzer closer to the plate and the corner pieces. And put the more ornate part of the frame
+    // as the inner / middle band. And move the flat band to the inside and make it a little thinner."
+    // COLOUR: every bronze stop now comes off the brass plaque ramp (#f4e6b8 / #e0c77c / #c2a55f /
+    // #a8862f / #8a6a2a / #6b5119) and the corner-block highlight, so the frame, the corner blocks
+    // and the plaque are ONE MATERIAL instead of three golds that nearly match.
+    // ORDER, outer edge to artwork: thin dark edge, highlight, outer ogee, dark step, recessed black
+    // channel, THE BEAD COURSE (now the middle band, was sitting further out), a dark step, then a
+    // THIN FLAT bronze band against the picture, and the dark lip. The ornament is in the middle
+    // where it reads, and the flat band is the last thing before the artwork, which is how a real
+    // moulding steps down to the rebate.
+    var _lit  = '#1a1206 0 6%,#f4e6b8 6% 12%,#e0c77c 12%,#c2a55f 30%,#8a6a2a 30% 36%,#150f06 36% 46%,#c9a84c 46%,#a8862f 72%,#3d2d0c 72% 78%,#c2a55f 78% 90%,#241708 90% 100%';
+    var _shad = '#0a0703 0 6%,#a8862f 6% 12%,#8a6a2a 12%,#6b5119 30%,#4a3810 30% 36%,#080502 36% 46%,#7f6224 46%,#5f4715 72%,#241708 72% 78%,#8a6a2a 78% 90%,#120d05 90% 100%';
     var _railT = 'linear-gradient(180deg,' + _lit  + ')';
     var _railL = 'linear-gradient(90deg,'  + _lit  + ')';
     var _railB = 'linear-gradient(0deg,'   + _shad + ')';
@@ -1909,8 +1924,11 @@ function picOverlay(opts, sizeIn){
     // the rail). Transparent past 64 percent of the tile so the beads are separate objects with the
     // bed showing between them, not a sausage.
     var _bead = 'radial-gradient(circle at 50% 50%,#fff3cf 0 14%,#d9bd6a 38%,#6b5119 62%,rgba(0,0,0,0) 64%)';
-    var _bt = Math.max(3, Math.round(_bw * 0.42));      // bead tile
-    var _by = Math.max(1, Math.round(_bw * 0.61) - Math.round(_bt / 2));   // where the bead bed sits
+    // The bead course follows its bed: centred on 59 percent of the rail, which is the middle of the
+    // 46-72 percent band above. If the profile stops move, this must move with them -- one number
+    // describing one thing, which is the rule this file keeps re-learning.
+    var _bt = Math.max(3, Math.round(_bw * 0.38));      // bead tile
+    var _by = Math.max(1, Math.round(_bw * 0.59 - _bt / 2));   // centred on the bead bed
     var _d = function(pos){ return '<i style="position:absolute;' + pos + 'width:' + _dw + 'px;height:' + _dw + 'px;' +
       'background:linear-gradient(135deg,#f4e6b8 0%,#c9a84c 45%,#7a5d22 100%);' +
       'box-shadow:0 1px 1.5px rgba(0,0,0,0.65),inset 0 0 0 0.5px rgba(255,248,220,0.55);"></i>'; };
