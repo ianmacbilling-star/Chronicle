@@ -1706,13 +1706,12 @@
     </div>
     <div class="form-group">
       <label class="form-label">Height <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">Optional. Sets how tall this character is drawn next to the others, and tells the artist their size in every scene.</span></label>
-      <div style="display:flex;align-items:center;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
         <input type="range" id="char-height" min="0" max="1000" step="1" value="0" oninput="charHeightSync()" style="flex:1;" />
-        <div id="char-height-out" style="min-width:96px;text-align:right;font-family:Cinzel,serif;color:var(--gold);">Not set</div>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="charHeightClear()" title="Leave the height unset. The character is drawn as it is today.">Clear</button>
+        <div id="char-height-out" class="form-label" style="margin-bottom:0;min-width:64px;text-align:left;white-space:nowrap;">Not set</div>
+        <button type="button" class="btn btn-sm" onclick="charHeightClear()" title="Leave the height unset. The character is drawn as it is today.">Clear</button>
       </div>
       <datalist id="char-height-ticks"></datalist>
-      <div id="char-height-scale" style="margin-top:8px;min-height:84px;"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Visual &amp; Personality Traits</label>
