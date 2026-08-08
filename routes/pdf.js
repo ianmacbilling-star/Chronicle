@@ -4988,7 +4988,17 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // what a constant could do.
   // TEMPORARY, AND THE 0.6 IS THE ONLY REASON FOR IT. TD-362 cuts the white to alpha once at
   // generation; with real transparency a box can overlap freely and this reverts to the page budget.
-  var CAST_MIN_STEP_RATIO = 0.60;     // a step below this and the near figure erases its neighbour
+  // v3.0.573 -- 0.60 to 0.26, BECAUSE THE BOXES ARE NOT OPAQUE ANY MORE. The 0.60 floor existed for
+  // exactly one reason: a white rectangle erases whatever it covers, so figures could not be allowed
+  // to overlap far. TD-362 cuts that white to real alpha when the reference is stored, so a box now
+  // contains only the figure -- and figures may overlap as hard as the composition wants.
+  // NOT ZERO. Even with alpha, two figures at the same spot is a huddle rather than a line-up, and
+  // the near/far stagger needs somewhere to read. 0.26 gives a five-person party a 5.2in figure,
+  // which is where v3.0.569 was before the occlusion forced the retreat.
+  // OLD REFERENCES STILL HAVE OPAQUE GROUNDS until they are regenerated or restaged, so a cast that
+  // has not been through TD-360 will still show boxes -- at this overlap, badly. That is the cost of
+  // going back up, and it is the right trade: new and restaged casts are the ones that matter now.
+  var CAST_MIN_STEP_RATIO = 0.26;     // with real alpha, overlap is a composition choice again
   var _castHFit = CG_W / (CAST_ASP * (1 + CAST_MIN_STEP_RATIO * Math.max(1, _castPerRow - 1)));
   var _castHCap = (_castRows === 1) ? Math.min(6.0, _castHFit) : (_castRows === 2 ? 2.6 : 1.9);
   if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;

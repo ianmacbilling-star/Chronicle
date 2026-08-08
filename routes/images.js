@@ -1479,7 +1479,10 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       .run(new Date().toISOString(), job.id);
     if (!claim || claim.changes === 0) return res.status(200).json({ ok: true });
     try {
-      const imageUrl = await persistToR2(falUrl);
+      // v3.0.573 -- TD-362. A character reference is generated on a white ground BY SPEC and is the
+      // only image this product composites over another, so it is the only one whose ground is cut to
+      // real alpha. A scene image has a real background and must keep every pixel of it.
+      const imageUrl = await persistToR2(falUrl, { cutWhite: job.kind === 'char_ref' });
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3

@@ -256,7 +256,10 @@ async function releaseImage(db, fileUrl) {
 // URL, or — fail-soft — the original URL if the copy fails, so a storage
 // hiccup never breaks (or double-charges) a successful generation. A rare
 // fallback can be repaired later by a background sweep.
-async function persistToR2(remoteUrl) {
+// v3.0.573 -- opts.cutWhite cuts a white ground to real alpha before storing (TD-362). Only the
+// character reference path asks for it: those are generated on white BY SPEC (v3.0.559) and are the
+// only images composited over one another. A scene image has a real background and must keep it.
+async function persistToR2(remoteUrl, opts) {
   if (!remoteUrl) return remoteUrl;
   const base = process.env.R2_PUBLIC_URL || '';
   // Already one of ours (R2 public URL or local upload)? Don't re-copy.
@@ -272,11 +275,19 @@ async function persistToR2(remoteUrl) {
       maxContentLength: Infinity,
       maxBodyLength: Infinity
     });
-    const buf = Buffer.from(resp.data);
+    let buf = Buffer.from(resp.data);
+    if (opts && opts.cutWhite) {
+      // Fail-soft inside: returns the original bytes for anything it cannot safely handle.
+      buf = require('./alpha').cutWhiteToAlpha(buf);
+    }
     const ct = String(resp.headers['content-type'] || 'image/png').split(';')[0].trim();
-    const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
+    // v3.0.573 -- if the cut rewrote the image it is a PNG now whatever it arrived as, so the stored
+    // content type has to follow the BYTES rather than the response header.
+    const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+    const ct2 = isPng ? 'image/png' : ct;
+    const ext = isPng ? 'png' : (ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png');
     const filename = 'gen-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + '.' + ext;
-    const url = await uploadFile(buf, filename, ct);
+    const url = await uploadFile(buf, filename, ct2);
     console.log('  Persisted to R2:', url);
     return url;
   } catch (e) {
