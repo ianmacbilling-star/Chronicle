@@ -267,13 +267,24 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   const fork = _sc.fork;
   const cur = await getForkBookPrefs(db, req.session.userId, fork, req.params.campaignId, { inherit: true, versionId: _sc.versionId });
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(req.params.campaignId);
+  // v3.0.552 -- the session dates, for seeding the subtitle field. Cheap, and read-only.
+  const _sdRows = await db.prepare('SELECT session_date FROM sessions WHERE campaign_id = ? AND session_date IS NOT NULL').all(req.params.campaignId);
+  const _sdTimes = (_sdRows || []).map(function (r) { return Date.parse(r.session_date); }).filter(function (t) { return !isNaN(t); });
+  const _dateRange = require('./pdf').formatDateRange(_sdTimes);
   res.json({
     campaign_id: Number(req.params.campaignId),
     cover_image_url: cur.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
     book_title: cur.book_title || '',
-    subtitle: cur.subtitle || '',   // v3.0.551 -- TD-346; blank means the cover falls back to the date range
+    // v3.0.552 -- null is sent as null, NOT coerced to empty. The client needs to tell "never set"
+    // from "cleared" so it knows whether to seed the field with the dates.
+    subtitle: (cur.subtitle == null ? null : String(cur.subtitle)),
+    // The date range the cover would show, computed by the SAME function pdf.js renders with
+    // (formatDateRange). The Prep panel seeds the subtitle field from this, so a book that has never
+    // had a subtitle opens showing exactly what its cover already says -- and a second copy of a
+    // date format, which is the fault this codebase keeps re-finding, does not get created.
+    date_range: _dateRange,
     title_color: cur.title_color || '',
     layout_opts: cur.layout_opts || '',   // per (chooser, fork, campaign) layout choices -- stored beside the cover art
     own_cover: cur.cover_image_url || '', own_back: cur.back_cover_image_url || '', own_title: cur.title_image_url || ''
@@ -290,7 +301,11 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
   if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
-  if (b.subtitle !== undefined) patch.subtitle = b.subtitle || null;   // v3.0.551 -- null and empty both mean 'use the dates'
+  // v3.0.552 -- THE EMPTY STRING IS PRESERVED, DELIBERATELY. `b.subtitle || null` would collapse ''
+  // back to null, and null and empty are now DIFFERENT states: null means the book has never had a
+  // subtitle and shows its dates, empty means someone cleared it and it shows nothing. Collapsing
+  // them would make the field settable but never removable, which is the thing Ian asked to fix.
+  if (b.subtitle !== undefined) patch.subtitle = (b.subtitle === '' ? '' : (b.subtitle || null));
   if (b.title_color !== undefined) patch.title_color = b.title_color || null;
   // Layout choices (borders, paper, fonts, drop cap, narrative style, arrange...) ride in the SAME
   // per-(chooser, fork, campaign) prefs blob as the cover art, so they follow the book, not the browser.

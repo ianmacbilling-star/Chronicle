@@ -1128,7 +1128,12 @@ function brassPlateHtml(title, bottomOffset, sc) {
         ' L' + (w - 0.5) + ',' + (h - _q).toFixed(3) + ' A' + _R + ',' + _R + ' 0 0 0 ' + (w - _q).toFixed(3) + ',' + (h - 0.5) + ' L0,' + (h - 0.5);
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
       '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><defs>' + _pg + '</defs>' +
+      // v3.0.552 -- the 1px highlight and shade, as rects that run only from the inner edge to where
+      // the bite begins. That is the whole fix: they stop at the scallop because the SHAPE stops
+      // there, rather than running to a rectangle corner that is not drawn.
       '<path d="' + fill + '" fill="url(#pg)"/>' +
+      '<rect x="' + (left ? _q : 0) + '" y="1" width="' + (w - _q) + '" height="1" fill="rgba(255,248,220,0.40)" shape-rendering="crispEdges"/>' +
+      '<rect x="' + (left ? _q : 0) + '" y="' + (h - 2) + '" width="' + (w - _q) + '" height="1" fill="rgba(0,0,0,0.35)" shape-rendering="crispEdges"/>' +
       '<path d="' + line + '" fill="none" stroke="#4a3810" stroke-width="1" stroke-linejoin="round" stroke-linecap="butt"/></svg>';
     // v3.0.547 -- SINGLE QUOTES, AND THE DOUBLE ONES DELETED THE ENTIRE PLATE.
     // v3.0.545 emitted url("data:...") into an inline HTML style="..." attribute. The first double
@@ -1148,9 +1153,16 @@ function brassPlateHtml(title, bottomOffset, sc) {
   var _edge = 'linear-gradient(#4a3810,#4a3810)';
   var _body = 'linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%)';
   var _mid = 'calc(100% - ' + (_capR * 2) + 'px)';
+  // v3.0.552 -- the middle section s highlight and shade, one pixel in from its edges. Declared
+  // BEFORE the edge lines so those still paint on top, and inset by the cap width at both ends so
+  // they cannot reach a corner.
+  var _hi = 'linear-gradient(rgba(255,248,220,0.40),rgba(255,248,220,0.40))';
+  var _lo = 'linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.35))';
   var _plateBg = _cap(true) + ' 0 0 / ' + _capR + 'px 100% no-repeat, ' +
     _cap(false) + ' 100% 0 / ' + _capR + 'px 100% no-repeat, ' +
     _edge + ' ' + _capR + 'px 0 / ' + _mid + ' 1px no-repeat, ' +
+    _hi + ' ' + _capR + 'px 1px / ' + _mid + ' 1px no-repeat, ' +
+    _lo + ' ' + _capR + 'px calc(100% - 2px) / ' + _mid + ' 1px no-repeat, ' +
     _edge + ' ' + _capR + 'px 100% / ' + _mid + ' 1px no-repeat, ' +
     _body + ' ' + _capR + 'px 0 / ' + _mid + ' 100% no-repeat';
   return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
@@ -1194,7 +1206,20 @@ function brassPlateHtml(title, bottomOffset, sc) {
     // draw a square shadow behind a scalloped plate, announcing the shape as fake. A filter follows
     // the rendered alpha, so it hugs the bites.
     'filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45));' +
-    'box-shadow:inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -4px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
+    // v3.0.552 -- THE TWO HARD 1px LINES ARE GONE FROM HERE, AND THEY WERE THE HAIRS.
+    // Ian: "I think it is the highlight line and the shadow line going too far." He is right, and it
+    // is why two fixes to the cap STROKE changed nothing -- the stroke was never it.
+    // AN INSET BOX-SHADOW FOLLOWS THE ELEMENT S RECTANGLE. The scallops are not cut out of the
+    // element; they are cut out of the BACKGROUND, by the cap images. So the box is still a box, and
+    // `inset 0 1px 0` and `inset 0 -1px 0` ran its FULL WIDTH -- straight across the four corners
+    // that had been bitten away. Each overhang is exactly the bite radius, which is the length of
+    // the marks in his blow-up. It also explains the one measurement that made no sense: the mark
+    // read NEUTRAL GREY, and nothing in this plate is neutral grey -- but rgba(255,248,220,0.40)
+    // over dark artwork is.
+    // They move into the shapes that already stop at the scallop: 1px rects inside each cap, and two
+    // more background layers across the middle. The soft bottom shading stays here -- it is blurred
+    // and inset by 4px, so it has no hard edge to leave a mark with.
+    'box-shadow:inset 0 -4px 6px -4px rgba(0,0,0,0.50);' +
     'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
     'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
@@ -2103,9 +2128,34 @@ function coverTitleCss(key) {
 // carries the current dates as a PLACEHOLDER; the stored value stays empty until someone types one.
 // It also means a fork that has not set a subtitle follows its OWN dates rather than inheriting a
 // typed string from whoever set one first.
+// v3.0.552 -- NULL MEANS THE DATES; EMPTY MEANS EMPTY. The two are different states now.
+// Ian: "go ahead and put the dates in there and let them change it. Then if they blank it out it
+// will not do anything. They may not want a sub title -- currently there is no way to blank it out."
+// v3.0.551 collapsed both to "use the dates", which made the subtitle a one-way door: settable,
+// never removable. Three states rather than two:
+//   null / absent   the book has never had one    -> the date range, exactly as before
+//   ''              deliberately cleared          -> NOTHING
+//   a string        set                           -> that string
+// Existing books are all in the first state, so nothing visibly changes for any of them -- and the
+// field is now seeded with the dates so clearing it is a thing a user can actually do.
+// THE EMPTY STRING HAS TO SURVIVE THE ROUND TRIP, which is why the PUT in campaigns.js no longer
+// writes `b.subtitle || null`: that collapses the two states back together at the database.
+// v3.0.552 -- THE DATE RANGE, IN ONE PLACE. It was inline in the novel builder, and the Prep panel
+// now has to seed the subtitle field with exactly the same string. Two copies of a date format is
+// the fault this file has re-found at every scale today, so it is a function and campaigns.js calls
+// THIS one rather than growing its own.
+function formatDateRange(dts) {
+  if (!dts || !dts.length) return '';
+  var minDate = new Date(Math.min.apply(null, dts));
+  var maxDate = new Date(Math.max.apply(null, dts));
+  var _df = { year: 'numeric', month: 'long', day: 'numeric' };
+  return minDate.toLocaleDateString('en-US', _df) +
+    (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', _df) : '');
+}
 function coverSubtitle(pageOpts, dateRange) {
-  var v = (pageOpts && pageOpts.subtitle != null) ? String(pageOpts.subtitle).trim() : '';
-  return v || dateRange || '';
+  var raw = (pageOpts && pageOpts.subtitle != null) ? String(pageOpts.subtitle).trim() : null;
+  if (raw === null) return dateRange || '';   // never set: the legacy default
+  return raw;                                 // set, including deliberately empty
 }
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
@@ -4680,14 +4730,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     : sessions;
   // Date range
   const _dts = sessions.map(function(s) { return toDate(s.session_date); }).filter(Boolean).map(function(d){ return d.getTime(); });
-  let dateRange = '';
-  if (_dts.length) {
-    const minDate = new Date(Math.min.apply(null, _dts));
-    const maxDate = new Date(Math.max.apply(null, _dts));
-    const _df = {year:'numeric', month:'long', day:'numeric'};
-    dateRange = minDate.toLocaleDateString('en-US', _df) +
-      (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', _df) : '');
-  }
+  let dateRange = formatDateRange(_dts);   // v3.0.552 -- one source, shared with the book-meta endpoint that seeds the subtitle field
   const coverImg = campaign.cover_image_url || '';
 
   // Cast page -- "The Company". Density scales with the number of characters so
@@ -12031,3 +12074,4 @@ module.exports.assembleNovelHtml = assembleNovelHtml;
 // emitter rather than a copy of it. A probe whose control has drifted from the code answers a
 // question nobody asked.
 module.exports.bronzeMouldingHtml = bronzeMouldingHtml;
+module.exports.formatDateRange = formatDateRange;   // v3.0.552 -- campaigns.js seeds the subtitle field from this, so the two cannot drift

@@ -7035,11 +7035,20 @@ function prepSeedCoverFromCampaignImage() {
 function prepSyncTitle() {
   // v3.0.541 -- the admin-only True View button rides in here because prepSyncTitle is single-copy
   // and already runs on tab entry. loadNovelPreview has TWO copies and would need both patched.
-  // v3.0.551 -- the subtitle field. NOT seeded with the date range: the placeholder says what blank
-  // does, and the stored value stays empty until someone types one. Seeding it would make automatic
-  // unreachable and freeze a stale range into a book whose sessions later change.
+  // v3.0.552 -- SEEDED WITH THE DATES, AND BLANK NOW MEANS BLANK. Ian: "put the dates in there and
+  // let them change it. Then if they blank it out it will not do anything. They may not want a sub
+  // title -- currently there is no way to blank it out."
+  // v3.0.551 had blank meaning "use the dates", which made the field settable but never removable.
+  // Now: a subtitle that has never been set comes back as NULL and the field is seeded with the date
+  // range the cover already shows, so the first save writes those dates explicitly and clearing the
+  // field afterwards writes an empty string that means nothing at all.
+  // The seed comes from date_range on the endpoint, which is computed by the same formatDateRange
+  // the cover renders with -- the field cannot show a differently formatted date than the book.
   var _sub = document.getElementById('prep-subtitle');
-  if (_sub) _sub.value = (state.bookMeta && state.bookMeta.subtitle) ? state.bookMeta.subtitle : '';
+  if (_sub) {
+    var _bm = state.bookMeta || {};
+    _sub.value = (_bm.subtitle == null) ? (_bm.date_range || '') : _bm.subtitle;
+  }
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
