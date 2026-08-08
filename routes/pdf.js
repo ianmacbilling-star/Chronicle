@@ -4939,12 +4939,43 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     // sitting a little lower because closer to the viewer is lower on a receding ground plane, and
     // in front in paint order. That is depth, not jitter, so the row reads as people standing at
     // slightly different distances rather than as a wobbly row.
+    // v3.0.563 -- TD-345 stage 2: FIGURES ARE SCALED BY THEIR RECORDED HEIGHT.
+    // Measured off the page before this: all five figures rendered within 7 percent of each other,
+    // and the gnome CHILD came out the tallest of the party -- because every figure got the same box
+    // and each image simply filled it, so the rendered height said nothing about the character.
+    // LINEAR, WITH A FLOOR -- not the square root the to-do first proposed. Square root was chosen to
+    // stop one giant crushing everyone, but it also flattens the ordinary case: on this cast a 2.1ft
+    // child beside a 3.7ft fighter would render at 75 percent, which reads as an inconsistent
+    // picture rather than as a child. LINEAR gives 57 percent, which reads as a child.
+    // The floor does the job square root was brought in for, and only when it is actually needed:
+    // a 6ft human beside a 25ft dog would be 24 percent -- an ant -- so nothing drops below 35, and
+    // the giant still towers at nearly three times the human. Ordinary parties never reach the floor
+    // and keep TRUE proportion; only genuinely extreme casts get compressed, which is the right way
+    // round.
+    // NO HEIGHTS SET MEANS NOTHING CHANGES. A cast where nobody has a height renders exactly as it
+    // did, because the tallest is then undefined and every figure keeps its full size. Mixed casts
+    // work too: an unset character is treated as the tallest, so it never shrinks by accident.
+    var _CAST_MIN_REL = 0.35;
+    var _hts = castChars.map(function (c) { return (c.height_ft != null && +c.height_ft > 0) ? +c.height_ft : null; });
+    var _anyH = _hts.some(function (h) { return h !== null; });
+    var _tallest = _anyH ? Math.max.apply(null, _hts.filter(function (h) { return h !== null; })) : 0;
+    function _heightRel(i) {
+      if (!_anyH || !_tallest) return 1;
+      if (_hts[i] === null) return 1;                  // unset: full size, never shrunk by accident
+      return Math.max(_CAST_MIN_REL, _hts[i] / _tallest);
+    }
     var _members = castChars.map(function(c, _ci) {
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
       var _near = (_ci % 2 === 0);                       // alternate: near, far, near, far
-      var _sc   = _near ? 1 : 0.92;                      // farther figures are smaller
+      // The depth step and the height scale MULTIPLY: a short character standing forward is still
+      // short, and a tall one standing back is still tall. Folding them into one number would let
+      // the stagger silently cancel a real height difference.
+      var _sc   = (_near ? 1 : 0.92) * _heightRel(_ci);   // depth step, then the character's own height
       var _fw   = _castW * _sc, _fh = _castH * _sc;
-      var _drop = _near ? 0 : (_castH * 0.035);          // farther feet sit a touch higher
+      // v3.0.563 -- the step is a fraction of THIS figure's height, not of the box. Against the box
+      // it would lift a 2ft child as far as a 7ft goliath, which on a short figure is a visible
+      // float rather than a hint of distance.
+      var _drop = _near ? 0 : (_fh * 0.035);              // farther feet sit a touch higher
       // THE MASK IS THE WHOLE REASON THIS WORKS. The character art is NOT cut out -- every portrait
       // carries its own background -- so removing the frame would otherwise leave four rectangles of
       // grey. The edges are faded to GENUINE TRANSPARENCY rather than to page colour: fading to page
