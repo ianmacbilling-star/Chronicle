@@ -2374,7 +2374,19 @@ function gzNarrBox(narrHtml, opts) {
 // TWO CALLERS, ONE FIX: gzImgBox and cgFlowTower had byte-similar copies of this branch. gzImgBox's
 // comment records the same complaint already reported once -- "the border should come down to meet
 // the picture's edge" -- fixed there for the letterbox case and never for the stale-aspect one.
-function huggingImgBox(m, opts, outerCss, floorH) {
+// v3.0.532 -- THE FRAME WAS SIZED TO A TOWER S LONG SIDE. Ian: "can you dial back the thickness of
+// the bronze frame on tower pictures, it is a little big for them because they are thin pics."
+// picFrameScale takes the picture s SHORT side -- the dimension the frame competes with, and its
+// own header says so. This function was handed floorH, which is the HEIGHT. On a tower that is the
+// long side, so a 2.8in-wide picture 9.2in tall asked for the frame a 9.2in picture should get:
+// scale clamped to 1.50 and an 11px rail, against the 6px its real short side calls for.
+// THE PROOF IS TWO LINES APART. Both callers sit in a ternary whose OTHER branch already passes
+// Math.min(imgW, imgH). Same decision, same function, two lines away, and only one of them was
+// right -- which is this file s standing fault written down one more time.
+// floorH keeps doing its own job (the min-height that stops the box collapsing during the measure
+// pass); shortIn is a separate argument because they are separate measurements that happened to be
+// the same number on a landscape picture, which is exactly why nobody noticed.
+function huggingImgBox(m, opts, outerCss, floorH, shortIn) {
   return '<div style="' + outerCss + 'min-height:' + floorH.toFixed(2) + 'in;' +
       'position:relative;background:transparent;line-height:0;">' +
     // v3.0.516 -- THE CAPTION GOES OUTSIDE THIS FRAME TOO. It was emitted INSIDE the bordered
@@ -2385,7 +2397,7 @@ function huggingImgBox(m, opts, outerCss, floorH) {
     // is why it survived a whole round of eyeballing. Ninth of nine.
     '<div style="' + cgBorder(opts) + 'position:relative;line-height:0;">' +
       '<img style="width:100%;height:auto;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />' +
-      coCaptionCover(m, opts.caption, opts, floorH) + picOverlay(opts, floorH) +   // v3.0.518 frame last; v3.0.520 sized; v3.0.529 plaque clears the rail
+      coCaptionCover(m, opts.caption, opts, shortIn) + picOverlay(opts, shortIn) +   // v3.0.518 frame last; v3.0.520 sized; v3.0.529 plaque clears the rail; v3.0.532 SHORT side, not the floor
     '</div>' +
     cgCapFlow(m, opts) +
   '</div>';
@@ -2401,7 +2413,7 @@ function gzImgBox(m, opts, fl, w, h) {
     // does NOT collapse when image loads are aborted during the magazine measure pass -- without
     // this the band measures short and the deterministic composer clips its overflow. When the
     // image loads (compose/flow render) it renders at its natural height (>= the floor).
-    return huggingImgBox(m, opts, fl + 'width:' + w.toFixed(2) + 'in;', h);
+    return huggingImgBox(m, opts, fl + 'width:' + w.toFixed(2) + 'in;', h, Math.min(w, h));
   }
   // v3.0.513 -- caption OUTSIDE the frame. The float and the width move to a wrapper; the border
   // stays on the picture box, which is 0.12in shorter; the caption sits under it, outside the
@@ -2545,7 +2557,7 @@ function cgFlowTower(m, opts, narrHtml, besideHtml, sideLeft, shrink, wrapBelow)
     // adds NO dead space unless that stored aspect is stale. It is a FLOOR, never a ceiling: the
     // img keeps width:100 percent + height:auto, there is no overflow:hidden and no object-fit here,
     // so the box can only grow to the picture. This cannot crop a tower.
-    ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH)
+    ? huggingImgBox(m, opts, fl + 'width:' + imgW.toFixed(2) + 'in;', imgH, Math.min(imgW, imgH))
     : ('<div style="' + fl + cgBoxCss(m, opts) + 'width:' + imgW.toFixed(2) + 'in;height:' + imgH.toFixed(2) +
        'in;position:relative;background:transparent;line-height:0;">' + cgBoxInner(cgImgMedia(m, opts), m, opts, true, Math.min(imgW, imgH)) + '</div>');
   var col = (wrapBelow && !besideHtml)
@@ -2851,7 +2863,7 @@ function renderComicPage(moments, sections, intro, outro, opts) {
       var twMedia = m.image
         ? '<img style="object-fit:cover;width:calc(100% + 2px);height:calc(100% + 2px);margin:-1px;object-position:' + cgFocalPos(lmFocal(m)) + ';display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
         : '<div style="width:100%;height:100%;background:#1a0f06;"></div>';
-      var twBox = '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + cgBoxInner(twMedia, m, opts) + '</div>';
+      var twBox = '<div style="' + cgBorder(opts) + 'background:transparent;position:relative;line-height:0;flex:0 0 ' + twW.toFixed(2) + 'in;height:' + CO_TOWER_H.toFixed(2) + 'in;">' + cgBoxInner(twMedia, m, opts, false, Math.min(twW, CO_TOWER_H)) + '</div>';   // v3.0.532 -- sized to the SHORT side; it passed nothing and took the 1.0 default, which is a 7px rail on a 2.3in-wide picture
       var twNarr = '';
       if (sec.before) twNarr += buildNarrativeHTML(sec.before, false);
       if (sec.after) twNarr += buildNarrativeHTML(sec.after, false);
