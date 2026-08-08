@@ -468,14 +468,22 @@ function bronzeFrame(inner, inline, scale, ratio) {
   // The border below reproduces picBorderCss(frame) EXACTLY at scale 1 -- same width, same colour,
   // same three inset shadows -- so the two paths are now the same object all the way out to the
   // page. The apply script asserts that string equality rather than trusting this comment.
-  // v3.0.542 -- 3px -> 4px, matching the bands. Here it is FREE: the depth is fixed at 13 and
-  // picFrameSplit re-divides what is left, so the box does not change size. In the BANDS it is not
-  // free -- see picFrameBorderCss.
-  var _bd = Math.max(1, Math.round(4 * sc));
-  // TOTAL DEPTH IS STILL 13px AND STILL LOAD-BEARING (coInsetX / coInsetY, TD-312). The border now
-  // takes 3 of it, so only 10 are left to split -- a 8px rail and a 2px mat.
-  var _tot = Math.max(5, Math.round(13 * sc));
-  var _sp = picFrameSplit(Math.max(3, _tot - _bd));
+  // v3.0.543 -- THE DEPTH IS BUILT UP FROM THE RAIL NOW, NOT DIVIDED DOWN FROM A CONSTANT.
+  // Ian: "on the bigger pictures the whole frame could be bigger. When I do picture book and
+  // everything is big it looks a little skimpy." Measured off his PDF blow-up, scaling from the
+  // border: Picture Book was running a 7px rail while a large picture in a Magazine band gets 11.
+  // THE BIGGEST PICTURES IN THE PRODUCT HAD THE SECOND-THINNEST FRAME, and the cause was
+  // structural: the bands size the frame from the picture (picRailPx) while this divided a fixed
+  // 13px total three ways, so it could never grow no matter how large the picture was.
+  // NOW IT READS FORWARD: rail first, mat as a RATIO of the rail, border, and the total is whatever
+  // those come to. Ian: "I am ok with the mat growing as the frame / picture grows. So ratio it,
+  // do not hard code it." picMatPx has always been a ratio -- 0.25 of the rail -- so nothing there
+  // changed. What was hard-coded was this total, and it is gone.
+  // 11px is deliberately the same rail a large band picture gets, because Picture Book pictures ARE
+  // large. 4 + 11 + 3 = 18, against the 13 it was.
+  var _fr = bronzeFrameParts(sc);
+  var _bd = _fr.bd, _tot = _fr.total;
+  var _sp = { rail: _fr.rail, mat: _fr.mat };
   var _moulding = bronzeMouldingHtml(_sp.rail, _sp.mat);
   // #0a0806 stays as the ground behind the moulding: if a gradient is ever not honoured the frame
   // degrades to a dark band rather than to a transparent one, which would delete it outright.
@@ -1142,13 +1150,13 @@ function brassPlateHtml(title, bottomOffset, sc) {
 // CO_CAP_GAP_PX is Ian few pixels: the caption stops just short of the rail instead of touching it.
 var CO_CAP_GAP_PX = 2;
 function coInsetX(border) {
-  if (border === 'frame') return 13;
+  if (border === 'frame') return bronzeFrameParts(1).total;   // v3.0.543 -- DERIVED, so the caption cannot end up on the moulding
   if (border === 'keyline') return 1 + KEYLINE_MAT_PX;   // v3.0.535 -- 1px border plus the mat
   if (border === 'comic') return 5;
   return 0;
 }
 function coInsetY(border) {
-  if (border === 'frame') return 15;
+  if (border === 'frame') return bronzeFrameParts(1).total + 2;   // v3.0.543 -- derived, plus the 2px wrapper padding coMedia adds
   if (border === 'keyline') return 3 + KEYLINE_MAT_PX;   // v3.0.535 -- border + wrapper padding + the mat
   if (border === 'comic') return 5;
   return 0;   // gallery bottom gap comes from coMediaPadBottom, which the caller already applies
@@ -2019,6 +2027,18 @@ function picMatPx(railPx) { return Math.max(2, Math.round(railPx * 0.25)); }
 // depth it already owns. Solved by search rather than algebra because picMatPx rounds, and a
 // closed form that disagrees with the function by one pixel is exactly the kind of second copy
 // this build exists to delete. 13px resolves to a 10px rail and a 3px mat; 8px to 6 and 2.
+// v3.0.543 -- WHAT bronzeFrame IS MADE OF, IN ONE PLACE, so the frame and the caption insets
+// cannot disagree. coInsetX and coInsetY used to carry 13 and 15 as LITERALS measured off the
+// emitted CSS -- correct when written, and silently wrong the moment the frame changed. That is the
+// same fault as the inner hairline at rail+1 (v3.0.542) and the caption insets before v3.0.535:
+// two numbers that must agree, written down twice. They are derived from this now.
+function bronzeFrameParts(sc) {
+  var _s = sc || 1;
+  var bd = Math.max(1, Math.round(4 * _s));      // the dark outer band, matching picFrameBorderCss
+  var rail = Math.max(3, Math.round(11 * _s));   // the moulding, sized like a large band picture
+  var mat = picMatPx(rail);                      // a RATIO of the rail, never a constant
+  return { bd: bd, rail: rail, mat: mat, total: bd + rail + mat };
+}
 function picFrameSplit(totalPx) {
   for (var r = totalPx - 2; r >= 3; r--) { if (r + picMatPx(r) === totalPx) return { rail: r, mat: totalPx - r }; }
   var rr = Math.max(3, totalPx - 2);
@@ -2070,8 +2090,20 @@ function bronzeMouldingHtml(railPx, matPx) {
   // this must never do.
   var _bw = railPx;      // rail width, supplied by the caller
   var _mw = matPx;       // mat width, supplied by the caller
-  var _dw = Math.max(3, Math.round(_bw * 0.70));   // corner block size
-  var _di = Math.max(1, Math.round((_bw - _dw) / 2));
+  // v3.0.543 -- THE BLOCK FILLS THE CORNER NOW, 0.70 OF THE RAIL TO ALL OF IT.
+  // Ian, on a PDF blow-up with the corner circled: "make the corner not have the seam. See how the
+  // bronze frame ends with a line and the bottom protrudes out from under the rivet. Make the rivet
+  // bigger if need be to cover it all."
+  // THE SEAM IS REAL AND STRUCTURAL. The rails are drawn left and right first, then top and bottom,
+  // so top and bottom own the corners -- which means at every corner a lit rail butts into a shadow
+  // rail and the join is a visible line. The block exists to cover it. At 0.70 with a centred
+  // offset it left 2px showing at the outer edge and 1px at the inner on an 11px rail, which is
+  // exactly the line he circled and the bottom rail poking out beneath it.
+  // v3.0.522 warned that a full-width block "swallows the corner". It does, and that is the point:
+  // a corner block on a real moulding IS the full width of the rail. The seam is the worse problem,
+  // and this is the third time it has been asked for -- 0.45 to 0.57 to 0.70 and now the whole rail.
+  var _dw = _bw;   // corner block size -- the full rail, so no join can show beside it
+  var _di = 0;
   var _bt = Math.max(3, Math.round(_bw * 0.38));   // bead tile
   var _by = Math.max(1, Math.round((_bw * 0.50 - _bt / 2) * 10) / 10);   // bead bed centre, 50 percent
 
