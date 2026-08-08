@@ -797,11 +797,36 @@ async function logImageGeneration(db, userId, source, refId, forkId) {
 // portrait, the editing model conditions on it; otherwise it's pure
 // text-to-image. Returns the image URL. Caller stores it + logs it.
 function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
+  // v3.0.559 -- TD-342: THE STAGING IS DICTATED, NOT SUGGESTED.
+  // It used to say 'plain neutral background', and 'neutral' was read loosely -- grey studio
+  // sweeps, warm backdrops, and worst of all A FLOOR. Shumble came back standing on stone tiles,
+  // Frumble on a grey floor. That is the root cause of BOTH open Company-page faults:
+  //   TD-343 feet float above the contact shadow -- object-position:center bottom puts the bottom
+  //          of the IMAGE on the stage floor, so a figure whose art includes ground sits however
+  //          high the artist's ground happens to be, and the gap differs per image so no single
+  //          crop constant can fix it;
+  //   TD-343 the grey haze around every figure -- there is nothing to cut out cleanly against.
+  // WHY THIS CAN BE DICTATED AT ALL, which is what makes it cheap. Ian: "the Canonical image only
+  // appears here. It is used as a reference everywhere else." It is DISPLAYED in exactly one place,
+  // the Company page; everywhere else it is an INPUT to generation, where a plain white ground is
+  // if anything better because no backdrop bleeds into the scene it seeds. So there is no user
+  // preference to respect here and no reason to offer one.
+  // PURE WHITE, NOT 'NEUTRAL'. A named colour is checkable and cut-outable; an adjective is neither.
+  // FEET ON THE BOTTOM EDGE is the other half: it is what lets the Company page place a figure on
+  // the shadow by construction instead of by per-image nudging.
   const refPrompt =
     IP_GUARD_IMG +
-    'Full-body character reference portrait. Neutral standing pose, ' +
-    'facing forward, plain neutral background, even soft lighting, ' +
-    'comic book art style.\n\n' +
+    'Full-body character reference portrait. Neutral standing pose, facing forward, ' +
+    'comic book art style, even soft lighting.\n\n' +
+    'STAGING - follow exactly:\n' +
+    '- Background must be PURE WHITE (#FFFFFF), completely empty, edge to edge.\n' +
+    '- NO floor, NO ground, NO stage, NO horizon line, NO cast shadow on the ground, ' +
+    'NO scenery, NO props, NO texture, NO gradient, NO vignette.\n' +
+    '- The character is cut out against white, as if on a blank page.\n' +
+    '- Show the ENTIRE body from the top of the head to the soles of both feet.\n' +
+    '- Both feet must be visible and must REST ON THE VERY BOTTOM EDGE of the frame, ' +
+    'with no empty space beneath them.\n' +
+    '- Do not crop any part of the character. Do not add text, labels or borders.\n\n' +
     'CHARACTER: ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   let model = IMAGE_MODELS[key];
