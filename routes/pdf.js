@@ -4949,8 +4949,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // is the figures themselves. At 0.60 a five-character row is 4.22in tall against 2.43in this
   // morning: SEVENTY-FOUR PERCENT taller.
   var CAST_OV = 0.60;                 // how much of each figure the next one covers
+  var _castStepOverride = null;       // set for single rows, which size from a height target instead
   var CAST_ASP = 0.62;                // figure box, width over height -- a standing figure
-  var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);
+  var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);   // the overlap-driven width, used when a row has captions
   // Height cap so a one or two-character party does not produce a figure taller than the page.
   // The whole block must leave room for the title, the captions and the contents that follow.
   // v3.0.568 -- a single row loses its per-figure captions (see the roster below), so it needs less
@@ -4959,7 +4960,21 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var _castHCap = (_castRows === 1) ? 6.0 : (_castRows === 2 ? 2.6 : 1.9);
   if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
   var _castH = _castW / CAST_ASP;
-  var _castStep = _castW * (1 - CAST_OV);   // centre-to-centre, and the caption width
+  // v3.0.569 -- A SINGLE ROW IS SIZED FROM ITS HEIGHT TARGET, NOT FROM AN OVERLAP CONSTANT.
+  // Ian marked on a printed page roughly where the tallest figure should reach: about six inches.
+  // Chasing that by raising CAST_OV was the wrong direction -- the overlap number is a MEANS, and
+  // solving for it backwards gave 0.79, which is meaningless to read and impossible to tune.
+  // So: take the height, derive the width from the box aspect, and derive the SPACING from what is
+  // left of the content width. The figures then always fit the row exactly, at whatever height is
+  // asked for, and the overlap becomes an OUTPUT rather than a knob.
+  // Only single rows do this -- they are the ones with a roster instead of captions, so nothing
+  // below them constrains the spacing.
+  if (_castRows === 1 && _castPerRow > 1) {
+    _castH = _castHCap;
+    _castW = _castH * CAST_ASP;
+    _castStepOverride = (CG_W - _castW) / (_castPerRow - 1);
+  }
+  var _castStep = (_castStepOverride != null) ? _castStepOverride : _castW * (1 - CAST_OV);   // centre-to-centre, and the caption width
   var _castPort = _castW;   // kept for the no-image fallback font sizing below
   var castBlockHTML;
   if (_castFields === 'list') {
@@ -5001,6 +5016,12 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       if (_hts[i] === null) return 1;                  // unset: full size, never shrunk by accident
       return Math.max(_CAST_MIN_REL, _hts[i] / _tallest);
     }
+    // v3.0.569 -- DECLARED BEFORE THE MAP THAT READS IT, and v3.0.568 got this wrong. The flag was
+    // declared BELOW this map, and the map runs immediately -- so `var` hoisting made it `undefined`
+    // at the moment every caption was built. undefined is falsy, so the ternary took the wrong branch
+    // and EVERY CAPTION RENDERED ANYWAY, beneath a roster that was also rendering. No syntax error,
+    // no warning, and node --check cannot see it: the only symptom was Ian's page showing both.
+    var _castRoster = (_castRows === 1);
     var _members = castChars.map(function(c, _ci) {
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
       var _near = (_ci % 2 === 0);                       // alternate: near, far, near, far
@@ -5039,11 +5060,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       // and its shadow stayed on the ground line, leaving it sitting below the boots.
       // Its offset is now the SAME _drop the figure gets, minus the 1.5 percent raise that lets the
       // boots sit into it. One number driving both, rather than two that have to be kept in step.
-      var _shadow = '<div class="cast-shadow" style="width:' + (_fw * 0.55).toFixed(2) + 'in;height:' + (_fh * 0.045).toFixed(3) + 'in;bottom:' + (_drop - _castH * 0.015).toFixed(3) + 'in;opacity:' + (_near ? 0.42 : 0.30) + ';"></div>';
+      var _shadow = '<div class="cast-shadow" style="width:' + (_fw * 0.42).toFixed(2) + 'in;height:' + (_fh * 0.030).toFixed(3) + 'in;bottom:' + (_drop - _castH * 0.015).toFixed(3) + 'in;opacity:' + (_near ? 0.42 : 0.30) + ';"></div>';
       var _fig = primaryImg
         ? '<img class="cast-fig" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;' + _mask + '" src="' + primaryImg + '" alt="" />'
         : '<div class="cast-no-img" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>';
-      return '<div class="cast-member" style="width:' + _castW.toFixed(2) + 'in;margin-left:' + (_ci === 0 ? 0 : -(_castW * CAST_OV)).toFixed(3) + 'in;z-index:' + (_near ? 3 : 2) + ';">' +
+      return '<div class="cast-member" style="width:' + _castW.toFixed(2) + 'in;margin-left:' + (_ci === 0 ? 0 : -(_castW - _castStep)).toFixed(3) + 'in;z-index:' + (_near ? 3 : 2) + ';">' +
         '<div class="cast-stage" style="height:' + _castH.toFixed(2) + 'in;padding-bottom:' + _drop.toFixed(3) + 'in;">' +
           _shadow + _fig +
         '</div>' +
@@ -5059,8 +5080,6 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       '</div>';
     });
     // Rows are balanced, so a stray fourth character never stands alone under three others.
-    // v3.0.568 -- one row means one roster line; more than one row keeps per-figure captions.
-    var _castRoster = (_castRows === 1);
     var _rowsHtml = '';
     for (var _r = 0; _r < _castRows; _r++) {
       var _slice = _members.slice(_r * _castPerRow, (_r + 1) * _castPerRow);
@@ -5272,7 +5291,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   ${coverSizeCss(co && co.titleSize)}
 
   /* CAST PAGE */
-  .cast-page { width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
+  .cast-page { position:relative;width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
   .cast-page-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .cast-page-subtitle { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;text-align:center;font-style:italic;margin-bottom:0.05in; }
   .cast-page-dm { font-family:'Cinzel',serif;font-size:10pt;color:#8a6a2a;text-align:center;margin-bottom:0.35in;letter-spacing:0.05em; }
@@ -5291,8 +5310,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   /* v3.0.568 -- the roster line. Ian: "From left to right... Shumble, Gnome Fighter, Humble, Gnome
      Cleric..." One sentence in reading order, so a name is still findable without a caption under
      every figure -- which is what frees the figures to overlap properly. */
-  .cast-roster { font-family:'Crimson Text',serif;font-size:10.5pt;color:#5b4a37;text-align:center;
-     margin:0.30in auto 0;max-width:6.2in;line-height:1.5; }
+  /* v3.0.569 -- pinned to the foot of the page rather than trailing the figures. Ian: "push the
+     From left to right text down to the bottom of the page." */
+  .cast-roster { position:absolute;left:0.85in;right:0.85in;bottom:0.75in;
+     font-family:'Crimson Text',serif;font-size:10.5pt;color:#5b4a37;text-align:center;
+     margin:0;line-height:1.5; }
   .cast-roster b { font-family:'Cinzel',serif;font-weight:600;color:#2c1810; }
   /* Ian: "they should be placed closer to the bottom of the page." A single row is the only case
      with room to spare, so it is the only case that gets pushed down. */
@@ -5318,7 +5340,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   /* v3.0.562 -- the shadow rises slightly so the boots sit INTO it rather than on top of it, which
      is what absorbs the per-image variance in the margin above. */
   .cast-shadow { position:absolute;left:50%;bottom:-1.5%;transform:translateX(-50%);border-radius:50%;
-     background:radial-gradient(ellipse at 50% 50%,rgba(20,12,4,0.85) 0%,rgba(20,12,4,0.45) 45%,rgba(20,12,4,0) 72%);filter:blur(1.2px);z-index:0; }
+          /* v3.0.569 -- STRONGER AND WIDER. Ian: "put the shadows back." They were still being drawn,
+        but the figures grew 74 percent at v3.0.568 while the shadow's blur stayed at 1.2px and its
+        height stayed a flat 4.5 percent of the figure -- so what read as a contact shadow under a
+        2.4in figure was a faint smear under a 6in one. Scaled up and darkened to match. */
+     background:radial-gradient(ellipse at 50% 50%,rgba(20,12,4,0.92) 0%,rgba(20,12,4,0.55) 42%,rgba(20,12,4,0) 74%);filter:blur(2.2px);z-index:0; }
   /* The caption is the STEP width, not the figure width, so neighbouring captions can never collide
      however much the figures overlap. */
   .cast-label { margin:0.07in auto 0;position:relative;z-index:4; }
