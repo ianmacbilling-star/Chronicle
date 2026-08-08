@@ -824,8 +824,19 @@ function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
     'NO scenery, NO props, NO texture, NO gradient, NO vignette.\n' +
     '- The character is cut out against white, as if on a blank page.\n' +
     '- Show the ENTIRE body from the top of the head to the soles of both feet.\n' +
-    '- Both feet must be visible and must REST ON THE VERY BOTTOM EDGE of the frame, ' +
-    'with no empty space beneath them.\n' +
+    // v3.0.562 -- ASK FOR THE MARGIN, DO NOT FORBID IT. v3.0.559 demanded feet flush to the bottom
+    // edge; the model left 4.8 percent of white beneath them anyway, and Ian was right that flush
+    // would look CROPPED on the character card where the image is seen on its own.
+    // A PROPORTION, NOT A PIXEL COUNT. The model does not reason reliably in pixels but composes
+    // well, and one twentieth is almost exactly what it produced unprompted -- so this asks for the
+    // thing it already does rather than for a thing it ignores.
+    // IT DOES NOT NEED TO BE EXACT. The Company page assumes this margin and the contact shadow is a
+    // soft ellipse the boots overlap, so a percent or two of variance disappears into the shadow
+    // instead of showing as a float. Deliberately no pixel-scanning of the image: a scan that is
+    // right most of the time would eventually put one character through the floor, and nobody would
+    // know until the book was printed.
+    '- Both feet must be visible, and there must be a SMALL EVEN MARGIN of empty white below ' +
+    'them -- roughly one twentieth of the image height. Do not let the feet touch the bottom edge.\n' +
     '- Do not crop any part of the character. Do not add text, labels or borders.\n\n' +
     'CHARACTER: ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';

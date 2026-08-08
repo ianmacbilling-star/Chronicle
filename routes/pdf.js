@@ -5188,9 +5188,22 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
      pair of feet on one ground line however tall the art happens to be. padding-bottom lifts the
      farther figures a touch, so the ground recedes instead of being a ruled line. */
   .cast-stage { position:relative;display:flex;align-items:flex-end;justify-content:center;line-height:0; }
-  .cast-fig { display:block;object-fit:contain;object-position:center bottom;position:relative;z-index:1; }
+  /* v3.0.562 -- TD-343: THE FIGURE IS PUSHED DOWN BY THE MARGIN ITS ART CARRIES.
+     Every reference now leaves about one twentieth of empty white beneath the feet (v3.0.562), so
+     object-position:center bottom stands the figure on the bottom of the IMAGE and leaves the boots
+     that far above the ground line. Shifting down by the same proportion puts them back on it.
+     A PERCENTAGE, NOT A PIXEL VALUE, so it holds at every figure size on the page -- the line-up
+     scales figures by cast count, and a constant would be right at one size only.
+     THIS IS NOT EXACT AND IS NOT MEANT TO BE. The margin the model leaves varies by a percent or
+     two; the contact shadow below is deliberately soft and wide enough that the boots overlap it,
+     so the variance lands INSIDE the shadow. Overlapping a shadow always reads as grounded; a gap
+     never does, which is why the error is aimed downward rather than centred. */
+  .cast-fig { display:block;object-fit:contain;object-position:center bottom;position:relative;z-index:1;
+     transform:translateY(4.8%); }
   /* The contact shadow, centred on the feet and sitting UNDER the figure. */
-  .cast-shadow { position:absolute;left:50%;bottom:0;transform:translateX(-50%);border-radius:50%;
+  /* v3.0.562 -- the shadow rises slightly so the boots sit INTO it rather than on top of it, which
+     is what absorbs the per-image variance in the margin above. */
+  .cast-shadow { position:absolute;left:50%;bottom:-1.5%;transform:translateX(-50%);border-radius:50%;
      background:radial-gradient(ellipse at 50% 50%,rgba(20,12,4,0.85) 0%,rgba(20,12,4,0.45) 45%,rgba(20,12,4,0) 72%);filter:blur(1.2px);z-index:0; }
   /* The caption is the STEP width, not the figure width, so neighbouring captions can never collide
      however much the figures overlap. */
