@@ -468,7 +468,10 @@ function bronzeFrame(inner, inline, scale, ratio) {
   // The border below reproduces picBorderCss(frame) EXACTLY at scale 1 -- same width, same colour,
   // same three inset shadows -- so the two paths are now the same object all the way out to the
   // page. The apply script asserts that string equality rather than trusting this comment.
-  var _bd = Math.max(1, Math.round(3 * sc));
+  // v3.0.542 -- 3px -> 4px, matching the bands. Here it is FREE: the depth is fixed at 13 and
+  // picFrameSplit re-divides what is left, so the box does not change size. In the BANDS it is not
+  // free -- see picFrameBorderCss.
+  var _bd = Math.max(1, Math.round(4 * sc));
   // TOTAL DEPTH IS STILL 13px AND STILL LOAD-BEARING (coInsetX / coInsetY, TD-312). The border now
   // takes 3 of it, so only 10 are left to split -- a 8px rail and a 2px mat.
   var _tot = Math.max(5, Math.round(13 * sc));
@@ -1957,7 +1960,7 @@ function picBorderCss(opts){
     // Palette pulled onto the brass plaque ramp (#c2a55f -> #6b5119) so the frame and the plaque
     // read as one object rather than two gold things. Costs nothing: border was already 3px and the
     // rest is inset.
-    case 'frame':    return picFrameBorderCss(3);   // v3.0.534 -- one definition, shared with bronzeFrame
+    case 'frame':    return picFrameBorderCss(4);   // v3.0.534 one definition; v3.0.542 3px -> 4px, Ian: the outside dark part should be bigger
     case 'comic':    return 'border:5px solid #0a0806;';
     case 'gallery':  return 'box-shadow:' + CO_IMG_SHADOW + ';';
     case 'vignette': return '';
@@ -2075,8 +2078,30 @@ function bronzeMouldingHtml(railPx, matPx) {
   // THE PROFILE, unchanged from v3.0.528 and now expressed as data rather than as a stop list.
   // Percentages of the rail, outer edge to artwork. The apply script asserts these against the
   // numbers the gradient version carried, because a re-typed profile is a different frame.
-  var _lit  = [[0, 20, '#f4e6b8'], [20, 34, '#e0c77c'], [34, 66, '#a8862f'], [66, 86, '#7a5d22'], [86, 100, '#3d2d0c']];
-  var _shad = [[0, 20, '#241708'], [20, 34, '#5f4715'], [34, 66, '#8a6a2a'], [66, 86, '#e0c77c'], [86, 100, '#3d2d0c']];
+  // v3.0.542 -- THE OUTER FACE WIDENS, 20 percent to 28. Ian: "the outside dark / wood part of the
+  // frame should be bigger." That part is the CSS border, and it widens too (see picFrameBorderCss)
+  // -- but the moulding s own outermost plane widening with it is what makes the whole outer band
+  // read as one thicker thing rather than a wide border with a thin edge stuck on it.
+  // THE BEAD BED STAYS CENTRED ON 50 PERCENT. 36-64 rather than 34-66, because the bead offset is a
+  // single number serving all four rails and a bed that is not symmetric needs two (v3.0.530).
+  // AND THE FIRST ATTEMPT AT THIS WAS WRONG. Widening the outer face to 28 percent took the width
+  // out of the STEP, which fell to 0.64px at a rail of 8 -- sub-pixel, the very trap this build
+  // exists to close, self-inflicted while closing it. Caught by printing the plane widths before
+  // shipping rather than by Ian looking at a page. 23 percent is the most the outer face can take
+  // while every plane still holds a whole pixel at rail 8, which is the common size.
+  var _lit  = [[0, 23, '#f4e6b8'], [23, 36, '#e0c77c'], [36, 64, '#a8862f'], [64, 82, '#7a5d22'], [82, 100, '#3d2d0c']];
+  // v3.0.542 -- THE SHADOW RAIL S OUTER FACE WAS BLACK, SO IT VANISHED INTO THE BORDER.
+  // Ian: "there is a solid bronze band that runs on the left and top outside the rivet band, but on
+  // the right and bottom there is no similar band. It should be there and be darker, shadowed a
+  // little." The band WAS there. Measured off his screenshot, border against the face beside it:
+  //     left and top     74,52,24  ->  244,230,184     a 170-point jump, unmistakable
+  //     right and bottom 21,14,4   ->   36,23,8        a 15-point jump, one black mass
+  // #241708 is not dark bronze, it is black with a hint of brown. Raised to #6b5119, which clears
+  // the shadow border by 86 points -- comparable to the lit side -- while staying far below the lit
+  // face at 244, so the light direction is untouched. THIS IS v3.0.524 RECURRING ON THE OTHER RAIL:
+  // that build found the frame reading olive-brown because near-black steps do not read as steps,
+  // fixed it on the lit rails, and nobody looked at the shadow ones.
+  var _shad = [[0, 23, '#6b5119'], [23, 36, '#5f4715'], [36, 64, '#8a6a2a'], [64, 82, '#e0c77c'], [82, 100, '#3d2d0c']];
   var _matSh = ['#c9c1af', '#dcd5c6'];   // top and left: the shadowed bevel
   var _matLt = ['#ece7d9', '#f8f5ec'];   // bottom and right: the lit bevel
 
@@ -2125,11 +2150,27 @@ function bronzeMouldingHtml(railPx, matPx) {
   // The radial gradient becomes three flat circles. Its stops were percentages of the
   // FARTHEST CORNER, which on a square tile is 0.707 of the tile -- so 14/38/62 percent are
   // 0.099, 0.269 and 0.438 of the tile. Reproduced rather than eyeballed.
-  var _bc = (_bt / 2).toFixed(2);
+  // v3.0.542 -- THE BEADS ARE WHOLE-PIXEL SQUARES NOW, AND THIS IS THE SUB-PIXEL LESSON FOR THE
+  // THIRD TIME IN ONE DAY. Ian, on the same picture at the same size in both renderers: "look at
+  // the rivets, barely there on pdf." Measured down one column of the bead bed:
+  //     HTML  127 186 213 127 143 213 169 127 200 212 ...   range 86, std 35
+  //     PDF   144 141 130 146 138 128 137 135 129 130 ...   range 20, std  6
+  // Eighty-five percent of the contrast, gone. The bead was three concentric circles carried over
+  // verbatim from the CSS radial-gradient at v3.0.540 -- and at a 4px tile their radii resolve to
+  // 1.75, 1.08 and 0.40 PIXELS. The bright core is 0.8px across. Chrome s screen rasteriser
+  // antialiases that into a visible blob; the print path averages it away.
+  // v3.0.528 fixed exactly this for the rail planes. The bead was converted without anyone asking
+  // what its stops resolve to, one function away from the comment saying not to.
+  // THE CONSTRAINT IS BRUTAL: _bt is max(3, round(rail * 0.38)), so the tile is only ever 3 or 4
+  // pixels. Three tones cannot live in three pixels. So: one bead of (tile - 1) with a one-pixel
+  // gap, a bright face and a one-pixel shade along its bottom and right. Every feature a whole
+  // pixel, nothing to average away. It loses internal modelling the measurement shows was never
+  // reaching the page.
+  var _bs = Math.max(2, _bt - 1);        // bead size, a whole number of pixels
   var _bead = '<pattern id="bd" patternUnits="userSpaceOnUse" width="' + _bt + '" height="' + _bt + '">' +
-    '<circle cx="' + _bc + '" cy="' + _bc + '" r="' + (_bt * 0.438).toFixed(2) + '" fill="#6b5119"/>' +
-    '<circle cx="' + _bc + '" cy="' + _bc + '" r="' + (_bt * 0.269).toFixed(2) + '" fill="#d9bd6a"/>' +
-    '<circle cx="' + _bc + '" cy="' + _bc + '" r="' + (_bt * 0.099).toFixed(2) + '" fill="#fff3cf"/>' +
+    '<rect x="0" y="0" width="' + _bs + '" height="' + _bs + '" fill="#fff3cf" shape-rendering="crispEdges"/>' +
+    '<rect x="0" y="' + (_bs - 1) + '" width="' + _bs + '" height="1" fill="#8a6a2a" shape-rendering="crispEdges"/>' +
+    '<rect x="' + (_bs - 1) + '" y="0" width="1" height="' + _bs + '" fill="#8a6a2a" shape-rendering="crispEdges"/>' +
     '</pattern>';
   _svg += _r(0, _by, '100%', _bt, 'url(#bd)');
   _svg += _r(0, '100%', '100%', _bt, 'url(#bd)', _up(_by + _bt));
@@ -2179,7 +2220,13 @@ function bronzeMouldingHtml(railPx, matPx) {
     '<svg width="100%" height="100%" style="position:absolute;inset:0;display:block;" xmlns="http://www.w3.org/2000/svg">' +
       '<defs>' + _bead + '</defs>' + _svg +
     '</svg>' +
-    '<div style="position:absolute;inset:' + (_bw + 1) + 'px;box-shadow:inset 0 0 0 1px rgba(28,18,4,0.75),inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
+    // v3.0.542 -- rail + mat, NOT rail + 1. v3.0.527 put this at the moulding/artwork boundary and
+    // it WAS the boundary -- the mat did not exist until v3.0.529. Since then the mat has occupied
+    // rail to rail+mat, so rail+1 lands one pixel INSIDE it and has been drawing a dark line across
+    // the mat on every picture. Found by measuring a PDF: the mat reads 134,128,114 / 66,58,45 /
+    // 190,185,172 where it should be a clean 201 and 220. A constant that was correct when written
+    // and became wrong when something moved underneath it, which is this file s standing fault.
+    '<div style="position:absolute;inset:' + (_bw + _mw) + 'px;box-shadow:inset 0 0 0 1px rgba(28,18,4,0.75),inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
   '</div>';
 }
 function picOverlay(opts, sizeIn){
