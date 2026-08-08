@@ -4941,12 +4941,22 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     var first = raw.split('/')[0].trim();
     return first || raw.trim();
   }
-  var CAST_OV = 0.42;                 // how much of each figure the next one covers
+  // v3.0.568 -- 0.42 to 0.60, and THE CAPTIONS ARE WHAT WAS HOLDING IT BACK. Ian offered the way
+  // out: "if need be you could do From left to right, Shumble Gnome Fighter, Humble Gnome Cleric...
+  // at the bottom." Per-figure captions need a slot each, and the slot is the figure width times
+  // (1 - overlap) -- so every increase in overlap narrowed the captions until names stopped fitting.
+  // A single roster line under the row needs no slots at all, so the only remaining limit on overlap
+  // is the figures themselves. At 0.60 a five-character row is 4.22in tall against 2.43in this
+  // morning: SEVENTY-FOUR PERCENT taller.
+  var CAST_OV = 0.60;                 // how much of each figure the next one covers
   var CAST_ASP = 0.62;                // figure box, width over height -- a standing figure
   var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);
   // Height cap so a one or two-character party does not produce a figure taller than the page.
   // The whole block must leave room for the title, the captions and the contents that follow.
-  var _castHCap = (_castRows === 1) ? 4.2 : (_castRows === 2 ? 2.6 : 1.9);
+  // v3.0.568 -- a single row loses its per-figure captions (see the roster below), so it needs less
+  // room beneath and can afford more above. 4.2 to 6.0. Multi-row casts keep their captions and
+  // their caps unchanged.
+  var _castHCap = (_castRows === 1) ? 6.0 : (_castRows === 2 ? 2.6 : 1.9);
   if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
   var _castH = _castW / CAST_ASP;
   var _castStep = _castW * (1 - CAST_OV);   // centre-to-centre, and the caption width
@@ -5037,24 +5047,31 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         '<div class="cast-stage" style="height:' + _castH.toFixed(2) + 'in;padding-bottom:' + _drop.toFixed(3) + 'in;">' +
           _shadow + _fig +
         '</div>' +
-        // v3.0.567 -- THE CAPTION STAGGERS WITH ITS FIGURE. Ian: "maybe move them closer and stagger
-        // their captions." At 0.42 overlap the caption slots are narrow and adjacent names crowd each
-        // other; dropping every other one clears them completely and reinforces the near/far reading
-        // the figures already have -- a caption that steps back with its figure looks deliberate,
-        // where two captions colliding looks broken.
+        // v3.0.568 -- ON A SINGLE ROW THE CAPTIONS MOVE TO ONE ROSTER LINE BELOW (see _castRoster).
+        // Per-figure captions are kept for multi-row casts, where the figures are small, the names
+        // are the only way to tell them apart, and a roster of a dozen would be unreadable prose.
+        (_castRoster ? '' :
         '<div class="cast-label" style="width:' + _castStep.toFixed(2) + 'in;margin-top:' + (_near ? 0 : 0.13).toFixed(2) + 'in;">' +
           '<div class="cast-name">' + _fmEsc(castFirstName(c.name)) + '</div>' +
           '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
           ((((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '')) +
-        '</div>' +
+        '</div>') +
       '</div>';
     });
     // Rows are balanced, so a stray fourth character never stands alone under three others.
+    // v3.0.568 -- one row means one roster line; more than one row keeps per-figure captions.
+    var _castRoster = (_castRows === 1);
     var _rowsHtml = '';
     for (var _r = 0; _r < _castRows; _r++) {
       var _slice = _members.slice(_r * _castPerRow, (_r + 1) * _castPerRow);
       if (!_slice.length) continue;
-      _rowsHtml += '<div class="cast-lineup">' + _slice.join('') + '</div>';
+      _rowsHtml += '<div class="cast-lineup' + (_castRoster ? ' cast-lineup-push' : '') + '">' + _slice.join('') + '</div>';
+    }
+    // v3.0.568 -- the roster, in reading order, as one sentence. Ian's own phrasing.
+    if (_castRoster) {
+      _rowsHtml += '<div class="cast-roster">From left to right: ' + castChars.map(function (c) {
+        return '<b>' + _fmEsc(castFirstName(c.name)) + '</b>' + (c.cls ? ', ' + _fmEsc(c.cls) : '');
+      }).join(' &middot; ') + '</div>';
     }
     castBlockHTML = _rowsHtml;
   }
@@ -5271,6 +5288,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
      feet still share a ground line, and every caption now starts at the same y and grows DOWNWARD.
      The row is ragged at the bottom instead of the top, which is what a caption row should do. */
   .cast-lineup { display:flex;align-items:flex-start;justify-content:center;margin-top:0.14in; }
+  /* v3.0.568 -- the roster line. Ian: "From left to right... Shumble, Gnome Fighter, Humble, Gnome
+     Cleric..." One sentence in reading order, so a name is still findable without a caption under
+     every figure -- which is what frees the figures to overlap properly. */
+  .cast-roster { font-family:'Crimson Text',serif;font-size:10.5pt;color:#5b4a37;text-align:center;
+     margin:0.30in auto 0;max-width:6.2in;line-height:1.5; }
+  .cast-roster b { font-family:'Cinzel',serif;font-weight:600;color:#2c1810; }
+  /* Ian: "they should be placed closer to the bottom of the page." A single row is the only case
+     with room to spare, so it is the only case that gets pushed down. */
+  .cast-lineup-push { margin-top:1.6in; }
   .cast-member { text-align:center;position:relative; }
   /* The stage is a fixed-height box the figure sits at the BOTTOM of, which is what puts every
      pair of feet on one ground line however tall the art happens to be. padding-bottom lifts the
