@@ -4957,7 +4957,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // v3.0.568 -- a single row loses its per-figure captions (see the roster below), so it needs less
   // room beneath and can afford more above. 4.2 to 6.0. Multi-row casts keep their captions and
   // their caps unchanged.
-  var _castHCap = (_castRows === 1) ? 6.0 : (_castRows === 2 ? 2.6 : 1.9);
+  // v3.0.570 -- 6.0 to 5.2, because 6.0 did not fit. A cast page is 9.55in of printable height; the
+  // title block takes about 1.3, the pushed-down row took 1.6 more, and the roster needs its foot.
+  // The figures ran off the bottom. 5.2in plus the title plus the roster leaves real margin, and it
+  // is still more than double where the day started.
+  var _castHCap = (_castRows === 1) ? 5.2 : (_castRows === 2 ? 2.6 : 1.9);
   if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
   var _castH = _castW / CAST_ASP;
   // v3.0.569 -- A SINGLE ROW IS SIZED FROM ITS HEIGHT TARGET, NOT FROM AN OVERLAP CONSTANT.
@@ -5312,13 +5316,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
      every figure -- which is what frees the figures to overlap properly. */
   /* v3.0.569 -- pinned to the foot of the page rather than trailing the figures. Ian: "push the
      From left to right text down to the bottom of the page." */
-  .cast-roster { position:absolute;left:0.85in;right:0.85in;bottom:0.75in;
+  .cast-roster { position:absolute;left:0.85in;right:0.85in;bottom:0.5in;z-index:4;
      font-family:'Crimson Text',serif;font-size:10.5pt;color:#5b4a37;text-align:center;
      margin:0;line-height:1.5; }
   .cast-roster b { font-family:'Cinzel',serif;font-weight:600;color:#2c1810; }
   /* Ian: "they should be placed closer to the bottom of the page." A single row is the only case
      with room to spare, so it is the only case that gets pushed down. */
-  .cast-lineup-push { margin-top:1.6in; }
+  /* v3.0.570 -- 1.6in to 0.5in. A 5.2in row already fills most of the page, so the push that made
+     sense under a 2.4in row now shoves the figures through the roster and off the sheet. */
+  .cast-lineup-push { margin-top:0.5in; }
   .cast-member { text-align:center;position:relative; }
   /* The stage is a fixed-height box the figure sits at the BOTTOM of, which is what puts every
      pair of feet on one ground line however tall the art happens to be. padding-bottom lifts the
@@ -5334,7 +5340,19 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
      two; the contact shadow below is deliberately soft and wide enough that the boots overlap it,
      so the variance lands INSIDE the shadow. Overlapping a shadow always reads as grounded; a gap
      never does, which is why the error is aimed downward rather than centred. */
+  /* v3.0.570 -- MULTIPLY, BECAUSE WHITE IS NOT TRANSPARENT. Ian: "they need to now be transparent."
+     v3.0.559 made every reference white-ground, and v3.0.567 deleted the edge mask on the grounds
+     that the art was cut out. It is cut out ON WHITE -- which is not the same thing. At the 79
+     percent overlap this page now runs, each figure's white RECTANGLE covers the figure behind it,
+     and it was covering the contact shadows too, which is why they looked missing.
+     multiply maps white to whatever is underneath and leaves dark ink alone, so a white ground
+     disappears against paper of any colour without the image needing real alpha. ONE property, not
+     a two-layer composite -- which matters, because the composite is exactly what died in print
+     (TD-352) and took the figures with it at v3.0.567.
+     If this does not survive the print path either, the fallback is not another blend: it is to cut
+     the white to alpha server-side once, at generation, and store the image with transparency. */
   .cast-fig { display:block;object-fit:contain;object-position:center bottom;position:relative;z-index:1;
+     mix-blend-mode:multiply;
      transform:translateY(4.8%); }
   /* The contact shadow, centred on the feet and sitting UNDER the figure. */
   /* v3.0.562 -- the shadow rises slightly so the boots sit INTO it rather than on top of it, which
