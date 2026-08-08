@@ -476,10 +476,10 @@ function bronzeFrame(inner, inline, scale, ratio) {
   var _moulding = bronzeMouldingHtml(_sp.rail, _sp.mat);
   // #0a0806 stays as the ground behind the moulding: if a gradient is ever not honoured the frame
   // degrades to a dark band rather than to a transparent one, which would delete it outright.
+  // v3.0.534 -- the border comes from the shared function now, with bronzeFrame s own drop shadow
+  // handed in as the leading layer. The two paths cannot drift by a character.
   var _shell = 'position:relative;line-height:0;background:#0a0806;border-radius:2px;' +
-    'border:' + _bd + 'px solid #2a1d0c;' +
-    'box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(0,0,0,0.85),' +
-    'inset 0 ' + _bd + 'px 6px -2px rgba(0,0,0,0.60),inset ' + _bd + 'px 0 6px -3px rgba(0,0,0,0.45);';
+    picFrameBorderCss(_bd, '0 2px 6px rgba(0,0,0,0.4)');
   if (ratio) {
     return '<div style="' + (inline ? 'display:inline-block;' : '') + 'width:100%;aspect-ratio:' + ratio + ';box-sizing:border-box;' + _shell + '">' +
       '<div style="position:absolute;inset:' + (_tot - _bd) + 'px;line-height:0;overflow:hidden;">' + inner + '</div>' +   // inset resolves against the PADDING box, so the border is already outside it
@@ -1022,7 +1022,19 @@ function brassPlateHtml(title, bottomOffset, sc) {
   // sticker. A mask leaves the border painted along the scalloped edge.
   // GRACEFUL BY CONSTRUCTION: if the mask is not honoured the plaque simply renders as the
   // rounded rectangle it is today. Nothing depends on it.
-  var _sc = Math.max(3, Math.round(5 * sc));   // scallop radius, tied to the plate size
+  // v3.0.534 -- THE SCALLOP IS A PROPORTION OF THE PLATE, NOT A CONSTANT. Ian: "the scallops
+  // before looked better, they were shaded better or something, these look unfinished."
+  // v3.0.528 shortened the plate from 18.5px to 16.5px and left this radius pinned at 5px, so the
+  // four bites went from eating 54 percent of the plate s height to 61 percent. There is almost no
+  // straight edge left between the top and bottom bites, which is why the ends read as a chewed
+  // lozenge rather than a plate with scalloped corners. Nothing at v3.0.529, .530 or .531 touched
+  // this function at all -- verified by diffing it against the v3.0.526 baseline, where the ONLY
+  // two differences are the padding and the shadow, both from v3.0.528.
+  // The height is now DERIVED from the same numbers that draw the plate, so the two cannot drift:
+  // two 1px borders, the two paddings, and the line box (CAP_BASE_PT at 96dpi times line-height).
+  var _plateH = 2 + Math.max(1, Math.round(2 * sc)) + Math.max(1, Math.round(1 * sc)) +
+    (CAP_BASE_PT * sc * 96 / 72) * 1.15;
+  var _sc = Math.max(3, Math.round(_plateH * 0.27));   // scallop radius, a proportion of the plate
   var _bite = 'radial-gradient(circle ' + _sc + 'px at ';
   var _mask = _bite + '0 0, transparent 99%, #000 100%), ' +
     _bite + '100% 0, transparent 99%, #000 100%), ' +
@@ -1063,7 +1075,7 @@ function brassPlateHtml(title, bottomOffset, sc) {
     'background:linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%);' +
     'border:1px solid #4a3810;' +
     '-webkit-mask:' + _mask + ';-webkit-mask-composite:source-in;mask:' + _mask + ';mask-composite:intersect;' +
-    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -3px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
+    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -4px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
     'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
     'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
     'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
@@ -1850,6 +1862,34 @@ function _coCapH(h, opts) {
 }
 var CG_BORDER = 'border:4px solid #0a0806;overflow:hidden;';
 var CG_FRAME  = 'border:12px solid #0a0806;overflow:hidden;'; // bold comic panel frame (Comic only)
+// v3.0.534 -- THE DARK OUTER BAND WAS THE ONLY FLAT THING LEFT ON THE FRAME.
+// Ian: "everything looks 3D but that dark outer band... a one pixel solid black line on the very
+// outside edge... maybe dark on top and left and lighter on bottom and right?"
+// THE LINE: yes, and it was nearly free -- a hairline already sat at the outer edge at
+// rgba(0,0,0,0.85). It is now solid #000, so the frame has a crisp silhouette against the page.
+// THE DIRECTION: the OTHER way, and the distinction is the one the mat already turns on.
+// The mat inverts because it is CONCAVE -- a bevel cut inward, whose top face turns away from the
+// light. This band is not concave. It is the outside of a solid object, exactly like the moulding:
+// its top edge faces up INTO the light and its bottom edge faces down away from it. So it lights
+// the SAME way as the moulding -- lighter top and left, darker bottom and right. Shaded the other
+// way it would fight the moulding two pixels away and the frame would stop reading as one object
+// lit from one place. Ian asked for thoughts and this is the disagreement, offered with reasons.
+// ONE DEFINITION. This string lived in two places -- picBorderCss for the bands and a copy inside
+// bronzeFrame -- which is the drift trap TD-336 was closed to stop. bronzeFrame passes its own
+// scaled width and its outer drop shadow; everything else about the two is now literally the same
+// characters.
+function picFrameBorderCss(bd, leadShadow) {
+  var _b = Math.max(1, bd);
+  // The shorthand first, so an engine that does not honour the per-side longhands degrades to the
+  // old flat band rather than to no border at all.
+  return 'border:' + _b + 'px solid #2a1d0c;' +
+    'border-top-color:#4a3418;border-left-color:#4a3418;' +
+    'border-bottom-color:#150e04;border-right-color:#150e04;' +
+    'box-shadow:' + (leadShadow ? leadShadow + ',' : '') +
+    'inset 0 0 0 1px #000,' +
+    'inset 0 ' + _b + 'px 6px -2px rgba(0,0,0,0.60),' +
+    'inset ' + _b + 'px 0 6px -3px rgba(0,0,0,0.45);';
+}
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
@@ -1865,7 +1905,7 @@ function picBorderCss(opts){
     // Palette pulled onto the brass plaque ramp (#c2a55f -> #6b5119) so the frame and the plaque
     // read as one object rather than two gold things. Costs nothing: border was already 3px and the
     // rest is inset.
-    case 'frame':    return 'border:3px solid #2a1d0c;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.85),inset 0 3px 6px -2px rgba(0,0,0,0.60),inset 3px 0 6px -3px rgba(0,0,0,0.45);';
+    case 'frame':    return picFrameBorderCss(3);   // v3.0.534 -- one definition, shared with bronzeFrame
     case 'comic':    return 'border:5px solid #0a0806;';
     case 'gallery':  return 'box-shadow:' + CO_IMG_SHADOW + ';';
     case 'vignette': return '';
