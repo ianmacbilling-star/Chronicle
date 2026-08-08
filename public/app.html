@@ -193,6 +193,7 @@
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-sm" id="novel-layout-btn" onclick="openStylePicker('novel-layout')" style="display:none">Layout: Classic</button>
             <button class="btn btn-sm" id="novel-preview-mode-btn" onclick="toggleNovelPreviewMode()" title="Quick View = fast on-screen preview for layout checks. True View = the exact paged PDF that prints (slower)." style="display:none">Quick View</button>
+            <button class="btn btn-sm" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;margin-left:4px;" title="Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View &mdash; admin only</button>
             <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
               <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
               <span id="novel-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">100%</span>

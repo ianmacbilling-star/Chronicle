@@ -6952,6 +6952,32 @@ function previewNovelPDF() {
   loadNovelPreview(novelLayoutStyle);
 }
 
+// v3.0.541 -- TRUE VIEW, ADMIN ONLY. Ian: "put the old True View button there so I do not have to
+// go through the Optimize process that takes 5 minutes every time."
+// WHY IT EXISTS. Every finding this session about the frame, the plaque and the mat came from a
+// RENDERED PDF, because the browser and the print path disagree -- gradient stops interpolate in
+// one and step in the other, a mask composite is honoured in one and dropped in the other. Judging
+// decoration on the Quick View is judging the wrong artifact. But the only route to a real PDF was
+// a full Optimize run, so every one-pixel question cost five minutes.
+// WHAT IT IS NOT. This is the UN-OPTIMISED book: the same URL the preview builds, with format=pdf
+// and no page parameter, opened in a new tab. Pagination, page count and clipping will NOT match a
+// finished book, and it is not a substitute for looking at the optimised one. It answers "how does
+// this RENDER", never "how does this PAGINATE".
+// DEFINED ONCE, ON PURPOSE. exportNovelPDF exists in THREE copies in this file; a new name defined
+// once cannot be half-patched, which is the fault this codebase keeps re-finding.
+function prepTrueView() {
+  if (!(typeof state !== 'undefined' && state.user && state.user.is_admin)) return;
+  if (!(state.currentCampaign && state.currentCampaign.id)) return;
+  var url = '/api/pdf/novel/' + state.currentCampaign.id +
+    '?layout=' + encodeURIComponent(typeof novelLayoutStyle !== 'undefined' ? novelLayoutStyle : 'Classic') +
+    novelAsUserQ('&') + customOptsQ('novel', '&') + '&format=pdf';
+  // The live fields, not the saved ones, so a title being typed is reflected without a save first.
+  var _t = document.getElementById('prep-title');
+  if (_t && _t.value && _t.value.trim()) url += '&bookTitle=' + encodeURIComponent(_t.value.trim());
+  var _c = document.getElementById('print-title-color');
+  if (_c && _c.value) url += '&titleColor=' + encodeURIComponent(_c.value);
+  window.open(url, '_blank');
+}
 function exportNovelPDF() {
   var url = '/api/pdf/novel/' + state.currentCampaign.id + '?layout=' + encodeURIComponent(novelLayoutStyle) + novelAsUserQ('&') + customOptsQ('novel','&') + '&format=pdf';
   window.open(url, '_blank');
@@ -7005,6 +7031,10 @@ function prepSeedCoverFromCampaignImage() {
 // Title field tracks the viewed fork; editable only on your own version. The
 // owner's typed title is stashed while peeking at another fork and restored.
 function prepSyncTitle() {
+  // v3.0.541 -- the admin-only True View button rides in here because prepSyncTitle is single-copy
+  // and already runs on tab entry. loadNovelPreview has TWO copies and would need both patched.
+  var _tv = document.getElementById('prep-trueview-btn');
+  if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
   var tEl = document.getElementById('prep-title'); if (!tEl) return;
   var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
   if (own) {
