@@ -453,19 +453,40 @@ function bronzeFrame(inner, inline, scale, ratio) {
   // does. The old outer 1px border is gone because the moulding paints its own outer hairline --
   // which is why the depths still match rather than being one pixel short.
   var sc = scale || 1;
+  // v3.0.533 -- THE DARK OUTER BORDER IS BACK, AND ITS ABSENCE WAS A v3.0.531 REGRESSION.
+  // Ian: "the frames are not quite as good now... the dark outer border is not there, it is like
+  // the stuff is out of order." Then, crucially, the correction that found it: "Magazine s interior
+  // pics look good, but the title pics look messed up like Picture Book does."
+  // THAT NARROWED IT FROM THE PROFILE TO THIS FUNCTION. Magazine interiors and bronzeFrame draw the
+  // same moulding since v3.0.531, so a profile fault would have shown in all three. It showed in
+  // exactly the two bronzeFrame consumers, which means the difference is the box, not the paint.
+  // AND IT IS: a band s image box carries picBorderCss, which for `frame` is a 3px solid #2a1d0c
+  // border plus an inset hairline, with picOverlay drawing INSIDE it. bronzeFrame had its own
+  // `border:1px solid #0a0806` doing that job and v3.0.531 deleted it when four nested divs became
+  // one shell -- on the reasoning that the moulding paints its own hairline. It does, at 1px and
+  // 0.85 alpha, which measured 86 against the 42 of the border it replaced.
+  // The border below reproduces picBorderCss(frame) EXACTLY at scale 1 -- same width, same colour,
+  // same three inset shadows -- so the two paths are now the same object all the way out to the
+  // page. The apply script asserts that string equality rather than trusting this comment.
+  var _bd = Math.max(1, Math.round(3 * sc));
+  // TOTAL DEPTH IS STILL 13px AND STILL LOAD-BEARING (coInsetX / coInsetY, TD-312). The border now
+  // takes 3 of it, so only 10 are left to split -- a 8px rail and a 2px mat.
   var _tot = Math.max(5, Math.round(13 * sc));
-  var _sp = picFrameSplit(_tot);
+  var _sp = picFrameSplit(Math.max(3, _tot - _bd));
   var _moulding = bronzeMouldingHtml(_sp.rail, _sp.mat);
   // #0a0806 stays as the ground behind the moulding: if a gradient is ever not honoured the frame
   // degrades to a dark band rather than to a transparent one, which would delete it outright.
-  var _shell = 'position:relative;line-height:0;background:#0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
+  var _shell = 'position:relative;line-height:0;background:#0a0806;border-radius:2px;' +
+    'border:' + _bd + 'px solid #2a1d0c;' +
+    'box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(0,0,0,0.85),' +
+    'inset 0 ' + _bd + 'px 6px -2px rgba(0,0,0,0.60),inset ' + _bd + 'px 0 6px -3px rgba(0,0,0,0.45);';
   if (ratio) {
     return '<div style="' + (inline ? 'display:inline-block;' : '') + 'width:100%;aspect-ratio:' + ratio + ';box-sizing:border-box;' + _shell + '">' +
-      '<div style="position:absolute;inset:' + _tot + 'px;line-height:0;overflow:hidden;">' + inner + '</div>' +
+      '<div style="position:absolute;inset:' + (_tot - _bd) + 'px;line-height:0;overflow:hidden;">' + inner + '</div>' +   // inset resolves against the PADDING box, so the border is already outside it
       _moulding +
     '</div>';
   }
-  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + _tot + 'px;' + _shell + '">' +
+  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + (_tot - _bd) + 'px;' + _shell + '">' +
     inner + _moulding +
   '</div>';
 }
