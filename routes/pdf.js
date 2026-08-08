@@ -436,38 +436,46 @@ function companionEligible(m) { var s = normShape(m); return s === 'standard' ||
 // everywhere. inline=true makes the frame hug a fixed-size image (title/cast);
 // the default is a full-width block (interior columns).
 function bronzeFrame(inner, inline, scale, ratio) {
-  // scale (default 1) shrinks the whole frame proportionally. The interior story
-  // images are large so the full-size frame reads thin; the title image and the
-  // (often small) cast portraits pass a smaller scale so the frame stays in
-  // proportion instead of swallowing the picture.
+  // v3.0.531 -- TD-336 CLOSED. This drew its own frame -- an 8px flat 135-degree gradient, a black
+  // mat, a 2px gold keyline and four rotated diamonds -- while the bands drew picOverlay. Two
+  // objects, one menu item, and they never looked alike. It now draws the SAME moulding the bands
+  // do, from the same function, so Picture Book, the session title page and Magazine agree.
+  //
+  // THE TOTAL INWARD THICKNESS IS UNCHANGED AND THAT IS LOAD-BEARING. It was 1px border + 8px pad
+  // + 2px mat + 2px gold = 13px at scale 1, and coInsetX / coInsetY carry 13 and 15 as MEASURED
+  // CONSTANTS that position every overlay caption in the classic composer (TD-312). Change the
+  // depth and every caption on a bronze picture moves. So the depth is held at 13 and only the
+  // painting inside it changes: picFrameSplit turns 13 into a 10px rail and a 3px mat.
+  //
+  // GEOMETRY IS UNTOUCHED IN BOTH BRANCHES. The ratio branch was border-box with the padding drawn
+  // inward, so the frame added nothing; it still adds nothing, with the artwork in an absolutely
+  // positioned box inset by the same 13px. The inline branch added 13px per side outward and still
+  // does. The old outer 1px border is gone because the moulding paints its own outer hairline --
+  // which is why the depths still match rather than being one pixel short.
   var sc = scale || 1;
-  var padO = Math.max(1, Math.round(8 * sc));
-  var padM = Math.max(1, Math.round(2 * sc));
-  var gold = Math.max(1, Math.round(2 * sc));
-  var dia = Math.max(3, Math.round(6 * sc));
-  var _d = function(pos, tr){ return '<i style="position:absolute;' + pos + 'width:' + dia + 'px;height:' + dia + 'px;background:#c9a84c;transform:' + tr + ' rotate(45deg);box-shadow:0 0 0 1px #0a0806;"></i>'; };
-  var _dia = _d('top:0;left:0;', 'translate(-50%,-50%)') + _d('top:0;right:0;', 'translate(50%,-50%)') + _d('bottom:0;left:0;', 'translate(-50%,50%)') + _d('bottom:0;right:0;', 'translate(50%,50%)');
+  var _tot = Math.max(5, Math.round(13 * sc));
+  var _sp = picFrameSplit(_tot);
+  var _moulding = bronzeMouldingHtml(_sp.rail, _sp.mat);
+  // #0a0806 stays as the ground behind the moulding: if a gradient is ever not honoured the frame
+  // degrades to a dark band rather than to a transparent one, which would delete it outright.
+  var _shell = 'position:relative;line-height:0;background:#0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
   if (ratio) {
-    // INSET frame: the outer box IS the image box (fixed to the image aspect ratio); all the
-    // frame padding is drawn INWARD via border-box, so the frame adds zero height/width -- it
-    // just covers the outermost sliver of the image. Keeps the packer's geometry exact.
-    return '<div style="' + (inline ? 'display:inline-block;' : '') + 'width:100%;aspect-ratio:' + ratio + ';box-sizing:border-box;padding:' + padO + 'px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-      '<div style="width:100%;height:100%;box-sizing:border-box;padding:' + padM + 'px;background:#0a0806;">' +
-      '<div style="position:relative;width:100%;height:100%;box-sizing:border-box;border:' + gold + 'px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
-      '</div>' +
+    return '<div style="' + (inline ? 'display:inline-block;' : '') + 'width:100%;aspect-ratio:' + ratio + ';box-sizing:border-box;' + _shell + '">' +
+      '<div style="position:absolute;inset:' + _tot + 'px;line-height:0;overflow:hidden;">' + inner + '</div>' +
+      _moulding +
     '</div>';
   }
-  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + padO + 'px;background:linear-gradient(135deg,#2c1e10 0%,#0d0a06 52%,#2c1e10 100%);border:1px solid #0a0806;border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-    '<div style="padding:' + padM + 'px;background:#0a0806;">' +
-    '<div style="position:relative;border:' + gold + 'px solid #c9a84c;line-height:0;">' + inner + _dia + '</div>' +
-    '</div>' +
+  return '<div style="' + (inline ? 'display:inline-block;' : '') + 'padding:' + _tot + 'px;' + _shell + '">' +
+    inner + _moulding +
   '</div>';
 }
 function framedMedia(m) {
   var ratio = dispRatioCSS(m);
-  // NOTE: bronzeFrame has no overflow:hidden, so the primitive's 1px overscan would bleed past the
-  // gold border. This emitter keeps its own exact height:100% cover img (no overscan) -- a genuine
-  // special case left out of the primitive on purpose.
+  // NOTE: this emitter keeps its own exact height:100% cover img with no overscan -- a genuine
+  // special case left out of the primitive on purpose. v3.0.531 changed the REASON but not the
+  // conclusion: bronzeFrame now clips its artwork box, so an overscan would no longer bleed past
+  // the moulding. It would instead be cropped, which for a cover-fitted image is a silent loss of
+  // edge rather than a visible fault -- worse to debug, not better. Leave it exact.
   var inner = m.image
     ? '<img style="width:100%;height:100%;object-fit:cover;display:block;" src="' + m.image + '" alt="' + (m.title || '') + '" />'
     : '<div style="width:100%;height:100%;background:#160e06;"></div>';
@@ -1889,10 +1897,33 @@ function picRailPx(sizeIn) { return Math.max(5, Math.round(7 * picFrameScale(siz
 // 0.20 -> 0.25: Ian, "add one more pixel to the matte weight on larger images." That factor gives
 // 2px at rails 5 through 9 and 3px at rails 10 and 11, so ONLY the large pictures gain anything.
 function picMatPx(railPx) { return Math.max(2, Math.round(railPx * 0.25)); }
-function picOverlay(opts, sizeIn){
-  var b = opts && opts.border;
-  if (b === 'vignette') return vignetteOverlayHtml();
-  if (b === 'frame') {
+// v3.0.531 -- GIVEN A TOTAL DEPTH, WHAT RAIL AND MAT ADD UP TO IT EXACTLY?
+// bronzeFrame has a FIXED inward thickness it is not allowed to change (see there), so it cannot
+// derive the rail from a picture size the way the bands do -- it has to work backwards from the
+// depth it already owns. Solved by search rather than algebra because picMatPx rounds, and a
+// closed form that disagrees with the function by one pixel is exactly the kind of second copy
+// this build exists to delete. 13px resolves to a 10px rail and a 3px mat; 8px to 6 and 2.
+function picFrameSplit(totalPx) {
+  for (var r = totalPx - 2; r >= 3; r--) { if (r + picMatPx(r) === totalPx) return { rail: r, mat: totalPx - r }; }
+  var rr = Math.max(3, totalPx - 2);
+  return { rail: rr, mat: Math.max(1, totalPx - rr) };
+}
+// v3.0.531 -- TD-336: ONE MOULDING, DRAWN IN ONE PLACE.
+// "Bronze picture frame" was TWO unrelated implementations. The Magazine and Comic bands drew
+// picOverlay; Picture Book and the session title page drew bronzeFrame -- nested divs, an 8px
+// flat gradient, a black mat, a 2px gold keyline and rotated diamonds. One menu item, one name,
+// two emitters that never looked alike. It also cost debugging time twice: a picture was
+// attributed to the wrong builder from its frame, and one dump grep was what settled it.
+// Ian: "can you do it on picture book and on the session title images too... would prefer them
+// all to be uniform."
+// THE MOULDING IS NOW THIS FUNCTION AND ONLY THIS FUNCTION. Both callers hand it a rail width
+// and a mat width and get identical HTML back. The body below was LIFTED VERBATIM out of
+// picOverlay rather than retyped -- the only two lines changed are the ones that used to derive
+// _bw and _mw from sizeIn, which are now parameters. That is deliberate: a retyped copy is how
+// this became two implementations in the first place.
+// It returns an absolutely-positioned inset:0 overlay with pointer-events:none, so it can only
+// PAINT. It cannot move anything, whichever box it is dropped into.
+function bronzeMouldingHtml(railPx, matPx) {
     // v3.0.520 -- A LIT BEZEL INSTEAD OF FLAT RINGS.
     // THE BEZEL is a border-image gradient running at 135 degrees, so light falls from the top-left:
     // bright brass on the top and left rails, the value rolling down through the corner turn to a
@@ -1917,7 +1948,7 @@ function picOverlay(opts, sizeIn){
     // v3.0.526 -- THINNER AGAIN. Ian: "make the outer flat band a little thinner... pull the inner
     // bands closer to the edge to thin the whole thing up a little more." 8px -> 7px at reference,
     // and the profile below is re-cut so the outer ogee gives up most of the width.
-    var _bw = picRailPx(sizeIn);      // rail width -- shared with the plaque clearance
+    var _bw = railPx;      // rail width, supplied by the caller
     // The studs sit ON the rail and are centred across it, so they read as hardware set into the
     // moulding rather than as decorations floating near the corner.
     // v3.0.522 -- the corner blocks shrink to sit IN the moulding rather than across it. At 0.8 of
@@ -2098,7 +2129,7 @@ function picOverlay(opts, sizeIn){
     // mounted print reads as a window rather than as a second frame.
     // Same two hard 1px bands as v3.0.529 -- at 2 to 3px a three-stop ramp is three sub-pixel stops
     // and paints as one flat smear, which is the v3.0.528 lesson and it has not stopped being true.
-    var _mw = picMatPx(_bw);      // mat width -- shared with the plaque offset
+    var _mw = matPx;      // mat width, supplied by the caller
     var _matSh = '#c9c1af 0 50%,#dcd5c6 50% 100%';   // top and left: the shadowed bevel
     var _matLt = '#ece7d9 0 50%,#f8f5ec 50% 100%';   // bottom and right: the lit bevel
     var _matT = 'linear-gradient(180deg,' + _matSh + ')';
@@ -2161,6 +2192,15 @@ function picOverlay(opts, sizeIn){
     return '<div style="position:absolute;inset:0;pointer-events:none;background:' + _bg + ';box-shadow:' + _edges + ';">' +
       '<div style="position:absolute;inset:' + (_bw + 1) + 'px;box-shadow:inset 0 0 0 1px rgba(28,18,4,0.75),inset 0 2px 5px -1px rgba(0,0,0,0.60),inset 2px 0 5px -2px rgba(0,0,0,0.45);"></div>' +
       _diamonds + '</div>';
+}
+function picOverlay(opts, sizeIn){
+  var b = opts && opts.border;
+  if (b === 'vignette') return vignetteOverlayHtml();
+  if (b === 'frame') {
+    // v3.0.531 -- the whole moulding moved to bronzeMouldingHtml so Picture Book and the title
+    // page can draw the SAME object. This branch is now only the two numbers that describe it.
+    var _r = picRailPx(sizeIn);
+    return bronzeMouldingHtml(_r, picMatPx(_r));
   }
   return '';
 }
