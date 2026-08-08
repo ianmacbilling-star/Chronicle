@@ -11866,3 +11866,7 @@ router.get('/measure-paired/:campaignId', requireAuth, async function (req, res)
 module.exports = router;
 module.exports.buildNovelHTML = buildNovelHTML;
 module.exports.assembleNovelHtml = assembleNovelHtml;
+// v3.0.539 -- exported for the frame fidelity probe (TD-351) so its control arm calls the SHIPPING
+// emitter rather than a copy of it. A probe whose control has drifted from the code answers a
+// question nobody asked.
+module.exports.bronzeMouldingHtml = bronzeMouldingHtml;
