@@ -5316,7 +5316,9 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
      every figure -- which is what frees the figures to overlap properly. */
   /* v3.0.569 -- pinned to the foot of the page rather than trailing the figures. Ian: "push the
      From left to right text down to the bottom of the page." */
-  .cast-roster { position:absolute;left:0.85in;right:0.85in;bottom:0.5in;z-index:4;
+  /* v3.0.571 -- ON THE BOTTOM MARGIN ITSELF. Ian: "put the text at the very bottom margin." The
+     page pads 0.75in, so 0.75 puts the roster exactly on that line rather than floating above it. */
+  .cast-roster { position:absolute;left:0.85in;right:0.85in;bottom:0.75in;z-index:4;
      font-family:'Crimson Text',serif;font-size:10.5pt;color:#5b4a37;text-align:center;
      margin:0;line-height:1.5; }
   .cast-roster b { font-family:'Cinzel',serif;font-weight:600;color:#2c1810; }
@@ -5324,7 +5326,11 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
      with room to spare, so it is the only case that gets pushed down. */
   /* v3.0.570 -- 1.6in to 0.5in. A 5.2in row already fills most of the page, so the push that made
      sense under a 2.4in row now shoves the figures through the roster and off the sheet. */
-  .cast-lineup-push { margin-top:0.5in; }
+  /* v3.0.571 -- Ian: "the characters up at like 25 percent." A cast page is 9.55in printable and
+     the title block takes about 1.3 of it, so the figures already begin near a quarter down. Pulling
+     the push to zero puts their heads there instead of a half-inch lower, and hands that half inch
+     back to the gap above the roster. */
+  .cast-lineup-push { margin-top:0; }
   .cast-member { text-align:center;position:relative; }
   /* The stage is a fixed-height box the figure sits at the BOTTOM of, which is what puts every
      pair of feet on one ground line however tall the art happens to be. padding-bottom lifts the
