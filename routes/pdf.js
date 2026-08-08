@@ -4172,11 +4172,37 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // The Company page lists player characters only -- NPCs still appear in panels.
   var castChars = characters.filter(function (c) { return !_isNpc(c); });
   var _castN = castChars.length;
-  var _castCols, _castPort, _castGap, _castFields;
-  if (_castN <= 12)      { _castCols = 3; _castPort = 1.1;  _castGap = 0.25; _castFields = 'full'; }
-  else if (_castN <= 30) { _castCols = 4; _castPort = 0.85; _castGap = 0.16; _castFields = 'mid';  }
-  else if (_castN <= 60) { _castCols = 6; _castPort = 0.55; _castGap = 0.10; _castFields = 'name'; }
-  else                   { _castCols = 0; _castPort = 0;    _castGap = 0;    _castFields = 'list'; }
+  // v3.0.525 -- THE COMPANY IS A LINE-UP, NOT A GRID OF CARDS.
+  // Ian, looking at a four-character page that rendered 3 + 1 with 40 percent of the page empty:
+  // "take them out of the frame... put the full picture of the characters standing next to each
+  // other.. even overlapping. with just captions underneath them... not frame or border. Maybe a
+  // little shadow under each of them." And then: "Feet line up... almost like a line up", with
+  // "some slightly closer than others" so it is not a perfect straight line.
+  //
+  // WHAT WAS ACTUALLY WRONG, and both faults are the same one -- a constant where a derivation
+  // belongs. Columns were HARDCODED at 3 for any cast up to twelve, so four characters could only
+  // ever render 3 + 1 with an orphan. And the portrait was a FIXED 1.1in square regardless of how
+  // many there were, so a four-person party got the same tiny picture twelve would, and the page
+  // sat 40 percent empty. Both now fall out of the count.
+  //
+  // ROWS ARE BALANCED. Never an orphan: 4 goes 2+2, not 3+1; 7 goes 4+3; 5 stays 3+2, which reads
+  // as a deliberate pyramid rather than a leftover.
+  var _castRows = (_castN <= 6) ? 1 : (_castN <= 14 ? 2 : (_castN <= 27 ? 3 : 4));
+  var _castPerRow = Math.ceil(_castN / _castRows);
+  var _castFields = (_castN <= 12) ? 'full' : (_castN <= 30 ? 'mid' : (_castN <= 60 ? 'name' : 'list'));
+  // OVERLAP. Figures tuck behind one another so the group reads as a company standing together
+  // rather than as a contact sheet. n figures at width w overlapping by OV occupy
+  // w * (n - (n-1)*OV), so w falls straight out of the content width.
+  var CAST_OV = 0.12;                 // how much of each figure the next one covers
+  var CAST_ASP = 0.62;                // figure box, width over height -- a standing figure
+  var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);
+  // Height cap so a one or two-character party does not produce a figure taller than the page.
+  // The whole block must leave room for the title, the captions and the contents that follow.
+  var _castHCap = (_castRows === 1) ? 4.2 : (_castRows === 2 ? 2.6 : 1.9);
+  if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
+  var _castH = _castW / CAST_ASP;
+  var _castStep = _castW * (1 - CAST_OV);   // centre-to-centre, and the caption width
+  var _castPort = _castW;   // kept for the no-image fallback font sizing below
   var castBlockHTML;
   if (_castFields === 'list') {
     castBlockHTML = '<div class="cast-names">' + castChars.map(function(c){
@@ -4186,32 +4212,50 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     }).join('') + '</div>';
   } else {
     var _noImgFont = Math.max(9, Math.round(_castPort * 21));
-    var _members = castChars.map(function(c) {
+    // DEPTH STAGGER. Ian: "you could stagger them a little so some are slightly closer than
+    // others. That way they are not on a perfect straight line." Their FEET still land on one
+    // ground line -- he asked for a line-up -- but alternate figures step FORWARD: slightly larger,
+    // sitting a little lower because closer to the viewer is lower on a receding ground plane, and
+    // in front in paint order. That is depth, not jitter, so the row reads as people standing at
+    // slightly different distances rather than as a wobbly row.
+    var _members = castChars.map(function(c, _ci) {
       var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
-      var _ps = 'width:' + _castPort + 'in;height:' + _castPort + 'in;';
-      // Frame scale follows the portrait size, tuned so a portrait's frame is the
-      // same proportion of the picture as the (large) interior story frames -- a thin
-      // gold line, not a thick dark band. Smaller portrait -> thinner frame.
-      var _fsc = Math.max(0.13, Math.min(0.18, _castPort * 0.15));
-      return '<div class="cast-member">' +
-        ((co && co.border === 'frame' && co.arrange !== 'comicpage')
-          ? '<div style="margin-bottom:0.08in;">' + bronzeFrame(
-              (primaryImg
-                ? '<img style="' + _ps + 'object-fit:cover;object-position:center top;display:block;" src="' + primaryImg + '" alt="" />'
-                : '<div style="' + _ps + 'background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:\'Cinzel\',serif;font-weight:700;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>'),
-              true, _fsc) + '</div>'
-          : '<div class="cast-portrait-frame" style="' + _ps + picBorderCss(co) + '">' +
-              (primaryImg
-                ? '<img class="cast-portrait" src="' + primaryImg + '" alt="" />'
-                : '<div class="cast-no-img" style="font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
-              picOverlay(co) +
-            '</div>') +
-        '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
-        '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
-        (((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '') +
+      var _near = (_ci % 2 === 0);                       // alternate: near, far, near, far
+      var _sc   = _near ? 1 : 0.92;                      // farther figures are smaller
+      var _fw   = _castW * _sc, _fh = _castH * _sc;
+      var _drop = _near ? 0 : (_castH * 0.035);          // farther feet sit a touch higher
+      // THE MASK IS THE WHOLE REASON THIS WORKS. The character art is NOT cut out -- every portrait
+      // carries its own background -- so removing the frame would otherwise leave four rectangles of
+      // grey. The edges are faded to GENUINE TRANSPARENCY rather than to page colour: fading to page
+      // colour would paint white over the figure behind and make overlap look like damage; fading to
+      // transparent lets the figure behind show through, which is what makes a group read as a group.
+      // Same mechanism as the scalloped plaque (v3.0.518).
+      var _mask = '-webkit-mask:linear-gradient(90deg,rgba(0,0,0,0) 0,#000 15%,#000 85%,rgba(0,0,0,0) 100%),linear-gradient(180deg,rgba(0,0,0,0) 0,#000 9%,#000 94%,rgba(0,0,0,0) 100%);-webkit-mask-composite:source-in;mask:linear-gradient(90deg,rgba(0,0,0,0) 0,#000 15%,#000 85%,rgba(0,0,0,0) 100%),linear-gradient(180deg,rgba(0,0,0,0) 0,#000 9%,#000 94%,rgba(0,0,0,0) 100%);mask-composite:intersect;';
+      // A flattened, blurred ellipse under the feet. This is what sells STANDING; without it the
+      // figures float. It is scaled and dimmed with distance like everything else.
+      var _shadow = '<div class="cast-shadow" style="width:' + (_fw * 0.55).toFixed(2) + 'in;height:' + (_fh * 0.045).toFixed(3) + 'in;opacity:' + (_near ? 0.42 : 0.30) + ';"></div>';
+      var _fig = primaryImg
+        ? '<img class="cast-fig" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;' + _mask + '" src="' + primaryImg + '" alt="" />'
+        : '<div class="cast-no-img" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>';
+      return '<div class="cast-member" style="width:' + _castW.toFixed(2) + 'in;margin-left:' + (_ci === 0 ? 0 : -(_castW * CAST_OV)).toFixed(3) + 'in;z-index:' + (_near ? 3 : 2) + ';">' +
+        '<div class="cast-stage" style="height:' + _castH.toFixed(2) + 'in;padding-bottom:' + _drop.toFixed(3) + 'in;">' +
+          _shadow + _fig +
+        '</div>' +
+        '<div class="cast-label" style="width:' + _castStep.toFixed(2) + 'in;">' +
+          '<div class="cast-name">' + _fmEsc(c.name) + '</div>' +
+          '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
+          ((((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '')) +
+        '</div>' +
       '</div>';
-    }).join('');
-    castBlockHTML = '<div class="cast-grid" style="grid-template-columns:repeat(' + _castCols + ',1fr);gap:' + _castGap + 'in;">' + _members + '</div>';
+    });
+    // Rows are balanced, so a stray fourth character never stands alone under three others.
+    var _rowsHtml = '';
+    for (var _r = 0; _r < _castRows; _r++) {
+      var _slice = _members.slice(_r * _castPerRow, (_r + 1) * _castPerRow);
+      if (!_slice.length) continue;
+      _rowsHtml += '<div class="cast-lineup">' + _slice.join('') + '</div>';
+    }
+    castBlockHTML = _rowsHtml;
   }
 
   // Get DM name from campaign
@@ -4384,12 +4428,23 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-page-subtitle { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;text-align:center;font-style:italic;margin-bottom:0.05in; }
   .cast-page-dm { font-family:'Cinzel',serif;font-size:10pt;color:#8a6a2a;text-align:center;margin-bottom:0.35in;letter-spacing:0.05em; }
   .cast-divider { width:60px;height:1px;background:rgba(201,168,76,0.4);margin:0.2in auto; }
-  .cast-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:0.25in;margin-top:0.1in; }
-  .cast-member { text-align:center;padding:0.15in;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:#fff; }
-  .cast-portrait-frame { box-sizing:border-box;position:relative;display:block;overflow:hidden;line-height:0;border-radius:4px;margin:0 auto 0.08in; }
-  .cast-portrait { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
-  .cast-no-img { width:100%;height:100%;background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-weight:700; }
-  .cast-name { font-family:'Cinzel',serif;font-size:11pt;font-weight:600;color:#2c1810;margin-bottom:0.03in; }
+  /* v3.0.525 -- THE COMPANY IS A LINE-UP. No cards, no borders, no white boxes: the figures stand
+     on the page and the only furniture is a ground shadow and the caption underneath. */
+  .cast-lineup { display:flex;align-items:flex-end;justify-content:center;margin-top:0.14in; }
+  .cast-member { text-align:center;position:relative; }
+  /* The stage is a fixed-height box the figure sits at the BOTTOM of, which is what puts every
+     pair of feet on one ground line however tall the art happens to be. padding-bottom lifts the
+     farther figures a touch, so the ground recedes instead of being a ruled line. */
+  .cast-stage { position:relative;display:flex;align-items:flex-end;justify-content:center;line-height:0; }
+  .cast-fig { display:block;object-fit:contain;object-position:center bottom;position:relative;z-index:1; }
+  /* The contact shadow, centred on the feet and sitting UNDER the figure. */
+  .cast-shadow { position:absolute;left:50%;bottom:0;transform:translateX(-50%);border-radius:50%;
+     background:radial-gradient(ellipse at 50% 50%,rgba(20,12,4,0.85) 0%,rgba(20,12,4,0.45) 45%,rgba(20,12,4,0) 72%);filter:blur(1.2px);z-index:0; }
+  /* The caption is the STEP width, not the figure width, so neighbouring captions can never collide
+     however much the figures overlap. */
+  .cast-label { margin:0.07in auto 0;position:relative;z-index:4; }
+  .cast-no-img { background:#c9a84c;color:#2c1810;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-weight:700;border-radius:3px; }
+  .cast-name { font-family:'Cinzel',serif;font-size:10.5pt;font-weight:600;color:#2c1810;margin-bottom:0.02in;line-height:1.15; }
   .cast-cls { font-family:'Crimson Text',serif;font-size:10pt;color:#8a6a2a;font-style:italic;margin-bottom:0.03in; }
   .cast-player { font-family:'Cinzel',serif;font-size:8pt;color:#9e9088;letter-spacing:0.05em;margin-bottom:0.05in; }
   .cast-desc { font-family:'Crimson Text',serif;font-size:9pt;color:#6b5f55;line-height:1.4; }
