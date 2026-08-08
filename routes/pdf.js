@@ -1914,8 +1914,25 @@ function picOverlay(opts, sizeIn){
     // THIN FLAT bronze band against the picture, and the dark lip. The ornament is in the middle
     // where it reads, and the flat band is the last thing before the artwork, which is how a real
     // moulding steps down to the rebate.
-    var _lit  = '#1a1206 0 6%,#f4e6b8 6% 12%,#e0c77c 12%,#c2a55f 30%,#8a6a2a 30% 36%,#150f06 36% 46%,#c9a84c 46%,#a8862f 72%,#3d2d0c 72% 78%,#c2a55f 78% 90%,#241708 90% 100%';
-    var _shad = '#0a0703 0 6%,#a8862f 6% 12%,#8a6a2a 12%,#6b5119 30%,#4a3810 30% 36%,#080502 36% 46%,#7f6224 46%,#5f4715 72%,#241708 72% 78%,#8a6a2a 78% 90%,#120d05 90% 100%';
+    // v3.0.524 -- THE FRAME READ BROWN, NOT BRONZE, AND IT WAS MEASURABLE.
+    // Ian, after v3.0.523 warmed the individual stops: "I can see that the frame is smaller but the
+    // color is not any better." He was right, and warming the bronzes was the wrong lever. Averaging
+    // each rail by how much of its width every plane occupies:
+    //     lit rail    #8f783f      shadow rail  #574318      WHOLE FRAME  #735e2c
+    //     brass plaque                                                    #a7883e
+    // The frame averaged THIRTY PERCENT darker than the plaque, and the cause was BLACK: 32 percent
+    // of the lit rail and 38 percent of the shadow rail were near-black step colours. The plaque has
+    // none. At an 8px rail those sub-pixel dark planes do not read as STEPS at all -- they just drag
+    // the average down, which is exactly the olive-brown that was on the page.
+    // TWO CHANGES, both structural rather than cosmetic:
+    //   the dark steps are THINNER and are dark BRONZE rather than black. A step only has to be
+    //   darker than its neighbours to read as a break; it does not have to be a hole.
+    //   the shadow rails come up out of charcoal. The unlit side of a brass frame is still brass.
+    // Measured off the emitted CSS afterwards: lit #ab9156, shadow #85692a, WHOLE FRAME #987d40
+    // against the plaque #a7883e -- SEVEN percent apart, down from thirty. Near-black falls from
+    // 32/38 percent to 21/26. The apply script re-measures this and refuses if it drifts past 12.
+    var _lit  = '#3d2d0c 0 4%,#f7ecd2 4% 11%,#e8d295 11%,#cbaf6a 31%,#a8862f 31% 36%,#2a1d0c 36% 44%,#e0c77c 44%,#b8974a 72%,#5f4715 72% 77%,#d3b76e 77% 91%,#3d2d0c 91% 100%';
+    var _shad = '#241708 0 4%,#c2a55f 4% 11%,#b8974a 11%,#a8862f 31%,#8a6a2a 31% 36%,#1a1206 36% 44%,#a8862f 44%,#8a6a2a 72%,#4a3810 72% 77%,#a8862f 77% 91%,#241708 91% 100%';
     var _railT = 'linear-gradient(180deg,' + _lit  + ')';
     var _railL = 'linear-gradient(90deg,'  + _lit  + ')';
     var _railB = 'linear-gradient(0deg,'   + _shad + ')';
