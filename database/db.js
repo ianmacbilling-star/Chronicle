@@ -373,6 +373,11 @@ async function initPostgres() {
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS asset_id INTEGER',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS description TEXT',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS revert_image_url TEXT',
+    // v3.0.558 -- TD-345. NULL means "not set", and that is a real state that must survive: Ian
+    // ruled that existing characters stay blank, so a cast with no heights renders exactly as it
+    // does today and the feature appears only when someone opts in. NO DEFAULT -- a default of 6
+    // would silently declare every existing character six feet tall.
+    'ALTER TABLE characters ADD COLUMN IF NOT EXISTS height_ft REAL',
     'ALTER TABLE novel_book_meta ADD COLUMN IF NOT EXISTS title_color TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',

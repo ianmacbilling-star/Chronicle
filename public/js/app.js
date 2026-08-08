@@ -5389,6 +5389,59 @@ function renderCharacters() {
   setupCardDragDrop();
 }
 
+// v3.0.558 -- TD-345: THE HEIGHT SLIDER, AND WHY IT IS NOT LINEAR.
+// Ian asked for 1ft to 25ft with marks at 3-8 then 10, 12, 15, 20, 25 -- a range that has to hold
+// both a Minnie Mouse and a Clifford. Linearly, EVERY HUMAN CHARACTER would live in the bottom fifth
+// of the track and be impossible to set precisely, which is most of the cast most of the time.
+// A power curve puts 1-8ft across the first 58 percent of the travel and opens up fast above it.
+// AND IT DOES NOT SNAP. Ian: "if you can slide anywhere in those then maybe less markers." Half a
+// cast is 5ft6, and notching to whole feet would make that unreachable. The marks are LABELS.
+var CHAR_H_MIN = 1, CHAR_H_MAX = 25, CHAR_H_POW = 2.2;
+var CHAR_H_TICKS = [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25];
+function charHeightFromSlider(v) {
+  var t = Math.max(0, Math.min(1, (+v || 0) / 1000));
+  return Math.round((CHAR_H_MIN + (CHAR_H_MAX - CHAR_H_MIN) * Math.pow(t, CHAR_H_POW)) * 10) / 10;
+}
+function charSliderFromHeight(ft) {
+  var f = Math.max(CHAR_H_MIN, Math.min(CHAR_H_MAX, +ft || CHAR_H_MIN));
+  return Math.round(1000 * Math.pow((f - CHAR_H_MIN) / (CHAR_H_MAX - CHAR_H_MIN), 1 / CHAR_H_POW));
+}
+// Feet and inches up to 8ft, because that is how anyone describes a person; plain feet above it,
+// because nobody says a dragon is twenty-four feet seven.
+function charHeightLabel(ft) {
+  if (ft == null) return 'Not set';
+  if (ft > 8) return ft + ' ft';
+  var whole = Math.floor(ft), inch = Math.round((ft - whole) * 12);
+  if (inch === 12) { whole += 1; inch = 0; }
+  return whole + "' " + inch + '"';
+}
+function charHeightSync() {
+  var el = document.getElementById('char-height'), out = document.getElementById('char-height-out');
+  if (!el || !out) return;
+  el.dataset.set = '1';
+  out.textContent = charHeightLabel(charHeightFromSlider(el.value));
+}
+function charHeightClear() {
+  var el = document.getElementById('char-height'), out = document.getElementById('char-height-out');
+  if (!el || !out) return;
+  el.value = 0; el.dataset.set = ''; out.textContent = 'Not set';
+}
+// Blank stays blank. Ian ruled that existing characters get no default, so a character with no
+// height sends NOTHING and the server leaves the column alone.
+function charHeightValue() {
+  var el = document.getElementById('char-height');
+  if (!el || !el.dataset.set) return '';
+  return String(charHeightFromSlider(el.value));
+}
+function charHeightLoad(ft) {
+  var el = document.getElementById('char-height'), out = document.getElementById('char-height-out');
+  if (!el || !out) return;
+  var dl = document.getElementById('char-height-ticks');
+  if (dl && !dl.childNodes.length) { CHAR_H_TICKS.forEach(function (t) { var o = document.createElement('option'); o.value = charSliderFromHeight(t); o.label = t + 'ft'; dl.appendChild(o); }); el.setAttribute('list', 'char-height-ticks'); }
+  if (ft == null || ft === '') { charHeightClear(); return; }
+  el.value = charSliderFromHeight(ft); el.dataset.set = '1';
+  out.textContent = charHeightLabel(Math.round((+ft) * 10) / 10);
+}
 function openCharModal(editId) {
   var char = editId ? state.characters.find(function(c){return c.id===editId;}) : null;
   document.getElementById('char-edit-id').value = editId || '';
@@ -5397,6 +5450,7 @@ function openCharModal(editId) {
   document.getElementById('char-name').value = char ? char.name : '';
   document.getElementById('char-player').value = char ? (char.player_name || '') : '';
   document.getElementById('char-cls').value = char ? (char.cls || '') : '';
+  charHeightLoad(char ? char.height_ft : null);   // v3.0.558 -- TD-345
   document.getElementById('char-desc').value = char ? (char.description || '') : '';
   var npcEl = document.getElementById('char-is-npc');
   if (npcEl) npcEl.checked = !!(char && (char.is_npc === true || char.is_npc === 1 || char.is_npc === '1'));
@@ -5429,6 +5483,7 @@ function closeCharModal() {
       fd.append('name', name);
       fd.append('player_name', document.getElementById('char-player').value.trim());
       fd.append('cls', document.getElementById('char-cls').value.trim() || 'Adventurer');
+      fd.append('height_ft', charHeightValue());   // v3.0.558 -- empty means unset, and the server stores NULL for it
       fd.append('description', document.getElementById('char-desc').value.trim());
       var npcEl = document.getElementById('char-is-npc');
       fd.append('is_npc', (npcEl && npcEl.checked) ? 'true' : 'false');

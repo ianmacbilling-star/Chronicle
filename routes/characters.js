@@ -1,5 +1,21 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
+
+// v3.0.558 -- TD-345: character height, in feet.
+// PARSED, CLAMPED AND ROUNDED HERE so a value can never reach the database that the UI could not
+// have produced -- the slider is one client and the API is another, and only this is authoritative.
+// NULL IS A REAL STATE. An empty string, an absent field and a non-number all mean "not set", which
+// is what every existing character is and what the Company page must keep rendering unchanged.
+// The range is Ian s: 1ft to 25ft. Below that is not a character; above it is a set piece, not a
+// member of the party. One decimal, because 5.5 is a common height and 5.53 is noise.
+function parseHeightFt(v) {
+  if (v === undefined || v === null || v === '') return null;
+  var n = parseFloat(v);
+  if (!isFinite(n)) return null;
+  if (n < 1) n = 1;
+  if (n > 25) n = 25;
+  return Math.round(n * 10) / 10;
+}
 const { getDb } = require('../database/db');
 const { friendlyAnthropicError, friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, verifyCampaignDM, verifyCampaignMember, verifyCampaignDmOrCharacterOwner, isCampaignLocked } = require('../middleware/auth');
@@ -69,8 +85,8 @@ router.post('/', requireAuth, verifyCampaignDM, checkCharacterLimit, guardUpload
 
     const npcFlag = (is_npc === true || is_npc === 'true' || is_npc === 1 || is_npc === '1');
     const result = await db.prepare(
-      'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, is_npc, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(req.params.campaignId, name.trim(), player_name || '', cls || 'Adventurer', description || '', image, image_portrait, image_fullbody, image_action, image_other, npcFlag, now, req.session.userId);
+      'INSERT INTO characters (campaign_id, name, player_name, cls, description, image, image_portrait, image_fullbody, image_action, image_other, is_npc, height_ft, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.params.campaignId, name.trim(), player_name || '', cls || 'Adventurer', description || '', image, image_portrait, image_fullbody, image_action, image_other, npcFlag, parseHeightFt(req.body.height_ft), now, req.session.userId);
 
     const character = await db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
     res.json(character);
@@ -121,14 +137,20 @@ router.put('/:id', requireAuth, verifyCampaignDmOrCharacterOwner, guardUpload(up
       npcVal = (req.body.is_npc === true || req.body.is_npc === 'true' || req.body.is_npc === 1 || req.body.is_npc === '1');
     }
     await db.prepare(
-      'UPDATE characters SET name=?, player_name=?, cls=?, description=?, image=?, image_portrait=?, image_fullbody=?, image_action=?, image_other=?, is_npc=?, edited_at=?, edited_by=? WHERE id=?'
+      'UPDATE characters SET name=?, player_name=?, cls=?, description=?, image=?, image_portrait=?, image_fullbody=?, image_action=?, image_other=?, is_npc=?, height_ft=?, edited_at=?, edited_by=? WHERE id=?'
     ).run(
       req.body.name ? req.body.name.trim() : char.name,
       req.body.player_name !== undefined ? req.body.player_name.trim() : (char.player_name || ''),
       req.body.cls ? req.body.cls.trim() : char.cls,
       req.body.description !== undefined ? req.body.description.trim() : (char.description || ''),
       images.image, images.image_portrait, images.image_fullbody, images.image_action, images.image_other,
-      npcVal, now, req.session.userId, char.id
+      npcVal,
+      // v3.0.558 -- TD-345. ABSENT means UNCHANGED, not cleared. A PUT that omits height_ft must
+      // leave the stored value alone, because several callers update a character without ever having
+      // seen this field -- the reference regenerate path among them. An EMPTY STRING is different:
+      // that is the user deliberately clearing it, and it stores NULL.
+      (req.body.height_ft === undefined ? (char.height_ft == null ? null : char.height_ft) : parseHeightFt(req.body.height_ft)),
+      now, req.session.userId, char.id
     );
 
     // Release replaced/cleared images now that the row points elsewhere

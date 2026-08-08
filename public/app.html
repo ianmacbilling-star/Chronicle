@@ -1705,6 +1705,15 @@
       <input class="form-input" id="char-cls" placeholder="e.g. Half-elf Ranger" />
     </div>
     <div class="form-group">
+      <label class="form-label">Height <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">Optional. Sets how tall this character is drawn next to the others, and tells the artist their size in every scene.</span></label>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <input type="range" id="char-height" min="0" max="1000" step="1" value="0" oninput="charHeightSync()" style="flex:1;" />
+        <div id="char-height-out" style="min-width:96px;text-align:right;font-family:Cinzel,serif;color:var(--gold);">Not set</div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="charHeightClear()" title="Leave the height unset. The character is drawn as it is today.">Clear</button>
+      </div>
+      <datalist id="char-height-ticks"></datalist>
+    </div>
+    <div class="form-group">
       <label class="form-label">Visual &amp; Personality Traits</label>
       <textarea class="form-textarea" id="char-desc" style="min-height:100px;" placeholder="Describe appearance and personality in detail — hair, skin, clothing, weapons, distinctive features, temperament, mannerisms, speech patterns..."></textarea>
     </div>
