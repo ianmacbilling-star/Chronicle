@@ -1000,14 +1000,29 @@ function brassPlateHtml(title, bottomOffset, sc) {
     _bite + '0 100%, transparent 99%, #000 100%), ' +
     _bite + '100% 100%, transparent 99%, #000 100%)';
   return '<div style="position:absolute;left:50%;bottom:calc(' + bottomOffset + ' + 0.10in);' +
-    'transform:translateX(-50%);max-width:78%;padding:' + capPx(4, sc) + ' ' + capPx(16, sc) + ' ' + capPx(5, sc) + ';border-radius:2px;' +
-    'background:linear-gradient(180deg,#e0c77c 0%,#c9a84c 34%,#a8862f 68%,#8a6a2a 100%);' +
-    'border:1px solid #5f4715;' +
+    // v3.0.519 -- CALMER, SHADED AND SHORTER. Ian: "can you darken the plate a little... it is a
+    // little in your face", "maybe shadow the lower half of it a little", "you might be able to make
+    // it shorter... the text has room below it." Three changes, none of them the size of the type:
+    //   DARKER   the whole ramp drops about one stop, so it reads as aged brass rather than gold
+    //            leaf, and the top highlight comes down from 0.75 to 0.40 -- that highlight was
+    //            most of the glare.
+    //   SHADED   a soft inset shadow rising off the bottom edge, which is what a cast plaque does
+    //            under a light from above. Inset, so it cannot spill onto the picture, and pulled
+    //            back to 5px so it sits UNDER the type rather than behind it: at 18.5px tall the
+    //            type runs to y14.5 and the shading starts at y13.5.
+    //   SHORTER  vertical padding 4/5px -> 2/3px and line-height 1.3 -> 1.15. 24.0px -> 18.5px, a
+    //            23 percent reduction, and the type does not change size at all.
+    // Contrast was checked rather than assumed: the type crosses the 16-78 percent band of the ramp,
+    // where the darkened plate gives 7.4 down to 3.5 against #241703. The darkest stop sits BELOW
+    // the type. Side padding and max-width are untouched -- the width is the text s to decide.
+    'transform:translateX(-50%);max-width:78%;padding:' + capPx(2, sc) + ' ' + capPx(16, sc) + ' ' + capPx(3, sc) + ';border-radius:2px;' +
+    'background:linear-gradient(180deg,#c2a55f 0%,#a8862f 34%,#8a6a2a 68%,#6b5119 100%);' +
+    'border:1px solid #4a3810;' +
     '-webkit-mask:' + _mask + ';-webkit-mask-composite:source-in;mask:' + _mask + ';mask-composite:intersect;' +
-    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.75),inset 0 -1px 0 rgba(0,0,0,0.3);' +
+    'box-shadow:0 2px 4px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,248,220,0.40),inset 0 -5px 6px -4px rgba(0,0,0,0.50),inset 0 -1px 0 rgba(0,0,0,0.35);' +
     'font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, sc) + ';font-weight:700;letter-spacing:0.08em;' +
-    'text-transform:uppercase;color:#2a1c08;text-shadow:0 1px 0 rgba(255,248,220,0.45);' +
-    'line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+    'text-transform:uppercase;color:#241703;text-shadow:0 1px 0 rgba(255,248,220,0.30);' +
+    'line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
     rivet('left') + rivet('right') + title + '</div>';
 }
 // v3.0.512 -- HOW FAR IN THE PICTURE ACTUALLY STARTS, MEASURED FROM THE POSITIONING BOX.
