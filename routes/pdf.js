@@ -1084,14 +1084,29 @@ function brassPlateHtml(title, bottomOffset, sc) {
   var _capR = _sc;
   function _cap(left) {
     var w = _capR, h = _capH, r = _capR;
+    // v3.0.548 -- THE ZERO-LENGTH SEGMENTS ARE GONE, AND THEY WERE THE SPUR.
+    // Ian: "on darker pictures there is that little line coming off the scallop."
+    // THE CAP WIDTH EQUALS THE BITE RADIUS, so the old path drew "L w,0" immediately after the arc
+    // had already arrived at (r,0) -- the SAME POINT -- and the same again before the second arc.
+    // Two zero-length segments. A zero-length segment has no direction, so the join at it is
+    // undefined, and a MITER join on an undefined direction is exactly how a renderer produces a
+    // spike. It showed on dark pictures because that is where a thin light spur off the bite has
+    // anything to contrast against.
+    // The degenerate moves are removed rather than worked around, and the join is round so that no
+    // future change to the cap width can bring the spike back.
+    // The straight top and bottom runs are emitted ONLY when the cap is wider than its bite. Today
+    // it is not -- the cap width IS the radius -- so those moves would land on the point the arc
+    // already reached, and a zero-length segment has no direction for the join to work from. The
+    // guard is written as a condition rather than deleted, so a wider cap still draws correctly.
+    var _flat = (w > r);
     var d = left
-      ? 'M0,' + r + ' A' + r + ',' + r + ' 0 0 0 ' + r + ',0 L' + w + ',0 L' + w + ',' + h +
-        ' L' + r + ',' + h + ' A' + r + ',' + r + ' 0 0 0 0,' + (h - r) + ' Z'
-      : 'M' + w + ',' + r + ' A' + r + ',' + r + ' 0 0 1 ' + (w - r) + ',0 L0,0 L0,' + h +
-        ' L' + (w - r) + ',' + h + ' A' + r + ',' + r + ' 0 0 1 ' + w + ',' + (h - r) + ' Z';
+      ? 'M0,' + r + ' A' + r + ',' + r + ' 0 0 0 ' + r + ',0 ' + (_flat ? 'L' + w + ',0 ' : '') + 'L' + w + ',' + h + ' ' +
+        (_flat ? 'L' + r + ',' + h + ' ' : '') + 'A' + r + ',' + r + ' 0 0 0 0,' + (h - r) + ' Z'
+      : 'M' + w + ',' + r + ' A' + r + ',' + r + ' 0 0 1 ' + (w - r) + ',0 ' + (_flat ? 'L0,0 ' : '') + 'L0,' + h + ' ' +
+        (_flat ? 'L' + (w - r) + ',' + h + ' ' : '') + 'A' + r + ',' + r + ' 0 0 1 ' + w + ',' + (h - r) + ' Z';
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
       '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><defs>' + _pg + '</defs>' +
-      '<path d="' + d + '" fill="url(#pg)" stroke="#4a3810" stroke-width="1"/></svg>';
+      '<path d="' + d + '" fill="url(#pg)" stroke="#4a3810" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/></svg>';
     // v3.0.547 -- SINGLE QUOTES, AND THE DOUBLE ONES DELETED THE ENTIRE PLATE.
     // v3.0.545 emitted url("data:...") into an inline HTML style="..." attribute. The first double
     // quote CLOSED THE ATTRIBUTE -- at character 130 of 2,927 -- so the background, the padding, the
