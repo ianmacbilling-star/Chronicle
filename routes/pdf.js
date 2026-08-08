@@ -900,7 +900,7 @@ function coMedia(m, border) {
       // square, and the 4px here came from the preset family this branch was copied from. It also
       // fixed a mismatch nobody had named -- the mat overlay is a plain box with square corners, so
       // at 3px of white against a 4px radius the mat and the border disagreed at all four corners.
-      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '0', picOverlay({ border: 'keyline' })) + '</div>';
+      return '<div style="padding:2px 0;line-height:0;">' + shapedImage(m, 'border:1px solid rgba(120,90,30,0.35);box-shadow:0 1px 5px rgba(0,0,0,0.12);', '0', picOverlay({ border: 'keyline' }, CO_CLASSIC_PIC_IN)) + '</div>';   // v3.0.544 -- see CO_CLASSIC_PIC_IN
     case 'none':
     default:
       return img;
@@ -1151,13 +1151,13 @@ function brassPlateHtml(title, bottomOffset, sc) {
 var CO_CAP_GAP_PX = 2;
 function coInsetX(border) {
   if (border === 'frame') return bronzeFrameParts(1).total;   // v3.0.543 -- DERIVED, so the caption cannot end up on the moulding
-  if (border === 'keyline') return 1 + KEYLINE_MAT_PX;   // v3.0.535 -- 1px border plus the mat
+  if (border === 'keyline') return 1 + keylineMatMaxPx();   // v3.0.535 border + mat; v3.0.544 the mat varies, so clear the widest
   if (border === 'comic') return 5;
   return 0;
 }
 function coInsetY(border) {
   if (border === 'frame') return bronzeFrameParts(1).total + 2;   // v3.0.543 -- derived, plus the 2px wrapper padding coMedia adds
-  if (border === 'keyline') return 3 + KEYLINE_MAT_PX;   // v3.0.535 -- border + wrapper padding + the mat
+  if (border === 'keyline') return 3 + keylineMatMaxPx();   // v3.0.535 border + wrapper + mat; v3.0.544 the widest mat
   if (border === 'comic') return 5;
   return 0;   // gallery bottom gap comes from coMediaPadBottom, which the caller already applies
 }
@@ -1952,7 +1952,34 @@ var KEYLINE_MAT = '#f7f5ef';   // matte, not paper white: it reads as board rath
 // v3.0.538 -- 1px -> 3px. Ian: "add two more pixels of white." Third and final call on this width
 // (2 -> 1 -> 3), and the caption insets have tracked it every time without being touched, which is
 // the whole return on deriving them at v3.0.535 instead of hardcoding a matching pair.
-var KEYLINE_MAT_PX = 3;
+// v3.0.544 -- HOW BIG A CLASSIC-COMPOSER PICTURE IS, for the two places that need a size and have
+// no way to measure one. coMedia is handed a moment and a border, never inches, and the picture is
+// laid out at whatever its column happens to be. But Picture Book puts ONE image per block at full
+// column width, so they are uniformly large -- which is the same reasoning that lets bronzeFrame
+// use a fixed rail of 11 there rather than scaling per picture (v3.0.543).
+// If Picture Book ever gains a genuinely small image, this becomes a real measurement instead.
+var CO_CLASSIC_PIC_IN = 6.5;
+// v3.0.544 -- THE KEYLINE MAT SCALES WITH THE PICTURE. Ian, comparing two keyline pictures on one
+// page: "small pic leave the white as is, med pics add a pixel, and big pics double current size."
+// His words, as three bands. sizeIn is the picture s SHORT side in inches -- the same measurement
+// picFrameScale takes, so the product has ONE notion of how big a picture is rather than two.
+//   under 3in     3px   a float or a small aside: unchanged, and he said so
+//   3in to 5.5in  4px   the middle of the range
+//   5.5in and up  6px   double, which is the case he was looking at
+// A caller that does not know its size gets 3, the small case -- the same fail-safe direction
+// picFrameScale uses, because a mat that is too thin is a smaller fault than one that eats the art.
+function keylineMatPx(sizeIn) {
+  if (!(sizeIn > 0)) return 3;
+  if (sizeIn >= 5.5) return 6;
+  if (sizeIn >= 3.0) return 4;
+  return 3;
+}
+// The widest the mat can ever be. The caption insets use THIS rather than a per-picture value,
+// because coInsetX and coInsetY are reached from call sites that do not know their picture size --
+// so a caption stops clear of the widest mat on every picture. On a small one it therefore stops a
+// few pixels inside the artwork, which is invisible; the alternative is a caption sitting ON the
+// mat of a large one, which is the fault these functions exist to prevent (TD-312).
+function keylineMatMaxPx() { return keylineMatPx(99); }
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
   switch (opts && opts.border) {
@@ -2273,7 +2300,7 @@ function picOverlay(opts, sizeIn){
   // one thin line, and a lit bevel two pixels inside it would fight that. Ian asked for matte white
   // and matte white is also the right answer.
   // IT COVERS THE OUTERMOST 2px OF THE ARTWORK rather than moving it -- TD-166, the picture pays.
-  if (b === 'keyline') return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 ' + KEYLINE_MAT_PX + 'px ' + KEYLINE_MAT + ';"></div>';
+  if (b === 'keyline') return '<div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 ' + keylineMatPx(sizeIn) + 'px ' + KEYLINE_MAT + ';"></div>';   // v3.0.544 -- sizeIn is already a parameter of this function; it was simply never used on this branch
   if (b === 'frame') {
     // v3.0.531 -- the whole moulding moved to bronzeMouldingHtml so Picture Book and the title
     // page can draw the SAME object. This branch is now only the two numbers that describe it.
