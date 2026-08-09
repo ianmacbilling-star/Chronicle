@@ -719,12 +719,23 @@
         </div>
       </div>
 
+      <!-- v3.0.594 -- PREVIOUS / NEXT SESSION. Ian, 2026-08-09: arrows on the tab row, one left of
+           Story and one hard right, "they can mimic the Ellipse button". So: btn btn-sm, the same
+           class the session-version ellipsis uses, rather than a new control style.
+           They live INSIDE .sess-tabs so they sit above the rule and move with it; margin-left:auto
+           on the right one pushes it to the far edge without touching the flex row itself. -->
       <div class="sess-tabs">
+        <button class="btn btn-sm" id="sess-nav-prev" type="button" onclick="sessNavGo(-1)"
+                style="margin-right:10px;align-self:center;padding:2px 10px;line-height:1.2;"
+                title="Previous session">&#8249;</button>
         <div class="sess-tab active" id="stab-notes" onclick="switchSessionTab('notes')">Story</div>
         <div class="sess-tab" id="stab-characters" onclick="switchSessionTab('characters')">Characters</div>
         <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">Review</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
         <div class="sess-tab dm-only" id="stab-export" onclick="switchSessionTab('export')">Preview</div>
+        <button class="btn btn-sm" id="sess-nav-next" type="button" onclick="sessNavGo(1)"
+                style="margin-left:auto;align-self:center;padding:2px 10px;line-height:1.2;"
+                title="Next session">&#8250;</button>
       </div>
 
       <!-- COMBINED SESSION NOTES + TRANSCRIPT TAB -->
