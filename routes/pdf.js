@@ -4981,6 +4981,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var CAST_OV = 0.55;                  // how much of each figure its neighbour covers, within a row
   var CAST_DEPTH_SHRINK = 0.95;        // per row further back, at three rows and up
   var CAST_HEAD_MARGIN = 0.06;         // clear air above the row in front, as a fraction of a full figure
+  var CAST_GROUND_STEP = 0.045;        // how much higher each row back STANDS -- the perspective cue itself
   var CAST_BLOCK_MAX_IN = 6.0;         // the whole formation, top to standing line
   var _CAST_MIN_REL = 0.35;            // the floor under height scaling (see _heightRel)
   // Back row as wide as the cast can fill, then one fewer each row forward. round(sqrt(2n)) is the
@@ -5044,12 +5045,34 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     });
     var _rowMax = _figU.map(function (u) { return Math.max.apply(null, u); });
     var _rowMin = _figU.map(function (u) { return Math.min.apply(null, u); });
-    // THE RAISE, front to back. Each row clears the TALLEST figure in the row ahead of it by
-    // CAST_HEAD_MARGIN, measured against its OWN SHORTEST figure -- the worst pair on the page.
+    // THE RAISE, front to back, AND IT ANSWERS TWO SEPARATE QUESTIONS. v3.0.581 asked only the
+    // second and got the ground line backwards for its trouble.
+    //
+    //   1. THE GROUND. A row further back stands higher on a receding ground plane, ALWAYS, by a
+    //      fixed step. This is the perspective cue and it does not depend on anybody's height.
+    //   2. HEAD CLEARANCE. A row must also clear the TALLEST figure in the row ahead, measured
+    //      against its OWN SHORTEST -- the worst pair on the page.
+    //
+    // v3.0.581 used (2) alone. That term is (tallest in front) minus (shortest in back), and since
+    // the cast is sorted TALLEST TO THE BACK it is normally NEGATIVE -- so the back row was pushed
+    // DOWN, below the front row's feet. Measured on a 7ft/6.5ft/6ft/3.5ft/3ft party: the back row
+    // stood 1.42in BELOW the front one. Ian, on the first page it drew: "you got the heights
+    // backwards... the ones in front should be slightly lower than the ones in back."
+    //
+    // TAKING THE LARGER OF THE TWO IS WHAT MAKES BOTH TRUE. The ground step carries the ordinary
+    // case, where the back row is taller and needs no help clearing; head clearance takes over
+    // exactly when it is needed, which is a cast of equal heights. Neither number is tuned against
+    // the other and neither can be defeated by the other.
+    //
+    // AND THE TEST THAT MISSED IT IS THE LESSON: v3.0.581 was verified on casts where EVERY figure
+    // was the same height, which is the one shape where the negative term is exactly zero. The
+    // check below now sweeps mixed heights, where the fault is obvious.
     var _raiseU = new Array(_rowsN);
     _raiseU[_rowsN - 1] = 0;
     for (var _i = _rowsN - 2; _i >= 0; _i--) {
-      _raiseU[_i] = _raiseU[_i + 1] + (_rowMax[_i + 1] - _rowMin[_i]) + CAST_HEAD_MARGIN;
+      var _ground = _raiseU[_i + 1] + CAST_GROUND_STEP;
+      var _heads  = _raiseU[_i + 1] + (_rowMax[_i + 1] - _rowMin[_i]) + CAST_HEAD_MARGIN;
+      _raiseU[_i] = Math.max(_ground, _heads);
     }
     var _blockU = 0;
     for (var _r2 = 0; _r2 < _rowsN; _r2++) _blockU = Math.max(_blockU, _raiseU[_r2] + _rowMax[_r2]);
