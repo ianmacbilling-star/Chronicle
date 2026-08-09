@@ -990,6 +990,30 @@ async function submitAssetReference(falKey, descriptionText, category, modelKey,
 //   baseImageUrl = the image to edit FROM (session ref preferred)
 //   changeText   = the amendment, e.g. "skin and hair turned deathly white"
 //   charName     = the character's name, for the instruction
+// =================================================================================================
+// DEAD CODE -- NOTHING CAN REACH THIS. TD-381, noted 2026-08-09 at Ian's request.
+//
+// Ian: "there actually isn't a Regenerate button on the Characters Tab on the Session screen. There
+// is a retouch." He is right. The chain is:
+//     regenerateReference()  in public/js/app.js   -- DEFINED, ZERO CALLERS
+//       -> POST /:id/characters/:characterId/regenerate-reference  in routes/sessions.js
+//         -> submitEditReference()  ->  buildEditReferenceInput()  (this function)
+// and editReferenceImage(), the synchronous variant, is exported and likewise called by nothing.
+// A whole feature -- client function, route, submit helper, prompt builder, sync variant -- that
+// nothing can reach.
+//
+// IT IS NOT HURTING ANYTHING, which is why it is being LEFT rather than deleted (Ian's call). But it
+// read as live long enough that v3.0.587 fixed a real bug in it and described the fix in terms of a
+// button on screen -- so the note is here to stop the next reader making the same mistake.
+//
+// THE LIVE PATH ON THAT PAGE IS RETOUCH: submitRetouch() with shape 'reference'. That one carries
+// CHAR_REF_STAGING and its results are alpha-cut, and it is what actually converts a character.
+//
+// FIFTH MEMBER OF A FAMILY THAT HAS NOW COST REAL TIME: TD-329 (paneSafeHtml), TD-337 (coFloatImg),
+// TD-344 (buildSessionHTML's cast block), TD-349 (bronzeFrame's comment), and this.
+// TD-381 holds the decision: either wire a Regenerate button to it -- the path is correct and ready
+// -- or delete all five pieces together.
+// =================================================================================================
 function buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey) {
   const name = charName || 'the character';
   const instruction =

@@ -36,12 +36,103 @@ function stampLastActive(userId) {
 }
 
 // Session check — must be logged in.
+// v3.0.589 -- TD-179 STAGE 2. IMPERSONATION EXPIRY AND ACTIVITY POLLUTION.
+// Spec sections 3.3 and 4.3.
+//
+// EXPIRY (3.3): a forgotten browser tab must not leave a session logged in as a customer
+// indefinitely. Checked on every authenticated request rather than on a timer, because there is no
+// timer that outlives a process restart and this costs one integer comparison.
+// The audit row is closed with end_reason 'expiry' -- fire and forget, because a failed audit write
+// must never strand an admin inside somebody else's account.
+//
+// ACTIVITY POLLUTION (4.3): stampLastActive would record the TARGET as active, so support visits
+// would look like user activity -- and last-active drives the account-lifecycle idle clock
+// (ACCOUNT_LIFECYCLE_SPEC), so a support visit could silently postpone a deletion. The real admin's
+// own activity is not stamped either; they are not using their account, they are using someone
+// else's.
+var IMPERSONATION_MAX_MS = 30 * 60 * 1000;
+function impersonationExpired(req) {
+  if (!req.session || !req.session.impersonatorId) return false;
+  var started = Number(req.session.impersonateStartedAt || 0);
+  return !started || (Date.now() - started) > IMPERSONATION_MAX_MS;
+}
+// THE TOKENS SPENT ARE COUNTED FROM token_ledger, NOT FROM A COUNTER.
+// Ian wants to hand tokens back after a support visit -- "give them back the tokens and even more
+// for their trouble" -- and guessing the number after the fact is exactly what nobody does
+// accurately. A counter would have meant incrementing at every spend site in the app, several of
+// which do not have `req` in scope, and a field that only SOME paths remember to update is worse
+// than no field: it reads as authoritative and is quietly low.
+// The ledger already records every debit with a timestamp, so the honest number is a query over the
+// window the session was open. token_ledger is the record; this just reads it.
+function endImpersonation(req, reason) {
+  var rowId = req.session.impersonationRowId;
+  var targetId = req.session.userId;
+  var startedMs = Number(req.session.impersonateStartedAt || 0);
+  req.session.userId = req.session.impersonatorId;
+  delete req.session.impersonatorId;
+  delete req.session.impersonatorEmail;
+  delete req.session.impersonateTargetEmail;
+  delete req.session.impersonateStartedAt;
+  delete req.session.impersonationRowId;
+  if (rowId) {
+    (async function () {
+      var spent = 0;
+      try {
+        const db = await getDb();
+        if (targetId && startedMs) {
+          const r = await db.prepare(
+            'SELECT COALESCE(SUM(-amount), 0) AS spent FROM token_ledger ' +
+            'WHERE user_id = ? AND amount < 0 AND created_at >= ?'
+          ).get(targetId, new Date(startedMs).toISOString());
+          spent = (r && Number(r.spent)) || 0;
+        }
+      } catch (e) { console.error('[impersonate] could not total tokens for row ' + rowId + ': ' + ((e && e.message) || e)); }
+      try {
+        const db2 = await getDb();
+        await db2.prepare("UPDATE admin_impersonations SET ended_at = CURRENT_TIMESTAMP, end_reason = ?, tokens_spent = ? WHERE id = ? AND ended_at IS NULL")
+          .run(String(reason || 'manual'), spent, rowId);
+      } catch (e) { console.error('[impersonate] could not close audit row ' + rowId + ': ' + ((e && e.message) || e)); }
+    })();
+  }
+}
 function requireAuth(req, res, next) {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
-  stampLastActive(req.session.userId);
+  if (impersonationExpired(req)) endImpersonation(req, 'expiry');
+  if (!req.session.impersonatorId) stampLastActive(req.session.userId);
   next();
+}
+// v3.0.589 -- TD-179. AUTHORISE ON THE ADMIN BEHIND THE SESSION, NOT THE USER IN FRONT OF IT.
+//
+// THE TRAP THIS EXISTS FOR (spec 4.1): the moment you impersonate you are NOT an admin, because
+// requireAdmin resolves the email of req.session.userId and that is now the customer. That is
+// correct and load-bearing -- it stops impersonation chaining and keeps admin routes unreachable
+// from an impersonated session. But three things must still work from inside:
+//
+//   1. STOP. Gated on requireAdmin you would lock yourself into the account.
+//   2. ADD TOKENS. Ian, 2026-08-09: "a user has trouble doing something that costs tokens, I go in
+//      there, do what I can to fix it, and I want to just be able to give them back the tokens and
+//      even more for their trouble." Re-enabling admin inside the session would break the single
+//      question; asking a DIFFERENT question -- is there a real admin behind this session -- gives
+//      the capability without touching the rule.
+//   3. The diagnostics-by-campaign bundle (spec 4.2), when it is built.
+//
+// The authority is the REAL ADMIN'S and the audit row already names them, so an Add Tokens grant
+// made from inside is attributable to the admin rather than appearing as the user crediting
+// themselves.
+async function requireImpersonatorOrAdmin(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  if (req.session.impersonatorId) {
+    if (impersonationExpired(req)) {
+      endImpersonation(req, 'expiry');
+      return res.status(403).json({ error: 'That support session has expired. Start it again.' });
+    }
+    return next();
+  }
+  return requireAdmin(req, res, next);
 }
 
 // Returns 'dm' | 'player' | null. Plain helper — use inside route bodies
@@ -224,5 +315,7 @@ module.exports = {
   verifyForkOwnerOrDm,
   isCampaignLocked,
   memberSubquery,
-  dmSubquery
+  dmSubquery,
+  // v3.0.589 -- TD-179 stage 2.
+  requireImpersonatorOrAdmin, impersonationExpired, endImpersonation, IMPERSONATION_MAX_MS
 };

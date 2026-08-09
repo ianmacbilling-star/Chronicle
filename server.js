@@ -232,6 +232,13 @@ app.use('/api', apiLimiter);
 // (which has no session and must never be gated).
 app.use('/api', require('./middleware/tiers').attachTier);
 app.use('/api', require('./routes/debug').captureMiddleware);
+// v3.0.589 -- TD-179 STAGE 3. THE IMPERSONATION DENY LIST.
+// Mounted HIGH and ONCE, above every protected route group, so a route added later is covered
+// without anyone remembering to wire it in. It is a no-op on every ordinary request -- it returns
+// immediately unless req.session.impersonatorId is set.
+// This is one half of what makes the privacy-policy clause true; the audit table is the other.
+// Neither may ship without the other. See middleware/impersonationGuard.js.
+app.use('/api', require('./middleware/impersonationGuard'));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/email', require('./routes/email').router);

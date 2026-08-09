@@ -945,6 +945,163 @@ function insufficientTokensHtml(message) {
 }
 
 // ----- TESTING: self-service add tokens (any user). Remove at Stripe. -----
+// =================================================================================================
+// SUPPORT ACCESS (impersonation) -- TD-179 stage 4, v3.0.590. Spec: ADMIN_IMPERSONATION_SPEC.md.
+//
+// EVERYTHING HERE READS ONE ENDPOINT, /api/admin/impersonate/status, and that endpoint reads the
+// SAME session fields the server-side deny list reads. The banner therefore cannot claim a state
+// the guard is not enforcing -- which matters, because the banner is the only thing telling you
+// that the next click lands on somebody else's account.
+// =================================================================================================
+var _impState = null, _impTimer = null;
+
+function _impMsg(id, text, good) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = text ? 'block' : 'none';
+  el.textContent = text || '';
+  el.style.background = good ? 'rgba(80,160,90,0.18)' : 'rgba(194,65,12,0.22)';
+  el.style.color = good ? '#bfe6c4' : '#ffd9c7';
+}
+
+// The countdown is redrawn from the STATUS the server gave us, not from a local clock we keep
+// winding on -- a tab left open in the background must not show 12 minutes remaining on a session
+// the server ended half an hour ago.
+function _impPaint() {
+  var bar = document.getElementById('imp-banner');
+  if (!bar) return;
+  if (!_impState || !_impState.active) {
+    bar.style.display = 'none';
+    document.body.style.paddingTop = '';
+    return;
+  }
+  bar.style.display = 'block';
+  // The banner is fixed, so it would otherwise sit on top of the app's own header.
+  try { document.body.style.paddingTop = (bar.offsetHeight || 44) + 'px'; } catch (e) {}
+  var who = document.getElementById('imp-banner-who');
+  if (who) who.textContent = 'Viewing as ' + (_impState.viewingAs || 'a user') + ' \u2014 you are not yourself.';
+  var t = document.getElementById('imp-banner-time');
+  if (t) {
+    var mins = Math.max(0, Math.round((_impState.expiresInMs || 0) / 60000));
+    t.textContent = mins > 0 ? ('ends in ' + mins + ' min') : 'ending now';
+  }
+}
+
+function impersonateRefresh(cb) {
+  fetch('/api/admin/impersonate/status', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { _impState = d || null; _impPaint(); if (cb) cb(d); })
+    .catch(function () { if (cb) cb(null); });
+}
+
+// Poll while a session is live so the countdown is honest and an expiry seen by the SERVER shows up
+// here without a reload. Every 60s: cheap, and the only cost is while impersonating.
+function impersonateStartPolling() {
+  if (_impTimer) return;
+  _impTimer = setInterval(function () {
+    impersonateRefresh(function (d) {
+      if (!d || !d.active) { clearInterval(_impTimer); _impTimer = null; }
+    });
+  }, 60000);
+}
+
+function impersonateStart() {
+  var em = document.getElementById('imp-email');
+  var rs = document.getElementById('imp-reason');
+  var email = em ? em.value.trim() : '';
+  if (!email) { _impMsg('imp-admin-msg', 'Enter the customer email address.', false); return; }
+  _impMsg('imp-admin-msg', 'Starting...', true);
+  fetch('/api/admin/impersonate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email, reason: rs ? rs.value.trim() : '' })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || res.j.error) {
+        _impMsg('imp-admin-msg', (res.j && res.j.error) || 'Could not start the support session.', false);
+        return;
+      }
+      // A FULL RELOAD, deliberately. Every cached campaign, session, balance and pref in this page
+      // belongs to the admin; carrying any of it into the customer's session would show their book
+      // with your data on it. Cheapest correct answer: start the page again as them.
+      window.location.href = '/app.html';
+    })
+    .catch(function () { _impMsg('imp-admin-msg', 'Could not start the support session.', false); });
+}
+
+function impersonateStop() {
+  fetch('/api/admin/impersonate/stop', { method: 'POST' })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function () { window.location.href = '/app.html'; })
+    .catch(function () { window.location.href = '/app.html'; });
+}
+
+function impersonateGrantTokens() {
+  var el = document.getElementById('imp-banner-tokens');
+  var amt = el ? parseInt(el.value, 10) : 0;
+  var m = document.getElementById('imp-banner-msg');
+  if (!(amt > 0)) { if (m) { m.style.display = 'block'; m.textContent = 'Enter a positive number of tokens.'; } return; }
+  if (m) { m.style.display = 'block'; m.textContent = 'Adding ' + amt + ' tokens...'; }
+  fetch('/api/admin/impersonate/grant-tokens', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: amt })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!m) return;
+      if (!res.ok || !res.j || res.j.error) { m.textContent = (res.j && res.j.error) || 'Could not add the tokens.'; return; }
+      m.textContent = 'Added ' + res.j.granted + ' tokens to this account.';
+      if (typeof refreshTokenBalance === 'function') { try { refreshTokenBalance(); } catch (e) {} }
+      setTimeout(function () { if (m) m.style.display = 'none'; }, 6000);
+    })
+    .catch(function () { if (m) m.textContent = 'Could not add the tokens.'; });
+}
+
+function impersonateLoadLog() {
+  var box = document.getElementById('imp-log');
+  if (!box) return;
+  box.textContent = 'Loading...';
+  fetch('/api/admin/impersonate/log', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      var rows = (d && d.sessions) || [];
+      if (!rows.length) { box.textContent = 'No support sessions recorded yet.'; return; }
+      box.innerHTML = rows.map(function (r) {
+        var when = r.started_at ? String(r.started_at).replace('T', ' ').slice(0, 16) : '';
+        var state = r.ended_at ? ('ended, ' + (r.end_reason || 'manual')) : 'STILL OPEN';
+        var spent = (r.tokens_spent > 0) ? (' &middot; ' + r.tokens_spent + ' tokens spent') : '';
+        return '<div style="padding:4px 0;border-bottom:1px solid rgba(201,168,76,0.15);">' +
+          when + ' &middot; <strong>' + (r.admin_email || '?') + '</strong> &rarr; ' + (r.target_email || '?') +
+          ' &middot; ' + state + spent + (r.reason ? (' &middot; <em>' + r.reason + '</em>') : '') + '</div>';
+      }).join('');
+    })
+    .catch(function () { box.textContent = 'Could not load the log.'; });
+}
+
+// The orange panel is admin-only. Hidden rather than absent is fine here BECAUSE the routes behind
+// it are gated server-side -- a hidden button is not a control, but a hidden button in front of a
+// guarded route is just tidy.
+// Run on EVERY page load, before anything else paints, so a reader who is inside a support session
+// never sees a screen without the banner on it. It is one request and it is skipped for nobody --
+// the cost of getting this wrong is a page that looks like your own account and is not.
+if (typeof document !== 'undefined') {
+  var _impBoot = function () {
+    impersonateRefresh(function (d) {
+      if (d && d.active) impersonateStartPolling();
+      try { impersonateSyncAdminPanel(); } catch (e) {}
+    });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _impBoot);
+  else _impBoot();
+}
+function impersonateSyncAdminPanel() {
+  var sec = document.getElementById('imp-admin-section');
+  if (!sec) return;
+  var isAdmin = !!(typeof state !== 'undefined' && state.user && state.user.is_admin);
+  var inSession = !!(_impState && _impState.active);
+  sec.style.display = (isAdmin && !inSession) ? '' : 'none';
+}
+
 function devAddTokens() {
   var input = document.getElementById('dev-add-tokens-input');
   var msg = document.getElementById('dev-add-tokens-msg');
@@ -13315,6 +13472,9 @@ var TIER_FIELD_LABELS = {
 };
 
 function switchSettingsTab(tab) {
+  // v3.0.590 -- TD-179. The orange Support Access panel is admin-only, and hidden while a
+  // support session is already running (you cannot start a second one from inside the first).
+  try { impersonateRefresh(function () { impersonateSyncAdminPanel(); }); } catch (e) {}
   ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos'].forEach(function (t) {
     var pane = document.getElementById('settings-pane-' + t);
     var btn = document.getElementById('settings-tab-' + t);

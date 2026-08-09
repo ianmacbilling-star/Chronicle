@@ -1122,6 +1122,44 @@ async function migrateForks(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_fork_book_prefs_lookup ON fork_book_prefs(chooser_user_id, fork_user_id, campaign_id)');
 
+  // v3.0.589 -- TD-179 STAGE 1. THE IMPERSONATION AUDIT TRAIL.
+  // Spec: ADMIN_IMPERSONATION_SPEC.md sections 7 and 8. This table is what makes support access
+  // DEFENSIBLE if it is ever questioned, and it is half of what makes the privacy-policy clause
+  // TRUE -- the other half is the deny-list middleware. Ian, 2026-08-02: "put that we need to add
+  // it to the Privacy policy." A promise the code does not keep is worse than no promise, so the
+  // clause must not ship before this and the guard do.
+  //
+  // admin_email AND target_email ARE DENORMALISED ON PURPOSE. ADMIN_EMAILS is an env var and the
+  // users table can be deleted from; if either changes later, a row that recorded only ids would
+  // quietly stop saying WHO did what. The record has to survive the thing it is a record of.
+  //
+  // ON DELETE SET NULL, not CASCADE: deleting a user must not erase the evidence that support
+  // entered their account. The denormalised emails carry the meaning after the id goes.
+  //
+  // tokens_spent -- v3.0.589, Ian's decision. He wants to SPEND tokens while impersonating (you
+  // cannot reproduce a failing Optimize run otherwise) and then give them back, generously. Guessing
+  // how many were spent is exactly the sort of thing nobody does accurately after the fact, so the
+  // session counts them.
+  //
+  // RETENTION: these rows are the record, not scratch data. Do NOT include them in the TF-05
+  // retention purge (TD-044).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_impersonations (
+      id SERIAL PRIMARY KEY,
+      admin_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      admin_email TEXT NOT NULL,
+      target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      target_email TEXT NOT NULL,
+      reason TEXT,
+      tokens_spent INTEGER NOT NULL DEFAULT 0,
+      started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ended_at TIMESTAMP,
+      end_reason TEXT
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_admin_imp_open ON admin_impersonations(id) WHERE ended_at IS NULL');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_admin_imp_target ON admin_impersonations(target_user_id, started_at DESC)');
+
   // v3.0.455 -- BOOK PREFS ARE PER VERSION (TD-242 stage 2b).
   //
   // WHY A SENTINEL 0 AND NOT NULL + A COALESCE INDEX. A nullable version_id would need a UNIQUE
