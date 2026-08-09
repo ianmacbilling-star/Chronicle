@@ -7147,19 +7147,21 @@ function prepSeedCoverFromCampaignImage() {
 function prepSyncTitle() {
   // v3.0.541 -- the admin-only True View button rides in here because prepSyncTitle is single-copy
   // and already runs on tab entry. loadNovelPreview has TWO copies and would need both patched.
-  // v3.0.552 -- SEEDED WITH THE DATES, AND BLANK NOW MEANS BLANK. Ian: "put the dates in there and
-  // let them change it. Then if they blank it out it will not do anything. They may not want a sub
-  // title -- currently there is no way to blank it out."
-  // v3.0.551 had blank meaning "use the dates", which made the field settable but never removable.
-  // Now: a subtitle that has never been set comes back as NULL and the field is seeded with the date
-  // range the cover already shows, so the first save writes those dates explicitly and clearing the
-  // field afterwards writes an empty string that means nothing at all.
-  // The seed comes from date_range on the endpoint, which is computed by the same formatDateRange
-  // the cover renders with -- the field cannot show a differently formatted date than the book.
+  // v3.0.575 -- NO DATE SEED. THE FIELD IS EMPTY UNTIL SOMEBODY TYPES IN IT.
+  // Ian, 2026-08-09: "I do not care about the subtitle dates. That field can be null. Even on old
+  // books... it is a rare case where someone would want that, and if they do they can type in the
+  // dates." So the cover prints no subtitle unless one was set, and this field simply shows what is
+  // stored.
+  // WHAT THIS RETIRES: v3.0.551/552 seeded the box with the date range so a first save would write
+  // those dates explicitly, and kept null and empty as DIFFERENT states so the automatic value was
+  // reachable again after clearing. With no automatic value there is nothing to reach back to, so
+  // both collapse to "nothing" and the box is an ordinary text input.
+  // The endpoint still returns date_range and the title and details pages still print it -- it is
+  // only the COVER that stops defaulting to it.
   var _sub = document.getElementById('prep-subtitle');
   if (_sub) {
     var _bm = state.bookMeta || {};
-    _sub.value = (_bm.subtitle == null) ? (_bm.date_range || '') : _bm.subtitle;
+    _sub.value = (_bm.subtitle == null) ? '' : _bm.subtitle;
   }
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
@@ -7197,6 +7199,84 @@ function prepSaveSubtitle() {
     fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_sB) });
   }
 }
+// v3.0.575 -- THE TITLE IS SAVED. IT NEVER WAS.
+// The one and only client write of book_title lived inside publishStory(), so a title existed as
+// text in an input box and nowhere else until somebody published. Everything downstream that reads
+// the STORED book title -- the Optimize render, the Order tab, the wrap cover -- therefore fell
+// through to the campaign name, which is exactly what Ian reported on 2026-08-08: "it was taking
+// the Campaign title and not the title in the Title field."
+// The subtitle (prepSaveSubtitle) and the colour (prepSaveTitleColor) both had an onchange from the
+// day they shipped. The title simply never got one.
+// STATE IS UPDATED LOCALLY TOO, and that is what makes the other tabs agree without re-fetching:
+// loadPrintTab reads state.bookMeta, so an edit here reaches the Order tab on the next tab switch
+// with no round trip and no second copy of the value.
+// EMPTY IS NOT SENT AS EMPTY. A book must have a title, so clearing the box falls back to the
+// campaign name rather than storing nothing -- otherwise the cover would print blank, which is not
+// a state any reader is asking for.
+function prepSaveTitle() {
+  var el = document.getElementById('prep-title');
+  if (!el || !state.currentCampaign) return;
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) return;
+  var _t = (el.value || '').trim();
+  if (!_t) { _t = (state.currentCampaign.name || '').trim(); el.value = _t; }
+  state.bookMeta = state.bookMeta || {};
+  if (state.bookMeta.book_title === _t) return;   // nothing changed; do not spend a round trip
+  state.bookMeta.book_title = _t;
+  var _b = { book_title: _t }; if (state.novelAsUser) _b.fork_user = state.novelAsUser;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_b) }).catch(function(){});
+  // Keep the Order tab's mirror in step immediately, for the case where it has already been drawn.
+  var _pt = document.getElementById('print-book-title'); if (_pt) _pt.value = _t;
+}
+// v3.0.575 -- MATERIALISE THE BOOK SETTINGS INTO THE VERSION THE FIRST TIME PREP OPENS IT.
+// Ian, 2026-08-09: "save the title and really all the other layout settings the moment the main
+// publish page loads for the first time for that version. Default it up with the Campaign title and
+// whatever was there from the version they copied to get theirs."
+// WHY THIS IS A WRITE AND NOT A READ-TIME DEFAULT. getForkBookPrefs already falls back version ->
+// base -> fork owner, so an unmaterialised version RENDERS correctly today. What it cannot do is
+// let the version diverge: the fallback is deliberately a read, so the branched-from book stays
+// live underneath. Writing the effective values in once turns that inheritance into a SNAPSHOT,
+// which is the behaviour Ian wants -- a version is a book you come back to, and the Story Master
+// changing the canonical afterwards must not restyle it.
+// THE USE CASE THAT DECIDED IT, in his words: publishing a campaign as a series of issues. Episode
+// one and episode two share a version so the font, frames and layout stay consistent, while the
+// cover and subtitle change per issue. That only works if the version really owns its settings.
+// WHAT IS DELIBERATELY NOT MATERIALISED:
+//   - the SUBTITLE. Null means "nothing", not "compute something", so there is no effective value
+//     to freeze and writing one would invent a subtitle nobody typed.
+//   - the COVER IMAGE FALLBACK. The endpoint returns cover_image_url already fallen back to the
+//     campaign tile; own_cover is the value actually stored or inherited. Writing the campaign tile
+//     in would permanently detach the book cover from the campaign image for anyone who never chose
+//     one, which is a decision the reader has not made.
+// ONCE PER VERSION, and only on a version you own. A second pass would overwrite a real edit with
+// a stale copy of it, and firing on someone else's version would earn a 403 from a background PUT
+// nobody was watching.
+function prepMaterializeBookMeta() {
+  try {
+    var c = state.currentCampaign; if (!c || !state.user) return;
+    if (!(typeof prepUseMember === 'function' && prepUseMember())) return;
+    var _key = String(c.id) + '|' + String((typeof bookMetaVersionId === 'function' ? bookMetaVersionId() : '') || '0');
+    state._prepMaterialized = state._prepMaterialized || {};
+    if (state._prepMaterialized[_key]) return;
+    state._prepMaterialized[_key] = true;
+    var _bm = state.bookMeta || {};
+    var _body = {
+      book_title: (_bm.book_title || (c.name || '')).trim(),
+      title_color: _bm.title_color || '#f0d98a',
+      layout_opts: JSON.stringify({ opts: customOpts, active: customActive })
+    };
+    // own_* are the values really stored or inherited, as opposed to the campaign-tile fallback.
+    if (_bm.own_cover) _body.cover_image_url = _bm.own_cover;
+    if (_bm.own_back) _body.back_cover_image_url = _bm.own_back;
+    if (_bm.own_title) _body.title_image_url = _bm.own_title;
+    if (state.novelAsUser) _body.fork_user = state.novelAsUser;
+    fetch('/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_body) })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      // MERGE, do not replace. The PUT answers with the record it wrote; keeping the fields it
+      // does not carry (date_range) means no caller has to know which endpoint it was answered by.
+      .then(function(m){ if (m) state.bookMeta = Object.assign({}, state.bookMeta || {}, m); })
+      .catch(function(){ state._prepMaterialized[_key] = false; });   // let a later open try again
+  } catch (e) {}
+}
 function prepSaveTitleColor() {
   var el = document.getElementById('print-title-color');
   if (!el || !state.currentCampaign) return;
@@ -7212,21 +7292,35 @@ function prepPanelSync() {
     if (isSM && !state.novelAsUser) prepSeedCoverFromCampaignImage();
     prepSyncTitle();
     renderPrepThumbs();
+    // v3.0.575 -- AFTER the panel is painted, never before. prepSyncTitle is what puts the campaign
+    // name into an empty title box, and applyCampaignLayoutOpts (inside prepLoadBookMeta) is what
+    // hydrates customOpts -- so materialising earlier would store a title nobody has seen and a
+    // layout blob belonging to the previously open campaign.
+    prepMaterializeBookMeta();
   });
   _prepEnsureArchives();
 }
 // Per-member book images (Phase 2b): a member on their own fork edits their own
 // cover/back/title via /my-book-meta; the SM edits the campaign images as before.
 function prepUseMember() {
-  // True whenever the viewer may edit the currently-shown book: their own fork (SM
-  // canonical or member own), OR the SM curating a member's fork into the SM overlay.
-  if (typeof novelOwnView === 'function' && novelOwnView()) return true;
-  var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
-  return isSM && !!state.novelAsUser;
+  // v3.0.575 -- YOU MAY WRITE ONLY THE VERSION YOU OWN, AND THAT IS NOW THE WHOLE RULE.
+  // Ian, 2026-08-09: "the userID of the person logged in must match the userid of the owner of the
+  // version in order for it to save... a Storymaster can just create a new version specifically for
+  // that member... That way it is the whole thing, not just the title and cover."
+  // WHAT WAS REMOVED: the second clause, which let a Story Master edit a member's cover and title
+  // into an overlay row keyed (SM, member). That capability predates versions. It answered the
+  // question "how does a Story Master give a member a different-looking book" at a time when there
+  // was no other answer -- and it only ever carried the COVER, never the layout, the art style or
+  // the narrative, so the book it produced was half curated.
+  // THE TWO GATES NOW AGREE. saveCampaignLayoutOpts has always used novelOwnView() and refuses on
+  // someone else's version (TD-282); the cover and title used this looser predicate. One book
+  // setting being writable while the one beside it was not is the kind of split that reads as a
+  // bug from either side.
+  return (typeof novelOwnView === 'function') ? novelOwnView() : true;
 }
 function _prepCampaignMeta() {
   var c = state.currentCampaign || {};
-  return { cover_image_url: c.campaign_image_url || '', back_cover_image_url: '', title_image_url: '', book_title: '', title_color: '' };
+  return { cover_image_url: c.campaign_image_url || '', back_cover_image_url: '', title_image_url: '', book_title: '', subtitle: null, title_color: '' };
 }
 // Load book-meta for the CURRENTLY VIEWED fork. Canonical (null) reads the live
 // campaign in renderPrepThumbs; a fork view fetches that fork's effective meta so
@@ -7332,6 +7426,11 @@ function closePrepImagePicker() {
 // Refresh button: sync the title to the Order tab, then re-render the preview
 // with the current title + image picks (one trigger for both).
 function refreshNovelPreview() {
+  // v3.0.575 -- commit the title before rendering. onchange fires on blur, and clicking this
+  // button blurs the field, so in practice the save has already run -- but Refresh is the moment
+  // the reader expects their edit to become real, and prepSaveTitle early-returns when nothing
+  // changed, so calling it costs nothing and closes the ordering question outright.
+  if (typeof prepSaveTitle === 'function') prepSaveTitle();
   var tEl = document.getElementById('prep-title');
   var title = tEl ? tEl.value.trim() : '';
   var pt = document.getElementById('print-book-title');
@@ -14423,12 +14522,18 @@ function printProgressDone() {
 }
 
 function loadPrintTab() {
-  // The book title is set on the Preview & Export tab and is read-only here;
-  // mirror the current prep title (or campaign name) into this field.
+  // The book title is set on the Preview & Export tab and is read-only here.
+  // v3.0.575 -- READ THE STORED TITLE FIRST, not the other tab's input box.
+  // This reached into #prep-title, which is only populated once the Prep panel has actually been
+  // rendered. Landing on Order without having opened Prep this session found an empty box and fell
+  // through to the campaign name -- the same wrong title, arriving by a different route.
+  // state.bookMeta is the version's own stored value, which is what every other surface now uses.
   var _pbt = document.getElementById('print-book-title');
   if (_pbt) {
     var _prep = document.getElementById('prep-title');
-    var _v = (_prep && _prep.value.trim()) || (state.currentCampaign && state.currentCampaign.name) || '';
+    var _v = ((state.bookMeta && state.bookMeta.book_title) || '').trim()
+      || (_prep && _prep.value.trim())
+      || (state.currentCampaign && state.currentCampaign.name) || '';
     if (_v) _pbt.value = _v;
   }
   if (!state.currentCampaign) return;

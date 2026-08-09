@@ -1067,14 +1067,52 @@ router.post('/:id/fork', requireAuth, verifyCampaignMember, async function(req, 
   const mineRows = await db.prepare('SELECT id FROM campaign_versions WHERE campaign_id = ? AND user_id = ? AND NOT is_canonical ORDER BY id ASC').all(req.params.campaignId, req.session.userId);
   const mineCount = (mineRows || []).length;
   if (mineCount >= 1 && !_wantsBranch) {
-    // EFFECTIVE tier, not the account tier: max(own tier, the campaign Story Master's tier), the
-    // same call the art styles use. Ian: "the DM has to be gold or they have to be gold". Extra
-    // versions are a per-campaign feature, so inheriting the SM's tier is the right rule here --
-    // note getEffectiveTier's own warning that ACCOUNT-level limits must not work this way.
-    const effRank = accessRank(await getEffectiveTier(req.session.userId, req.campaignId || (req.campaign && req.campaign.id)));
-    if (effRank < GOLD_RANK) {
+    // v3.0.576 -- TD-367. YOUR OWN TIER, NOT THE EFFECTIVE ONE. Ian, 2026-08-09: "I want to change
+    // the versioning and make it so you have to be on Gold Yourself. Not a Gold Extended Tier."
+    //
+    // WHAT THIS REVERSES, DELIBERATELY. Until now this read max(your tier, the Story Master's), so
+    // a Copper member in a Gold Story Master's campaign got unlimited versions -- the rule written
+    // at v3.0.456 from Ian's own words, "the DM has to be gold or they have to be gold". It is
+    // being changed on purpose and the earlier decision is recorded here rather than overwritten,
+    // so nobody later reads this as a bug and helpfully restores the inheritance.
+    //
+    // WHY IT IS RIGHT NOW: a version is an ACCOUNT-level allowance, not a per-campaign feature.
+    // getEffectiveTier's own header says so -- "account-level limits (e.g. max_campaigns) must
+    // still use the user's OWN tier -- joining a higher-tier SM does not grant account-level
+    // allowances" -- and extra versions cost storage and render time on the maker's account,
+    // wherever they were made. Art styles stay on the effective tier: those are a property of the
+    // campaign's book, which is the case that header carves out.
+    //
+    // PASSING null IS THE WHOLE CHANGE. getEffectiveTier with no campaign returns the user's own
+    // tier and nothing else, so this adds no query and no second way of asking the question.
+    //
+    // ONLY ON CREATE, and only past the first. Everyone gets one version free forever, and adding
+    // a session to a version you already own is still free -- see _wantsBranch above.
+    // ALREADY-CREATED VERSIONS ARE UNTOUCHED. This gate fires on creation only, so anyone who made
+    // extras under the old inherited rule keeps them, reads them and publishes them; they simply
+    // cannot make another without Gold of their own.
+    //
+    // tierRank, NOT accessRank -- AND THE SWAP IS THE SECOND HALF OF THIS ITEM, NOT AN OVERSIGHT.
+    // Ian, 2026-08-09: "Let's exclude the free tier from this feature."
+    //
+    // The two ranks disagree about exactly one tier, which is the whole reason both exist. Per the
+    // header on accessRank: tierRank is HIERARCHY (seniority, maxTier, lapse direction), accessRank
+    // is WHAT A TIER MAY CREATE (art, narrative and layout gating). The Free Trial is deliberately
+    // rank 1 and access_rank 4 -- bottom of the hierarchy, top of creative access -- so it can show
+    // the product off without being a paid plan.
+    //     trial  rank 1 / access 4      silver  rank 2 / access 2      platinum rank 4 / access 4
+    //     copper rank 1 / access 1      gold    rank 3 / access 3
+    // Under accessRank a trial account cleared a Gold gate and could hold unlimited versions.
+    //
+    // AN EXTRA VERSION IS AN ENTITLEMENT, NOT A CREATIVE CAPABILITY. It is the same kind of thing
+    // as max_campaigns -- an allowance attached to a paid account -- not the same kind of thing as
+    // which art styles you may pick. So it belongs on the hierarchy rank, and the art-style gate
+    // above (accessRank, line ~328) is deliberately left alone: a trial SHOULD get every style.
+    // This is the one gate in this file that reads tierRank; that asymmetry is the point.
+    const ownRank = tierRank(await getEffectiveTier(req.session.userId, null));
+    if (ownRank < GOLD_RANK) {
       return res.status(402).json({
-        error: 'Extra versions need Gold. You can upgrade your own plan, or the Story Master of this campaign can upgrade theirs -- either one unlocks it for you here.',
+        error: 'Your first version is free. Making another one needs Gold or higher on your own plan -- upgrade to keep more than one version of a campaign.',
         code: 'FORK_TIER'
       });
     }

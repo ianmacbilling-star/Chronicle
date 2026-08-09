@@ -2284,10 +2284,45 @@ function formatDateRange(dts) {
   return minDate.toLocaleDateString('en-US', _df) +
     (minDate.getTime() !== maxDate.getTime() ? ' — ' + maxDate.toLocaleDateString('en-US', _df) : '');
 }
-function coverSubtitle(pageOpts, dateRange) {
-  var raw = (pageOpts && pageOpts.subtitle != null) ? String(pageOpts.subtitle).trim() : null;
-  if (raw === null) return dateRange || '';   // never set: the legacy default
-  return raw;                                 // set, including deliberately empty
+// v3.0.575 -- THE DATE DEFAULT IS GONE, AND THE THREE STATES ARE NOW TWO.
+// Ian, 2026-08-09: "I do not care about the subtitle dates. That field can be null. Even on old
+// books." So a subtitle that has never been set prints NOTHING rather than the session date range.
+// WHAT THIS RETIRES, deliberately: the null-versus-empty distinction v3.0.551/552 built. It existed
+// only to let someone get BACK to the automatic date range after clearing it; with no automatic
+// value there is nothing to get back to, so null and empty now mean the same thing and the field is
+// an ordinary text box. The reader who wants dates types them.
+// THE DATE RANGE IS STILL COMPUTED AND STILL USED -- the title page and the details page both print
+// it (see dateRange at the top of this builder). It is only the COVER that stops defaulting to it,
+// which is why the parameter is gone rather than the value.
+// EXISTING BOOKS CHANGE. Any book that never had a subtitle typed has been printing its dates under
+// the title and will now print nothing there. Ian accepted that explicitly.
+function coverSubtitle(pageOpts) {
+  var raw = (pageOpts && pageOpts.subtitle != null) ? String(pageOpts.subtitle).trim() : '';
+  return raw;
+}
+// v3.0.575 -- ONE PLACE THAT READS A FORK'S BOOK META ONTO THE CAMPAIGN. This block existed FIVE
+// times, byte-identical, in /novel, /print-interior, /print-cover, /publish-story and
+// assembleNovelHtml -- and the subtitle and the title colour had to be added to all five at once,
+// which is precisely the shape of fault this file keeps re-finding (TD-336, and the DERIVE DO NOT
+// PAIR rule). Five copies of a rule is five chances for the sixth caller to miss one.
+// WHY THE COVER FALLS BACK TO THE CAMPAIGN TILE AND THE OTHERS DO NOT: a book must always have a
+// cover, and campaigns.campaign_image_url is the only guaranteed image. The back and title images
+// are optional by design. campaign.cover_image_url on the campaign record is vestigial after the
+// per-fork move and is never read here.
+// THE TITLE, SUBTITLE AND COLOUR ARE STAGED ONTO PRIVATE FIELDS rather than applied directly,
+// because a query parameter must still win over the stored value -- the Prep panel renders a live
+// preview of an edit that has not been saved yet. The pageOpts builders below resolve that order.
+function applyForkBookMeta(campaign, fbm) {
+  var _f = fbm || {};
+  campaign.cover_image_url = _f.cover_image_url || campaign.campaign_image_url || '';
+  campaign.back_cover_image_url = _f.back_cover_image_url || '';
+  campaign.title_image_url = _f.title_image_url || '';
+  if (_f.book_title) campaign._memberBookTitle = _f.book_title;
+  // Subtitle: an empty string is a real stored value meaning "nothing under the title", so this
+  // tests for null/undefined rather than for falsiness. Coercing '' away here would make a cleared
+  // subtitle indistinguishable from one that was never set.
+  if (_f.subtitle != null) campaign._memberSubtitle = String(_f.subtitle);
+  if (_f.title_color) campaign._memberTitleColor = String(_f.title_color);
 }
 function picBorderCss(opts){
   // The picture-border option, applied identically in EVERY layout. Default: none.
@@ -5527,7 +5562,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
         <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
-        <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
+        <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts))}</div>
         ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
       ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
@@ -5538,7 +5573,7 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
     <div class="cover-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
     <div class="cover-divider"></div>
     <div class="cover-subtitle">${campaign.description || 'A tale of adventure and legend'}</div>
-    <div class="cover-dates"${_coverSubStylePlain}>${_fmEsc(coverSubtitle(pageOpts, dateRange))}</div>
+    <div class="cover-dates"${_coverSubStylePlain}>${_fmEsc(coverSubtitle(pageOpts))}</div>
   </div>`}
   <div class="cover-watermark">CAMPAIGNIA.COM</div>
 </div>` : ''}
@@ -5805,15 +5840,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
-    {
-      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
-      // record cover_image_url is vestigial after the per-fork move -- never use it).
-      var _fbm = _bm || {};
-      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
-      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
-      campaign.title_image_url = _fbm.title_image_url || '';
-      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
-    }
+    applyForkBookMeta(campaign, _bm);   // v3.0.575 -- was five byte-identical copies of this block
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
@@ -5842,8 +5869,19 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     pageOpts.page = pageNum;
   }
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
-  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);   // v3.0.551 -- blank is meaningful: it means use the dates
+  // v3.0.575 -- THE QUERY WINS, THE STORED VALUE FILLS IN, AND THAT ORDER IS THE WHOLE FIX.
+  // The subtitle and the title colour were saved to the fork book prefs and then read back from
+  // NOWHERE -- only from the query string. finalizeBookQuery() does not send them, so every render
+  // on the Optimize path (compose, layout-apply, layout-fill) fell back to the built-in defaults
+  // however carefully the reader had set them. The book title had the opposite fault: it resolved
+  // from the stored value correctly and was never stored.
+  // QUERY FIRST because the Prep panel previews an edit before it has been saved. STORED SECOND so
+  // every other surface -- Optimize, Order, Publish -- shows what the version actually holds
+  // without any of them having to carry a copy of the fields.
+  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);
+  else if (campaign._memberSubtitle != null) pageOpts.subtitle = campaign._memberSubtitle;
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
+  else if (campaign._memberTitleColor && /^#[0-9a-fA-F]{3,8}$/.test(campaign._memberTitleColor)) pageOpts.titleColor = campaign._memberTitleColor;
   res.set('X-Total-Sessions', String(sessionsWithData.length));
   // v3.0.333 -- the INCLUDED count above has been on the wire since it was written and nothing ever
   // read it. Publish the campaign total beside it so the Optimize tab can say 7 of 9 rather than 7,
@@ -5935,15 +5973,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
   var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
-    {
-      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
-      // record cover_image_url is vestigial after the per-fork move -- never use it).
-      var _fbm = _bm || {};
-      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
-      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
-      campaign.title_image_url = _fbm.title_image_url || '';
-      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
-    }
+    applyForkBookMeta(campaign, _bm);   // v3.0.575 -- was five byte-identical copies of this block
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
@@ -6408,13 +6438,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
     if (_bmFork) {
       const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
-      {
-        var _fbm = _bm || {};
-        campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
-        campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
-        campaign.title_image_url = _fbm.title_image_url || '';
-        if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
-      }
+      applyForkBookMeta(campaign, _bm);   // v3.0.575 -- was five byte-identical copies of this block
     }
 
     var selection = {
@@ -6436,7 +6460,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
     var fHideLogo = co ? !!co.hideLogo : false;
 
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || '' });
+    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '' });   // v3.0.575 -- the stored colour, same as the title beside it
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
@@ -6575,15 +6599,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
-    {
-      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
-      // record cover_image_url is vestigial after the per-fork move -- never use it).
-      var _fbm = _bm || {};
-      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
-      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
-      campaign.title_image_url = _fbm.title_image_url || '';
-      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
-    }
+    applyForkBookMeta(campaign, _bm);   // v3.0.575 -- was five byte-identical copies of this block
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
@@ -6620,6 +6636,12 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // but that is a listing thumbnail, not part of the artifact -- the reader opens ONE pdf.
   // Covers are stripped for the PRINT interior only. Publishing is not printing.
   var pageOpts = { publicMode: true, bookTitle: bookTitle };
+  // v3.0.575 -- the published book carries the version's own subtitle and title colour. The
+  // 'composed' branch below copies the approved PDF and never reaches a render, so this only
+  // bites the admin 'flow' path -- but a published cover that disagreed with the approved one
+  // would be a silent wrong-book bug of exactly the TD-219 shape, so it is set here too.
+  if (campaign._memberSubtitle != null) pageOpts.subtitle = campaign._memberSubtitle;
+  if (campaign._memberTitleColor) pageOpts.titleColor = campaign._memberTitleColor;
 
   // Which render the reader chose on the Optimize tab: 'composed' = the optimized (After) book,
   // anything else = the original flow (Before) book. 'composed' is what every user publishes --
@@ -6997,15 +7019,7 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   var _bmFork = _bmSc.fork, _bmChooser = _bmSc.chooser, _bmVid = _bmSc.versionId;
   if (_bmFork) {
     const _bm = await getForkBookPrefs(db, _bmChooser, _bmFork, campaign.id, { inherit: true, versionId: _bmVid });
-    {
-      // Resolve covers from the fork's own meta, else the campaign tile (the campaign
-      // record cover_image_url is vestigial after the per-fork move -- never use it).
-      var _fbm = _bm || {};
-      campaign.cover_image_url = _fbm.cover_image_url || campaign.campaign_image_url || '';
-      campaign.back_cover_image_url = _fbm.back_cover_image_url || '';
-      campaign.title_image_url = _fbm.title_image_url || '';
-      if (_fbm.book_title) campaign._memberBookTitle = _fbm.book_title;
-    }
+    applyForkBookMeta(campaign, _bm);   // v3.0.575 -- was five byte-identical copies of this block
   }
   const sessionsWithData = await Promise.all(sessions.filter(function(s) { return _incMap[s.id]; }).map(async function(s) {
     // v3.0.454 -- ONE resolver (database/db.js bookForkForSession). Was four byte-identical copies
@@ -7027,8 +7041,19 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (req.query.nocover === '1') pageOpts.noCover = true;   // optimize/interior renders never include covers
   if (req.query.publicMode === '1') pageOpts.publicMode = true;   // published books mask real names to pen names
   if (req.query.bookTitle != null && String(req.query.bookTitle).trim()) pageOpts.bookTitle = req.query.bookTitle;
-  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);   // v3.0.551 -- blank is meaningful: it means use the dates
+  // v3.0.575 -- THE QUERY WINS, THE STORED VALUE FILLS IN, AND THAT ORDER IS THE WHOLE FIX.
+  // The subtitle and the title colour were saved to the fork book prefs and then read back from
+  // NOWHERE -- only from the query string. finalizeBookQuery() does not send them, so every render
+  // on the Optimize path (compose, layout-apply, layout-fill) fell back to the built-in defaults
+  // however carefully the reader had set them. The book title had the opposite fault: it resolved
+  // from the stored value correctly and was never stored.
+  // QUERY FIRST because the Prep panel previews an edit before it has been saved. STORED SECOND so
+  // every other surface -- Optimize, Order, Publish -- shows what the version actually holds
+  // without any of them having to carry a copy of the fields.
+  if (req.query.subtitle != null) pageOpts.subtitle = String(req.query.subtitle);
+  else if (campaign._memberSubtitle != null) pageOpts.subtitle = campaign._memberSubtitle;
   if (req.query.titleColor != null && /^#[0-9a-fA-F]{3,8}$/.test(String(req.query.titleColor))) pageOpts.titleColor = String(req.query.titleColor);
+  else if (campaign._memberTitleColor && /^#[0-9a-fA-F]{3,8}$/.test(campaign._memberTitleColor)) pageOpts.titleColor = campaign._memberTitleColor;
 
   // Book-wide panel index (reading order): a manifest the AI keys its signals to, and the
   // hook for applying in-memory layout_meta overrides for the optimize PREVIEW. NOTHING here
