@@ -4943,127 +4943,71 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   //
   // ROWS ARE BALANCED. Never an orphan: 4 goes 2+2, not 3+1; 7 goes 4+3; 5 stays 3+2, which reads
   // as a deliberate pyramid rather than a leftover.
-  var _castRows = (_castN <= 6) ? 1 : (_castN <= 14 ? 2 : (_castN <= 27 ? 3 : 4));
-  var _castPerRow = Math.ceil(_castN / _castRows);
   var _castFields = (_castN <= 12) ? 'full' : (_castN <= 30 ? 'mid' : (_castN <= 60 ? 'name' : 'list'));
-  // OVERLAP. Figures tuck behind one another so the group reads as a company standing together
-  // rather than as a contact sheet. n figures at width w overlapping by OV occupy
-  // w * (n - (n-1)*OV), so w falls straight out of the content width.
-  // v3.0.566 -- MORE OVERLAP, WHICH IS WHAT MAKES THE FIGURES BIGGER. Ian: "can they be bigger? The
-  // text is bigger than the characters." He is right, and the cause is not the height cap -- that
-  // allows 4.2in and a five-character row only reaches 2.4. The figures are WIDTH-limited: n figures
-  // overlapping by OV occupy w * (n - (n-1)*OV), so the less they overlap the narrower each must be,
-  // and the box aspect then holds the height down with them.
-  // v3.0.567 -- 0.30 to 0.42. Ian: "they need to be bigger overall and maybe closer together."
-  // BOTH ASKS ARE THE SAME NUMBER, which is the useful thing here: more overlap moves the figures
-  // closer AND makes each one wider, and the box aspect turns that width into height. 0.12 to 0.42
-  // is 44 percent taller than where the day started, at no cost in page space.
-  // The mask is gone as of this build, so nothing is being faded at the edges any more -- and with
-  // the art cut out on white and short characters not filling their boxes, the BOXES overlap far
-  // more than the figures inside them ever do.
-  // AND IT IS ONLY SAFE NOW. Overlap used to be risky because every portrait carried its own
-  // background, so tucking figures together meant tucking RECTANGLES together. Since v3.0.559 they
-  // are cut out on white, and height scaling (v3.0.563) means a short character does not fill its
-  // box either -- so the boxes overlap far more than the figures inside them ever do.
-  // v3.0.566 -- ONE NAME ON THE LINE-UP. Ian: "can we just take the first name in the Name array."
-  // A character's name field carries every alias the player uses -- "Lumen / Elias / Elias Ward" --
-  // which is right on a character sheet and wrong under a portrait: it wrapped to three lines and
-  // made the caption taller than the figure above it.
-  // Split on the slash, take the first, fall back to the whole string if there is no slash or the
-  // first segment is empty, so a name like "/ Elias" can never render as nothing.
-  function castFirstName(n) {
-    var raw = String(n == null ? '' : n);
-    var first = raw.split('/')[0].trim();
-    return first || raw.trim();
+  // ===============================================================================================
+  // THE COMPANY: A BOWLING-PIN FORMATION, SORTED BY HEIGHT (v3.0.581)
+  //
+  // Ian, 2026-08-09: "Taller characters go in the back, shorter in front. Order the characters by
+  // height... lay them out bowling pin style... the characters in back need to be shrunk by maybe 5
+  // percent and placed slightly higher than the standing line of the ones in front. I want to make
+  // sure we can always see the heads of the characters, even the ones in back."
+  //
+  // THE ROW PLAN IS DERIVED, NOT TABULATED. A list of pairs is a list of numbers waiting to
+  // disagree with itself, and this file has paid for that repeatedly. The back row is the widest;
+  // every forward row holds one fewer and tucks into the gaps behind it. Ian: "you can spread the
+  // back row out across the page to the margins" -- so the BACK row spans the full content width,
+  // which is what sets the figure size for everyone. Only the four-character case is special: a
+  // balanced 2 + 2 reads better than 3 + 1, and Ian specified it.
+  //     1 [1]      4 [2,2]     7 [4,3]      10 [4,3,2,1]
+  //     2 [2]      5 [3,2]     8 [4,3,1]    11 [5,4,2]
+  //     3 [3]      6 [3,2,1]   9 [4,3,2]    12 [5,4,3]
+  //
+  // HEAD CLEARANCE IS DERIVED FROM THE SHRINK, NOT TUNED BESIDE IT. The dangerous cast is not a
+  // giant behind a child, it is SIX PEOPLE WHO ARE ALL SIX FEET: there the back figure is the same
+  // height as the front one, so a shrink and a separately-chosen raise have to agree or heads get
+  // cut off. They are therefore not two numbers. A row rises by the height its own shrink cost it,
+  // PLUS a margin -- measured against the tallest figure in the row ahead and the SHORTEST in its
+  // own, which is the worst pair available. Heads then clear by construction at every cast size,
+  // and CAST_HEAD_MARGIN is the only thing to tune.
+  //
+  // SORTING TALLEST TO THE BACK IS WHAT MAKES THAT CHEAP: a back figure is never really shorter
+  // than one in front, so the margin only ever has to cover the shrink.
+  //
+  // AND THE SHRINK ONLY STARTS AT THREE ROWS, which is what Ian asked for. Two rows keep their true
+  // sizes and are merely lifted clear -- there is no distance to suggest yet, and shrinking a
+  // four-character page would lose size for nothing.
+  // ===============================================================================================
+  var CAST_ASP = 0.75;                 // figure box, width over height -- matches the 3:4 reference art
+  var CAST_OV = 0.55;                  // how much of each figure its neighbour covers, within a row
+  var CAST_DEPTH_SHRINK = 0.95;        // per row further back, at three rows and up
+  var CAST_HEAD_MARGIN = 0.06;         // clear air above the row in front, as a fraction of a full figure
+  var CAST_GROUND_STEP = 0.045;        // how much higher each row back STANDS -- the perspective cue itself
+  var CAST_BLOCK_MAX_IN = 6.0;         // the whole formation, top to standing line
+  var _CAST_MIN_REL = 0.35;            // the floor under height scaling (see _heightRel)
+  // Back row as wide as the cast can fill, then one fewer each row forward. round(sqrt(2n)) is the
+  // width of a triangular arrangement of n, which is exactly the shape being built.
+  function castRowPlan(n) {
+    if (n <= 3) return [n];
+    if (n === 4) return [2, 2];
+    var rows = [], left = n, w = Math.round(Math.sqrt(2 * n));
+    while (left > 0) {
+      var take = Math.min(w, left);
+      rows.push(take);
+      left -= take;
+      w = Math.max(1, take - 1);
+    }
+    return rows;
   }
-  // v3.0.568 -- 0.42 to 0.60, and THE CAPTIONS ARE WHAT WAS HOLDING IT BACK. Ian offered the way
-  // out: "if need be you could do From left to right, Shumble Gnome Fighter, Humble Gnome Cleric...
-  // at the bottom." Per-figure captions need a slot each, and the slot is the figure width times
-  // (1 - overlap) -- so every increase in overlap narrowed the captions until names stopped fitting.
-  // A single roster line under the row needs no slots at all, so the only remaining limit on overlap
-  // is the figures themselves. At 0.60 a five-character row is 4.22in tall against 2.43in this
-  // morning: SEVENTY-FOUR PERCENT taller.
-  var CAST_OV = 0.60;                 // how much of each figure the next one covers
-  var _castStepOverride = null;       // set for single rows, which size from a height target instead
-  // v3.0.574 -- 0.62 TO 0.75, TO MATCH THE ART. The references are generated at 3:4 (0.75) but the
-  // box was 0.62, so object-fit:contain letterboxed EVERY figure: the drawn art was only 83 percent
-  // of the box height and the top 17 percent was empty. That is why the figures looked smaller than
-  // the numbers said, and it is also why a couple of shadows looked wrong -- the shadow is sized
-  // from the BOX width, and a letterboxed figure does not fill its box.
-  // Matching the box to the art means no letterboxing, so the figure IS the box and the shadow lands
-  // on the real silhouette.
-  var CAST_ASP = 0.75;                // figure box, width over height -- matches the reference aspect
-  var _castW = CG_W / (_castPerRow - (_castPerRow - 1) * CAST_OV);   // the overlap-driven width, used when a row has captions
-  // Height cap so a one or two-character party does not produce a figure taller than the page.
-  // The whole block must leave room for the title, the captions and the contents that follow.
-  // v3.0.568 -- a single row loses its per-figure captions (see the roster below), so it needs less
-  // room beneath and can afford more above. 4.2 to 6.0. Multi-row casts keep their captions and
-  // their caps unchanged.
-  // v3.0.570 -- 6.0 to 5.2, because 6.0 did not fit. A cast page is 9.55in of printable height; the
-  // title block takes about 1.3, the pushed-down row took 1.6 more, and the roster needs its foot.
-  // The figures ran off the bottom. 5.2in plus the title plus the roster leaves real margin, and it
-  // is still more than double where the day started.
-  // v3.0.572 -- 5.2 BACK TO 3.1, AND IT IS A RETREAT WITH A REASON. Ian: "we lost two characters."
-  // Humble and Dumble -- the two FAR figures -- vanished entirely from a five-gnome page.
-  // THE BOXES ARE STILL OPAQUE. The white grounds measure 251,251,252 rather than pure white, so
-  // mix-blend-mode:multiply does not clear them (v3.0.570), and at 5.2in the box is 3.22in wide with
-  // only 0.89in of step -- so a near figure's rectangle is nearly four times the gap to its
-  // neighbour and paints over that neighbour COMPLETELY. Not crowding: erasure.
-  // SIZE AND COMPLETENESS ARE IN DIRECT CONFLICT UNTIL THE GROUNDS ARE REALLY TRANSPARENT, and
-  // losing two of five characters is far worse than smaller figures. 3.1in is the largest height at
-  // which a box cannot swallow its neighbour: it leaves the step at 62 percent of the box width.
-  // THIS IS TEMPORARY. TD-362 cuts the white to alpha once at generation; the moment images carry
-  // real transparency this number goes straight back up, because nothing else was wrong with 5.2.
-  // v3.0.572 -- THE SINGLE-ROW HEIGHT IS DERIVED FROM THE PARTY SIZE, NOT PICKED.
-  // Ian: "we lost two characters." Humble and Dumble -- the two FAR figures -- vanished from a
-  // five-gnome page. THE BOXES ARE STILL OPAQUE: the generated grounds measure 251,251,252 rather
-  // than pure white, so mix-blend-mode:multiply does not clear them (v3.0.570 assumed it would). At
-  // a 5.2in cap the box is 3.22in wide with 0.89in of step, so a near figure's rectangle is nearly
-  // four times the gap to its neighbour and paints over it COMPLETELY. Not crowding: erasure.
-  // A FIXED CAP IS THE WRONG SHAPE. 3.1in is safe for five figures and NOT for six -- caught by the
-  // guard in this build's own apply script, which swept party sizes rather than checking the one on
-  // Ian's screen. Solving for the constraint instead gives every party the largest height that still
-  // leaves a neighbour visible: CG_W >= h * ASP * (1 + 0.6 * (n - 1)).
-  //     2 figures  6.6in      4 figures  3.9in      6 figures  2.7in
-  //     3 figures  5.0in      5 figures  3.2in      7 figures  2.4in
-  // Small parties get BIGGER figures than the old flat 4.2in ever allowed, which is the opposite of
-  // what a constant could do.
-  // TEMPORARY, AND THE 0.6 IS THE ONLY REASON FOR IT. TD-362 cuts the white to alpha once at
-  // generation; with real transparency a box can overlap freely and this reverts to the page budget.
-  // v3.0.573 -- 0.60 to 0.26, BECAUSE THE BOXES ARE NOT OPAQUE ANY MORE. The 0.60 floor existed for
-  // exactly one reason: a white rectangle erases whatever it covers, so figures could not be allowed
-  // to overlap far. TD-362 cuts that white to real alpha when the reference is stored, so a box now
-  // contains only the figure -- and figures may overlap as hard as the composition wants.
-  // NOT ZERO. Even with alpha, two figures at the same spot is a huddle rather than a line-up, and
-  // the near/far stagger needs somewhere to read. 0.26 gives a five-person party a 5.2in figure,
-  // which is where v3.0.569 was before the occlusion forced the retreat.
-  // OLD REFERENCES STILL HAVE OPAQUE GROUNDS until they are regenerated or restaged, so a cast that
-  // has not been through TD-360 will still show boxes -- at this overlap, badly. That is the cost of
-  // going back up, and it is the right trade: new and restaged casts are the ones that matter now.
-  // v3.0.574 -- 0.26 to 0.12. The alpha cut is confirmed working in a printed PDF, so a figure now
-  // occludes nothing at all and the only reason to limit overlap is composition. Ian marked roughly
-  // six inches on a printed page; 0.12 reaches it.
-  var CAST_MIN_STEP_RATIO = 0.12;     // with real alpha, overlap is a composition choice again
-  var _castHFit = CG_W / (CAST_ASP * (1 + CAST_MIN_STEP_RATIO * Math.max(1, _castPerRow - 1)));
-  var _castHCap = (_castRows === 1) ? Math.min(6.0, _castHFit) : (_castRows === 2 ? 2.6 : 1.9);
-  if (_castW / CAST_ASP > _castHCap) _castW = _castHCap * CAST_ASP;
-  var _castH = _castW / CAST_ASP;
-  // v3.0.569 -- A SINGLE ROW IS SIZED FROM ITS HEIGHT TARGET, NOT FROM AN OVERLAP CONSTANT.
-  // Ian marked on a printed page roughly where the tallest figure should reach: about six inches.
-  // Chasing that by raising CAST_OV was the wrong direction -- the overlap number is a MEANS, and
-  // solving for it backwards gave 0.79, which is meaningless to read and impossible to tune.
-  // So: take the height, derive the width from the box aspect, and derive the SPACING from what is
-  // left of the content width. The figures then always fit the row exactly, at whatever height is
-  // asked for, and the overlap becomes an OUTPUT rather than a knob.
-  // Only single rows do this -- they are the ones with a roster instead of captions, so nothing
-  // below them constrains the spacing.
-  if (_castRows === 1 && _castPerRow > 1) {
-    _castH = _castHCap;
-    _castW = _castH * CAST_ASP;
-    _castStepOverride = (CG_W - _castW) / (_castPerRow - 1);
-  }
-  var _castStep = (_castStepOverride != null) ? _castStepOverride : _castW * (1 - CAST_OV);   // centre-to-centre, and the caption width
-  var _castPort = _castW;   // kept for the no-image fallback font sizing below
+  // TALLEST FIRST. An unset height counts as tallest, the same rule the scaling already uses, so a
+  // cast nobody has measured keeps its existing order instead of being silently rearranged.
+  var _castSorted = castChars.slice().sort(function (a, b) {
+    var ha = (a.height_ft != null && +a.height_ft > 0) ? +a.height_ft : null;
+    var hb = (b.height_ft != null && +b.height_ft > 0) ? +b.height_ft : null;
+    if (ha === null && hb === null) return 0;
+    if (ha === null) return -1;
+    if (hb === null) return 1;
+    return hb - ha;
+  });
   var castBlockHTML;
   if (_castFields === 'list') {
     castBlockHTML = '<div class="cast-names">' + castChars.map(function(c){
@@ -5072,113 +5016,166 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       '</div>';
     }).join('') + '</div>';
   } else {
-    var _noImgFont = Math.max(9, Math.round(_castPort * 21));
-    // DEPTH STAGGER. Ian: "you could stagger them a little so some are slightly closer than
-    // others. That way they are not on a perfect straight line." Their FEET still land on one
-    // ground line -- he asked for a line-up -- but alternate figures step FORWARD: slightly larger,
-    // sitting a little lower because closer to the viewer is lower on a receding ground plane, and
-    // in front in paint order. That is depth, not jitter, so the row reads as people standing at
-    // slightly different distances rather than as a wobbly row.
-    // v3.0.563 -- TD-345 stage 2: FIGURES ARE SCALED BY THEIR RECORDED HEIGHT.
-    // Measured off the page before this: all five figures rendered within 7 percent of each other,
-    // and the gnome CHILD came out the tallest of the party -- because every figure got the same box
-    // and each image simply filled it, so the rendered height said nothing about the character.
-    // LINEAR, WITH A FLOOR -- not the square root the to-do first proposed. Square root was chosen to
-    // stop one giant crushing everyone, but it also flattens the ordinary case: on this cast a 2.1ft
-    // child beside a 3.7ft fighter would render at 75 percent, which reads as an inconsistent
-    // picture rather than as a child. LINEAR gives 57 percent, which reads as a child.
-    // The floor does the job square root was brought in for, and only when it is actually needed:
-    // a 6ft human beside a 25ft dog would be 24 percent -- an ant -- so nothing drops below 35, and
-    // the giant still towers at nearly three times the human. Ordinary parties never reach the floor
-    // and keep TRUE proportion; only genuinely extreme casts get compressed, which is the right way
-    // round.
-    // NO HEIGHTS SET MEANS NOTHING CHANGES. A cast where nobody has a height renders exactly as it
-    // did, because the tallest is then undefined and every figure keeps its full size. Mixed casts
-    // work too: an unset character is treated as the tallest, so it never shrinks by accident.
-    var _CAST_MIN_REL = 0.35;
-    var _hts = castChars.map(function (c) { return (c.height_ft != null && +c.height_ft > 0) ? +c.height_ft : null; });
+    // HEIGHT SCALING, unchanged from v3.0.563: linear against the tallest, with a floor. Linear
+    // because a 2.1ft child beside a 3.7ft fighter must READ as a child (57 percent) rather than as
+    // an inconsistent picture (75, which is what the square root gives); the floor does the job
+    // square root was brought in for, and only where it is needed.
+    var _hts = _castSorted.map(function (c) { return (c.height_ft != null && +c.height_ft > 0) ? +c.height_ft : null; });
     var _anyH = _hts.some(function (h) { return h !== null; });
     var _tallest = _anyH ? Math.max.apply(null, _hts.filter(function (h) { return h !== null; })) : 0;
-    function _heightRel(i) {
+    function _heightRel(c) {
       if (!_anyH || !_tallest) return 1;
-      if (_hts[i] === null) return 1;                  // unset: full size, never shrunk by accident
-      return Math.max(_CAST_MIN_REL, _hts[i] / _tallest);
+      var h = (c.height_ft != null && +c.height_ft > 0) ? +c.height_ft : null;
+      if (h === null) return 1;
+      return Math.max(_CAST_MIN_REL, h / _tallest);
     }
-    // v3.0.569 -- DECLARED BEFORE THE MAP THAT READS IT, and v3.0.568 got this wrong. The flag was
-    // declared BELOW this map, and the map runs immediately -- so `var` hoisting made it `undefined`
-    // at the moment every caption was built. undefined is falsy, so the ternary took the wrong branch
-    // and EVERY CAPTION RENDERED ANYWAY, beneath a roster that was also rendering. No syntax error,
-    // no warning, and node --check cannot see it: the only symptom was Ian's page showing both.
-    var _castRoster = (_castRows === 1);
-    var _members = castChars.map(function(c, _ci) {
-      var primaryImg = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
-      var _near = (_ci % 2 === 0);                       // alternate: near, far, near, far
-      // The depth step and the height scale MULTIPLY: a short character standing forward is still
-      // short, and a tall one standing back is still tall. Folding them into one number would let
-      // the stagger silently cancel a real height difference.
-      var _sc   = (_near ? 1 : 0.92) * _heightRel(_ci);   // depth step, then the character's own height
-      var _fw   = _castW * _sc, _fh = _castH * _sc;
-      // v3.0.563 -- the step is a fraction of THIS figure's height, not of the box. Against the box
-      // it would lift a 2ft child as far as a 7ft goliath, which on a short figure is a visible
-      // float rather than a hint of distance.
-      var _drop = _near ? 0 : (_fh * 0.035);              // farther feet sit a touch higher
-      // v3.0.567 -- THE MASK IS GONE, AND ITS ABSENCE IS THE FIX FOR TWO THINGS AT ONCE.
-      // Ian: "on the final Optimize they were gone. They were there throughout the process and
-      // looping but on the final loop they disappeared." His screenshot of the saved page shows the
-      // CONTACT SHADOWS still in place with no figures above them -- and the shadows are pure CSS
-      // while the figures are <img> elements carrying this mask. A mask that fails to resolve does
-      // not show the image unmasked; IT HIDES THE IMAGE ENTIRELY.
-      // This is TD-352, and it is the same two-layer -webkit-mask with mask-composite that was
-      // measured dead in the print path twice today -- once on the plaque scallops (TD-347) and once
-      // in the frame probe. It survived the Optimize pane, which is a browser, and died in the save,
-      // which is not. Ian guessed it before I did.
-      // AND IT NO LONGER HAS ANYTHING TO DO. Its own comment said why it existed: "the character art
-      // is NOT cut out -- every portrait carries its own background -- so removing the frame would
-      // otherwise leave four rectangles of grey." Since v3.0.559 every reference is generated on pure
-      // white with no floor and no ground shadow, so there are no rectangles of grey to hide. The
-      // mask was protecting against a problem that no longer exists, using a mechanism that no longer
-      // works, and deleting it fixes the disappearance rather than working around it.
-      var _mask = '';
-      // A flattened, blurred ellipse under the feet. This is what sells STANDING; without it the
-      // figures float. It is scaled and dimmed with distance like everything else.
-      // v3.0.565 -- THE SHADOW RISES WITH THE FIGURE. Ian: "I don't understand why Humble has their
-      // shadow below their feet." Humble and Dumble are the two FAR figures, and v3.0.562 lifts a far
-      // figure with padding-bottom on the stage so it reads as standing further back -- but the
-      // shadow is position:absolute against that stage, so padding does not move it. The figure rose
-      // and its shadow stayed on the ground line, leaving it sitting below the boots.
-      // Its offset is now the SAME _drop the figure gets, minus the 1.5 percent raise that lets the
-      // boots sit into it. One number driving both, rather than two that have to be kept in step.
-      var _shadow = '<div class="cast-shadow" style="width:' + (_fw * 0.42).toFixed(2) + 'in;height:' + (_fh * 0.030).toFixed(3) + 'in;bottom:' + (_drop - _castH * 0.015).toFixed(3) + 'in;opacity:' + (_near ? 0.42 : 0.30) + ';"></div>';
-      var _fig = primaryImg
-        ? '<img class="cast-fig" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;' + _mask + '" src="' + primaryImg + '" alt="" />'
-        : '<div class="cast-no-img" style="width:' + _fw.toFixed(2) + 'in;height:' + _fh.toFixed(2) + 'in;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>';
-      return '<div class="cast-member" style="width:' + _castW.toFixed(2) + 'in;margin-left:' + (_ci === 0 ? 0 : -(_castW - _castStep)).toFixed(3) + 'in;z-index:' + (_near ? 3 : 2) + ';">' +
-        '<div class="cast-stage" style="height:' + _castH.toFixed(2) + 'in;padding-bottom:' + _drop.toFixed(3) + 'in;">' +
-          _shadow + _fig +
-        '</div>' +
-        // v3.0.568 -- ON A SINGLE ROW THE CAPTIONS MOVE TO ONE ROSTER LINE BELOW (see _castRoster).
-        // Per-figure captions are kept for multi-row casts, where the figures are small, the names
-        // are the only way to tell them apart, and a roster of a dozen would be unreadable prose.
-        (_castRoster ? '' :
-        '<div class="cast-label" style="width:' + _castStep.toFixed(2) + 'in;margin-top:' + (_near ? 0 : 0.13).toFixed(2) + 'in;">' +
-          '<div class="cast-name">' + _fmEsc(castFirstName(c.name)) + '</div>' +
-          '<div class="cast-cls">' + _fmEsc(c.cls || '') + '</div>' +
-          ((((_castFields === 'full' || _castFields === 'mid') && _pubName(c.player_name, c.player_pen_name)) ? '<div class="cast-player">Played by ' + _fmEsc(_pubName(c.player_name, c.player_pen_name)) + '</div>' : '')) +
-        '</div>') +
-      '</div>';
+    var _plan = castRowPlan(_castN);
+    var _rowsN = _plan.length;
+    var _shrink = (_rowsN >= 3) ? CAST_DEPTH_SHRINK : 1;
+    var _rows = [], _cut = 0;
+    _plan.forEach(function (cnt) { _rows.push(_castSorted.slice(_cut, _cut + cnt)); _cut += cnt; });
+    // rows[0] is the BACK row; distance is counted from the FRONT, which is where the raise starts.
+    function _rowDist(i) { return _rowsN - 1 - i; }
+    function _rowScale(i) { return Math.pow(_shrink, _rowDist(i)); }
+    // Every height below is in units of ONE FULL-SIZE FRONT FIGURE, so the whole formation can be
+    // solved before a single inch is committed and then scaled once to fit.
+    var _figU = _rows.map(function (row, i) {
+      var rs = _rowScale(i);
+      return row.map(function (c) { return _heightRel(c) * rs; });
     });
-    // Rows are balanced, so a stray fourth character never stands alone under three others.
-    var _rowsHtml = '';
-    for (var _r = 0; _r < _castRows; _r++) {
-      var _slice = _members.slice(_r * _castPerRow, (_r + 1) * _castPerRow);
-      if (!_slice.length) continue;
-      _rowsHtml += '<div class="cast-lineup' + (_castRoster ? ' cast-lineup-push' : '') + '">' + _slice.join('') + '</div>';
+    var _rowMax = _figU.map(function (u) { return Math.max.apply(null, u); });
+    var _rowMin = _figU.map(function (u) { return Math.min.apply(null, u); });
+    // THE RAISE, front to back, AND IT ANSWERS TWO SEPARATE QUESTIONS. v3.0.581 asked only the
+    // second and got the ground line backwards for its trouble.
+    //
+    //   1. THE GROUND. A row further back stands higher on a receding ground plane, ALWAYS, by a
+    //      fixed step. This is the perspective cue and it does not depend on anybody's height.
+    //   2. HEAD CLEARANCE. A row must also clear the TALLEST figure in the row ahead, measured
+    //      against its OWN SHORTEST -- the worst pair on the page.
+    //
+    // v3.0.581 used (2) alone. That term is (tallest in front) minus (shortest in back), and since
+    // the cast is sorted TALLEST TO THE BACK it is normally NEGATIVE -- so the back row was pushed
+    // DOWN, below the front row's feet. Measured on a 7ft/6.5ft/6ft/3.5ft/3ft party: the back row
+    // stood 1.42in BELOW the front one. Ian, on the first page it drew: "you got the heights
+    // backwards... the ones in front should be slightly lower than the ones in back."
+    //
+    // TAKING THE LARGER OF THE TWO IS WHAT MAKES BOTH TRUE. The ground step carries the ordinary
+    // case, where the back row is taller and needs no help clearing; head clearance takes over
+    // exactly when it is needed, which is a cast of equal heights. Neither number is tuned against
+    // the other and neither can be defeated by the other.
+    //
+    // AND THE TEST THAT MISSED IT IS THE LESSON: v3.0.581 was verified on casts where EVERY figure
+    // was the same height, which is the one shape where the negative term is exactly zero. The
+    // check below now sweeps mixed heights, where the fault is obvious.
+    var _raiseU = new Array(_rowsN);
+    _raiseU[_rowsN - 1] = 0;
+    for (var _i = _rowsN - 2; _i >= 0; _i--) {
+      var _ground = _raiseU[_i + 1] + CAST_GROUND_STEP;
+      var _heads  = _raiseU[_i + 1] + (_rowMax[_i + 1] - _rowMin[_i]) + CAST_HEAD_MARGIN;
+      _raiseU[_i] = Math.max(_ground, _heads);
     }
-    // v3.0.568 -- the roster, in reading order, as one sentence. Ian's own phrasing.
-    if (_castRoster) {
-      _rowsHtml += '<div class="cast-roster">From left to right: ' + castChars.map(function (c) {
+    var _blockU = 0;
+    for (var _r2 = 0; _r2 < _rowsN; _r2++) _blockU = Math.max(_blockU, _raiseU[_r2] + _rowMax[_r2]);
+    // SIZE. The back row spans the content width: n figures at width w overlapping by OV occupy
+    // w * (1 + (n-1)*(1-OV)), so w falls straight out of it -- then the page height caps it, because
+    // raising rows costs vertical room that a width-only calculation cannot see.
+    var _nBack = _plan[0];
+    // A row the SAME width as the one behind it steps half a pace across so it does not stand
+    // directly in front of it -- and that half pace has to be paid for out of the width, or the
+    // formation runs off the page. Only the four-character 2 + 2 reaches this today; it is derived
+    // rather than special-cased so a future plan with a repeated row cannot overflow silently.
+    var _stagger = 0;
+    for (var _sg = 1; _sg < _rowsN; _sg++) if (_plan[_sg] === _plan[_sg - 1]) { _stagger = 0.5; break; }
+    var _wBack = CG_W / (1 + (_nBack - 1) * (1 - CAST_OV) + _stagger * (1 - CAST_OV));
+    var _H = _wBack / (CAST_ASP * _rowScale(0));
+    var _Hcap = CAST_BLOCK_MAX_IN / _blockU;
+    if (_H > _Hcap) _H = _Hcap;
+    // ONE STEP FOR EVERY ROW, which is what makes a forward row land in the gaps behind it: a row
+    // holding one fewer figure, centred at the same step, sits exactly half a step across.
+    var _S = _H * CAST_ASP * _rowScale(0) * (1 - CAST_OV);
+    var _blockH = _H * _blockU;
+    var _noImgFont = Math.max(9, Math.round(_H * CAST_ASP * 21));
+    var _slots = [], _slotX = [];
+    _rows.forEach(function (row, i) {
+      var _rs = _rowScale(i);
+      var _wRow = _H * CAST_ASP * _rs;
+      var _rowW = _wRow + (row.length - 1) * _S;
+      var _x0 = (CG_W - _rowW) / 2;
+      // Two rows of the SAME width would stand one directly in front of the other, so the front one
+      // steps half a pace across. Only the four-character 2 + 2 reaches this.
+      if (i > 0 && row.length === _rows[i - 1].length) _x0 += _S / 2;
+      row.forEach(function (c, j) {
+        var _fh = _H * _figU[i][j];
+        var _fw = _fh * CAST_ASP;
+        var _left = _x0 + j * _S + (_wRow - _fw) / 2;
+        var _bottom = _H * _raiseU[i];
+        var _dim = Math.max(0.22, 0.42 - _rowDist(i) * 0.05);
+        var _img = c.canonical_reference_url || c.image_portrait || c.image_fullbody || c.image_action || c.image_other || c.image;
+        _slotX.push({ l: _left, w: _fw });
+        _slots.push(
+          '<div class="cast-slot" style="left:' + _left.toFixed(3) + 'in;bottom:' + _bottom.toFixed(3) +
+            'in;width:' + _fw.toFixed(3) + 'in;height:' + _fh.toFixed(3) + 'in;z-index:' + (i + 2) + ';">' +
+            '<div class="cast-shadow" style="width:' + (_fw * 0.42).toFixed(3) + 'in;height:' + (_fh * 0.030).toFixed(3) + 'in;opacity:' + _dim + ';"></div>' +
+            (_img
+              ? '<img class="cast-fig" style="width:' + _fw.toFixed(3) + 'in;height:' + _fh.toFixed(3) + 'in;" src="' + _img + '" alt="" />'
+              : '<div class="cast-no-img" style="width:' + _fw.toFixed(3) + 'in;height:' + _fh.toFixed(3) + 'in;font-size:' + _noImgFont + 'pt;">' + _fmEsc(String(c.name || '?').charAt(0)) + '</div>') +
+          '</div>'
+        );
+      });
+    });
+    // RE-CENTRE ON WHAT WAS ACTUALLY DRAWN, not on what the row maths intended. Height scaling
+    // makes figures narrower than their slots, and a staggered row shifts sideways, so the true
+    // extent of the formation is not the sum of the parts. Measuring it and centring that is one
+    // line, and it is the difference between a page that is centred and one that is nearly centred.
+    if (_slots.length) {
+      var _minL = Math.min.apply(null, _slotX.map(function (s) { return s.l; }));
+      var _maxR = Math.max.apply(null, _slotX.map(function (s) { return s.l + s.w; }));
+      var _shift = (CG_W - (_maxR - _minL)) / 2 - _minL;
+      if (Math.abs(_shift) > 0.0005) {
+        for (var _sx = 0; _sx < _slots.length; _sx++) {
+          _slots[_sx] = _slots[_sx].replace('left:' + _slotX[_sx].l.toFixed(3) + 'in;',
+                                            'left:' + (_slotX[_sx].l + _shift).toFixed(3) + 'in;');
+        }
+      }
+    }
+    var _rowsHtml = '<div class="cast-formation" style="height:' + _blockH.toFixed(3) + 'in;">' + _slots.join('') + '</div>';
+    // THE ROSTER, unchanged in wording for a single row -- it is the line Ian asked for and it is
+    // now the ONLY naming, at every cast size, because per-figure captions cannot survive rows that
+    // overlap and offset. With more than one row "from left to right" is not a single sequence, so
+    // each row says which it is; the alternative is a sentence that reads correctly and describes
+    // the wrong person.
+    // v3.0.582 -- RESTORED. This lived inside the block v3.0.581 replaced and went out with it,
+    // while the new roster still called it: ReferenceError on every book with a cast page, which
+    // took the Prep viewer down. node --check cannot see an undefined call, and the geometry
+    // harness STUBBED this name -- so the one test that ran the block masked the fault instead of
+    // finding it. A stub for something the code is supposed to own is not a test double, it is a
+    // hole. It lives here now because the roster is its only caller.
+    // v3.0.566 -- ONE NAME ON THE LINE-UP. Ian: "can we just take the first name in the Name
+    // array." A character's name field carries every alias the player uses -- "Lumen / Elias /
+    // Elias Ward" -- which is right on a character sheet and wrong under a portrait.
+    // Falls back to the whole string when there is no slash or the first segment is empty, so a
+    // name like "/ Elias" can never render as nothing.
+    function castFirstName(n) {
+      var raw = String(n == null ? '' : n);
+      var first = raw.split('/')[0].trim();
+      return first || raw.trim();
+    }
+    var _rosterRow = function (row) {
+      return row.map(function (c) {
         return '<b>' + _fmEsc(castFirstName(c.name)) + '</b>' + (c.cls ? ', ' + _fmEsc(c.cls) : '');
-      }).join(' &middot; ') + '</div>';
+      }).join(' &middot; ');
+    };
+    if (_rowsN === 1) {
+      _rowsHtml += '<div class="cast-roster">From left to right: ' + _rosterRow(_rows[0]) + '</div>';
+    } else {
+      var _label = function (i) {
+        if (i === 0) return 'Back row';
+        if (i === _rowsN - 1) return 'Front row';
+        return 'Middle row';
+      };
+      _rowsHtml += '<div class="cast-roster">' + _rows.map(function (row, i) {
+        return '<span class="cast-roster-row"><i>' + _label(i) + ', from left to right:</i> ' + _rosterRow(row) + '</span>';
+      }).join('') + '</div>';
     }
     castBlockHTML = _rowsHtml;
   }
@@ -5394,6 +5391,25 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
      Top-aligning fixes it without moving anything else: the stage has an explicit height, so the
      feet still share a ground line, and every caption now starts at the same y and grows DOWNWARD.
      The row is ragged at the bottom instead of the top, which is what a caption row should do. */
+  /* v3.0.581 -- THE FORMATION IS AN ABSOLUTE STAGE, NOT A FLEX ROW.
+     Flex with negative margins could place a single line of figures and nothing more. A pin needs
+     each row centred at its own width, offset half a step from the row behind, and RAISED by a
+     derived amount -- three things flex cannot express together. Every figure is now positioned
+     against this box in inches computed in one place, which is also why the arithmetic can be
+     checked without rendering anything.
+     The box is as tall as the formation and the figures sit on its bottom edge, so the front row
+     stands on one ground line however far the back rows are lifted. */
+  .cast-formation { position:relative;width:100%;margin-top:0.14in; }
+  .cast-slot { position:absolute; }
+  .cast-roster-row { display:block; }
+  .cast-roster-row i { font-style:italic;color:#6b5f55; }
+  /* v3.0.581 -- DEAD FROM HERE TO .cast-player, AND SAID SO RATHER THAN LEFT TO BE DISCOVERED.
+     .cast-lineup, .cast-lineup-push, .cast-member, .cast-stage, .cast-label, .cast-name, .cast-cls
+     and .cast-player belonged to the flex line-up the formation replaced. NOTHING EMITS THEM NOW --
+     the naming is the roster line, and the figures are absolutely placed in .cast-formation.
+     Kept for one release rather than deleted so a rollback has something to land on; delete them
+     with the next tidy. This file has four entries in the to-do (TD-329, TD-337, TD-344, TD-349)
+     that all say the same thing: a rule that READS as live and is not costs somebody real time. */
   .cast-lineup { display:flex;align-items:flex-start;justify-content:center;margin-top:0.14in; }
   /* v3.0.568 -- the roster line. Ian: "From left to right... Shumble, Gnome Fighter, Humble, Gnome
      Cleric..." One sentence in reading order, so a name is still findable without a caption under
