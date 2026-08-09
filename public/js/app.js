@@ -7196,6 +7196,7 @@ function prepSyncTitle() {
       : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
     tEl.readOnly = true;
   }
+  prepApplyOwnershipLock();   // v3.0.580 -- the layout half, re-applied on every version switch
   var _cEl = document.getElementById('print-title-color');
   if (_cEl) {
     _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
@@ -13789,6 +13790,54 @@ function prepSyncMarkerBreak(){
   if(!on) mb.checked = false;
   if(mbl){ mbl.style.opacity = on ? '1' : '0.55'; }
 }
+// v3.0.580 -- EVERY TITLE AND LAYOUT CONTROL ON PREP FOLLOWS THE SAME RULE, IN ONE PLACE.
+// Ian, 2026-08-09: "Can you do it to all the layout and title controls on the prep and preview tab?"
+//
+// v3.0.579 locked the subtitle and the colour to match the title. That left the layout half still
+// editable on a book you do not own -- and the layout save DOES put up a message, so those controls
+// were merely useless rather than silent. Same defect, quieter. Now the whole panel agrees.
+//
+// THE LOCK ONLY EVER ADDS A RESTRICTION, WHICH IS THE ONE THING TO GET RIGHT HERE. Two controls
+// carry their own gates and this must not reopen either:
+//   pcl-hidelogo     is Platinum-only (prepLayoutLoad sets it from the tier)
+//   pcl-markerbreak  is only live when Session dividers is on (prepSyncMarkerBreak sets it)
+// Both are therefore FORCE-DISABLED when the book is not yours and otherwise left exactly as their
+// own gate decided. Setting `disabled = !own` on them would hand a Copper reader the Platinum
+// logo toggle the moment they opened their own book -- a tier gate defeated by a cosmetic change.
+//
+// The plain controls have no other gate, so they take `disabled = !own` outright and come back when
+// the reader switches to a version of their own.
+var PREP_LOCK_PLAIN = ['pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
+                       'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
+                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc'];
+var PREP_LOCK_GATED = ['pcl-hidelogo', 'pcl-markerbreak'];
+function prepApplyOwnershipLock() {
+  try {
+    var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+    PREP_LOCK_PLAIN.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = !own;
+    });
+    if (!own) {
+      PREP_LOCK_GATED.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.disabled = true;
+      });
+    }
+    // The cover, back and title image slots. openPrepImagePicker already refuses and explains, so
+    // this is about LOOKING inert as well as being inert -- a live-looking tile that answers a click
+    // with an apology is the same fault in a different costume.
+    ['cover', 'back', 'title'].forEach(function (k) {
+      var t = document.getElementById('prep-thumb-' + k);
+      if (!t) return;
+      t.style.opacity = own ? '' : '0.55';
+      t.style.cursor = own ? '' : 'not-allowed';
+      t.title = own ? '' : 'This is someone else s version. Switch to your own version to change the images.';
+    });
+    var note = document.getElementById('prep-readonly-note');
+    if (note) note.style.display = own ? 'none' : '';
+  } catch (e) {}
+}
 function prepLayoutLoad(){
   var o = (typeof customOpts !== 'undefined' && customOpts) ? customOpts : CUSTOM_LAYOUT_DEFAULTS;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=o[k]; });
@@ -13808,6 +13857,8 @@ function prepLayoutLoad(){
   if (_cp && !_cp._commitWired) { _cp._commitWired = true; _cp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
   var _lp = document.getElementById('prep-acc-layout');
   if (_lp && !_lp._commitWired) { _lp._commitWired = true; _lp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
+  // LAST, so it can only tighten what prepSyncMarkerBreak and the tier check decided above.
+  prepApplyOwnershipLock();
 }
 // Read the layout panel (pcl-*) into the unified customOpts + mark it active, WITHOUT rendering.
 function prepLayoutCommit(){
