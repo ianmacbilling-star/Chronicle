@@ -246,6 +246,13 @@
             </div>
           </div>
 
+          <!-- v3.0.580 -- ONE EXPLANATION INSTEAD OF FIFTEEN DEAD CONTROLS. Shown only when the
+               book on screen belongs to somebody else; prepApplyOwnershipLock toggles it. Without
+               it a reader meets a panel where nothing responds and nothing says why, which is the
+               same complaint as a control that accepts an edit and discards it. -->
+          <div id="prep-readonly-note" style="display:none;margin-bottom:12px;padding:8px 10px;font-size:12px;line-height:1.5;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:0 var(--radius) var(--radius) 0;">
+            You are looking at someone else&#8217;s version, so the title, cover and layout settings are read-only. Switch to your own version to change them.
+          </div>
           <div class="prep-acc open" id="prep-acc-cover">
             <button class="prep-acc-head" type="button" onclick="togglePrepAcc('cover')" aria-expanded="true"><span>Title &amp; Cover</span><span class="prep-acc-chev">&#9662;</span></button>
             <div class="prep-acc-body">

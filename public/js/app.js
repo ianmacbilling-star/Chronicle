@@ -7158,10 +7158,24 @@ function prepSyncTitle() {
   // both collapse to "nothing" and the box is an ordinary text input.
   // The endpoint still returns date_range and the title and details pages still print it -- it is
   // only the COVER that stops defaulting to it.
+  // v3.0.579 -- THREE CONTROLS IN ONE PANEL BEHAVED THREE WAYS ON SOMEONE ELSE'S VERSION.
+  // Ian, 2026-08-09: "I was changing it on someone else's version so it wasn't saving."
+  // The TITLE went read-only, the LAYOUT save put up a message, and the SUBTITLE and the COLOUR let
+  // you edit freely and then threw the edit away in silence. The gate was right in all three cases;
+  // only one of them said so. A control that accepts typing and discards it is indistinguishable
+  // from a bug -- which is exactly how it was reported, and it cost a build chasing a real but
+  // unrelated race.
+  // readOnly for the text box, disabled for the colour: readOnly has no effect on input[type=color],
+  // so the two need different attributes to reach the same behaviour.
+  var _ownV = (typeof novelOwnView === 'function') ? novelOwnView() : true;
   var _sub = document.getElementById('prep-subtitle');
   if (_sub) {
     var _bm = state.bookMeta || {};
     _sub.value = (_bm.subtitle == null) ? '' : _bm.subtitle;
+    _sub.readOnly = !_ownV;
+    _sub.title = _ownV
+      ? 'Sits under the title on the cover. Leave it empty for no subtitle at all.'
+      : 'This is someone else s version. Switch to your own version to change the subtitle.';
   }
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
@@ -7182,8 +7196,13 @@ function prepSyncTitle() {
       : ((state.currentCampaign && state.currentCampaign.name) ? state.currentCampaign.name : '');
     tEl.readOnly = true;
   }
+  prepApplyOwnershipLock();   // v3.0.580 -- the layout half, re-applied on every version switch
   var _cEl = document.getElementById('print-title-color');
-  if (_cEl) _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
+  if (_cEl) {
+    _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
+    _cEl.disabled = !_ownV;   // v3.0.579 -- see the note above the subtitle
+    _cEl.title = _ownV ? '' : 'This is someone else s version. Switch to your own version to change the title colour.';
+  }
 }
 // Persist the title color per user (campaign + user) via /my-book-meta, mirroring the title text.
 // v3.0.551 -- TD-346. Saves like the title colour: same route, same per-fork rules (TD-282 -- you
@@ -7191,12 +7210,84 @@ function prepSyncTitle() {
 // AN EMPTY VALUE IS SENT, NOT SKIPPED. Blank is a real state meaning "use the session dates", so
 // clearing the field has to reach the server and clear it there. Skipping empties would make the
 // subtitle a one-way door: settable, never unsettable.
+// v3.0.578 -- EVERY BOOK-META WRITE GOES THROUGH HERE, ONE AT A TIME, AND KEEPS ITS VALUE LOCALLY.
+// Ian, 2026-08-09: "when I change a sub title and move off the tab then immediately come back it is
+// gone... it is there for a split second then gets cleared."
+//
+// THE FIELD WAS NOT CLEARED -- IT WAS REPAINTED FROM A SERVER ANSWER THAT DID NOT HAVE THE EDIT IN
+// IT. Two separate ways that happens, and this closes both:
+//   1. TWO WRITES IN FLIGHT. setForkBookPrefs reads the whole prefs blob, awaits, merges and writes
+//      it back, so two overlapping requests interleave and the later WRITE wins carrying the
+//      earlier READ's snapshot. Harmless while the panel had one writer; v3.0.575 added a second
+//      (the first-load materialise) and made it reachable. Chaining every write on one promise
+//      means this panel can never have two in flight at once.
+//   2. A RELOAD OVERTAKING A WRITE. Leaving the tab fires a GET; if it is answered before the PUT
+//      commits, prepSyncTitle paints the OLD value over the typed one -- which is exactly the
+//      split second Ian saw, the input holding his text until the stale answer landed.
+//      _prepPending holds what we have sent but not yet had confirmed, and prepLoadBookMeta layers
+//      it back over any response, so a slow round trip can no longer un-type an edit.
+//
+// THE SERVER-SIDE HALF IS THE REAL GUARANTEE (fill_only on the materialise): this ordering makes
+// the common case right, and fill-only makes the uncommon one impossible. Belt and braces on a
+// fault that is invisible when it happens and looks like lost work.
+function _prepMetaWrite(patch, cb) {
+  var c = state.currentCampaign;
+  if (!c) { if (cb) cb(null); return; }
+  state._prepPending = state._prepPending || {};
+  Object.keys(patch).forEach(function (k) {
+    if (k !== 'fork_user' && k !== 'fill_only') state._prepPending[k] = patch[k];
+  });
+  // Reflect it locally at once, so anything repainting from state.bookMeta before the round trip
+  // finishes shows what the reader typed rather than what the server last said.
+  state.bookMeta = state.bookMeta || {};
+  Object.keys(patch).forEach(function (k) {
+    if (k !== 'fork_user' && k !== 'fill_only') state.bookMeta[k] = patch[k];
+  });
+  var body = Object.assign({}, patch);
+  if (state.novelAsUser && body.fork_user == null) body.fork_user = state.novelAsUser;
+  var url = '/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?');
+  var run = function () {
+    return fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (m) {
+        // Clear the keys this write owned, and only where nothing newer has queued behind us with a
+        // different value for the same field.
+        // v3.0.579 -- CLEARED ON FAILURE TOO, AND THAT IS THE WHOLE POINT OF THIS CHANGE.
+        // v3.0.578 only cleared them when the server answered, so a REFUSED or failed write left the
+        // value pinned in _prepPending forever -- layered back over every reload, showing something
+        // that was never stored. That is precisely the illusion this pending map exists to prevent,
+        // manufactured by the fix for it. On a failure the SERVER IS RIGHT and the screen must say
+        // so, even though saying so means the reader watches their edit disappear: an edit that
+        // vanishes is recoverable, one that looks saved and is not gets discovered much later.
+        Object.keys(patch).forEach(function (k) {
+          if (k === 'fork_user' || k === 'fill_only') return;
+          if (state._prepPending && String(state._prepPending[k]) === String(patch[k])) delete state._prepPending[k];
+        });
+        if (!m) {
+          // Put the stored truth back on screen rather than leaving a value nothing accepted.
+          if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function () { if (typeof prepSyncTitle === 'function') prepSyncTitle(); });
+          if (typeof showAlert === 'function') showAlert('That change could not be saved. Switch to your own version to change the cover or the title.');
+        }
+        if (cb) cb(m);
+        return m;
+      })
+      .catch(function () {
+        Object.keys(patch).forEach(function (k) {
+          if (k === 'fork_user' || k === 'fill_only') return;
+          if (state._prepPending && String(state._prepPending[k]) === String(patch[k])) delete state._prepPending[k];
+        });
+        if (cb) cb(null);
+        return null;
+      });
+  };
+  state._prepMetaChain = (state._prepMetaChain || Promise.resolve()).then(run, run);
+  return state._prepMetaChain;
+}
 function prepSaveSubtitle() {
   var el = document.getElementById('prep-subtitle');
   if (!el || !state.currentCampaign) return;
   if (typeof prepUseMember === 'function' && prepUseMember()) {
-    var _sB = { subtitle: el.value.trim() }; if (state.novelAsUser) _sB.fork_user = state.novelAsUser;
-    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_sB) });
+    _prepMetaWrite({ subtitle: el.value.trim() });   // v3.0.578 -- chained, and kept locally until confirmed
   }
 }
 // v3.0.575 -- THE TITLE IS SAVED. IT NEVER WAS.
@@ -7221,9 +7312,7 @@ function prepSaveTitle() {
   if (!_t) { _t = (state.currentCampaign.name || '').trim(); el.value = _t; }
   state.bookMeta = state.bookMeta || {};
   if (state.bookMeta.book_title === _t) return;   // nothing changed; do not spend a round trip
-  state.bookMeta.book_title = _t;
-  var _b = { book_title: _t }; if (state.novelAsUser) _b.fork_user = state.novelAsUser;
-  fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_b) }).catch(function(){});
+  _prepMetaWrite({ book_title: _t });   // v3.0.578 -- sets state.bookMeta itself, chained, kept until confirmed
   // Keep the Order tab's mirror in step immediately, for the case where it has already been drawn.
   var _pt = document.getElementById('print-book-title'); if (_pt) _pt.value = _t;
 }
@@ -7268,13 +7357,18 @@ function prepMaterializeBookMeta() {
     if (_bm.own_cover) _body.cover_image_url = _bm.own_cover;
     if (_bm.own_back) _body.back_cover_image_url = _bm.own_back;
     if (_bm.own_title) _body.title_image_url = _bm.own_title;
-    if (state.novelAsUser) _body.fork_user = state.novelAsUser;
-    fetch('/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_body) })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      // MERGE, do not replace. The PUT answers with the record it wrote; keeping the fields it
-      // does not carry (date_range) means no caller has to know which endpoint it was answered by.
-      .then(function(m){ if (m) state.bookMeta = Object.assign({}, state.bookMeta || {}, m); })
-      .catch(function(){ state._prepMaterialized[_key] = false; });   // let a later open try again
+    // v3.0.578 -- FILL ONLY. A materialise establishes defaults; it must never overwrite something
+    // the reader has already set. Without this the write carried a snapshot taken before their edit
+    // and could put it back, which is how a typed subtitle disappeared. Being fill-only makes that
+    // impossible under every interleaving rather than merely unlikely under most.
+    _body.fill_only = true;
+    // On the shared write chain, so it can never be in flight beside a field the reader is editing.
+    // MERGE the answer, do not replace it: the PUT returns the record it wrote and not the fields it
+    // does not carry (date_range), so no caller has to know which endpoint answered.
+    _prepMetaWrite(_body, function (m) {
+      if (m) state.bookMeta = Object.assign({}, state.bookMeta || {}, m, state._prepPending || {});
+      else state._prepMaterialized[_key] = false;   // let a later open try again
+    });
   } catch (e) {}
 }
 function prepSaveTitleColor() {
@@ -7282,8 +7376,7 @@ function prepSaveTitleColor() {
   if (!el || !state.currentCampaign) return;
   if (typeof prepUseMember === 'function' && prepUseMember()) {
     // Per-fork (SM canonical or member), written to the logged-in user's own row.
-    var _tcB = { title_color: el.value }; if (state.novelAsUser) _tcB.fork_user = state.novelAsUser;
-    fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tcB) }).catch(function(){});
+    _prepMetaWrite({ title_color: el.value });   // v3.0.578 -- chained, and kept locally until confirmed
   }
 }
 function prepPanelSync() {
@@ -7331,7 +7424,11 @@ function prepLoadBookMeta(cb) {
   if (!c || !forkUser) { state.bookMeta = _prepCampaignMeta(); if (cb) cb(); return; }
   fetch('/api/campaigns/' + c.id + '/my-book-meta?as_user=' + encodeURIComponent(forkUser) + bookMetaVersionQ('&'), { cache: 'no-store' })
     .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(m){ state.bookMeta = m || _prepCampaignMeta(); applyCampaignLayoutOpts(m); finalizeClearStats(); if (cb) cb(); })
+    // v3.0.578 -- PENDING EDITS SIT ON TOP OF THE SERVER ANSWER. Leaving the tab fires this GET;
+    // if it is answered before an in-flight save commits, the answer is one edit out of date and
+    // prepSyncTitle would paint it straight over what the reader just typed. Layering _prepPending
+    // back on top means a slow round trip can no longer un-type an edit.
+    .then(function(m){ state.bookMeta = Object.assign({}, m || _prepCampaignMeta(), state._prepPending || {}); applyCampaignLayoutOpts(m); finalizeClearStats(); if (cb) cb(); })
     .catch(function(){ state.bookMeta = _prepCampaignMeta(); finalizeClearStats(); if (cb) cb(); });
 }
 function _prepMemberSetImage(kind, url) {
@@ -7449,7 +7546,12 @@ async function publishStory() {
   var bEl = document.getElementById('prep-blurb');
   var aEl = document.getElementById('prep-attest');
   var _title = tEl ? tEl.value.trim() : '';
-  if (prepUseMember() && _title) { var _btB = { book_title: _title }; if (state.novelAsUser) _btB.fork_user = state.novelAsUser; fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta' + bookMetaVersionQ('?'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_btB) }).catch(function(){}); }
+  // v3.0.578 -- ON THE SHARED WRITE CHAIN like every other book-meta write. This was a direct PUT
+  // fired at the moment of publishing, which is exactly when a materialise or a field save could
+  // still be in flight -- the same overlap that cost the subtitle. Largely redundant now that the
+  // title saves on blur, but a last commit before publishing is worth keeping; it just must not be
+  // the one write that races the others.
+  if (prepUseMember() && _title) { _prepMetaWrite({ book_title: _title }); }
   var _blurb = bEl ? bEl.value.trim() : '';
   var _attested = aEl ? !!aEl.checked : false;
   var btn = document.getElementById('novel-publish-btn');
@@ -13688,6 +13790,54 @@ function prepSyncMarkerBreak(){
   if(!on) mb.checked = false;
   if(mbl){ mbl.style.opacity = on ? '1' : '0.55'; }
 }
+// v3.0.580 -- EVERY TITLE AND LAYOUT CONTROL ON PREP FOLLOWS THE SAME RULE, IN ONE PLACE.
+// Ian, 2026-08-09: "Can you do it to all the layout and title controls on the prep and preview tab?"
+//
+// v3.0.579 locked the subtitle and the colour to match the title. That left the layout half still
+// editable on a book you do not own -- and the layout save DOES put up a message, so those controls
+// were merely useless rather than silent. Same defect, quieter. Now the whole panel agrees.
+//
+// THE LOCK ONLY EVER ADDS A RESTRICTION, WHICH IS THE ONE THING TO GET RIGHT HERE. Two controls
+// carry their own gates and this must not reopen either:
+//   pcl-hidelogo     is Platinum-only (prepLayoutLoad sets it from the tier)
+//   pcl-markerbreak  is only live when Session dividers is on (prepSyncMarkerBreak sets it)
+// Both are therefore FORCE-DISABLED when the book is not yours and otherwise left exactly as their
+// own gate decided. Setting `disabled = !own` on them would hand a Copper reader the Platinum
+// logo toggle the moment they opened their own book -- a tier gate defeated by a cosmetic change.
+//
+// The plain controls have no other gate, so they take `disabled = !own` outright and come back when
+// the reader switches to a version of their own.
+var PREP_LOCK_PLAIN = ['pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
+                       'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
+                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc'];
+var PREP_LOCK_GATED = ['pcl-hidelogo', 'pcl-markerbreak'];
+function prepApplyOwnershipLock() {
+  try {
+    var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+    PREP_LOCK_PLAIN.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = !own;
+    });
+    if (!own) {
+      PREP_LOCK_GATED.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.disabled = true;
+      });
+    }
+    // The cover, back and title image slots. openPrepImagePicker already refuses and explains, so
+    // this is about LOOKING inert as well as being inert -- a live-looking tile that answers a click
+    // with an apology is the same fault in a different costume.
+    ['cover', 'back', 'title'].forEach(function (k) {
+      var t = document.getElementById('prep-thumb-' + k);
+      if (!t) return;
+      t.style.opacity = own ? '' : '0.55';
+      t.style.cursor = own ? '' : 'not-allowed';
+      t.title = own ? '' : 'This is someone else s version. Switch to your own version to change the images.';
+    });
+    var note = document.getElementById('prep-readonly-note');
+    if (note) note.style.display = own ? 'none' : '';
+  } catch (e) {}
+}
 function prepLayoutLoad(){
   var o = (typeof customOpts !== 'undefined' && customOpts) ? customOpts : CUSTOM_LAYOUT_DEFAULTS;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=o[k]; });
@@ -13707,6 +13857,8 @@ function prepLayoutLoad(){
   if (_cp && !_cp._commitWired) { _cp._commitWired = true; _cp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
   var _lp = document.getElementById('prep-acc-layout');
   if (_lp && !_lp._commitWired) { _lp._commitWired = true; _lp.addEventListener('change', function(){ if (typeof prepLayoutCommit === 'function') prepLayoutCommit(); }); }
+  // LAST, so it can only tighten what prepSyncMarkerBreak and the tier check decided above.
+  prepApplyOwnershipLock();
 }
 // Read the layout panel (pcl-*) into the unified customOpts + mark it active, WITHOUT rendering.
 function prepLayoutCommit(){
