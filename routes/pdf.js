@@ -4982,7 +4982,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   var CAST_DEPTH_SHRINK = 0.95;        // per row further back, at three rows and up
   var CAST_HEAD_MARGIN = 0.06;         // clear air above the row in front, as a fraction of a full figure
   var CAST_GROUND_STEP = 0.045;        // how much higher each row back STANDS -- the perspective cue itself
-  var CAST_BLOCK_MAX_IN = 6.0;         // the whole formation, top to standing line
+  // v3.0.584 -- DERIVED FROM THE PAGE, NOT PICKED. 6.0in was a constant chosen when the cast was a
+  // single row and the roster had room beneath it by luck. The formation is taller now, so the two
+  // must be solved together: the figures get what is left after the title block and the roster have
+  // taken theirs. Change the page, the title or the roster and this follows on its own.
+  var CAST_PAGE_H_IN = 9.55;           // must match --cast-page-h in the stylesheet
+  var CAST_PAGE_PAD_IN = 0.75;         // top and bottom, and the roster sits on the bottom one
+  var CAST_TITLE_BLOCK_IN = 0.96;      // The Company + the divider + the formation's top margin
+  var CAST_ROSTER_RESERVE_IN = 0.95;   // four lines at 10.5pt/1.5 plus air -- the roster wraps, so this is a CEILING
+  var CAST_BLOCK_MAX_IN = CAST_PAGE_H_IN - (2 * CAST_PAGE_PAD_IN) - CAST_TITLE_BLOCK_IN - CAST_ROSTER_RESERVE_IN;
   var _CAST_MIN_REL = 0.35;            // the floor under height scaling (see _heightRel)
   // Back row as wide as the cast can fill, then one fewer each row forward. round(sqrt(2n)) is the
   // width of a triangular arrangement of n, which is exactly the shape being built.
@@ -5376,7 +5384,16 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   ${coverSizeCss(co && co.titleSize)}
 
   /* CAST PAGE */
-  .cast-page { position:relative;width:8.5in;padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
+  /* v3.0.584 -- THE VIEWER PAGE IS NOW THE SAME SHAPE AS THE PRINTED ONE, and that is the whole
+     roster fix. The roster is pinned 0.75in from the BOTTOM OF THIS BOX. In print the box is forced
+     to 9.55in so there is room below the figures; on screen it had no height at all, so the box was
+     exactly as tall as its contents and 0.75in from its bottom landed ON THE FIGURES' FEET. Ian saw
+     it cross a dwarf's robe, an orc's mace and a child. TD-365 said the PDF was fine and it was --
+     the two were being sized by different rules, which is the same two-numbers fault this file
+     keeps re-finding, in a place nobody had thought to look for it.
+     --cast-page-h is declared ONCE and read by both rules, so the screen and the print page cannot
+     drift apart again. */
+  .cast-page { --cast-page-h:9.55in; position:relative;box-sizing:border-box;width:8.5in;min-height:var(--cast-page-h);padding:0.75in 0.85in;page-break-after:always;background:#fdf8f0; }
   .cast-page-title { font-family:'Cinzel',serif;font-size:22pt;font-weight:700;color:#2c1810;text-align:center;margin-bottom:0.1in; }
   .cast-page-subtitle { font-family:'Crimson Text',serif;font-size:12pt;color:#6b5f55;text-align:center;font-style:italic;margin-bottom:0.05in; }
   .cast-page-dm { font-family:'Cinzel',serif;font-size:10pt;color:#8a6a2a;text-align:center;margin-bottom:0.35in;letter-spacing:0.05em; }
@@ -5482,7 +5499,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   .cast-name-player { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a6a2a;font-style:italic; }
   /* The Company page can never spill to a 2nd sheet: cap height + clip. The
      density tiers keep realistic casts well within this height. */
-  @media print { .cast-page { box-sizing:border-box;height:9.55in;overflow:hidden; } }
+  @media print { .cast-page { height:var(--cast-page-h);overflow:hidden; } }
 
   /* FRONT MATTER — interior title page + details / copyright page */
   .titlepage { width:8.5in;min-height:9.4in;padding:0.85in;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
