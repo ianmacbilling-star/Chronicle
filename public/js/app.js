@@ -7158,10 +7158,24 @@ function prepSyncTitle() {
   // both collapse to "nothing" and the box is an ordinary text input.
   // The endpoint still returns date_range and the title and details pages still print it -- it is
   // only the COVER that stops defaulting to it.
+  // v3.0.579 -- THREE CONTROLS IN ONE PANEL BEHAVED THREE WAYS ON SOMEONE ELSE'S VERSION.
+  // Ian, 2026-08-09: "I was changing it on someone else's version so it wasn't saving."
+  // The TITLE went read-only, the LAYOUT save put up a message, and the SUBTITLE and the COLOUR let
+  // you edit freely and then threw the edit away in silence. The gate was right in all three cases;
+  // only one of them said so. A control that accepts typing and discards it is indistinguishable
+  // from a bug -- which is exactly how it was reported, and it cost a build chasing a real but
+  // unrelated race.
+  // readOnly for the text box, disabled for the colour: readOnly has no effect on input[type=color],
+  // so the two need different attributes to reach the same behaviour.
+  var _ownV = (typeof novelOwnView === 'function') ? novelOwnView() : true;
   var _sub = document.getElementById('prep-subtitle');
   if (_sub) {
     var _bm = state.bookMeta || {};
     _sub.value = (_bm.subtitle == null) ? '' : _bm.subtitle;
+    _sub.readOnly = !_ownV;
+    _sub.title = _ownV
+      ? 'Sits under the title on the cover. Leave it empty for no subtitle at all.'
+      : 'This is someone else s version. Switch to your own version to change the subtitle.';
   }
   var _tv = document.getElementById('prep-trueview-btn');
   if (_tv) _tv.style.display = (typeof state !== 'undefined' && state.user && state.user.is_admin) ? 'inline-flex' : 'none';
@@ -7183,7 +7197,11 @@ function prepSyncTitle() {
     tEl.readOnly = true;
   }
   var _cEl = document.getElementById('print-title-color');
-  if (_cEl) _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
+  if (_cEl) {
+    _cEl.value = (state.bookMeta && state.bookMeta.title_color) ? state.bookMeta.title_color : '#f0d98a';
+    _cEl.disabled = !_ownV;   // v3.0.579 -- see the note above the subtitle
+    _cEl.title = _ownV ? '' : 'This is someone else s version. Switch to your own version to change the title colour.';
+  }
 }
 // Persist the title color per user (campaign + user) via /my-book-meta, mirroring the title text.
 // v3.0.551 -- TD-346. Saves like the title colour: same route, same per-fork rules (TD-282 -- you
@@ -7231,16 +7249,35 @@ function _prepMetaWrite(patch, cb) {
     return fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (m) {
-        // Clear only the keys this write owned, and only when the server agrees -- another write
-        // may have queued behind us with a newer value for the same field.
+        // Clear the keys this write owned, and only where nothing newer has queued behind us with a
+        // different value for the same field.
+        // v3.0.579 -- CLEARED ON FAILURE TOO, AND THAT IS THE WHOLE POINT OF THIS CHANGE.
+        // v3.0.578 only cleared them when the server answered, so a REFUSED or failed write left the
+        // value pinned in _prepPending forever -- layered back over every reload, showing something
+        // that was never stored. That is precisely the illusion this pending map exists to prevent,
+        // manufactured by the fix for it. On a failure the SERVER IS RIGHT and the screen must say
+        // so, even though saying so means the reader watches their edit disappear: an edit that
+        // vanishes is recoverable, one that looks saved and is not gets discovered much later.
         Object.keys(patch).forEach(function (k) {
           if (k === 'fork_user' || k === 'fill_only') return;
-          if (m && state._prepPending && String(state._prepPending[k]) === String(patch[k])) delete state._prepPending[k];
+          if (state._prepPending && String(state._prepPending[k]) === String(patch[k])) delete state._prepPending[k];
         });
+        if (!m) {
+          // Put the stored truth back on screen rather than leaving a value nothing accepted.
+          if (typeof prepLoadBookMeta === 'function') prepLoadBookMeta(function () { if (typeof prepSyncTitle === 'function') prepSyncTitle(); });
+          if (typeof showAlert === 'function') showAlert('That change could not be saved. Switch to your own version to change the cover or the title.');
+        }
         if (cb) cb(m);
         return m;
       })
-      .catch(function () { if (cb) cb(null); return null; });
+      .catch(function () {
+        Object.keys(patch).forEach(function (k) {
+          if (k === 'fork_user' || k === 'fill_only') return;
+          if (state._prepPending && String(state._prepPending[k]) === String(patch[k])) delete state._prepPending[k];
+        });
+        if (cb) cb(null);
+        return null;
+      });
   };
   state._prepMetaChain = (state._prepMetaChain || Promise.resolve()).then(run, run);
   return state._prepMetaChain;
