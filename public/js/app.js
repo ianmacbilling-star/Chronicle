@@ -4649,6 +4649,7 @@ function showErrorDialog(msg, title) {
 }
 
 function switchSessionTab(tab) {
+  try { state.currentSessionTab = tab; } catch (e) {}   // v3.0.594 -- so prev/next can land on the same tab (BOTH copies patched)
   var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
@@ -10521,6 +10522,7 @@ function saveNotes() {
 }
 
 function switchSessionTab(tab) {
+  try { state.currentSessionTab = tab; } catch (e) {}   // v3.0.594 -- so prev/next can land on the same tab (BOTH copies patched)
   var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
@@ -12985,6 +12987,83 @@ function forkQ() {
   return state.currentForkId ? ('?fork_id=' + encodeURIComponent(state.currentForkId)) : '';
 }
 
+// =================================================================================================
+// PREVIOUS / NEXT SESSION -- v3.0.594. Ian, 2026-08-09.
+//
+// THE ORDER IS THE SESSIONS LIST'S ORDER, because that is what Ian asked for and because two
+// orderings of the same thing is the fault this codebase keeps re-finding. The list sorts by
+// session_date DESCENDING (newest first), so the arrows walk the list top to bottom: LEFT goes up
+// the list (newer), RIGHT goes down it (older).
+// **WORTH KNOWING, AND ONE WORD TO FLIP:** that means the RIGHT arrow moves BACK in time. It matches
+// the list, which is what was asked; if it reads wrong in use, negate the direction and nothing else
+// changes.
+//
+// EVERY SESSION, whatever its status -- Ian: "don't worry about status." So an arrow can land on a
+// draft, which is a page the reader can already reach from the list.
+//
+// THE TAB AND THE VERSION BOTH TRAVEL. Staying on Storyboard while stepping through sessions is the
+// point of the feature; and silently moving someone from their own version to the Story Master's
+// would be exactly the quiet wrong-version move that TD-194 and TD-242 exist to prevent. The version
+// is matched by version_id on the destination, and falls back to the canonical when that version has
+// no fork there -- the same rule the book itself uses (bookForkForSession).
+function sessNavOrdered() {
+  var list = (typeof state !== 'undefined' && Array.isArray(state.sessions)) ? state.sessions.slice() : [];
+  return list.sort(function (x, y) {
+    var dx = (x.session_date || '').toString().split('T')[0];
+    var dy = (y.session_date || '').toString().split('T')[0];
+    if (dx < dy) return 1;
+    if (dx > dy) return -1;
+    return 0;
+  });
+}
+function sessNavIndex() {
+  var cur = state && state.currentSession ? String(state.currentSession.id) : null;
+  if (!cur) return -1;
+  var o = sessNavOrdered();
+  for (var i = 0; i < o.length; i++) if (String(o[i].id) === cur) return i;
+  return -1;
+}
+// Greyed at the ends rather than hidden (Ian's call): a control that vanishes shifts the row and
+// leaves the reader wondering whether they missed something. Disabled says "you are at the first".
+function sessNavSync() {
+  try {
+    var prev = document.getElementById('sess-nav-prev');
+    var next = document.getElementById('sess-nav-next');
+    if (!prev && !next) return;
+    var o = sessNavOrdered(), i = sessNavIndex();
+    var noPrev = (i <= 0), noNext = (i < 0 || i >= o.length - 1);
+    if (prev) {
+      prev.disabled = noPrev;
+      prev.style.opacity = noPrev ? '0.35' : '';
+      prev.style.cursor = noPrev ? 'not-allowed' : 'pointer';
+      prev.title = noPrev ? 'This is the first session in the list' : ('Previous session: ' + ((o[i - 1] && o[i - 1].title) || ''));
+    }
+    if (next) {
+      next.disabled = noNext;
+      next.style.opacity = noNext ? '0.35' : '';
+      next.style.cursor = noNext ? 'not-allowed' : 'pointer';
+      next.title = noNext ? 'This is the last session in the list' : ('Next session: ' + ((o[i + 1] && o[i + 1].title) || ''));
+    }
+  } catch (e) {}
+}
+function sessNavGo(dir) {
+  try {
+    var o = sessNavOrdered(), i = sessNavIndex();
+    if (i < 0) return;
+    var t = i + (dir < 0 ? -1 : 1);
+    if (t < 0 || t >= o.length) return;
+    // Capture BEFORE navigating: selectSession clears currentForkId, so the version has to be read
+    // off the fork that is on screen right now.
+    var vid = null;
+    try {
+      var f = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+      vid = f && f.version_id ? f.version_id : null;
+    } catch (e) {}
+    state._sessNavVersionId = vid;
+    state._sessNavTab = (typeof state.currentSessionTab === 'string' && state.currentSessionTab) ? state.currentSessionTab : null;
+    if (typeof selectSession === 'function') selectSession(o[t].id);
+  } catch (e) {}
+}
 function loadSessionForks(sessionId) {
   if (!state.currentCampaign) return;
   var sel = document.getElementById('session-fork-select');
@@ -12994,6 +13073,20 @@ function loadSessionForks(sessionId) {
     .then(function(forks) {
       forks = Array.isArray(forks) ? forks : [];
       state.sessionForks = forks;
+      // v3.0.594 -- the version travelling with a prev/next move. Applied HERE, before the selector
+      // picks its default, because that default is `state.currentForkId || the canonical` and
+      // selectSession has just nulled it. Falls through to the canonical when this version has no
+      // fork on the destination -- the same rule the book uses.
+      if (state._sessNavVersionId) {
+        var _want = (forks || []).filter(function (f) { return String(f.version_id) === String(state._sessNavVersionId); })[0];
+        if (_want) state.currentForkId = _want.fork_id;
+        state._sessNavVersionId = null;
+      }
+      if (state._sessNavTab) {
+        var _tab = state._sessNavTab; state._sessNavTab = null;
+        try { if (typeof switchSessionTab === 'function') switchSessionTab(_tab); } catch (e) {}
+      }
+      try { sessNavSync(); } catch (e) {}
       var dmFork = forks.filter(function(f) { return f.role === 'dm'; })[0];
       if (sel) {
         sel.innerHTML = '';
@@ -17024,6 +17117,19 @@ function goToPublishOptions() {
   switchNovelTab('sessions');
 }
 // ===================================================================================
+// v3.0.593 -- TD-383. WHO GETS THE DIAGNOSTIC DUMP.
+// An admin, OR an admin inside a support session -- because impersonating drops admin (by design)
+// and takes every diagnostic with it, at exactly the moment "why is this book clipping" is the
+// question being asked.
+// Deliberately NOT used for the reset-grows easter egg, which changes the reader's book, nor for
+// optimizeIsAdmin(), which controls the whole admin view of the Optimize pane. Support needs to
+// SEE, not to rewrite.
+function hasDumpTools() {
+  try {
+    if (typeof state !== 'undefined' && state.user && state.user.is_admin) return true;
+    return !!(typeof _impState !== 'undefined' && _impState && _impState.active);
+  } catch (e) { return false; }
+}
 function optimizeIsAdmin() { return !!(typeof state !== 'undefined' && state.user && state.user.is_admin); }
 function applyOptimizeViewMode() {
   var admin = optimizeIsAdmin();
@@ -18723,7 +18829,7 @@ function _runLayoutAiOptimize() {
   // available; the JSON/log sections are only populated if Optimize ran this session (they're client
   // state, not saved), and are clearly labelled as empty otherwise.
   var _dbgCnt = document.getElementById('finalize-after-count');
-  if (_dbgCnt && state.user && state.user.is_admin) {
+  if (_dbgCnt && hasDumpTools()) {   // v3.0.593 -- TD-383: also inside a support session
     _dbgCnt.style.cursor = 'pointer';
     _dbgCnt.title = 'Double-click: download diagnostics bundle (dump + JSON + log)';
     _dbgCnt.ondblclick = function () {
@@ -19800,7 +19906,7 @@ function renderPdfInto(url, containerId, isBefore) {
         var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
         if (_wcnt) _wcnt.innerHTML = finalizeCountLabel(total, _fpct);
         // Admin: double-click the BEFORE page count for the flow-plan text dump (mirrors the After).
-        if (isBefore && _wcnt && state.user && state.user.is_admin && state.currentCampaign) {
+        if (isBefore && _wcnt && hasDumpTools() && state.currentCampaign) {   // v3.0.593 -- TD-383
           _wcnt.style.cursor = 'pointer';
           _wcnt.title = 'Double-click: flow plan (admin)';
           _wcnt.ondblclick = function () { window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery() + '&flow=1', '_blank'); };

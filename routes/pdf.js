@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
@@ -4814,7 +4814,15 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
-  ${titleFaceImp}
+  /* v3.0.595 -- WAS a bare reference to titleFaceImp, WHICH ONLY EXISTS IN buildNovelHTML. This is
+     buildSessionHTML. The name was carried across when the cover-title work was copied between the
+     two builders, and
+     every session Preview threw ReferenceError. node --check cannot
+     see an undefined reference, the book path never reaches this line, and nobody rendered a single
+     session -- so it shipped and stayed broken until Ian hit it on production.
+     CALLED DIRECTLY rather than re-declared, so there is no second variable to drift from the first,
+     and it now reads exactly like the line beneath it. */
+  ${coverTitleFaceCss(co && co.titleStyle)}
   ${coverTitleCss(co && co.titleStyle)}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
@@ -10349,7 +10357,23 @@ router.get('/page-fix-options/:campaignId', requireAuth, async function (req, re
   }
 });
 
-router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+// v3.0.593 -- TD-383. THE DIAGNOSTICS DUMP WORKS FROM INSIDE A SUPPORT SESSION.
+//
+// Ian, 2026-08-09: "just rescope TD-383 to look for the Imposter flag and allow it. I'm never going
+// to have the campaign ID handy."
+//
+// The spec proposed a separate admin route taking a campaign id, so a bundle could be pulled without
+// entering the account at all. That is still the more private tool and stays open -- but it assumes
+// you know which campaign, and on a support call you do not; you are looking at the book.
+//
+// So the gate asks the question the Exit button and Add Tokens already ask: is there a REAL ADMIN
+// behind this session. requireAdmin still fails while impersonating -- that is load-bearing and
+// unchanged -- and this route simply asks something else.
+//
+// READ-ONLY ONLY. This produces a dump. The OTHER admin easter egg on that page -- reset AI image
+// grows -- MUTATES the reader's book and is deliberately left admin-gated: seeing why a book is
+// broken is support, rewriting it underneath somebody is not.
+router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, async function (req, res) {
   // ?nogrows=1 -> REFERENCE PACK: every image at natural size, the run-scoped grow store ignored.
   // The store survives 30 minutes after an Optimize, so a plain pack-debug silently inherits the
   // last run's grows -- which is why dumps showed 'sized: (none)' in the header and GROWN cells in
