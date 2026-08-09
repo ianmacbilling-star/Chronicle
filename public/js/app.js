@@ -7401,6 +7401,43 @@ function prepSaveTitleColor() {
 // the problem and none of the cost.
 // Each saver now returns early when nothing changed, so calling all three on every tab switch is
 // free in the ordinary case.
+// v3.0.588 -- COMMIT ON THE WAY OUT, WHEREVER "OUT" IS.
+// Ian, 2026-08-09: "I filled out the subtitle and then didn't just tab off that to the next thing,
+// I never left the text box but moused up and clicked on a new tab... It didn't save."
+//
+// v3.0.584 committed on switchNovelTab, which covers the Prep / Optimize / Order sub-tabs and
+// NOTHING ELSE. The breadcrumbs run arbitrary onclick actions, showCampaignSection exists twice, and
+// the top nav is different again -- so patching navigation handlers one at a time is a losing game
+// that also loses to whatever navigation is added next.
+//
+// ONE CAPTURE-PHASE pointerdown LISTENER instead. It fires BEFORE any click handler and before
+// anything is hidden, so it does not matter what the click was going to do or which function was
+// going to do it: if a Prep field holds focus and the pointer went down somewhere else, the edit is
+// committed first. Capture is load-bearing -- in the bubble phase the navigation has already run.
+//
+// WHY NOT JUST USE blur: that is what was already relied on, and it is exactly what fails here. A
+// focused input hidden before its blur is processed does not reliably fire `change`, and the whole
+// point of this listener is to run BEFORE the hiding.
+// WHY NOT 'input': that would write on every keystroke, down a chain that serialises writes.
+//
+// Cheap: it early-returns on every click in the app except the handful where a Prep field is
+// focused. Each saver already returns early when nothing changed, so the common case costs nothing.
+var PREP_COMMIT_IDS = ['prep-title', 'prep-subtitle', 'print-title-color'];
+function prepWireCommitOnExit() {
+  if (prepWireCommitOnExit._done) return;
+  prepWireCommitOnExit._done = true;
+  try {
+    document.addEventListener('pointerdown', function (e) {
+      try {
+        var a = document.activeElement;
+        if (!a || !a.id || PREP_COMMIT_IDS.indexOf(a.id) < 0) return;
+        if (e.target === a) return;                     // still inside the field being edited
+        if (a.contains && a.contains(e.target)) return;
+        prepCommitFields();
+      } catch (_) {}
+    }, true);
+  } catch (e) {}
+}
 function prepCommitFields() {
   try {
     if (typeof prepSaveTitle === 'function') prepSaveTitle();
@@ -7419,6 +7456,7 @@ function prepPanelSync() {
     // hydrates customOpts -- so materialising earlier would store a title nobody has seen and a
     // layout blob belonging to the previously open campaign.
     prepMaterializeBookMeta();
+    prepWireCommitOnExit();   // v3.0.588 -- idempotent; one listener for the life of the page
   });
   _prepEnsureArchives();
 }
