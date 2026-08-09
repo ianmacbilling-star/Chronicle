@@ -5121,6 +5121,22 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     // overlap and offset. With more than one row "from left to right" is not a single sequence, so
     // each row says which it is; the alternative is a sentence that reads correctly and describes
     // the wrong person.
+    // v3.0.582 -- RESTORED. This lived inside the block v3.0.581 replaced and went out with it,
+    // while the new roster still called it: ReferenceError on every book with a cast page, which
+    // took the Prep viewer down. node --check cannot see an undefined call, and the geometry
+    // harness STUBBED this name -- so the one test that ran the block masked the fault instead of
+    // finding it. A stub for something the code is supposed to own is not a test double, it is a
+    // hole. It lives here now because the roster is its only caller.
+    // v3.0.566 -- ONE NAME ON THE LINE-UP. Ian: "can we just take the first name in the Name
+    // array." A character's name field carries every alias the player uses -- "Lumen / Elias /
+    // Elias Ward" -- which is right on a character sheet and wrong under a portrait.
+    // Falls back to the whole string when there is no slash or the first segment is empty, so a
+    // name like "/ Elias" can never render as nothing.
+    function castFirstName(n) {
+      var raw = String(n == null ? '' : n);
+      var first = raw.split('/')[0].trim();
+      return first || raw.trim();
+    }
     var _rosterRow = function (row) {
       return row.map(function (c) {
         return '<b>' + _fmEsc(castFirstName(c.name)) + '</b>' + (c.cls ? ', ' + _fmEsc(c.cls) : '');
