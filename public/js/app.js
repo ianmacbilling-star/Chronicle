@@ -454,6 +454,12 @@ function buyTokenPack(packId) {
     msg.style.display = 'block';
     msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
+  function showError(text) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   // TF-03: blocked tiers never reach checkout.
   if (state.canPurchaseTokens === false) { showUpgrade(); return; }
   function showComingSoon() {
@@ -463,19 +469,27 @@ function buyTokenPack(packId) {
     msg.style.display = 'block';
     msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
-  function showError(text) {
-    if (!msg) return;
-    msg.textContent = text;
-    msg.style.display = 'block';
-    msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
-  }
   fetch('/api/tokens/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ packId: packId })
   }).then(function(r) {
     if (r.status === 503) { showComingSoon(); return null; }
-    if (r.status === 403) { showUpgrade(); return null; }
+    // v3.0.592 -- A STATUS CODE IS NOT A REASON.
+    // This read `403` and concluded "not on a paid plan", because when it was written that was the
+    // only thing a 403 from this route could mean. v3.0.589 added a second source -- the support
+    // deny list -- and this handler dutifully told Ian he needed to upgrade a PLATINUM account
+    // while the real answer was "you are viewing someone else". It cost four rounds of testing and
+    // it read, convincingly, as a bug in the new feature.
+    // Now the BODY decides. The server already sends a message written for this exact case; the
+    // client just has to stop overwriting it with a guess.
+    if (r.status === 403) {
+      return r.json().then(function (j) {
+        if (j && j.error === 'impersonation_denied') { showError(j.message || 'Not available while viewing as another user.'); return null; }
+        showUpgrade();
+        return null;
+      }).catch(function () { showUpgrade(); return null; });
+    }
     return r.json();
   }).then(function(data) {
     if (!data) return;
@@ -521,7 +535,9 @@ function subscribeTier(tier) {
   }).then(function(data) {
     if (!data) return;
     if (data.url) { window.location = data.url; return; }
-    show((data && data.error) ? data.error : "We couldn't start your subscription -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
+    // v3.0.592 -- prefer the server's SENTENCE over its error CODE. The deny list sends both, and
+    // "impersonation_denied" is not something to show a human.
+    show((data && (data.message || data.error)) ? (data.message || data.error) : "We couldn't start your subscription -- this looks like a billing setup issue on our end, not a problem with your card. Please try again shortly, and if it keeps happening, contact support.");
   }).catch(function() {
     show('Could not reach the billing service. Please try again.');
   });
@@ -558,7 +574,9 @@ function changePlan(tier) {
     }
     show((data.error === 'no_subscription')
       ? 'You do not have an active subscription to change. Use Subscribe instead.'
-      : ('Could not change your plan. ' + (data.detail ? ('[' + data.detail + ']') : 'Please try again.')));
+      // v3.0.592 -- a refusal from the support deny list arrives here too; say what it said.
+      : ((data && data.message) ? data.message
+        : ('Could not change your plan. ' + (data.detail ? ('[' + data.detail + ']') : 'Please try again.'))));
   }).catch(function() {
     show('Could not reach the billing service. Please try again.');
   });
@@ -574,7 +592,8 @@ function openBillingPortal() {
   }).then(function(data) {
     if (!data) return;
     if (data.url) { window.location = data.url; return; }
-    show('Could not open the billing portal. Please try again.');
+    // v3.0.592 -- say what the server said, if it said anything.
+    show((data && (data.message || data.error)) ? (data.message || data.error) : 'Could not open the billing portal. Please try again.');
   }).catch(function() {
     show('Could not reach the billing service. Please try again.');
   });
