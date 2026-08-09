@@ -664,6 +664,45 @@ router.get('/impersonate/status', requireAuth, function (req, res) {
   });
 });
 
+// GRANT TOKENS TO THE ACCOUNT YOU ARE VIEWING -- TD-179 stage 5, v3.0.590.
+//
+// Ian, 2026-08-09: "a user has trouble doing something that costs tokens... I want to just be able
+// to give them back the tokens and even more for their trouble. So if you can continue to give me
+// access to the Add Tokens admin tool."
+//
+// IT CANNOT BE THE EXISTING /api/tokens/admin/credit ROUTE. That resolves admin from
+// req.session.userId, which while impersonating IS THE CUSTOMER -- so it would 403, and "fixing"
+// that by re-enabling admin inside the session would break the rule that stops impersonation
+// chaining. This asks the other question instead (requireImpersonatorOrAdmin): is there a real
+// admin behind this session.
+//
+// THE GRANT IS ATTRIBUTED TO THE ADMIN, NOT THE CUSTOMER. triggered_by_user_id carries the real
+// admin id, so the ledger does not read as the user crediting themselves -- which is the whole
+// difference between a support tool and an unexplained balance change.
+router.post('/impersonate/grant-tokens', requireAuth, requireImpersonatorOrAdmin, async function (req, res) {
+  try {
+    if (!req.session.impersonatorId) {
+      return res.status(400).json({ error: 'You are not in a support session.' });
+    }
+    const amt = parseInt((req.body && req.body.amount), 10);
+    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ error: 'Enter a positive number of tokens.' });
+    if (amt > 100000) return res.status(400).json({ error: 'That is more tokens than any support case needs.' });
+    const bucket = (req.body && req.body.bucket === 'utlt') ? 'utlt' : 'cot';
+    const tokens = require('./tokens');
+    const bal = await tokens.creditTokens(req.session.userId, amt, {
+      bucket: bucket,
+      event_type: 'admin_credit',
+      source: 'support:' + (req.session.impersonatorEmail || 'admin'),
+      triggered_by_user_id: req.session.impersonatorId
+    });
+    console.warn('[impersonate] ' + (req.session.impersonatorEmail || 'admin') + ' granted ' + amt +
+      ' ' + bucket + ' tokens to ' + (req.session.impersonateTargetEmail || ('user ' + req.session.userId)));
+    return res.json({ ok: true, granted: amt, bucket: bucket, balance: bal || null });
+  } catch (e) {
+    return res.status(500).json({ error: friendlyError(e, 'Could not add the tokens.') });
+  }
+});
+
 // RECENT SESSIONS. Admin-only; the audit trail is the point of the feature, so it must be readable
 // from inside the product rather than only from a psql prompt.
 router.get('/impersonate/log', requireAuth, requireAdmin, async function (req, res) {
