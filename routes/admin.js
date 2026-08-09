@@ -6,7 +6,7 @@
 // ============================================================
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireImpersonatorOrAdmin, endImpersonation, impersonationExpired, IMPERSONATION_MAX_MS } = require('../middleware/auth');
 const tiers = require('../middleware/tiers');
 const { getDb } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
@@ -571,6 +571,112 @@ router.post('/promo-codes/:id/toggle', requireAuth, requireAdmin, async function
     await db.prepare('UPDATE promo_codes SET active = ? WHERE id = ?').run(next, id);
     res.json({ ok: true, active: next });
   } catch (e) { console.error('promo-codes toggle error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+// =================================================================================================
+// IMPERSONATION -- TD-179 STAGE 2, v3.0.589. Spec: ADMIN_IMPERSONATION_SPEC.md section 3.
+//
+// Ian, 2026-08-02: "a screen where I could put in their email address and it would get me in as
+// them." That is what this is -- but a SESSION SWAP from an already-authenticated admin session,
+// not the master password he first floated. The spec rejected that one: unrevocable for a single
+// person, unattributable, works from anywhere with no admin session behind it, and if it leaks
+// every account is exposed with no way to tell what was touched. This gives identical access, is
+// revoked by removing an email from ADMIN_EMAILS, and is attributable by construction.
+//
+// WHY IT IS FIVE LINES: every authenticated route in the app resolves identity from exactly one
+// place, req.session.userId. So impersonation is swapping one field and remembering the original.
+// All the engineering goes into the guard rails, not the mechanism.
+// =================================================================================================
+
+// START. Admin-only, by definition -- you must still be yourself to become someone else.
+router.post('/impersonate', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    const reason = String((req.body && req.body.reason) || '').trim().slice(0, 500);
+    if (!email) return res.status(400).json({ error: 'An email address is required.' });
+    const db = await getDb();
+    const me = await db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.session.userId);
+    const target = await db.prepare('SELECT id, email FROM users WHERE LOWER(email) = ?').get(email);
+    if (!target) return res.status(404).json({ error: 'No account with that email address.' });
+    if (String(target.id) === String(req.session.userId)) {
+      return res.status(400).json({ error: 'That is your own account.' });
+    }
+    // NO ADMIN-ON-ADMIN (spec 3.1). It keeps the audit trail meaningful -- an admin acting through
+    // another admin's account produces a row that names the wrong person for everything that
+    // follows -- and it removes any question of chaining.
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function (e) { return e.trim().toLowerCase(); }).filter(Boolean);
+    if (adminEmails.indexOf(String(target.email).toLowerCase()) !== -1) {
+      return res.status(400).json({ error: 'That account is an admin. Support access is for customer accounts.' });
+    }
+    // THE AUDIT ROW IS WRITTEN BEFORE THE SWAP, and a failure here REFUSES the impersonation.
+    // Access without a record is the thing the privacy clause promises does not happen, so if the
+    // record cannot be made the access must not happen either.
+    let rowId = null;
+    try {
+      const ins = await db.prepare(
+        'INSERT INTO admin_impersonations (admin_user_id, admin_email, target_user_id, target_email, reason, started_at) ' +
+        'VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+      ).run(me.id, me.email, target.id, target.email, reason || null);
+      rowId = ins && ins.lastInsertRowid;
+    } catch (e) {
+      console.error('[impersonate] audit write failed, refusing: ' + ((e && e.message) || e));
+      return res.status(500).json({ error: 'Could not record the support session, so it was not started.' });
+    }
+    req.session.impersonatorId = req.session.userId;
+    req.session.impersonatorEmail = me.email;
+    req.session.impersonateTargetEmail = target.email;
+    req.session.impersonateStartedAt = Date.now();
+    req.session.impersonationRowId = rowId;
+    req.session.userId = target.id;
+    console.warn('[impersonate] ' + me.email + ' -> ' + target.email + (reason ? (' (' + reason + ')') : ''));
+    return res.json({ ok: true, viewingAs: target.email, expiresInMs: IMPERSONATION_MAX_MS });
+  } catch (e) {
+    return res.status(500).json({ error: friendlyError(e, 'Could not start the support session.') });
+  }
+});
+
+// STOP. NOT gated on requireAdmin -- see spec 4.1. The moment you impersonate you are not an admin,
+// so requiring admin here would lock you inside the customer's account with no way out but clearing
+// cookies. Gated on the presence of the impersonator instead.
+router.post('/impersonate/stop', requireAuth, async function (req, res) {
+  if (!req.session || !req.session.impersonatorId) {
+    return res.status(400).json({ error: 'You are not in a support session.' });
+  }
+  const back = req.session.impersonatorEmail;
+  endImpersonation(req, 'manual');
+  return res.json({ ok: true, backTo: back });
+});
+
+// STATUS. Drives the banner, and it is deliberately the SAME session fields the deny list reads,
+// so the banner cannot say one thing while the guard enforces another (spec 6).
+router.get('/impersonate/status', requireAuth, function (req, res) {
+  if (!req.session || !req.session.impersonatorId) return res.json({ active: false });
+  const started = Number(req.session.impersonateStartedAt || 0);
+  return res.json({
+    active: true,
+    viewingAs: req.session.impersonateTargetEmail || null,
+    adminEmail: req.session.impersonatorEmail || null,
+    startedAt: started || null,
+    expiresInMs: Math.max(0, IMPERSONATION_MAX_MS - (Date.now() - started)),
+    // Not reported live: the total is computed from token_ledger when the session CLOSES.
+    // A live figure would need a counter at every spend site -- see endImpersonation.
+    tokensSpent: null
+  });
+});
+
+// RECENT SESSIONS. Admin-only; the audit trail is the point of the feature, so it must be readable
+// from inside the product rather than only from a psql prompt.
+router.get('/impersonate/log', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      'SELECT id, admin_email, target_email, reason, tokens_spent, started_at, ended_at, end_reason ' +
+      'FROM admin_impersonations ORDER BY started_at DESC LIMIT 50'
+    ).all();
+    return res.json({ sessions: rows || [] });
+  } catch (e) {
+    return res.status(500).json({ error: friendlyError(e, 'Could not read the support log.') });
+  }
 });
 
 
