@@ -119,11 +119,38 @@ router.get('/library/story/:id/:slug?', async function (req, res) {
             '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
               '<a href="/?ref=story" style="display:inline-block;background:#c9a84c;color:#160e06;padding:9px 18px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;">Make your own &rarr;</a>' +
               (row.pdf_url ? '<a href="' + esc(row.pdf_url) + '" target="_blank" rel="noopener" style="display:inline-block;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">Download PDF</a>' : '') +
+              // v3.0.585 -- SHARE. One button that does the right thing per device rather than a row
+              // of network logos: navigator.share opens the real share sheet on a phone (where
+              // sharing actually happens), and falls back to copying the link on a desktop browser.
+              // NO PER-NETWORK BUTTONS, deliberately -- each one is a third-party URL to maintain, a
+              // logo to keep licensed, and they date badly. The page already emits og: and twitter:
+              // tags, so a pasted link unfurls with the cover, the title and the blurb wherever it
+              // lands. That is what makes a plain link as good as a network button.
+              '<button type="button" id="cmpShare" data-url="' + esc(pageUrl) + '" data-title="' + esc(title) + '" style="display:inline-flex;align-items:center;gap:7px;background:transparent;color:#c9a84c;border:1px solid rgba(201,168,76,0.5);padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;" aria-label="Share this story">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle>' +
+                  '<circle cx="18" cy="19" r="3"></circle>' +
+                  '<line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line>' +
+                  '<line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line>' +
+                '</svg>Share</button>' +
+              '<span id="cmpShareMsg" style="font-size:12px;color:rgba(240,232,208,0.75);" role="status" aria-live="polite"></span>' +
             '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
-      '</div>';
+      '</div>' +
+      '<script>(function(){var b=document.getElementById("cmpShare");if(!b)return;'+
+      'var u=b.getAttribute("data-url"),t=b.getAttribute("data-title"),m=document.getElementById("cmpShareMsg");'+
+      'function say(x){if(m){m.textContent=x;setTimeout(function(){m.textContent="";},2500);}}'+
+      'function legacy(){var a=document.createElement("textarea");a.value=u;a.setAttribute("readonly","");'+
+      'a.style.position="absolute";a.style.left="-9999px";document.body.appendChild(a);a.select();'+
+      'try{document.execCommand("copy");say("Link copied");}catch(e){say("Copy this page URL to share");}'+
+      'document.body.removeChild(a);}'+
+      'b.addEventListener("click",function(){'+
+      'if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});return;}'+
+      'if(navigator.clipboard&&navigator.clipboard.writeText){'+
+      'navigator.clipboard.writeText(u).then(function(){say("Link copied");}).catch(legacy);return;}'+
+      'legacy();});})();<\/script>';
 
     var legalReportBar =
       '<div style="background:#0a0806;border-top:1px solid rgba(201,168,76,0.18);">' +

@@ -6381,6 +6381,8 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
+  // v3.0.584 -- FIRST, before any pane is hidden: an edit in progress belongs to the tab being left.
+  if (typeof prepCommitFields === 'function') prepCommitFields();
   if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
   if (tab === 'finalize' && typeof loadFinalize === 'function') { loadFinalize(); }
   if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
@@ -7286,9 +7288,14 @@ function _prepMetaWrite(patch, cb) {
 function prepSaveSubtitle() {
   var el = document.getElementById('prep-subtitle');
   if (!el || !state.currentCampaign) return;
-  if (typeof prepUseMember === 'function' && prepUseMember()) {
-    _prepMetaWrite({ subtitle: el.value.trim() });   // v3.0.578 -- chained, and kept locally until confirmed
-  }
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) return;
+  // v3.0.584 -- SKIP A WRITE THAT WOULD CHANGE NOTHING, so this can be called on every tab switch
+  // without spending a round trip. null and empty both mean NO SUBTITLE since v3.0.583, so they
+  // must compare equal or leaving the tab would write '' over a stored null on every single visit.
+  var _now = el.value.trim();
+  var _was = (state.bookMeta && state.bookMeta.subtitle != null) ? String(state.bookMeta.subtitle) : '';
+  if (_now === _was) return;
+  _prepMetaWrite({ subtitle: _now });   // v3.0.578 -- chained, and kept locally until confirmed
 }
 // v3.0.575 -- THE TITLE IS SAVED. IT NEVER WAS.
 // The one and only client write of book_title lived inside publishStory(), so a title existed as
@@ -7376,8 +7383,30 @@ function prepSaveTitleColor() {
   if (!el || !state.currentCampaign) return;
   if (typeof prepUseMember === 'function' && prepUseMember()) {
     // Per-fork (SM canonical or member), written to the logged-in user's own row.
+    var _wasC = (state.bookMeta && state.bookMeta.title_color) ? String(state.bookMeta.title_color) : '';
+    if (el.value === _wasC) return;   // v3.0.584 -- idempotent, see prepSaveSubtitle
     _prepMetaWrite({ title_color: el.value });   // v3.0.578 -- chained, and kept locally until confirmed
   }
+}
+// v3.0.584 -- COMMIT THE PREP FIELDS WHEN LEAVING THE TAB.
+// Ian, 2026-08-09: "the sub title saves whenever you leave that tab too. It saves if you click off
+// into another field... but doesn't save if you click on another tab."
+//
+// The fields save on 'change', which browsers fire on BLUR -- and clicking a tab hides the pane it
+// is in. A focused input that is hidden before the blur is processed does not reliably fire change,
+// so the edit was simply never sent. Nothing was broken; the event just never happened.
+//
+// DO NOT FIX THIS BY MOVING TO 'input'. That would write on every keystroke -- a PUT per character,
+// down a chain that serialises them. One explicit commit at the moment of leaving is the whole of
+// the problem and none of the cost.
+// Each saver now returns early when nothing changed, so calling all three on every tab switch is
+// free in the ordinary case.
+function prepCommitFields() {
+  try {
+    if (typeof prepSaveTitle === 'function') prepSaveTitle();
+    if (typeof prepSaveSubtitle === 'function') prepSaveSubtitle();
+    if (typeof prepSaveTitleColor === 'function') prepSaveTitleColor();
+  } catch (e) {}
 }
 function prepPanelSync() {
   prepLoadBookMeta(function(){
@@ -10945,6 +10974,8 @@ function regenImage(momentId, index) {
 var novelLayoutStyle = 'Classic';
 
 function switchNovelTab(tab) {
+  // v3.0.584 -- FIRST, before any pane is hidden: an edit in progress belongs to the tab being left.
+  if (typeof prepCommitFields === 'function') prepCommitFields();
   if (typeof layoutAiCheckStatus === 'function') layoutAiCheckStatus();
   if (tab === 'finalize' && typeof loadFinalize === 'function') { loadFinalize(); }
   if (tab === 'order' && typeof loadPrintTab === 'function') loadPrintTab();
