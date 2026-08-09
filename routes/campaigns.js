@@ -351,7 +351,12 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
       return res.status(403).json({ error: 'You are looking at someone else\u2019s version. Switch to your own version to change the cover or the layout.' });
     }
   }
-  const merged = await setForkBookPrefs(db, uid, fork, cid, patch, _scP.versionId);
+  // v3.0.578 -- fill_only: write these values only where nothing is stored yet. Used by the Prep
+  // panel's first-load materialise, which must establish defaults without ever overwriting an edit
+  // the reader has already made. See the note on setForkBookPrefs: this route can have two writes
+  // in flight at once, and fill-only is safe under every interleaving rather than under most.
+  const _fillOnly = !!(b && b.fill_only);
+  const merged = await setForkBookPrefs(db, uid, fork, cid, patch, _scP.versionId, { fillOnly: _fillOnly });
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
     campaign_id: Number(cid),

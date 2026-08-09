@@ -2159,10 +2159,25 @@ async function getForkBookPrefs(db, chooserId, forkId, campaignId, opts) {
   }
   return {};
 }
-async function setForkBookPrefs(db, chooserId, forkId, campaignId, patch, versionId) {
+// v3.0.578 -- opts.fillOnly INVERTS THE MERGE, and it exists because of a bug this function's
+// shape makes inevitable. This is a READ-MODIFY-WRITE over one JSON blob with an await in the
+// middle, so two requests in flight together interleave and the later WRITE wins with the earlier
+// READ's snapshot. That was harmless while the Prep panel had exactly one writer. v3.0.575 added a
+// second -- the first-load materialise -- and a subtitle typed while it was in flight was written,
+// then silently overwritten by a snapshot taken before it existed.
+// FILL-ONLY IS WHAT A MATERIALISE ACTUALLY MEANS: write these defaults only where nothing is set.
+// Under it the stored row always wins, so a materialise cannot clobber a real edit NO MATTER HOW
+// THE TWO REQUESTS INTERLEAVE -- which is a property of the operation rather than of the timing,
+// and therefore does not have to be got right twice.
+// An explicit null in the patch is still a value under a normal write; under fillOnly the current
+// row simply wins, including when the current value is an empty string (a deliberately cleared
+// subtitle is SET, not absent).
+async function setForkBookPrefs(db, chooserId, forkId, campaignId, patch, versionId, opts) {
   const vid = Number(versionId) || 0;
   const cur = await getForkBookPrefs(db, chooserId, forkId, campaignId, { inherit: true, versionId: vid });
-  const merged = Object.assign({}, cur, patch || {});
+  const merged = (opts && opts.fillOnly)
+    ? Object.assign({}, patch || {}, cur)
+    : Object.assign({}, cur, patch || {});
   const json = JSON.stringify(merged);
   // ON CONFLICT names fork_book_prefs_scope_key's exact column list. If that constraint is ever
   // changed, THIS STATEMENT MUST CHANGE IN THE SAME COMMIT -- dropping a constraint invalidates
