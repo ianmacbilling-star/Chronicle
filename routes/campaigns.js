@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, versionOwnerUserId } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
@@ -295,7 +295,15 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   const db = await getDb();
   const uid = req.session.userId, cid = req.params.campaignId, b = req.body || {};
   const fork = (b.fork_user != null) ? Number(b.fork_user) : (req.query.as_user ? Number(req.query.as_user) : uid);
-  if (fork !== uid && req.campaignRole !== 'dm') return res.status(403).json({ error: 'You can only edit your own fork' });
+  // v3.0.575 -- THE STORY MASTER EXEMPTION IS GONE. You write the book you own, and nothing else.
+  // Ian, 2026-08-09: "the userID of the person logged in must match the userid of the owner of the
+  // version in order for it to save. This is a slight departure from what we had before -- I think
+  // before you could have your own title and cover on someone elses book. Now that we have added
+  // versions that is not necessary anymore."
+  // A Story Master who wants a member to have a different-looking book creates a VERSION for them,
+  // which carries the layout, the art style and the narrative too -- where this overlay only ever
+  // carried the cover and the title, so the book it produced was half curated.
+  if (fork !== uid) return res.status(403).json({ error: 'You can only edit your own book. Switch to your own version to change the cover or the layout.' });
   const patch = {};
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
@@ -326,9 +334,19 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   //
   // The Story Master curating a member's book is untouched -- that is the fork check above, and it
   // is a different permission from this one.
-  if (_scP.bookVersionId && req.campaignRole !== 'dm') {
-    const _vw = await db.prepare('SELECT user_id, is_canonical FROM campaign_versions WHERE id = ?').get(_scP.bookVersionId);
-    const _mine = _vw && !_vw.is_canonical && String(_vw.user_id) === String(uid);
+  // v3.0.575 -- ONE OWNERSHIP TEST, AND IT COVERS THE CANONICAL TOO.
+  // This used to exempt any DM outright, so a Story Master could write onto a member's version.
+  // Now everyone is asked the same question: are you the owner of the version on screen.
+  // THE CANONICAL HAS NO user_id AND THAT IS DELIBERATE. versionOwnerUserId derives it from
+  // campaign_members role='dm', so canonical ownership FOLLOWS A STORY MASTER HANDOVER for free --
+  // where a stamped column would leave the new Story Master locked out of their own book and would
+  // go NULL again if the old owner's account were deleted (TD-248). Ian asked for the row to be
+  // stamped; the derivation gives the same answer and cannot go stale, so it is used instead.
+  if (_scP.bookVersionId) {
+    const _vw = await db.prepare('SELECT id, campaign_id, user_id, is_canonical FROM campaign_versions WHERE id = ?').get(_scP.bookVersionId);
+    let _owner = null;
+    try { _owner = _vw ? await versionOwnerUserId(db, _vw) : null; } catch (e) { _owner = null; }
+    const _mine = _owner != null && String(_owner) === String(uid);
     if (!_mine) {
       return res.status(403).json({ error: 'You are looking at someone else\u2019s version. Switch to your own version to change the cover or the layout.' });
     }
@@ -341,6 +359,11 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     back_cover_image_url: merged.back_cover_image_url || '',
     title_image_url: merged.title_image_url || '',
     book_title: merged.book_title || '',
+    // v3.0.575 -- THE PUT NOW ANSWERS IN THE SAME SHAPE AS THE GET. It omitted the subtitle, so a
+    // client assigning this response onto state.bookMeta (the image picker does, and the new
+    // materialise does) silently dropped a subtitle it had never touched. Two payloads describing
+    // one record must carry the same fields or the caller has to remember which is which.
+    subtitle: (merged.subtitle == null ? null : String(merged.subtitle)),
     title_color: merged.title_color || '',
     layout_opts: merged.layout_opts || '',
     own_cover: merged.cover_image_url || '', own_back: merged.back_cover_image_url || '', own_title: merged.title_image_url || ''

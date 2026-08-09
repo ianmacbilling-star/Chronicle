@@ -250,9 +250,9 @@
             <button class="prep-acc-head" type="button" onclick="togglePrepAcc('cover')" aria-expanded="true"><span>Title &amp; Cover</span><span class="prep-acc-chev">&#9662;</span></button>
             <div class="prep-acc-body">
               <div class="prep-field-label">Title</div>
-              <input type="text" id="prep-title" maxlength="200" placeholder="e.g. The Shattered Crown" class="prep-input" />
+              <input type="text" id="prep-title" maxlength="200" onchange="prepSaveTitle()" placeholder="e.g. The Shattered Crown" class="prep-input" title="The title printed on the cover, the title page and the spine. Starts as the campaign name; change it and it is saved with this version." />
               <div class="prep-field-label">Subtitle</div>
-              <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Starts as your session date range -- change it, or clear it for no subtitle at all." />
+              <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Leave it empty for no subtitle at all." />
               <div class="prep-color-row">
                 <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
                 <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
