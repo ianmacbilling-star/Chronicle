@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, resolveBookVersion, bookForkForSession, bookPrefsScope } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireImpersonatorOrAdmin } = require('../middleware/auth');
 const { getEffectiveTier, accessRank, isPaidTier } = require('../middleware/tiers');
 const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { TEXT_MODEL } = require('../config/models');
@@ -10349,7 +10349,23 @@ router.get('/page-fix-options/:campaignId', requireAuth, async function (req, re
   }
 });
 
-router.get('/pack-debug/:campaignId', requireAuth, requireAdmin, async function (req, res) {
+// v3.0.593 -- TD-383. THE DIAGNOSTICS DUMP WORKS FROM INSIDE A SUPPORT SESSION.
+//
+// Ian, 2026-08-09: "just rescope TD-383 to look for the Imposter flag and allow it. I'm never going
+// to have the campaign ID handy."
+//
+// The spec proposed a separate admin route taking a campaign id, so a bundle could be pulled without
+// entering the account at all. That is still the more private tool and stays open -- but it assumes
+// you know which campaign, and on a support call you do not; you are looking at the book.
+//
+// So the gate asks the question the Exit button and Add Tokens already ask: is there a REAL ADMIN
+// behind this session. requireAdmin still fails while impersonating -- that is load-bearing and
+// unchanged -- and this route simply asks something else.
+//
+// READ-ONLY ONLY. This produces a dump. The OTHER admin easter egg on that page -- reset AI image
+// grows -- MUTATES the reader's book and is deliberately left admin-gated: seeing why a book is
+// broken is support, rewriting it underneath somebody is not.
+router.get('/pack-debug/:campaignId', requireAuth, requireImpersonatorOrAdmin, async function (req, res) {
   // ?nogrows=1 -> REFERENCE PACK: every image at natural size, the run-scoped grow store ignored.
   // The store survives 30 minutes after an Optimize, so a plain pack-debug silently inherits the
   // last run's grows -- which is why dumps showed 'sized: (none)' in the header and GROWN cells in

@@ -17024,6 +17024,19 @@ function goToPublishOptions() {
   switchNovelTab('sessions');
 }
 // ===================================================================================
+// v3.0.593 -- TD-383. WHO GETS THE DIAGNOSTIC DUMP.
+// An admin, OR an admin inside a support session -- because impersonating drops admin (by design)
+// and takes every diagnostic with it, at exactly the moment "why is this book clipping" is the
+// question being asked.
+// Deliberately NOT used for the reset-grows easter egg, which changes the reader's book, nor for
+// optimizeIsAdmin(), which controls the whole admin view of the Optimize pane. Support needs to
+// SEE, not to rewrite.
+function hasDumpTools() {
+  try {
+    if (typeof state !== 'undefined' && state.user && state.user.is_admin) return true;
+    return !!(typeof _impState !== 'undefined' && _impState && _impState.active);
+  } catch (e) { return false; }
+}
 function optimizeIsAdmin() { return !!(typeof state !== 'undefined' && state.user && state.user.is_admin); }
 function applyOptimizeViewMode() {
   var admin = optimizeIsAdmin();
@@ -18723,7 +18736,7 @@ function _runLayoutAiOptimize() {
   // available; the JSON/log sections are only populated if Optimize ran this session (they're client
   // state, not saved), and are clearly labelled as empty otherwise.
   var _dbgCnt = document.getElementById('finalize-after-count');
-  if (_dbgCnt && state.user && state.user.is_admin) {
+  if (_dbgCnt && hasDumpTools()) {   // v3.0.593 -- TD-383: also inside a support session
     _dbgCnt.style.cursor = 'pointer';
     _dbgCnt.title = 'Double-click: download diagnostics bundle (dump + JSON + log)';
     _dbgCnt.ondblclick = function () {
@@ -19800,7 +19813,7 @@ function renderPdfInto(url, containerId, isBefore) {
         var _wcnt = document.getElementById(isBefore ? 'finalize-before-count' : 'finalize-after-count');
         if (_wcnt) _wcnt.innerHTML = finalizeCountLabel(total, _fpct);
         // Admin: double-click the BEFORE page count for the flow-plan text dump (mirrors the After).
-        if (isBefore && _wcnt && state.user && state.user.is_admin && state.currentCampaign) {
+        if (isBefore && _wcnt && hasDumpTools() && state.currentCampaign) {   // v3.0.593 -- TD-383
           _wcnt.style.cursor = 'pointer';
           _wcnt.title = 'Double-click: flow plan (admin)';
           _wcnt.ondblclick = function () { window.open('/api/pdf/pack-debug/' + state.currentCampaign.id + finalizeBookQuery() + '&flow=1', '_blank'); };
