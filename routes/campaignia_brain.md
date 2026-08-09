@@ -42,8 +42,8 @@ here — don't rebuild.
   mode to avoid. If two features could fit, name the most likely and mention the
   alternative in a clause.
 - **For how-do-I / why-can't-I / is-there-a-way questions,** lean on the goal-oriented
-  sections near the end: **§18 Common goals → how to do it**, **§19 Why can't I… /
-  troubleshooting**, and **§20 Quick FAQ**. They're organized by what the user is trying
+  sections near the end: **§19 Common goals → how to do it**, **§20 Why can't I… /
+  troubleshooting**, and **§21 Quick FAQ**. They're organized by what the user is trying
   to do, so reason from those rather than from the screen-by-screen reference.
 - If something truly isn't covered anywhere, say you're not certain and point to the
   single most likely screen to look — that's still concrete, and better than inventing
@@ -252,7 +252,7 @@ since it also loses everything else the trial offered.)
 
 If you run a table, you subscribe to a paid tier and your players join **free as Copper
 members**. They inherit your tier's styling inside your campaign, can build their own
-versions of sessions, and only need to spend tokens to generate their *own* images —
+version of the campaign, and only need to spend tokens to generate their *own* images —
 which they can buy as packs while they're in your (paid) campaign. So one paid Story
 Master can outfit a whole group; players pay nothing unless they want their own art.
 
@@ -436,7 +436,117 @@ See how it looks on the printed page.
 
 ---
 
-## 11. Assets (the Asset Library)
+## 11. Versions — your own edition of the book
+
+A **version** is your own edition of a campaign's book. It holds a complete set of
+choices — the cover, the title, the layout, the art style, the narrative style — plus your
+own copy of the narrative and the pictures for any session you've branched. Two people can
+read the same campaign and build completely different books from it, and neither can change
+the other's. A version belongs to one person, spans the whole campaign, and stays exactly as
+you left it when you come back.
+
+Think of it as a **printing of a book**, not a draft of one. Versions sit beside each other
+rather than in a line — yours isn't a newer edition of the Story Master's, it's a different
+one.
+
+**What a version holds**
+
+- **The cover and title block** — book title, subtitle, title colour, title style,
+  placement and size, plus the cover, back cover and title-page images.
+- **The layout** — layout style, picture borders and frames, caption style, body font, drop
+  cap, running page header, session dividers and whether each session starts on a fresh
+  page, and whether to include the cover page, the character page and the contents.
+- **The styles** — art style, narrative style, narrative verbosity.
+- **The content of every session you've branched** — the panels and their pictures, prompts,
+  order and locks; the narrative intro, sections and outro; the Direction notes and
+  outlines; the per-session character looks; and which sessions are in the book at all.
+
+**What a version doesn't hold**
+
+- **Sessions you haven't branched.** A version only holds its own copy of a session once you
+  make one there. Everywhere else it reads the Story Master's canonical session — which is
+  what makes a version cheap: branch the one session you want to change, and the rest of the
+  book is still the Story Master's.
+- **The campaign itself** — characters, assets, the transcript, the campaign name and image
+  belong to the campaign, not to any version.
+- **The campaign's name.** Your book title *starts* as the campaign name, but once the
+  version exists they're separate things. Renaming the campaign later does **not** rename
+  your book.
+
+**The canonical version**
+
+Every campaign has one **canonical** version. It's the Story Master's, it's created
+automatically the first time any session is worked on, and it's what everyone else's version
+reads through for sessions they haven't branched themselves. It belongs to whoever currently
+holds the Story Master role, so it follows a handover.
+
+**Making a version**
+
+**Your first version of a campaign is free. Making another one needs Gold or higher on your
+own paid plan** — a Story Master's plan doesn't extend this one, and the Free Trial doesn't
+include it. A trial account gets one version, and keeps every art style.
+
+- **You always make a version from a session, never from nothing.** Branch a session and the
+  version comes into being around it. The buttons are **Make My Version** (your first one on
+  a session) and **New Version** (once you already have one there).
+- **You copy whichever version is on screen**, whoever owns it — the canonical usually, or
+  your own if you want to try a second idea without losing the first.
+- **The session has to be Ready.** The Story Master publishes a session before anyone else
+  can branch it.
+- **You must name it, every time.** A version appears on every session in the campaign, so
+  the name is the only thing telling you which book you're looking at. Names must be unique
+  among your own versions of that campaign.
+- **Adding a session to a version you already own is always free** — that isn't a new
+  version, it's an existing one picking up another session.
+
+Branching copies the panels and their pictures, the narrative and its summaries, the
+Direction notes, the outlines, the per-session character looks, the casting, and the art and
+narrative styles. One deliberate exception: when you add a *second* session to a version you
+already have, the content comes from the session you branched but the **style comes from
+your version** — otherwise your book would render half in one art style and half in another.
+
+**Who can change what**
+
+**You can look at anyone's version. You can only change your own.** Opening someone else's
+shows you their book, their cover and their layout exactly as they have it; nothing you do
+while looking at it is saved to their version, and Campaignia tells you rather than failing
+quietly. **The Story Master isn't an exception** — if a Story Master wants a member to have a
+differently-styled book, the answer is to make a version for them, which carries the layout,
+the art style and the narrative too.
+
+**What's saved, and when**
+
+**Everything on the Preview & Export tab saves automatically** — there's no Save button for
+cover and layout settings. Change the title and click away; pick a border; choose a colour;
+each is written to your version as you make it. The first time you open Preview & Export on a
+version, its settings are written in as they stand, so the version genuinely owns them and
+the book you branched from can be restyled later without yours changing underneath you. The
+title and settings then follow the book everywhere — the Optimize tab renders with them, the
+Order and Publish tab shows them, and they're still there when you come back tomorrow.
+
+**Subtitles are optional and empty by default.** Leave the field blank and nothing prints
+under the title; if you want the session dates there, type them.
+
+**Building, publishing and printing a version**
+
+- **The book you build is the version selected in the picker** — preview, Optimize, save,
+  publish, print and order all carry that selection, so you can't optimize one version and
+  publish another by accident.
+- **Optimize saves per version and per layout style**, so optimizing in Magazine doesn't
+  disturb the Picture Book layout you approved last week, or anyone else's book.
+- **Publishing takes a snapshot** — a published story is a copy of the exact file you
+  approved, with its own Library record. Change your cover afterwards and the published book
+  keeps the one it went out with.
+- **That's how you publish a series.** Publish the first few sessions as Episode One, then
+  change the cover and subtitle, include the next few sessions and publish Episode Two — from
+  the *same* version, so the font, frames and layout stay consistent across the run while the
+  cover and subtitle change per issue. Episode One in the Library is untouched.
+- **Renaming and deleting act on the version you're looking at**, never on another. Deleting
+  is done a session at a time.
+
+---
+
+## 12. Assets (the Asset Library)
 
 Assets keep your story consistent across sessions. An asset is a reference image — of a
 **location**, a **recurring minor character (NPC)**, or an **item** — that Campaignia
@@ -463,7 +573,7 @@ a key ally) belongs on the **Characters tab** with the NPC flag.
 
 ---
 
-## 12. Archives
+## 13. Archives
 
 The Archive is a campaign-wide gallery of every image you've saved off — from the
 storyboard or from character creation. See each image full-size with details, and
@@ -484,7 +594,7 @@ dashboard.
 
 ---
 
-## 13. Members
+## 14. Members
 
 The Members screen (inside a campaign) is where you invite people and manage who's in
 it. Every campaign has exactly one **Story Master**.
@@ -505,7 +615,7 @@ it. Every campaign has exactly one **Story Master**.
 
 ---
 
-## 14. Publish
+## 15. Publish
 
 Turn finished sessions into a graphic novel — published to the Library and/or ordered as
 a printed book. Three parts:
@@ -550,7 +660,7 @@ a printed book. Three parts:
 
 ---
 
-## 15. The public Library
+## 16. The public Library
 
 The Library is where you browse everything the Campaignia community has made public. Two
 sides: a gallery of **public images** (single images users flagged public, credited to
@@ -560,7 +670,7 @@ It's also where your own published stories and public images appear to the world
 
 ---
 
-## 16. Custom Art Styles (Platinum)
+## 17. Custom Art Styles (Platinum)
 
 On the **Platinum** tier you can build your own art styles, under **Custom Art Styles**
 in the profile menu. Click **New style**, name it, and upload **2–4 reference images that
@@ -578,7 +688,7 @@ just can't make new ones.
 
 ---
 
-## 17. Tokens at the top + buying bundles
+## 18. Tokens at the top + buying bundles
 
 - **Token count (top bar):** the gem icon and number in the header is your current total
   token balance — your monthly use-it-or-lose-it tokens plus your carry-over tokens. Click
@@ -590,7 +700,7 @@ just can't make new ones.
 
 ---
 
-## 18. Common goals — how to do it
+## 19. Common goals — how to do it
 
 Task-oriented answers. Match the user's goal to one of these and give the concrete steps.
 
@@ -666,13 +776,14 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 
 ---
 
-## 19. Why can't I… / troubleshooting
+## 20. Why can't I… / troubleshooting
 
 Friction points and what's actually going on.
 
 - **"Why can't I create a campaign or session?"** You're on **Copper** (or your trial
-  ended / you downgraded). Copper can join and build its own versions inside a paid Story
-  Master's campaign, but can't create its own campaigns or sessions. Subscribe to create.
+  ended / you downgraded). Copper can join and build one version of its own inside a paid
+  Story Master's campaign, but can't create its own campaigns or sessions. Subscribe to
+  create.
 - **"Why is there a watermark on my images?"** Only **Free Trial** images are
   watermarked. On any paid tier — or as a Copper member under a paid Story Master — your
   images are clean.
@@ -715,7 +826,7 @@ Friction points and what's actually going on.
 
 ---
 
-## 20. Quick FAQ
+## 21. Quick FAQ
 
 - **Do tokens expire?** Your monthly use-it-or-lose-it tokens do (each cycle); purchased
   and carry-over tokens don't.
