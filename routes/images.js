@@ -441,7 +441,11 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
   var refFraming = (shape === 'reference');
   const editPrompt = (stylePrefix ? stylePrefix + '\n\n' : '') +
     (refFraming
-      ? 'You are editing an EXISTING single-character reference image, provided as Image 1. It shows ONE character on a plain background. Keep that SAME single figure: identical face, body type, species, hair, distinctive features, outfit, colors, and pose, and change ONLY the following, leaving everything else untouched. Output exactly ONE figure: do NOT create a model sheet, turnaround, or multiple side-by-side copies, and do not add any other characters, creatures, or objects.\n\n'
+      // v3.0.587 -- "a plain background" IS THE PHRASE THAT COST TD-342, and it was still here.
+      // The canonical generator was fixed on 2026-08-08 by naming the colour; this path kept the
+      // adjective, so a retouch could hand back a figure on a grey sweep or a floor. The staging
+      // is now dictated here too, from the one shared string.
+      ? 'You are editing an EXISTING single-character reference image, provided as Image 1. It shows ONE character. Keep that SAME single figure: identical face, body type, species, hair, distinctive features, outfit, colors, and pose, and change ONLY the following, leaving everything else untouched. Output exactly ONE figure: do NOT create a model sheet, turnaround, or multiple side-by-side copies, and do not add any other characters, creatures, or objects.\n\n' + CHAR_REF_STAGING
       : 'You are editing an EXISTING comic panel, provided as Image 1. Keep Image 1 the same \u2014 ' +
         'same composition, framing, background, the characters already present and their faces and ' +
         'poses, colors, lighting, and art style \u2014 and apply ONLY the following change, leaving ' +
@@ -567,6 +571,61 @@ function characterNameMatches(name, lowerText) {
   }
   return false;
 }
+// ===============================================================================================
+// CHARACTER HEIGHT IN THE PROMPTS -- TD-345(d), v3.0.586.
+//
+// Ian, 2026-08-08: "I struggled keeping character heights accurate in scenes." And 2026-08-09:
+// "just make sure their heights are written into the character prompts. That get copied from
+// session to session."
+//
+// WHERE IT IS STORED: as a marked line inside `session_characters.prompt`. That row is a
+// per-session SNAPSHOT and it is carried forward from the previous session's snapshot, so a height
+// written into it copies session to session by the mechanism that already exists -- which is
+// exactly what Ian described, and it is what makes TD-345(f) true without a schema change:
+// "if a character that's tall in session 6 gets shrunk, we would be screwed."
+//
+// WHERE IT IS DELIVERED, AND THIS IS THE PART THAT IS NOT OBVIOUS: on the NAME LINE, not in the
+// description. When a character has a reference image, buildCharacterBlock deliberately DROPS the
+// description (see linesTrim below -- it "only invites cross-character attribute bleed"), and a
+// reference image is the normal case. A height left in the description would therefore never reach
+// the model on the very path that matters. So it is parsed out of the stored prompt and promoted
+// onto the name line, which survives both the full and the trimmed forms.
+//
+// THE MARKER IS LOAD-BEARING and must be normalised at every write and read point -- the same rule
+// the `STYLE:` token carries in the custom art styles. It lives here, once, and extract.js reads it
+// through the export rather than repeating the string.
+var CHAR_HEIGHT_TAG = 'HEIGHT:';
+var CHAR_HEIGHT_RE = /^[ \t]*HEIGHT:[ \t]*(.+)$/mi;
+// Feet as a decimal to words a model reads well. 5.5 -> "about 5 feet 6 inches tall".
+// Rounded to the nearest inch: the slider is free-sliding, and "5 feet 5.97 inches" is noise.
+function charHeightPhrase(ft) {
+  var n = parseFloat(ft);
+  if (!(n > 0)) return '';
+  var inches = Math.round(n * 12);
+  var f = Math.floor(inches / 12), i = inches % 12;
+  if (f <= 0) return 'about ' + inches + ' inches tall';
+  return 'about ' + f + (f === 1 ? ' foot' : ' feet') + (i ? ' ' + i + (i === 1 ? ' inch' : ' inches') : '') + ' tall';
+}
+// Strip any existing marker, then add the current one. IDEMPOTENT BY CONSTRUCTION: a prompt carried
+// forward already carries a marker, and appending a second would stack them for as long as the
+// campaign runs. Stripping first also means a height CHANGED today is picked up by sessions created
+// from now on, while every session already snapshotted keeps the height it was built with.
+function charPromptWithHeight(prompt, heightFt) {
+  var base = String(prompt == null ? '' : prompt).replace(CHAR_HEIGHT_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  var phrase = charHeightPhrase(heightFt);
+  if (!phrase) return base;                 // no height set: the prompt is untouched (TD-345(e))
+  return (base ? base + '\n' : '') + CHAR_HEIGHT_TAG + ' ' + phrase;
+}
+// Split a stored prompt into the description the model should read and the height phrase, so the
+// caller can put each where it belongs.
+function charSplitHeight(prompt) {
+  var raw = String(prompt == null ? '' : prompt);
+  var m = CHAR_HEIGHT_RE.exec(raw);
+  return {
+    desc: raw.replace(CHAR_HEIGHT_RE, '').replace(/\n{3,}/g, '\n\n').trim(),
+    height: m ? String(m[1]).trim() : ''
+  };
+}
 function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
   if (!chars || !chars.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
@@ -610,19 +669,23 @@ function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
     var beforeChange = hasChange && (pIdx < changeIdx);
 
     var nameLine = characterCanonicalName(c.name) + (c.cls ? ' (' + c.cls + ')' : '');
+    // v3.0.586 -- TD-345(d). The height rides the NAME LINE so it survives the trimmed form
+    // below, which drops the description whenever a reference image is present.
+    var _hSplit = charSplitHeight(c.snapshot_prompt || c.canonical_prompt || c.description || '');
+    if (_hSplit.height) nameLine += ', ' + _hSplit.height;
     var desc, refUrl;
     if (beforeChange) {
       // Pre-change panel: snapshot prompt with the change text stripped off,
       // so the character shows their OLD look.
-      var base = c.snapshot_prompt || c.canonical_prompt || c.description || '';
+      var base = charSplitHeight(c.snapshot_prompt || c.canonical_prompt || c.description || '').desc;
       if (c.change_note) base = base.split('\n\nRECENT CHANGE:')[0];
       desc = base;
       refUrl = c.prior_reference_url || c.canonical_reference_url || null;
     } else {
       // At/after the change (or no change at all): amended snapshot.
-      desc = (c.snapshot_prompt && c.snapshot_prompt.trim())
+      desc = charSplitHeight((c.snapshot_prompt && c.snapshot_prompt.trim())
         ? c.snapshot_prompt
-        : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description);
+        : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description)).desc;
       refUrl = c.snapshot_reference_url || c.canonical_reference_url || null;
     }
     var hasRef = !!(refUrl && /^https?:\/\//.test(refUrl));
@@ -796,6 +859,42 @@ async function logImageGeneration(db, userId, source, refId, forkId) {
 // Built from the canonical/amended text. If the character has an uploaded
 // portrait, the editing model conditions on it; otherwise it's pure
 // text-to-image. Returns the image URL. Caller stores it + logs it.
+// v3.0.587 -- THE STAGING IS ONE STRING, USED BY EVERY PATH THAT PRODUCES A CHARACTER REFERENCE.
+// It was written once, inline, for the canonical generator (TD-342) -- and the other two paths never
+// got it. The Session Characters page has a Regenerate button AND a Retouch button, and both write
+// a reference image that the Company page composites:
+//   buildEditReferenceInput  said nothing about staging at all;
+//   submitRetouch            said "ONE character on a plain background" -- and "plain" is the exact
+//                            loose word TD-342 identified as the cause of grey studio sweeps, warm
+//                            backdrops, and worst of all A FLOOR.
+// So a character regenerated from that page came back standing on a ground, and no amount of alpha
+// cutting downstream can rescue that -- the floor is part of the drawing.
+// Ian, 2026-08-09: "if a user hits the regenerate button on the Session Character page... it should
+// still build the character using the new transparent format."
+// ONE STRING, THREE CALLERS. Three copies of a staging spec is three chances for the next one to
+// drift -- which is exactly what happened here, at the scale of a whole feature.
+var CHAR_REF_STAGING =
+    'STAGING - follow exactly:\n' +
+    '- Background must be PURE WHITE (#FFFFFF), completely empty, edge to edge.\n' +
+    '- NO floor, NO ground, NO stage, NO horizon line, NO cast shadow on the ground, ' +
+    'NO scenery, NO props, NO texture, NO gradient, NO vignette.\n' +
+    '- The character is cut out against white, as if on a blank page.\n' +
+    '- Show the ENTIRE body from the top of the head to the soles of both feet.\n' +
+    // v3.0.562 -- ASK FOR THE MARGIN, DO NOT FORBID IT. v3.0.559 demanded feet flush to the bottom
+    // edge; the model left 4.8 percent of white beneath them anyway, and Ian was right that flush
+    // would look CROPPED on the character card where the image is seen on its own.
+    // A PROPORTION, NOT A PIXEL COUNT. The model does not reason reliably in pixels but composes
+    // well, and one twentieth is almost exactly what it produced unprompted -- so this asks for the
+    // thing it already does rather than for a thing it ignores.
+    // IT DOES NOT NEED TO BE EXACT. The Company page assumes this margin and the contact shadow is a
+    // soft ellipse the boots overlap, so a percent or two of variance disappears into the shadow
+    // instead of showing as a float. Deliberately no pixel-scanning of the image: a scan that is
+    // right most of the time would eventually put one character through the floor, and nobody would
+    // know until the book was printed.
+    '- Both feet must be visible, and there must be a SMALL EVEN MARGIN of empty white below ' +
+    'them -- roughly one twentieth of the image height. Do not let the feet touch the bottom edge.\n' +
+    '- Do not crop any part of the character. Do not add text, labels or borders.\n\n';
+
 function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
   // v3.0.559 -- TD-342: THE STAGING IS DICTATED, NOT SUGGESTED.
   // It used to say 'plain neutral background', and 'neutral' was read loosely -- grey studio
@@ -818,26 +917,7 @@ function buildReferenceInput(descriptionText, portraitUrl, modelKey) {
     IP_GUARD_IMG +
     'Full-body character reference portrait. Neutral standing pose, facing forward, ' +
     'comic book art style, even soft lighting.\n\n' +
-    'STAGING - follow exactly:\n' +
-    '- Background must be PURE WHITE (#FFFFFF), completely empty, edge to edge.\n' +
-    '- NO floor, NO ground, NO stage, NO horizon line, NO cast shadow on the ground, ' +
-    'NO scenery, NO props, NO texture, NO gradient, NO vignette.\n' +
-    '- The character is cut out against white, as if on a blank page.\n' +
-    '- Show the ENTIRE body from the top of the head to the soles of both feet.\n' +
-    // v3.0.562 -- ASK FOR THE MARGIN, DO NOT FORBID IT. v3.0.559 demanded feet flush to the bottom
-    // edge; the model left 4.8 percent of white beneath them anyway, and Ian was right that flush
-    // would look CROPPED on the character card where the image is seen on its own.
-    // A PROPORTION, NOT A PIXEL COUNT. The model does not reason reliably in pixels but composes
-    // well, and one twentieth is almost exactly what it produced unprompted -- so this asks for the
-    // thing it already does rather than for a thing it ignores.
-    // IT DOES NOT NEED TO BE EXACT. The Company page assumes this margin and the contact shadow is a
-    // soft ellipse the boots overlap, so a percent or two of variance disappears into the shadow
-    // instead of showing as a float. Deliberately no pixel-scanning of the image: a scan that is
-    // right most of the time would eventually put one character through the floor, and nobody would
-    // know until the book was printed.
-    '- Both feet must be visible, and there must be a SMALL EVEN MARGIN of empty white below ' +
-    'them -- roughly one twentieth of the image height. Do not let the feet touch the bottom edge.\n' +
-    '- Do not crop any part of the character. Do not add text, labels or borders.\n\n' +
+    CHAR_REF_STAGING +
     'CHARACTER: ' + descriptionText;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   let model = IMAGE_MODELS[key];
@@ -918,7 +998,13 @@ function buildEditReferenceInput(baseImageUrl, changeText, charName, modelKey) {
     'features, outfit, colors and pose as the reference image. ' +
     'Apply ONLY this one appearance change: ' + changeText + '. ' +
     'Do not add or draw any other creatures, characters, or objects. ' +
-    'Comic book art style.';
+    'Comic book art style.\n\n' +
+    // v3.0.587 -- THE SAME STAGING THE CANONICAL GENERATOR DICTATES. Without it this path kept
+    // whatever ground the source image happened to carry, so regenerating an OLD character from
+    // the Session Characters page reproduced its floor -- and the alpha cut cannot remove a floor
+    // that is drawn into the picture. Restating it here is also what CONVERTS an old character:
+    // the figure is preserved, the stage is replaced.
+    CHAR_REF_STAGING;
   const key = IMAGE_MODELS[modelKey] ? modelKey : 'nano2';
   if (key === 'nano2' && baseImageUrl && /^https?:\/\//.test(baseImageUrl)) {
     return { model: IMAGE_EDIT_MODELS.nano2, input: { prompt: instruction, image_urls: [baseImageUrl], num_images: 1, aspect_ratio: '3:4', output_format: 'png', safety_tolerance: '5', resolution: '1K' } };
@@ -1482,7 +1568,13 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       // v3.0.573 -- TD-362. A character reference is generated on a white ground BY SPEC and is the
       // only image this product composites over another, so it is the only one whose ground is cut to
       // real alpha. A scene image has a real background and must keep every pixel of it.
-      const imageUrl = await persistToR2(falUrl, { cutWhite: job.kind === 'char_ref' });
+      // v3.0.587 -- session_ref IS A CHARACTER REFERENCE. The Session Characters page writes one
+      // with Regenerate and with Retouch, and the Company page composites it exactly like the
+      // canonical -- so it needs the same real alpha. Gating on char_ref alone meant those two
+      // buttons handed back an opaque white box that erased its neighbours on the line-up.
+      // A SCENE image still keeps every pixel: it has a real background and must not be cut.
+      const _cutWhite = (job.kind === 'char_ref' || job.kind === 'session_ref');
+      const imageUrl = await persistToR2(falUrl, { cutWhite: _cutWhite });
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3
@@ -1682,6 +1774,10 @@ router.post('/backfill-dims', requireAuth, requireAdmin, async function (req, re
 });
 module.exports = router;
 module.exports.generateReferenceImage = generateReferenceImage;
+// v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.
+module.exports.charPromptWithHeight = charPromptWithHeight;
+module.exports.charSplitHeight = charSplitHeight;
+module.exports.charHeightPhrase = charHeightPhrase;
 module.exports.editReferenceImage = editReferenceImage;
 module.exports.getSelectedModel = getSelectedModel;
 module.exports.logImageGeneration = logImageGeneration;

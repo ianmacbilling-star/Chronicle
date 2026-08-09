@@ -3892,6 +3892,25 @@ var COMPOSED_CACHE_MAX = 24;
 // different ids, the state is split across instances and NOTHING run-scoped can be relied on --
 // not the fix control, not the optimize loop's grow store, not the move store.
 var PROC_ID = Math.random().toString(36).slice(2, 6) + ':' + process.pid;
+// v3.0.588 -- TD-370. WHICH SESSIONS THE APPROVED BOOK WAS BUILT FROM, AS ONE STRING.
+//
+// The approved layout is pinned by `co`, the settings string. `session_includes` LIVES OUTSIDE IT.
+// So adding or removing a session left the saved layout still loading, still publishing and still
+// printing -- describing the book as it was, with nothing noticing. Publishing again re-emitted the
+// PREVIOUS issue's bytes under the new listing, which is how the series-publishing steps came to
+// look wrong (TD-369).
+//
+// This is TD-219 reached through a different door: "the printed book is the approved book" is the
+// right default, and the reader must be TOLD when the two have parted company.
+//
+// SORTED, so the string describes the SET rather than the order a query happened to return.
+function includeFingerprint(incMap) {
+  try {
+    var ids = Object.keys(incMap || {}).filter(function (k) { return !!incMap[k]; });
+    ids.sort(function (a, b) { return Number(a) - Number(b); });
+    return ids.join(',');
+  } catch (e) { return ''; }
+}
 function composedCacheKey(campaignId, req) {
   var q = req && req.query ? req.query : {};
   // v3.0.454 -- as_version joins the key. Two versions belonging to ONE user share an as_user, so
@@ -6063,6 +6082,23 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
       return res.status(409).json({ error: 'optimize_required',
         message: 'There is no saved layout for this book in this style. Open the Optimize tab, run Optimize (or load your last saved version) and click Save, then order.' });
     }
+    // v3.0.588 -- TD-370. THE SESSIONS CHANGED, SO THE APPROVED BOOK IS NOT THIS BOOK.
+    // Note this REFUSES where v3.0.496 deliberately stopped refusing on a SETTINGS mismatch,
+    // and the distinction is the point: a different border renders the same story differently,
+    // while a different set of sessions is a different story. The attestation v3.0.496 leans on
+    // -- the customer reviewing the interior on screen before paying -- cannot help here,
+    // because the interior they would be shown is the OLD one and looks perfectly correct.
+    // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT: entries saved before this build have none
+    // and must keep ordering exactly as they do today.
+    {
+      var _loInc = await lastOptimizedEntry(req, req.params.campaignId, co.arrange);
+      var _nowFp = includeFingerprint(_incMap);
+      if (_loInc && _loInc.inc != null && _loInc.inc !== _nowFp) {
+        try { console.warn('[print-interior] refused: included sessions changed since approval. approved: ' + (_loInc.inc || '(none)') + ' | now: ' + _nowFp); } catch (e) {}
+        return res.status(409).json({ error: 'includes_changed',
+          message: 'The sessions included in this book have changed since this layout was approved, so the approved book is not the book you are looking at. Open the Optimize tab, run Optimize and Save, then order.' });
+      }
+    }
     // v3.0.496 -- ORDERING NO LONGER REFUSES ON A SETTINGS MISMATCH EITHER.
     // The previous comment here read: "a different border, preset or paper produces a
     // different book, and neither answer is safe to pick silently." That reasoning was
@@ -6746,6 +6782,18 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     // Optimize tab, and the only routes to Publish run through Optimize or through Load
     // Last Optimized File, so it has necessarily been shown. Ian: 'They have already seen
     // all that.' A second notice on the publish card would be the same warning twice.
+    // v3.0.588 -- TD-370. THE SESSIONS CHANGED, SO THE SAVED BOOK IS NOT THIS BOOK.
+    // This REFUSES where the `co` check below only logs, and the difference is deliberate: a
+    // settings change renders the same story differently, while an include change makes it a
+    // DIFFERENT STORY. Publishing the saved bytes would put the previous issue on the Library
+    // under the new listing -- silently, and permanently, because a published story is a
+    // snapshot.
+    // ONLY WHEN THE APPROVAL CARRIES A FINGERPRINT. Entries saved before this build have none,
+    // and must keep publishing exactly as they do today.
+    if (_loE.inc != null && _loE.inc !== includeFingerprint(_incMap)) {
+      try { console.warn('[publish-story] refused: the included sessions have changed since this layout was approved. approved: ' + (_loE.inc || '(none)') + ' | now: ' + includeFingerprint(_incMap)); } catch (e) {}
+      return res.status(409).json({ error: 'includes_changed', message: 'The sessions included in this book have changed since this layout was approved, so the saved book is not the book you are looking at. Open the Optimize tab, run Optimize and Save, then publish.' });
+    }
     if ((_loE.co || '') !== (req.query.co || '')) {
       try { console.log('[publish-story] publishing the SAVED layout; current settings differ. saved co: ' + (_loE.co || '(none)') + ' | current co: ' + (req.query.co || '(none)')); } catch (e) {}
     }
@@ -7146,7 +7194,10 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
-  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats };
+  // v3.0.588 -- TD-370. The include set is resolved here already; handing it back means
+  // save-optimized records the SAME computation the book was assembled from rather than
+  // repeating it and risking a second answer.
+  return { campaign: campaign, html: html, layoutStyle: layoutStyle, sessionCount: sessionsWithData.length, manifest: manifest, co: co, beats: beats, incFp: includeFingerprint(_incMap) };
 }
 
 // PHASE 3 (page-packer) v1: render the packed book. Measure -> pack -> feed the packer's
@@ -12306,6 +12357,11 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
                          // protective quick save (not flattened, overwritten seconds later) from
                          // the real one. Absent on entries written before this build, which is why
                          // publish tests `=== false` rather than falsiness.
+                         // v3.0.588 -- TD-370. The sessions this layout was approved from.
+                         // Absent on entries written before this build, which is why the readers
+                         // below test for PRESENCE before comparing -- an old approval must not
+                         // start refusing to publish.
+                         inc: (built && built.incFp != null) ? built.incFp : null,
                          flattened: !_quick };
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt }, _vid);
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
