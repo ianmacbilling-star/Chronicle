@@ -4814,7 +4814,15 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
-  ${titleFaceImp}
+  /* v3.0.595 -- WAS a bare reference to titleFaceImp, WHICH ONLY EXISTS IN buildNovelHTML. This is
+     buildSessionHTML. The name was carried across when the cover-title work was copied between the
+     two builders, and
+     every session Preview threw ReferenceError. node --check cannot
+     see an undefined reference, the book path never reaches this line, and nobody rendered a single
+     session -- so it shipped and stayed broken until Ian hit it on production.
+     CALLED DIRECTLY rather than re-declared, so there is no second variable to drift from the first,
+     and it now reads exactly like the line beneath it. */
+  ${coverTitleFaceCss(co && co.titleStyle)}
   ${coverTitleCss(co && co.titleStyle)}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
