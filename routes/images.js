@@ -567,6 +567,61 @@ function characterNameMatches(name, lowerText) {
   }
   return false;
 }
+// ===============================================================================================
+// CHARACTER HEIGHT IN THE PROMPTS -- TD-345(d), v3.0.586.
+//
+// Ian, 2026-08-08: "I struggled keeping character heights accurate in scenes." And 2026-08-09:
+// "just make sure their heights are written into the character prompts. That get copied from
+// session to session."
+//
+// WHERE IT IS STORED: as a marked line inside `session_characters.prompt`. That row is a
+// per-session SNAPSHOT and it is carried forward from the previous session's snapshot, so a height
+// written into it copies session to session by the mechanism that already exists -- which is
+// exactly what Ian described, and it is what makes TD-345(f) true without a schema change:
+// "if a character that's tall in session 6 gets shrunk, we would be screwed."
+//
+// WHERE IT IS DELIVERED, AND THIS IS THE PART THAT IS NOT OBVIOUS: on the NAME LINE, not in the
+// description. When a character has a reference image, buildCharacterBlock deliberately DROPS the
+// description (see linesTrim below -- it "only invites cross-character attribute bleed"), and a
+// reference image is the normal case. A height left in the description would therefore never reach
+// the model on the very path that matters. So it is parsed out of the stored prompt and promoted
+// onto the name line, which survives both the full and the trimmed forms.
+//
+// THE MARKER IS LOAD-BEARING and must be normalised at every write and read point -- the same rule
+// the `STYLE:` token carries in the custom art styles. It lives here, once, and extract.js reads it
+// through the export rather than repeating the string.
+var CHAR_HEIGHT_TAG = 'HEIGHT:';
+var CHAR_HEIGHT_RE = /^[ \t]*HEIGHT:[ \t]*(.+)$/mi;
+// Feet as a decimal to words a model reads well. 5.5 -> "about 5 feet 6 inches tall".
+// Rounded to the nearest inch: the slider is free-sliding, and "5 feet 5.97 inches" is noise.
+function charHeightPhrase(ft) {
+  var n = parseFloat(ft);
+  if (!(n > 0)) return '';
+  var inches = Math.round(n * 12);
+  var f = Math.floor(inches / 12), i = inches % 12;
+  if (f <= 0) return 'about ' + inches + ' inches tall';
+  return 'about ' + f + (f === 1 ? ' foot' : ' feet') + (i ? ' ' + i + (i === 1 ? ' inch' : ' inches') : '') + ' tall';
+}
+// Strip any existing marker, then add the current one. IDEMPOTENT BY CONSTRUCTION: a prompt carried
+// forward already carries a marker, and appending a second would stack them for as long as the
+// campaign runs. Stripping first also means a height CHANGED today is picked up by sessions created
+// from now on, while every session already snapshotted keeps the height it was built with.
+function charPromptWithHeight(prompt, heightFt) {
+  var base = String(prompt == null ? '' : prompt).replace(CHAR_HEIGHT_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  var phrase = charHeightPhrase(heightFt);
+  if (!phrase) return base;                 // no height set: the prompt is untouched (TD-345(e))
+  return (base ? base + '\n' : '') + CHAR_HEIGHT_TAG + ' ' + phrase;
+}
+// Split a stored prompt into the description the model should read and the height phrase, so the
+// caller can put each where it belongs.
+function charSplitHeight(prompt) {
+  var raw = String(prompt == null ? '' : prompt);
+  var m = CHAR_HEIGHT_RE.exec(raw);
+  return {
+    desc: raw.replace(CHAR_HEIGHT_RE, '').replace(/\n{3,}/g, '\n\n').trim(),
+    height: m ? String(m[1]).trim() : ''
+  };
+}
 function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
   if (!chars || !chars.length) return { text: '', refs: [] };
   var text = (panelText || '').toLowerCase();
@@ -610,19 +665,23 @@ function buildCharacterBlock(chars, panelText, panelIndex, explicitCharIds) {
     var beforeChange = hasChange && (pIdx < changeIdx);
 
     var nameLine = characterCanonicalName(c.name) + (c.cls ? ' (' + c.cls + ')' : '');
+    // v3.0.586 -- TD-345(d). The height rides the NAME LINE so it survives the trimmed form
+    // below, which drops the description whenever a reference image is present.
+    var _hSplit = charSplitHeight(c.snapshot_prompt || c.canonical_prompt || c.description || '');
+    if (_hSplit.height) nameLine += ', ' + _hSplit.height;
     var desc, refUrl;
     if (beforeChange) {
       // Pre-change panel: snapshot prompt with the change text stripped off,
       // so the character shows their OLD look.
-      var base = c.snapshot_prompt || c.canonical_prompt || c.description || '';
+      var base = charSplitHeight(c.snapshot_prompt || c.canonical_prompt || c.description || '').desc;
       if (c.change_note) base = base.split('\n\nRECENT CHANGE:')[0];
       desc = base;
       refUrl = c.prior_reference_url || c.canonical_reference_url || null;
     } else {
       // At/after the change (or no change at all): amended snapshot.
-      desc = (c.snapshot_prompt && c.snapshot_prompt.trim())
+      desc = charSplitHeight((c.snapshot_prompt && c.snapshot_prompt.trim())
         ? c.snapshot_prompt
-        : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description);
+        : (c.canonical_prompt && c.canonical_prompt.trim() ? c.canonical_prompt : c.description)).desc;
       refUrl = c.snapshot_reference_url || c.canonical_reference_url || null;
     }
     var hasRef = !!(refUrl && /^https?:\/\//.test(refUrl));
@@ -1682,6 +1741,10 @@ router.post('/backfill-dims', requireAuth, requireAdmin, async function (req, re
 });
 module.exports = router;
 module.exports.generateReferenceImage = generateReferenceImage;
+// v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.
+module.exports.charPromptWithHeight = charPromptWithHeight;
+module.exports.charSplitHeight = charSplitHeight;
+module.exports.charHeightPhrase = charHeightPhrase;
 module.exports.editReferenceImage = editReferenceImage;
 module.exports.getSelectedModel = getSelectedModel;
 module.exports.logImageGeneration = logImageGeneration;

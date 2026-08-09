@@ -1,4 +1,7 @@
 const express = require('express');
+// v3.0.586 -- TD-345(d). The height marker is DEFINED in images.js and read from there, so the
+// writer and the reader cannot drift apart. See the note above buildCharacterBlock.
+const charHeight = require('./images');
 const genresvc = require('../services/genres');   // v3.0.488 -- stage 4 steering
 const router = express.Router();
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
@@ -433,6 +436,19 @@ async function resolveCarryForward(db, character, currentSession, forkId) {
     : (character.canonical_prompt && character.canonical_prompt.trim()
         ? character.canonical_prompt
         : (character.description || ''));
+
+  // v3.0.586 -- TD-345(d). THE HEIGHT IS WRITTEN INTO THE SNAPSHOT, WHICH IS WHAT CARRIES IT.
+  // Ian: "make sure their heights are written into the character prompts. That get copied from
+  // session to session." This row IS the per-session snapshot and the branch above already
+  // carries the previous session's prompt forward, so writing the height here means it travels
+  // with the character for free -- and every session already created keeps the height it was
+  // built with, which is TD-345(f): "if a character that's tall in session 6 gets shrunk, we
+  // would be screwed."
+  // NORMALISED, NOT APPENDED. charPromptWithHeight strips any existing marker before adding the
+  // current one, so a prompt carried forward cannot accumulate a stack of them, and a height
+  // CHANGED today is picked up by sessions created from now on rather than being frozen out.
+  // A character with no height set is returned untouched (TD-345(e)).
+  try { prompt = charHeight.charPromptWithHeight(prompt, character.height_ft); } catch (e) {}
 
   var referenceUrl = (prior && prior.reference_url)
     ? prior.reference_url
