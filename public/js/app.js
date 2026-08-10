@@ -17221,6 +17221,10 @@ var _finalizeAfterBlob = '';
 function loadFinalize() {
   applyLayoutAvailability();   // drop withheld layouts from the pickers (server is authoritative)
   if (!state.currentCampaign || !document.getElementById('finalize-before-scroll')) return;
+  // v3.0.610 -- ASK WHETHER SOMETHING IS ALREADY RUNNING, on every entry to this tab. This is the
+  // half that answers "it is running but I do not see it running": after a refresh the client has
+  // forgotten its run, and until now the button sat there looking idle and invited a second one.
+  try { optimizeAskStatus(optimizeShowBusy); } catch (e) {}
   applyOptimizeViewMode();   // clean user view by default; admin diagnostics only when toggled on
   finalizeUpdateHeader();   // show the layout + attributes immediately, before the scan finishes
   // v3.0.334 -- A RUN IN FLIGHT OWNS BOTH PANES. Stepping to another tab and back tore the rendered
@@ -19108,10 +19112,62 @@ function finalizeGoToPublish() {
 }
 function finalizeCancelOptimize() {
   window._optimizeCancelled = true;   // checked at the pre-loop auto-fire and between loop passes
+  // v3.0.610 -- tell the server the run is over. Best effort: the stale timeout is the real safety
+  // net, and this only saves the reader from waiting it out.
+  try { fetch('/api/pdf/optimize-release', { method: 'POST', credentials: 'same-origin' }).catch(function () {}); } catch (e) {}
   var _cb = document.getElementById('layoutai-cancel-btn'); if (_cb) { _cb.disabled = true; _cb.textContent = 'Cancelling...'; }
   // If the loop hasn't started yet, the pre-loop render stays in the After pane (that's the intent:
   // stop after the first, un-optimized render so the packer output can be inspected/dumped).
   if (typeof optimizeProgress === 'function') optimizeProgress('Cancelling &mdash; will stop after the current step.', {});
+}
+// v3.0.610 -- ONE OPTIMIZE RUN PER USER, AND YOU CAN SEE THE ONE YOU HAVE.
+// Ian, 2026-08-10: "I know we have had optimizing start and then when I come back it is not running
+// or it is stalled or it is running but I do not see it running. And then I hit it again... having
+// more than one running at a time with my content. I just cannot see the other one."
+//
+// EVERY GUARD THIS FILE HAD WAS A VARIABLE IN ONE TAB -- _optimizeLock is even commented "in memory
+// only, never persisted" -- so a refresh, a second tab or a second device wiped all of them while
+// the server carried on. The server now holds the claim; this asks it.
+//
+// TWO PLACES ASK, and they answer different questions. On entering the tab it is "is something
+// running that I cannot see", which is the invisible-run problem. At the click it is "may I start",
+// which is the second-run problem. The server refuses a second compose with 409 regardless, so this
+// is the courtesy, not the enforcement.
+function optimizeAskStatus(cb) {
+  fetch('/api/pdf/optimize-status?_=' + Date.now(), { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { cb(j || { running: false }); })
+    .catch(function () { cb({ running: false }); });   // never block a run because a status call failed
+}
+function optimizeBusyText(j) {
+  var mins = Math.max(1, Math.round((j.elapsedMs || 0) / 60000));
+  var which = (j.campaignName ? ('"' + j.campaignName + '"')
+             : (state.currentCampaign && String(j.campaignId) === String(state.currentCampaign.id) ? 'this book' : 'another book'));
+  return 'An Optimize run for ' + which + ' is already going in the background, started about ' +
+         mins + ' minute' + (mins === 1 ? '' : 's') + ' ago. It has to finish before another can start.';
+}
+// Shown on the Optimize tab whenever the server says a run is in flight. It is the answer to "it is
+// running but I do not see it running", so it is deliberately loud and sits above the button.
+function optimizeShowBusy(j) {
+  var host = document.getElementById('layoutai-status');
+  var btn = document.getElementById('layoutai-run-btn');
+  if (j && j.running) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Optimize running...'; btn.classList.remove('has-token'); }
+    if (host) { host.textContent = optimizeBusyText(j); host.style.color = 'var(--gold)'; }
+    // Ask again while it runs, so the tab clears itself when the run finishes rather than needing
+    // a refresh -- which is the habit that caused the double runs in the first place.
+    try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
+    window._optimizeBusyTimer = setTimeout(function () {
+      optimizeAskStatus(optimizeShowBusy);
+    }, 5000);
+    return;
+  }
+  try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
+  window._optimizeBusyTimer = null;
+  if (host && host.style.color === 'var(--gold)') { host.textContent = ''; host.style.color = ''; }
+  if (btn && btn.textContent === 'Optimize running...' && !window._aiLoopRunning && !window._aiPreloop && !window._aiFinishing) {
+    btn.disabled = false; btn.textContent = 'Optimize layout'; btn.classList.add('has-token');
+  }
 }
 async function runLayoutAiDryRun() {
   if (!state.currentCampaign) return;
@@ -19168,6 +19224,24 @@ function _runLayoutAiOptimize() {
   // in which a user navigates away. Confirmed in the wild on .350: Publish on another campaign
   // was open early in a run and correctly greyed once the passes began. Same mistake as the
   // original bug, one layer up: the run identity was bound to the click and the lock was not.
+  // v3.0.610 -- ASK THE SERVER FIRST. Placed before _aiPreloop is set and before optimizeLockStart,
+  // so a refused start leaves no client state behind to clear. The server refuses the compose with a
+  // 409 anyway; this is what turns that into a sentence rather than a broken render.
+  // A CALLBACK, NOT await: _runLayoutAiOptimize is a plain function -- node --check caught the await
+  // here, which is the one thing it does catch. The whole body re-enters through _optimizeGo once the
+  // server has answered, so nothing below runs on a refused start.
+  if (!window._optimizeCleared) {
+    optimizeAskStatus(function (j) {
+      if (j && j.running) {
+        optimizeShowBusy(j);
+        try { optimizeLogLine(optimizeBusyText(j), 'stop'); } catch (e) {}
+        return;
+      }
+      window._optimizeCleared = true;
+      try { _runLayoutAiOptimize(); } finally { window._optimizeCleared = false; }
+    });
+    return;
+  }
   window._aiPreloop = true;
   window._aiPreloopAt = Date.now();
   window._optimizeTokensSpent = 0;   // v3.0.360 -- running total for this run, reset at the click
