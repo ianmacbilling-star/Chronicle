@@ -7616,54 +7616,62 @@ function prepWireCommitOnExit() {
   } catch (e) {}
 }
 // =================================================================================================
-// BACK TO TOP -- v3.0.596. Ian, 2026-08-09: floating, always at the bottom, on every tab,
-// semi-transparent, and not on mobile.
+// BACK TO TOP -- v3.0.597. Ian, 2026-08-10: "small, semi transparent and always float at the
+// bottom... almost like a chat button." ALWAYS VISIBLE, so there is no threshold, no scroll
+// listener, no resize listener and no sync function. The CSS shows it; JS only handles the click.
+// One failure mode instead of three.
 //
-// THE THING THAT WOULD HAVE MADE THIS SILENTLY DO NOTHING: this app does not scroll the WINDOW.
-// `.main-content` is `flex:1; overflow-y:auto`, so the page body never moves and window.scrollTo(0,0)
-// is a no-op on every screen in the app. The scroller is the element, and that is what gets scrolled
-// and what gets listened to. Found by reading the stylesheet before writing the handler rather than
-// after Ian reported a button that did nothing.
+// WHAT v3.0.596 GOT WRONG, AND THIS TIME IT IS MEASURED RATHER THAN READ. The comment that stood
+// here said this app never scrolls the WINDOW, because `.main-content` is `flex:1; overflow-y:auto`.
+// That reading stopped one line short. `overflow-y:auto` only produces a scrollbar on a box with a
+// BOUNDED height, and nothing bounds this one: `body` is `min-height:100vh`, `.app-layout` is
+// `min-height:calc(100vh - 44px - 35px)`, and `.main-content` carries no height and no max-height at
+// all. It grows to fit its content, so scrollHeight always equals clientHeight.
 //
-// It still falls back to the window if that container is ever absent, so a future layout change
-// degrades to "works" rather than to "silently dead".
-function _toTopScroller() {
-  return document.querySelector('.main-content') || document.scrollingElement || document.body;
+// MEASURED IN THE CONSOLE ON A SCROLLED SESSION PAGE, 2026-08-10:
+//   .main-content  scrollTop 0     scrollHeight 9134   clientHeight 9134
+//   scrollingElement scrollTop 8406  scrollHeight 9204
+// The container cannot scroll. The document does.
+//
+// The old show condition was `.main-content.scrollTop > 400` -- a number that is structurally always
+// zero -- so the button never appeared on ANY screen, not merely on Sessions. And the old fallback
+// did not rescue it: it fired only when the element was ABSENT, and it is present, just not
+// scrolling. A guard against the wrong failure.
+//
+// THE RULE THAT COMES OUT OF IT: DO NOT NAME A SCROLLER. `findScrollParent` was already in this file
+// several hundred lines above, and it picks one by MEASUREMENT -- it demands the overflow rule AND
+// `scrollHeight > clientHeight + 2`. Ask it from the view that is actually on screen, then scroll
+// every candidate to zero. Scrolling a box that is already at zero is a no-op, so this is right
+// whichever element is live today and stays right if the layout is ever given a real height.
+function _toTopAnchor() {
+  try {
+    var kids = document.querySelectorAll('.main-content > div');
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].offsetParent !== null) return kids[i];
+    }
+  } catch (e) {}
+  return document.querySelector('.main-content');
+}
+function _toTopTargets() {
+  var out = [];
+  function add(el) { if (el && out.indexOf(el) < 0) out.push(el); }
+  try {
+    if (typeof findScrollParent === 'function') add(findScrollParent(_toTopAnchor()));
+  } catch (e) {}
+  try { add(document.querySelector('.main-content')); } catch (e) {}
+  try { add(document.scrollingElement || document.documentElement); } catch (e) {}
+  return out;
 }
 function scrollBackToTop() {
-  try {
-    var el = _toTopScroller();
-    if (el && typeof el.scrollTo === 'function') { el.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    if (el) el.scrollTop = 0;
-  } catch (e) { try { _toTopScroller().scrollTop = 0; } catch (_) {} }
-}
-// Shown only once there is something to come back FROM. A button that is always there is furniture;
-// one that appears when you have scrolled is an answer to a question you just asked.
-// 400px rather than a screen height: on a tall monitor a screen height is a long way to scroll
-// before the way back appears.
-function _toTopSync() {
-  try {
-    var btn = document.getElementById('to-top-btn');
-    if (!btn) return;
-    var el = _toTopScroller();
-    var y = (el && typeof el.scrollTop === 'number') ? el.scrollTop : 0;
-    btn.style.display = (y > 400) ? 'flex' : 'none';
-  } catch (e) {}
-}
-function _toTopWire() {
-  if (_toTopWire._done) return;
-  var el = _toTopScroller();
-  if (!el) return;
-  _toTopWire._done = true;
-  try {
-    el.addEventListener('scroll', _toTopSync, { passive: true });
-    window.addEventListener('resize', _toTopSync);
-    _toTopSync();
-  } catch (e) {}
-}
-if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _toTopWire);
-  else _toTopWire();
+  var list = _toTopTargets();
+  for (var i = 0; i < list.length; i++) {
+    var el = list[i];
+    try {
+      if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0, behavior: 'smooth' });
+      else el.scrollTop = 0;
+    } catch (e) { try { el.scrollTop = 0; } catch (_) {} }
+  }
+  try { if (typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
 }
 function prepCommitFields() {
   try {

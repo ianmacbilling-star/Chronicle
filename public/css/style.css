@@ -2365,8 +2365,13 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    The Sessions list is one tap away and still navigates, so nothing is unreachable without them. */
 @media (max-width:640px){ #sess-nav-prev, #sess-nav-next { display:none; } }
 
-/* v3.0.596 -- BACK TO TOP. Ian: floating, always at the bottom, on every tab, semi-transparent,
-   "not on mobile at all really... but on a big screen it's needed."
+/* v3.0.597 -- BACK TO TOP. Ian, 2026-08-10: "small, semi transparent and always float at the
+   bottom... almost like a chat button."
+   ALWAYS ON, which is why `display` is flex here and JS never touches it. v3.0.596 shipped it
+   `display:none` and let a scroll handler reveal it past 400px; that handler was watching
+   `.main-content.scrollTop`, which is structurally always 0 because the box has no bounded height,
+   so the button never appeared on any screen. The threshold is gone rather than repaired -- an
+   always-present control needs no state, and state is what was wrong.
    BOTTOM RIGHT, which is where a reader's hand already is on a wide screen and where this control
    is conventional. Deliberately NOT bottom-centre: centre sits over the middle of the content, and
    this app puts its primary buttons there (Generate Images, Continue to secure payment).
@@ -2375,15 +2380,15 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    or an open modal must never be covered by a scroll affordance. */
 .to-top-btn{
   position:fixed; right:22px; bottom:22px; z-index:90;
-  width:42px; height:42px; border-radius:50%;
+  width:34px; height:34px; border-radius:50%;
   background:rgba(20,15,8,0.55); color:rgba(201,168,76,0.9);
   border:1px solid rgba(201,168,76,0.35);
-  font-size:18px; line-height:1; cursor:pointer;
-  display:none; align-items:center; justify-content:center;
+  font-size:15px; line-height:1; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
   box-shadow:0 4px 14px rgba(0,0,0,0.35);
   backdrop-filter:blur(3px);
   transition:opacity 0.15s, background 0.15s, border-color 0.15s;
-  opacity:0.6;
+  opacity:0.4;
 }
 .to-top-btn:hover{ opacity:1; background:rgba(20,15,8,0.85); border-color:var(--gold); }
 /* Hidden on phones entirely, per Ian. A phone has its own way back to the top and the button would
