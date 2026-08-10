@@ -18595,6 +18595,75 @@ function optimizeLogLine(txt, kind) {
 // v3.0.341 -- RETURNS A PROMISE that resolves TRUE only when a file was actually stored. The caller
 // needs to know, because the pane is redrawn from that file and drawing before it exists shows the
 // previous run's book with no warning.
+// v3.0.605 -- WAIT FOR A SAVE JOB, AND KNOW THE DIFFERENCE BETWEEN LOST AND FAILED.
+//
+// Polls every 2s. Two things make this more than a loop:
+//
+// 1. state 'unknown' IS NOT A FAILURE. The job store is in the process that ran the loop, so a
+//    restart or a redeploy mid-save loses the job -- but NOT the save, which writes to R2 and the
+//    database before it ever reports. That is precisely what happened on 2026-08-10: the work landed
+//    and the client called it an error. On unknown, ask /last-optimized whether a save exists that is
+//    NEWER than the moment this request was posted, and if so treat it as the success it is.
+//
+// 2. A single failed poll is not a failed save either. Three consecutive network errors are needed
+//    before giving up, because one dropped request during a five minute render should not discard a
+//    book that is about to finish.
+//
+// The ceiling is 20 minutes, which is far above the 125s that started all this and still bounded.
+function finalizeAwaitSaveJob(jobId, postedAt, q) {
+  var POLL_MS = 2000;
+  var LIMIT_MS = 20 * 60 * 1000;
+  var misses = 0;
+  function landedAfterPost() {
+    // The fallback question, and the one nobody could ask before this build: is there a saved book
+    // dated after I asked for one?
+    return fetch('/api/pdf/last-optimized/' + state.currentCampaign.id + q + '&_=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.found || !j.at) return null;
+        var at = Date.parse(j.at);
+        if (!(at >= postedAt - 5000)) return null;   // an OLDER save is somebody elses, not mine
+        return { ok: true, j: { ok: true, arrange: j.arrange, pdfUrl: j.pdfUrl, pages: j.pages || 0,
+                                at: j.at, flattened: null, quickSave: false, bytes: 0, layoutSaved: !!j.hasLayout,
+                                recovered: true } };
+      })
+      .catch(function () { return null; });
+  }
+  return new Promise(function (resolve) {
+    function tick() {
+      if (Date.now() - postedAt > LIMIT_MS) {
+        return landedAfterPost().then(function (rec) {
+          resolve(rec || { ok: false, j: { error: 'save_timeout', message: 'The save is taking longer than expected. Try Load Last Optimized File.' } });
+        });
+      }
+      fetch('/api/pdf/save-optimized-status/' + encodeURIComponent(jobId) + '?_=' + Date.now())
+        .then(function (r) { return r.json(); })
+        .then(function (st) {
+          misses = 0;
+          if (!st) { setTimeout(tick, POLL_MS); return; }
+          if (st.state === 'done')  { resolve({ ok: true, j: st.result || { ok: true } }); return; }
+          if (st.state === 'error') { resolve({ ok: false, j: { error: st.error || 'save_failed', message: st.message || 'save-optimized failed' } }); return; }
+          if (st.state === 'unknown') {
+            return landedAfterPost().then(function (rec) {
+              if (rec) { resolve(rec); return; }
+              resolve({ ok: false, j: { error: 'save_lost', message: 'The server restarted while saving. Try Save again, or Load Last Optimized File.' } });
+            });
+          }
+          setTimeout(tick, POLL_MS);
+        })
+        .catch(function () {
+          misses++;
+          if (misses >= 3) {
+            return landedAfterPost().then(function (rec) {
+              resolve(rec || { ok: false, j: { error: 'save_unreachable', message: 'Lost contact while saving. Try Load Last Optimized File.' } });
+            });
+          }
+          setTimeout(tick, POLL_MS);
+        });
+    }
+    setTimeout(tick, POLL_MS);
+  });
+}
 function finalizeSaveOptimized(quiet) {
   if (!state.currentCampaign) return Promise.resolve(false);
   try {
@@ -18618,9 +18687,22 @@ function finalizeSaveOptimized(quiet) {
     // ONLY THE REAL SAVE. The protective quick save fires the instant the loop ends, while the loop
     // may still be finishing, and it skips the flatten -- it is fast and silent by design.
     if (!quiet) { try { finalizeFixBusyBar(true); } catch (e) {} }
+    // v3.0.605 -- THE SAVE IS A JOB, AND THE CLIENT WAITS BY ASKING RATHER THAN BY HOLDING.
+    // On 2026-08-10 this fetch died at 125s with "Unexpected token '<'" -- Cloudflare returning its
+    // own HTML 524 page because the origin had not answered inside about 100 seconds. The save had
+    // ALREADY SUCCEEDED; only the answer was lost. So the POST now returns a job id straight away and
+    // this polls for the result, then hands that result to the exact same branches below. Everything
+    // downstream -- the publish hand-off, the interior cache drop, the prepared-order invalidation --
+    // is untouched, because the payload it receives is unchanged.
+    var _postedAt = Date.now();
     return fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
+      // A 409 optimize_required still arrives here directly, exactly as before -- the cache lookup
+      // stayed synchronous on the server precisely so the quiet-swallow rule below did not change.
+      if (!rj.ok || !rj.j || !rj.j.jobId) return rj;
+      return finalizeAwaitSaveJob(rj.j.jobId, _postedAt, q);
+    }).then(function (rj) {
       // SAY SO, EITHER WAY. This used to note only success and swallow every failure, so a 409 from a
       // cache-key miss was completely invisible -- nothing was ever saved and nothing ever said so.
       if (rj.ok && rj.j && rj.j.ok) {

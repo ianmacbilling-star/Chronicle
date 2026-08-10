@@ -12275,6 +12275,73 @@ router.post('/layout-fill/:campaignId', requireAuth, async function (req, res) {
 // the already-composed (optimized) body from cache -- no re-pack, no token -- upload it to R2, and store
 // { pdfUrl, at, pages } under prefs.lastOptimized[arrange]. Keyed per layout because the same images are
 // framed differently in magazine vs picture-book, so each layout remembers its own optimized result.
+// =================================================================================================
+// SAVE-OPTIMIZED IS A JOB NOW -- v3.0.605.
+//
+// WHAT BROKE, ON PRODUCTION, TWICE. Ian ran Optimize on a 49 page book. The run finished, 48
+// improvements applied, 8 pictures grown -- and the save reported
+// "Unexpected token <, <!DOCTYPE ... is not valid JSON" after 125 seconds. That is not a JSON fault.
+// It is Cloudflare returning its own HTML 524 page because the ORIGIN did not answer inside about
+// 100 seconds, and the client parsing that page as JSON.
+//
+// THE WORK ITSELF SUCCEEDED. Every R2 upload and every database write in this handler happens BEFORE
+// the response line, and Node does not abort a handler when the client disconnects. Ian pressed Load
+// Last Optimized File and his book was there. So the bug was never "the save fails" -- it was "the
+// client cannot hear that it succeeded", and so never enabled Go to Publish nor cleared its caches.
+//
+// WHY IT CANNOT BE FIXED BY BEING FASTER. Measured from the diagnostics bundle: the protective save
+// (render plus upload, no flatten) completes fine; adding the Ghostscript flatten, about 43 seconds
+// on this book by the note below, pushes the total to 125. Trimming that buys headroom on a 49 page
+// book and loses it again on a 100 page one. A synchronous request that is already 25 percent over a
+// fixed proxy ceiling is not a thing to optimise, it is a thing to stop doing.
+//
+// SO: this route now returns a job id immediately and does the work afterwards, and the client polls
+// GET /save-optimized-status/:jobId. Nothing about WHAT is saved changed -- same render, same
+// flatten, same two R2 objects, same prefs write, same response payload. Only who waits.
+//
+// THE CACHE MISS IS STILL SYNCHRONOUS AND STILL A 409. It is a Map lookup, it costs nothing, and the
+// client has a carefully argued rule about swallowing optimize_required only on the quiet save.
+// Making that answer arrive by a different route than it does today would have rewritten that rule
+// by accident.
+//
+// THE JOB STORE IS IN MEMORY, ON PURPOSE AND WITH EYES OPEN. The composed cache this route reads is
+// already in-process, so a save can only ever be served by the process that ran the loop -- an
+// out-of-process job store would not make this survive a restart, it would only look as if it might.
+// What matters is the FAILURE MODE, and it is covered: an unknown job id answers state=unknown
+// rather than an error, and the client then asks /last-optimized whether a save landed after it
+// started. That is the question nobody could ask on 2026-08-10.
+// =================================================================================================
+var _saveJobs = new Map();
+var SAVE_JOB_TTL_MS = 30 * 60 * 1000;
+var SAVE_JOB_MAX = 40;
+function saveJobPrune() {
+  try {
+    var now = Date.now();
+    _saveJobs.forEach(function (j, id) {
+      if (now - (j.finishedAt || j.startedAt || now) > SAVE_JOB_TTL_MS) _saveJobs.delete(id);
+    });
+    while (_saveJobs.size > SAVE_JOB_MAX) {
+      var oldest = _saveJobs.keys().next();
+      if (oldest.done) break;
+      _saveJobs.delete(oldest.value);
+    }
+  } catch (e) {}
+}
+router.get('/save-optimized-status/:jobId', requireAuth, function (req, res) {
+  try {
+    var job = _saveJobs.get(String(req.params.jobId || ''));
+    // UNKNOWN IS NOT AN ERROR. A restart, a redeploy, or a job aged out of the store all land here,
+    // and none of them means the save failed -- on 2026-08-10 the save had in fact succeeded. The
+    // client is told to go and look rather than told a lie.
+    if (!job) return res.json({ state: 'unknown', proc: PROC_ID, up: Math.round(process.uptime()) });
+    if (job.userId !== req.session.userId) return res.status(403).json({ state: 'error', error: 'not_yours' });
+    if (job.state === 'done') return res.json({ state: 'done', result: job.result });
+    if (job.state === 'error') return res.json({ state: 'error', error: job.code || 'save_failed', message: job.message || 'save-optimized failed' });
+    return res.json({ state: 'running', elapsedMs: Date.now() - job.startedAt, step: job.step || '' });
+  } catch (e) {
+    return res.status(500).json({ state: 'error', error: 'status_failed' });
+  }
+});
 router.post('/save-optimized/:campaignId', requireAuth, async function (req, res) {
   try {
     var campaignId = req.params.campaignId;
@@ -12316,11 +12383,49 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
       return res.status(409).json({ error: 'optimize_required', message: 'Run Optimize first.' });
     }
     var arrange = hit.arrange || (req.query.co ? (parseCustomOpts(req.query.co).arrange || 'magazine') : 'magazine');
+    // ---- FROM HERE ON THE CLIENT IS NOT WAITING -------------------------------------------------
+    // Everything above was a Map lookup and some string work. Everything below renders a book,
+    // flattens it with Ghostscript and pushes two objects to R2, and on a 49 page book that measured
+    // 125 seconds against a proxy ceiling of about 100. The answer goes out now and the work carries
+    // on; the client polls the status route for the same payload it used to get from here.
+    var _jobId = PROC_ID + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    var _job = { id: _jobId, userId: req.session.userId, campaignId: campaignId,
+                 state: 'running', step: 'render', startedAt: Date.now(), finishedAt: 0,
+                 result: null, code: '', message: '' };
+    saveJobPrune();
+    _saveJobs.set(_jobId, _job);
+    // 202: accepted, not completed. The body carries jobId and async so a client can tell this apart
+    // from the old shape without guessing.
+    res.status(202).json({ ok: true, async: true, jobId: _jobId, startedAt: _job.startedAt });
+    try { await saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle, arrange); }
+    catch (e) {
+      // saveOptimizedWork owns its own error reporting; this is the belt for anything it rethrows.
+      _job.state = 'error'; _job.finishedAt = Date.now();
+      _job.message = (e && e.message) || 'save-optimized failed';
+      console.error('[save-optimized] job ' + _jobId + ' failed:', _job.message);
+    }
+    return;
+  } catch (e) {
+    console.error('[save-optimized] failed:', e && e.message ? e.message : e);
+    log500('save-optimized', req, e);
+    if (!res.headersSent) return res.status(500).json({ error: (e && e.message) || 'save-optimized failed' });
+    return;
+  }
+});
+// The body of the old handler, unchanged in what it DOES. It reports through the job rather than
+// through res, because by the time it runs the response has already gone.
+async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle, arrange) {
+  function fail(code, message) {
+    _job.state = 'error'; _job.code = code; _job.message = message; _job.finishedAt = Date.now();
+    console.error('[save-optimized] job ' + _job.id + ' ' + code + ': ' + message);
+  }
+  try {
     var built = await assembleNovelHtml(req, campaignId, null, { arrange: arrange, packComposedBody: hit.body, campaignName: hit.campaignName || '' });
     var html = built && built.html;
-    if (!html) return res.status(500).json({ error: 'Could not build the optimized layout.' });
+    if (!html) return fail('build_failed', 'Could not build the optimized layout.');
     var baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
+    _job.step = 'render';
     var pdfBuffer = await renderHtmlToPdf(html, {});
     var pages = 0; try { pages = await countPdfPages(pdfBuffer); } catch (e) {}
     // v3.0.424 -- HOW MANY COVER PAGES THIS FILE HAS, so the POD interior can be produced by
@@ -12340,7 +12445,7 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     // Default is to flatten: any other caller, now or later, gets the small file without asking.
     var _quick = !!(req.body && req.body.quickSave);
     var _flatO = { flattened: false, buffer: pdfBuffer };
-    if (!_quick) { _flatO = await flattenPdf(pdfBuffer, 'optimized'); pdfBuffer = _flatO.buffer; }
+    if (!_quick) { _job.step = 'flatten'; _flatO = await flattenPdf(pdfBuffer, 'optimized'); pdfBuffer = _flatO.buffer; }
     var _bytesO = pdfBuffer.length;
     // v3.0.422 -- STORE THE LAYOUT BESIDE THE PDF, on BOTH saves: the protective one taken the
     // instant the loop ends AND the manual Save this Version, because either can be the last save
@@ -12357,8 +12462,9 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
       });
     } catch (e) { console.error('[save-optimized] layout store failed: ' + ((e && e.message) || e)); _stUrl = null; }
     if (!_stUrl) {
-      return res.status(502).json({ error: 'layout_store_failed', message: 'The layout could not be stored, so nothing was saved. Please try Save again.' });
+      return fail('layout_store_failed', 'The layout could not be stored, so nothing was saved. Please try Save again.');
     }
+    _job.step = 'upload';
     var pdfUrl = await uploadFile(pdfBuffer, fname, 'application/pdf', 'optimized');
 
     var db = await getDb();
@@ -12390,14 +12496,21 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
     await setForkBookPrefs(db, chooser, fork, campaignId, { lastOptimized: lastOpt }, _vid);
     // v3.0.388 -- report the flatten so the client can put the specifics in the diagnostics
     // bundle. The user-facing line stays generic; the bundle gets the numbers.
-    return res.json({ ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at,
-      flattened: !!_flatO.flattened, quickSave: _quick, bytes: _bytesO, layoutSaved: true });
+    // THE SAME PAYLOAD THE ROUTE USED TO RETURN, byte for byte in shape. The client feeds it into
+    // the very same success branch, so none of the reasoning below it -- the publish hand-off, the
+    // interior cache drop, the prepared-order invalidation -- had to be touched or re-argued.
+    _job.result = { ok: true, arrange: arrange, pdfUrl: pdfUrl, pages: pages, at: lastOpt[arrange].at,
+      flattened: !!_flatO.flattened, quickSave: _quick, bytes: _bytesO, layoutSaved: true };
+    _job.state = 'done';
+    _job.finishedAt = Date.now();
+    console.log('[save-optimized] job ' + _job.id + ' done in ' + Math.round((_job.finishedAt - _job.startedAt) / 1000) + 's, ' + pages + ' pages');
+    return;
   } catch (e) {
     console.error('[save-optimized] failed:', e && e.message ? e.message : e);
     log500('save-optimized', req, e);
-    return res.status(500).json({ error: (e && e.message) || 'save-optimized failed' });
+    return fail('save_failed', (e && e.message) || 'save-optimized failed');
   }
-});
+}
 
 // Return the saved last-optimized entry for the current layout (or null), so the Optimize tab can show
 // the already-optimized PDF on load without re-running.
