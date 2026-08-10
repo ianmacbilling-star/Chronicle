@@ -7662,6 +7662,55 @@ function _toTopTargets() {
   try { add(document.scrollingElement || document.documentElement); } catch (e) {}
   return out;
 }
+// THE MOTION -- v3.0.599. Ian, 2026-08-10: "you can animate it... but make it fast."
+//
+// WHY THIS IS HAND-DRIVEN RATHER THAN behavior:'smooth'. Native smooth scrolling has NO duration
+// control and its time scales with DISTANCE, so a 4,000px Optimize pane crawls while a 200px page
+// snaps. Ian saw exactly that and read it as two different designs: "on the inner panel of the prep
+// tab it is instantly back at the top... on the others it scrolls up slower."
+//
+// AND THE FAST ONES WERE FAST BY ACCIDENT. The v3.0.598 iframe pass called smooth scrollTo and THEN
+// set scrollingElement.scrollTop = 0 -- belt and braces, except the braces cancel the belt. The jump
+// won every time. Two behaviours, neither chosen.
+//
+// ONE DURATION, ONE EASING, EVERY SURFACE. 200ms with an ease-out cubic: long enough to read as
+// movement rather than a cut, short enough that a long pane does not make you wait. Change
+// TO_TOP_MS and every surface changes together -- the whole point is that there is one number.
+//
+// prefers-reduced-motion is honoured by jumping, which is what that setting asks for.
+var TO_TOP_MS = 200;
+// window.performance, not bare `performance`. They are the same object in a browser, but reaching
+// past `window` makes the clock unreachable to anything trying to drive this function -- which is
+// how a tween ships having never actually been run. Same reason requestAnimationFrame is called
+// through window below.
+function _toTopNow() {
+  try { return (window.performance && window.performance.now) ? window.performance.now() : Date.now(); }
+  catch (e) { return Date.now(); }
+}
+function _toTopReduced() {
+  try {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  } catch (e) { return false; }
+}
+function _toTopAnimate(el) {
+  try {
+    if (!el) return;
+    var start = el.scrollTop || 0;
+    if (start <= 0) return;
+    if (_toTopReduced() || typeof window.requestAnimationFrame !== 'function') { el.scrollTop = 0; return; }
+    var t0 = _toTopNow();
+    var step = function () {
+      try {
+        var p = (_toTopNow() - t0) / TO_TOP_MS;
+        if (p >= 1) { el.scrollTop = 0; return; }
+        var e = 1 - Math.pow(1 - p, 3);
+        el.scrollTop = start * (1 - e);
+        window.requestAnimationFrame(step);
+      } catch (_) { try { el.scrollTop = 0; } catch (__) {} }
+    };
+    window.requestAnimationFrame(step);
+  } catch (e) { try { el.scrollTop = 0; } catch (_) {} }
+}
 // AND THE SCROLLER THAT IS NOT AN ELEMENT OF THIS DOCUMENT AT ALL -- v3.0.598. Ian, 2026-08-10, on
 // the session Preview tab: "there are two scroll bars... do the inner one not the outer. The outer
 // one barely moves." The inner bar belongs to an IFRAME. The preview pane is pinned at 75vh with the
@@ -7683,10 +7732,10 @@ function _toTopScrollIframes() {
       var f = frames[i];
       try {
         if (f.offsetParent === null) continue;
-        var w = f.contentWindow;
-        if (w && typeof w.scrollTo === 'function') w.scrollTo({ top: 0, behavior: 'smooth' });
         var d = f.contentDocument;
-        if (d && d.scrollingElement) d.scrollingElement.scrollTop = 0;
+        var inner = d && (d.scrollingElement || d.documentElement);
+        if (inner) _toTopAnimate(inner);
+        else if (f.contentWindow && typeof f.contentWindow.scrollTo === 'function') f.contentWindow.scrollTo(0, 0);
       } catch (e) {}
     }
   } catch (e) {}
@@ -7722,8 +7771,7 @@ function _toTopScrollContainers() {
         if (el.offsetParent === null) continue;
         var oy = window.getComputedStyle(el).overflowY;
         if (oy !== 'auto' && oy !== 'scroll') continue;
-        if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0, behavior: 'smooth' });
-        else el.scrollTop = 0;
+        _toTopAnimate(el);
       } catch (e) {}
     }
   } catch (e) {}
@@ -7733,13 +7781,8 @@ function scrollBackToTop() {
   _toTopScrollContainers();
   var list = _toTopTargets();
   for (var i = 0; i < list.length; i++) {
-    var el = list[i];
-    try {
-      if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0, behavior: 'smooth' });
-      else el.scrollTop = 0;
-    } catch (e) { try { el.scrollTop = 0; } catch (_) {} }
+    _toTopAnimate(list[i]);
   }
-  try { if (typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
 }
 function prepCommitFields() {
   try {
