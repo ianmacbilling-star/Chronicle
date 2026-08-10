@@ -255,13 +255,15 @@
           </div>
           <iframe id="novel-preview-iframe" data-toptarget src="" style="width:100%;border:none;background:#fff;display:none;"></iframe>
         </div>
-        <div id="novel-pager-bottom" style="display:none;align-items:center;justify-content:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
-          <button class="btn btn-sm" id="novel-pager-prev-bottom" onclick="novelPagePrev()">Prev</button>
-          <select id="novel-pager-select-bottom" onchange="novelPageJump(this.value)"
-            style="background:rgba(20,12,4,0.8);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);">
-          </select>
-          <button class="btn btn-sm" id="novel-pager-next-bottom" onclick="novelPageNext()">Next</button>
-        </div>
+        <!-- v3.0.603 -- THE BOTTOM PAGER IS GONE. Ian, 2026-08-10: "get rid of the navigation buttons
+             at the bottom of the Preview panel... They take up too much space. Push that preview panel
+             all the way down to match the other panels height."
+             The identical Prev / selector / Next still sits in the header row above the preview, so
+             nothing became unreachable. REMOVED rather than hidden: `var suffixes = ['']` in
+             renderNovelPager was the single authority driving both bars, and leaving the markup behind
+             once nothing writes to it produces exactly the kind of element that reads as live and is
+             not. With this out of the column, #novel-preview-frame's flex:1 takes the space and the
+             preview finally ends level with the Prep panel beside it. -->
         </div><!-- /novel-preview-col -->
         <div id="novel-splitter" onmousedown="novelSplitStart(event)" title="Drag to resize the panes"><div class="novel-splitter-bar"></div></div>
         <aside class="novel-prep-panel" id="novel-prep-panel">

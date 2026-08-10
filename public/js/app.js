@@ -7089,8 +7089,11 @@ function setupNovelPager() {
   var sessions = state.novelSessions || [];
   var total = sessions.length;
 
-  // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
-  var suffixes = ['', '-bottom'];
+  // v3.0.603 -- ONE pager bar, in the header row above the preview. Ian asked for the bottom one to
+  // go; this array was the single authority driving both, and every lookup below is already
+  // null-guarded, so deleting one string retired the whole control rather than leaving it half-wired.
+  // The array is kept rather than unrolled: it is what makes this ONE rule instead of a rule per bar.
+  var suffixes = [''];
 
   // True View renders the real continuous document (sessions flow into each
   // other mid-page), so a session-based pager has no clean page to jump to.
@@ -11546,8 +11549,11 @@ function setupNovelPager() {
   var sessions = state.novelSessions || [];
   var total = sessions.length;
 
-  // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
-  var suffixes = ['', '-bottom'];
+  // v3.0.603 -- ONE pager bar, in the header row above the preview. Ian asked for the bottom one to
+  // go; this array was the single authority driving both, and every lookup below is already
+  // null-guarded, so deleting one string retired the whole control rather than leaving it half-wired.
+  // The array is kept rather than unrolled: it is what makes this ONE rule instead of a rule per bar.
+  var suffixes = [''];
 
   // True View renders the real continuous document (sessions flow into each
   // other mid-page), so a session-based pager has no clean page to jump to.
