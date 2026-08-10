@@ -2234,6 +2234,24 @@ html.staging-env .app-logo-text{color:#2b1400;}
   #finalize-after-nav{ flex:1 1 auto; min-height:0; }
 }
 
+/* v3.0.607 -- THE ROW MUST STRETCH ITS PANES, AND SAYING SO IN THE STYLESHEET WAS NOT ENOUGH.
+   v3.0.601 set align-items:stretch on #finalize-after-row from here. The element carried
+   align-items:flex-start as an INLINE style, and an inline declaration beats a stylesheet rule
+   without !important -- so the rule was present, correct, and dead. The panes went on sizing to
+   their content, which for the After pane is a stack of 49 rendered canvases, and the whole Optimize
+   tab scrolled instead of the pane. Ian saw it as the page spine and the left column scrolling away.
+   The inline declaration is gone and the alignment is set per breakpoint below, so there is now ONE
+   place that decides it.
+   THE GENERAL LESSON, and it is worth more than the fix: a CSS rule can be present and overridden,
+   which reads exactly like a rule that is absent, except that grepping for it finds it. The apply
+   script now sweeps every property these rules set against the inline style of the same element. */
+@media (min-width:901px){
+  #finalize-after-row{ align-items:stretch; }
+}
+@media (max-width:900px){
+  #finalize-after-row{ align-items:flex-start; }
+}
+
 /* Narrow screens keep a definite height, because below 901px the view is not a bounded column and a
    flex:1 pane would collapse to nothing. These are the old numbers, kept only where they still
    describe something true. */

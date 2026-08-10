@@ -472,7 +472,12 @@
                   </span>
                 </div>
                 <div id="finalize-after-progress" style="display:none;margin-bottom:6px;"></div>
-                <div id="finalize-after-row" style="display:flex;gap:8px;align-items:flex-start;">
+                <!-- v3.0.607 -- align-items IS NOT SET HERE. It lives in the stylesheet, per breakpoint: stretch
+                     on a wide screen so the panes take the height of the bounded row, flex-start below
+                     901px where they carry explicit heights instead. It was inline as flex-start, which
+                     beat the stretch rule v3.0.601 added and left the panes sizing to their CONTENT --
+                     a 49 page canvas stack -- so the whole tab scrolled instead of the preview. -->
+                <div id="finalize-after-row" style="display:flex;gap:8px;">
                   <div id="finalize-after-scroll" data-toptarget style="flex:1 1 auto;min-width:0;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
                   <div id="finalize-after-body" style="flex:1 1 auto;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
                   <div id="finalize-after-nav-wrap" style="display:none;flex:0 0 36px;flex-direction:column;">
