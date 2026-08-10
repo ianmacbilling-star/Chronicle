@@ -2213,6 +2213,37 @@ var COVER_TITLE_PRESETS = {
 // fall back to a system face and render at different metrics than the preview. null means
 // "already present".
 var COVER_TITLE_FACE = { chronicle: null, engraved: null, pulp: null, manuscript: 'garamond', quill: 'script' };
+// =================================================================================================
+// THE BUILT TITLE OVERLAY -- v3.0.620, TD-357 stage two.
+//
+// Ian: "it should follow the other title attributes -- size and placement -- so when you hit done it
+// should refresh and have the new title picture on the book."
+//
+// PLACEMENT COMES FREE, and that is why the overlay goes INSIDE .cover-art-caption rather than being
+// positioned itself. That block is already moved by coverPlaceCss for top / middle / bottom, and it
+// already carries the scrim that makes a title readable over arbitrary art. An overlay positioned
+// independently would have needed its own copy of all three placements and its own scrim -- two more
+// copies of rules that already exist, which is the fault this file keeps re-finding.
+//
+// STYLE AND COLOUR DO NOT APPLY, and cannot. They set a typeface and a fill on REAL TEXT; there is no
+// real text here, it is a drawing of the words. SIZE does apply, as a width.
+//
+// ONE DEFINITION, THREE COVERS. The session builder, the novel builder and the printed wrap each draw
+// a cover. The Campaignia logo is currently written three times across them (TD-394) and that is
+// exactly how a thing ends up on screen and missing in print. This is a function.
+var BUILT_TITLE_BASE_PCT = 76;   // of the caption width at medium; the caption is already inset
+function builtTitleCss(size) {
+  var r = Object.prototype.hasOwnProperty.call(COVER_SIZE_RATIO, String(size || 'medium'))
+    ? COVER_SIZE_RATIO[String(size || 'medium')] : 1;
+  // Capped at 96 so Large cannot push the artwork past the caption and into the frame.
+  var pct = Math.min(96, Math.round(BUILT_TITLE_BASE_PCT * r));
+  return '.cover-built-title { display:block; margin:0 auto; width:' + pct + '%; height:auto;' +
+         ' object-fit:contain; }';
+}
+function builtTitleHtml(url) {
+  if (!url) return '';
+  return '<img class="cover-built-title" src="' + String(url).replace(/"/g, '&quot;') + '" alt="" />';
+}
 function coverTitleFaceCss(key) {
   var k = String(key || 'chronicle');
   var f = Object.prototype.hasOwnProperty.call(COVER_TITLE_FACE, k) ? COVER_TITLE_FACE[k] : null;
@@ -2346,6 +2377,9 @@ function applyForkBookMeta(campaign, fbm) {
   campaign.cover_image_url = _f.cover_image_url || campaign.campaign_image_url || '';
   campaign.back_cover_image_url = _f.back_cover_image_url || '';
   campaign.title_image_url = _f.title_image_url || '';
+  // v3.0.620 -- the BUILT title (TD-357 stage two). This block used to exist five times
+  // byte-identical until v3.0.575; adding the field here is the whole reason it was consolidated.
+  campaign.built_title_url = _f.built_title_url || '';
   if (_f.book_title) campaign._memberBookTitle = _f.book_title;
   // Subtitle: an empty string is a real stored value meaning "nothing under the title", so this
   // tests for null/undefined rather than for falsiness. Coercing '' away here would make a cleared
@@ -4538,6 +4572,12 @@ function previewScrollbarCss() {
 }
 function buildSessionHTML(session, moments, campaign, characters, narrative, opts, renderOpts) {
   var co = opts || null;
+  // v3.0.620 -- declared HERE as well as in buildNovelHTML. ESLint no-undef caught it missing:
+  // the CSS line below references it in BOTH builders, and a variable declared in one and used
+  // in the other is precisely TD-385, which broke every session preview for days. The session
+  // cover draws the CAMPAIGN name rather than the book title, so it carries no overlay -- but it
+  // must still be able to evaluate the expression.
+  var _builtTitle = '';
   // v3.0.616 -- THE LOGO LIVES ON THE BACK COVER. Ian, 2026-08-10: "I think I want to move the logo
   // to the back of the book. The back cover, not the front cover. Same location but on the back. And
   // you can hide the Include Campaignia Logo layout option -- we will always have it on the back."
@@ -4887,6 +4927,7 @@ ${previewScrollbarCss()}
      and it now reads exactly like the line beneath it. */
   ${coverTitleFaceCss(co && co.titleStyle)}
   ${coverTitleCss(co && co.titleStyle)}
+  ${_builtTitle ? builtTitleCss(co && co.titleSize) : ''}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
   /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
@@ -5001,6 +5042,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // v3.0.555 -- the title preset's face, inlined the same way the body font is. Empty unless the
   // chosen preset needs a face that is not already in every document.
   var titleFaceImp = coverTitleFaceCss(co ? co.titleStyle : '');
+  var _builtTitle = campaign.built_title_url || '';   // v3.0.620 -- TD-357 stage two
   var fontFam = coFontFamily(co ? co.font : '');
   var fontRule = fontFam ? ('.content-page p { font-family:' + fontFam + ' !important; }') : '';
   // When paginated, render only one session. page is 1-indexed.
@@ -5484,6 +5526,7 @@ ${previewScrollbarCss()}
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${titleFaceImp}
   ${coverTitleCss(co && co.titleStyle)}
+  ${_builtTitle ? builtTitleCss(co && co.titleSize) : ''}
   /* v3.0.553 -- placement, emitted after the base rules so it can only override. Bottom is empty. */
   ${coverPlaceCss(co && co.titlePlace)}
   /* v3.0.554 -- size, after placement so both can apply. Medium is empty. */
@@ -5700,8 +5743,8 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <img class="cover-art-img" src="${coverImg}" alt="" />
       <div class="cover-art-fade"></div>
       <div class="cover-art-caption">
-        <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
-        <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts))}</div>
+        ${_builtTitle ? builtTitleHtml(_builtTitle) : `<div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
+        <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts))}</div>`}
       </div>
     </div>
   </div>` : `<div class="cover-content">
@@ -6475,6 +6518,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var titleSizeCss = coverSizeCss(wco && wco.titleSize);
   var titlePlaceCss = coverPlaceCss(wco && wco.titlePlace);
   var subtitleTxt = esc(coverSubtitle({ subtitle: opts.subtitle }));
+  var builtTitle = campaign.built_title_url || '';   // v3.0.620 -- TD-357 stage two, same helper as the interior
   var frontImg = campaign.cover_image_url || '';
   var backImg = campaign.back_cover_image_url || '';
   // v3.0.616 -- THE MARK MOVES TO THE BACK PANEL. Ian: same location, on the back. It is no longer
@@ -6491,8 +6535,10 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     ? framing +
       '<div class="wc-frame"><img class="wc-img cover-art-img" src="' + frontImg + '" alt="" />' +
       '<div class="wc-fade"></div>' +
-      '<div class="wc-front-cap cover-art-caption"><div class="wc-title cover-art-title">' + bookTitle + '</div>' +
-      (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : '') +
+      '<div class="wc-front-cap cover-art-caption">' +
+      (builtTitle ? builtTitleHtml(builtTitle)
+                  : ('<div class="wc-title cover-art-title">' + bookTitle + '</div>' +
+                     (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : ''))) +
       '</div></div>' + mark
     : framing +
       '<div class="wc-frame"><div class="wc-textfront">' +
@@ -6547,6 +6593,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // losing to it. Chronicle, medium and bottom each emit the EMPTY STRING by design, so a
     // cover that has never touched these controls is byte-identical to what it was.
     titlePresetCss + titleSizeCss + titlePlaceCss +
+    (builtTitle ? builtTitleCss(wco && wco.titleSize) : '') +
     '</style></head><body>' +
     '<div class="wrap">' +
       '<div class="wc-panel wc-back">' + backInner + '</div>' +

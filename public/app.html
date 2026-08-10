@@ -308,7 +308,11 @@
                    and stores the image, so the lettering can be judged before anything is built on it. -->
               <div class="prep-title-style-row">
                 <div class="prep-field-label" style="margin:0;">Title style</div>
-                <button type="button" class="btn btn-sm" id="title-build-open" onclick="openTitleBuilder()"
+                <!-- v3.0.620 -- Ian: make it look like the Optimize button above it. Same gold fill,
+                     same display face, same letter-spacing -- these are the two controls on this panel
+                     that SPEND A TOKEN, so they should read as the same kind of thing. -->
+                <button type="button" id="title-build-open" onclick="openTitleBuilder()"
+                        style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;font-size:12px;"
                         title="Draw the title and subtitle as artwork instead of setting them in a typeface. Costs a token each time you generate.">Title Builder</button>
               </div>
               <select id="pcl-titleStyle" class="prep-input" title="One named look for the cover title and subtitle: the font, weight, spacing and shading together. Applies to both cover layouts.">

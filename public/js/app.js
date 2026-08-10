@@ -7613,8 +7613,14 @@ function openTitleBuilder() {
   _tbShowResult(existing);
   var m = _tbEl('title-build-modal'); if (m) m.classList.remove('hidden');
 }
+// v3.0.620 -- DONE REPAINTS THE BOOK. Ian: "when you hit done it should refresh and have the new
+// title picture on the book based on those other attributes." The preview is an iframe whose src
+// carries the book query, so it does not know the version gained a built title until it is reloaded.
+// loadNovelPreview is the same call the layout controls make after an Apply, so this is the path that
+// already exists rather than a second way to repaint.
 function closeTitleBuilder() {
   var m = _tbEl('title-build-modal'); if (m) m.classList.add('hidden');
+  try { if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); } catch (e) {}
 }
 function _tbShowResult(url) {
   var img = _tbEl('title-build-img'), empty = _tbEl('title-build-empty');
