@@ -2252,6 +2252,59 @@ html.staging-env .app-logo-text{color:#2b1400;}
   #finalize-after-row{ align-items:flex-start; }
 }
 
+/* =================================================================================================
+   v3.0.608 -- THE OPTIMIZE SCROLLBARS. Ian, 2026-08-10: "we don't need the horizontal scroll bar at
+   the bottom of the page count panel, just make the panel wide enough. And can you make the vertical
+   scroll bar on the page count panel prettier and thinner... a lot thinner."
+
+   WHY THE HORIZONTAL BAR WAS THERE, and it was arithmetic rather than styling: a page number is
+   font-size:10px with padding:0 5px, so three digits need about 28px. The spine wrapper was
+   flex:0 0 36px and a default scrollbar takes about 15 of those. 28 + 15 does not fit in 36, so the
+   numbers overflowed sideways and the browser added a horizontal bar. Widening alone would have
+   worked; thinning alone would have worked; doing both leaves real slack instead of a near miss --
+   which is what the 36 was.
+
+   44px = 28 for three digits (the print page cap is 250, so three is the maximum) + 6 for the thin
+   bar + 2 for the borders, leaving 8px of slack. overflow-x:hidden is a belt, not the mechanism:
+   with the width right there is nothing to clip, and if a font ever renders wider a clipped digit is
+   better than the bar Ian asked to remove.
+
+   The thumb is the app gold at low alpha with a transparent track, so the bar reads as part of the
+   panel rather than as chrome sitting on it. scrollbar-width / scrollbar-color are the standard
+   properties (Firefox, and Chrome 121+); the ::-webkit- rules cover older Chrome. Both are declared
+   because either alone leaves one of the two browsers on the default bar.
+   ================================================================================================= */
+#finalize-after-nav, #finalize-page-nav{
+  overflow-x:hidden;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(201,168,76,0.40) transparent;
+}
+#finalize-after-nav::-webkit-scrollbar, #finalize-page-nav::-webkit-scrollbar{ width:6px; }
+#finalize-after-nav::-webkit-scrollbar-track, #finalize-page-nav::-webkit-scrollbar-track{ background:transparent; }
+#finalize-after-nav::-webkit-scrollbar-thumb, #finalize-page-nav::-webkit-scrollbar-thumb{
+  background:rgba(201,168,76,0.35); border-radius:3px;
+}
+#finalize-after-nav::-webkit-scrollbar-thumb:hover, #finalize-page-nav::-webkit-scrollbar-thumb:hover{
+  background:rgba(201,168,76,0.65);
+}
+
+/* The two book panes get the same treatment a little wider -- these are long documents and the bar
+   is a position indicator you actually read, where the spine bar is only a way to reach a number. */
+#finalize-after-scroll, #finalize-before-scroll{
+  scrollbar-width:thin;
+  scrollbar-color:rgba(201,168,76,0.40) transparent;
+}
+#finalize-after-scroll::-webkit-scrollbar, #finalize-before-scroll::-webkit-scrollbar{ width:9px; }
+#finalize-after-scroll::-webkit-scrollbar-track, #finalize-before-scroll::-webkit-scrollbar-track{
+  background:rgba(201,168,76,0.06); border-radius:5px;
+}
+#finalize-after-scroll::-webkit-scrollbar-thumb, #finalize-before-scroll::-webkit-scrollbar-thumb{
+  background:rgba(201,168,76,0.38); border-radius:5px; border:2px solid transparent; background-clip:padding-box;
+}
+#finalize-after-scroll::-webkit-scrollbar-thumb:hover, #finalize-before-scroll::-webkit-scrollbar-thumb:hover{
+  background:rgba(201,168,76,0.7); background-clip:padding-box;
+}
+
 /* Narrow screens keep a definite height, because below 901px the view is not a bounded column and a
    flex:1 pane would collapse to nothing. These are the old numbers, kept only where they still
    describe something true. */
