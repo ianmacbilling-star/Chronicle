@@ -18983,20 +18983,25 @@ function finalizeSaveFixedVersion() {
   });
 }
 // v3.0.506 -- THE NEXT STEP, FROM WHERE THEY ARE. Ian, 2026-08-07: "on the Prep and Preview tab
-// at the top a button that says Optimize and takes them to the Optimize tab and fires it off.
-// Kinda like the Go to Publish button does on the Optimize tab. A call to action on the next step."
-// Modelled on finalizeGoToPublish below: switch the tab, then act. It also STARTS the run, which
-// finalizeGoToPublish does not need to do -- so the guard matters more here.
-// NO GUARD OF ITS OWN, deliberately: runLayoutAiDryRun already refuses re-entry at its entry point
-// (v3.0.350, added because the only check lived inside runAiOptimizeLoop and a second click cost a
-// full pre-loop compose and render before being silently dropped). Adding a second, different guard
-// here is how two conditions drift apart. The tab switch still happens either way, so a press
-// during a run takes you to watch it rather than doing nothing.
-// The small delay lets the tab render before the run starts painting into it.
+// at the top a button that says Optimize and takes them to the Optimize tab."
+// Modelled on finalizeGoToPublish below.
+//
+// v3.0.604 -- IT NO LONGER FIRES THE RUN. Ian, 2026-08-10: "just make it go to the tab. Don't start
+// it like it was coded to do. We'll make them hit the real button on the optimizer tab to kick it
+// off." This is now NAVIGATION ONLY.
+//
+// AND THAT IS THE RIGHT SHAPE, not merely the requested one. This button sits at the top of a tab a
+// reader is browsing; the run it used to start SPENDS TOKENS AND TAKES MINUTES, both scaling with
+// the size of the book. A control whose label reads as a signpost should not be the one that spends
+// money. The Optimize tab shows its own cost estimate beside its own button, and that is where the
+// decision belongs -- next to the number.
+//
+// The re-entry guard discussion that used to sit here is now moot for this path: nothing is started,
+// so there is nothing to re-enter. runLayoutAiDryRun still guards its own entry point (v3.0.350) for
+// the real button, and that remains the only place the check lives.
 function prepGoToOptimize() {
   try { switchNovelTab('finalize'); } catch (e) {}
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { try { window.scrollTo(0, 0); } catch (e2) {} }
-  setTimeout(function () { try { if (typeof runLayoutAiDryRun === 'function') runLayoutAiDryRun(); } catch (e) {} }, 120);
 }
 function finalizeGoToPublish() {
   var b = document.getElementById('layoutai-publish-btn'); if (b) b.disabled = true;

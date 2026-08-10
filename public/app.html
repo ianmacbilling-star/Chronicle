@@ -272,10 +272,14 @@
             <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
               <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()">&#8635; Refresh preview</button>
               <!-- v3.0.506 -- CALL TO ACTION FOR THE NEXT STEP, modelled on Go to Publish on the
-                   Optimize tab. Switches to Optimize AND starts the run, so the next step is one
-                   click rather than two. runLayoutAiDryRun guards its own re-entry, so a second
-                   press while a run is in flight is refused there rather than here. -->
-              <button class="btn btn-primary btn-sm" id="prep-optimize-btn" onclick="prepGoToOptimize()">Optimize &#8594;</button>
+                   Optimize tab.
+                   v3.0.604 -- NAVIGATION ONLY. It used to switch tabs AND start the run. Ian:
+                   "just make it go to the tab... we'll make them hit the real button on the
+                   optimizer tab to kick it off." A signpost at the top of a browsing tab should
+                   not be the control that spends tokens; the decision belongs on the Optimize tab,
+                   beside the cost estimate. -->
+              <button class="btn btn-primary btn-sm" id="prep-optimize-btn" onclick="prepGoToOptimize()"
+                      title="Takes you to the Optimize tab. Nothing starts until you press Optimize layout there -- and that run spends tokens and takes several minutes, both growing with the size of your book.">Optimize &#8594;</button>
             </div>
           </div>
 
@@ -404,7 +408,8 @@
             <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
             <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;">Optimize layout</button>
+              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;"
+                      title="Hands the whole book to the AI art director to lay out again. This SPENDS TOKENS and takes several minutes -- both grow with the size of your book. The estimate beside this button is the most it can cost.">Optimize layout</button>
               <button id="layoutai-cancel-btn" onclick="finalizeCancelOptimize()" style="display:none;background:none;border:1px solid rgba(200,90,70,0.55);color:#e8a08c;border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Cancel</button>
               <!-- v3.0.382 -- shown only when an Optimize run COMPLETES, in the slot the Cancel
                    button vacates. The publish source is already armed to the optimized book at
