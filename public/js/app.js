@@ -1873,7 +1873,10 @@ function showView(view) {
   });
 
   var el = document.getElementById('view-' + view);
-  if (el) el.style.display = 'block';
+  // v3.0.600 -- '' NOT 'block', same reason: #view-novel is a flex column on a wide screen and an
+  // inline display:block would defeat the rule. `.view` carries NO display rule of its own -- checked,
+  // not assumed -- so every other view resolves to block exactly as it does today.
+  if (el) el.style.display = '';
   state.currentView = view;
 
   // Update sidebar active states
@@ -6566,7 +6569,11 @@ function switchNovelTab(tab) {
   if (tab === 'order' && typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // keep the 'publishing X' label honest
   ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
-    if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    // v3.0.600 -- '' NOT 'block'. An inline display beats the stylesheet, and on a wide screen the
+    // Publish page needs its visible pane to be a flex COLUMN so the panes inside can be told to fill
+    // whatever height is left. Empty string hands the decision back to CSS; below 901px no rule
+    // matches and a div still resolves to block, so nothing changes there.
+    if (pane) pane.style.display = t === tab ? '' : 'none';
     var el = document.getElementById('ntab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -7217,16 +7224,18 @@ function resizeNovelPreviewIframe() {
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
   _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
-  var _ph = '75vh';
+  // v3.0.600 -- ON A WIDE SCREEN, CSS OWNS THIS HEIGHT. What stood here copied the PREP PANEL's
+  // measured height onto the iframe, with a 520px floor. Measured on Ian's 798px screen:
+  // prepPanel 774, previewIframe 774, document 1022 -- 224px of overshoot. The panel grows with its
+  // accordions, the iframe copies it, and the pair walks off the bottom of the window together.
+  // That is a fourth copy of one rule. The pane is now a flex child that takes whatever height is
+  // left, so the height is set in exactly one place and it is the stylesheet.
   if (window.innerWidth > 900) {
-    var _prep = document.querySelector('.novel-prep-panel');
-    if (_prep && _prep.offsetHeight > 0) {
-      var _h = _prep.offsetHeight;
-      if (_h < 520) _h = 520;
-      _ph = _h + 'px';
-    }
+    if (iframe) iframe.style.height = '';
+    if (frame) frame.style.height = '';
+    return;
   }
-  if (iframe) iframe.style.height = _ph;
+  if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
 
@@ -7661,6 +7670,47 @@ function _toTopTargets() {
   try { add(document.querySelector('.main-content')); } catch (e) {}
   try { add(document.scrollingElement || document.documentElement); } catch (e) {}
   return out;
+}
+// THE APP CHROME, MEASURED -- v3.0.600. The Publish page has to know how much vertical room is left
+// under the header and the breadcrumb. The obvious source is the literal already in the stylesheet:
+// `.app-layout { min-height: calc(100vh - 44px - 35px) }`.
+//
+// THAT LITERAL IS A GUESS, AND USING IT WOULD BAKE IN THE FAULT THIS BUILD EXISTS TO FIX.
+// `.breadcrumb-row` has NO height rule at all -- it is `padding:4px` plus whatever the crumb line
+// happens to be. `.app-header` has no height either. 44 and 35 are two numbers written down a second
+// time, and they go wrong the moment either row wraps, the font metrics differ, or the browser is
+// zoomed. Deriving a layout from them is the same fault as the caption insets and the frame hairline.
+//
+// So it is MEASURED, published once as `--app-chrome`, and kept current by a ResizeObserver on the
+// two elements themselves. One number, and it comes from the page rather than from a memory of it.
+// The CSS carries `var(--app-chrome, 79px)` so a browser without ResizeObserver still gets today's
+// behaviour rather than a collapsed page.
+function _appChromeSync() {
+  try {
+    var h = document.querySelector('.app-header');
+    var b = document.querySelector('.breadcrumb-row');
+    var n = (h ? h.offsetHeight : 0) + (b ? b.offsetHeight : 0);
+    if (n > 0) document.documentElement.style.setProperty('--app-chrome', n + 'px');
+  } catch (e) {}
+}
+function _appChromeWire() {
+  if (_appChromeWire._done) return;
+  _appChromeWire._done = true;
+  try {
+    _appChromeSync();
+    window.addEventListener('resize', _appChromeSync);
+    if (typeof window.ResizeObserver === 'function') {
+      var ro = new window.ResizeObserver(_appChromeSync);
+      var h = document.querySelector('.app-header');
+      var b = document.querySelector('.breadcrumb-row');
+      if (h) ro.observe(h);
+      if (b) ro.observe(b);
+    }
+  } catch (e) {}
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _appChromeWire);
+  else _appChromeWire();
 }
 // THE MOTION -- v3.0.599. Ian, 2026-08-10: "you can animate it... but make it fast."
 //
@@ -10215,7 +10265,10 @@ function showView(view) {
   });
 
   var el = document.getElementById('view-' + view);
-  if (el) el.style.display = 'block';
+  // v3.0.600 -- '' NOT 'block', same reason: #view-novel is a flex column on a wide screen and an
+  // inline display:block would defeat the rule. `.view` carries NO display rule of its own -- checked,
+  // not assumed -- so every other view resolves to block exactly as it does today.
+  if (el) el.style.display = '';
   state.currentView = view;
 
   // Update sidebar active states
@@ -11367,7 +11420,11 @@ function switchNovelTab(tab) {
   if (tab === 'order' && typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // keep the 'publishing X' label honest
   ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
-    if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    // v3.0.600 -- '' NOT 'block'. An inline display beats the stylesheet, and on a wide screen the
+    // Publish page needs its visible pane to be a flex COLUMN so the panes inside can be told to fill
+    // whatever height is left. Empty string hands the decision back to CSS; below 901px no rule
+    // matches and a div still resolves to block, so nothing changes there.
+    if (pane) pane.style.display = t === tab ? '' : 'none';
     var el = document.getElementById('ntab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -11577,16 +11634,18 @@ function resizeNovelPreviewIframe() {
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
   _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
-  var _ph = '75vh';
+  // v3.0.600 -- ON A WIDE SCREEN, CSS OWNS THIS HEIGHT. What stood here copied the PREP PANEL's
+  // measured height onto the iframe, with a 520px floor. Measured on Ian's 798px screen:
+  // prepPanel 774, previewIframe 774, document 1022 -- 224px of overshoot. The panel grows with its
+  // accordions, the iframe copies it, and the pair walks off the bottom of the window together.
+  // That is a fourth copy of one rule. The pane is now a flex child that takes whatever height is
+  // left, so the height is set in exactly one place and it is the stylesheet.
   if (window.innerWidth > 900) {
-    var _prep = document.querySelector('.novel-prep-panel');
-    if (_prep && _prep.offsetHeight > 0) {
-      var _h = _prep.offsetHeight;
-      if (_h < 520) _h = 520;
-      _ph = _h + 'px';
-    }
+    if (iframe) iframe.style.height = '';
+    if (frame) frame.style.height = '';
+    return;
   }
-  if (iframe) iframe.style.height = _ph;
+  if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
 

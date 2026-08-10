@@ -2145,6 +2145,65 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .pcl-toggles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px 14px; align-items:start; }
 @media (max-width: 900px) { .novel-preview-layout { flex-direction:column; } .novel-prep-panel { flex:1 1 auto; width:100%; min-width:0; position:static; max-height:none; } #novel-splitter { display:none; } }
 
+/* =================================================================================================
+   v3.0.600 -- THE PUBLISH PAGE FITS THE SCREEN. Ian, 2026-08-10: "can you make the publish page as
+   big as their screen allows and not have an outer scrollbar, then just let the inner scroll bars
+   work... I think we might still need it in cases when the session tab runs long."
+
+   MEASURED FIRST. On a 798px viewport the document wanted 1022 -- 224px of overshoot. It was never
+   content length; it was three literals each overshooting a little and stacking:
+     .novel-prep-panel      max-height:calc(100vh - 24px)   -- but it STARTS ~200px down the page,
+                                                               so its bottom sat that far below the
+                                                               fold. This is the runaway scrollbar.
+     #novel-preview-iframe  height:90vh (inline)            -- 90vh + chrome + headers > 100vh
+     resizeNovelPreviewIframe()                             -- copied the PREP PANEL's height onto
+                                                               the iframe (measured: both 774)
+   Each is a guess at a screen size, written where a derivation belonged.
+
+   THE FIX IS NOT overflow:hidden. Nothing here suppresses the outer scrollbar; the page simply
+   stops exceeding the viewport, so the bar has nothing to scroll. That distinction is the whole
+   design: if a tab genuinely needs more room -- a short laptop, 125 percent display scaling, a long
+   Prep column -- the outer bar returns and everything stays reachable. Clipping would have turned
+   every measurement error into an invisible, unclickable button.
+
+   THE HEIGHT COMES FROM --app-chrome, MEASURED IN JS from .app-header and .breadcrumb-row, because
+   neither has a height rule and the 44px/35px in .app-layout is itself a pair. Fallback 79px keeps
+   today's behaviour if the variable never arrives.
+
+   SCOPED TO min-width:901px, matching the breakpoint above, where the layout already stacks and the
+   prep panel is already released. Fixed-height panes on a phone are hostile.
+   ================================================================================================= */
+
+/* Fallbacks for every width -- these are what a narrow screen keeps. */
+#novel-preview-frame{ min-height:520px; }
+#novel-preview-iframe, #novel-preview-loading{ height:75vh; }
+
+@media (min-width:901px){
+  #view-novel{
+    display:flex; flex-direction:column;
+    height:calc(100vh - var(--app-chrome, 79px));
+    /* the glass rule sets min-height:calc(100vh - 44px - 35px); if the measured chrome is TALLER
+       than 79px that min-height would win and reintroduce the overshoot it is meant to remove. */
+    min-height:0;
+  }
+  #view-novel > .page-header,
+  #view-novel > .sess-tabs{ flex:0 0 auto; }
+
+  /* Only the Prep & Preview tab is height-managed in this build. The other three panes keep their
+     default flex sizing, so if one is taller than the view it overflows and the page scrolls -- the
+     same behaviour they have today, deliberately unchanged until each is looked at on its own. */
+  #view-novel > #novel-tab-preview{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #novel-tab-preview > .novel-preview-layout{ flex:1 1 auto; min-height:0; align-items:stretch; }
+
+  /* Sticky was solving the problem that the panel could run off the page. At full row height there
+     is nothing to stick to and nothing to run off. */
+  .novel-preview-layout > .novel-prep-panel{ position:static; top:auto; max-height:none; min-height:0; }
+  .novel-preview-layout > .novel-preview-col{ display:flex; flex-direction:column; min-height:0; }
+  .novel-preview-col > #novel-preview-frame{ flex:1 1 auto; min-height:0; }
+  #novel-preview-frame > #novel-preview-iframe,
+  #novel-preview-frame > #novel-preview-loading{ height:100%; }
+}
+
 /* ===== Pre-Publish image picker (slots + modal) ===== */
 .prep-img-slots { display:flex; gap:8px; margin:0 0 14px; }
 .prep-img-slot { flex:1 1 0; min-width:0; text-align:center; }
