@@ -7826,9 +7826,56 @@ function _toTopScrollContainers() {
     }
   } catch (e) {}
 }
+// WHEN A SCREEN SAYS WHAT IT WANTS SCROLLED -- v3.0.601. Ian, 2026-08-10: "on the prep and preview
+// tab it also does the scroll on the Prep Panel to the left. It shouldn't touch that one." And on
+// Optimize: "I think it's also trying to do the Page number scroll bar. It shouldn't touch that one.
+// The new scroll button should only touch the Previewing Panels."
+//
+// HE IS RIGHT AND THE GENERAL RULE WAS TOO GENERAL. "Scroll everything that overflows" is correct on
+// an ordinary screen and wrong on Publish, where a form column and two page-number rails are
+// NAVIGATION, not reading surfaces. Resetting a rail throws away the place you were looking at.
+//
+// BUT NOT A LIST OF IDS IN HERE. That is the fault TD-379 names -- one rule written in three places,
+// and the next pane added is the one nobody updates. Instead the MARKUP declares it: an element
+// carrying `data-toptarget` is a reading surface. If the page shows ANY marked element, only marked
+// elements move; if it shows none, the general scan runs exactly as it did in v3.0.598. So Publish
+// is precise and every other screen is unchanged, and a future pane is handled by marking it rather
+// than by editing this function.
+//
+// THE OUTER PAGE ALWAYS RETURNS regardless. "Back to top" means the page as well as the pane.
+function _toTopMarked() {
+  var out = [];
+  try {
+    var all = document.querySelectorAll('[data-toptarget]');
+    for (var i = 0; i < all.length; i++) {
+      try { if (all[i].offsetParent !== null) out.push(all[i]); } catch (e) {}
+    }
+  } catch (e) {}
+  return out;
+}
+function _toTopScrollMarked(list) {
+  for (var i = 0; i < list.length; i++) {
+    var el = list[i];
+    try {
+      if (el.tagName === 'IFRAME') {
+        var d = el.contentDocument;
+        var inner = d && (d.scrollingElement || d.documentElement);
+        if (inner) _toTopAnimate(inner);
+        else if (el.contentWindow && typeof el.contentWindow.scrollTo === 'function') el.contentWindow.scrollTo(0, 0);
+      } else {
+        _toTopAnimate(el);
+      }
+    } catch (e) {}
+  }
+}
 function scrollBackToTop() {
-  _toTopScrollIframes();
-  _toTopScrollContainers();
+  var marked = _toTopMarked();
+  if (marked.length) {
+    _toTopScrollMarked(marked);
+  } else {
+    _toTopScrollIframes();
+    _toTopScrollContainers();
+  }
   var list = _toTopTargets();
   for (var i = 0; i < list.length; i++) {
     _toTopAnimate(list[i]);

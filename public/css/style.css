@@ -2202,6 +2202,46 @@ html.staging-env .app-logo-text{color:#2b1400;}
   .novel-preview-col > #novel-preview-frame{ flex:1 1 auto; min-height:0; }
   #novel-preview-frame > #novel-preview-iframe,
   #novel-preview-frame > #novel-preview-loading{ height:100%; }
+
+  /* ---------------------------------------------------------------------------------------------
+     v3.0.601 -- THE OPTIMIZE TAB, same treatment. Ian: "I still get the far right scroll bar when I
+     go to the Optimize tab." It carried FOUR more literals -- three panes at height:680px and a page
+     rail at 660px -- which is 680 plus roughly 230px of headers and tabs, so it overflows anything
+     under about a 910px viewport. Ian's is 798.
+
+     Every one of those inline heights is gone; the panes are flex children that take what is left.
+     #finalize-left loses its overflow:hidden and scrolls on its own, because once the row is bounded
+     the controls column is the one thing here that can genuinely be taller than the window.
+
+     The two page rails are stretched to the row height rather than given one, so they stay level with
+     the panes they index no matter what height the row settles at -- the old 680/660 pairing meant
+     the After rail was 20px shorter than its own pane for no reason anybody recorded.
+     --------------------------------------------------------------------------------------------- */
+  #view-novel > #novel-tab-finalize{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #novel-tab-finalize > #finalize-split{ flex:1 1 auto; min-height:0; }
+  #finalize-left{ overflow-y:auto; min-height:0; }
+  #finalize-right{ min-height:0; }
+  #finalize-right > #finalize-pdf-panes{ flex:1 1 auto; min-height:0; }
+  #finalize-before-wrap{ display:flex; flex-direction:column; min-height:0; }
+  #finalize-after-wrap{ display:flex; flex-direction:column; min-height:0; }
+  #finalize-before-scroll{ flex:1 1 auto; min-height:0; }
+  #finalize-page-nav-wrap{ min-height:0; }
+  #finalize-page-nav{ flex:1 1 auto; min-height:0; }
+  #finalize-after-row{ flex:1 1 auto; min-height:0; align-items:stretch; }
+  #finalize-after-scroll{ min-height:0; }
+  #finalize-after-body{ min-height:0; }
+  #finalize-after-nav-wrap{ min-height:0; }
+  #finalize-after-nav{ flex:1 1 auto; min-height:0; }
+}
+
+/* Narrow screens keep a definite height, because below 901px the view is not a bounded column and a
+   flex:1 pane would collapse to nothing. These are the old numbers, kept only where they still
+   describe something true. */
+@media (max-width:900px){
+  #finalize-before-scroll, #finalize-after-scroll, #finalize-after-body{ height:680px; }
+  #finalize-page-nav{ height:680px; }
+  #finalize-after-nav{ height:660px; }
+  #finalize-left{ overflow:hidden; }
 }
 
 /* ===== Pre-Publish image picker (slots + modal) ===== */

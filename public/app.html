@@ -253,7 +253,7 @@
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
             </div>
           </div>
-          <iframe id="novel-preview-iframe" src="" style="width:100%;border:none;background:#fff;display:none;"></iframe>
+          <iframe id="novel-preview-iframe" data-toptarget src="" style="width:100%;border:none;background:#fff;display:none;"></iframe>
         </div>
         <div id="novel-pager-bottom" style="display:none;align-items:center;justify-content:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
           <button class="btn btn-sm" id="novel-pager-prev-bottom" onclick="novelPagePrev()">Prev</button>
@@ -397,7 +397,7 @@
       <!-- Finalize tab (AI layout optimization / dry run) -->
       <div id="novel-tab-finalize" style="display:none;">
         <div id="finalize-split" style="display:flex;align-items:stretch;gap:0;">
-          <div id="finalize-left" style="flex:0 0 33%;min-width:220px;overflow:hidden;padding-right:8px;">
+          <div id="finalize-left" style="flex:0 0 33%;min-width:220px;padding-right:8px;">
             <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span id="optimize-preview-pill" style="font-size:10px;background:rgba(201,168,76,0.18);border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
             <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
             <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
@@ -442,11 +442,11 @@
             <div id="finalize-pdf-panes" style="display:flex;gap:6px;align-items:stretch;">
               <div id="finalize-before-wrap" style="display:none;flex:1 1 auto;min-width:0;">
                 <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;"><span>Before</span><span style="display:flex;gap:8px;align-items:baseline;"><button id="finalize-before-open" onclick="finalizeOpenPdf(true)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button><span id="finalize-before-count" style="color:var(--gold);letter-spacing:0.03em;"></span></span></div>
-                <div id="finalize-before-scroll" style="height:680px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;"></div>
+                <div id="finalize-before-scroll" data-toptarget style="overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;"></div>
               </div>
               <div id="finalize-page-nav-wrap" style="flex:0 0 36px;display:none;flex-direction:column;">
                 <div style="font-size:11px;color:rgba(245,232,200,0.4);margin-bottom:4px;text-align:center;">Pg</div>
-                <div id="finalize-page-nav" title="Jump both panes to a page" style="height:680px;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
+                <div id="finalize-page-nav" title="Jump both panes to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
               </div>
               <div id="finalize-after-wrap" style="flex:1 1 100%;min-width:0;">
                 <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
@@ -465,12 +465,12 @@
                   </span>
                 </div>
                 <div id="finalize-after-progress" style="display:none;margin-bottom:6px;"></div>
-                <div style="display:flex;gap:8px;align-items:flex-start;">
-                  <div id="finalize-after-scroll" style="flex:1 1 auto;min-width:0;height:680px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
-                  <div id="finalize-after-body" style="flex:1 1 auto;height:680px;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
+                <div id="finalize-after-row" style="display:flex;gap:8px;align-items:flex-start;">
+                  <div id="finalize-after-scroll" data-toptarget style="flex:1 1 auto;min-width:0;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
+                  <div id="finalize-after-body" style="flex:1 1 auto;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
                   <div id="finalize-after-nav-wrap" style="display:none;flex:0 0 36px;flex-direction:column;">
                     <div style="font-size:11px;color:rgba(245,232,200,0.4);margin-bottom:4px;text-align:center;">Pg</div>
-                    <div id="finalize-after-nav" title="Jump to a page" style="height:660px;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
+                    <div id="finalize-after-nav" title="Jump to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
                   </div>
                 </div>
               </div>
