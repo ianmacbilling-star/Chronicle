@@ -1275,10 +1275,34 @@ function coInsetBottomCss(border, padBottom) {
 function coCaptionOverlay(m, caption, border) {
   if (!m.title) return '';
   var _capB = coMediaPadBottom(border);
-  var _capT = coMediaPadTop(border);
+  // v3.0.615 -- TD-399. THE COMIC TITLE PLATE SITS INSIDE THE FRAME.
+  // Ian, 2026-08-10, with a screenshot: "the comic style caption needs to be inside the frame border.
+  // All interior captions really need to be inside the frame border. I think this is the only one
+  // with the issue." HE IS RIGHT THAT IT IS THE ONLY ONE.
+  //
+  // v3.0.512 inset this whole family so a caption stops at the ARTWORK rather than at the outside of
+  // the frame -- gradient, the top gradient and the rest all take coInsetXCss. The PLATE was missed,
+  // and it was wrong on BOTH axes for the same reason:
+  //   left:0                      -- the outer edge of the moulding, so it hung off the picture;
+  //   top: coMediaPadTop(border)  -- which returns 2px, the WRAPPER padding only. The bronze frame is
+  //                                  bronzeFrameParts(1).total, about 13px, so 2px is still inside
+  //                                  the moulding. That is the top overhang in the screenshot.
+  //
+  // Both correct helpers already existed beside the ones the other captions use, and both DERIVE the
+  // inset from the frame instead of restating it -- coInsetY is literally commented "DERIVED, so the
+  // caption cannot end up on the moulding". This was a helper that was never called, not a number
+  // that was wrong.
+  //
+  // AN UNFRAMED PICTURE MOVES BY 2px, AND THAT IS THE POINT RATHER THAN A SIDE EFFECT. coInsetXCss
+  // adds CO_CAP_GAP_PX whatever the border, so a borderless plate now sits 2px in -- exactly where
+  // gradient and gradtop already sit on the same picture. The fix is "the plate behaves like its
+  // siblings", so agreeing with them at every border is the property worth having; preserving a
+  // literal 0 would have kept one caption special for no reason anyone could state.
+  // (An earlier draft of this comment claimed non-framed layouts were untouched. They are not, by
+  // 2px, and the harness said so.)
   var _capSc = capScaleForShape(m && m.shape);   // v3.0.508 -- furniture scales with the picture
   if (caption === 'plate')
-    return '<div style="position:absolute;top:' + _capT + ';left:0;max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
+    return '<div style="position:absolute;top:' + coInsetTopCss(border) + ';left:' + coInsetXCss(border) + ';max-width:90%;background:#f0e8d0;border:' + capPx(3, _capSc) + ' solid #0a0806;border-top:none;border-left:none;padding:' + capPx(3, _capSc) + ' ' + capPx(6, _capSc) + ' ' + capPx(4, _capSc) + ';font-family:Cinzel,serif;font-size:' + capPt(CAP_BASE_PT, _capSc) + ';font-weight:600;color:#0a0806;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.title + '</div>';
   if (caption === 'brass') return brassPlateHtml(m.title, _capB, _capSc);
   // v3.0.512 -- INSET SO THE FRAME STAYS INTACT. left/right/bottom now stop at the artwork
   // instead of at the outside of the frame. See coInsetX / coInsetBottomCss.
