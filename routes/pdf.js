@@ -6425,6 +6425,35 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   if (!rawTitle) rawTitle = campaign.name || 'Campaignia';
   var bookTitle = esc(rawTitle);
   var titleColor = (opts.titleColor && /^#[0-9a-fA-F]{3,8}$/.test(opts.titleColor)) ? opts.titleColor : '#f0d98a';
+  // v3.0.614 -- TD-393. THE PRESETS REACH THE PRINTED BOOK.
+  //
+  // WHAT WAS WRONG, and it was three things rather than one. The interior cover page calls
+  // coverTitleFaceCss and coverTitleCss; this function called NEITHER, hardcoded 26pt, honoured only
+  // titleColor, drew no subtitle at all -- and declared font-family Cinzel while loading NO font CSS.
+  // Fonts in this app are inlined base64 faces precisely because the container cannot reach Google,
+  // so the printed title was never Cinzel either; it fell through to Georgia. A reader picked
+  // Manuscript, saw it on screen, ordered the book, and got a different cover.
+  //
+  // ALIASED, NOT RE-IMPLEMENTED. The wrap elements now carry the INTERIOR class names alongside their
+  // own -- wc-title is also cover-art-title, wc-front-cap is also cover-art-caption -- so every rule
+  // those four helpers emit applies here unchanged. Re-emitting the preset declarations against
+  // .wc-* selectors would have been a second copy of eight presets, three sizes and three placements,
+  // which is the DERIVE DO NOT PAIR fault this file keeps re-finding: five copies of the fork-meta
+  // block is what TD-336 and v3.0.575 are about. One helper, three covers.
+  //
+  // THE FRONT PANEL IS TRIM SIZED, so the interior point sizes carry across with no conversion and
+  // there is no second scale to keep in step. The base title size moves 26pt -> COVER_PT.artTitle so
+  // that the DEFAULT preset matches the screen too, which is the whole point of the exercise.
+  //
+  // THE TITLE IS FULLY OPAQUE. Ian, 2026-08-10: "do not make the title transparent." The 40 percent
+  // on .wc-logo is a deliberate flattener test (v3.0.378) with the spine logo left at 0.95 as its
+  // control; nothing else on this sheet carries alpha.
+  var wco = opts.co || null;
+  var titleFaceCss = coverTitleFaceCss(wco && wco.titleStyle);
+  var titlePresetCss = coverTitleCss(wco && wco.titleStyle);
+  var titleSizeCss = coverSizeCss(wco && wco.titleSize);
+  var titlePlaceCss = coverPlaceCss(wco && wco.titlePlace);
+  var subtitleTxt = esc(coverSubtitle({ subtitle: opts.subtitle }));
   var frontImg = campaign.cover_image_url || '';
   var backImg = campaign.back_cover_image_url || '';
   var logo = hideLogo ? '' : '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
@@ -6436,12 +6465,16 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var mark = '<div class="wc-mark">CAMPAIGNIA</div>';
   var frontInner = frontImg
     ? framing +
-      '<div class="wc-frame"><img class="wc-img" src="' + frontImg + '" alt="" />' +
+      '<div class="wc-frame"><img class="wc-img cover-art-img" src="' + frontImg + '" alt="" />' +
       '<div class="wc-fade"></div>' +
-      '<div class="wc-front-cap"><div class="wc-title">' + bookTitle + '</div>' + logo + '</div></div>' + mark
+      '<div class="wc-front-cap cover-art-caption"><div class="wc-title cover-art-title">' + bookTitle + '</div>' +
+      (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : '') +
+      logo + '</div></div>' + mark
     : framing +
       '<div class="wc-frame"><div class="wc-textfront">' + logo +
-      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title">' + bookTitle + '</div></div></div>' + mark;
+      '<div class="wc-eyebrow">The Saga of</div><div class="wc-title cover-art-title">' + bookTitle + '</div>' +
+      (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : '') +
+      '</div></div>' + mark;
   var backInner = framing +
     '<div class="wc-frame">' + (backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '') + '</div>' + mark;
 
@@ -6449,13 +6482,17 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '@page { size: ' + W + 'in ' + H + 'in; margin: 0; }' +
     '* { box-sizing: border-box; margin: 0; padding: 0; }' +
     'html, body { width: ' + W + 'in; height: ' + H + 'in; }' +
+    // v3.0.614 -- THE FONTS. This document declared Cinzel and loaded nothing, and the faces in
+    // this app are inlined base64 because the container cannot reach fonts.googleapis.com --
+    // the two-day stuck-pack hang. So the printed cover was rendering in Georgia.
+    baseFontCss() + titleFaceCss +
     "body { font-family: 'Cinzel','Georgia',serif; background:#0a0604; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact; }" +
     '.wrap { position:relative; width:' + W + 'in; height:' + H + 'in; background:#0a0604; overflow:hidden; }' +
     '.wc-panel { position:absolute; top:0; height:' + H + 'in; overflow:hidden; }' +
     '.wc-back  { left:0; width:' + sideW + 'in; }' +
     '.wc-front { right:0; width:' + sideW + 'in; }' +
     '.wc-spine { left:' + sideW + 'in; width:' + spineW + 'in; display:flex; align-items:center; justify-content:center; background:#0a0604; border-left:1px solid rgba(201,168,76,0.18); border-right:1px solid rgba(201,168,76,0.18); }' +
-    '.wc-img { width:100%; height:100%; object-fit:cover; object-position:center top; display:block; }' +
+    '.wc-img, .cover-art-img { width:100%; height:100%; object-fit:cover; object-position:center top; display:block; }' +
     '.wc-bg { position:absolute; inset:0; background:radial-gradient(ellipse at center, #3a2010 0%, #0a0604 70%); }' +
     '.wc-border { position:absolute; inset:0.5in; border:2px solid rgba(201,168,76,0.4); pointer-events:none; }' +
     '.wc-border-inner { position:absolute; inset:0.6in; border:1px solid rgba(201,168,76,0.2); pointer-events:none; }' +
@@ -6467,7 +6504,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-spine-logo { position:absolute; left:50%; bottom:0.16in; transform:translateX(-50%); width:' + spineLogoW + 'in; height:auto; object-fit:contain; opacity:0.95; }' +
     '.wc-front-cap { position:absolute; left:0; right:0; bottom:0; height:48%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 0.32in 0.4in; background:linear-gradient(to top, rgba(10,6,4,0.96) 24%, rgba(10,6,4,0.55) 60%, rgba(10,6,4,0) 100%); }' +
     '.wc-textfront { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0.6in 0.5in 0.6in 0.45in; text-align:center; }' +
-    '.wc-title { font-size:26pt; font-weight:700; color:' + titleColor + '; letter-spacing:0.04em; line-height:1.12; text-align:center; text-transform:uppercase; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
+    '.wc-title { font-size:' + COVER_PT.artTitle + 'pt; font-weight:700; color:' + titleColor + '; letter-spacing:0.04em; line-height:1.12; text-align:center; text-transform:uppercase; text-shadow:0 2px 14px rgba(0,0,0,0.95); margin-bottom:0.16in; }' +
     '.wc-eyebrow { font-size:10pt; color:rgba(201,168,76,0.6); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.12in; }' +
     // v3.0.378 -- Ian: 40 percent transparent, as a DELIBERATE TEST OF THE FLATTENER.
     // The wrap cover is one of the two files v3.0.377 runs through Ghostscript, so this is a
@@ -6476,6 +6513,11 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // light one, and comparing them says whether flattening is faithful across the range
     // rather than only at one value.
     '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:' + COVER_LOGO_OPACITY + '; }' +
+    '.wc-sub { font-size:' + COVER_PT.artSub + 'pt; color:' + titleColor + '; letter-spacing:0.14em; text-transform:uppercase; margin-top:0.08in; text-align:center; opacity:0.85; }' +
+    // LAST, so every preset, size and placement rule overrides the base above rather than
+    // losing to it. Chronicle, medium and bottom each emit the EMPTY STRING by design, so a
+    // cover that has never touched these controls is byte-identical to what it was.
+    titlePresetCss + titleSizeCss + titlePlaceCss +
     '</style></head><body>' +
     '<div class="wrap">' +
       '<div class="wc-panel wc-back">' + backInner + '</div>' +
@@ -6589,7 +6631,15 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
     var fHideLogo = co ? !!co.hideLogo : false;
 
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '' });   // v3.0.575 -- the stored colour, same as the title beside it
+    // v3.0.614 -- TD-393. THE PRINTED COVER NOW GETS WHAT THE SCREEN COVER GETS. This route already
+    // parsed `co` and already resolved the fork book meta; it simply never handed either to the wrap,
+    // so the presets, the size, the placement and the SUBTITLE all stopped at the screen. Same
+    // query-first, stored-second rule the novel route uses, so a Prep panel edit previews before it
+    // is saved and every other surface shows what the version actually holds.
+    var _wrapSub = null;
+    if (req.query.subtitle != null) _wrapSub = String(req.query.subtitle);
+    else if (campaign._memberSubtitle != null) _wrapSub = campaign._memberSubtitle;
+    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it   // v3.0.575 -- the stored colour, same as the title beside it
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
