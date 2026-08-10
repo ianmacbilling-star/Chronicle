@@ -14166,6 +14166,11 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   pano:1, aside:1, companion:1, emphasis:0,
   cover:1, cast:1, toc:1, header:1, markers:1, markerbreak:0, watermark:1,
   hidelogo:0,
+  // v3.0.611 -- REQUIRED HERE, not optional. _normalizeLayoutBlob loads a saved layout by
+  // iterating THIS object and copying only keys it finds, so a toggle missing from it is
+  // dropped on every reload -- it would set, serialise once, and then quietly forget itself.
+  // The server has the identical trap in CO_DEFAULTS, and this is its twin.
+  castnpc:0,
   // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
@@ -14322,10 +14327,24 @@ function finalizeClearStats(){
   } catch (e) {}
 })();
 var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle'];   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
-var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','hidelogo'];
+// v3.0.611 -- castnpc joins the registry rather than getting its own handling. This one array is
+// read and written in six places across the Prep panel and the Layout modal, so adding the key
+// here wires both forms in both directions at once. A control added outside it would work in
+// whichever half somebody remembered.
+var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','hidelogo','castnpc'];
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
 // Enable the page-break sub-toggle only when Session dividers (markers) is on.
+function clSyncCastNpc(){
+  var ck=document.getElementById('cl-cast');
+  var cn=document.getElementById('cl-castnpc');
+  var cnl=document.getElementById('cl-castnpc-label');
+  if(!cn) return;
+  var on = ck ? !!ck.checked : true;
+  cn.disabled = !on;
+  if(!on) cn.checked = false;
+  if(cnl){ cnl.style.opacity = on ? '1' : '0.55'; }
+}
 function clSyncMarkerBreak(){
   var mk=document.getElementById('cl-markers');
   var mb=document.getElementById('cl-markerbreak');
@@ -14412,6 +14431,19 @@ function prepSyncMarkerBreak(){
   if(!on) mb.checked = false;
   if(mbl){ mbl.style.opacity = on ? '1' : '0.55'; }
 }
+// v3.0.611 -- NPCs are meaningless with no character page, so the toggle follows it exactly as the
+// page-break toggle follows Session dividers. Same shape on purpose: a second convention for the
+// same idea is how two controls that should behave alike drift apart.
+function prepSyncCastNpc(){
+  var ck=document.getElementById('pcl-cast');
+  var cn=document.getElementById('pcl-castnpc');
+  var cnl=document.getElementById('pcl-castnpc-label');
+  if(!cn) return;
+  var on = ck ? !!ck.checked : true;
+  cn.disabled = !on;
+  if(!on) cn.checked = false;
+  if(cnl){ cnl.style.opacity = on ? '1' : '0.55'; }
+}
 // v3.0.580 -- EVERY TITLE AND LAYOUT CONTROL ON PREP FOLLOWS THE SAME RULE, IN ONE PLACE.
 // Ian, 2026-08-09: "Can you do it to all the layout and title controls on the prep and preview tab?"
 //
@@ -14431,7 +14463,7 @@ function prepSyncMarkerBreak(){
 // the reader switches to a version of their own.
 var PREP_LOCK_PLAIN = ['pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
-                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc'];
+                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc'];
 var PREP_LOCK_GATED = ['pcl-hidelogo', 'pcl-markerbreak'];
 function prepApplyOwnershipLock() {
   try {
@@ -14465,6 +14497,7 @@ function prepLayoutLoad(){
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!o[k]; });
   prepSyncMarkerBreak();
+  prepSyncCastNpc();
   var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);
   var _hl=document.getElementById('pcl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; }
   var _hll=document.getElementById('pcl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; }
@@ -14502,6 +14535,7 @@ function prepLayoutReset(){
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!CUSTOM_LAYOUT_DEFAULTS[k]; });
   prepSyncMarkerBreak();
+  prepSyncCastNpc();
 }
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
@@ -14511,6 +14545,7 @@ function openCustomLayout(ctx){
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.checked=!!o[k]; });
   clSyncMarkerBreak();
+  clSyncCastNpc();
   (function(){ var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4); var _hl=document.getElementById('cl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; } var _hll=document.getElementById('cl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; } })();
   var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
   var novelOnly=document.querySelectorAll('.cl-novel-only');

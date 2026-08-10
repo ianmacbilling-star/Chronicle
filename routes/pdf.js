@@ -779,6 +779,11 @@ var CO_DEFAULTS = {
   font: 'classic',
   pano: 1, aside: 1, companion: 1, emphasis: 0,
   cover: 1, cast: 1, toc: 1, header: 1, markers: 1, markerbreak: 0, watermark: 1,
+  // v3.0.611 -- NPCs on the character page. DEFAULT 0, because the page has always listed
+  // player characters only, and a default of 1 would silently redraw every book already in
+  // print. NUMBER-typed like every other toggle: parseCustomOpts drops any key that is not in
+  // this object, and reads it back through the type it finds here.
+  castnpc: 0,
   hidelogo: 0,
   // v3.0.551 -- TD-346 step 1. The cover title settings ride the SAME co string as border, caption
   // and paper, so they reach every render path automatically and persist through layout_opts with
@@ -4953,6 +4958,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   function _pubName(real, pen) { return fPublic ? (pen || '') : (real || ''); }
   var fCover  = (pageOpts && pageOpts.noCover) ? false : (co ? !!co.cover : true);
   var fCast   = co ? !!co.cast      : true;
+  var fCastNpc = co ? !!co.castnpc  : false;   // v3.0.611 -- NPCs on the Company page; off unless asked
   var fToc    = co ? !!co.toc       : false;
   var fHeader = co ? !!co.header    : true;
   var fMarkers= co ? !!co.markers   : true;
@@ -4983,8 +4989,22 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // then a very large cast falls back to a names-only list. A hard print height
   // cap (see CSS) is the final backstop against any overflow.
   var _isNpc = function (c) { return c.is_npc === true || c.is_npc === 1 || c.is_npc === '1' || c.is_npc === 'true'; };
-  // The Company page lists player characters only -- NPCs still appear in panels.
-  var castChars = characters.filter(function (c) { return !_isNpc(c); });
+  // v3.0.611 -- INCLUDE NPCS ON THE CHARACTER PAGE, off by default. Ian, 2026-08-10: "add an option
+  // to the check box layout options to Include NPCs in Character Page, then make it include NPCs
+  // from the canonical character list on the Company page."
+  //
+  // The line this replaces read "The Company page lists player characters only -- NPCs still appear
+  // in panels", which was a decision rather than a limitation, so this is a switch and not a repair.
+  //
+  // NOTHING ELSE IN THE PAGE NEEDS TO KNOW. Everything downstream -- the height sort, the row plan,
+  // the density ladder, the roster line -- is derived from castChars and its length, so an NPC is
+  // simply another figure. That is the reason this is one line instead of a feature: the page was
+  // already written against a list rather than against a notion of who belongs on it.
+  //
+  // WHAT IAN SHOULD EXPECT, because it is a consequence and not a fault: the density ladder chooses
+  // full portraits up to 12, compressed to 30, names past 60. A party of 7 plus 6 NPCs crosses 12,
+  // so switching this on can shrink every figure on the page.
+  var castChars = fCastNpc ? characters.slice() : characters.filter(function (c) { return !_isNpc(c); });
   var _castN = castChars.length;
   // v3.0.525 -- THE COMPANY IS A LINE-UP, NOT A GRID OF CARDS.
   // Ian, looking at a four-character page that rendered 3 + 1 with 40 percent of the page empty:
