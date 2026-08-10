@@ -17824,12 +17824,24 @@ function finalizeNavHighlight(navId, scrollId) {
     var el = nav.children[j], on = (el.getAttribute('data-page') == best);
     el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)';
     el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent';
-    if (on) {
-      // Keep the marker visible in a long spine, but only nudge -- a full scrollIntoView every frame
-      // fights the user's own scrolling.
-      var nr = nav.getBoundingClientRect(), er = el.getBoundingClientRect();
-      if (er.top < nr.top + 4 || er.bottom > nr.bottom - 4) nav.scrollTop += (er.top - nr.top) - (nr.height / 2);
-    }
+    // v3.0.606 -- THE SPINE HIGHLIGHTS, IT DOES NOT MOVE ITSELF. Ian, 2026-08-10: "as I scroll down
+    // the preview panel the page number panel needs to stay static and not move. It currently
+    // highlights the page you are on as you scroll, so it shouldn't move. But sometimes there are
+    // enough pages to take that page count off the page, so it has to have its own scroll bar."
+    //
+    // WHAT USED TO SIT HERE nudged the spine so the gold marker stayed in view. That was written
+    // when the spine was a hard 660px, where on a 49 page book the marker only left the box near the
+    // end. v3.0.601 made the spine a flex child of a bounded row -- about 500px on a 798px screen --
+    // so it now leaves the box a third of the way down and the spine jumps on almost every scroll.
+    // The behaviour did not change; the container did, and that was enough to make it intolerable.
+    //
+    // THE SPINE IS A CONTROL, NOT A READOUT. It is something you scroll and click to go somewhere.
+    // Two things moving it at once -- your hand and the preview -- is what made it feel broken. It
+    // keeps overflow-y:auto and therefore its own scroll bar, which is how a long book stays
+    // reachable now that nothing scrolls it for you.
+    //
+    // ACCEPTED COST, stated because it is real: past the point where the spine overflows, the gold
+    // marker can be off screen until you scroll the spine yourself.
   }
 }
 // One rAF-throttled listener per pane, attached once. Scroll fires far faster than a highlight needs
