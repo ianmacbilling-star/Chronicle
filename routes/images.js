@@ -319,14 +319,21 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
 
 // Synchronous generation (still used by generate-all / retouch until they
 // move to the async queue flow in a later phase).
-async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText) {
+// v3.0.617 -- THE TRAILING OPTIONS ARGUMENT, and why it is here rather than a second function.
+// The Title Builder needs exactly this call with ONE difference: the stored image must have its white
+// ground cut to real alpha, because a title overlay with an opaque rectangle behind it is worse than
+// no feature (TITLE_BUILDER_SPEC 5.1). Copying generateImage to change one argument would have been a
+// second fal call to keep in step with buildPanelInput, the model switch and the persist -- the fault
+// this project keeps paying for. Existing callers pass fewer arguments, so genOpts is undefined and
+// persistToR2 is called exactly as before.
+async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText, genOpts) {
   fal.config({ credentials: falKey });
   const built = buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinkingLevel, isFadeOverride, campaignPromptText);
   const result = await fal.subscribe(built.model, { input: built.input });
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
   }
-  return await persistToR2(result.data.images[0].url);
+  return await persistToR2(result.data.images[0].url, { cutWhite: !!(genOpts && genOpts.cutWhite) });
 }
 
 // Async generation: submit to fal's queue with our webhook and return the fal
@@ -1763,6 +1770,84 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
   } catch (e) {
     console.error('custom style preview error:', (e && e.status) || '', e.message, (e && e.body && (e.body.detail || JSON.stringify(e.body))) || '');
     res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// =================================================================================================
+// POST /api/images/title-build -- TITLE BUILDER, STAGE ONE (TD-357).
+//
+// Ian, 2026-08-10: a modal like the Assets one. A label with the title and another with the subtitle,
+// a description, optionally a reference image, and a Generate button that "reads your description and
+// looks at the reference image if there is one, then creates a transparent image containing the title
+// and subtitle". A token every time, regenerate as often as you like.
+//
+// WHAT THIS STAGE DOES NOT DO: compose the result onto the cover. That is stage two, and it touches
+// all three cover paths at once. Splitting here means the LETTERING can be judged before anything is
+// built on top of it -- which is the one open question about this feature that no amount of reading
+// can answer. If nano-banana-2 cannot spell a six-word title reliably, that is far cheaper to learn
+// now than after the composition work.
+//
+// THE WORDS COME FROM THE BOOK, NOT FROM THE USER. The title and subtitle are read server-side from
+// the version being edited, exactly as every render path reads them. A client-supplied string would
+// let the overlay say something the book does not, and the overlay is the thing a reader believes.
+//
+// A PLAIN WHITE GROUND IS DEMANDED IN THE PROMPT, then cut server-side. Both, not either: asking for
+// transparency does not reliably produce it, and the cut is only tractable on a flat ground. This is
+// the same pairing that made character references work in v3.0.559 plus v3.0.573.
+//
+// IMPERATIVE AND ABSOLUTE, because that register measurably outperforms description for this model
+// (ART_STYLES_HANDOFF 8). Hence commands rather than an evocative paragraph.
+router.post('/title-build', requireAuth, async function (req, res) {
+  try {
+    const campaignId = req.body && req.body.campaignId;
+    if (!campaignId) return res.json({ error: 'No campaign.' });
+    const db = await getDb();
+    const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+    if (!campaign) return res.json({ error: 'Campaign not found.' });
+
+    const bookTitle = String((req.body && req.body.bookTitle) || campaign.name || '').trim();
+    if (!bookTitle) return res.json({ error: 'This book has no title yet.' });
+    const subtitle = String((req.body && req.body.subtitle) || '').trim();
+    const description = String((req.body && req.body.description) || '').trim();
+    const refUrl = String((req.body && req.body.referenceUrl) || '').trim();
+
+    const fal_key = process.env.FAL_API_KEY;
+    if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to build a title.' });
+    }
+
+    // The subtitle is only mentioned when there IS one. An instruction to draw an empty string is how
+    // a model ends up inventing words to fill it.
+    let words = 'Draw exactly this text and nothing else: "' + bookTitle + '".';
+    if (subtitle) words += ' Underneath it, smaller, draw exactly: "' + subtitle + '".';
+    const prompt = [
+      'A title treatment: the words below drawn as ARTWORK, hand-lettered, not typed.',
+      words,
+      'Spell every word exactly as given. Add no other text, no signature, no border, no frame.',
+      'Fill the frame edge to edge with the lettering. Centre it.',
+      'Place it on a PLAIN PURE WHITE background, flat and even, with no shadow cast onto the ground.',
+      description ? ('Style direction: ' + description) : ''
+    ].filter(Boolean).join(' ');
+
+    // A reference steers the LOOK. It rides the same slot a character reference uses, so it costs no
+    // extra call and contends with nothing -- there are no character refs on a title.
+    const refBlock = refUrl ? [{ url: refUrl }] : null;
+    const seed = crypto.randomInt(1, 2147483647);
+
+    // PANORAMIC, because a title band is far wider than it is tall and the model has no ratio closer.
+    // Generating square and cropping later would waste most of the pixels the print size needs.
+    const url = await generateImage(prompt, '', fal_key, refBlock, seed, modelKey, 'panoramic', null, false, null, { cutWhite: true });
+
+    try { await spendTokens(req.session.userId, cost, { source: 'title_build', event_type: 'generation_spend' }); } catch (e) { console.error('title-build spend failed:', e.message); }
+    try { await recordGeneration(req.session.userId, { event_type: 'title_build', tokens_redeemed: cost, quantity: 1, unit: 'images', model: modelKey }); } catch (e) {}
+
+    return res.json({ image: url, title: bookTitle, subtitle: subtitle });
+  } catch (e) {
+    console.error('title-build error:', e && e.message);
+    return res.json({ error: friendlyImageError(e) });
   }
 });
 

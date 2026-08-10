@@ -2593,3 +2593,23 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 /* Hidden on phones entirely, per Ian. A phone has its own way back to the top and the button would
    sit over content that is already tight. */
 @media (max-width:640px){ .to-top-btn{ display:none !important; } }
+
+/* v3.0.617 -- TITLE BUILDER (TD-357), stage one. Nothing here is novel: the readonly rows borrow the
+   prep-input surface so the title reads as a value rather than an empty field, and the result box is
+   a checkerboard so a TRANSPARENT result is visibly transparent. That last one is the whole point of
+   the panel -- on a plain dark background a white rectangle and a clean cut look identical, which is
+   precisely the failure the alpha cut exists to prevent. */
+.prep-title-style-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 6px; }
+.tb-readonly { background:rgba(20,12,4,0.85); border:1px solid rgba(201,168,76,0.3); border-radius:8px;
+  padding:8px 10px; font-size:14px; color:var(--gold); min-height:38px; display:flex; align-items:center; }
+.tb-ref-row { display:flex; gap:8px; align-items:center; }
+.tb-ref-row .form-input { flex:1 1 auto; min-width:0; }
+.tb-ref-thumb img { max-height:70px; border-radius:6px; border:1px solid rgba(201,168,76,0.3); margin-top:8px; }
+.tb-result { margin-top:6px; border:1px solid rgba(201,168,76,0.25); border-radius:8px; min-height:120px;
+  display:flex; align-items:center; justify-content:center; padding:10px;
+  background-color:#2a2018;
+  background-image:linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%),
+                   linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%);
+  background-size:16px 16px; background-position:0 0, 8px 8px; }
+.tb-result img { max-width:100%; height:auto; display:block; }
+.tb-empty { color:var(--text-muted); font-size:13px; text-align:center; }

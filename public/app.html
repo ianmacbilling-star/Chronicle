@@ -301,7 +301,16 @@
                 <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
                 <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
               </div>
-              <div class="prep-field-label">Title style</div>
+              <!-- v3.0.617 -- TITLE BUILDER, STAGE ONE. Ian: "it should be triggered from a button that
+                   sits to the side of our current Title styles." The built title is EITHER/OR with the
+                   style dropdown -- Ian: "they can use one or the other" -- but that switching is
+                   stage two, along with composing the overlay onto the cover. This stage only builds
+                   and stores the image, so the lettering can be judged before anything is built on it. -->
+              <div class="prep-title-style-row">
+                <div class="prep-field-label" style="margin:0;">Title style</div>
+                <button type="button" class="btn btn-sm" id="title-build-open" onclick="openTitleBuilder()"
+                        title="Draw the title and subtitle as artwork instead of setting them in a typeface. Costs a token each time you generate.">Title Builder</button>
+              </div>
               <select id="pcl-titleStyle" class="prep-input" title="One named look for the cover title and subtitle: the font, weight, spacing and shading together. Applies to both cover layouts.">
                 <option value="chronicle">Chronicle &mdash; the classic Campaignia cover</option>
                 <option value="engraved">Engraved &mdash; heavy, cut into stone</option>
@@ -1751,6 +1760,54 @@
       <button class="btn btn-primary" id="ca-save-btn" onclick="submitCopyToAsset()">Copy to Assets</button>
     </div>
     <div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">A copy of this image is saved as a reusable asset, independent of the archived original.</div>
+  </div>
+</div>
+<!-- v3.0.617 -- TITLE BUILDER (TD-357), stage one. Modelled on the Asset modal at Ian request, with
+     two differences he specified: the title and subtitle are LABELS rather than fields, because they
+     belong to the book and are read server-side at generation time -- a typed string here could make
+     the artwork say something the book does not -- and there is one Generate button that reads the
+     description and the reference together. Every press costs a token. -->
+<div class="modal-overlay hidden" id="title-build-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Title Builder</div>
+      <button class="modal-close" onclick="closeTitleBuilder()">&times;</button>
+    </div>
+    <div id="title-build-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <div class="tb-readonly" id="title-build-title">&mdash;</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Subtitle</label>
+      <div class="tb-readonly" id="title-build-sub">&mdash;</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">how the lettering should look</span></label>
+      <textarea class="form-input" id="title-build-desc" rows="3" placeholder="e.g. heavy brush strokes, tapered ends, gold on black, like a martial arts poster"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Reference image <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">optional, steers the look</span></label>
+      <div class="tb-ref-row">
+        <input class="form-input" id="title-build-ref" placeholder="Paste an image URL" />
+        <!-- v3.0.617 -- NO FILE UPLOAD IN STAGE ONE, DELIBERATELY. There is no generic image-upload
+             endpoint in this app; the only one is bound into asset creation. Shipping an Upload button
+             that needed a route to be invented would either have delayed the lettering question or put
+             a dead control on screen, and a control that reads as live and is not is the exact fault
+             this session has spent the day removing. The cover is the likeliest reference anyway and
+             is already a stored URL on this version. -->
+        <button type="button" class="btn btn-sm" onclick="titleBuildUseCover()" title="Use this book's cover image as the reference">Use cover</button>
+      </div>
+      <div class="tb-ref-thumb hidden" id="title-build-ref-thumb"></div>
+    </div>
+    <div class="tb-result" id="title-build-result">
+      <div class="tb-empty" id="title-build-empty">Nothing built yet. Generate to draw your title as artwork.</div>
+      <img id="title-build-img" class="hidden" alt="Built title" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
+      <button class="btn" onclick="closeTitleBuilder()">Done</button>
+    </div>
   </div>
 </div>
 <div class="modal-overlay hidden" id="asset-modal">

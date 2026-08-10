@@ -7567,6 +7567,101 @@ function prepMaterializeBookMeta() {
     });
   } catch (e) {}
 }
+// =================================================================================================
+// TITLE BUILDER (TD-357), STAGE ONE. Ian, 2026-08-10: a modal like the Assets one, a label for the
+// title and one for the subtitle, a description, an optional reference, and a Generate button that
+// costs a token every press.
+//
+// THE TITLE AND SUBTITLE ARE LABELS, NOT FIELDS, and that is a correctness decision rather than a
+// styling one: the words belong to the BOOK. The server reads them from the version at generation
+// time; these labels only show what it will use. A typed box here could make the artwork say
+// something the book does not, and the artwork is the thing a reader believes over the metadata.
+//
+// STAGE ONE DOES NOT COMPOSE THE RESULT ONTO THE COVER. It generates, cuts the ground to real alpha
+// and stores it on the version. Composition, and switching the style dropdown off while a built title
+// is active, is stage two -- which touches all three cover paths at once and should not be mixed with
+// the question this stage exists to answer: can the model letter a six-word title reliably.
+function _tbEl(id) { return document.getElementById(id); }
+function _tbErr(msg) {
+  var e = _tbEl('title-build-error');
+  if (!e) return;
+  e.textContent = msg || '';
+  e.classList.toggle('hidden', !msg);
+}
+// The subtitle follows the SAME rule the cover does (v3.0.596): never set means nothing is drawn, not
+// the session dates. Showing dates here would promise a subtitle the render will not draw.
+function _tbSubtitle() {
+  var raw = (state.bookMeta && state.bookMeta.subtitle != null) ? String(state.bookMeta.subtitle).trim() : '';
+  return raw;
+}
+function _tbTitle() {
+  var t = (state.bookMeta && state.bookMeta.book_title) ? String(state.bookMeta.book_title).trim() : '';
+  if (!t && state.currentCampaign) t = String(state.currentCampaign.name || '').trim();
+  return t;
+}
+function openTitleBuilder() {
+  if (!state.currentCampaign) return;
+  _tbErr('');
+  var t = _tbTitle(), sub = _tbSubtitle();
+  var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || 'This book has no title yet';
+  var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
+  // Show whatever this version already has, so reopening is not a blank slate.
+  var existing = (state.bookMeta && state.bookMeta.title_image_url) || '';
+  _tbShowResult(existing);
+  var m = _tbEl('title-build-modal'); if (m) m.classList.remove('hidden');
+}
+function closeTitleBuilder() {
+  var m = _tbEl('title-build-modal'); if (m) m.classList.add('hidden');
+}
+function _tbShowResult(url) {
+  var img = _tbEl('title-build-img'), empty = _tbEl('title-build-empty');
+  if (url) {
+    if (img) { img.src = url; img.classList.remove('hidden'); }
+    if (empty) empty.classList.add('hidden');
+  } else {
+    if (img) { img.removeAttribute('src'); img.classList.add('hidden'); }
+    if (empty) empty.classList.remove('hidden');
+  }
+}
+function titleBuildUseCover() {
+  var cov = (state.bookMeta && state.bookMeta.cover_image_url) ||
+            (state.currentCampaign && state.currentCampaign.cover_image_url) || '';
+  var ref = _tbEl('title-build-ref');
+  if (!cov) { _tbErr('This book has no cover image yet.'); return; }
+  if (ref) ref.value = cov;
+  _tbErr('');
+  var th = _tbEl('title-build-ref-thumb');
+  if (th) { th.innerHTML = '<img src="' + cov + '" alt="" />'; th.classList.remove('hidden'); }
+}
+function titleBuildGenerate() {
+  if (!state.currentCampaign) return;
+  var t = _tbTitle();
+  if (!t) { _tbErr('Give the book a title first.'); return; }
+  _tbErr('');
+  var btn = _tbEl('title-build-go');
+  if (btn) { btn.disabled = true; btn.textContent = 'Drawing...'; }
+  var body = {
+    campaignId: state.currentCampaign.id,
+    bookTitle: t,
+    subtitle: _tbSubtitle(),
+    description: (_tbEl('title-build-desc') || {}).value || '',
+    referenceUrl: (_tbEl('title-build-ref') || {}).value || ''
+  };
+  fetch('/api/images/title-build', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not build the title.'); return; }
+      _tbShowResult(d.image);
+      // Stored on the VERSION, through the same endpoint the cover images use, so it forks with the
+      // book rather than following the browser.
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({ title_image_url: d.image });
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    })
+    .catch(function () { _tbErr('Could not build the title.'); })
+    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
+}
 function prepSaveTitleColor() {
   var el = document.getElementById('print-title-color');
   if (!el || !state.currentCampaign) return;
