@@ -2142,7 +2142,15 @@ html.staging-env .app-logo-text{color:#2b1400;}
 #novel-splitter .novel-splitter-bar { width:3px; height:60px; background:rgba(216,184,92,0.5); border-radius:2px; transition:background 0.12s; }
 #novel-splitter:hover .novel-splitter-bar { background:rgba(216,184,92,0.85); }
 .pcl-fields { display:flex; flex-direction:column; gap:10px; }
-.pcl-toggles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px 14px; align-items:start; }
+/* v3.0.613 -- TWO COLUMNS, FIXED. Ian, 2026-08-10, looking at the panel: "little weird... can you
+   do two columns with the check boxes in them? Needs to be a little more orderly."
+   auto-fit was the disorder. repeat(auto-fit, minmax(150px, 1fr)) lets the COLUMN COUNT follow
+   the panel width, and the Prep panel is user-draggable, so the same eight controls reflowed
+   into two, three or four columns and a long label like Include table of contents wrapped
+   wherever it happened to land. Two columns is a decision rather than a consequence.
+   minmax(0, 1fr) rather than 1fr: a grid track will not shrink below its content by default, so
+   a long label would push the column wider than half and break the alignment it is here to fix. */
+.pcl-toggles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px 14px; align-items:start; }
 @media (max-width: 900px) { .novel-preview-layout { flex-direction:column; } .novel-prep-panel { flex:1 1 auto; width:100%; min-width:0; position:static; max-height:none; } #novel-splitter { display:none; } }
 
 /* =================================================================================================
@@ -2496,8 +2504,17 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    AND THE SPAN ABOVE HAS TO BE UNDONE INSIDE IT: .pcl-toggle-pair carries grid-column:1/-1 for
    when it sits directly in .pcl-toggles, and left alone that makes each pair span the WRAPPER
    too -- which stacks them again and looks exactly like the rule never applied. */
-.pcl-pair-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 6px 14px; align-items: start; }
+/* The wrapper spans both columns and repeats the SAME two-column track and the SAME gap, so its
+   two pairs line up exactly with the single controls above and below them. A different gap or a
+   different track here would put the second pair a few pixels off the column it sits under,
+   which is the kind of near-miss that reads as sloppy without being obviously wrong. */
+.pcl-pair-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; align-items: start; }
 .pcl-pair-row > .pcl-toggle-pair { grid-column: auto; }
+/* Below 901px the Prep panel is already released to full width and stacked under the preview,
+   where two columns of checkboxes squeeze the labels rather than tidy them. */
+@media (max-width:900px){
+  .pcl-toggles, .pcl-pair-row { grid-template-columns: 1fr; }
+}
 
 /* Order & Publish: the print order and the Library publish are SIBLING cards, each with its own
    border -- publishing is not part of the order, so it must not sit inside the order's frame.
