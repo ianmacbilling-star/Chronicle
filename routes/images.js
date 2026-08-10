@@ -339,7 +339,13 @@ async function generateImage(prompt, style, falKey, charBlock, seed, modelKey, s
   if (!result.data || !result.data.images || !result.data.images[0]) {
     throw new Error('No image returned from fal.ai');
   }
-  return await persistToR2(result.data.images[0].url, { cutWhite: !!(genOpts && genOpts.cutWhite) });
+  // v3.0.619 -- FORWARD THE WHOLE OBJECT. v3.0.617 named ONE field here, cutWhite, and it worked
+  // because the title asked for cutWhite. v3.0.618 switched the title to cutGround and this line
+  // was not touched, so the flag was silently dropped and NO CUT RAN AT ALL -- proved by decoding
+  // the stored PNG, which came back colour type 2 with no alpha channel and the model own metadata
+  // chunks still attached. A pass-through that names one field is a pass-through that loses the
+  // next one.
+  return await persistToR2(result.data.images[0].url, genOpts || {});
 }
 
 // Async generation: submit to fal's queue with our webhook and return the fal
@@ -1850,7 +1856,10 @@ router.post('/title-build', requireAuth, async function (req, res) {
 
     // A reference steers the LOOK. It rides the same slot a character reference uses, so it costs no
     // extra call and contends with nothing -- there are no character refs on a title.
-    const refBlock = refUrl ? [{ url: refUrl }] : null;
+    // v3.0.619 -- {text, refs}, NOT a bare array. buildPanelInput reads charBlock.refs; a plain array
+    // has no .refs, so the model never received Ian uploaded reference at all. It was not ignoring the
+    // poster -- it was never sent one.
+    const refBlock = refUrl ? { text: '', refs: [{ url: refUrl, name: 'the lettering reference' }] } : null;
     const seed = crypto.randomInt(1, 2147483647);
 
     // PANORAMIC, because a title band is far wider than it is tall and the model has no ratio closer.
@@ -1860,13 +1869,32 @@ router.post('/title-build', requireAuth, async function (req, res) {
     try { await spendTokens(req.session.userId, cost, { source: 'title_build', event_type: 'generation_spend' }); } catch (e) { console.error('title-build spend failed:', e.message); }
     try { await recordGeneration(req.session.userId, { event_type: 'title_build', tokens_redeemed: cost, quantity: 1, unit: 'images', model: modelKey }); } catch (e) {}
 
-    return res.json({ image: url, title: bookTitle, subtitle: subtitle });
+    // v3.0.619 -- SAY WHETHER THE GROUND CAME OFF. cutGroundToAlpha returns the ORIGINAL bytes when
+    // it cannot find a ground -- which is right, but means a photographic reference yields an opaque
+    // rectangle that looks exactly like every other result. The stored file is re-encoded as RGBA
+    // only when the cut ran, so the colour type IS the answer, read back from the bytes rather than
+    // inferred from what we asked for.
+    let cutOk = null;
+    try { cutOk = await imageHasAlpha(url); } catch (e) {}
+    return res.json({ image: url, title: bookTitle, subtitle: subtitle, cut: cutOk });
   } catch (e) {
     console.error('title-build error:', e && e.message);
     return res.json({ error: friendlyImageError(e) });
   }
 });
 
+// Read the stored PNG header and report whether it carries an alpha channel. Colour type 6 is RGBA,
+// which our cut is the only thing that produces here -- fal returns type 2. Cheap: it reads the
+// first bytes, not the image.
+async function imageHasAlpha(url) {
+  try {
+    const axios = require('axios');
+    const r = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000, headers: { Range: 'bytes=0-63' }, validateStatus: function (s) { return s === 200 || s === 206; } });
+    const b = Buffer.from(r.data);
+    if (b.length < 26 || b[0] !== 0x89 || b[1] !== 0x50) return null;   // not a PNG: cannot tell
+    return b[25] === 6 || b[25] === 4;                                  // IHDR colour type byte
+  } catch (e) { return null; }
+}
 // POST /api/images/title-ref -- store ONE reference image for the Title Builder and return its URL.
 // Ian: "the plan would be to drop an image in there that had lettering similar to what I want my title
 // to look like." A URL field alone could not serve that -- the images he wants to use are on his disk.

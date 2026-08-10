@@ -7667,6 +7667,12 @@ function titleBuildGenerate() {
     .then(function (d) {
       if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not build the title.'); return; }
       _tbShowResult(d.image);
+      // v3.0.619 -- SAY SO WHEN THE GROUND DID NOT COME OFF. The cut returns the original bytes when it
+      // cannot find a ground, so a photographic reference produces an opaque rectangle that looks like
+      // any other result. Without this, every failure looks the same as every success.
+      if (d.cut === false) {
+        _tbErr('The background could not be removed -- this came back as a scene rather than lettering on a plain ground. Try again, or use a reference that is lettering only.');
+      }
       // Stored on the VERSION, through the same endpoint the cover images use, so it forks with the
       // book rather than following the browser.
       if (typeof _prepMetaWrite === 'function') _prepMetaWrite({ built_title_url: d.image });
