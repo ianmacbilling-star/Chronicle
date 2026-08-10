@@ -163,4 +163,130 @@ function cutWhiteToAlpha(buf) {
   }
 }
 
-module.exports = { cutWhiteToAlpha, CUT_HI, CUT_LO };
+// =====================================================================================================
+// GROUND-BY-CONNECTIVITY ALPHA CUT (TD-357)
+// =====================================================================================================
+// cutWhiteToAlpha decides by COLOUR: bright enough is ground. That is right for character references,
+// which are generated on a white ground and drawn in ink. It is WRONG for a built title.
+//
+// Ian sent six reference titles -- GALARE EMPIRE in silver, STARLESS KINGDOM in white, BLOOD CROWN in a
+// red gradient, SPRING COURT in pale gold -- every one of them LIGHT LETTERING ON BLACK. A colour cut
+// would erase the letters along with the sky. Those looks also only exist BECAUSE of the dark field:
+// the metallic edges and the glow have nothing to sit against on white.
+//
+// So this decides by CONNECTIVITY instead. Flood inward from the border: whatever is reachable from the
+// edge, within a tolerance of the corner colour, is ground. Everything else is kept -- including the
+// counter inside an O and a pale letter in the middle of the image, which a colour test cannot tell
+// apart from the sky. It is colour-agnostic by construction, so gold on black, black on cream and a
+// gradient all behave the same.
+//
+// THE SEED COLOUR IS THE FOUR CORNERS, not a constant, and it is a MEDIAN rather than an average: a
+// single speckle in one corner -- and every one of Ian's references has gold flecks scattered over the
+// black -- would drag a mean but cannot move a median.
+//
+// THE EDGE RAMP MATTERS MORE HERE THAN ANYWHERE. A hard in/out boundary leaves a jagged fringe on every
+// antialiased letterform, which on a printed cover looks worse than the box it replaced. So a pixel is
+// scored by DISTANCE from the ground colour: at or below NEAR it is ground, at or above FAR it is ink,
+// and between them alpha ramps. Only pixels reached by the flood can be made transparent, so a dark
+// area INSIDE a letter stays solid however close its colour is to the background.
+//
+// FAIL-SOFT, exactly like its sibling: anything unexpected returns the original buffer. A title with a
+// rectangle behind it is ugly; a title that fails to load is a broken cover.
+const GROUND_NEAR = 26;    // within this distance of the ground colour and reachable: fully transparent
+const GROUND_FAR  = 74;    // beyond this: fully opaque. Between: ramp. Measured against Ian's references,
+                           // whose flecks sit far outside 74 and whose antialiasing sits inside it.
+function cutGroundToAlpha(buf) {
+  try {
+    if (!Buffer.isBuffer(buf) || buf.length < 8 || !buf.slice(0, 8).equals(PNG_SIG)) return buf;
+    let p = 8, width = 0, height = 0, depth = 0, ctype = -1, interlace = 0;
+    const idat = [];
+    while (p + 8 <= buf.length) {
+      const len = buf.readUInt32BE(p);
+      const type = buf.slice(p + 4, p + 8).toString('ascii');
+      const data = buf.slice(p + 8, p + 8 + len);
+      if (type === 'IHDR') {
+        width = data.readUInt32BE(0); height = data.readUInt32BE(4);
+        depth = data[8]; ctype = data[9]; interlace = data[12];
+      } else if (type === 'IDAT') idat.push(data);
+      else if (type === 'IEND') break;
+      p += 12 + len;
+    }
+    if (depth !== 8 || interlace !== 0) return buf;
+    if (ctype !== 2 && ctype !== 6) return buf;
+    if (!width || !height || !idat.length) return buf;
+    if (width * height > 40e6) return buf;
+
+    const bpp = (ctype === 6) ? 4 : 3;
+    const raw = unfilter(zlib.inflateSync(Buffer.concat(idat)), width, height, bpp);
+    if (!raw) return buf;
+
+    const at = (x, y) => (y * width + x) * bpp;
+    const med = (arr) => arr.slice().sort((a, b) => a - b)[arr.length >> 1];
+    const corners = [[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]];
+    const gr = med(corners.map(c => raw[at(c[0], c[1])]));
+    const gg = med(corners.map(c => raw[at(c[0], c[1]) + 1]));
+    const gb = med(corners.map(c => raw[at(c[0], c[1]) + 2]));
+    const dist = (i) => {
+      const dr = raw[i] - gr, dg = raw[i + 1] - gg, db = raw[i + 2] - gb;
+      return Math.sqrt(dr * dr + dg * dg + db * db);
+    };
+
+    // Flood from every border pixel. An explicit stack, not recursion: a 2000x800 ground is well over a
+    // million pixels and would blow the call stack.
+    const reach = new Uint8Array(width * height);
+    const stack = [];
+    const push = (x, y) => {
+      const k = y * width + x;
+      if (reach[k]) return;
+      if (dist(at(x, y)) > GROUND_FAR) return;
+      reach[k] = 1; stack.push(k);
+    };
+    for (let x = 0; x < width; x++) { push(x, 0); push(x, height - 1); }
+    for (let y = 0; y < height; y++) { push(0, y); push(width - 1, y); }
+    while (stack.length) {
+      const k = stack.pop(), x = k % width, y = (k / width) | 0;
+      if (x > 0) push(x - 1, y);
+      if (x < width - 1) push(x + 1, y);
+      if (y > 0) push(x, y - 1);
+      if (y < height - 1) push(x, y + 1);
+    }
+
+    const stride = width * 4;
+    const out = Buffer.alloc(height * (stride + 1));
+    let cut = 0;
+    for (let y = 0; y < height; y++) {
+      const doff = y * (stride + 1);
+      out[doff] = 0;
+      for (let x = 0; x < width; x++) {
+        const s = at(x, y), d = doff + 1 + x * 4;
+        const a0 = (bpp === 4) ? raw[s + 3] : 255;
+        let a = 255;
+        if (reach[y * width + x]) {
+          const dd = dist(s);
+          if (dd <= GROUND_NEAR) { a = 0; cut++; }
+          else if (dd < GROUND_FAR) a = Math.round(255 * (dd - GROUND_NEAR) / (GROUND_FAR - GROUND_NEAR));
+        }
+        out[d] = raw[s]; out[d + 1] = raw[s + 1]; out[d + 2] = raw[s + 2];
+        out[d + 3] = Math.min(a0, a);
+      }
+    }
+    // Nothing meaningful removed means there was no ground to remove -- keep the original bytes rather
+    // than rewriting the file and discarding whatever else its chunks carried.
+    if (cut < width * height * 0.02) return buf;
+
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
+    ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+    return Buffer.concat([
+      PNG_SIG,
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(out, { level: 9 })),
+      chunk('IEND', Buffer.alloc(0))
+    ]);
+  } catch (e) {
+    console.error('cutGroundToAlpha failed, keeping the original image:', e.message);
+    return buf;
+  }
+}
+
+module.exports = { cutWhiteToAlpha, cutGroundToAlpha, CUT_HI, CUT_LO, GROUND_NEAR, GROUND_FAR };

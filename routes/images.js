@@ -12,6 +12,12 @@ const { fal } = require('@fal-ai/client');
 const { getTokenCost, canAfford, spendTokens, getBalance, recordGeneration } = require('./tokens');
 const crypto = require('crypto');
 const { logDebug } = require('./debug');
+// v3.0.618 -- the title reference upload. Same multer shape and the same shared guard the asset
+// upload uses, so one policy covers both rather than a second set of limits to drift.
+const multer = require('multer');
+const { uploadFile } = require('../storage/storage');
+const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
+const titleRefUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
 
 // Async image generation (fal queue + webhook). PUBLIC_BASE_URL is the app's
 // public origin for THIS environment (set in Railway), e.g. https://campaignia.com
@@ -1821,14 +1827,24 @@ router.post('/title-build', requireAuth, async function (req, res) {
 
     // The subtitle is only mentioned when there IS one. An instruction to draw an empty string is how
     // a model ends up inventing words to fill it.
+    // v3.0.618 -- REBUILT AROUND IAN REFERENCES. He sent six book titles -- silver, white, pale gold, a
+    // red gradient -- every one LIGHT LETTERING ON A BLACK FIELD. Those looks exist BECAUSE of the dark
+    // ground: the metallic edges and the glow have nothing to sit against on white. So the ground is
+    // black now, and the cut that follows decides by connectivity rather than colour.
+    //
+    // AND THE REFERENCE FIGHTS BACK. A sheet of six titles is exactly the input that makes a model draw
+    // STARLESS KINGDOM instead of the book title, so the split is stated twice and in both directions:
+    // the LOOK comes from the reference, the WORDS come only from here.
     let words = 'Draw exactly this text and nothing else: "' + bookTitle + '".';
     if (subtitle) words += ' Underneath it, smaller, draw exactly: "' + subtitle + '".';
     const prompt = [
-      'A title treatment: the words below drawn as ARTWORK, hand-lettered, not typed.',
+      'A book title logo: the words below drawn as ARTWORK, hand-lettered, not typed.',
       words,
-      'Spell every word exactly as given. Add no other text, no signature, no border, no frame.',
-      'Fill the frame edge to edge with the lettering. Centre it.',
-      'Place it on a PLAIN PURE WHITE background, flat and even, with no shadow cast onto the ground.',
+      'Spell every word exactly as given, letter for letter.',
+      refUrl ? 'Take the lettering style, the palette and any ornament from the reference image. Do NOT copy any words from the reference image -- use only the text given above.' : '',
+      'Add no other text, no signature, no border, no frame, no page edges.',
+      'Fill the frame with the lettering and centre it.',
+      'Place it on a FLAT SOLID BLACK background, evenly lit, with nothing else on the background at all.',
       description ? ('Style direction: ' + description) : ''
     ].filter(Boolean).join(' ');
 
@@ -1839,7 +1855,7 @@ router.post('/title-build', requireAuth, async function (req, res) {
 
     // PANORAMIC, because a title band is far wider than it is tall and the model has no ratio closer.
     // Generating square and cropping later would waste most of the pixels the print size needs.
-    const url = await generateImage(prompt, '', fal_key, refBlock, seed, modelKey, 'panoramic', null, false, null, { cutWhite: true });
+    const url = await generateImage(prompt, '', fal_key, refBlock, seed, modelKey, 'panoramic', null, false, null, { cutGround: true });
 
     try { await spendTokens(req.session.userId, cost, { source: 'title_build', event_type: 'generation_spend' }); } catch (e) { console.error('title-build spend failed:', e.message); }
     try { await recordGeneration(req.session.userId, { event_type: 'title_build', tokens_redeemed: cost, quantity: 1, unit: 'images', model: modelKey }); } catch (e) {}
@@ -1848,6 +1864,24 @@ router.post('/title-build', requireAuth, async function (req, res) {
   } catch (e) {
     console.error('title-build error:', e && e.message);
     return res.json({ error: friendlyImageError(e) });
+  }
+});
+
+// POST /api/images/title-ref -- store ONE reference image for the Title Builder and return its URL.
+// Ian: "the plan would be to drop an image in there that had lettering similar to what I want my title
+// to look like." A URL field alone could not serve that -- the images he wants to use are on his disk.
+// No generation, no token: this only persists a file so the generator can look at it.
+router.post('/title-ref', requireAuth, guardUpload(titleRefUpload, 'title-ref'), async function (req, res) {
+  try {
+    if (!req.file || !req.file.buffer) return res.json({ error: 'No image received.' });
+    const ct = req.file.mimetype || 'image/png';
+    const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
+    const name = 'titleref-' + req.session.userId + '-' + Date.now() + '.' + ext;
+    const url = await uploadFile(req.file.buffer, name, ct);
+    return res.json({ url: url });
+  } catch (e) {
+    console.error('title-ref upload failed:', e && e.message);
+    return res.json({ error: 'Could not store that image.' });
   }
 });
 

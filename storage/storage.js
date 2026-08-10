@@ -279,6 +279,11 @@ async function persistToR2(remoteUrl, opts) {
     if (opts && opts.cutWhite) {
       // Fail-soft inside: returns the original bytes for anything it cannot safely handle.
       buf = require('./alpha').cutWhiteToAlpha(buf);
+    } else if (opts && opts.cutGround) {
+      // v3.0.618 -- the TITLE cut, which decides by CONNECTIVITY rather than colour. A built title is
+      // light lettering on black as often as the reverse, and a colour test erases exactly the letters
+      // it is meant to keep. Mutually exclusive with cutWhite: two different answers to one question.
+      buf = require('./alpha').cutGroundToAlpha(buf);
     }
     const ct = String(resp.headers['content-type'] || 'image/png').split(';')[0].trim();
     // v3.0.573 -- if the cut rewrote the image it is a PNG now whatever it arrived as, so the stored

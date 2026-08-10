@@ -1789,14 +1789,12 @@
     <div class="form-group">
       <label class="form-label">Reference image <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">optional, steers the look</span></label>
       <div class="tb-ref-row">
-        <input class="form-input" id="title-build-ref" placeholder="Paste an image URL" />
-        <!-- v3.0.617 -- NO FILE UPLOAD IN STAGE ONE, DELIBERATELY. There is no generic image-upload
-             endpoint in this app; the only one is bound into asset creation. Shipping an Upload button
-             that needed a route to be invented would either have delayed the lettering question or put
-             a dead control on screen, and a control that reads as live and is not is the exact fault
-             this session has spent the day removing. The cover is the likeliest reference anyway and
-             is already a stored URL on this version. -->
-        <button type="button" class="btn btn-sm" onclick="titleBuildUseCover()" title="Use this book's cover image as the reference">Use cover</button>
+        <input class="form-input" id="title-build-ref" placeholder="Paste an image URL, or upload one" />
+        <input type="file" id="title-build-file" accept="image/*" style="display:none;" onchange="titleBuildUpload(this)" />
+        <!-- v3.0.618 -- A REAL UPLOAD, and Use cover is gone. Ian: "the plan would be to drop an image in
+             there that had lettering similar to what I want my title to look like." The cover is ART, not
+             lettering, so offering it was the wrong affordance -- the references he wants are on his disk. -->
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('title-build-file').click()">Upload</button>
       </div>
       <div class="tb-ref-thumb hidden" id="title-build-ref-thumb"></div>
     </div>

@@ -276,6 +276,7 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     cover_image_url: cur.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
+    built_title_url: cur.built_title_url || '',
     book_title: cur.book_title || '',
     // v3.0.552 -- null is sent as null, NOT coerced to empty. The client needs to tell "never set"
     // from "cleared" so it knows whether to seed the field with the dates.
@@ -308,6 +309,11 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
   if (b.title_image_url !== undefined) patch.title_image_url = b.title_image_url || null;
+  // v3.0.618 -- THE BUILT TITLE IS ITS OWN FIELD. v3.0.617 stored it in title_image_url, which was
+  // ALREADY TAKEN: that is the third image in the Prep panel, the artwork on the book title PAGE.
+  // Ian saw his own title-page image appear in the builder and said so before anything overwrote it.
+  // The prefs blob takes new keys with no schema change, which is exactly what it is for.
+  if (b.built_title_url !== undefined) patch.built_title_url = b.built_title_url || null;
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
   // v3.0.552 -- THE EMPTY STRING IS PRESERVED, DELIBERATELY. `b.subtitle || null` would collapse ''
   // back to null, and null and empty are now DIFFERENT states: null means the book has never had a
@@ -363,6 +369,7 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     cover_image_url: merged.cover_image_url || (camp ? camp.campaign_image_url : '') || '',
     back_cover_image_url: merged.back_cover_image_url || '',
     title_image_url: merged.title_image_url || '',
+    built_title_url: merged.built_title_url || '',
     book_title: merged.book_title || '',
     // v3.0.575 -- THE PUT NOW ANSWERS IN THE SAME SHAPE AS THE GET. It omitted the subtitle, so a
     // client assigning this response onto state.bookMeta (the image picker does, and the new

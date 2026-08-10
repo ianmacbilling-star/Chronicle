@@ -7606,7 +7606,10 @@ function openTitleBuilder() {
   var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || 'This book has no title yet';
   var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
   // Show whatever this version already has, so reopening is not a blank slate.
-  var existing = (state.bookMeta && state.bookMeta.title_image_url) || '';
+  // v3.0.618 -- built_title_url, NOT title_image_url. That one is the book title PAGE artwork, the
+  // third image in the Prep panel, and v3.0.617 both displayed it here and would have overwritten
+  // it on the first Generate. Ian spotted it before it cost him anything.
+  var existing = (state.bookMeta && state.bookMeta.built_title_url) || '';
   _tbShowResult(existing);
   var m = _tbEl('title-build-modal'); if (m) m.classList.remove('hidden');
 }
@@ -7623,15 +7626,25 @@ function _tbShowResult(url) {
     if (empty) empty.classList.remove('hidden');
   }
 }
-function titleBuildUseCover() {
-  var cov = (state.bookMeta && state.bookMeta.cover_image_url) ||
-            (state.currentCampaign && state.currentCampaign.cover_image_url) || '';
-  var ref = _tbEl('title-build-ref');
-  if (!cov) { _tbErr('This book has no cover image yet.'); return; }
-  if (ref) ref.value = cov;
+// v3.0.618 -- UPLOAD A REFERENCE. Ian wants to drop in a sheet of lettering he likes, so the file goes
+// to R2 first and the generator is handed the URL. Nothing is charged: this only stores a picture.
+function titleBuildUpload(input) {
+  var f = input && input.files && input.files[0];
+  if (!f) return;
   _tbErr('');
-  var th = _tbEl('title-build-ref-thumb');
-  if (th) { th.innerHTML = '<img src="' + cov + '" alt="" />'; th.classList.remove('hidden'); }
+  var fd = new FormData();
+  fd.append('image', f);
+  fetch('/api/images/title-ref', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error || !d.url) { _tbErr((d && (d.message || d.error)) || 'Could not store that image.'); return; }
+      var ref = _tbEl('title-build-ref');
+      if (ref) ref.value = d.url;
+      var th = _tbEl('title-build-ref-thumb');
+      if (th) { th.innerHTML = '<img src="' + d.url + '" alt="" />'; th.classList.remove('hidden'); }
+    })
+    .catch(function () { _tbErr('Could not store that image.'); })
+    .then(function () { try { input.value = ''; } catch (e) {} });
 }
 function titleBuildGenerate() {
   if (!state.currentCampaign) return;
@@ -7656,7 +7669,7 @@ function titleBuildGenerate() {
       _tbShowResult(d.image);
       // Stored on the VERSION, through the same endpoint the cover images use, so it forks with the
       // book rather than following the browser.
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({ title_image_url: d.image });
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({ built_title_url: d.image });
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not build the title.'); })
