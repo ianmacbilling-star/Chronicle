@@ -12449,6 +12449,7 @@ router.post('/save-optimized/:campaignId', requireAuth, async function (req, res
 async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle, arrange) {
   function fail(code, message) {
     _job.state = 'error'; _job.code = code; _job.message = message; _job.finishedAt = Date.now();
+    try { optimizeRunEnd(req.session.userId); } catch (e) {}   // v3.0.610 -- a failed save ends the run too
     console.error('[save-optimized] job ' + _job.id + ' ' + code + ': ' + message);
   }
   try {
@@ -12477,7 +12478,14 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
     // Default is to flatten: any other caller, now or later, gets the small file without asking.
     var _quick = !!(req.body && req.body.quickSave);
     var _flatO = { flattened: false, buffer: pdfBuffer };
-    if (!_quick) { _job.step = 'flatten'; _flatO = await flattenPdf(pdfBuffer, 'optimized'); pdfBuffer = _flatO.buffer; }
+    if (!_quick) {
+      _job.step = 'flatten';
+      // The flatten measured 102s on this book and nothing else touches the server during it,
+      // so the run lock gets a beat of its own or a slow book could drift toward stale.
+      var _beat = setInterval(function () { try { optimizeRunBeat(req.session.userId, 'flatten'); } catch (e) {} }, 20000);
+      try { _flatO = await flattenPdf(pdfBuffer, 'optimized'); } finally { clearInterval(_beat); }
+      pdfBuffer = _flatO.buffer;
+    }
     var _bytesO = pdfBuffer.length;
     // v3.0.422 -- STORE THE LAYOUT BESIDE THE PDF, on BOTH saves: the protective one taken the
     // instant the loop ends AND the manual Save this Version, because either can be the last save
@@ -12535,6 +12543,10 @@ async function saveOptimizedWork(_job, req, campaignId, hit, _lookKey, bookTitle
       flattened: !!_flatO.flattened, quickSave: _quick, bytes: _bytesO, layoutSaved: true };
     _job.state = 'done';
     _job.finishedAt = Date.now();
+    // v3.0.610 -- the run is over. Released on the REAL save only: the protective quick save fires
+    // the instant the loop ends, while the final fill and the flatten are still to come, and letting
+    // go there would open the door to a second run during the slowest part of the first.
+    if (!_quick) { try { optimizeRunEnd(req.session.userId); } catch (e) {} }
     console.log('[save-optimized] job ' + _job.id + ' done in ' + Math.round((_job.finishedAt - _job.startedAt) / 1000) + 's, ' + pages + ' pages');
     return;
   } catch (e) {
@@ -12637,11 +12649,109 @@ router.post('/restore-optimized/:campaignId', requireAuth, async function (req, 
   }
 });
 
+// =================================================================================================
+// ONE OPTIMIZE RUN PER USER -- v3.0.610. Ian, 2026-08-10: "one optimize book per USER at one time on
+// the server, and it needs to give a warning that one is running in the background and it must
+// complete before a new one can be started."
+//
+// WHY THIS EXISTS, AND IT IS IAN WHO SPOTTED IT: "I know we have had optimizing start and then when I
+// come back it is not running or it is stalled or it is running but I do not see it running. And
+// then I hit it again... having more than one running at a time with my content. I just cannot see
+// the other one."
+//
+// HE IS RIGHT AND THE ARCHITECTURE ALLOWS IT COMPLETELY. Every existing guard is a variable in ONE
+// BROWSER TAB -- _optimizeLock is commented "in memory only, never persisted", and _aiLoopRunning,
+// _aiPreloop and _aiFinishing are window properties. A hard refresh, a second tab or a second device
+// wipes all four while the server carries on working. A grep for a server-side lock across every
+// route and service returned NOTHING.
+//
+// AND A SECOND RUN IS NOT MERELY SLOW, IT CAN PRODUCE THE WRONG BOOK. The composed body is stored
+// under composedCacheKey(campaignId, req) and the move and grow stores key the same way, so two runs
+// on one book write to the SAME entries and the last writer wins. Run B can be replayed with run A
+// moves, and the save takes whatever is in the cache at that instant.
+//
+// THE EVIDENCE THAT SOMETHING WAS ALREADY COMPETING: the same book, same settings, fourteen minutes
+// apart, pass 2 took 1m57 then 1m21, pass 3 1m35 then 1m04, pass 4 1m57 then 1m18 -- about 45 percent
+// slower across every pass on the run whose order request then died with a 502 and no log line.
+//
+// PER USER, NOT PER CAMPAIGN, at Ian instruction. It is the stricter rule and the simpler one to
+// explain: you may have one book optimizing at a time, whichever book it is.
+//
+// LIFECYCLE, and the failure modes are the point:
+//   acquired  at compose (the start of a run, and where the token is charged)
+//   refreshed on every pack-render and every save, so a live run keeps its claim
+//   released  when the real save finishes, or when the client says the run ended
+//   expires   after OPTIMIZE_LOCK_STALE_MS without a heartbeat, so a crashed run cannot lock a
+//             person out forever
+// IN MEMORY, deliberately, for the same reason the composed cache is: a run can only ever be served
+// by the process holding its pack. If the process restarts the run is gone anyway, and so is the
+// lock -- which is the correct outcome and needs no cleanup.
+var _optimizeRuns = new Map();               // userId -> { campaignId, campaignName, startedAt, beat, step }
+var OPTIMIZE_LOCK_STALE_MS = 15 * 60 * 1000; // a 47 page book measured 8m24 of passes plus 140s of save
+function optimizeRunGet(userId) {
+  var r = _optimizeRuns.get(userId);
+  if (!r) return null;
+  if (Date.now() - (r.beat || r.startedAt) > OPTIMIZE_LOCK_STALE_MS) { _optimizeRuns.delete(userId); return null; }
+  return r;
+}
+function optimizeRunStart(userId, campaignId, campaignName) {
+  _optimizeRuns.set(userId, { campaignId: String(campaignId), campaignName: campaignName || '',
+                              startedAt: Date.now(), beat: Date.now(), step: 'compose' });
+}
+function optimizeRunBeat(userId, step) {
+  var r = optimizeRunGet(userId);
+  if (!r) return;
+  r.beat = Date.now();
+  if (step) r.step = step;
+}
+function optimizeRunEnd(userId) { try { _optimizeRuns.delete(userId); } catch (e) {} }
+// The client asks this on entering the Optimize tab, which is what turns "it is running but I do not
+// see it running" into a visible state after a refresh.
+router.get('/optimize-status', requireAuth, function (req, res) {
+  try {
+    var r = optimizeRunGet(req.session.userId);
+    if (!r) return res.json({ running: false });
+    return res.json({ running: true, campaignId: r.campaignId, campaignName: r.campaignName,
+                      startedAt: r.startedAt, elapsedMs: Date.now() - r.startedAt, step: r.step || '' });
+  } catch (e) {
+    return res.json({ running: false });
+  }
+});
+// Best effort, from the client, when a loop ends without a save (cancelled, or failed). The stale
+// timeout is the real safety net; this only makes the common case immediate rather than a wait.
+router.post('/optimize-release', requireAuth, function (req, res) {
+  try { optimizeRunEnd(req.session.userId); } catch (e) {}
+  return res.json({ ok: true });
+});
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
+    // v3.0.610 -- HEARTBEAT FIRST, and on EVERY pack-render, not only the composing one. The loop
+    // calls this route once per pass, so a live run keeps its claim without a timer of its own.
+    try { optimizeRunBeat(req.session.userId, 'pass'); } catch (e) {}
     if (req.query.compose === '1' || req.query.compose === 'true') {
+      // v3.0.610 -- ONE RUN PER USER. Refused BEFORE the token check, so a blocked attempt cannot
+      // cost anybody a token, and before runGrowsClear below -- which is the line that makes this
+      // more than a nicety. A second start CLEARS THE FIRST RUN GROW AND MOVE STORES, so the run
+      // already in flight would go on to save a book missing every adjustment it had made.
+      var _busy = optimizeRunGet(req.session.userId);
+      if (_busy && String(_busy.campaignId) !== String(req.params.campaignId)) {
+        return res.status(409).json({ error: 'optimize_busy', campaignId: _busy.campaignId,
+          campaignName: _busy.campaignName || '', startedAt: _busy.startedAt,
+          elapsedMs: Date.now() - _busy.startedAt,
+          message: 'An Optimize run is already going in the background. It has to finish before another can start.' });
+      }
+      if (_busy) {
+        return res.status(409).json({ error: 'optimize_busy', campaignId: _busy.campaignId,
+          campaignName: _busy.campaignName || '', startedAt: _busy.startedAt,
+          elapsedMs: Date.now() - _busy.startedAt, sameBook: true,
+          message: 'This book is already being optimized in the background. It has to finish before another run can start.' });
+      }
       // Optimize costs 1 token. Check up front; charge only after a successful compose (below).
       if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
+      // The campaign row is not loaded this early in the route -- checked, because node --check
+      // would have passed a reference to it and the name is only used for a message. The client
+      // knows which book it asked for, so it can name it; the server records the id.
+      try { optimizeRunStart(req.session.userId, req.params.campaignId, ''); } catch (e) {}
       // A new Optimize run: clear this book's run-scoped grows so we start from the NATURAL images.
       // Grows recorded during this run's loop passes are keyed the same way and carry across passes for
       // convergence, but never persist to the DB -- so the layout is deterministic and never degrades.
