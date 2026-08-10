@@ -2444,8 +2444,19 @@
     border:1.5px solid rgba(245,232,200,0.28); border-top-color:rgba(245,232,200,0.75); border-radius:50%;
     animation:estspin 0.7s linear infinite; }
   @keyframes estspin { to { transform:rotate(360deg); } }
-  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--gold);font-family:var(--font-display);letter-spacing:0.02em; }
-  .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:6px 8px;font-size:12px;font-family:var(--font-display);width:100%;max-width:100%;box-sizing:border-box; }
+  /* v3.0.602 -- THESE MATCH THE TITLE & COVER PANEL NOW, NOT THE OTHER WAY ROUND. Ian, 2026-08-10,
+     looking at the two accordions side by side: "make them match the Title panel... I think the
+     title panel is more like everywhere else." He is right about the reason -- var(--font-display)
+     is Cinzel, which renders as capitals, so these labels read as SMALL CAPS while every other form
+     label in the app is plain sans. The Title panel was not the odd one out; this was.
+     Values taken from .prep-field-label and .prep-input verbatim: colour rgba(201,168,76,0.9), body
+     font, and 14px controls at 8px/10px padding. --radius is already 8px, so the corners agreed.
+     CHANGED AT THE SOURCE, NOT SCOPED TO THE ACCORDION. The Custom Layout MODAL uses these same two
+     classes for the same four controls -- it is one form rendered in two places. Scoping this to
+     .novel-prep-panel would have given the same form two appearances, which is the fault this
+     project keeps paying for. The modal now matches as well. */
+  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(201,168,76,0.9);font-family:inherit; }
+  .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:14px;font-family:inherit;width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
   .cl-toggle input { accent-color:#c9a84c;width:15px;height:15px; }
   /* TF-11: the Layout modal's two-column grids + split footer cramp on a phone. */
