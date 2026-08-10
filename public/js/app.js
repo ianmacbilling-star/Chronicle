@@ -7662,7 +7662,75 @@ function _toTopTargets() {
   try { add(document.scrollingElement || document.documentElement); } catch (e) {}
   return out;
 }
+// AND THE SCROLLER THAT IS NOT AN ELEMENT OF THIS DOCUMENT AT ALL -- v3.0.598. Ian, 2026-08-10, on
+// the session Preview tab: "there are two scroll bars... do the inner one not the outer. The outer
+// one barely moves." The inner bar belongs to an IFRAME. The preview pane is pinned at 75vh with the
+// whole document scrolling inside it, so the outer page has only a couple of hundred pixels of travel
+// and the button was correctly scrolling the wrong thing.
+//
+// BY VISIBILITY, NOT BY NAME. There are exactly two iframes in the app -- session Preview and Publish
+// preview -- both same-origin (/api/pdf/...) and both display:none until loaded, so offsetParent is
+// null for the one that is not on screen. Naming `session-preview-iframe` here would fix one page and
+// silently leave the other, which is the two-copies-of-one-rule fault recorded as TD-379.
+//
+// WHERE THIS CANNOT WORK, AND IT IS NOT A BUG: in True View the iframe holds the browser's NATIVE PDF
+// viewer, whose scroll position is not scriptable from outside. The try/catch swallows it. The session
+// Preview tab forces quick mode, so this only ever bites on the Publish page in True View.
+function _toTopScrollIframes() {
+  try {
+    var frames = document.querySelectorAll('iframe');
+    for (var i = 0; i < frames.length; i++) {
+      var f = frames[i];
+      try {
+        if (f.offsetParent === null) continue;
+        var w = f.contentWindow;
+        if (w && typeof w.scrollTo === 'function') w.scrollTo({ top: 0, behavior: 'smooth' });
+        var d = f.contentDocument;
+        if (d && d.scrollingElement) d.scrollingElement.scrollTop = 0;
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
+// AND THE INNER BARS THAT ARE PLAIN DIVS -- v3.0.598. Ian, 2026-08-10: "the inner scroll on the
+// Optimize tab in Publish as well." Those panes are not iframes; they are divs carrying inline
+// `height:680px; overflow-y:auto` (finalize-before-scroll, finalize-after-scroll, and the two page
+// rails), and the Optimize log panel is another at max-height 420px.
+//
+// GENERALISED RATHER THAN LISTED. This is findScrollParent's test -- the overflow rule AND
+// `scrollHeight > clientHeight + 2` -- applied DOWNWARD instead of upward. Listing ids here would be
+// the third copy of one rule and would miss the next pane somebody adds, which is TD-379 exactly.
+//
+// THREE DELIBERATE EXCLUSIONS:
+//   - scoped to `.main-content`, so the modals and the help drawer (both outside it) are untouched;
+//   - TEXTAREA / INPUT / SELECT are skipped, because scroll position in a field belongs to the
+//     caret. The transcript box must not jump while somebody is typing in it;
+//   - anything with offsetParent null is off screen and left alone, which is what keeps the hidden
+//     tab's panes at their old position instead of silently resetting every tab at once.
+//
+// The scrollHeight test runs FIRST because it is a cheap property read; getComputedStyle is only
+// called on the handful of elements that actually overflow.
+function _toTopScrollContainers() {
+  try {
+    var all = document.querySelectorAll('.main-content *');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      try {
+        var tag = el.tagName;
+        if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') continue;
+        if (!(el.scrollHeight > el.clientHeight + 2)) continue;
+        if (el.scrollTop === 0) continue;
+        if (el.offsetParent === null) continue;
+        var oy = window.getComputedStyle(el).overflowY;
+        if (oy !== 'auto' && oy !== 'scroll') continue;
+        if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0, behavior: 'smooth' });
+        else el.scrollTop = 0;
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
 function scrollBackToTop() {
+  _toTopScrollIframes();
+  _toTopScrollContainers();
   var list = _toTopTargets();
   for (var i = 0; i < list.length; i++) {
     var el = list[i];
