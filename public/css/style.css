@@ -2486,6 +2486,18 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    into the next CELL (the adjacent column), where its indent made it read as a child of the toggle
    above. Span the full row and stack the pair, matching the Layout modal. */
 .pcl-toggle-pair { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+/* v3.0.612 -- Ian: put the character-page pair opposite the session-divider pair, since both
+   carry a sub-checkbox and so stand the same height.
+   THE WRAPPER SPANS THE ROW AND LAYS THE PAIRS OUT ITSELF. Putting them next to each other in
+   .pcl-toggles would not have held: that grid is auto-fit, so the number of controls per line
+   follows the panel width and the two pairs would sit opposite at some widths and split across
+   rows at others. auto-fit here too, so they drop to one column when the panel is genuinely
+   too narrow instead of squeezing the labels.
+   AND THE SPAN ABOVE HAS TO BE UNDONE INSIDE IT: .pcl-toggle-pair carries grid-column:1/-1 for
+   when it sits directly in .pcl-toggles, and left alone that makes each pair span the WRAPPER
+   too -- which stacks them again and looks exactly like the rule never applied. */
+.pcl-pair-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 6px 14px; align-items: start; }
+.pcl-pair-row > .pcl-toggle-pair { grid-column: auto; }
 
 /* Order & Publish: the print order and the Library publish are SIBLING cards, each with its own
    border -- publishing is not part of the order, so it must not sit inside the order's frame.
