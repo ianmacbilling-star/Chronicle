@@ -7615,6 +7615,56 @@ function prepWireCommitOnExit() {
     }, true);
   } catch (e) {}
 }
+// =================================================================================================
+// BACK TO TOP -- v3.0.596. Ian, 2026-08-09: floating, always at the bottom, on every tab,
+// semi-transparent, and not on mobile.
+//
+// THE THING THAT WOULD HAVE MADE THIS SILENTLY DO NOTHING: this app does not scroll the WINDOW.
+// `.main-content` is `flex:1; overflow-y:auto`, so the page body never moves and window.scrollTo(0,0)
+// is a no-op on every screen in the app. The scroller is the element, and that is what gets scrolled
+// and what gets listened to. Found by reading the stylesheet before writing the handler rather than
+// after Ian reported a button that did nothing.
+//
+// It still falls back to the window if that container is ever absent, so a future layout change
+// degrades to "works" rather than to "silently dead".
+function _toTopScroller() {
+  return document.querySelector('.main-content') || document.scrollingElement || document.body;
+}
+function scrollBackToTop() {
+  try {
+    var el = _toTopScroller();
+    if (el && typeof el.scrollTo === 'function') { el.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (el) el.scrollTop = 0;
+  } catch (e) { try { _toTopScroller().scrollTop = 0; } catch (_) {} }
+}
+// Shown only once there is something to come back FROM. A button that is always there is furniture;
+// one that appears when you have scrolled is an answer to a question you just asked.
+// 400px rather than a screen height: on a tall monitor a screen height is a long way to scroll
+// before the way back appears.
+function _toTopSync() {
+  try {
+    var btn = document.getElementById('to-top-btn');
+    if (!btn) return;
+    var el = _toTopScroller();
+    var y = (el && typeof el.scrollTop === 'number') ? el.scrollTop : 0;
+    btn.style.display = (y > 400) ? 'flex' : 'none';
+  } catch (e) {}
+}
+function _toTopWire() {
+  if (_toTopWire._done) return;
+  var el = _toTopScroller();
+  if (!el) return;
+  _toTopWire._done = true;
+  try {
+    el.addEventListener('scroll', _toTopSync, { passive: true });
+    window.addEventListener('resize', _toTopSync);
+    _toTopSync();
+  } catch (e) {}
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _toTopWire);
+  else _toTopWire();
+}
 function prepCommitFields() {
   try {
     if (typeof prepSaveTitle === 'function') prepSaveTitle();

@@ -2355,3 +2355,37 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 @media (max-width: 560px) {
   #finalize-before-scroll, #finalize-after-scroll, #finalize-after-body { height: 55vh !important; }
 }
+
+/* v3.0.596 -- SESSION NAV ARROWS ON A PHONE. Ian: "make them smaller or gone on phones... they push
+   the tab row down. They are fine on a tablet."
+   GONE, not smaller. The tab row is a wrap-enabled flex row, so on a narrow screen the arrows do not
+   shrink -- they take a whole line of their own and shove the tabs down, which is the complaint.
+   Making them smaller would delay that, not prevent it. 640px is the breakpoint this stylesheet
+   already uses for phone layouts, so it stays one number rather than a new one.
+   The Sessions list is one tap away and still navigates, so nothing is unreachable without them. */
+@media (max-width:640px){ #sess-nav-prev, #sess-nav-next { display:none; } }
+
+/* v3.0.596 -- BACK TO TOP. Ian: floating, always at the bottom, on every tab, semi-transparent,
+   "not on mobile at all really... but on a big screen it's needed."
+   BOTTOM RIGHT, which is where a reader's hand already is on a wide screen and where this control
+   is conventional. Deliberately NOT bottom-centre: centre sits over the middle of the content, and
+   this app puts its primary buttons there (Generate Images, Continue to secure payment).
+   The help FAB lives in the HEADER, not down here, so there is nothing to collide with.
+   z-index sits below the impersonation banner (99999) and below modals (100000+): a support banner
+   or an open modal must never be covered by a scroll affordance. */
+.to-top-btn{
+  position:fixed; right:22px; bottom:22px; z-index:90;
+  width:42px; height:42px; border-radius:50%;
+  background:rgba(20,15,8,0.55); color:rgba(201,168,76,0.9);
+  border:1px solid rgba(201,168,76,0.35);
+  font-size:18px; line-height:1; cursor:pointer;
+  display:none; align-items:center; justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  backdrop-filter:blur(3px);
+  transition:opacity 0.15s, background 0.15s, border-color 0.15s;
+  opacity:0.6;
+}
+.to-top-btn:hover{ opacity:1; background:rgba(20,15,8,0.85); border-color:var(--gold); }
+/* Hidden on phones entirely, per Ian. A phone has its own way back to the top and the button would
+   sit over content that is already tight. */
+@media (max-width:640px){ .to-top-btn{ display:none !important; } }
