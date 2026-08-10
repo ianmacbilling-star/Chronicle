@@ -174,11 +174,11 @@ function cutWhiteToAlpha(buf) {
 // would erase the letters along with the sky. Those looks also only exist BECAUSE of the dark field:
 // the metallic edges and the glow have nothing to sit against on white.
 //
-// So this decides by CONNECTIVITY instead. Flood inward from the border: whatever is reachable from the
-// edge, within a tolerance of the corner colour, is ground. Everything else is kept -- including the
-// counter inside an O and a pale letter in the middle of the image, which a colour test cannot tell
-// apart from the sky. It is colour-agnostic by construction, so gold on black, black on cream and a
-// gradient all behave the same.
+// So this decides by DISTANCE FROM THE MEASURED GROUND rather than by brightness. The reference point
+// is read from the image itself, so gold on black, black on cream and a gradient all behave alike --
+// which a fixed brightness threshold cannot do.
+// v3.0.621: it also does NOT require a pixel to be reachable from the border. It used to, and that
+// left a solid plug inside every closed letterform. See the note at the flood site below.
 //
 // THE SEED COLOUR IS THE FOUR CORNERS, not a constant, and it is a MEDIAN rather than an average: a
 // single speckle in one corner -- and every one of Ian's references has gold flecks scattered over the
@@ -187,12 +187,12 @@ function cutWhiteToAlpha(buf) {
 // THE EDGE RAMP MATTERS MORE HERE THAN ANYWHERE. A hard in/out boundary leaves a jagged fringe on every
 // antialiased letterform, which on a printed cover looks worse than the box it replaced. So a pixel is
 // scored by DISTANCE from the ground colour: at or below NEAR it is ground, at or above FAR it is ink,
-// and between them alpha ramps. Only pixels reached by the flood can be made transparent, so a dark
-// area INSIDE a letter stays solid however close its colour is to the background.
+// and between them alpha ramps. v3.0.621 removed the extra condition that a pixel also be reachable
+// from the border, because that is what kept a solid plug inside every closed letterform.
 //
 // FAIL-SOFT, exactly like its sibling: anything unexpected returns the original buffer. A title with a
 // rectangle behind it is ugly; a title that fails to load is a broken cover.
-const GROUND_NEAR = 26;    // within this distance of the ground colour and reachable: fully transparent
+const GROUND_NEAR = 26;    // within this distance of the ground colour: fully transparent
 const GROUND_FAR  = 74;    // beyond this: fully opaque. Between: ramp. Measured against Ian's references,
                            // whose flecks sit far outside 74 and whose antialiasing sits inside it.
 function cutGroundToAlpha(buf) {
@@ -231,25 +231,29 @@ function cutGroundToAlpha(buf) {
       return Math.sqrt(dr * dr + dg * dg + db * db);
     };
 
-    // Flood from every border pixel. An explicit stack, not recursion: a 2000x800 ground is well over a
-    // million pixels and would blow the call stack.
-    const reach = new Uint8Array(width * height);
-    const stack = [];
-    const push = (x, y) => {
-      const k = y * width + x;
-      if (reach[k]) return;
-      if (dist(at(x, y)) > GROUND_FAR) return;
-      reach[k] = 1; stack.push(k);
-    };
-    for (let x = 0; x < width; x++) { push(x, 0); push(x, height - 1); }
-    for (let y = 0; y < height; y++) { push(0, y); push(width - 1, y); }
-    while (stack.length) {
-      const k = stack.pop(), x = k % width, y = (k / width) | 0;
-      if (x > 0) push(x - 1, y);
-      if (x < width - 1) push(x + 1, y);
-      if (y > 0) push(x, y - 1);
-      if (y < height - 1) push(x, y + 1);
-    }
+    // v3.0.621 -- THE COUNTERS. Ian: "one thing you need to make sure you make transparent is the
+    // closed spaces inside the lettering."
+    //
+    // WHAT WAS HERE AND WHY IT WAS WRONG. v3.0.618 flooded inward from the border and only made
+    // REACHABLE pixels transparent. A counter -- the hole in an O, A, e, R -- is enclosed by ink, so
+    // the flood can never reach it: every closed letterform kept a solid blob of ground colour inside
+    // it, which over cover art is a black plug in every O. The harness even asserted it, on purpose,
+    // to protect a pale shape sitting in the middle of a pale ground.
+    //
+    // THAT CASE CANNOT ARISE HERE. The prompt DEMANDS a flat solid black ground, so "a light shape
+    // enclosed by ink that happens to match the sky" is not an input this function receives. The
+    // connectivity test was guarding against something that does not happen, at the cost of the thing
+    // that happens in almost every title.
+    //
+    // So the decision is now purely COLOUR DISTANCE from the measured ground: near it is ground
+    // wherever it sits, enclosed or not. The median-corner seed and the edge ramp are unchanged --
+    // they are what stop a gold fleck moving the reference point and what keep antialiased edges from
+    // fringing.
+    //
+    // THE EXPOSURE THIS OPENS, stated rather than discovered: a letter's own black OUTLINE or drop
+    // shadow on a black ground is also near-ground and will thin or vanish. The flood had the same
+    // problem wherever an outline touched the sky; this makes it general. If outlines start
+    // disappearing, the answer is a tighter GROUND_NEAR, not the return of the flood.
 
     const stride = width * 4;
     const out = Buffer.alloc(height * (stride + 1));
@@ -261,11 +265,9 @@ function cutGroundToAlpha(buf) {
         const s = at(x, y), d = doff + 1 + x * 4;
         const a0 = (bpp === 4) ? raw[s + 3] : 255;
         let a = 255;
-        if (reach[y * width + x]) {
-          const dd = dist(s);
-          if (dd <= GROUND_NEAR) { a = 0; cut++; }
-          else if (dd < GROUND_FAR) a = Math.round(255 * (dd - GROUND_NEAR) / (GROUND_FAR - GROUND_NEAR));
-        }
+        const dd = dist(s);
+        if (dd <= GROUND_NEAR) { a = 0; cut++; }
+        else if (dd < GROUND_FAR) a = Math.round(255 * (dd - GROUND_NEAR) / (GROUND_FAR - GROUND_NEAR));
         out[d] = raw[s]; out[d + 1] = raw[s + 1]; out[d + 2] = raw[s + 2];
         out[d + 3] = Math.min(a0, a);
       }
