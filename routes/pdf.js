@@ -4538,7 +4538,15 @@ function previewScrollbarCss() {
 }
 function buildSessionHTML(session, moments, campaign, characters, narrative, opts, renderOpts) {
   var co = opts || null;
-  var fHideLogo = co ? !!co.hideLogo : false;
+  // v3.0.616 -- THE LOGO LIVES ON THE BACK COVER. Ian, 2026-08-10: "I think I want to move the logo
+  // to the back of the book. The back cover, not the front cover. Same location but on the back. And
+  // you can hide the Include Campaignia Logo layout option -- we will always have it on the back."
+  // NOBODY CAN HIDE IT NOW, so there is no flag left to read: the control is gone from both forms,
+  // the Platinum tier check is gone, and the mark is unconditional. Same position and the same
+  // COVER_LOGO_OPACITY it carried on the front.
+  // THE GHOST TWIN WENT WITH IT. It existed only to stop the front logo shifting the title upward
+  // (v3.0.554, "never move the Campaignia logo, put it at the bottom"); on the back there is no
+  // title to shift, so the mechanism is deleted rather than carried over unused.
   var fCover  = (renderOpts && renderOpts.noCover) ? false : (co ? !!co.cover     : true);
   var fHeader = co ? !!co.header    : true;
   var fWmark  = false; // OFF for now; set to (user is on free trial) later. Under-fill scan samples the paper background, so the watermark never affects optimization even when on.
@@ -4860,18 +4868,13 @@ ${previewScrollbarCss()}
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  /* v3.0.554 -- THE LOGO DOES NOT MOVE WITH THE TITLE. Ian: "never move the Campaignia logo, put
-     it back where it was and lower it. And leave it there -- it should not move. Just the title."
-     It was a child of .cover-art-caption, which is the block placement moves, so at Top it went to
-     the top of the cover with the title. That was a bug in v3.0.553, not a decision.
-     It is pinned to the FRAME now, at 0.25in -- halfway from the 0.5in it sat at to the inner edge.
-     THE GHOST TWIN IS WHY THE TITLE DID NOT SHIFT. The logo was the last child of a flex-end
-     column, so simply removing it would have let the title and subtitle fall by exactly its height.
-     Its height is auto and depends on the artwork, so there is no number to compensate with. A twin
-     left in flow at visibility:hidden occupies exactly the right space, whatever that turns out to
-     be -- measured by the browser rather than guessed by me. */
+  /* v3.0.616 -- THE LOGO IS NOT ON THIS COVER ANY MORE. It moved to the BACK cover at Ian request
+     and .cover-art-logo now sits on the back-cover page instead, at the same position and the same
+     opacity. What stood here explained the GHOST TWIN: the logo was the last child of a flex-end
+     column, so removing it would have let the title fall by exactly its height, and a hidden twin
+     held the space. With no logo in this column there is nothing to hold, so the twin and its rule
+     are deleted rather than left behind describing an element that no longer exists. */
   .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
-  .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   /* v3.0.595 -- WAS a bare reference to titleFaceImp, WHICH ONLY EXISTS IN buildNovelHTML. This is
@@ -4910,12 +4913,9 @@ ${fCover ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-art-title">${campaign.name}</div>
         <div class="cover-art-dates">${session.name}${session.session_date ? ' &middot; ' + formatDate(session.session_date) : ''}</div>
-        ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
-      ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     </div>
   </div>` : `<div class="cover-content">
-    ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     <div class="cover-eyebrow">A Saga of</div>
     <div class="cover-campaign">${campaign.name}</div>
     <div class="cover-divider"></div>
@@ -4942,7 +4942,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && campaign.back_cover_image_url) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /><img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -4974,7 +4974,15 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   layoutStyle = layoutStyle || 'Classic';
   pageOpts = pageOpts || {};
   var co = opts || null;
-  var fHideLogo = co ? !!co.hideLogo : false;
+  // v3.0.616 -- THE LOGO LIVES ON THE BACK COVER. Ian, 2026-08-10: "I think I want to move the logo
+  // to the back of the book. The back cover, not the front cover. Same location but on the back. And
+  // you can hide the Include Campaignia Logo layout option -- we will always have it on the back."
+  // NOBODY CAN HIDE IT NOW, so there is no flag left to read: the control is gone from both forms,
+  // the Platinum tier check is gone, and the mark is unconditional. Same position and the same
+  // COVER_LOGO_OPACITY it carried on the front.
+  // THE GHOST TWIN WENT WITH IT. It existed only to stop the front logo shifting the title upward
+  // (v3.0.554, "never move the Campaignia logo, put it at the bottom"); on the back there is no
+  // title to shift, so the mechanism is deleted rather than carried over unused.
   var fPublic = !!(pageOpts && pageOpts.publicMode);
   // Public Library render: each real name is replaced by that person's pen
   // name (members + Story Master); a missing pen name renders blank. Off for
@@ -5418,7 +5426,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
         : '<div class="dp-block"><div class="dp-label">Story Master</div><div class="dp-value">' + _fmEsc(copyHolder) + '</div></div>') +
       '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
       '<div class="dp-footer">' +
-        (fHideLogo ? '' : '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />') +
+        '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />' +
         '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
           // v3.0.391 -- Ian, exact wording. The tabletop role-playing reference is gone: the term
           // is right in the marketing copy and in the AI system prompts, where it does real work,
@@ -5465,18 +5473,13 @@ ${previewScrollbarCss()}
   .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
-  /* v3.0.554 -- THE LOGO DOES NOT MOVE WITH THE TITLE. Ian: "never move the Campaignia logo, put
-     it back where it was and lower it. And leave it there -- it should not move. Just the title."
-     It was a child of .cover-art-caption, which is the block placement moves, so at Top it went to
-     the top of the cover with the title. That was a bug in v3.0.553, not a decision.
-     It is pinned to the FRAME now, at 0.25in -- halfway from the 0.5in it sat at to the inner edge.
-     THE GHOST TWIN IS WHY THE TITLE DID NOT SHIFT. The logo was the last child of a flex-end
-     column, so simply removing it would have let the title and subtitle fall by exactly its height.
-     Its height is auto and depends on the artwork, so there is no number to compensate with. A twin
-     left in flow at visibility:hidden occupies exactly the right space, whatever that turns out to
-     be -- measured by the browser rather than guessed by me. */
+  /* v3.0.616 -- THE LOGO IS NOT ON THIS COVER ANY MORE. It moved to the BACK cover at Ian request
+     and .cover-art-logo now sits on the back-cover page instead, at the same position and the same
+     opacity. What stood here explained the GHOST TWIN: the logo was the last child of a flex-end
+     column, so removing it would have let the title fall by exactly its height, and a hidden twin
+     held the space. With no logo in this column there is nothing to hold, so the twin and its rule
+     are deleted rather than left behind describing an element that no longer exists. */
   .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
-  .cover-art-logo-ghost { width:110px;height:auto;object-fit:contain;visibility:hidden; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${titleFaceImp}
@@ -5699,12 +5702,9 @@ ${(fCover && (!paginated || pageOpts.page === 1)) ? `<!-- COVER PAGE -->
       <div class="cover-art-caption">
         <div class="cover-art-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
         <div class="cover-art-dates"${_coverSubStyleArt}>${_fmEsc(coverSubtitle(pageOpts))}</div>
-        ${fHideLogo ? '' : '<img class="cover-art-logo-ghost" src="/images/Campaignia_Logo.png" alt="" />'}
       </div>
-      ${fHideLogo ? '' : '<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     </div>
   </div>` : `<div class="cover-content">
-    ${fHideLogo ? '' : '<img class="cover-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />'}
     <div class="cover-eyebrow">The Saga of</div>
     <div class="cover-title"${_coverTitleStyle}>${_fmEsc(_bookTitleFM)}</div>
     <div class="cover-divider"></div>
@@ -5729,7 +5729,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && (!paginated || pageOpts.page === totalSessions) && (campaign.back_cover_image_url || fPublic)) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner">${campaign.back_cover_image_url ? `<div class="cover-art-frame"><img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" /><img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div>` : `<div class="backcover-default"><div class="bc-title">${_fmEsc(_bookTitleFM)}</div><div class="bc-rule"></div><div class="bc-tag">A Campaignia Chronicle</div></div>`}</div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -5840,7 +5840,6 @@ router.get('/session/:campaignId/:sessionId', requireAuth, async function(req, r
     };
 
     const co = req.query.co ? parseCustomOpts(req.query.co) : null;
-    if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
     let html = buildSessionHTML(session, moments, campaign, characters, narrative, co, { noCover: true });
     if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
     // Stage 1 verification: ?measure=1 returns the text-only measured block
@@ -6027,7 +6026,6 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   res.set('X-Campaign-Sessions', String(sessions.length));
 
   const co = req.query.co ? parseCustomOpts(req.query.co) : null;
-  if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   let html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   if (req.query.pane === '1') html = paneSafeHtml(html);   // preview-safe gradients in the Finalize panes only
   if (await userInFreeTrial(db, req.session.userId)) html = injectTrialWatermark(html);
@@ -6437,7 +6435,6 @@ function coverGeometry(binding, totalWidthIn) {
 
 function buildWrapCoverHTML(campaign, spec, dims, opts) {
   opts = opts || {};
-  var hideLogo = !!opts.hideLogo;
   var W = dims.widthIn, H = dims.heightIn;
   var geo = coverGeometry(spec.binding, W);
   var sideW = geo.sideW, spineW = geo.spineW;
@@ -6480,8 +6477,11 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   var subtitleTxt = esc(coverSubtitle({ subtitle: opts.subtitle }));
   var frontImg = campaign.cover_image_url || '';
   var backImg = campaign.back_cover_image_url || '';
-  var logo = hideLogo ? '' : '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
-  var spineLogo = hideLogo ? '' : '<img class="wc-spine-logo" src="/images/Campaignia_Logo.png" alt="" />';
+  // v3.0.616 -- THE MARK MOVES TO THE BACK PANEL. Ian: same location, on the back. It is no longer
+  // optional, so there is no flag: the Platinum hide-logo control is gone and both marks always draw.
+  // The FRONT panel keeps none, which is what makes room for a built title overlay to own that space.
+  var logo = '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
+  var spineLogo = '<img class="wc-spine-logo" src="/images/Campaignia_Logo.png" alt="" />';
   var spineFont = Math.max(7, Math.min(20, Math.round(spineW * 56)));
   var spineLogoW = Math.max(0.12, Math.min(0.5, spineW * 0.78));
 
@@ -6493,14 +6493,15 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
       '<div class="wc-fade"></div>' +
       '<div class="wc-front-cap cover-art-caption"><div class="wc-title cover-art-title">' + bookTitle + '</div>' +
       (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : '') +
-      logo + '</div></div>' + mark
+      '</div></div>' + mark
     : framing +
-      '<div class="wc-frame"><div class="wc-textfront">' + logo +
+      '<div class="wc-frame"><div class="wc-textfront">' +
       '<div class="wc-eyebrow">The Saga of</div><div class="wc-title cover-art-title">' + bookTitle + '</div>' +
       (subtitleTxt ? '<div class="wc-sub cover-art-dates">' + subtitleTxt + '</div>' : '') +
       '</div></div>' + mark;
   var backInner = framing +
-    '<div class="wc-frame">' + (backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '') + '</div>' + mark;
+    '<div class="wc-frame">' + (backImg ? '<img class="wc-img" src="' + backImg + '" alt="" />' : '') +
+    '<div class="wc-back-cap">' + logo + '</div></div>' + mark;
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
     '@page { size: ' + W + 'in ' + H + 'in; margin: 0; }' +
@@ -6537,6 +6538,10 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // light one, and comparing them says whether flattening is faithful across the range
     // rather than only at one value.
     '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:' + COVER_LOGO_OPACITY + '; }' +
+    // v3.0.616 -- bottom centre of the BACK panel, the position the front cap used to give it, and
+    // the same COVER_LOGO_OPACITY. z-index clears the artwork; the 40 percent is still the
+    // v3.0.378 flattener test with the spine logo at 0.95 as its control.
+    '.wc-back-cap { position:absolute; left:0; right:0; bottom:0.25in; display:flex; justify-content:center; z-index:2; }' +
     '.wc-sub { font-size:' + COVER_PT.artSub + 'pt; color:' + titleColor + '; letter-spacing:0.14em; text-transform:uppercase; margin-top:0.08in; text-align:center; opacity:0.85; }' +
     // LAST, so every preset, size and placement rule overrides the base above rather than
     // losing to it. Chronicle, medium and bottom each emit the EMPTY STRING by design, so a
@@ -6652,8 +6657,6 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     }
 
     var co = req.query.co ? parseCustomOpts(req.query.co) : null;
-    if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
-    var fHideLogo = co ? !!co.hideLogo : false;
 
     // v3.0.614 -- TD-393. THE PRINTED COVER NOW GETS WHAT THE SCREEN COVER GETS. This route already
     // parsed `co` and already resolved the fork book meta; it simply never handed either to the wrap,
@@ -6663,7 +6666,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     var _wrapSub = null;
     if (req.query.subtitle != null) _wrapSub = String(req.query.subtitle);
     else if (campaign._memberSubtitle != null) _wrapSub = campaign._memberSubtitle;
-    var html = buildWrapCoverHTML(campaign, built.spec, dims, { hideLogo: fHideLogo, bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it   // v3.0.575 -- the stored colour, same as the title beside it
+    var html = buildWrapCoverHTML(campaign, built.spec, dims, { bookTitle: req.query.bookTitle || campaign._memberBookTitle || '', titleColor: req.query.titleColor || campaign._memberTitleColor || '', subtitle: _wrapSub, co: co });   // v3.0.575 -- the stored colour, same as the title beside it   // v3.0.575 -- the stored colour, same as the title beside it
     var baseUrl = (process.env.PUBLIC_BASE_URL || '');
     if (baseUrl.charAt(baseUrl.length - 1) === '/') baseUrl = baseUrl.slice(0, -1);
     if (baseUrl) html = html.replace('<head>', '<head><base href="' + baseUrl + '/">');
@@ -7325,7 +7328,6 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo) {
   if (req.query.mzCapFeatures === '1') { co = co || {}; co.mzCapFeatures = true; }
   if (req.query.mzFloatShrunk === '1') { co = co || {}; co.mzFloatShrunk = true; }
   else if (req.query.packRender === '1' || req.query.packRender === 'true') { co = co || {}; co.arrange = 'paired'; co.packStacked = true; }
-  if (co) co.hideLogo = (accessRank(await getEffectiveTier(req.session.userId, campaign.id)) >= 4) && !!co.hidelogo;
   if (extraCo) { co = co || {}; for (var _k in extraCo) { if (Object.prototype.hasOwnProperty.call(extraCo, _k)) co[_k] = extraCo[_k]; } }
   const html = buildNovelHTML(campaign, sessionsWithData, characters, layoutStyle, pageOpts, co);
   // v3.0.588 -- TD-370. The include set is resolved here already; handing it back means

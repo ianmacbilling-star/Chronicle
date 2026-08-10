@@ -14331,7 +14331,7 @@ var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace
 // read and written in six places across the Prep panel and the Layout modal, so adding the key
 // here wires both forms in both directions at once. A control added outside it would work in
 // whichever half somebody remembered.
-var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','hidelogo','castnpc'];
+var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc'];   // v3.0.616 -- hidelogo retired
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
 // Enable the page-break sub-toggle only when Session dividers (markers) is on.
@@ -14453,7 +14453,6 @@ function prepSyncCastNpc(){
 //
 // THE LOCK ONLY EVER ADDS A RESTRICTION, WHICH IS THE ONE THING TO GET RIGHT HERE. Two controls
 // carry their own gates and this must not reopen either:
-//   pcl-hidelogo     is Platinum-only (prepLayoutLoad sets it from the tier)
 //   pcl-markerbreak  is only live when Session dividers is on (prepSyncMarkerBreak sets it)
 // Both are therefore FORCE-DISABLED when the book is not yours and otherwise left exactly as their
 // own gate decided. Setting `disabled = !own` on them would hand a Copper reader the Platinum
@@ -14464,7 +14463,7 @@ function prepSyncCastNpc(){
 var PREP_LOCK_PLAIN = ['pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc'];
-var PREP_LOCK_GATED = ['pcl-hidelogo', 'pcl-markerbreak'];
+var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
     var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
@@ -14499,8 +14498,6 @@ function prepLayoutLoad(){
   prepSyncMarkerBreak();
   prepSyncCastNpc();
   var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);
-  var _hl=document.getElementById('pcl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; }
-  var _hll=document.getElementById('pcl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; }
   // Commit panel selections to the unified customOpts the moment any control changes, so a plain
   // Refresh (not just Apply) reflects the chosen arrangement. Programmatic .value sets above
   // don't fire 'change', so this never clobbers on load.
@@ -14546,7 +14543,6 @@ function openCustomLayout(ctx){
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.checked=!!o[k]; });
   clSyncMarkerBreak();
   clSyncCastNpc();
-  (function(){ var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4); var _hl=document.getElementById('cl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; } var _hll=document.getElementById('cl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; } })();
   var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
   var novelOnly=document.querySelectorAll('.cl-novel-only');
   for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }
