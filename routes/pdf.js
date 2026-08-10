@@ -4477,6 +4477,36 @@ function buildLayout(layoutStyle, moments, sections, intro, outro, opts) {
 // ============================================================
 // Generate PDF HTML for a session
 // ============================================================
+// v3.0.609 -- THE PREVIEW SCROLLBAR, INSIDE THE IFRAME. Ian, 2026-08-10: use the new Optimize bar on
+// the Prep and Preview panel and on the session Preview tab too, so they all match.
+//
+// THOSE TWO PANES ARE IFRAMES, so their scrollbar belongs to the document THIS FILE generates, not
+// to app.html. style.css cannot reach across the boundary. Hence a rule emitted into the preview
+// document itself.
+//
+// IT CANNOT CHANGE THE LAYOUT, WHICH IS THE ONLY REASON IT IS SAFE TO PUT HERE. A narrower scrollbar
+// widens the scrollport, and on a reflowing document that would move the text -- which would mean
+// the browser preview and the PDF disagreeing, the fault this project has paid for repeatedly. The
+// preview does not reflow: body is width:8.5in with margin:0 auto, a fixed sheet centred in whatever
+// room there is, so a thinner bar changes the side margins and nothing else. Checked before writing.
+//
+// AND IT IS INERT IN PRINT: Chromium paints no scrollbar when rendering to PDF, so these rules have
+// no effect on the artifact that goes to Lulu.
+//
+// ONE DEFINITION, CALLED FROM BOTH BUILDERS. buildSessionHTML and buildNovelHTML each emit their own
+// <style> block, and a rule written into one of them is exactly how titleFaceImp came to be declared
+// in the novel builder and used in the session builder, breaking every session preview for days.
+function previewScrollbarCss() {
+  return [
+    "  html { scrollbar-width: thin; scrollbar-color: rgba(201,168,76,0.40) transparent; }",
+    "  ::-webkit-scrollbar { width: 9px; height: 9px; }",
+    "  ::-webkit-scrollbar-track { background: rgba(201,168,76,0.06); border-radius: 5px; }",
+    "  ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.38); border-radius: 5px;",
+    "                              border: 2px solid transparent; background-clip: padding-box; }",
+    "  ::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.7); background-clip: padding-box; }",
+    "  ::-webkit-scrollbar-corner { background: transparent; }"
+  ].join("\n");
+}
 function buildSessionHTML(session, moments, campaign, characters, narrative, opts, renderOpts) {
   var co = opts || null;
   var fHideLogo = co ? !!co.hideLogo : false;
@@ -4531,6 +4561,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
 <meta charset="UTF-8">
 <style>
   ${baseFontCss()}
+${previewScrollbarCss()}
   ${fontImp}
   ${fontRule}
 
@@ -5363,6 +5394,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
 <meta charset="UTF-8">
 <style>
   ${baseFontCss()}
+${previewScrollbarCss()}
   ${fontImp}
   ${fontRule}
 
