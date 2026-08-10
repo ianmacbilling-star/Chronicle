@@ -2145,6 +2145,176 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .pcl-toggles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px 14px; align-items:start; }
 @media (max-width: 900px) { .novel-preview-layout { flex-direction:column; } .novel-prep-panel { flex:1 1 auto; width:100%; min-width:0; position:static; max-height:none; } #novel-splitter { display:none; } }
 
+/* =================================================================================================
+   v3.0.600 -- THE PUBLISH PAGE FITS THE SCREEN. Ian, 2026-08-10: "can you make the publish page as
+   big as their screen allows and not have an outer scrollbar, then just let the inner scroll bars
+   work... I think we might still need it in cases when the session tab runs long."
+
+   MEASURED FIRST. On a 798px viewport the document wanted 1022 -- 224px of overshoot. It was never
+   content length; it was three literals each overshooting a little and stacking:
+     .novel-prep-panel      max-height:calc(100vh - 24px)   -- but it STARTS ~200px down the page,
+                                                               so its bottom sat that far below the
+                                                               fold. This is the runaway scrollbar.
+     #novel-preview-iframe  height:90vh (inline)            -- 90vh + chrome + headers > 100vh
+     resizeNovelPreviewIframe()                             -- copied the PREP PANEL's height onto
+                                                               the iframe (measured: both 774)
+   Each is a guess at a screen size, written where a derivation belonged.
+
+   THE FIX IS NOT overflow:hidden. Nothing here suppresses the outer scrollbar; the page simply
+   stops exceeding the viewport, so the bar has nothing to scroll. That distinction is the whole
+   design: if a tab genuinely needs more room -- a short laptop, 125 percent display scaling, a long
+   Prep column -- the outer bar returns and everything stays reachable. Clipping would have turned
+   every measurement error into an invisible, unclickable button.
+
+   THE HEIGHT COMES FROM --app-chrome, MEASURED IN JS from .app-header and .breadcrumb-row, because
+   neither has a height rule and the 44px/35px in .app-layout is itself a pair. Fallback 79px keeps
+   today's behaviour if the variable never arrives.
+
+   SCOPED TO min-width:901px, matching the breakpoint above, where the layout already stacks and the
+   prep panel is already released. Fixed-height panes on a phone are hostile.
+   ================================================================================================= */
+
+/* Fallbacks for every width -- these are what a narrow screen keeps. */
+#novel-preview-frame{ min-height:520px; }
+#novel-preview-iframe, #novel-preview-loading{ height:75vh; }
+
+@media (min-width:901px){
+  #view-novel{
+    display:flex; flex-direction:column;
+    height:calc(100vh - var(--app-chrome, 79px));
+    /* the glass rule sets min-height:calc(100vh - 44px - 35px); if the measured chrome is TALLER
+       than 79px that min-height would win and reintroduce the overshoot it is meant to remove. */
+    min-height:0;
+  }
+  #view-novel > .page-header,
+  #view-novel > .sess-tabs{ flex:0 0 auto; }
+
+  /* Only the Prep & Preview tab is height-managed in this build. The other three panes keep their
+     default flex sizing, so if one is taller than the view it overflows and the page scrolls -- the
+     same behaviour they have today, deliberately unchanged until each is looked at on its own. */
+  #view-novel > #novel-tab-preview{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #novel-tab-preview > .novel-preview-layout{ flex:1 1 auto; min-height:0; align-items:stretch; }
+
+  /* Sticky was solving the problem that the panel could run off the page. At full row height there
+     is nothing to stick to and nothing to run off. */
+  .novel-preview-layout > .novel-prep-panel{ position:static; top:auto; max-height:none; min-height:0; }
+  .novel-preview-layout > .novel-preview-col{ display:flex; flex-direction:column; min-height:0; }
+  .novel-preview-col > #novel-preview-frame{ flex:1 1 auto; min-height:0; }
+  #novel-preview-frame > #novel-preview-iframe,
+  #novel-preview-frame > #novel-preview-loading{ height:100%; }
+
+  /* ---------------------------------------------------------------------------------------------
+     v3.0.601 -- THE OPTIMIZE TAB, same treatment. Ian: "I still get the far right scroll bar when I
+     go to the Optimize tab." It carried FOUR more literals -- three panes at height:680px and a page
+     rail at 660px -- which is 680 plus roughly 230px of headers and tabs, so it overflows anything
+     under about a 910px viewport. Ian's is 798.
+
+     Every one of those inline heights is gone; the panes are flex children that take what is left.
+     #finalize-left loses its overflow:hidden and scrolls on its own, because once the row is bounded
+     the controls column is the one thing here that can genuinely be taller than the window.
+
+     The two page rails are stretched to the row height rather than given one, so they stay level with
+     the panes they index no matter what height the row settles at -- the old 680/660 pairing meant
+     the After rail was 20px shorter than its own pane for no reason anybody recorded.
+     --------------------------------------------------------------------------------------------- */
+  #view-novel > #novel-tab-finalize{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #novel-tab-finalize > #finalize-split{ flex:1 1 auto; min-height:0; }
+  #finalize-left{ overflow-y:auto; min-height:0; }
+  #finalize-right{ min-height:0; }
+  #finalize-right > #finalize-pdf-panes{ flex:1 1 auto; min-height:0; }
+  #finalize-before-wrap{ display:flex; flex-direction:column; min-height:0; }
+  #finalize-after-wrap{ display:flex; flex-direction:column; min-height:0; }
+  #finalize-before-scroll{ flex:1 1 auto; min-height:0; }
+  #finalize-page-nav-wrap{ min-height:0; }
+  #finalize-page-nav{ flex:1 1 auto; min-height:0; }
+  #finalize-after-row{ flex:1 1 auto; min-height:0; align-items:stretch; }
+  #finalize-after-scroll{ min-height:0; }
+  #finalize-after-body{ min-height:0; }
+  #finalize-after-nav-wrap{ min-height:0; }
+  #finalize-after-nav{ flex:1 1 auto; min-height:0; }
+}
+
+/* v3.0.607 -- THE ROW MUST STRETCH ITS PANES, AND SAYING SO IN THE STYLESHEET WAS NOT ENOUGH.
+   v3.0.601 set align-items:stretch on #finalize-after-row from here. The element carried
+   align-items:flex-start as an INLINE style, and an inline declaration beats a stylesheet rule
+   without !important -- so the rule was present, correct, and dead. The panes went on sizing to
+   their content, which for the After pane is a stack of 49 rendered canvases, and the whole Optimize
+   tab scrolled instead of the pane. Ian saw it as the page spine and the left column scrolling away.
+   The inline declaration is gone and the alignment is set per breakpoint below, so there is now ONE
+   place that decides it.
+   THE GENERAL LESSON, and it is worth more than the fix: a CSS rule can be present and overridden,
+   which reads exactly like a rule that is absent, except that grepping for it finds it. The apply
+   script now sweeps every property these rules set against the inline style of the same element. */
+@media (min-width:901px){
+  #finalize-after-row{ align-items:stretch; }
+}
+@media (max-width:900px){
+  #finalize-after-row{ align-items:flex-start; }
+}
+
+/* =================================================================================================
+   v3.0.608 -- THE OPTIMIZE SCROLLBARS. Ian, 2026-08-10: "we don't need the horizontal scroll bar at
+   the bottom of the page count panel, just make the panel wide enough. And can you make the vertical
+   scroll bar on the page count panel prettier and thinner... a lot thinner."
+
+   WHY THE HORIZONTAL BAR WAS THERE, and it was arithmetic rather than styling: a page number is
+   font-size:10px with padding:0 5px, so three digits need about 28px. The spine wrapper was
+   flex:0 0 36px and a default scrollbar takes about 15 of those. 28 + 15 does not fit in 36, so the
+   numbers overflowed sideways and the browser added a horizontal bar. Widening alone would have
+   worked; thinning alone would have worked; doing both leaves real slack instead of a near miss --
+   which is what the 36 was.
+
+   44px = 28 for three digits (the print page cap is 250, so three is the maximum) + 6 for the thin
+   bar + 2 for the borders, leaving 8px of slack. overflow-x:hidden is a belt, not the mechanism:
+   with the width right there is nothing to clip, and if a font ever renders wider a clipped digit is
+   better than the bar Ian asked to remove.
+
+   The thumb is the app gold at low alpha with a transparent track, so the bar reads as part of the
+   panel rather than as chrome sitting on it. scrollbar-width / scrollbar-color are the standard
+   properties (Firefox, and Chrome 121+); the ::-webkit- rules cover older Chrome. Both are declared
+   because either alone leaves one of the two browsers on the default bar.
+   ================================================================================================= */
+#finalize-after-nav, #finalize-page-nav{
+  overflow-x:hidden;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(201,168,76,0.40) transparent;
+}
+#finalize-after-nav::-webkit-scrollbar, #finalize-page-nav::-webkit-scrollbar{ width:6px; }
+#finalize-after-nav::-webkit-scrollbar-track, #finalize-page-nav::-webkit-scrollbar-track{ background:transparent; }
+#finalize-after-nav::-webkit-scrollbar-thumb, #finalize-page-nav::-webkit-scrollbar-thumb{
+  background:rgba(201,168,76,0.35); border-radius:3px;
+}
+#finalize-after-nav::-webkit-scrollbar-thumb:hover, #finalize-page-nav::-webkit-scrollbar-thumb:hover{
+  background:rgba(201,168,76,0.65);
+}
+
+/* The two book panes get the same treatment a little wider -- these are long documents and the bar
+   is a position indicator you actually read, where the spine bar is only a way to reach a number. */
+#finalize-after-scroll, #finalize-before-scroll{
+  scrollbar-width:thin;
+  scrollbar-color:rgba(201,168,76,0.40) transparent;
+}
+#finalize-after-scroll::-webkit-scrollbar, #finalize-before-scroll::-webkit-scrollbar{ width:9px; }
+#finalize-after-scroll::-webkit-scrollbar-track, #finalize-before-scroll::-webkit-scrollbar-track{
+  background:rgba(201,168,76,0.06); border-radius:5px;
+}
+#finalize-after-scroll::-webkit-scrollbar-thumb, #finalize-before-scroll::-webkit-scrollbar-thumb{
+  background:rgba(201,168,76,0.38); border-radius:5px; border:2px solid transparent; background-clip:padding-box;
+}
+#finalize-after-scroll::-webkit-scrollbar-thumb:hover, #finalize-before-scroll::-webkit-scrollbar-thumb:hover{
+  background:rgba(201,168,76,0.7); background-clip:padding-box;
+}
+
+/* Narrow screens keep a definite height, because below 901px the view is not a bounded column and a
+   flex:1 pane would collapse to nothing. These are the old numbers, kept only where they still
+   describe something true. */
+@media (max-width:900px){
+  #finalize-before-scroll, #finalize-after-scroll, #finalize-after-body{ height:680px; }
+  #finalize-page-nav{ height:680px; }
+  #finalize-after-nav{ height:660px; }
+  #finalize-left{ overflow:hidden; }
+}
+
 /* ===== Pre-Publish image picker (slots + modal) ===== */
 .prep-img-slots { display:flex; gap:8px; margin:0 0 14px; }
 .prep-img-slot { flex:1 1 0; min-width:0; text-align:center; }
@@ -2355,3 +2525,42 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 @media (max-width: 560px) {
   #finalize-before-scroll, #finalize-after-scroll, #finalize-after-body { height: 55vh !important; }
 }
+
+/* v3.0.596 -- SESSION NAV ARROWS ON A PHONE. Ian: "make them smaller or gone on phones... they push
+   the tab row down. They are fine on a tablet."
+   GONE, not smaller. The tab row is a wrap-enabled flex row, so on a narrow screen the arrows do not
+   shrink -- they take a whole line of their own and shove the tabs down, which is the complaint.
+   Making them smaller would delay that, not prevent it. 640px is the breakpoint this stylesheet
+   already uses for phone layouts, so it stays one number rather than a new one.
+   The Sessions list is one tap away and still navigates, so nothing is unreachable without them. */
+@media (max-width:640px){ #sess-nav-prev, #sess-nav-next { display:none; } }
+
+/* v3.0.597 -- BACK TO TOP. Ian, 2026-08-10: "small, semi transparent and always float at the
+   bottom... almost like a chat button."
+   ALWAYS ON, which is why `display` is flex here and JS never touches it. v3.0.596 shipped it
+   `display:none` and let a scroll handler reveal it past 400px; that handler was watching
+   `.main-content.scrollTop`, which is structurally always 0 because the box has no bounded height,
+   so the button never appeared on any screen. The threshold is gone rather than repaired -- an
+   always-present control needs no state, and state is what was wrong.
+   BOTTOM RIGHT, which is where a reader's hand already is on a wide screen and where this control
+   is conventional. Deliberately NOT bottom-centre: centre sits over the middle of the content, and
+   this app puts its primary buttons there (Generate Images, Continue to secure payment).
+   The help FAB lives in the HEADER, not down here, so there is nothing to collide with.
+   z-index sits below the impersonation banner (99999) and below modals (100000+): a support banner
+   or an open modal must never be covered by a scroll affordance. */
+.to-top-btn{
+  position:fixed; right:22px; bottom:22px; z-index:90;
+  width:34px; height:34px; border-radius:50%;
+  background:rgba(20,15,8,0.55); color:rgba(201,168,76,0.9);
+  border:1px solid rgba(201,168,76,0.35);
+  font-size:15px; line-height:1; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  backdrop-filter:blur(3px);
+  transition:opacity 0.15s, background 0.15s, border-color 0.15s;
+  opacity:0.4;
+}
+.to-top-btn:hover{ opacity:1; background:rgba(20,15,8,0.85); border-color:var(--gold); }
+/* Hidden on phones entirely, per Ian. A phone has its own way back to the top and the button would
+   sit over content that is already tight. */
+@media (max-width:640px){ .to-top-btn{ display:none !important; } }

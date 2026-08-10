@@ -1873,7 +1873,10 @@ function showView(view) {
   });
 
   var el = document.getElementById('view-' + view);
-  if (el) el.style.display = 'block';
+  // v3.0.600 -- '' NOT 'block', same reason: #view-novel is a flex column on a wide screen and an
+  // inline display:block would defeat the rule. `.view` carries NO display rule of its own -- checked,
+  // not assumed -- so every other view resolves to block exactly as it does today.
+  if (el) el.style.display = '';
   state.currentView = view;
 
   // Update sidebar active states
@@ -6566,7 +6569,11 @@ function switchNovelTab(tab) {
   if (tab === 'order' && typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // keep the 'publishing X' label honest
   ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
-    if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    // v3.0.600 -- '' NOT 'block'. An inline display beats the stylesheet, and on a wide screen the
+    // Publish page needs its visible pane to be a flex COLUMN so the panes inside can be told to fill
+    // whatever height is left. Empty string hands the decision back to CSS; below 901px no rule
+    // matches and a div still resolves to block, so nothing changes there.
+    if (pane) pane.style.display = t === tab ? '' : 'none';
     var el = document.getElementById('ntab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -7082,8 +7089,11 @@ function setupNovelPager() {
   var sessions = state.novelSessions || [];
   var total = sessions.length;
 
-  // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
-  var suffixes = ['', '-bottom'];
+  // v3.0.603 -- ONE pager bar, in the header row above the preview. Ian asked for the bottom one to
+  // go; this array was the single authority driving both, and every lookup below is already
+  // null-guarded, so deleting one string retired the whole control rather than leaving it half-wired.
+  // The array is kept rather than unrolled: it is what makes this ONE rule instead of a rule per bar.
+  var suffixes = [''];
 
   // True View renders the real continuous document (sessions flow into each
   // other mid-page), so a session-based pager has no clean page to jump to.
@@ -7217,16 +7227,18 @@ function resizeNovelPreviewIframe() {
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
   _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
-  var _ph = '75vh';
+  // v3.0.600 -- ON A WIDE SCREEN, CSS OWNS THIS HEIGHT. What stood here copied the PREP PANEL's
+  // measured height onto the iframe, with a 520px floor. Measured on Ian's 798px screen:
+  // prepPanel 774, previewIframe 774, document 1022 -- 224px of overshoot. The panel grows with its
+  // accordions, the iframe copies it, and the pair walks off the bottom of the window together.
+  // That is a fourth copy of one rule. The pane is now a flex child that takes whatever height is
+  // left, so the height is set in exactly one place and it is the stylesheet.
   if (window.innerWidth > 900) {
-    var _prep = document.querySelector('.novel-prep-panel');
-    if (_prep && _prep.offsetHeight > 0) {
-      var _h = _prep.offsetHeight;
-      if (_h < 520) _h = 520;
-      _ph = _h + 'px';
-    }
+    if (iframe) iframe.style.height = '';
+    if (frame) frame.style.height = '';
+    return;
   }
-  if (iframe) iframe.style.height = _ph;
+  if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
 
@@ -7614,6 +7626,263 @@ function prepWireCommitOnExit() {
       } catch (_) {}
     }, true);
   } catch (e) {}
+}
+// =================================================================================================
+// BACK TO TOP -- v3.0.597. Ian, 2026-08-10: "small, semi transparent and always float at the
+// bottom... almost like a chat button." ALWAYS VISIBLE, so there is no threshold, no scroll
+// listener, no resize listener and no sync function. The CSS shows it; JS only handles the click.
+// One failure mode instead of three.
+//
+// WHAT v3.0.596 GOT WRONG, AND THIS TIME IT IS MEASURED RATHER THAN READ. The comment that stood
+// here said this app never scrolls the WINDOW, because `.main-content` is `flex:1; overflow-y:auto`.
+// That reading stopped one line short. `overflow-y:auto` only produces a scrollbar on a box with a
+// BOUNDED height, and nothing bounds this one: `body` is `min-height:100vh`, `.app-layout` is
+// `min-height:calc(100vh - 44px - 35px)`, and `.main-content` carries no height and no max-height at
+// all. It grows to fit its content, so scrollHeight always equals clientHeight.
+//
+// MEASURED IN THE CONSOLE ON A SCROLLED SESSION PAGE, 2026-08-10:
+//   .main-content  scrollTop 0     scrollHeight 9134   clientHeight 9134
+//   scrollingElement scrollTop 8406  scrollHeight 9204
+// The container cannot scroll. The document does.
+//
+// The old show condition was `.main-content.scrollTop > 400` -- a number that is structurally always
+// zero -- so the button never appeared on ANY screen, not merely on Sessions. And the old fallback
+// did not rescue it: it fired only when the element was ABSENT, and it is present, just not
+// scrolling. A guard against the wrong failure.
+//
+// THE RULE THAT COMES OUT OF IT: DO NOT NAME A SCROLLER. `findScrollParent` was already in this file
+// several hundred lines above, and it picks one by MEASUREMENT -- it demands the overflow rule AND
+// `scrollHeight > clientHeight + 2`. Ask it from the view that is actually on screen, then scroll
+// every candidate to zero. Scrolling a box that is already at zero is a no-op, so this is right
+// whichever element is live today and stays right if the layout is ever given a real height.
+function _toTopAnchor() {
+  try {
+    var kids = document.querySelectorAll('.main-content > div');
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].offsetParent !== null) return kids[i];
+    }
+  } catch (e) {}
+  return document.querySelector('.main-content');
+}
+function _toTopTargets() {
+  var out = [];
+  function add(el) { if (el && out.indexOf(el) < 0) out.push(el); }
+  try {
+    if (typeof findScrollParent === 'function') add(findScrollParent(_toTopAnchor()));
+  } catch (e) {}
+  try { add(document.querySelector('.main-content')); } catch (e) {}
+  try { add(document.scrollingElement || document.documentElement); } catch (e) {}
+  return out;
+}
+// THE APP CHROME, MEASURED -- v3.0.600. The Publish page has to know how much vertical room is left
+// under the header and the breadcrumb. The obvious source is the literal already in the stylesheet:
+// `.app-layout { min-height: calc(100vh - 44px - 35px) }`.
+//
+// THAT LITERAL IS A GUESS, AND USING IT WOULD BAKE IN THE FAULT THIS BUILD EXISTS TO FIX.
+// `.breadcrumb-row` has NO height rule at all -- it is `padding:4px` plus whatever the crumb line
+// happens to be. `.app-header` has no height either. 44 and 35 are two numbers written down a second
+// time, and they go wrong the moment either row wraps, the font metrics differ, or the browser is
+// zoomed. Deriving a layout from them is the same fault as the caption insets and the frame hairline.
+//
+// So it is MEASURED, published once as `--app-chrome`, and kept current by a ResizeObserver on the
+// two elements themselves. One number, and it comes from the page rather than from a memory of it.
+// The CSS carries `var(--app-chrome, 79px)` so a browser without ResizeObserver still gets today's
+// behaviour rather than a collapsed page.
+function _appChromeSync() {
+  try {
+    var h = document.querySelector('.app-header');
+    var b = document.querySelector('.breadcrumb-row');
+    var n = (h ? h.offsetHeight : 0) + (b ? b.offsetHeight : 0);
+    if (n > 0) document.documentElement.style.setProperty('--app-chrome', n + 'px');
+  } catch (e) {}
+}
+function _appChromeWire() {
+  if (_appChromeWire._done) return;
+  _appChromeWire._done = true;
+  try {
+    _appChromeSync();
+    window.addEventListener('resize', _appChromeSync);
+    if (typeof window.ResizeObserver === 'function') {
+      var ro = new window.ResizeObserver(_appChromeSync);
+      var h = document.querySelector('.app-header');
+      var b = document.querySelector('.breadcrumb-row');
+      if (h) ro.observe(h);
+      if (b) ro.observe(b);
+    }
+  } catch (e) {}
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _appChromeWire);
+  else _appChromeWire();
+}
+// THE MOTION -- v3.0.599. Ian, 2026-08-10: "you can animate it... but make it fast."
+//
+// WHY THIS IS HAND-DRIVEN RATHER THAN behavior:'smooth'. Native smooth scrolling has NO duration
+// control and its time scales with DISTANCE, so a 4,000px Optimize pane crawls while a 200px page
+// snaps. Ian saw exactly that and read it as two different designs: "on the inner panel of the prep
+// tab it is instantly back at the top... on the others it scrolls up slower."
+//
+// AND THE FAST ONES WERE FAST BY ACCIDENT. The v3.0.598 iframe pass called smooth scrollTo and THEN
+// set scrollingElement.scrollTop = 0 -- belt and braces, except the braces cancel the belt. The jump
+// won every time. Two behaviours, neither chosen.
+//
+// ONE DURATION, ONE EASING, EVERY SURFACE. 200ms with an ease-out cubic: long enough to read as
+// movement rather than a cut, short enough that a long pane does not make you wait. Change
+// TO_TOP_MS and every surface changes together -- the whole point is that there is one number.
+//
+// prefers-reduced-motion is honoured by jumping, which is what that setting asks for.
+var TO_TOP_MS = 200;
+// window.performance, not bare `performance`. They are the same object in a browser, but reaching
+// past `window` makes the clock unreachable to anything trying to drive this function -- which is
+// how a tween ships having never actually been run. Same reason requestAnimationFrame is called
+// through window below.
+function _toTopNow() {
+  try { return (window.performance && window.performance.now) ? window.performance.now() : Date.now(); }
+  catch (e) { return Date.now(); }
+}
+function _toTopReduced() {
+  try {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  } catch (e) { return false; }
+}
+function _toTopAnimate(el) {
+  try {
+    if (!el) return;
+    var start = el.scrollTop || 0;
+    if (start <= 0) return;
+    if (_toTopReduced() || typeof window.requestAnimationFrame !== 'function') { el.scrollTop = 0; return; }
+    var t0 = _toTopNow();
+    var step = function () {
+      try {
+        var p = (_toTopNow() - t0) / TO_TOP_MS;
+        if (p >= 1) { el.scrollTop = 0; return; }
+        var e = 1 - Math.pow(1 - p, 3);
+        el.scrollTop = start * (1 - e);
+        window.requestAnimationFrame(step);
+      } catch (_) { try { el.scrollTop = 0; } catch (__) {} }
+    };
+    window.requestAnimationFrame(step);
+  } catch (e) { try { el.scrollTop = 0; } catch (_) {} }
+}
+// AND THE SCROLLER THAT IS NOT AN ELEMENT OF THIS DOCUMENT AT ALL -- v3.0.598. Ian, 2026-08-10, on
+// the session Preview tab: "there are two scroll bars... do the inner one not the outer. The outer
+// one barely moves." The inner bar belongs to an IFRAME. The preview pane is pinned at 75vh with the
+// whole document scrolling inside it, so the outer page has only a couple of hundred pixels of travel
+// and the button was correctly scrolling the wrong thing.
+//
+// BY VISIBILITY, NOT BY NAME. There are exactly two iframes in the app -- session Preview and Publish
+// preview -- both same-origin (/api/pdf/...) and both display:none until loaded, so offsetParent is
+// null for the one that is not on screen. Naming `session-preview-iframe` here would fix one page and
+// silently leave the other, which is the two-copies-of-one-rule fault recorded as TD-379.
+//
+// WHERE THIS CANNOT WORK, AND IT IS NOT A BUG: in True View the iframe holds the browser's NATIVE PDF
+// viewer, whose scroll position is not scriptable from outside. The try/catch swallows it. The session
+// Preview tab forces quick mode, so this only ever bites on the Publish page in True View.
+function _toTopScrollIframes() {
+  try {
+    var frames = document.querySelectorAll('iframe');
+    for (var i = 0; i < frames.length; i++) {
+      var f = frames[i];
+      try {
+        if (f.offsetParent === null) continue;
+        var d = f.contentDocument;
+        var inner = d && (d.scrollingElement || d.documentElement);
+        if (inner) _toTopAnimate(inner);
+        else if (f.contentWindow && typeof f.contentWindow.scrollTo === 'function') f.contentWindow.scrollTo(0, 0);
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
+// AND THE INNER BARS THAT ARE PLAIN DIVS -- v3.0.598. Ian, 2026-08-10: "the inner scroll on the
+// Optimize tab in Publish as well." Those panes are not iframes; they are divs carrying inline
+// `height:680px; overflow-y:auto` (finalize-before-scroll, finalize-after-scroll, and the two page
+// rails), and the Optimize log panel is another at max-height 420px.
+//
+// GENERALISED RATHER THAN LISTED. This is findScrollParent's test -- the overflow rule AND
+// `scrollHeight > clientHeight + 2` -- applied DOWNWARD instead of upward. Listing ids here would be
+// the third copy of one rule and would miss the next pane somebody adds, which is TD-379 exactly.
+//
+// THREE DELIBERATE EXCLUSIONS:
+//   - scoped to `.main-content`, so the modals and the help drawer (both outside it) are untouched;
+//   - TEXTAREA / INPUT / SELECT are skipped, because scroll position in a field belongs to the
+//     caret. The transcript box must not jump while somebody is typing in it;
+//   - anything with offsetParent null is off screen and left alone, which is what keeps the hidden
+//     tab's panes at their old position instead of silently resetting every tab at once.
+//
+// The scrollHeight test runs FIRST because it is a cheap property read; getComputedStyle is only
+// called on the handful of elements that actually overflow.
+function _toTopScrollContainers() {
+  try {
+    var all = document.querySelectorAll('.main-content *');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      try {
+        var tag = el.tagName;
+        if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') continue;
+        if (!(el.scrollHeight > el.clientHeight + 2)) continue;
+        if (el.scrollTop === 0) continue;
+        if (el.offsetParent === null) continue;
+        var oy = window.getComputedStyle(el).overflowY;
+        if (oy !== 'auto' && oy !== 'scroll') continue;
+        _toTopAnimate(el);
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
+// WHEN A SCREEN SAYS WHAT IT WANTS SCROLLED -- v3.0.601. Ian, 2026-08-10: "on the prep and preview
+// tab it also does the scroll on the Prep Panel to the left. It shouldn't touch that one." And on
+// Optimize: "I think it's also trying to do the Page number scroll bar. It shouldn't touch that one.
+// The new scroll button should only touch the Previewing Panels."
+//
+// HE IS RIGHT AND THE GENERAL RULE WAS TOO GENERAL. "Scroll everything that overflows" is correct on
+// an ordinary screen and wrong on Publish, where a form column and two page-number rails are
+// NAVIGATION, not reading surfaces. Resetting a rail throws away the place you were looking at.
+//
+// BUT NOT A LIST OF IDS IN HERE. That is the fault TD-379 names -- one rule written in three places,
+// and the next pane added is the one nobody updates. Instead the MARKUP declares it: an element
+// carrying `data-toptarget` is a reading surface. If the page shows ANY marked element, only marked
+// elements move; if it shows none, the general scan runs exactly as it did in v3.0.598. So Publish
+// is precise and every other screen is unchanged, and a future pane is handled by marking it rather
+// than by editing this function.
+//
+// THE OUTER PAGE ALWAYS RETURNS regardless. "Back to top" means the page as well as the pane.
+function _toTopMarked() {
+  var out = [];
+  try {
+    var all = document.querySelectorAll('[data-toptarget]');
+    for (var i = 0; i < all.length; i++) {
+      try { if (all[i].offsetParent !== null) out.push(all[i]); } catch (e) {}
+    }
+  } catch (e) {}
+  return out;
+}
+function _toTopScrollMarked(list) {
+  for (var i = 0; i < list.length; i++) {
+    var el = list[i];
+    try {
+      if (el.tagName === 'IFRAME') {
+        var d = el.contentDocument;
+        var inner = d && (d.scrollingElement || d.documentElement);
+        if (inner) _toTopAnimate(inner);
+        else if (el.contentWindow && typeof el.contentWindow.scrollTo === 'function') el.contentWindow.scrollTo(0, 0);
+      } else {
+        _toTopAnimate(el);
+      }
+    } catch (e) {}
+  }
+}
+function scrollBackToTop() {
+  var marked = _toTopMarked();
+  if (marked.length) {
+    _toTopScrollMarked(marked);
+  } else {
+    _toTopScrollIframes();
+    _toTopScrollContainers();
+  }
+  var list = _toTopTargets();
+  for (var i = 0; i < list.length; i++) {
+    _toTopAnimate(list[i]);
+  }
 }
 function prepCommitFields() {
   try {
@@ -10046,7 +10315,10 @@ function showView(view) {
   });
 
   var el = document.getElementById('view-' + view);
-  if (el) el.style.display = 'block';
+  // v3.0.600 -- '' NOT 'block', same reason: #view-novel is a flex column on a wide screen and an
+  // inline display:block would defeat the rule. `.view` carries NO display rule of its own -- checked,
+  // not assumed -- so every other view resolves to block exactly as it does today.
+  if (el) el.style.display = '';
   state.currentView = view;
 
   // Update sidebar active states
@@ -11198,7 +11470,11 @@ function switchNovelTab(tab) {
   if (tab === 'order' && typeof finalizeUpdatePublishPick === 'function') finalizeUpdatePublishPick();   // keep the 'publishing X' label honest
   ['sessions', 'preview', 'finalize', 'order'].forEach(function(t) {
     var pane = document.getElementById('novel-tab-' + t);
-    if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    // v3.0.600 -- '' NOT 'block'. An inline display beats the stylesheet, and on a wide screen the
+    // Publish page needs its visible pane to be a flex COLUMN so the panes inside can be told to fill
+    // whatever height is left. Empty string hands the decision back to CSS; below 901px no rule
+    // matches and a div still resolves to block, so nothing changes there.
+    if (pane) pane.style.display = t === tab ? '' : 'none';
     var el = document.getElementById('ntab-' + t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -11273,8 +11549,11 @@ function setupNovelPager() {
   var sessions = state.novelSessions || [];
   var total = sessions.length;
 
-  // Both pager bars: top and bottom. Suffix '' = top, '-bottom' = bottom.
-  var suffixes = ['', '-bottom'];
+  // v3.0.603 -- ONE pager bar, in the header row above the preview. Ian asked for the bottom one to
+  // go; this array was the single authority driving both, and every lookup below is already
+  // null-guarded, so deleting one string retired the whole control rather than leaving it half-wired.
+  // The array is kept rather than unrolled: it is what makes this ONE rule instead of a rule per bar.
+  var suffixes = [''];
 
   // True View renders the real continuous document (sessions flow into each
   // other mid-page), so a session-based pager has no clean page to jump to.
@@ -11408,16 +11687,18 @@ function resizeNovelPreviewIframe() {
   var iframe = document.getElementById('novel-preview-iframe');
   var frame = document.getElementById('novel-preview-frame');
   _fitPreviewMobile('novel-preview-iframe', typeof novelPreviewMode !== 'undefined' && novelPreviewMode !== 'wysiwyg');
-  var _ph = '75vh';
+  // v3.0.600 -- ON A WIDE SCREEN, CSS OWNS THIS HEIGHT. What stood here copied the PREP PANEL's
+  // measured height onto the iframe, with a 520px floor. Measured on Ian's 798px screen:
+  // prepPanel 774, previewIframe 774, document 1022 -- 224px of overshoot. The panel grows with its
+  // accordions, the iframe copies it, and the pair walks off the bottom of the window together.
+  // That is a fourth copy of one rule. The pane is now a flex child that takes whatever height is
+  // left, so the height is set in exactly one place and it is the stylesheet.
   if (window.innerWidth > 900) {
-    var _prep = document.querySelector('.novel-prep-panel');
-    if (_prep && _prep.offsetHeight > 0) {
-      var _h = _prep.offsetHeight;
-      if (_h < 520) _h = 520;
-      _ph = _h + 'px';
-    }
+    if (iframe) iframe.style.height = '';
+    if (frame) frame.style.height = '';
+    return;
   }
-  if (iframe) iframe.style.height = _ph;
+  if (iframe) iframe.style.height = '75vh';
   if (frame) frame.style.height = '';
 }
 
@@ -17543,11 +17824,26 @@ function finalizeNavHighlight(navId, scrollId) {
     var el = nav.children[j], on = (el.getAttribute('data-page') == best);
     el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)';
     el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent';
+    // v3.0.609 -- THE SPINE FOLLOWS AGAIN, AND THIS REVERSES v3.0.606 ON PURPOSE.
+    // Ian, 2026-08-10: "when the preview panel scrolls past the page number on the right, the page
+    // number panel should scroll too to always keep the page number you are on visible."
+    //
+    // WHY IT WAS REMOVED AND WHY THAT WAS WRONG. Ian reported the spine moving while he scrolled and
+    // asked for it to stay still, and v3.0.606 obliged by deleting the follow. The thing he was
+    // actually watching was the WHOLE PAGE scrolling -- v3.0.601 had left align-items:flex-start
+    // inline on the pane row, so nothing took the height of the row and the entire tab scrolled.
+    // v3.0.607 fixed that, and with only the preview moving, the follow is the behaviour he had all
+    // along. A symptom was traced to the nearest plausible cause rather than to the measured one.
+    //
+    // IT MOVES THE MINIMUM, NOT TO THE CENTRE. The version before v3.0.606 jumped the marker to the
+    // middle of the spine the moment it left the box, so the spine sat still and then lurched by half
+    // its height. Bringing the marker just inside the near edge instead means the spine advances a
+    // few pixels at a time and reads as travelling with the preview rather than snapping to it.
+    // The 6px margin keeps the marker off the rounded corners at the ends.
     if (on) {
-      // Keep the marker visible in a long spine, but only nudge -- a full scrollIntoView every frame
-      // fights the user's own scrolling.
-      var nr = nav.getBoundingClientRect(), er = el.getBoundingClientRect();
-      if (er.top < nr.top + 4 || er.bottom > nr.bottom - 4) nav.scrollTop += (er.top - nr.top) - (nr.height / 2);
+      var nr = nav.getBoundingClientRect(), er = el.getBoundingClientRect(), pad = 6;
+      if (er.top < nr.top + pad) nav.scrollTop -= (nr.top + pad) - er.top;
+      else if (er.bottom > nr.bottom - pad) nav.scrollTop += er.bottom - (nr.bottom - pad);
     }
   }
 }
@@ -18314,6 +18610,75 @@ function optimizeLogLine(txt, kind) {
 // v3.0.341 -- RETURNS A PROMISE that resolves TRUE only when a file was actually stored. The caller
 // needs to know, because the pane is redrawn from that file and drawing before it exists shows the
 // previous run's book with no warning.
+// v3.0.605 -- WAIT FOR A SAVE JOB, AND KNOW THE DIFFERENCE BETWEEN LOST AND FAILED.
+//
+// Polls every 2s. Two things make this more than a loop:
+//
+// 1. state 'unknown' IS NOT A FAILURE. The job store is in the process that ran the loop, so a
+//    restart or a redeploy mid-save loses the job -- but NOT the save, which writes to R2 and the
+//    database before it ever reports. That is precisely what happened on 2026-08-10: the work landed
+//    and the client called it an error. On unknown, ask /last-optimized whether a save exists that is
+//    NEWER than the moment this request was posted, and if so treat it as the success it is.
+//
+// 2. A single failed poll is not a failed save either. Three consecutive network errors are needed
+//    before giving up, because one dropped request during a five minute render should not discard a
+//    book that is about to finish.
+//
+// The ceiling is 20 minutes, which is far above the 125s that started all this and still bounded.
+function finalizeAwaitSaveJob(jobId, postedAt, q) {
+  var POLL_MS = 2000;
+  var LIMIT_MS = 20 * 60 * 1000;
+  var misses = 0;
+  function landedAfterPost() {
+    // The fallback question, and the one nobody could ask before this build: is there a saved book
+    // dated after I asked for one?
+    return fetch('/api/pdf/last-optimized/' + state.currentCampaign.id + q + '&_=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.found || !j.at) return null;
+        var at = Date.parse(j.at);
+        if (!(at >= postedAt - 5000)) return null;   // an OLDER save is somebody elses, not mine
+        return { ok: true, j: { ok: true, arrange: j.arrange, pdfUrl: j.pdfUrl, pages: j.pages || 0,
+                                at: j.at, flattened: null, quickSave: false, bytes: 0, layoutSaved: !!j.hasLayout,
+                                recovered: true } };
+      })
+      .catch(function () { return null; });
+  }
+  return new Promise(function (resolve) {
+    function tick() {
+      if (Date.now() - postedAt > LIMIT_MS) {
+        return landedAfterPost().then(function (rec) {
+          resolve(rec || { ok: false, j: { error: 'save_timeout', message: 'The save is taking longer than expected. Try Load Last Optimized File.' } });
+        });
+      }
+      fetch('/api/pdf/save-optimized-status/' + encodeURIComponent(jobId) + '?_=' + Date.now())
+        .then(function (r) { return r.json(); })
+        .then(function (st) {
+          misses = 0;
+          if (!st) { setTimeout(tick, POLL_MS); return; }
+          if (st.state === 'done')  { resolve({ ok: true, j: st.result || { ok: true } }); return; }
+          if (st.state === 'error') { resolve({ ok: false, j: { error: st.error || 'save_failed', message: st.message || 'save-optimized failed' } }); return; }
+          if (st.state === 'unknown') {
+            return landedAfterPost().then(function (rec) {
+              if (rec) { resolve(rec); return; }
+              resolve({ ok: false, j: { error: 'save_lost', message: 'The server restarted while saving. Try Save again, or Load Last Optimized File.' } });
+            });
+          }
+          setTimeout(tick, POLL_MS);
+        })
+        .catch(function () {
+          misses++;
+          if (misses >= 3) {
+            return landedAfterPost().then(function (rec) {
+              resolve(rec || { ok: false, j: { error: 'save_unreachable', message: 'Lost contact while saving. Try Load Last Optimized File.' } });
+            });
+          }
+          setTimeout(tick, POLL_MS);
+        });
+    }
+    setTimeout(tick, POLL_MS);
+  });
+}
 function finalizeSaveOptimized(quiet) {
   if (!state.currentCampaign) return Promise.resolve(false);
   try {
@@ -18337,9 +18702,22 @@ function finalizeSaveOptimized(quiet) {
     // ONLY THE REAL SAVE. The protective quick save fires the instant the loop ends, while the loop
     // may still be finishing, and it skips the flatten -- it is fast and silent by design.
     if (!quiet) { try { finalizeFixBusyBar(true); } catch (e) {} }
+    // v3.0.605 -- THE SAVE IS A JOB, AND THE CLIENT WAITS BY ASKING RATHER THAN BY HOLDING.
+    // On 2026-08-10 this fetch died at 125s with "Unexpected token '<'" -- Cloudflare returning its
+    // own HTML 524 page because the origin had not answered inside about 100 seconds. The save had
+    // ALREADY SUCCEEDED; only the answer was lost. So the POST now returns a job id straight away and
+    // this polls for the result, then hands that result to the exact same branches below. Everything
+    // downstream -- the publish hand-off, the interior cache drop, the prepared-order invalidation --
+    // is untouched, because the payload it receives is unchanged.
+    var _postedAt = Date.now();
     return fetch('/api/pdf/save-optimized/' + state.currentCampaign.id + q, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (rj) {
+      // A 409 optimize_required still arrives here directly, exactly as before -- the cache lookup
+      // stayed synchronous on the server precisely so the quiet-swallow rule below did not change.
+      if (!rj.ok || !rj.j || !rj.j.jobId) return rj;
+      return finalizeAwaitSaveJob(rj.j.jobId, _postedAt, q);
+    }).then(function (rj) {
       // SAY SO, EITHER WAY. This used to note only success and swallow every failure, so a 409 from a
       // cache-key miss was completely invisible -- nothing was ever saved and nothing ever said so.
       if (rj.ok && rj.j && rj.j.ok) {
@@ -18702,20 +19080,25 @@ function finalizeSaveFixedVersion() {
   });
 }
 // v3.0.506 -- THE NEXT STEP, FROM WHERE THEY ARE. Ian, 2026-08-07: "on the Prep and Preview tab
-// at the top a button that says Optimize and takes them to the Optimize tab and fires it off.
-// Kinda like the Go to Publish button does on the Optimize tab. A call to action on the next step."
-// Modelled on finalizeGoToPublish below: switch the tab, then act. It also STARTS the run, which
-// finalizeGoToPublish does not need to do -- so the guard matters more here.
-// NO GUARD OF ITS OWN, deliberately: runLayoutAiDryRun already refuses re-entry at its entry point
-// (v3.0.350, added because the only check lived inside runAiOptimizeLoop and a second click cost a
-// full pre-loop compose and render before being silently dropped). Adding a second, different guard
-// here is how two conditions drift apart. The tab switch still happens either way, so a press
-// during a run takes you to watch it rather than doing nothing.
-// The small delay lets the tab render before the run starts painting into it.
+// at the top a button that says Optimize and takes them to the Optimize tab."
+// Modelled on finalizeGoToPublish below.
+//
+// v3.0.604 -- IT NO LONGER FIRES THE RUN. Ian, 2026-08-10: "just make it go to the tab. Don't start
+// it like it was coded to do. We'll make them hit the real button on the optimizer tab to kick it
+// off." This is now NAVIGATION ONLY.
+//
+// AND THAT IS THE RIGHT SHAPE, not merely the requested one. This button sits at the top of a tab a
+// reader is browsing; the run it used to start SPENDS TOKENS AND TAKES MINUTES, both scaling with
+// the size of the book. A control whose label reads as a signpost should not be the one that spends
+// money. The Optimize tab shows its own cost estimate beside its own button, and that is where the
+// decision belongs -- next to the number.
+//
+// The re-entry guard discussion that used to sit here is now moot for this path: nothing is started,
+// so there is nothing to re-enter. runLayoutAiDryRun still guards its own entry point (v3.0.350) for
+// the real button, and that remains the only place the check lives.
 function prepGoToOptimize() {
   try { switchNovelTab('finalize'); } catch (e) {}
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { try { window.scrollTo(0, 0); } catch (e2) {} }
-  setTimeout(function () { try { if (typeof runLayoutAiDryRun === 'function') runLayoutAiDryRun(); } catch (e) {} }, 120);
 }
 function finalizeGoToPublish() {
   var b = document.getElementById('layoutai-publish-btn'); if (b) b.disabled = true;

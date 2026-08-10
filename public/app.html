@@ -28,6 +28,13 @@
      Hidden by default; impersonateRefresh() reveals it. A reader who is not in a support session
      never sees it and never pays for it.
 ================================================================================================= -->
+<!-- v3.0.597 -- BACK TO TOP. One button for the whole app, placed OUTSIDE every view so it
+     survives showView() swapping panes; it is position:fixed, so where it sits in the DOM does not
+     affect where it appears. ALWAYS VISIBLE on screens above 640px -- the stylesheet decides, and
+     no script ever sets its display. It was hidden-until-scrolled in v3.0.596 and the reveal never
+     fired; see the measurement recorded above scrollBackToTop() in app.js. -->
+<button id="to-top-btn" class="to-top-btn" type="button" onclick="scrollBackToTop()"
+        title="Back to top" aria-label="Back to top">&#8593;</button>
 <div id="imp-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c2410c;color:#fff;font-family:Georgia,serif;font-size:13px;line-height:1.4;padding:9px 14px;box-shadow:0 2px 10px rgba(0,0,0,0.45);">
   <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <span style="font-weight:700;letter-spacing:0.04em;">SUPPORT SESSION</span>
@@ -239,22 +246,24 @@
           <div class="progress-bar"><div class="progress-fill" id="novel-preview-progress-fill"></div></div>
           <div class="progress-msg" id="novel-preview-progress-msg">Loading preview&hellip;</div>
         </div>
-        <div id="novel-preview-frame" style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;min-height:520px;">
-          <div id="novel-preview-loading" style="width:100%;height:90vh;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
+        <div id="novel-preview-frame" style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;">
+          <div id="novel-preview-loading" style="width:100%;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
             <div style="text-align:center;color:rgba(201,168,76,0.4);">
               <div style="font-size:32px;margin-bottom:8px;"></div>
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
             </div>
           </div>
-          <iframe id="novel-preview-iframe" src="" style="width:100%;height:90vh;border:none;background:#fff;display:none;"></iframe>
+          <iframe id="novel-preview-iframe" data-toptarget src="" style="width:100%;border:none;background:#fff;display:none;"></iframe>
         </div>
-        <div id="novel-pager-bottom" style="display:none;align-items:center;justify-content:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
-          <button class="btn btn-sm" id="novel-pager-prev-bottom" onclick="novelPagePrev()">Prev</button>
-          <select id="novel-pager-select-bottom" onchange="novelPageJump(this.value)"
-            style="background:rgba(20,12,4,0.8);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);">
-          </select>
-          <button class="btn btn-sm" id="novel-pager-next-bottom" onclick="novelPageNext()">Next</button>
-        </div>
+        <!-- v3.0.603 -- THE BOTTOM PAGER IS GONE. Ian, 2026-08-10: "get rid of the navigation buttons
+             at the bottom of the Preview panel... They take up too much space. Push that preview panel
+             all the way down to match the other panels height."
+             The identical Prev / selector / Next still sits in the header row above the preview, so
+             nothing became unreachable. REMOVED rather than hidden: `var suffixes = ['']` in
+             renderNovelPager was the single authority driving both bars, and leaving the markup behind
+             once nothing writes to it produces exactly the kind of element that reads as live and is
+             not. With this out of the column, #novel-preview-frame's flex:1 takes the space and the
+             preview finally ends level with the Prep panel beside it. -->
         </div><!-- /novel-preview-col -->
         <div id="novel-splitter" onmousedown="novelSplitStart(event)" title="Drag to resize the panes"><div class="novel-splitter-bar"></div></div>
         <aside class="novel-prep-panel" id="novel-prep-panel">
@@ -263,10 +272,14 @@
             <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
               <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()">&#8635; Refresh preview</button>
               <!-- v3.0.506 -- CALL TO ACTION FOR THE NEXT STEP, modelled on Go to Publish on the
-                   Optimize tab. Switches to Optimize AND starts the run, so the next step is one
-                   click rather than two. runLayoutAiDryRun guards its own re-entry, so a second
-                   press while a run is in flight is refused there rather than here. -->
-              <button class="btn btn-primary btn-sm" id="prep-optimize-btn" onclick="prepGoToOptimize()">Optimize &#8594;</button>
+                   Optimize tab.
+                   v3.0.604 -- NAVIGATION ONLY. It used to switch tabs AND start the run. Ian:
+                   "just make it go to the tab... we'll make them hit the real button on the
+                   optimizer tab to kick it off." A signpost at the top of a browsing tab should
+                   not be the control that spends tokens; the decision belongs on the Optimize tab,
+                   beside the cost estimate. -->
+              <button class="btn btn-primary btn-sm" id="prep-optimize-btn" onclick="prepGoToOptimize()"
+                      title="Takes you to the Optimize tab. Nothing starts until you press Optimize layout there -- and that run spends tokens and takes several minutes, both growing with the size of your book.">Optimize &#8594;</button>
             </div>
           </div>
 
@@ -390,12 +403,13 @@
       <!-- Finalize tab (AI layout optimization / dry run) -->
       <div id="novel-tab-finalize" style="display:none;">
         <div id="finalize-split" style="display:flex;align-items:stretch;gap:0;">
-          <div id="finalize-left" style="flex:0 0 33%;min-width:220px;overflow:hidden;padding-right:8px;">
+          <div id="finalize-left" style="flex:0 0 33%;min-width:220px;padding-right:8px;">
             <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span id="optimize-preview-pill" style="font-size:10px;background:rgba(201,168,76,0.18);border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
             <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
             <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;">Optimize layout</button>
+              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;"
+                      title="Hands the whole book to the AI art director to lay out again. This SPENDS TOKENS and takes several minutes -- both grow with the size of your book. The estimate beside this button is the most it can cost.">Optimize layout</button>
               <button id="layoutai-cancel-btn" onclick="finalizeCancelOptimize()" style="display:none;background:none;border:1px solid rgba(200,90,70,0.55);color:#e8a08c;border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Cancel</button>
               <!-- v3.0.382 -- shown only when an Optimize run COMPLETES, in the slot the Cancel
                    button vacates. The publish source is already armed to the optimized book at
@@ -435,11 +449,11 @@
             <div id="finalize-pdf-panes" style="display:flex;gap:6px;align-items:stretch;">
               <div id="finalize-before-wrap" style="display:none;flex:1 1 auto;min-width:0;">
                 <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;"><span>Before</span><span style="display:flex;gap:8px;align-items:baseline;"><button id="finalize-before-open" onclick="finalizeOpenPdf(true)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button><span id="finalize-before-count" style="color:var(--gold);letter-spacing:0.03em;"></span></span></div>
-                <div id="finalize-before-scroll" style="height:680px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;"></div>
+                <div id="finalize-before-scroll" data-toptarget style="overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;"></div>
               </div>
-              <div id="finalize-page-nav-wrap" style="flex:0 0 36px;display:none;flex-direction:column;">
+              <div id="finalize-page-nav-wrap" style="flex:0 0 44px;display:none;flex-direction:column;">
                 <div style="font-size:11px;color:rgba(245,232,200,0.4);margin-bottom:4px;text-align:center;">Pg</div>
-                <div id="finalize-page-nav" title="Jump both panes to a page" style="height:680px;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
+                <div id="finalize-page-nav" title="Jump both panes to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
               </div>
               <div id="finalize-after-wrap" style="flex:1 1 100%;min-width:0;">
                 <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
@@ -458,12 +472,17 @@
                   </span>
                 </div>
                 <div id="finalize-after-progress" style="display:none;margin-bottom:6px;"></div>
-                <div style="display:flex;gap:8px;align-items:flex-start;">
-                  <div id="finalize-after-scroll" style="flex:1 1 auto;min-width:0;height:680px;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
-                  <div id="finalize-after-body" style="flex:1 1 auto;height:680px;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
-                  <div id="finalize-after-nav-wrap" style="display:none;flex:0 0 36px;flex-direction:column;">
+                <!-- v3.0.607 -- align-items IS NOT SET HERE. It lives in the stylesheet, per breakpoint: stretch
+                     on a wide screen so the panes take the height of the bounded row, flex-start below
+                     901px where they carry explicit heights instead. It was inline as flex-start, which
+                     beat the stretch rule v3.0.601 added and left the panes sizing to their CONTENT --
+                     a 49 page canvas stack -- so the whole tab scrolled instead of the preview. -->
+                <div id="finalize-after-row" style="display:flex;gap:8px;">
+                  <div id="finalize-after-scroll" data-toptarget style="flex:1 1 auto;min-width:0;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
+                  <div id="finalize-after-body" style="flex:1 1 auto;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
+                  <div id="finalize-after-nav-wrap" style="display:none;flex:0 0 44px;flex-direction:column;">
                     <div style="font-size:11px;color:rgba(245,232,200,0.4);margin-bottom:4px;text-align:center;">Pg</div>
-                    <div id="finalize-after-nav" title="Jump to a page" style="height:660px;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
+                    <div id="finalize-after-nav" title="Jump to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
                   </div>
                 </div>
               </div>
@@ -2437,8 +2456,19 @@
     border:1.5px solid rgba(245,232,200,0.28); border-top-color:rgba(245,232,200,0.75); border-radius:50%;
     animation:estspin 0.7s linear infinite; }
   @keyframes estspin { to { transform:rotate(360deg); } }
-  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--gold);font-family:var(--font-display);letter-spacing:0.02em; }
-  .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:6px 8px;font-size:12px;font-family:var(--font-display);width:100%;max-width:100%;box-sizing:border-box; }
+  /* v3.0.602 -- THESE MATCH THE TITLE & COVER PANEL NOW, NOT THE OTHER WAY ROUND. Ian, 2026-08-10,
+     looking at the two accordions side by side: "make them match the Title panel... I think the
+     title panel is more like everywhere else." He is right about the reason -- var(--font-display)
+     is Cinzel, which renders as capitals, so these labels read as SMALL CAPS while every other form
+     label in the app is plain sans. The Title panel was not the odd one out; this was.
+     Values taken from .prep-field-label and .prep-input verbatim: colour rgba(201,168,76,0.9), body
+     font, and 14px controls at 8px/10px padding. --radius is already 8px, so the corners agreed.
+     CHANGED AT THE SOURCE, NOT SCOPED TO THE ACCORDION. The Custom Layout MODAL uses these same two
+     classes for the same four controls -- it is one form rendered in two places. Scoping this to
+     .novel-prep-panel would have given the same form two appearances, which is the fault this
+     project keeps paying for. The modal now matches as well. */
+  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(201,168,76,0.9);font-family:inherit; }
+  .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:14px;font-family:inherit;width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
   .cl-toggle input { accent-color:#c9a84c;width:15px;height:15px; }
   /* TF-11: the Layout modal's two-column grids + split footer cramp on a phone. */
