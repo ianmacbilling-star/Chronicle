@@ -2620,7 +2620,14 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .tb-imgwrap { position:relative; display:inline-block; max-width:100%; }
 .tb-imgwrap:hover .panel-pill { opacity:1; }
 .tb-imgwrap img { max-width:100%; height:auto; display:block; }
-.tb-retouch { margin-top:10px; border:1px solid rgba(201,168,76,0.25); border-radius:8px; padding:10px; }
+/* v3.0.624 -- ITEM 4. Ian: "Push the buttons closer to the top of the generated image Just like the
+   Storyboard Panels." .panel-img-actions is top:8px against its wrapper, but .tb-result is a CENTRED
+   flex box with 10px of padding and a 120px min-height, so on a short wide title the pills sit well
+   inside the picture rather than on its edge. Tightened to 3px here only -- the storyboard keeps its
+   own 8px, because a full panel is tall enough that 8px still reads as the top corner. */
+.tb-imgwrap .panel-img-actions { top:3px; left:3px; right:3px; gap:4px; }
+/* The busy overlay needs the wrapper to clip it to the artwork, not to the checkerboard box. */
+.tb-imgwrap { overflow:hidden; border-radius:6px; }
 /* Warnings, not blocks: gold rather than red, because nothing here is broken and nothing is refused. */
 .tb-warn, .prep-title-note { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
   color:var(--gold-light); border-radius:8px; padding:8px 10px; font-size:12px; line-height:1.4; margin-top:8px; }

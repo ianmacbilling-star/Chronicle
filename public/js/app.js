@@ -204,6 +204,30 @@ function refreshTokenBalance() {
 // Optional `sublabel` shows a smaller line of descriptive text below the
 // main label (used for cycling status messages in the character flows).
 // `target` may be an Element or an element id string.
+// v3.0.624 -- ONE CONFIRM FOR EVERYONE. Ian, on the browser confirm() behind Remove: "Put that
+// Message in one of our own prettier warning Modals." The handler is held on state rather than in a
+// closure on the button so a second open cannot leave the first one wired underneath it.
+function appConfirm(opts) {
+  var o = opts || {};
+  state._appConfirmFn = (typeof o.onOk === "function") ? o.onOk : null;
+  var t = document.getElementById("app-confirm-title"); if (t) t.textContent = o.title || "Are you sure?";
+  var b = document.getElementById("app-confirm-body");  if (b) b.textContent = o.body || "";
+  var n = document.getElementById("app-confirm-note");
+  if (n) { n.textContent = o.note || ""; n.style.display = o.note ? "" : "none"; }
+  var ok = document.getElementById("app-confirm-ok");
+  if (ok) { ok.textContent = o.okLabel || "Yes"; ok.className = "btn " + (o.danger ? "btn-danger" : "btn-primary"); }
+  var m = document.getElementById("app-confirm-modal"); if (m) m.classList.remove("hidden");
+}
+function closeAppConfirm() {
+  state._appConfirmFn = null;
+  var m = document.getElementById("app-confirm-modal"); if (m) m.classList.add("hidden");
+}
+function appConfirmAccept() {
+  var fn = state._appConfirmFn;
+  closeAppConfirm();          // cleared BEFORE running, so a handler that opens another confirm works
+  if (fn) fn();
+}
+
 function showBusyOverlay(target, label, sublabel) {
   var el = (typeof target === 'string') ? document.getElementById(target) : target;
   if (!el) return null;
@@ -5366,6 +5390,7 @@ function regenCharRef(charId) {
 
 // Open the shared Retouch modal targeting a CHARACTER reference (vs a moment).
 function openRetouchChar(charId) {
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = charId;
   state.retouchMomentId = null;
   state.retouchSessionCharId = null;
@@ -5382,6 +5407,7 @@ function openRetouchChar(charId) {
 // openRetouch (moment) via state.retouchSessionCharId.
 function openRetouchSessionChar(charId) {
   state.retouchSessionCharId = charId;
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
   state.retouchMomentId = null;
   state.retouchAssetId = null;
@@ -7717,6 +7743,9 @@ function _tbShowResult(url) {
     if (empty) empty.classList.remove('hidden');
   }
   _tbSyncArchivePill();
+  // The Revert pill exists only when there is something to go back to, like the storyboard.
+  var rv = _tbEl('title-build-revert-btn');
+  if (rv) rv.classList.toggle('hidden', !(url && state.bookMeta && state.bookMeta.built_title_prev));
 }
 
 // _tbSetRef: the ONE writer of the reference. Everything that chooses a reference -- upload, drop,
@@ -7785,6 +7814,10 @@ function titleBuildGenerate() {
   _tbErr('');
   var btn = _tbEl('title-build-go');
   if (btn) { btn.disabled = true; btn.textContent = 'Drawing...'; }
+  // Only when there is already artwork to cover; on an empty panel the button label is the signal.
+  if ((state.bookMeta && state.bookMeta.built_title_url) || '') {
+    showBusyOverlay('title-build-imgwrap', 'Regenerating', 'Drawing your title\u2026');
+  }
   var body = {
     campaignId: state.currentCampaign.id,
     bookTitle: t,
@@ -7824,32 +7857,46 @@ function titleBuildGenerate() {
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not build the title.'); })
-    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
+    .then(function () { hideBusyOverlay('title-build-imgwrap'); if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
 }
 // =====================================================================================================
 // RETOUCH, REMOVE, ARCHIVE AND REPLACE FOR A BUILT TITLE  (TD-401, TD-402, TD-405)
 // =====================================================================================================
 
+// v3.0.624 -- THE SHARED RETOUCH MODAL, as Ian asked. The reservation in v3.0.622 was real -- every
+// other branch of submitRetouch posts to a QUEUE and polls a job, where this one returns the picture
+// directly -- but that is an argument about the SUBMIT, not about the box you type in. The modal is
+// shared; the submit branch stays its own shape.
+//
+// THE FLAG MUST BE CLEARED BY THE OTHER FOUR OPENERS. state.retouchTitle is checked first in
+// submitRetouch, so a title retouch left set would hijack the next panel retouch. openRetouch,
+// openRetouchChar, openRetouchSessionChar and openRetouchAsset each null it, exactly as they already
+// null each other. That is a five-place invariant and the apply script counts it.
 function titleBuildRetouchOpen() {
-  var row = _tbEl('title-build-retouch-row'); if (row) row.classList.remove('hidden');
-  var ta = _tbEl('title-build-retouch-text'); if (ta) setTimeout(function () { ta.focus(); }, 30);
+  state.retouchTitle = true;
+  state.retouchMomentId = null;
+  state.retouchCharId = null;
+  state.retouchSessionCharId = null;
+  state.retouchAssetId = null;
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function () { ta.focus(); }, 30);
 }
-function titleBuildRetouchClose() {
-  var row = _tbEl('title-build-retouch-row'); if (row) row.classList.add('hidden');
-  var ta = _tbEl('title-build-retouch-text'); if (ta) ta.value = '';
-}
+function titleBuildRetouchClose() { state.retouchTitle = null; }
 
 // Ian: "Add the Retouch to it as well! That's how we get the new lettering for the subtitle."
 // Synchronous, like Generate above it and unlike every other Retouch in the product -- see the note
 // on the route. Costs a token, because it is a call to fal.
-function titleBuildRetouch() {
+function titleBuildRetouch(instruction) {
   if (!state.currentCampaign) return;
-  var ta = _tbEl('title-build-retouch-text');
-  var instruction = ta ? String(ta.value || '').trim() : '';
-  if (!instruction) { if (ta) ta.focus(); return; }
+  instruction = String(instruction || '').trim();
+  if (!instruction) return;
   _tbErr('');
-  var btn = _tbEl('title-build-retouch-go');
-  if (btn) { btn.disabled = true; btn.textContent = 'Drawing...'; }
+  // v3.0.624 -- the same overlay the storyboard uses, on the artwork itself. Ian: "put the
+  // Regenerating Spinner over the image... Just like the Storyboard Tab."
+  showBusyOverlay('title-build-imgwrap', 'Retouching', 'Keeping the artwork, changing one thing\u2026');
   fetch('/api/images/title-retouch' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ campaignId: state.currentCampaign.id, instruction: instruction })
@@ -7857,6 +7904,10 @@ function titleBuildRetouch() {
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not retouch the title.'); return; }
+      // THE UNDO IS RECORDED BEFORE THE NEW PICTURE LANDS, from what is on the book right now.
+      // Reading it after the write would record the retouch as its own previous state.
+      var _prevUrl = (state.bookMeta && state.bookMeta.built_title_url) || '';
+      var _prevSrc = (state.bookMeta && state.bookMeta.built_title_src) || '';
       _tbShowResult(d.image);
       if (d.cut === false) {
         _tbErr('The background could not be removed -- the edit came back as a scene rather than lettering on a plain ground. Try a simpler instruction, or Generate again.');
@@ -7868,14 +7919,39 @@ function titleBuildRetouch() {
       // the title text and rebuilding is what sets the words.
       if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
         built_title_url: d.image,
-        built_title_src: d.source || ''
+        built_title_src: d.source || '',
+        built_title_prev: _prevUrl,
+        built_title_prev_src: _prevSrc
       });
       titleBuildRetouchClose();
       _tbRenderWarn();
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not retouch the title.'); })
-    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Apply change'; } });
+    .then(function () { hideBusyOverlay('title-build-imgwrap'); });
+}
+
+// v3.0.624. Undo the last retouch. Ian: "After a Retouch make sure you show the Revert button. So if
+// they dont like it they can revert back... Again... Just like we do on the Storyboard Panels."
+//
+// ONE STEP DEEP, deliberately, which is what revert_image_url on a moment and revert_reference_url on
+// a character also are. A stack would need somewhere to live and a rule for when it empties; one step
+// covers the case that actually happens -- that retouch made it worse, put it back.
+//
+// NO TOKEN. Nothing is drawn here; a picture that was already paid for is put back on the book.
+function titleBuildRevert() {
+  var prev = (state.bookMeta && state.bookMeta.built_title_prev) || '';
+  if (!prev) return;
+  var prevSrc = (state.bookMeta && state.bookMeta.built_title_prev_src) || '';
+  _tbErr('');
+  if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+    built_title_url: prev,
+    built_title_src: prevSrc,
+    built_title_prev: '',
+    built_title_prev_src: ''
+  });
+  _tbShowResult(prev);
+  _tbRenderWarn();
 }
 
 // TD-401. Take the drawn title off the book. The five presets come back to life the moment it is gone
@@ -7883,18 +7959,29 @@ function titleBuildRetouch() {
 function titleBuildRemove() {
   if (!state.currentCampaign) return;
   var archived = !!_tbArchiveRow();
-  var msg = archived
-    ? 'Take this drawn title off the book? It stays in your Archive, so you can put it back later.'
-    : 'Take this drawn title off the book?\n\nThis one is NOT in your Archive, so it will be gone for good and rebuilding it costs another token. Cancel and press Archive first if you might want it back.';
-  if (!confirm(msg)) return;
-  _tbErr('');
-  if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-    built_title_url: '', built_title_src: '', built_title_text: '', built_title_sub: ''
+  // v3.0.624 -- our own modal, not the browser one. The two cases say genuinely different things:
+  // archived means reversible, un-archived means a token is about to be thrown away, and the note
+  // line is where that distinction lives rather than being buried in a wall of confirm() text.
+  appConfirm({
+    title: 'Remove the drawn title?',
+    body: 'This takes the drawn title artwork off your cover and puts the five title styles back in charge.',
+    note: archived
+      ? 'This title is in your Archive, so you can put it back at any time with Replace.'
+      : 'This title is NOT in your Archive. Removing it is permanent, and drawing it again costs another token. Cancel and press Archive first if you might want it back.',
+    okLabel: 'Remove it',
+    danger: !archived,
+    onOk: function () {
+      _tbErr('');
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+        built_title_url: '', built_title_src: '', built_title_text: '', built_title_sub: '',
+        built_title_prev: '', built_title_prev_src: ''
+      });
+      _tbShowResult('');
+      titleBuildRetouchClose();
+      _tbRenderWarn();
+      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    }
   });
-  _tbShowResult('');
-  titleBuildRetouchClose();
-  _tbRenderWarn();
-  if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
 }
 
 // TD-402. Archive on, archive off -- the same toggle every other image in the product has.
@@ -9531,6 +9618,7 @@ function archiveFilterBarHTML(f, onchange) {
 
 function openRetouch(momentId) {
   state.retouchMomentId = momentId;
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
   state.retouchSessionCharId = null;
   state.retouchAssetId = null;
@@ -9542,6 +9630,7 @@ function openRetouch(momentId) {
 }
 
 function closeRetouch() {
+  state.retouchTitle = null;   // v3.0.624 -- Cancel must disarm it, not just Submit
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.add('hidden');
 }
@@ -9549,6 +9638,7 @@ function closeRetouch() {
 // Open the shared Retouch modal targeting an ASSET image.
 function openRetouchAsset(assetId) {
   state.retouchAssetId = assetId;
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
   state.retouchMomentId = null;
   state.retouchSessionCharId = null;
@@ -9594,6 +9684,16 @@ function revertAsset(assetId) {
 }
 
 function submitRetouch() {
+  // v3.0.624 -- the title branch leaves before the queue-and-poll branches below. A built title
+  // retouch is synchronous (see /api/images/title-retouch), so there is no job to poll for.
+  if (state.retouchTitle) {
+    var _ti = document.getElementById('retouch-instruction');
+    var _txt = _ti ? String(_ti.value || '').trim() : '';
+    if (!_txt) { if (_ti) _ti.focus(); return; }
+    closeRetouch();
+    titleBuildRetouch(_txt);
+    return;
+  }
   if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';

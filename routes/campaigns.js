@@ -289,6 +289,9 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     // The description that drew it, kept so an archived title can show its prompt like every other
     // archived image does, and so reopening the builder is not a blank Description box.
     built_title_prompt: cur.built_title_prompt || '',
+    // v3.0.624 -- the one-step undo behind Revert. Same shape as revert_image_url on a moment.
+    built_title_prev: cur.built_title_prev || '',
+    built_title_prev_src: cur.built_title_prev_src || '',
     built_title_text: cur.built_title_text || '',
     built_title_sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub)),
     book_title: cur.book_title || '',
@@ -333,6 +336,8 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // same reason it is on `subtitle` above -- a title drawn with no subtitle is a real state.
   if (b.built_title_src !== undefined) patch.built_title_src = b.built_title_src || null;
   if (b.built_title_prompt !== undefined) patch.built_title_prompt = b.built_title_prompt || null;
+  if (b.built_title_prev !== undefined) patch.built_title_prev = b.built_title_prev || null;
+  if (b.built_title_prev_src !== undefined) patch.built_title_prev_src = b.built_title_prev_src || null;
   if (b.built_title_text !== undefined) patch.built_title_text = b.built_title_text || null;
   if (b.built_title_sub !== undefined) patch.built_title_sub = (b.built_title_sub === '' ? '' : (b.built_title_sub || null));
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
@@ -388,6 +393,8 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     built_title_url: merged.built_title_url || '',
     built_title_src: merged.built_title_src || '',
     built_title_prompt: merged.built_title_prompt || '',
+    built_title_prev: merged.built_title_prev || '',
+    built_title_prev_src: merged.built_title_prev_src || '',
     built_title_text: merged.built_title_text || '',
     built_title_sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub)),
     book_title: merged.book_title || '',

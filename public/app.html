@@ -1831,25 +1831,19 @@
         <img id="title-build-img" alt="Built title" />
         <div class="panel-img-actions">
           <button class="panel-pill" id="title-build-retouch-btn" onclick="titleBuildRetouchOpen()" title="Keep this title and change just one thing. Costs a token.">Retouch</button>
+          <!-- v3.0.624 -- Revert, shown only when there is something to go back to, exactly as the
+               storyboard panel and the character reference do. A retouch costs a token and can come
+               back worse; without this the only way out was to spend another one. -->
+          <button class="panel-pill hidden" id="title-build-revert-btn" onclick="titleBuildRevert()" title="Undo the last retouch - restore the previous title">Revert</button>
           <button class="panel-pill" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
           <button class="panel-pill" id="title-build-archive-btn" onclick="titleBuildArchiveToggle()" title="Save this title to your Archive">Archive</button>
           <button class="panel-pill" onclick="titleBuildRemove()" title="Take the drawn title off the book and go back to the title styles">Remove</button>
         </div>
       </div>
     </div>
-    <!-- Retouch keeps its own instruction box rather than borrowing the shared Retouch modal. Every
-         branch of that modal submits to fal's QUEUE and polls a job; this one returns the picture
-         directly, like Generate beside it. A fifth branch shaped unlike the other four, plus a target
-         flag that all four existing openers would have to remember to clear, is a worse trade than
-         one textarea. -->
-    <div class="tb-retouch hidden" id="title-build-retouch-row">
-      <label class="form-label">Change one thing</label>
-      <textarea class="form-input" id="title-build-retouch-text" rows="2" placeholder="e.g. change the subtitle to read Episode 2"></textarea>
-      <div class="tb-ref-row">
-        <button class="btn btn-primary btn-sm has-token" id="title-build-retouch-go" onclick="titleBuildRetouch()">Apply change</button>
-        <button class="btn btn-sm" onclick="titleBuildRetouchClose()">Cancel</button>
-      </div>
-    </div>
+    <!-- v3.0.624 -- THE INLINE RETOUCH BOX IS GONE. Ian: "Handle it Just like the storyboard tab.
+         It opens a modal where you type your description." A second way to say the same thing, two
+         keystrokes from a control that already had one, is a worse cost than the shared branch. -->
     <div class="modal-footer">
       <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
       <button class="btn" onclick="closeTitleBuilder()">Done</button>
@@ -2123,6 +2117,26 @@
 </div>
 
 <!-- Confirm modal for handing off the Story Master role. -->
+<!-- v3.0.624 -- A REUSABLE CONFIRM, not a seventh single-use one. Ian: "I get a big ugly message box
+     ... Put that Message in one of our own prettier warning Modals." There are five raw confirm()
+     calls left in app.js; each existing pretty confirm in this file is bespoke to one action, which is
+     why the sixth reached for the browser instead. This one takes its words and its handler from the
+     caller so the remaining four can move across without new markup. -->
+<div class="modal-overlay hidden" id="app-confirm-modal" onclick="if(event.target===this)closeAppConfirm()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title" id="app-confirm-title">Are you sure?</div>
+      <button class="modal-close" onclick="closeAppConfirm()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:8px;" id="app-confirm-body"></p>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;" id="app-confirm-note"></p>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAppConfirm()">Cancel</button>
+      <button class="btn btn-primary" id="app-confirm-ok" onclick="appConfirmAccept()">Yes</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="confirm-make-dm-modal" onclick="if(event.target===this)closeMakeDmConfirm()">
   <div class="modal" style="max-width:460px;">
     <div class="modal-header">

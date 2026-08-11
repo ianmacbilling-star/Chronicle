@@ -2232,17 +2232,45 @@ var COVER_TITLE_FACE = { chronicle: null, engraved: null, pulp: null, manuscript
 // a cover. The Campaignia logo is currently written three times across them (TD-394) and that is
 // exactly how a thing ends up on screen and missing in print. This is a function.
 var BUILT_TITLE_BASE_PCT = 76;   // of the caption width at medium; the caption is already inset
+// v3.0.624 -- THE SCRIM NOW BELONGS TO THE TITLE ART, NOT TO THE CAPTION.
+//
+// Ian: "Make the Caption Scrim / Cover art Fade (the darker area behind the title image) just
+// slightly bigger than the image... So if the image/title art is resized it should resize with it."
+//
+// The caption scrim is a fixed 52 percent band with a gradient, so it could not follow a title that
+// changes width with titleSize. This halo is drawn on a wrapper that IS the artwork box, so its
+// size is the artwork size by construction rather than by a second number kept in step.
+//
+// BOX-SHADOW, NOT A GRADIENT, AND THAT IS MEASURED RATHER THAN PREFERRED. On 2026-08-11 the caption
+// gradient was found absent from the optimized render while cover-art-fade -- an inset box-shadow on
+// the element beside it -- survived in the same picture (edge/centre 0.292 before, 0.320 after; the
+// title band went 0.385 to 1.246 of mid-art). Whatever TD-406 turns out to be, box-shadow is the
+// primitive that was watched surviving that path and a gradient is the one that was not.
+//
+// THE BLUR AND SPREAD SCALE WITH r, the same ratio that sets the width. One number decides how big
+// the artwork is and how big its shadow is, so Large cannot end up with a Medium halo.
+//
+// AND THE CAPTION GRADIENT IS SWITCHED OFF while a built title is showing. Leaving it would stack
+// two scrims in the preview and one in print, which is the inconsistency Ian reported in the first
+// place. One title, one shadow, and the two views agree.
 function builtTitleCss(size) {
   var r = Object.prototype.hasOwnProperty.call(COVER_SIZE_RATIO, String(size || 'medium'))
     ? COVER_SIZE_RATIO[String(size || 'medium')] : 1;
   // Capped at 96 so Large cannot push the artwork past the caption and into the frame.
   var pct = Math.min(96, Math.round(BUILT_TITLE_BASE_PCT * r));
-  return '.cover-built-title { display:block; margin:0 auto; width:' + pct + '%; height:auto;' +
+  var blur = Math.round(56 * r), spread = Math.round(30 * r);
+  return '.cover-art-caption { background:none; }' +
+         ' .cover-built-wrap { position:relative; display:block; width:' + pct + '%; margin:0 auto; }' +
+         ' .cover-built-wrap::before { content:""; position:absolute; inset:-3% -4%; border-radius:50%;' +
+         ' background:rgba(10,6,4,0.85); box-shadow:0 0 ' + blur + 'px ' + spread + 'px rgba(10,6,4,0.85);' +
+         ' -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
+         ' .cover-built-title { position:relative; display:block; width:100%; height:auto;' +
          ' object-fit:contain; }';
 }
 function builtTitleHtml(url) {
   if (!url) return '';
-  return '<img class="cover-built-title" src="' + String(url).replace(/"/g, '&quot;') + '" alt="" />';
+  return '<div class="cover-built-wrap"><img class="cover-built-title" src="' +
+         String(url).replace(/"/g, '&quot;') + '" alt="" /></div>';
 }
 function coverTitleFaceCss(key) {
   var k = String(key || 'chronicle');
