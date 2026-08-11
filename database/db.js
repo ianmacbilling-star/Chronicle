@@ -1988,6 +1988,23 @@ async function getVersionRow(db, versionId) {
 // owned by whoever has the dm flag on the campaign but access to it is shared to the members."
 // So the canonical row carries user_id NULL and the answer comes from campaign_members. A second
 // stored copy would be free to drift, and it would go stale the first time a campaign changes hands.
+// ownsBookVersion: does this user own the version whose book is on screen?
+//
+// v3.0.622 -- EXTRACTED, not copied. This test was written out longhand inside the my-book-meta PUT,
+// and TD-401/402/405 needed it in three more places (archive a title, restore one, retouch one). Four
+// hand-written copies of a permission check is how one of them ends up disagreeing with the other
+// three, and the one that disagrees is the one that lets a write through.
+//
+// A version id of null/0 means there is no version scope to test, which is NOT a refusal -- the
+// my-book-meta fork check has already run by then and is the thing guarding that case.
+async function ownsBookVersion(db, uid, bookVersionId) {
+  if (!bookVersionId) return true;
+  const vw = await db.prepare('SELECT id, campaign_id, user_id, is_canonical FROM campaign_versions WHERE id = ?').get(bookVersionId);
+  let owner = null;
+  try { owner = vw ? await versionOwnerUserId(db, vw) : null; } catch (e) { owner = null; }
+  return owner != null && String(owner) === String(uid);
+}
+
 async function versionOwnerUserId(db, version) {
   if (!version) return null;
   if (!version.is_canonical) return version.user_id;
@@ -2238,4 +2255,4 @@ async function getAppSettingInt(key, def) {
   } catch (e) { return def; }
 }
 
-module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };
+module.exports = { getDb, resolveActingFork, requestedForkIdOf, isPostgres, getOrCreateDmFork, getDmForkId, getViewableForkId, effectiveIncludeMap, effectiveBookMeta, getForkBookPrefs, setForkBookPrefs, getAppSettingInt, requestedVersionIdOf, getVersionRow, versionOwnerUserId, ownsBookVersion, resolveBookVersion, bookForkForSession, prefsVersionId, bookPrefsScope, getOrCreateCanonicalVersion, versionsForCampaign, versionStyleDefaults, versionPriorCharacterLooks };

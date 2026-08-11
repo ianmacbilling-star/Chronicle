@@ -163,4 +163,211 @@ function cutWhiteToAlpha(buf) {
   }
 }
 
-module.exports = { cutWhiteToAlpha, CUT_HI, CUT_LO };
+// =====================================================================================================
+// GROUND-BY-CONNECTIVITY ALPHA CUT (TD-357)
+// =====================================================================================================
+// cutWhiteToAlpha decides by COLOUR: bright enough is ground. That is right for character references,
+// which are generated on a white ground and drawn in ink. It is WRONG for a built title.
+//
+// Ian sent six reference titles -- GALARE EMPIRE in silver, STARLESS KINGDOM in white, BLOOD CROWN in a
+// red gradient, SPRING COURT in pale gold -- every one of them LIGHT LETTERING ON BLACK. A colour cut
+// would erase the letters along with the sky. Those looks also only exist BECAUSE of the dark field:
+// the metallic edges and the glow have nothing to sit against on white.
+//
+// So this decides by DISTANCE FROM THE MEASURED GROUND rather than by brightness. The reference point
+// is read from the image itself, so gold on black, black on cream and a gradient all behave alike --
+// which a fixed brightness threshold cannot do.
+// v3.0.621: it also does NOT require a pixel to be reachable from the border. It used to, and that
+// left a solid plug inside every closed letterform. See the note at the flood site below.
+//
+// THE SEED COLOUR IS THE FOUR CORNERS, not a constant, and it is a MEDIAN rather than an average: a
+// single speckle in one corner -- and every one of Ian's references has gold flecks scattered over the
+// black -- would drag a mean but cannot move a median.
+//
+// THE EDGE RAMP MATTERS MORE HERE THAN ANYWHERE. A hard in/out boundary leaves a jagged fringe on every
+// antialiased letterform, which on a printed cover looks worse than the box it replaced. So a pixel is
+// scored by DISTANCE from the ground colour: at or below NEAR it is ground, at or above FAR it is ink,
+// and between them alpha ramps. v3.0.621 removed the extra condition that a pixel also be reachable
+// from the border, because that is what kept a solid plug inside every closed letterform.
+//
+// FAIL-SOFT, exactly like its sibling: anything unexpected returns the original buffer. A title with a
+// rectangle behind it is ugly; a title that fails to load is a broken cover.
+const GROUND_NEAR = 26;    // within this distance of the ground colour: fully transparent
+const GROUND_FAR  = 74;    // beyond this: fully opaque. Between: ramp. Measured against Ian's references,
+                           // whose flecks sit far outside 74 and whose antialiasing sits inside it.
+function cutGroundToAlpha(buf) {
+  try {
+    if (!Buffer.isBuffer(buf) || buf.length < 8 || !buf.slice(0, 8).equals(PNG_SIG)) return buf;
+    let p = 8, width = 0, height = 0, depth = 0, ctype = -1, interlace = 0;
+    const idat = [];
+    while (p + 8 <= buf.length) {
+      const len = buf.readUInt32BE(p);
+      const type = buf.slice(p + 4, p + 8).toString('ascii');
+      const data = buf.slice(p + 8, p + 8 + len);
+      if (type === 'IHDR') {
+        width = data.readUInt32BE(0); height = data.readUInt32BE(4);
+        depth = data[8]; ctype = data[9]; interlace = data[12];
+      } else if (type === 'IDAT') idat.push(data);
+      else if (type === 'IEND') break;
+      p += 12 + len;
+    }
+    if (depth !== 8 || interlace !== 0) return buf;
+    if (ctype !== 2 && ctype !== 6) return buf;
+    if (!width || !height || !idat.length) return buf;
+    if (width * height > 40e6) return buf;
+
+    const bpp = (ctype === 6) ? 4 : 3;
+    const raw = unfilter(zlib.inflateSync(Buffer.concat(idat)), width, height, bpp);
+    if (!raw) return buf;
+
+    const at = (x, y) => (y * width + x) * bpp;
+    const med = (arr) => arr.slice().sort((a, b) => a - b)[arr.length >> 1];
+    const corners = [[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]];
+    const gr = med(corners.map(c => raw[at(c[0], c[1])]));
+    const gg = med(corners.map(c => raw[at(c[0], c[1]) + 1]));
+    const gb = med(corners.map(c => raw[at(c[0], c[1]) + 2]));
+    const dist = (i) => {
+      const dr = raw[i] - gr, dg = raw[i + 1] - gg, db = raw[i + 2] - gb;
+      return Math.sqrt(dr * dr + dg * dg + db * db);
+    };
+
+    // v3.0.621 -- THE COUNTERS. Ian: "one thing you need to make sure you make transparent is the
+    // closed spaces inside the lettering."
+    //
+    // WHAT WAS HERE AND WHY IT WAS WRONG. v3.0.618 flooded inward from the border and only made
+    // REACHABLE pixels transparent. A counter -- the hole in an O, A, e, R -- is enclosed by ink, so
+    // the flood can never reach it: every closed letterform kept a solid blob of ground colour inside
+    // it, which over cover art is a black plug in every O. The harness even asserted it, on purpose,
+    // to protect a pale shape sitting in the middle of a pale ground.
+    //
+    // THAT CASE CANNOT ARISE HERE. The prompt DEMANDS a flat solid black ground, so "a light shape
+    // enclosed by ink that happens to match the sky" is not an input this function receives. The
+    // connectivity test was guarding against something that does not happen, at the cost of the thing
+    // that happens in almost every title.
+    //
+    // So the decision is now purely COLOUR DISTANCE from the measured ground: near it is ground
+    // wherever it sits, enclosed or not. The median-corner seed and the edge ramp are unchanged --
+    // they are what stop a gold fleck moving the reference point and what keep antialiased edges from
+    // fringing.
+    //
+    // THE EXPOSURE THIS OPENS, stated rather than discovered: a letter's own black OUTLINE or drop
+    // shadow on a black ground is also near-ground and will thin or vanish. The flood had the same
+    // problem wherever an outline touched the sky; this makes it general. If outlines start
+    // disappearing, the answer is a tighter GROUND_NEAR, not the return of the flood.
+
+    const stride = width * 4;
+    const out = Buffer.alloc(height * (stride + 1));
+    let cut = 0;
+    for (let y = 0; y < height; y++) {
+      const doff = y * (stride + 1);
+      out[doff] = 0;
+      for (let x = 0; x < width; x++) {
+        const s = at(x, y), d = doff + 1 + x * 4;
+        const a0 = (bpp === 4) ? raw[s + 3] : 255;
+        let a = 255;
+        const dd = dist(s);
+        if (dd <= GROUND_NEAR) { a = 0; cut++; }
+        else if (dd < GROUND_FAR) a = Math.round(255 * (dd - GROUND_NEAR) / (GROUND_FAR - GROUND_NEAR));
+        out[d] = raw[s]; out[d + 1] = raw[s + 1]; out[d + 2] = raw[s + 2];
+        out[d + 3] = Math.min(a0, a);
+      }
+    }
+    // Nothing meaningful removed means there was no ground to remove -- keep the original bytes rather
+    // than rewriting the file and discarding whatever else its chunks carried.
+    if (cut < width * height * 0.02) return buf;
+
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
+    ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+    return Buffer.concat([
+      PNG_SIG,
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(out, { level: 9 })),
+      chunk('IEND', Buffer.alloc(0))
+    ]);
+  } catch (e) {
+    console.error('cutGroundToAlpha failed, keeping the original image:', e.message);
+    return buf;
+  }
+}
+
+// =====================================================================================================
+// FLATTEN A TRANSPARENT PNG ONTO A SOLID COLOUR  (TD-402)
+// =====================================================================================================
+// The inverse of the two cuts above, and it exists for ONE caller: handing an archived built title back
+// to the image model as a REFERENCE.
+//
+// A built title is stored CUT -- real alpha where the ground used to be. A reference image is fetched by
+// fal and decoded by fal, and what it paints behind the alpha is not ours to decide: it may be black,
+// white, or nothing at all. So the reference we would be handing over is not the picture we can see.
+//
+// WHY NOT BLACK, which is what our own prompt asks the model to draw on. Because the LETTERING may be
+// dark. Ian's PETALS OF BLOOD reference is black letterforms with yellow patterning: paint black behind
+// a title drawn like that and the letters go with the ground. The backing has to be a colour that no
+// lettering ever is, so every part of the artwork survives it -- and then the prompt is told to ignore
+// the colour it is looking at. See TB_REF_BACK in routes/images.js, which owns both halves of that.
+//
+// EMITS COLOUR TYPE 2 (RGB, no alpha), deliberately: after this there is nothing left to be transparent,
+// and an opaque image is the thing the model is being asked to look at.
+//
+// FAIL-SOFT, like its siblings -- and the caller can TELL, because failure returns the very buffer it was
+// given. `out === buf` means no colour was laid down, which is what routes/images.js keys the prompt
+// sentence off. A claim in a prompt that the picture does not bear is worse than no claim at all.
+function flattenOntoColour(buf, fr, fg, fb) {
+  try {
+    if (!Buffer.isBuffer(buf) || buf.length < 8 || !buf.slice(0, 8).equals(PNG_SIG)) return buf;
+
+    let p = 8, width = 0, height = 0, depth = 0, ctype = -1, interlace = 0;
+    const idat = [];
+    while (p + 8 <= buf.length) {
+      const len = buf.readUInt32BE(p);
+      const type = buf.slice(p + 4, p + 8).toString('ascii');
+      const data = buf.slice(p + 8, p + 8 + len);
+      if (type === 'IHDR') {
+        width = data.readUInt32BE(0); height = data.readUInt32BE(4);
+        depth = data[8]; ctype = data[9]; interlace = data[12];
+      } else if (type === 'IDAT') idat.push(data);
+      else if (type === 'IEND') break;
+      p += 12 + len;
+    }
+
+    if (depth !== 8 || interlace !== 0) return buf;
+    if (ctype !== 6) return buf;              // type 2 has no alpha: there is nothing to flatten
+    if (!width || !height || !idat.length) return buf;
+    if (width * height > 40e6) return buf;
+
+    const raw = unfilter(zlib.inflateSync(Buffer.concat(idat)), width, height, 4);
+    if (!raw) return buf;
+
+    const stride = width * 3;
+    const out = Buffer.alloc(height * (stride + 1));
+    for (let y = 0; y < height; y++) {
+      const so = y * width * 4, doff = y * (stride + 1);
+      out[doff] = 0;                          // filter type 0, same as the cuts: simplest to verify
+      for (let x = 0; x < width; x++) {
+        const s = so + x * 4, d = doff + 1 + x * 3;
+        const a = raw[s + 3] / 255;
+        // Source-over onto an opaque backing. The stored pixels are NOT premultiplied -- the cuts
+        // above write colour and alpha independently -- so this is the straight lerp, not a divide.
+        out[d]     = Math.round(raw[s]     * a + fr * (1 - a));
+        out[d + 1] = Math.round(raw[s + 1] * a + fg * (1 - a));
+        out[d + 2] = Math.round(raw[s + 2] * a + fb * (1 - a));
+      }
+    }
+
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
+    ihdr[8] = 8; ihdr[9] = 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+    return Buffer.concat([
+      PNG_SIG,
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(out, { level: 9 })),
+      chunk('IEND', Buffer.alloc(0))
+    ]);
+  } catch (e) {
+    console.error('flattenOntoColour failed, keeping the original image:', e.message);
+    return buf;
+  }
+}
+
+module.exports = { cutWhiteToAlpha, cutGroundToAlpha, flattenOntoColour, CUT_HI, CUT_LO, GROUND_NEAR, GROUND_FAR };

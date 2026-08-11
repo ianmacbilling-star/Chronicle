@@ -204,6 +204,40 @@ function refreshTokenBalance() {
 // Optional `sublabel` shows a smaller line of descriptive text below the
 // main label (used for cycling status messages in the character flows).
 // `target` may be an Element or an element id string.
+// v3.0.624 -- ONE CONFIRM FOR EVERYONE. Ian, on the browser confirm() behind Remove: "Put that
+// Message in one of our own prettier warning Modals." The handler is held on state rather than in a
+// closure on the button so a second open cannot leave the first one wired underneath it.
+function appConfirm(opts) {
+  var o = opts || {};
+  state._appConfirmFn = (typeof o.onOk === "function") ? o.onOk : null;
+  var t = document.getElementById("app-confirm-title"); if (t) t.textContent = o.title || "Are you sure?";
+  var b = document.getElementById("app-confirm-body");  if (b) b.textContent = o.body || "";
+  var n = document.getElementById("app-confirm-note");
+  if (n) { n.textContent = o.note || ""; n.style.display = o.note ? "" : "none"; }
+  // v3.0.635 -- NOTICE MODE IS GONE, REPLACED BY A LABELLED CANCEL. v3.0.634 hid the second button
+  // on the theory that a refusal has nothing to cancel. Ian: "Put an Upgrade My Plan button and
+  // take them to the plans on the My Account page." A refusal that offers a way forward needs BOTH
+  // buttons -- the way forward and the way out -- so the one-button mode had no user left.
+  //
+  // Found by id now rather than by a :not() chain on the footer. That selector picked the button by
+  // what it was NOT, so giving the cancel a danger class or adding a third button would have
+  // silently matched something else.
+  var cancelBtn = document.getElementById('app-confirm-cancel');
+  if (cancelBtn) cancelBtn.textContent = o.cancelLabel || 'Cancel';
+  var ok = document.getElementById("app-confirm-ok");
+  if (ok) { ok.textContent = o.okLabel || "Yes"; ok.className = "btn " + (o.danger ? "btn-danger" : "btn-primary"); }
+  var m = document.getElementById("app-confirm-modal"); if (m) m.classList.remove("hidden");
+}
+function closeAppConfirm() {
+  state._appConfirmFn = null;
+  var m = document.getElementById("app-confirm-modal"); if (m) m.classList.add("hidden");
+}
+function appConfirmAccept() {
+  var fn = state._appConfirmFn;
+  closeAppConfirm();          // cleared BEFORE running, so a handler that opens another confirm works
+  if (fn) fn();
+}
+
 function showBusyOverlay(target, label, sublabel) {
   var el = (typeof target === 'string') ? document.getElementById(target) : target;
   if (!el) return null;
@@ -3765,7 +3799,7 @@ function resetCustomStyleForm() {
 }
 function openCustomStylesView() {
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    showAlert('Custom Art Styles are a Platinum feature. Upgrade to Platinum to build and use your own art styles.');
+    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.');
     return;
   }
   showView('custom-styles');
@@ -3775,7 +3809,7 @@ function openCustomStylesView() {
 }
 function openCustomStyles() {
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    showAlert('Custom Art Styles are a Platinum feature. Upgrade to Platinum to build and use your own art styles.');
+    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.');
     return;
   }
   resetCustomStyleForm();
@@ -5366,6 +5400,7 @@ function regenCharRef(charId) {
 
 // Open the shared Retouch modal targeting a CHARACTER reference (vs a moment).
 function openRetouchChar(charId) {
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = charId;
   state.retouchMomentId = null;
   state.retouchSessionCharId = null;
@@ -5382,6 +5417,7 @@ function openRetouchChar(charId) {
 // openRetouch (moment) via state.retouchSessionCharId.
 function openRetouchSessionChar(charId) {
   state.retouchSessionCharId = charId;
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
   state.retouchMomentId = null;
   state.retouchAssetId = null;
@@ -7439,7 +7475,20 @@ function _prepMetaWrite(patch, cb) {
   var url = '/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?');
   var run = function () {
     return fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      // v3.0.626 -- A REFUSED SAVE USED TO BE COMPLETELY SILENT.  threw the
+      // server's reason away, so a 403 here looked exactly like nothing happening: the built title
+      // appeared in the modal, never reached the book, and no message said why. Ian hit this and had
+      // to read it out of the browser console. The two 403s this route can return say different
+      // things -- wrong fork versus wrong version owner -- and neither was reaching the screen.
+      .then(function (r) {
+        if (r.ok) return r.json();
+        return r.json().catch(function () { return null; }).then(function (e) {
+          var msg = (e && (e.error || e.message)) || ('The server refused that change (' + r.status + ').');
+          try { console.error('my-book-meta ' + r.status + ': ' + msg); } catch (_c) {}
+          if (typeof showAlert === 'function') showAlert(msg);
+          return null;
+        });
+      })
       .then(function (m) {
         // Clear the keys this write owned, and only where nothing newer has queued behind us with a
         // different value for the same field.
@@ -7485,6 +7534,9 @@ function prepSaveSubtitle() {
   var _was = (state.bookMeta && state.bookMeta.subtitle != null) ? String(state.bookMeta.subtitle) : '';
   if (_now === _was) return;
   _prepMetaWrite({ subtitle: _now });   // v3.0.578 -- chained, and kept locally until confirmed
+  // v3.0.622 -- TD-357(2). The drawn title still spells the old subtitle, and this is the instant it
+  // stopped being true. Nothing is invalidated; the note simply appears.
+  if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
 }
 // v3.0.575 -- THE TITLE IS SAVED. IT NEVER WAS.
 // The one and only client write of book_title lived inside publishStory(), so a title existed as
@@ -7511,6 +7563,8 @@ function prepSaveTitle() {
   _prepMetaWrite({ book_title: _t });   // v3.0.578 -- sets state.bookMeta itself, chained, kept until confirmed
   // Keep the Order tab's mirror in step immediately, for the case where it has already been drawn.
   var _pt = document.getElementById('print-book-title'); if (_pt) _pt.value = _t;
+  // v3.0.622 -- TD-357(2), same reason as prepSaveSubtitle above.
+  if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
 }
 // v3.0.575 -- MATERIALISE THE BOOK SETTINGS INTO THE VERSION THE FIRST TIME PREP OPENS IT.
 // Ian, 2026-08-09: "save the title and really all the other layout settings the moment the main
@@ -7567,6 +7621,489 @@ function prepMaterializeBookMeta() {
     });
   } catch (e) {}
 }
+// =================================================================================================
+// TITLE BUILDER (TD-357), STAGE ONE. Ian, 2026-08-10: a modal like the Assets one, a label for the
+// title and one for the subtitle, a description, an optional reference, and a Generate button that
+// costs a token every press.
+//
+// THE TITLE AND SUBTITLE ARE LABELS, NOT FIELDS, and that is a correctness decision rather than a
+// styling one: the words belong to the BOOK. The server reads them from the version at generation
+// time; these labels only show what it will use. A typed box here could make the artwork say
+// something the book does not, and the artwork is the thing a reader believes over the metadata.
+//
+// STAGE ONE DOES NOT COMPOSE THE RESULT ONTO THE COVER. It generates, cuts the ground to real alpha
+// and stores it on the version. Composition, and switching the style dropdown off while a built title
+// is active, is stage two -- which touches all three cover paths at once and should not be mixed with
+// the question this stage exists to answer: can the model letter a six-word title reliably.
+function _tbEl(id) { return document.getElementById(id); }
+function _tbErr(msg) {
+  var e = _tbEl('title-build-error');
+  if (!e) return;
+  e.textContent = msg || '';
+  e.classList.toggle('hidden', !msg);
+}
+// The subtitle follows the SAME rule the cover does (v3.0.596): never set means nothing is drawn, not
+// the session dates. Showing dates here would promise a subtitle the render will not draw.
+function _tbSubtitle() {
+  var raw = (state.bookMeta && state.bookMeta.subtitle != null) ? String(state.bookMeta.subtitle).trim() : '';
+  return raw;
+}
+function _tbTitle() {
+  var t = (state.bookMeta && state.bookMeta.book_title) ? String(state.bookMeta.book_title).trim() : '';
+  if (!t && state.currentCampaign) t = String(state.currentCampaign.name || '').trim();
+  return t;
+}
+// _tbBookKey: which book the modal is currently showing. Campaign AND version, because switching
+// either one puts a different book on screen.
+function _tbBookKey() {
+  var c = state.currentCampaign ? state.currentCampaign.id : '';
+  var v = (typeof bookMetaVersionId === 'function') ? (bookMetaVersionId() || '') : '';
+  return String(c) + '/' + String(v);
+}
+// platinumGate: the refusal every Platinum-only tool shows, in ONE place.
+//
+// v3.0.635 -- Ian: "Put an Upgrade My Plan button and take them to the plans on the My Account
+// page. Create a similar Message for the Custom Art Styles... Right now it just gives a Toast
+// saying you cant use them."
+//
+// goToPlans ALREADY EXISTS and its own note says a later See Plans gate should reuse it -- it
+// switches to the account view and re-scrolls five times over a second, because that page fills
+// its panels in asynchronously and a single scroll lands short. Writing a second navigation here
+// would have been a second thing to keep in step with that page.
+//
+// A MODAL, NOT A TOAST. showAlert slides in at the top right for two and a half seconds, which is
+// easy to miss right after clicking, when you are looking at where you clicked -- and it has
+// nowhere to put an Upgrade button.
+function platinumGate(what, why) {
+  appConfirm({
+    title: what + ' is a Platinum feature',
+    body: why,
+    note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
+    okLabel: 'Upgrade My Plan',
+    cancelLabel: 'Not now',
+    onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
+  });
+}
+
+function openTitleBuilder() {
+  if (!state.currentCampaign) return;
+  // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
+  // the title builder. When I hit the button I should get a message stating such."
+  //
+  // state.user.tier is the account's OWN tier, which is what "true Platinum" means -- a Gold player
+  // in a Platinum Story Master's campaign gets Platinum art on the book but not Platinum tools. The
+  // six routes behind this modal make the same test server-side; this one only saves a round trip.
+  //
+  // A MODAL, NOT A TOAST. The Custom Art Style gate uses showAlert, which slides in at the top right
+  // for two and a half seconds -- easy to miss when you have just clicked something and are looking
+  // at where you clicked. This one has to be read. Worth aligning the two later.
+  if (!(state && state.user && state.user.tier === 'platinum')) {
+    platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen colour, size and placement.');
+    return;
+  }
+  _tbErr('');
+  var t = _tbTitle(), sub = _tbSubtitle();
+  var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || 'This book has no title yet';
+  var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
+
+  // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
+  // that nothing ever cleared, so a reference chosen on one book stayed selected across version
+  // switches, campaign switches and reloads -- DOM state impersonating book state. Ian found it.
+  //
+  // It is stamped with the book it was chosen under rather than blanked on every open: clearing
+  // unconditionally would also throw the reference away when you close the modal to check a subtitle
+  // and come straight back, which is a thing you do far more often than you switch books.
+  var key = _tbBookKey();
+  if (state._tbRefKey !== key) { titleBuildClearRef(); state._tbRefKey = key; }
+
+  // Seed the description from what actually drew this title, so reopening shows the words that
+  // produced the picture on screen instead of an empty box.
+  var dEl = _tbEl('title-build-desc');
+  if (dEl && !dEl.value && state.bookMeta && state.bookMeta.built_title_prompt) dEl.value = state.bookMeta.built_title_prompt;
+
+  // Show whatever this version already has, so reopening is not a blank slate.
+  // v3.0.618 -- built_title_url, NOT title_image_url. That one is the book title PAGE artwork, the
+  // third image in the Prep panel, and v3.0.617 both displayed it here and would have overwritten
+  // it on the first Generate. Ian spotted it before it cost him anything.
+  var existing = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  _tbShowResult(existing);
+  titleBuildRetouchClose();
+  _tbRenderWarn();
+  var m = _tbEl('title-build-modal'); if (m) m.classList.remove('hidden');
+  // The Archive pill has to know whether THIS picture is already in the chest, and that answer lives
+  // in the archive list rather than on the book. Loaded after the modal is shown so the panel is not
+  // held back by a fetch; the pill settles a moment later.
+  if (existing && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill);
+}
+
+// _tbArchiveRow: the archive entry for the title currently on the book, if there is one. Matched on
+// source_url -- the archive records the LIVE url it was taken from, which is exactly this field.
+function _tbArchiveRow() {
+  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  if (!url) return null;
+  return (state.archives || []).find(function (a) {
+    return a.image_type === 'title' && String(a.source_url || '') === String(url);
+  }) || null;
+}
+function _tbSyncArchivePill() {
+  var btn = _tbEl('title-build-archive-btn');
+  if (!btn) return;
+  var row = _tbArchiveRow();
+  btn.className = 'panel-pill' + (row ? ' is-on' : '');
+  btn.textContent = row ? 'Archived' : 'Archive';
+  btn.title = row ? 'In your Archive - click to remove it from the Archive' : 'Save this title to your Archive';
+}
+
+// _tbWarnText: the ONE place that decides whether the drawn title still says what the book says.
+// Returns '' when there is nothing to say. Used by the modal and by the Prep panel note, so the two
+// can never disagree about whether there is a mismatch.
+function _tbWarnText() {
+  var bm = state.bookMeta || {};
+  if (!bm.built_title_url) return '';
+  // A title built before v3.0.622 recorded no words, so there is nothing to compare and we say so
+  // rather than guessing that it matches.
+  if (!bm.built_title_text) return '';
+  var nowT = _tbTitle();
+  var nowS = _tbSubtitle();
+  var wasT = String(bm.built_title_text || '');
+  var wasS = (bm.built_title_sub == null) ? '' : String(bm.built_title_sub);
+  var parts = [];
+  if (nowT !== wasT) parts.push('the title now reads \u201c' + nowT + '\u201d but the drawing still says \u201c' + wasT + '\u201d');
+  if (String(nowS || '') !== wasS) parts.push('the subtitle now reads \u201c' + (nowS || 'nothing') + '\u201d but the drawing still says \u201c' + (wasS || 'nothing') + '\u201d');
+  if (!parts.length) return '';
+  return 'Your drawn title is out of step with the book: ' + parts.join(', and ') +
+         '. The cover will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to the title styles.';
+}
+function _tbRenderWarn() {
+  var el = _tbEl('title-build-warn');
+  if (!el) return;
+  var msg = _tbWarnText();
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
+}
+// v3.0.620 -- DONE REPAINTS THE BOOK. Ian: "when you hit done it should refresh and have the new
+// title picture on the book based on those other attributes." The preview is an iframe whose src
+// carries the book query, so it does not know the version gained a built title until it is reloaded.
+// loadNovelPreview is the same call the layout controls make after an Apply, so this is the path that
+// already exists rather than a second way to repaint.
+function closeTitleBuilder() {
+  var m = _tbEl('title-build-modal'); if (m) m.classList.add('hidden');
+  try { if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); } catch (e) {}
+}
+function _tbShowResult(url) {
+  // v3.0.622 -- the wrapper carries hidden now, not the image. The pills are children of the wrapper
+  // and are positioned against it, so hiding the img alone would leave four buttons floating over an
+  // empty box.
+  var img = _tbEl('title-build-img'), wrap = _tbEl('title-build-imgwrap'), empty = _tbEl('title-build-empty');
+  if (url) {
+    if (img) img.src = url;
+    if (wrap) wrap.classList.remove('hidden');
+    if (empty) empty.classList.add('hidden');
+  } else {
+    if (img) img.removeAttribute('src');
+    if (wrap) wrap.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+  }
+  _tbSyncArchivePill();
+  // The Revert pill exists only when there is something to go back to, like the storyboard.
+  var rv = _tbEl('title-build-revert-btn');
+  if (rv) rv.classList.toggle('hidden', !(url && state.bookMeta && state.bookMeta.built_title_prev));
+  // v3.0.629 -- there is a Replace in BOTH states and only ever one on screen. The empty-state one
+  // exists so the Archive is reachable before a token has been spent; hiding it here rather than
+  // relying on tb-empty being hidden keeps the two strips from ever showing together if that
+  // toggling changes.
+  var er = _tbEl('title-build-empty-replace');
+  if (er) er.classList.toggle('hidden', !!url);
+}
+
+// _tbSetRef: the ONE writer of the reference. Everything that chooses a reference -- upload, drop,
+// From Archive, Clear -- comes through here, so the hidden input, the preview and the Clear button
+// cannot end up describing three different states.
+function _tbSetRef(url) {
+  var ref = _tbEl('title-build-ref'); if (ref) ref.value = url || '';
+  var img = _tbEl('title-build-ref-img');
+  var empty = _tbEl('title-build-drop-empty');
+  var clear = _tbEl('title-build-ref-clear');
+  if (url) {
+    if (img) { img.src = url; img.classList.remove('hidden'); }
+    if (empty) empty.classList.add('hidden');
+    if (clear) clear.classList.remove('hidden');
+  } else {
+    if (img) { img.removeAttribute('src'); img.classList.add('hidden'); }
+    if (empty) empty.classList.remove('hidden');
+    if (clear) clear.classList.add('hidden');
+  }
+}
+function titleBuildClearRef() { _tbSetRef(''); }
+function titleBuildPickFile() { var f = _tbEl('title-build-file'); if (f) f.click(); }
+
+// Drag and drop, mirroring handleAssetDragOver/Leave/Drop exactly. Ian: "make it so you can drag and
+// drop a picture in as the reference like other areas."
+function handleTitleRefDragOver(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = _tbEl('title-build-drop'); if (z) z.classList.add('drag-over');
+}
+function handleTitleRefDragLeave(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = _tbEl('title-build-drop'); if (z) z.classList.remove('drag-over');
+}
+function handleTitleRefDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = _tbEl('title-build-drop'); if (z) z.classList.remove('drag-over');
+  var files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files[0]) _tbSendRefFile(files[0]);
+}
+// v3.0.618 -- UPLOAD A REFERENCE. Ian wants to drop in a sheet of lettering he likes, so the file goes
+// to R2 first and the generator is handed the URL. Nothing is charged: this only stores a picture.
+function titleBuildUpload(input) {
+  var f = input && input.files && input.files[0];
+  if (!f) return;
+  _tbSendRefFile(f);
+  try { input.value = ''; } catch (e) {}
+}
+// One sender for both the file picker and the drop zone, so a dropped file and a chosen file cannot
+// take different paths to the same field.
+function _tbSendRefFile(file) {
+  _tbErr('');
+  var fd = new FormData();
+  fd.append('image', file);
+  fetch('/api/images/title-ref', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error || !d.url) { _tbErr((d && (d.message || d.error)) || 'Could not store that image.'); return; }
+      _tbSetRef(d.url);
+    })
+    .catch(function () { _tbErr('Could not store that image.'); });
+}
+function titleBuildGenerate() {
+  if (!state.currentCampaign) return;
+  var t = _tbTitle();
+  if (!t) { _tbErr('Give the book a title first.'); return; }
+  _tbErr('');
+  var btn = _tbEl('title-build-go');
+  if (btn) { btn.disabled = true; btn.textContent = 'Drawing...'; }
+  // v3.0.629 -- ALWAYS, AND ON THE RESULT BOX. Ian: "make it so when you hit generate it does the
+  // same progress circling the retouch does." v3.0.624 gated this on artwork already existing AND
+  // anchored it to title-build-imgwrap -- which is the element that is HIDDEN until there is
+  // artwork. So on the first Generate, the one time you most want to see something happening, the
+  // overlay was skipped; and had it not been, it would have been mounted on a hidden div anyway.
+  // Two faults agreeing to look like one working feature. title-build-result is on screen in both
+  // states, which is the only requirement an overlay actually has.
+  showBusyOverlay('title-build-result', 'Generating', 'Drawing your title\u2026');
+  var body = {
+    campaignId: state.currentCampaign.id,
+    bookTitle: t,
+    subtitle: _tbSubtitle(),
+    description: (_tbEl('title-build-desc') || {}).value || '',
+    referenceUrl: (_tbEl('title-build-ref') || {}).value || ''
+  };
+  fetch('/api/images/title-build', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not build the title.'); return; }
+      _tbShowResult(d.image);
+      // v3.0.619 -- SAY SO WHEN THE GROUND DID NOT COME OFF. The cut returns the original bytes when it
+      // cannot find a ground, so a photographic reference produces an opaque rectangle that looks like
+      // any other result. Without this, every failure looks the same as every success.
+      if (d.cut === false) {
+        _tbErr('The background could not be removed -- this came back as a scene rather than lettering on a plain ground. Try again, or use a reference that is lettering only.');
+      }
+      // Stored on the VERSION, through the same endpoint the cover images use, so it forks with the
+      // book rather than following the browser.
+      // v3.0.622 -- FIVE FIELDS, ONE WRITE. The artwork, the uncut original behind it, the words it
+      // has drawn on it and the description that drew them all describe one picture; writing them in
+      // separate calls is how a book ends up with a title whose recorded words belong to the last one.
+      // The words come from the SERVER's reply, not from the boxes on screen -- the server is what
+      // told the model what to draw.
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+        built_title_url: d.image,
+        built_title_src: d.source || '',
+        built_title_text: d.title || '',
+        built_title_sub: (d.subtitle == null ? '' : String(d.subtitle)),
+        built_title_prompt: ((_tbEl('title-build-desc') || {}).value || '')
+      });
+      _tbRenderWarn();
+      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    })
+    .catch(function () { _tbErr('Could not build the title.'); })
+    .then(function () { hideBusyOverlay('title-build-result'); if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
+}
+// =====================================================================================================
+// RETOUCH, REMOVE, ARCHIVE AND REPLACE FOR A BUILT TITLE  (TD-401, TD-402, TD-405)
+// =====================================================================================================
+
+// v3.0.624 -- THE SHARED RETOUCH MODAL, as Ian asked. The reservation in v3.0.622 was real -- every
+// other branch of submitRetouch posts to a QUEUE and polls a job, where this one returns the picture
+// directly -- but that is an argument about the SUBMIT, not about the box you type in. The modal is
+// shared; the submit branch stays its own shape.
+//
+// THE FLAG MUST BE CLEARED BY THE OTHER FOUR OPENERS. state.retouchTitle is checked first in
+// submitRetouch, so a title retouch left set would hijack the next panel retouch. openRetouch,
+// openRetouchChar, openRetouchSessionChar and openRetouchAsset each null it, exactly as they already
+// null each other. That is a five-place invariant and the apply script counts it.
+function titleBuildRetouchOpen() {
+  state.retouchTitle = true;
+  state.retouchMomentId = null;
+  state.retouchCharId = null;
+  state.retouchSessionCharId = null;
+  state.retouchAssetId = null;
+  var ta = document.getElementById('retouch-instruction');
+  if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal');
+  if (modal) modal.classList.remove('hidden');
+  if (ta) setTimeout(function () { ta.focus(); }, 30);
+}
+function titleBuildRetouchClose() { state.retouchTitle = null; }
+
+// Ian: "Add the Retouch to it as well! That's how we get the new lettering for the subtitle."
+// Synchronous, like Generate above it and unlike every other Retouch in the product -- see the note
+// on the route. Costs a token, because it is a call to fal.
+function titleBuildRetouch(instruction) {
+  if (!state.currentCampaign) return;
+  instruction = String(instruction || '').trim();
+  if (!instruction) return;
+  _tbErr('');
+  // v3.0.624 -- the same overlay the storyboard uses, on the artwork itself. Ian: "put the
+  // Regenerating Spinner over the image... Just like the Storyboard Tab."
+  showBusyOverlay('title-build-result', 'Retouching', 'Keeping the artwork, changing one thing\u2026');
+  fetch('/api/images/title-retouch' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaignId: state.currentCampaign.id, instruction: instruction })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not retouch the title.'); return; }
+      // THE UNDO IS RECORDED BEFORE THE NEW PICTURE LANDS, from what is on the book right now.
+      // Reading it after the write would record the retouch as its own previous state.
+      var _prevUrl = (state.bookMeta && state.bookMeta.built_title_url) || '';
+      var _prevSrc = (state.bookMeta && state.bookMeta.built_title_src) || '';
+      _tbShowResult(d.image);
+      if (d.cut === false) {
+        _tbErr('The background could not be removed -- the edit came back as a scene rather than lettering on a plain ground. Try a simpler instruction, or Generate again.');
+      }
+      // THE WORDS ARE NOT UPDATED HERE, and that is deliberate. A retouch changes the picture by an
+      // instruction in English; nothing in this exchange knows what the new artwork actually spells.
+      // Claiming it now says the book's current title would be a guess printed as a fact -- and the
+      // mismatch warning exists precisely so a wrong claim is worse than an out-of-date one. Editing
+      // the title text and rebuilding is what sets the words.
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+        built_title_url: d.image,
+        built_title_src: d.source || '',
+        built_title_prev: _prevUrl,
+        built_title_prev_src: _prevSrc
+      });
+      titleBuildRetouchClose();
+      _tbRenderWarn();
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    })
+    .catch(function () { _tbErr('Could not retouch the title.'); })
+    .then(function () { hideBusyOverlay('title-build-result'); });
+}
+
+// v3.0.624. Undo the last retouch. Ian: "After a Retouch make sure you show the Revert button. So if
+// they dont like it they can revert back... Again... Just like we do on the Storyboard Panels."
+//
+// ONE STEP DEEP, deliberately, which is what revert_image_url on a moment and revert_reference_url on
+// a character also are. A stack would need somewhere to live and a rule for when it empties; one step
+// covers the case that actually happens -- that retouch made it worse, put it back.
+//
+// NO TOKEN. Nothing is drawn here; a picture that was already paid for is put back on the book.
+function titleBuildRevert() {
+  var prev = (state.bookMeta && state.bookMeta.built_title_prev) || '';
+  if (!prev) return;
+  var prevSrc = (state.bookMeta && state.bookMeta.built_title_prev_src) || '';
+  _tbErr('');
+  if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+    built_title_url: prev,
+    built_title_src: prevSrc,
+    built_title_prev: '',
+    built_title_prev_src: ''
+  });
+  _tbShowResult(prev);
+  _tbRenderWarn();
+}
+
+// TD-401. Take the drawn title off the book. The five presets come back to life the moment it is gone
+// -- that is the whole point, and it is what prepApplyTitleModeLock decides from.
+function titleBuildRemove() {
+  if (!state.currentCampaign) return;
+  var archived = !!_tbArchiveRow();
+  // v3.0.624 -- our own modal, not the browser one. The two cases say genuinely different things:
+  // archived means reversible, un-archived means a token is about to be thrown away, and the note
+  // line is where that distinction lives rather than being buried in a wall of confirm() text.
+  appConfirm({
+    title: 'Remove the drawn title?',
+    body: 'This takes the drawn title artwork off your cover and puts the five title styles back in charge.',
+    note: archived
+      ? 'This title is in your Archive, so you can put it back at any time with Replace.'
+      : 'This title is NOT in your Archive. Removing it is permanent, and drawing it again costs another token. Cancel and press Archive first if you might want it back.',
+    okLabel: 'Remove it',
+    danger: !archived,
+    onOk: function () {
+      _tbErr('');
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+        built_title_url: '', built_title_src: '', built_title_text: '', built_title_sub: '',
+        built_title_prev: '', built_title_prev_src: ''
+      });
+      _tbShowResult('');
+      titleBuildRetouchClose();
+      _tbRenderWarn();
+      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    }
+  });
+}
+
+// TD-402. Archive on, archive off -- the same toggle every other image in the product has.
+function titleBuildArchiveToggle() {
+  if (!state.currentCampaign) return;
+  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  if (!url) return;
+  var row = _tbArchiveRow();
+  _tbErr('');
+  if (row) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + row.id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.error) { _tbErr(d.message || d.error); return; }
+        state.archives = (state.archives || []).filter(function (a) { return a.id !== row.id; });
+        _tbSyncArchivePill();
+        if (typeof showAlert === 'function') showAlert('Removed from your Archive.');
+      })
+      .catch(function () { _tbErr('Could not update the Archive.'); });
+    return;
+  }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta/archive-title' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error || !d.archive) { _tbErr((d && (d.message || d.error)) || 'Could not archive the title.'); return; }
+      state.archives = (state.archives || []).concat([d.archive]);
+      _tbSyncArchivePill();
+      if (typeof showAlert === 'function') showAlert('Title saved to your Archive.');
+    })
+    .catch(function () { _tbErr('Could not archive the title.'); });
+}
+
+// Two pickers, one grid. Ian: "You should be able to pull in a reference image from the archive. And
+// even Pull in an actual title from the archive. For pulling in an archive only pull in Archived items
+// with the type Title." Both filter to type 'title' and neither costs a token -- no fal call is made.
+function openTitleReplacePicker() { _tbOpenPicker('title', 'Replace the title from your Archive'); }
+function openTitleRefPicker()     { _tbOpenPicker('titleref', 'Steer the look from an archived title'); }
+function _tbOpenPicker(mode, heading) {
+  if (!state.currentCampaign) return;
+  state.pickerCtx = { mode: mode };
+  state.pickerFilters = { session:'', moment:'', creator:'', type:'title', style:'', version:'', character:'', sort:'newest' };
+  var tEl = document.getElementById('replace-picker-title');
+  if (tEl) tEl.textContent = heading;
+  var modal = document.getElementById('replace-picker-modal');
+  if (modal) modal.classList.remove('hidden');
+  ensureArchivesLoaded(renderPicker);
+}
+
 function prepSaveTitleColor() {
   var el = document.getElementById('print-title-color');
   if (!el || !state.currentCampaign) return;
@@ -9021,6 +9558,29 @@ function archiveMomentLabel(a) {
   return null;
 }
 
+// v3.0.622 -- ONE place that turns an image_type into a word, and one that turns an archive row into
+// its caption. Both were written inline at their two call sites as `=== 'character' ? ... : 'Panel'`,
+// which is a two-type answer to what is now a three-type question.
+function archiveTypeLabel(t) {
+  if (t === 'character') return 'Character';
+  if (t === 'title') return 'Title';
+  return 'Panel';
+}
+function archiveTypeCaption(a) {
+  if (!a) return 'Panel';
+  if (a.image_type === 'character') return a.character_name || 'Character';
+  if (a.image_type === 'title') {
+    var t = a.title || 'Built title';
+    var sub = '';
+    try {
+      var m = a.layout_meta ? (typeof a.layout_meta === 'object' ? a.layout_meta : JSON.parse(a.layout_meta)) : null;
+      if (m && m.subtitle) sub = String(m.subtitle);
+    } catch (e) { sub = ''; }
+    return sub ? (t + ' \u00b7 ' + sub) : t;
+  }
+  return archiveMomentLabel(a) || 'Panel';
+}
+
 function setArchiveFilter(key, val) {
   if (!state.archiveFilters) state.archiveFilters = {};
   state.archiveFilters[key] = val;
@@ -9073,7 +9633,8 @@ function renderArchiveFilters() {
     '<select class="archive-filter" onchange="setArchiveFilter(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'type\', this.value)"><option value="">All types</option>' +
       '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
-      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option></select>' +
+      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option>' +
+      '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'sort\', this.value)">' +
       '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
@@ -9119,7 +9680,8 @@ function archiveFilterBarHTML(f, onchange) {
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
       '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
-      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option></select>' +
+      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option>' +
+      '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'sort\', this.value)">' +
       '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
@@ -9128,6 +9690,7 @@ function archiveFilterBarHTML(f, onchange) {
 
 function openRetouch(momentId) {
   state.retouchMomentId = momentId;
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
   state.retouchSessionCharId = null;
   state.retouchAssetId = null;
@@ -9139,6 +9702,7 @@ function openRetouch(momentId) {
 }
 
 function closeRetouch() {
+  state.retouchTitle = null;   // v3.0.624 -- Cancel must disarm it, not just Submit
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.add('hidden');
 }
@@ -9146,6 +9710,7 @@ function closeRetouch() {
 // Open the shared Retouch modal targeting an ASSET image.
 function openRetouchAsset(assetId) {
   state.retouchAssetId = assetId;
+  state.retouchTitle = null;   // v3.0.624 -- see titleBuildRetouchOpen
   state.retouchCharId = null;
   state.retouchMomentId = null;
   state.retouchSessionCharId = null;
@@ -9191,6 +9756,16 @@ function revertAsset(assetId) {
 }
 
 function submitRetouch() {
+  // v3.0.624 -- the title branch leaves before the queue-and-poll branches below. A built title
+  // retouch is synchronous (see /api/images/title-retouch), so there is no job to poll for.
+  if (state.retouchTitle) {
+    var _ti = document.getElementById('retouch-instruction');
+    var _txt = _ti ? String(_ti.value || '').trim() : '';
+    if (!_txt) { if (_ti) _ti.focus(); return; }
+    closeRetouch();
+    titleBuildRetouch(_txt);
+    return;
+  }
   if (!ensureGenFree()) return;
   var ta = document.getElementById('retouch-instruction');
   var instruction = ta ? ta.value.trim() : '';
@@ -9421,7 +9996,10 @@ function renderPickerGrid() {
   var rows = getFilteredArchives(state.pickerFilters);
   if (!rows.length) { grid.innerHTML = '<div class="archive-pick-empty">No archived images match these filters. Widen them to pull from another version, session, or character.</div>'; return; }
   grid.innerHTML = rows.map(function(a){
-    var cap = '<b>' + escapeHtml(a.image_type === 'character' ? (a.character_name || 'Character') : (archiveMomentLabel(a) || 'Panel')) + '</b>';
+    // v3.0.622 -- three types now, so "not a character" is no longer "a panel". An archived title is
+    // labelled with the words it has DRAWN on it, because six thumbnails of lettering are otherwise
+    // indistinguishable -- which is exactly the case Ian described (Episode 1 vs Episode 2).
+    var cap = '<b>' + escapeHtml(archiveTypeCaption(a)) + '</b>';
     if (a.session_title) cap += '<br>' + escapeHtml(a.session_title);
     var ver = (!a.fork_id || a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
     cap += '<br>' + escapeHtml(ver);
@@ -9438,6 +10016,39 @@ function applyArchiveToTarget(archiveId) {
   var ctx = state.pickerCtx || {};
   var cid = state.currentCampaign && state.currentCampaign.id;
   if (!cid) return;
+
+  // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
+  // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
+  // blob and a reference is not stored on the book at all, so neither fits that shape.
+  var vq = (typeof bookMetaVersionQ === 'function') ? bookMetaVersionQ('?') : '';
+  if (ctx.mode === 'title') {
+    fetch('/api/campaigns/' + cid + '/my-book-meta/restore-title' + vq, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
+      closeReplacePicker();
+      state.bookMeta = state.bookMeta || {};
+      state.bookMeta.built_title_url = d.built_title_url || '';
+      state.bookMeta.built_title_src = d.built_title_src || '';
+      state.bookMeta.built_title_text = d.built_title_text || '';
+      state.bookMeta.built_title_sub = d.built_title_sub;
+      _tbShowResult(d.built_title_url || '');
+      _tbRenderWarn();
+      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    }).catch(function (e) { alert('Could not put that title on the book: ' + e.message); });
+    return;
+  }
+  if (ctx.mode === 'titleref') {
+    fetch('/api/campaigns/' + cid + '/my-book-meta/title-ref-from-archive', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || d.error || !d.url) { alert((d && (d.message || d.error)) || 'Could not use that as a reference.'); return; }
+      closeReplacePicker();
+      _tbSetRef(d.url);
+    }).catch(function (e) { alert('Could not use that as a reference: ' + e.message); });
+    return;
+  }
+
   var body;
   if (ctx.mode === 'moment') {
     body = { target_type: 'moment', target_moment_id: ctx.momentId };
@@ -9513,7 +10124,7 @@ function renderArchiveGrid() {
   grid.innerHTML = rows.map(function(a){
     var canDelete = isDM || (meId && a.archived_by === meId);
     var when = a.created_at ? new Date(a.created_at).toLocaleDateString() : '';
-    var typeLabel = a.image_type === 'character' ? 'Character' : 'Panel';
+    var typeLabel = archiveTypeLabel(a.image_type);
     var ver = archiveVersionLabel(a);
     var mom = archiveMomentLabel(a);
     var meta = '<div class="archive-row"><span>Type</span><b>' + typeLabel + '</b></div>';
@@ -14166,6 +14777,11 @@ var CUSTOM_LAYOUT_DEFAULTS = {
   pano:1, aside:1, companion:1, emphasis:0,
   cover:1, cast:1, toc:1, header:1, markers:1, markerbreak:0, watermark:1,
   hidelogo:0,
+  // v3.0.611 -- REQUIRED HERE, not optional. _normalizeLayoutBlob loads a saved layout by
+  // iterating THIS object and copying only keys it finds, so a toggle missing from it is
+  // dropped on every reload -- it would set, serialise once, and then quietly forget itself.
+  // The server has the identical trap in CO_DEFAULTS, and this is its twin.
+  castnpc:0,
   // v3.0.553 -- TD-346 step 3. Rides the same customOpts object as border and caption, so it
   // serialises into the co string, persists through layout_opts and reaches every render path with
   // no new plumbing. Bottom is the default and produces no CSS at all, so every existing cover is
@@ -14322,10 +14938,24 @@ function finalizeClearStats(){
   } catch (e) {}
 })();
 var CL_SELECTS = ['arrange','border','caption','paper','narr','font','titlePlace','titleSize','titleStyle'];   // v3.0.555   // v3.0.554 -- titleSize joins the same machinery   // v3.0.553 -- titlePlace lives in the Title & Cover accordion but is read by id, which is location-independent
-var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','hidelogo'];
+// v3.0.611 -- castnpc joins the registry rather than getting its own handling. This one array is
+// read and written in six places across the Prep panel and the Layout modal, so adding the key
+// here wires both forms in both directions at once. A control added outside it would work in
+// whichever half somebody remembered.
+var CL_TOGGLES = ['dropcap','header','markers','markerbreak','cover','cast','toc','castnpc'];   // v3.0.616 -- hidelogo retired
 var CL_ARRANGE_LABEL = { paired:'Picture Book', comicpage:'Comic', magazine:'Magazine', gazette:'Gazette' };
 
 // Enable the page-break sub-toggle only when Session dividers (markers) is on.
+function clSyncCastNpc(){
+  var ck=document.getElementById('cl-cast');
+  var cn=document.getElementById('cl-castnpc');
+  var cnl=document.getElementById('cl-castnpc-label');
+  if(!cn) return;
+  var on = ck ? !!ck.checked : true;
+  cn.disabled = !on;
+  if(!on) cn.checked = false;
+  if(cnl){ cnl.style.opacity = on ? '1' : '0.55'; }
+}
 function clSyncMarkerBreak(){
   var mk=document.getElementById('cl-markers');
   var mb=document.getElementById('cl-markerbreak');
@@ -14412,6 +15042,19 @@ function prepSyncMarkerBreak(){
   if(!on) mb.checked = false;
   if(mbl){ mbl.style.opacity = on ? '1' : '0.55'; }
 }
+// v3.0.611 -- NPCs are meaningless with no character page, so the toggle follows it exactly as the
+// page-break toggle follows Session dividers. Same shape on purpose: a second convention for the
+// same idea is how two controls that should behave alike drift apart.
+function prepSyncCastNpc(){
+  var ck=document.getElementById('pcl-cast');
+  var cn=document.getElementById('pcl-castnpc');
+  var cnl=document.getElementById('pcl-castnpc-label');
+  if(!cn) return;
+  var on = ck ? !!ck.checked : true;
+  cn.disabled = !on;
+  if(!on) cn.checked = false;
+  if(cnl){ cnl.style.opacity = on ? '1' : '0.55'; }
+}
 // v3.0.580 -- EVERY TITLE AND LAYOUT CONTROL ON PREP FOLLOWS THE SAME RULE, IN ONE PLACE.
 // Ian, 2026-08-09: "Can you do it to all the layout and title controls on the prep and preview tab?"
 //
@@ -14421,7 +15064,6 @@ function prepSyncMarkerBreak(){
 //
 // THE LOCK ONLY EVER ADDS A RESTRICTION, WHICH IS THE ONE THING TO GET RIGHT HERE. Two controls
 // carry their own gates and this must not reopen either:
-//   pcl-hidelogo     is Platinum-only (prepLayoutLoad sets it from the tier)
 //   pcl-markerbreak  is only live when Session dividers is on (prepSyncMarkerBreak sets it)
 // Both are therefore FORCE-DISABLED when the book is not yours and otherwise left exactly as their
 // own gate decided. Setting `disabled = !own` on them would hand a Copper reader the Platinum
@@ -14431,8 +15073,8 @@ function prepSyncMarkerBreak(){
 // the reader switches to a version of their own.
 var PREP_LOCK_PLAIN = ['pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
-                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc'];
-var PREP_LOCK_GATED = ['pcl-hidelogo', 'pcl-markerbreak'];
+                       'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc'];
+var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
 function prepApplyOwnershipLock() {
   try {
     var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
@@ -14459,15 +15101,55 @@ function prepApplyOwnershipLock() {
     var note = document.getElementById('prep-readonly-note');
     if (note) note.style.display = own ? 'none' : '';
   } catch (e) {}
+  // v3.0.622 -- CALLED LAST, AND IT ONLY EVER TIGHTENS.
+  //
+  // This is not tidiness, it is the whole reason the built-title lock is a function rather than four
+  // lines somewhere else. pcl-titleStyle is a member of PREP_LOCK_PLAIN, and the loop above sets
+  // `el.disabled = !own` on every member unconditionally -- so ANY disabling done elsewhere is
+  // switched back on the next time this runs, which is on load, on every version switch, and at the
+  // end of prepLayoutLoad. Two reasons to disable one control, written in two places, and the last
+  // writer wins. Running here means ownership decides first and the title mode can only add to it.
+  prepApplyTitleModeLock();
+}
+
+// TD-357(1). A drawn title is EITHER/OR with the five presets -- Ian: "they can use one or the other".
+// While one is on the book the style dropdown and the colour picker change nothing at all, so they are
+// disabled and the reason is said out loud. Ian's TD-401 Remove is what makes this safe to do: without
+// a way back to the presets this would be a one-way door.
+//
+// NOT the size or the placement controls, which DO still apply -- builtTitleCss scales the artwork by
+// titleSize and the overlay is placed by titlePlace, so disabling them would be a lie in the other
+// direction.
+function prepApplyTitleModeLock() {
+  try {
+    var built = !!(state.bookMeta && state.bookMeta.built_title_url);
+    var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+    // Only ever tightens: a control already disabled because this is not your version stays disabled.
+    ['pcl-titleStyle', 'print-title-color'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (built || !own) el.disabled = true;
+      el.style.opacity = (built || !own) ? '0.55' : '';
+      // Capture the authored tooltip ONCE, before anything overwrites it -- otherwise the second run
+      // would 'restore' the explanation this function itself put there.
+      if (el.getAttribute('data-title-orig') === null) el.setAttribute('data-title-orig', el.title || '');
+      el.title = built
+        ? 'Your title is drawn artwork right now, so the title styles and colour do not apply. Remove the drawn title in the Title Builder to use them again.'
+        : (el.getAttribute('data-title-orig') || '');
+    });
+    // v3.0.625 -- the note element is gone from the panel; the tooltip written above is what is left
+    // explaining the two dimmed controls. Kept as a call so the Title Builder warning refreshes when
+    // the title text changes while the builder is open.
+    if (typeof _tbRenderWarn === 'function') _tbRenderWarn();
+  } catch (e) {}
 }
 function prepLayoutLoad(){
   var o = (typeof customOpts !== 'undefined' && customOpts) ? customOpts : CUSTOM_LAYOUT_DEFAULTS;
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!o[k]; });
   prepSyncMarkerBreak();
+  prepSyncCastNpc();
   var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);
-  var _hl=document.getElementById('pcl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; }
-  var _hll=document.getElementById('pcl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; }
   // Commit panel selections to the unified customOpts the moment any control changes, so a plain
   // Refresh (not just Apply) reflects the chosen arrangement. Programmatic .value sets above
   // don't fire 'change', so this never clobbers on load.
@@ -14502,6 +15184,7 @@ function prepLayoutReset(){
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.value=CUSTOM_LAYOUT_DEFAULTS[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!CUSTOM_LAYOUT_DEFAULTS[k]; });
   prepSyncMarkerBreak();
+  prepSyncCastNpc();
 }
 function openCustomLayout(ctx){
   _clCtx = ctx || 'novel';
@@ -14511,7 +15194,7 @@ function openCustomLayout(ctx){
   CL_SELECTS.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.value=o[k]; });
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('cl-'+k); if(el) el.checked=!!o[k]; });
   clSyncMarkerBreak();
-  (function(){ var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4); var _hl=document.getElementById('cl-hidelogo'); if(_hl){ _hl.disabled=!_plat; if(!_plat) _hl.checked=false; } var _hll=document.getElementById('cl-hidelogo-label'); if(_hll){ _hll.style.opacity=_plat?'1':'0.55'; _hll.title=_plat?'Hide the Campaignia logo on the cover':'Hiding the logo is a Platinum feature'; } })();
+  clSyncCastNpc();
   var lbl=document.getElementById('cl-ctx-label'); if(lbl) lbl.textContent = (_clCtx==='novel' ? '(graphic novel)' : '(this session)');
   var novelOnly=document.querySelectorAll('.cl-novel-only');
   for (var i=0;i<novelOnly.length;i++){ novelOnly[i].style.display = (_clCtx==='novel' ? 'flex' : 'none'); }
@@ -19153,7 +19836,20 @@ function optimizeShowBusy(j) {
   var btn = document.getElementById('layoutai-run-btn');
   if (j && j.running) {
     if (btn) { btn.disabled = true; btn.textContent = 'Optimize running...'; btn.classList.remove('has-token'); }
-    if (host) { host.textContent = optimizeBusyText(j); host.style.color = 'var(--gold)'; }
+    // v3.0.628 -- ORANGE, because it is a warning and not a status line. Ian: "lets make that orange
+    // so it is more like a warning." The colours are the .panel-dark .alert-warning pair already in
+    // the stylesheet rather than a new orange invented here.
+    //
+    // AND IT IS MARKED WITH A FLAG, NOT RECOGNISED BY ITS COLOUR. The clear path below used to test
+    // `host.style.color === 'var(--gold)'` to decide whether the message was its own to remove --
+    // so changing the colour here would have left the warning on screen forever after the run
+    // finished, and the bug would have looked like the run never ending. A thing that writes a
+    // message should say so, not be identified by how it looks.
+    if (host) {
+      host.textContent = optimizeBusyText(j);
+      host.style.color = 'var(--warn-text)';
+      host.dataset.optimizeBusy = '1';
+    }
     // Ask again while it runs, so the tab clears itself when the run finishes rather than needing
     // a refresh -- which is the habit that caused the double runs in the first place.
     try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
@@ -19164,7 +19860,16 @@ function optimizeShowBusy(j) {
   }
   try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
   window._optimizeBusyTimer = null;
-  if (host && host.style.color === 'var(--gold)') { host.textContent = ''; host.style.color = ''; }
+  // Clears on the flag this function set, whatever colour it happens to be wearing.
+  if (host && host.dataset && host.dataset.optimizeBusy === '1') {
+    host.textContent = '';
+    host.style.color = '';
+    delete host.dataset.optimizeBusy;
+    // v3.0.628 -- SAY THAT IT FINISHED. Ian: "Will it tell me when it ends?" The message used to
+    // simply vanish on the next five-second poll, which is indistinguishable from not having
+    // noticed. Only announced when a run was actually seen running, so a fresh tab stays quiet.
+    if (typeof showAlert === 'function') showAlert('The background Optimize run has finished. You can start another now.');
+  }
   if (btn && btn.textContent === 'Optimize running...' && !window._aiLoopRunning && !window._aiPreloop && !window._aiFinishing) {
     btn.disabled = false; btn.textContent = 'Optimize layout'; btn.classList.add('has-token');
   }

@@ -68,6 +68,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .panel-dark .alert-error{background:rgba(139,26,26,0.35);border-color:rgba(240,149,149,0.4);color:#f09595;}
 .panel-dark .alert-success{background:rgba(15,110,86,0.3);border-color:rgba(134,212,186,0.4);color:#86d4ba;}
 .panel-dark .alert-warning{background:rgba(120,80,0,0.32);border-color:rgba(230,190,120,0.4);color:#e6be78;}
+/* v3.0.628 -- the warning text colour as a token, so the Optimize busy line and the alert it
+   belongs with cannot drift to two different oranges. Same value as the rule above. */
+:root{--warn-text:#e6be78;}
 .panel-dark .alert-info{background:rgba(40,60,80,0.4);border-color:rgba(150,180,200,0.4);color:#a8c4d6;}
 /* v3.0.493 -- A WARNING IN THE OPTIMIZE PROGRESS LIST SHOULD LOOK LIKE ONE.
    The stale-layout notice was written into #optimize-progress as an ordinary bullet,
@@ -2127,6 +2130,14 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-h { font-family:var(--font-display); font-size:15px; color:var(--gold); margin-bottom:12px; letter-spacing:0.04em; }
 .prep-field-label { color:rgba(201,168,76,0.9); font-size:12px; margin:0 0 6px; }
 .prep-input { width:100%; background:rgba(20,12,4,0.85); color:var(--gold); border:1px solid rgba(201,168,76,0.3); border-radius:8px; padding:8px 10px; font-size:14px; font-family:inherit; box-sizing:border-box; margin-bottom:14px; }
+/* v3.0.627 -- two short dropdowns side by side. Ian: they are small and take up too much vertical
+   space. min-width:0 is the load-bearing part: without it a flex item refuses to shrink below its
+   content, so the longest option string would push the pair wider than the panel instead of the
+   select clipping as it already does at full width. Stacks again under 640px, where two selects on
+   one row would each be too narrow to read. */
+.prep-field-pair { display:flex; gap:12px; align-items:flex-start; }
+.prep-field-pair .prep-field-col { flex:1 1 0; min-width:0; }
+@media (max-width:640px){ .prep-field-pair { display:block; } }
 .prep-textarea { width:100%; min-height:64px; background:rgba(20,12,4,0.85); color:var(--gold); border:1px solid rgba(201,168,76,0.3); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box; margin-bottom:12px; }
 .prep-attest { display:flex; gap:8px; align-items:flex-start; font-size:12px; color:#cbb994; line-height:1.4; margin:0 0 14px; cursor:pointer; }
 .prep-attest input { margin-top:2px; flex-shrink:0; }
@@ -2142,7 +2153,15 @@ html.staging-env .app-logo-text{color:#2b1400;}
 #novel-splitter .novel-splitter-bar { width:3px; height:60px; background:rgba(216,184,92,0.5); border-radius:2px; transition:background 0.12s; }
 #novel-splitter:hover .novel-splitter-bar { background:rgba(216,184,92,0.85); }
 .pcl-fields { display:flex; flex-direction:column; gap:10px; }
-.pcl-toggles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px 14px; align-items:start; }
+/* v3.0.613 -- TWO COLUMNS, FIXED. Ian, 2026-08-10, looking at the panel: "little weird... can you
+   do two columns with the check boxes in them? Needs to be a little more orderly."
+   auto-fit was the disorder. repeat(auto-fit, minmax(150px, 1fr)) lets the COLUMN COUNT follow
+   the panel width, and the Prep panel is user-draggable, so the same eight controls reflowed
+   into two, three or four columns and a long label like Include table of contents wrapped
+   wherever it happened to land. Two columns is a decision rather than a consequence.
+   minmax(0, 1fr) rather than 1fr: a grid track will not shrink below its content by default, so
+   a long label would push the column wider than half and break the alignment it is here to fix. */
+.pcl-toggles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px 14px; align-items:start; }
 @media (max-width: 900px) { .novel-preview-layout { flex-direction:column; } .novel-prep-panel { flex:1 1 auto; width:100%; min-width:0; position:static; max-height:none; } #novel-splitter { display:none; } }
 
 /* =================================================================================================
@@ -2353,10 +2372,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 
 .prep-divider { height:1px; background:rgba(201,168,76,0.2); margin:4px 0 14px; }
 
-.prep-color-row { display:flex; align-items:center; gap:9px; margin:0 0 14px; }
 .prep-color-input { width:36px; height:26px; padding:0; border:1px solid rgba(201,168,76,0.3); border-radius:4px; background:transparent; cursor:pointer; flex:0 0 auto; }
-.prep-color-label { font-size:12px; color:rgba(201,168,76,0.8); }
-.prep-color-label span { color:rgba(201,168,76,0.5); }
 
 /* ===== Guided Tours ===== */
 .tour-overlay{position:fixed;inset:0;z-index:9998;}
@@ -2486,6 +2502,27 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    into the next CELL (the adjacent column), where its indent made it read as a child of the toggle
    above. Span the full row and stack the pair, matching the Layout modal. */
 .pcl-toggle-pair { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+/* v3.0.612 -- Ian: put the character-page pair opposite the session-divider pair, since both
+   carry a sub-checkbox and so stand the same height.
+   THE WRAPPER SPANS THE ROW AND LAYS THE PAIRS OUT ITSELF. Putting them next to each other in
+   .pcl-toggles would not have held: that grid is auto-fit, so the number of controls per line
+   follows the panel width and the two pairs would sit opposite at some widths and split across
+   rows at others. auto-fit here too, so they drop to one column when the panel is genuinely
+   too narrow instead of squeezing the labels.
+   AND THE SPAN ABOVE HAS TO BE UNDONE INSIDE IT: .pcl-toggle-pair carries grid-column:1/-1 for
+   when it sits directly in .pcl-toggles, and left alone that makes each pair span the WRAPPER
+   too -- which stacks them again and looks exactly like the rule never applied. */
+/* The wrapper spans both columns and repeats the SAME two-column track and the SAME gap, so its
+   two pairs line up exactly with the single controls above and below them. A different gap or a
+   different track here would put the second pair a few pixels off the column it sits under,
+   which is the kind of near-miss that reads as sloppy without being obviously wrong. */
+.pcl-pair-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; align-items: start; }
+.pcl-pair-row > .pcl-toggle-pair { grid-column: auto; }
+/* Below 901px the Prep panel is already released to full width and stacked under the preview,
+   where two columns of checkboxes squeeze the labels rather than tidy them. */
+@media (max-width:900px){
+  .pcl-toggles, .pcl-pair-row { grid-template-columns: 1fr; }
+}
 
 /* Order & Publish: the print order and the Library publish are SIBLING cards, each with its own
    border -- publishing is not part of the order, so it must not sit inside the order's frame.
@@ -2564,3 +2601,77 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 /* Hidden on phones entirely, per Ian. A phone has its own way back to the top and the button would
    sit over content that is already tight. */
 @media (max-width:640px){ .to-top-btn{ display:none !important; } }
+
+/* v3.0.617 -- TITLE BUILDER (TD-357), stage one. Nothing here is novel: the readonly rows borrow the
+   prep-input surface so the title reads as a value rather than an empty field, and the result box is
+   a checkerboard so a TRANSPARENT result is visibly transparent. That last one is the whole point of
+   the panel -- on a plain dark background a white rectangle and a clean cut look identical, which is
+   precisely the failure the alpha cut exists to prevent. */
+.prep-title-style-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 6px; }
+/* v3.0.632 -- the swatch sits on the row with the SELECT now, not the row with the label, so the
+   auto-margin rule that held it beside the label came out with it. The select carries the bottom
+   margin for the pair; leaving it on both would double the gap under this control. */
+.prep-style-color-row { display:flex; align-items:center; gap:8px; margin:0 0 14px; }
+.prep-style-color-row .prep-input { flex:1 1 auto; min-width:0; margin-bottom:0; }
+.prep-style-color-row .prep-color-input { flex:0 0 auto; }
+.tb-readonly { background:rgba(20,12,4,0.85); border:1px solid rgba(201,168,76,0.3); border-radius:8px;
+  padding:8px 10px; font-size:14px; color:var(--gold); min-height:38px; display:flex; align-items:center; }
+.tb-ref-row { display:flex; gap:8px; align-items:center; }
+.tb-ref-row .form-input { flex:1 1 auto; min-width:0; }
+.tb-ref-thumb img { max-height:70px; border-radius:6px; border:1px solid rgba(201,168,76,0.3); margin-top:8px; }
+/* v3.0.622 -- Title Builder reference drop zone. Deliberately the same shape, border and drag-over
+   treatment as .asset-drop, because it is the same gesture doing the same job. */
+.tb-drop { border:2px dashed rgba(201,168,76,0.3); border-radius:var(--radius); padding:12px; cursor:pointer;
+  min-height:96px; display:flex; align-items:center; justify-content:center; transition:border-color 0.15s, background 0.15s; }
+.tb-drop:hover { border-color:rgba(201,168,76,0.55); }
+.tb-drop.drag-over { border-color:var(--gold); background:rgba(201,168,76,0.1); }
+/* v3.0.629 -- the drop zone now carries pills, so it needs to be a positioned ancestor and to
+   reveal them the way every other pill host does. Fifth hover rule; the pattern is per-wrapper. */
+.tb-drop { position:relative; }
+.tb-drop:hover .panel-pill { opacity:1; }
+.tb-drop .panel-img-actions { justify-content:flex-end; }   /* v3.0.633 -- position from the shared rule */
+/* Generate above the result. The row is right-aligned so the button lands where the eye already
+   goes after typing the description. */
+.tb-gen-row { display:flex; justify-content:flex-end; margin:10px 0 0; }
+/* The empty-state Replace is always visible -- there is no artwork for it to obscure, and a
+   hover-only control on an empty box is a control nobody finds. */
+.panel-pill.is-static-shown { opacity:1; }
+.tb-drop-empty { display:flex; flex-direction:column; align-items:center; gap:6px; color:var(--text-muted); font-size:12px; text-align:center; }
+.tb-drop-preview { max-width:100%; max-height:120px; border-radius:6px; display:block; }
+.tb-ref-row { margin-top:8px; }
+/* THE FOURTH HOVER RULE. .panel-pill is opacity:0 and each wrapper reveals its own; the three others
+   are .storyboard-panel, .char-ref-imgwrap and .sc-review-imgwrap. Without this line every pill on a
+   built title is present, wired, and permanently invisible. */
+/* v3.0.633 -- one rule for this class. overflow:hidden came off with the reason for it: the busy
+   overlay moved to .tb-result in v3.0.629, and clipping the wrapper was what made a pill sitting
+   at top:0 look shorn. */
+.tb-imgwrap { position:relative; display:inline-block; max-width:100%; border-radius:6px; }
+.tb-imgwrap:hover .panel-pill { opacity:1; }
+.tb-imgwrap img { max-width:100%; height:auto; display:block; }
+/* v3.0.624 -- ITEM 4. Ian: "Push the buttons closer to the top of the generated image Just like the
+   Storyboard Panels." .panel-img-actions is top:8px against its wrapper, but .tb-result is a CENTRED
+   flex box with 10px of padding and a 120px min-height, so on a short wide title the pills sit well
+   inside the picture rather than on its edge. Tightened to 3px here only -- the storyboard keeps its
+   own 8px, because a full panel is tall enough that 8px still reads as the top corner. */
+/* v3.0.633 -- THE OVERRIDES COME OFF. Ian: "I want the buttons on the images on the title builder
+   to look like these buttons... the button tops are cut off." Both halves of that were mine:
+   v3.0.628 squared the top corners and pushed the row to top:0, which reads as sheared, and shrank
+   the pills to 9px so they did not match the storyboard ones beside them.
+
+   There is now NO title-builder pill styling at all -- .panel-pill and .panel-img-actions apply
+   unmodified, exactly as they do on a storyboard panel. Chasing "closer to the top edge" with a
+   local override was the wrong move; the shared rule was already right. */
+/* Warnings, not blocks: gold rather than red, because nothing here is broken and nothing is refused.
+   v3.0.625 -- .prep-title-note dropped with the element it styled; leaving the rule behind is the
+   kind of text that outlives what it describes. */
+.tb-warn { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
+  color:var(--gold-light); border-radius:8px; padding:8px 10px; font-size:12px; line-height:1.4; margin-top:8px; }
+.tb-result { margin-top:6px; border:1px solid rgba(201,168,76,0.25); border-radius:8px; min-height:120px;
+  display:flex; align-items:center; justify-content:center; padding:10px;
+  background-color:#2a2018;
+  background-image:linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%),
+                   linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%);
+  background-size:16px 16px; background-position:0 0, 8px 8px; }
+.tb-result img { max-width:100%; height:auto; display:block; }
+.tb-empty { color:var(--text-muted); font-size:13px; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:10px; }   /* v3.0.629 -- holds the Replace pill */

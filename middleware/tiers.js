@@ -488,6 +488,22 @@ async function getEffectiveTier(userId, campaignId) {
   }
 }
 
+// isTruePlatinum: the caller's OWN tier, ignoring anything inherited from a campaign.
+//
+// v3.0.634 -- Ian: "let's make it so Only Platinum users (True Platinum) can use the title builder."
+// TRUE matters here. getEffectiveTier(uid, campaignId) deliberately returns the HIGHER of your tier
+// and the Story Master's, so a Gold player in a Platinum SM's campaign gets Platinum art. That is
+// right for what a book looks like and wrong for who owns a tool: passing null asks only about you.
+//
+// ONE DEFINITION. The Custom Art Style Builder makes the same test inline in routes/artStyles.js,
+// and the Title Builder needed it in six more places across two routers. Seven hand-written copies
+// of an entitlement check is how one of them ends up disagreeing, and the one that disagrees is the
+// one that lets a paid feature through for free.
+async function isTruePlatinum(userId) {
+  try { return (await getEffectiveTier(userId, null)) === 'platinum'; }
+  catch (e) { return false; }   // never fail OPEN on an entitlement question
+}
+
 // Convenience: the effective tier's feature set (a TIERS entry).
 async function getEffectiveTierFeatures(userId, campaignId) {
   return getTier(await getEffectiveTier(userId, campaignId));
@@ -538,4 +554,4 @@ function narrativeStyleMinRank(id) { return NARRATIVE_STYLE_MIN_RANK[id] || 1; }
 function artStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= artStyleMinRank(id); }
 function narrativeStyleAllowed(effectiveRank, id) { return (effectiveRank || 1) >= narrativeStyleMinRank(id); }
 
-module.exports = { TIERS, getTier, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { TIERS, getTier, isTruePlatinum, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

@@ -6,6 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Campaignia</title>
   <meta name="description" content="Campaignia — TTRPG Session Graphic Novel Generator" />
+  <!-- v3.0.630 -- THE ONE PAGE THAT WAS MISSING THIS. /css/fonts.css is generated from the SAME
+       table services/printing/fonts.js inlines into every PDF, and index, login, library, terms,
+       invite, privacy, reset-password, offline and 404 all link it. app.html -- the page with the
+       font picker ON it -- did not, so the browser had none of the nine book faces available and
+       styling the options in them would have silently done nothing. -->
+  <link rel="stylesheet" href="/css/fonts.css">
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
   <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
 <link rel="stylesheet" href="/css/style.css">
@@ -297,30 +303,69 @@
               <input type="text" id="prep-title" maxlength="200" onchange="prepSaveTitle()" placeholder="e.g. The Shattered Crown" class="prep-input" title="The title printed on the cover, the title page and the spine. Starts as the campaign name; change it and it is saved with this version." />
               <div class="prep-field-label">Subtitle</div>
               <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Leave it empty for no subtitle at all." />
-              <div class="prep-color-row">
-                <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
-                <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
+
+              <!-- v3.0.625 -- THE STANDING NOTE IS GONE. Ian, mid-test: "Get rid of this message...
+                   We will figure out a better way to explain this than a big message like this."
+                   What replaces it for now is the tooltip prepApplyTitleModeLock already writes onto
+                   the two disabled controls, plus their dimmed state. THE MISMATCH WARNING IS NOT
+                   LOST -- it still shows inside the Title Builder on title-build-warn, which is where
+                   you can act on it. It no longer appears on this panel at the moment you type, so
+                   the better explanation still owes us something here. -->
+              <!-- v3.0.617 -- TITLE BUILDER, STAGE ONE. Ian: "it should be triggered from a button that
+                   sits to the side of our current Title styles." The built title is EITHER/OR with the
+                   style dropdown -- Ian: "they can use one or the other" -- but that switching is
+                   stage two, along with composing the overlay onto the cover. This stage only builds
+                   and stores the image, so the lettering can be judged before anything is built on it. -->
+              <!-- v3.0.630 -- the "(stands out against the cover image)" label text came off here:
+                   it was describing what a colour picker is. The swatch itself moved down to the
+                   select row in v3.0.632 -- see the note there. -->
+              <div class="prep-title-style-row">
+                <div class="prep-field-label" style="margin:0;">Title style</div>
+                <!-- v3.0.620 -- Ian: make it look like the Optimize button above it. Same gold fill,
+                     same display face, same letter-spacing -- these are the two controls on this panel
+                     that SPEND A TOKEN, so they should read as the same kind of thing. -->
+                <button type="button" id="title-build-open" onclick="openTitleBuilder()"
+                        style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;font-size:12px;"
+                        title="Draw the title and subtitle as artwork instead of setting them in a typeface. Costs a token each time you generate.">Title Builder</button>
               </div>
-              <div class="prep-field-label">Title style</div>
-              <select id="pcl-titleStyle" class="prep-input" title="One named look for the cover title and subtitle: the font, weight, spacing and shading together. Applies to both cover layouts.">
-                <option value="chronicle">Chronicle &mdash; the classic Campaignia cover</option>
-                <option value="engraved">Engraved &mdash; heavy, cut into stone</option>
-                <option value="pulp">Pulp &mdash; bold outline, poster energy</option>
-                <option value="manuscript">Manuscript &mdash; wide, restrained, ruled</option>
-                <option value="quill">Quill &mdash; a flowing hand</option>
-              </select>
-              <div class="prep-field-label">Title placement</div>
-              <select id="pcl-titlePlace" class="prep-input" title="Where the title and subtitle sit on the cover. The dark scrim behind the type and the framing of the artwork both follow this, so the title stays readable and never covers the part of the picture worth keeping.">
-                <option value="bottom">Bottom</option>
-                <option value="middle">Middle</option>
-                <option value="top">Top</option>
-              </select>
-              <div class="prep-field-label">Title size</div>
-              <select id="pcl-titleSize" class="prep-input" title="How large the title and subtitle are drawn. Both cover layouts scale by the same ratio, so each keeps its own proportions.">
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
-              </select>
+              <!-- v3.0.632 -- ON THE ROW WITH THE DROPDOWN, not the row with the label. v3.0.630 put
+                   the swatch beside the words "Title style"; Ian marked the select itself. The two
+                   set the same thing, so they belong on the same line. -->
+              <div class="prep-style-color-row">
+                <select id="pcl-titleStyle" class="prep-input" title="One named look for the cover title and subtitle: the font, weight, spacing and shading together. Applies to both cover layouts.">
+                  <option value="chronicle">Chronicle &mdash; the classic Campaignia cover</option>
+                  <option value="engraved">Engraved &mdash; heavy, cut into stone</option>
+                  <option value="pulp">Pulp &mdash; bold outline, poster energy</option>
+                  <option value="manuscript">Manuscript &mdash; wide, restrained, ruled</option>
+                  <option value="quill">Quill &mdash; a flowing hand</option>
+                </select>
+                <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" title="Colour of the cover title and subtitle. Switched off while a drawn title from the Title Builder is on the cover." />
+              </div>
+              <!-- v3.0.627 -- Ian: "Put Title Placement Drop down and Title Size Dropdown boxes next
+                   to each other on the same row. They are small and take up too much vertical space."
+                   Paired because they are the same KIND of choice -- both adjust the same type on the
+                   same cover -- where Title style above them picks the look and belongs on its own.
+                   The ids, classes and handlers are untouched: prepApplyOwnershipLock and
+                   prepApplyTitleModeLock both find these by id, and a rename here would have quietly
+                   unhooked the built-title lock. -->
+              <div class="prep-field-pair">
+                <div class="prep-field-col">
+                  <div class="prep-field-label">Title placement</div>
+                  <select id="pcl-titlePlace" class="prep-input" title="Where the title and subtitle sit on the cover. The dark scrim behind the type and the framing of the artwork both follow this, so the title stays readable and never covers the part of the picture worth keeping.">
+                    <option value="bottom">Bottom</option>
+                    <option value="middle">Middle</option>
+                    <option value="top">Top</option>
+                  </select>
+                </div>
+                <div class="prep-field-col">
+                  <div class="prep-field-label">Title size</div>
+                  <select id="pcl-titleSize" class="prep-input" title="How large the title and subtitle are drawn. Both cover layouts scale by the same ratio, so each keeps its own proportions.">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                </div>
+              </div>
               <div class="prep-field-label">Cover, Back &amp; Title images</div>
               <div class="prep-img-slots">
                 <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-cover" onclick="openPrepImagePicker('cover')"></div><div class="prep-img-cap">Cover</div></div>
@@ -365,28 +410,52 @@
                 </label>
                 <label class="cl-field" title="Typeface used for the narrative / body text"><span>Body font</span>
                   <select id="pcl-font">
-                    <option value="classic">Classic serif (Crimson)</option>
-                    <option value="garamond">Elegant (EB Garamond)</option>
-                    <option value="lora">Modern serif (Lora)</option>
-                    <option value="merriweather">Bookish (Merriweather)</option>
-                    <option value="sans">Clean sans (Helvetica)</option>
-                    <option value="mono">Typewriter (Courier)</option>
-                    <option value="script">Cursive script (Dancing Script)</option>
-                    <option value="journal">Handwritten journal (Caveat)</option>
-                    <option value="comic">Comic lettering (Comic Neue)</option>
+                    <option value="classic" style="font-family:'Crimson Text',Georgia,serif;font-size:15px;">Classic serif (Crimson)</option>
+                    <option value="garamond" style="font-family:'EB Garamond',Georgia,serif;font-size:15px;">Elegant (EB Garamond)</option>
+                    <option value="lora" style="font-family:'Lora',Georgia,serif;font-size:15px;">Modern serif (Lora)</option>
+                    <option value="merriweather" style="font-family:'Merriweather',Georgia,serif;font-size:15px;">Bookish (Merriweather)</option>
+                    <option value="sans" style="font-family:Helvetica,Arial,sans-serif;font-size:15px;">Clean sans (Helvetica)</option>
+                    <option value="mono" style="font-family:'Courier New',Courier,monospace;font-size:15px;">Typewriter (Courier)</option>
+                    <option value="script" style="font-family:'Dancing Script',cursive;font-size:15px;">Cursive script (Dancing Script)</option>
+                    <option value="journal" style="font-family:'Caveat',cursive;font-size:15px;">Handwritten journal (Caveat)</option>
+                    <option value="comic" style="font-family:'Comic Neue','Comic Sans MS',cursive;font-size:15px;">Comic lettering (Comic Neue)</option>
                   </select>
                 </label>
               </div>
               <div class="pcl-toggles" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:10px;">
                 <label class="cl-toggle" title="Large decorative first letter on the opening paragraph"><input type="checkbox" id="pcl-dropcap"><span>Drop cap on opening</span></label>
                 <label class="cl-toggle" title="Show the campaign / session header at the top of each page"><input type="checkbox" id="pcl-header"><span>Running page header</span></label>
-                <div class="pcl-toggle-pair">
+                <!-- v3.0.612 -- THE TWO DEPENDENT PAIRS SIT OPPOSITE EACH OTHER. Ian, 2026-08-10:
+                     "put the Include Character Page check box (with its sub check box) opposite the
+                     Session Dividers check box. They both have sub checkboxes so they will take up
+                     the same height."
+                     A SHARED ROW rather than adjacency in the outer grid: .pcl-toggles is auto-fit,
+                     so how many controls land on a line depends on the panel width, and merely
+                     moving these next to each other would leave them opposite at some widths and
+                     split across rows at others. This wrapper spans the full row and lays the two
+                     pairs out itself, so they are opposite whenever there is room and stack when
+                     there is not. -->
+                <div class="pcl-pair-row">
+                  <div class="pcl-toggle-pair">
                   <label class="cl-toggle" title="Show the decorative divider at the start of each session"><input type="checkbox" id="pcl-markers" onchange="prepSyncMarkerBreak()"><span>Session dividers</span></label>
                   <label class="cl-toggle" id="pcl-markerbreak-label" title="Start each session on a fresh page (only applies when Session dividers is on)" style="padding-left:26px;"><input type="checkbox" id="pcl-markerbreak"><span>New page per session</span></label>
+                  </div>
+                <!-- v3.0.611 -- NPCs on the character page, dependent on the character page itself,
+                     using the same pcl-toggle-pair the session-divider controls use. Ian:
+                     "add an option to the check box layout options to Include NPCs in Character
+                     Page, then make it include NPCs from the canonical character list on the
+                     Company page." Off by default, so no book already in print changes. -->
+                  <div class="pcl-toggle-pair">
+                  <label class="cl-toggle" title="Include the character / cast page"><input type="checkbox" id="pcl-cast" onchange="prepSyncCastNpc()"><span>Include character page</span></label>
+                  <label class="cl-toggle" id="pcl-castnpc-label" title="Also show your NPCs on the character page (only applies when Include character page is on). A large cast is drawn smaller." style="padding-left:26px;"><input type="checkbox" id="pcl-castnpc"><span>Include NPCs</span></label>
+                  </div>
                 </div>
                 <label class="cl-toggle" title="Include the cover page"><input type="checkbox" id="pcl-cover"><span>Include cover page</span></label>
-                <label class="cl-toggle" id="pcl-hidelogo-label" title="Hiding the logo is a Platinum feature"><input type="checkbox" id="pcl-hidelogo" disabled><span>Hide Campaignia logo</span></label>
-                <label class="cl-toggle" title="Include the character / cast page"><input type="checkbox" id="pcl-cast"><span>Include character page</span></label>
+                <!-- v3.0.616 -- HIDE CAMPAIGNIA LOGO IS GONE. Ian: the mark moves to the BACK cover and
+                     is always on, so there is nothing left to toggle. It was a Platinum-gated control;
+                     removing it retires that perk, which the landing-page tier copy (TD-387) must stop
+                     claiming. The `hidelogo` key stays in CO_DEFAULTS so stored co strings still parse,
+                     but nothing reads it any more. -->
                 <label class="cl-toggle" title="Include a table of contents listing the sessions"><input type="checkbox" id="pcl-toc"><span>Include table of contents</span></label>
               </div>
               <div style="display:flex;gap:8px;margin-top:14px;">
@@ -1729,6 +1798,111 @@
     <div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">A copy of this image is saved as a reusable asset, independent of the archived original.</div>
   </div>
 </div>
+<!-- v3.0.617 -- TITLE BUILDER (TD-357), stage one. Modelled on the Asset modal at Ian request, with
+     two differences he specified: the title and subtitle are LABELS rather than fields, because they
+     belong to the book and are read server-side at generation time -- a typed string here could make
+     the artwork say something the book does not -- and there is one Generate button that reads the
+     description and the reference together. Every press costs a token. -->
+<div class="modal-overlay hidden" id="title-build-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Title Builder</div>
+      <button class="modal-close" onclick="closeTitleBuilder()">&times;</button>
+    </div>
+    <div id="title-build-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <div class="tb-readonly" id="title-build-title">&mdash;</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Subtitle</label>
+      <div class="tb-readonly" id="title-build-sub">&mdash;</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">how the lettering should look</span></label>
+      <textarea class="form-input" id="title-build-desc" rows="3" placeholder="e.g. heavy brush strokes, tapered ends, gold on black, like a martial arts poster"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Reference image <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">optional, steers the look</span></label>
+      <!-- v3.0.622 -- THE URL BOX IS GONE FROM VIEW, not from the page. Ian: "we don't need to see the
+           Reference URL field." It stays as a hidden input because it is the one place the chosen
+           reference lives, and Generate reads it -- moving that into a variable would put the same
+           value in two places. Drag and drop mirrors the Assets modal exactly (asset-drop), including
+           the drag-over class, rather than inventing a second feel for the same gesture. -->
+      <input type="hidden" id="title-build-ref" />
+      <input type="file" id="title-build-file" accept="image/*" style="display:none;" onchange="titleBuildUpload(this)" />
+      <!-- v3.0.629 -- UPLOAD IS GONE BECAUSE THE BOX ALREADY IS THE UPLOAD. Ian: "Get rid of the
+           Upload button.. it is redundant." Clicking anywhere on this zone opens the file picker,
+           which is exactly what that button did. From Archive moves onto the box as a pill, like the
+           buttons on the artwork below it.
+
+           THE PILLS MUST STOP THE CLICK. They sit inside a div whose own onclick opens the file
+           picker, so without stopPropagation, choosing From Archive would open the archive picker AND
+           the operating system file dialog on top of it. -->
+      <div class="tb-drop" id="title-build-drop" onclick="titleBuildPickFile()"
+           ondragover="handleTitleRefDragOver(event)" ondragleave="handleTitleRefDragLeave(event)" ondrop="handleTitleRefDrop(event)">
+        <div class="panel-img-actions">
+          <button class="panel-pill" onclick="event.stopPropagation();openTitleRefPicker()" title="Steer this from a title you have already archived">From Archive</button>
+          <button class="panel-pill hidden" id="title-build-ref-clear" onclick="event.stopPropagation();titleBuildClearRef()" title="Remove this reference image">Clear</button>
+        </div>
+        <div class="tb-drop-empty" id="title-build-drop-empty">
+          <div style="font-size:24px;line-height:1;">&#8681;</div>
+          <div>Drop an image here, or click to choose one</div>
+        </div>
+        <img class="tb-drop-preview hidden" id="title-build-ref-img" alt="Reference image" />
+      </div>
+
+    </div>
+    <div class="tb-warn hidden" id="title-build-warn"></div>
+    <!-- v3.0.622 -- THE PILLS SIT ON THE PICTURE, like everywhere else. Ian: "Put the Archive button on
+         the rendered image just like we do elsewhere. When you mouse over the button appears."
+         .panel-pill is opacity:0 by default and is revealed by a hover rule written once PER WRAPPER
+         -- there are three in the stylesheet and this needed a fourth. Without it every one of these
+         buttons exists, works, and is invisible forever. -->
+    <!-- v3.0.629 -- Generate sits with the description and the reference that feed it, above the
+         result it produces, rather than in the footer beside Done. Ian marked the move on a
+         screenshot. Done stays in the footer, where a close button belongs. -->
+    <div class="tb-gen-row">
+      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
+    </div>
+    <div class="tb-result" id="title-build-result">
+      <!-- v3.0.629 -- Ian: "make it so when you open the Title builder the Replace button is there
+           before you ever hit generate... So you can pull something in from the Archive right away
+           without generating." Replace lived only on the artwork, so an empty builder could not reach
+           the Archive at all -- you had to spend a token drawing something you did not want first.
+
+           TWO STRIPS, NEVER BOTH: _tbShowResult toggles this one against the artwork strip, so there
+           is exactly one Replace on screen in either state. -->
+      <div class="tb-empty" id="title-build-empty">
+        <div>Nothing built yet. Generate to draw your title as artwork.</div>
+        <button class="panel-pill is-static-shown" id="title-build-empty-replace" onclick="openTitleReplacePicker()" title="Put an archived title on the book without generating">Replace from Archive</button>
+      </div>
+      <div class="tb-imgwrap hidden" id="title-build-imgwrap">
+        <!-- v3.0.633 -- Ian: "make it so if you click the generated image for the title it pops out
+             bigger. the Click to enlarge option." Same openLightbox every other image in the product
+             uses -- the panels, the character reference, the assets -- rather than a second viewer. -->
+        <img id="title-build-img" alt="Built title" style="cursor:zoom-in;"
+             onclick="openLightbox(this.src, 'Built title')" title="Click to enlarge" />
+        <div class="panel-img-actions">
+          <button class="panel-pill" id="title-build-retouch-btn" onclick="titleBuildRetouchOpen()" title="Keep this title and change just one thing. Costs a token.">Retouch</button>
+          <!-- v3.0.624 -- Revert, shown only when there is something to go back to, exactly as the
+               storyboard panel and the character reference do. A retouch costs a token and can come
+               back worse; without this the only way out was to spend another one. -->
+          <button class="panel-pill hidden" id="title-build-revert-btn" onclick="titleBuildRevert()" title="Undo the last retouch - restore the previous title">Revert</button>
+          <button class="panel-pill" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
+          <button class="panel-pill" id="title-build-archive-btn" onclick="titleBuildArchiveToggle()" title="Save this title to your Archive">Archive</button>
+          <button class="panel-pill" onclick="titleBuildRemove()" title="Take the drawn title off the book and go back to the title styles">Remove</button>
+        </div>
+      </div>
+    </div>
+    <!-- v3.0.624 -- THE INLINE RETOUCH BOX IS GONE. Ian: "Handle it Just like the storyboard tab.
+         It opens a modal where you type your description." A second way to say the same thing, two
+         keystrokes from a control that already had one, is a worse cost than the shared branch. -->
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTitleBuilder()">Done</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="asset-modal">
   <div class="modal">
     <div class="modal-header">
@@ -1996,6 +2170,26 @@
 </div>
 
 <!-- Confirm modal for handing off the Story Master role. -->
+<!-- v3.0.624 -- A REUSABLE CONFIRM, not a seventh single-use one. Ian: "I get a big ugly message box
+     ... Put that Message in one of our own prettier warning Modals." There are five raw confirm()
+     calls left in app.js; each existing pretty confirm in this file is bespoke to one action, which is
+     why the sixth reached for the browser instead. This one takes its words and its handler from the
+     caller so the remaining four can move across without new markup. -->
+<div class="modal-overlay hidden" id="app-confirm-modal" onclick="if(event.target===this)closeAppConfirm()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title" id="app-confirm-title">Are you sure?</div>
+      <button class="modal-close" onclick="closeAppConfirm()">&times;</button>
+    </div>
+    <p style="color:var(--text);margin-bottom:8px;" id="app-confirm-body"></p>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;" id="app-confirm-note"></p>
+    <div class="modal-footer">
+      <button class="btn" id="app-confirm-cancel" onclick="closeAppConfirm()">Cancel</button>
+      <button class="btn btn-primary" id="app-confirm-ok" onclick="appConfirmAccept()">Yes</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="confirm-make-dm-modal" onclick="if(event.target===this)closeMakeDmConfirm()">
   <div class="modal" style="max-width:460px;">
     <div class="modal-header">
@@ -2407,15 +2601,15 @@
       </label>
       <label class="cl-field" title="Typeface used for the narrative / body text"><span>Body font</span>
         <select id="cl-font">
-          <option value="classic">Classic serif (Crimson)</option>
-          <option value="garamond">Elegant (EB Garamond)</option>
-          <option value="lora">Modern serif (Lora)</option>
-          <option value="merriweather">Bookish (Merriweather)</option>
-          <option value="sans">Clean sans (Helvetica)</option>
-          <option value="mono">Typewriter (Courier)</option>
-          <option value="script">Cursive script (Dancing Script)</option>
-          <option value="journal">Handwritten journal (Caveat)</option>
-          <option value="comic">Comic lettering (Comic Neue)</option>
+          <option value="classic" style="font-family:'Crimson Text',Georgia,serif;font-size:15px;">Classic serif (Crimson)</option>
+          <option value="garamond" style="font-family:'EB Garamond',Georgia,serif;font-size:15px;">Elegant (EB Garamond)</option>
+          <option value="lora" style="font-family:'Lora',Georgia,serif;font-size:15px;">Modern serif (Lora)</option>
+          <option value="merriweather" style="font-family:'Merriweather',Georgia,serif;font-size:15px;">Bookish (Merriweather)</option>
+          <option value="sans" style="font-family:Helvetica,Arial,sans-serif;font-size:15px;">Clean sans (Helvetica)</option>
+          <option value="mono" style="font-family:'Courier New',Courier,monospace;font-size:15px;">Typewriter (Courier)</option>
+          <option value="script" style="font-family:'Dancing Script',cursive;font-size:15px;">Cursive script (Dancing Script)</option>
+          <option value="journal" style="font-family:'Caveat',cursive;font-size:15px;">Handwritten journal (Caveat)</option>
+          <option value="comic" style="font-family:'Comic Neue','Comic Sans MS',cursive;font-size:15px;">Comic lettering (Comic Neue)</option>
         </select>
       </label>
     </div>
@@ -2432,8 +2626,13 @@
 
     <div id="cl-pages-group" class="cl-grid" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
       <label class="cl-toggle" title="Include the cover page"><input type="checkbox" id="cl-cover"><span>Include cover page</span></label>
-      <label class="cl-toggle" id="cl-hidelogo-label" title="Hiding the logo is a Platinum feature"><input type="checkbox" id="cl-hidelogo" disabled><span>Hide Campaignia logo</span></label>
-      <label class="cl-toggle cl-novel-only" title="Include the character / cast page (graphic novel only)"><input type="checkbox" id="cl-cast"><span>Include character page</span></label>
+                <!-- v3.0.616 -- HIDE CAMPAIGNIA LOGO IS GONE. Ian: the mark moves to the BACK cover and
+                     is always on, so there is nothing left to toggle. It was a Platinum-gated control;
+                     removing it retires that perk, which the landing-page tier copy (TD-387) must stop
+                     claiming. The `hidelogo` key stays in CO_DEFAULTS so stored co strings still parse,
+                     but nothing reads it any more. -->
+      <label class="cl-toggle cl-novel-only" title="Include the character / cast page (graphic novel only)"><input type="checkbox" id="cl-cast" onchange="clSyncCastNpc()"><span>Include character page</span></label>
+      <label class="cl-toggle cl-novel-only" id="cl-castnpc-label" title="Also show your NPCs on the character page (only applies when Include character page is on). A large cast is drawn smaller." style="padding-left:26px;"><input type="checkbox" id="cl-castnpc"><span>Include NPCs</span></label>
       <label class="cl-toggle cl-novel-only" title="Include a table of contents listing the sessions (graphic novel only)"><input type="checkbox" id="cl-toc"><span>Include table of contents</span></label>
     </div>
 
