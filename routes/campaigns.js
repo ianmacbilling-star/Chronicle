@@ -6,6 +6,7 @@ const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, si
 const { checkCampaignLimit, getEffectiveTier, isTruePlatinum, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile, archiveCopy, restoreCopy, uploadFile, releaseImage } = require('../storage/storage');
 const { flattenOntoColour } = require('../storage/alpha');
+const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422
 
 // List campaigns the user is a member of (any role — DM or player). This
 // is the entry point users hit after login, and Phase 2 makes it
@@ -431,14 +432,10 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
 // layout_meta holds the subtitle and the uncut original -- layout_meta is already the free-form
 // per-image column (it carries focal/crop_safe for panels), so no schema change is needed.
 
-// Shared by all three: resolve the book scope, prove ownership, and hand back the prefs.
-async function titleScope(db, req) {
-  const cid = req.params.campaignId;
-  const sc = await bookPrefsScope(db, req, Number(cid));
-  if (!(await ownsBookVersion(db, req.session.userId, sc.bookVersionId))) return { error: 'You are looking at someone else\u2019s version. Switch to your own version to change the title.' };
-  const cur = await getForkBookPrefs(db, req.session.userId, sc.fork, cid, { inherit: true, versionId: sc.versionId });
-  return { sc: sc, cur: cur, cid: cid };
-}
+// v3.0.636 -- titleScope is gone; these three routes call resolveTitleTarget, the same adapter
+// routes/images.js uses. It was a second hand-written copy of resolve-scope-prove-ownership-read,
+// and the ownership refusal it returned had to be word-identical to the other copy to keep the
+// message consistent -- which is exactly the kind of agreement that stops being true (TD-422).
 
 // POST /:campaignId/my-book-meta/archive-title -- save the built title into the campaign Archive.
 // The URL is READ FROM THE VERSION, never taken from the body: a client-named URL would let anything
@@ -451,18 +448,18 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
       return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
     }
     const db = await getDb();
-    const t = await titleScope(db, req);
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
     if (t.error) return res.status(403).json({ error: t.error });
-    const liveUrl = t.cur.built_title_url || '';
+    const liveUrl = t.current.url;
     if (!liveUrl) return res.json({ error: 'There is no built title to archive yet.' });
 
     // Same cap, same message, same tier as every other archive. Ian: "Fine for the count too."
     try {
-      const effName = await getEffectiveTier(req.session.userId, t.cid);
+      const effName = await getEffectiveTier(req.session.userId, t.campaignId);
       const effTier = getTier(effName);
       const cap = effTier ? effTier.max_archives_per_campaign : null;
       if (cap !== null && cap !== undefined) {
-        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(t.cid);
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(t.campaignId);
         if (cnt && cnt.c >= cap) {
           return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
         }
@@ -473,12 +470,12 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
     // The uncut original is archived TOO when there is one, because it is the picture a later Retouch
     // or Reference wants and the live copy it points at is not protected from cleanup.
     let archivedSrc = '';
-    if (t.cur.built_title_src) {
-      try { archivedSrc = await archiveCopy(t.cur.built_title_src); }
+    if (t.current.src) {
+      try { archivedSrc = await archiveCopy(t.current.src); }
       catch (e) { console.error('archive built-title source failed (keeping the cut copy):', e.message); }
     }
     const meta = JSON.stringify({
-      subtitle: (t.cur.built_title_sub == null ? null : String(t.cur.built_title_sub)),
+      subtitle: t.current.sub,
       src: archivedSrc || null
     });
     const now = new Date().toISOString();
@@ -492,8 +489,8 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
     // and the name matching is exactly why it was never checked against the column it was going into.
     // A built title belongs to a book version and has no session fork at all, so NULL is also the
     // true answer -- the archives list LEFT JOINs session_forks, which is built for that.
-    ).run(t.cid, null, 'title', t.cur.built_title_text || t.cur.book_title || null,
-          archivedUrl, liveUrl, t.cur.built_title_prompt || null, meta, req.session.userId, now);
+    ).run(t.campaignId, null, 'title', t.current.text || t.current.bookTitle || null,
+          archivedUrl, liveUrl, t.current.prompt || null, meta, req.session.userId, now);
     const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
     return res.json({ success: true, archive: row });
   } catch (e) {
@@ -513,9 +510,9 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
       return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
     }
     const db = await getDb();
-    const t = await titleScope(db, req);
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
     if (t.error) return res.status(403).json({ error: t.error });
-    const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, t.cid);
+    const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, t.campaignId);
     if (!arch || !arch.image_url) return res.json({ error: 'Archived title not found.' });
     if (arch.image_type !== 'title') return res.json({ error: 'That archived image is not a title.' });
 
@@ -525,24 +522,23 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
     let freshSrc = '';
     if (meta && meta.src) { try { freshSrc = await restoreCopy(meta.src); } catch (e) { console.error('restore built-title source failed:', e.message); } }
 
-    const prevUrl = t.cur.built_title_url, prevSrc = t.cur.built_title_src;
+    const prevUrl = t.current.url, prevSrc = t.current.src;
     // The WORDS travel with the picture. Without them the mismatch warning would compare the book's
     // title against whatever the PREVIOUS title had drawn on it, and quietly say the wrong thing.
-    const patch = {
-      built_title_url: freshUrl,
-      built_title_src: freshSrc || null,
-      built_title_text: arch.title || null,
-      built_title_sub: (meta && meta.subtitle !== undefined) ? meta.subtitle : null
-    };
-    const merged = await setForkBookPrefs(db, req.session.userId, t.sc.fork, t.cid, patch, t.sc.versionId);
+    const merged = await t.write({
+      url: freshUrl,
+      src: freshSrc || '',
+      text: arch.title || '',
+      sub: (meta && meta.subtitle !== undefined) ? meta.subtitle : null
+    });
     if (prevUrl && prevUrl !== freshUrl) { try { await releaseImage(db, prevUrl); } catch (e) {} }
     if (prevSrc && prevSrc !== freshSrc) { try { await releaseImage(db, prevSrc); } catch (e) {} }
     return res.json({
       success: true,
-      built_title_url: merged.built_title_url || '',
-      built_title_src: merged.built_title_src || '',
-      built_title_text: merged.built_title_text || '',
-      built_title_sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub))
+      built_title_url: merged.url,
+      built_title_src: merged.src,
+      built_title_text: merged.text,
+      built_title_sub: merged.sub
     });
   } catch (e) {
     console.error('restore-title error:', e && e.message);

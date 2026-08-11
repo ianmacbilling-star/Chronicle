@@ -3,9 +3,10 @@ const genresvc = require('../services/genres');   // v3.0.488 -- stage 4, campai
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
-const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, getForkBookPrefs, bookPrefsScope, ownsBookVersion } = require('../database/db');
+const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
 const { releaseImage, persistToR2 } = require('../storage/storage');
-const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');   // v3.0.622 -- the title cut, now run as its own step
+const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');
+const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
@@ -1849,25 +1850,10 @@ async function chargeForTitleCall(req, cost, modelKey, source) {
   return spendOk;
 }
 
-// resolveOwnBuiltTitle: read the built title off the version ON SCREEN, and only if the caller owns it.
-//
-// A retouch edits a picture, so the picture has to be named. Naming it in the request body would let
-// any URL be fed to the model on the user's token, so it is read here from the same prefs blob every
-// render path reads -- with the SAME ownership test the my-book-meta PUT uses, derived rather than
-// copied: are you the owner of the version on screen.
-async function resolveOwnBuiltTitle(db, req, campaignId) {
-  const sc = await bookPrefsScope(db, req, Number(campaignId));
-  if (!(await ownsBookVersion(db, req.session.userId, sc.bookVersionId))) {
-    return { error: 'You are looking at someone else\u2019s version. Switch to your own version to change the title.' };
-  }
-  const cur = await getForkBookPrefs(db, req.session.userId, sc.fork, campaignId, { inherit: true, versionId: sc.versionId });
-  return {
-    cutUrl: cur.built_title_url || '',
-    srcUrl: cur.built_title_src || '',
-    text: cur.built_title_text || '',
-    sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub))
-  };
-}
+// v3.0.636 -- resolveOwnBuiltTitle is gone. It and titleScope in routes/campaigns.js did the same
+// three things in their own words -- resolve the scope, prove ownership, read the prefs -- and
+// differed only in the shape they returned. Both now call resolveTitleTarget, which answers in
+// neutral field names so that a chapter title can be stored somewhere else entirely (TD-422).
 
 // titleModelInput: the picture the MODEL should look at, which is not always the picture we store.
 //
@@ -2049,7 +2035,7 @@ async function imageHasAlpha(url) {
 // to it would be a worse answer than the plumbing it saves.
 //
 // THE PICTURE IS NOT NAMED BY THE CALLER. It is read from the version on screen, by the owner of that
-// version, through resolveOwnBuiltTitle -- otherwise any URL at all could be pushed through fal on
+// version, through resolveTitleTarget -- otherwise any URL at all could be pushed through fal on
 // this user's token.
 router.post('/title-retouch', requireAuth, async function (req, res) {
   try {
@@ -2067,9 +2053,9 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return res.json({ error: 'Campaign not found.' });
 
-    const own = await resolveOwnBuiltTitle(db, req, campaignId);
+    const own = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (own.error) return res.status(403).json({ error: own.error });
-    if (!own.cutUrl && !own.srcUrl) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
+    if (!own.current.url && !own.current.src) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
 
     const fal_key = process.env.FAL_API_KEY;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
@@ -2080,7 +2066,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     }
 
     // The uncut original when we have one, else the cut image with its ground painted back on.
-    const input = await titleModelInput(own.srcUrl, own.cutUrl);
+    const input = await titleModelInput(own.current.src, own.current.url);
     if (!input.url) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
 
     // IMPERATIVE AND ABSOLUTE, the same register the generate prompt uses. The ground instruction is
