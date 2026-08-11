@@ -3222,7 +3222,9 @@ function renderReview(data) {
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
-        castBadge + resetBtn + '<div class="review-actions-inline">' + pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu +
+        castBadge + resetBtn + '<div class="review-actions-inline">' +
+          (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
+          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu +
       '</div>' +
       (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(formatOutlineText(pOutText)) + '</div>' : '') +
       changeNote +
@@ -7653,6 +7655,55 @@ function _tbTitle() {
   if (!t && state.currentCampaign) t = String(state.currentCampaign.name || '').trim();
   return t;
 }
+// =====================================================================================================
+// WHAT THE TITLE BUILDER IS POINTED AT  (TD-422 stage 3c)
+// =====================================================================================================
+// Ian: the Title Builder on a chapter's opening image, "SO they can title their chapters with words
+// instead of a Picture."
+//
+// ONE PIECE OF STATE, SET ON OPEN AND CLEARED ON CLOSE. state._tbTarget outliving the modal is
+// exactly the fault Ian found in TD-403, where the reference image survived a version switch because
+// nothing ever cleared it. This is cleared in closeTitleBuilder and defaulted on every read, so a
+// stale chapter target cannot quietly redirect a book title.
+// _tbChapterBtn: the Title Builder button for a chapter's opening image.
+//
+// v3.0.641 -- ONE builder for both surfaces Ian marked (Review tab, and the opening image's pill
+// row). They take different classes, so the markup differs, but the decision of WHEN to offer it
+// and WHERE it points is made once.
+//
+// The session id comes from the moment being rendered, not from whatever session the page thinks is
+// current -- the Review tab and Storyboard both render rows that outlive a session switch.
+function _tbChapterBtn(sessionId, cls, label) {
+  if (!sessionId) return '';
+  return '<button class="' + cls + '" onclick="openTitleBuilder({kind:\'session\',campaignId:' +
+         ((state.currentCampaign && state.currentCampaign.id) || 0) + ',sessionId:' + sessionId + '})" ' +
+         'title="Draw this chapter title as artwork instead of a scene. Costs a token.">' + label + '</button>';
+}
+
+function _tbTarget() {
+  return (state && state._tbTarget) || { kind: 'book' };
+}
+function _tbIsSession() { return _tbTarget().kind === 'session'; }
+
+// _tbBody: the target, in the shape every title route reads it. One builder, so a route that gains
+// a field does not need six call sites updated.
+function _tbBody(extra) {
+  var t = _tbTarget();
+  var body = Object.assign({ campaignId: state.currentCampaign && state.currentCampaign.id }, extra || {});
+  if (t.kind !== 'book') body.target = t;
+  return body;
+}
+
+// _tbCur: the title on the target right now. For a book this rides along with bookMeta as it always
+// has; for a chapter it is fetched by title-read and held here for the life of the modal.
+function _tbCur() {
+  if (_tbIsSession()) return (state && state._tbSessionCur) || {};
+  var bm = (state && state.bookMeta) || {};
+  return { url: bm.built_title_url || '', src: bm.built_title_src || '', text: bm.built_title_text || '',
+           sub: (bm.built_title_sub == null ? null : String(bm.built_title_sub)),
+           prompt: bm.built_title_prompt || '', prevUrl: bm.built_title_prev || '' };
+}
+
 // _tbBookKey: which book the modal is currently showing. Campaign AND version, because switching
 // either one puts a different book on screen.
 function _tbBookKey() {
@@ -7685,7 +7736,10 @@ function platinumGate(what, why) {
   });
 }
 
-function openTitleBuilder() {
+// openTitleBuilder(target) -- target defaults to the book, so the Prep panel button is unchanged.
+function openTitleBuilder(target) {
+  state._tbTarget = (target && target.kind) ? target : { kind: 'book' };
+  state._tbSessionCur = null;
   if (!state.currentCampaign) return;
   // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
   // the title builder. When I hit the button I should get a message stating such."
@@ -7702,7 +7756,10 @@ function openTitleBuilder() {
   // reachable from elsewhere. TD-423 may well change this rule for Story Masters -- when it does,
   // this and the six routes move together, because both read ownsBookVersion, which has been one
   // function since v3.0.622.
-  if (typeof novelOwnView === 'function' && !novelOwnView()) {
+  // v3.0.641 -- a BOOK question only. A chapter's ownership is its session fork, which
+  // resolveTitleTarget answers server-side; novelOwnView here would refuse a chapter you do own
+  // simply because the book version on screen belongs to someone else.
+  if (!_tbIsSession() && typeof novelOwnView === 'function' && !novelOwnView()) {
     appConfirm({
       title: 'This version is not yours',
       body: 'You are looking at someone else\u2019s version of this book, so its cover cannot be changed from here.',
@@ -7734,13 +7791,18 @@ function openTitleBuilder() {
   // Seed the description from what actually drew this title, so reopening shows the words that
   // produced the picture on screen instead of an empty box.
   var dEl = _tbEl('title-build-desc');
-  if (dEl && !dEl.value && state.bookMeta && state.bookMeta.built_title_prompt) dEl.value = state.bookMeta.built_title_prompt;
+  // A chapter's description arrives with title-read; seeding from the book here would put the
+  // cover's wording into a chapter's box.
+  if (!_tbIsSession() && dEl && !dEl.value && state.bookMeta && state.bookMeta.built_title_prompt) dEl.value = state.bookMeta.built_title_prompt;
 
   // Show whatever this version already has, so reopening is not a blank slate.
   // v3.0.618 -- built_title_url, NOT title_image_url. That one is the book title PAGE artwork, the
   // third image in the Prep panel, and v3.0.617 both displayed it here and would have overwritten
   // it on the first Generate. Ian spotted it before it cost him anything.
-  var existing = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  // v3.0.641 -- for a chapter the modal opens empty and fills in when title-read answers, rather
+  // than showing the BOOK's title while it waits, which would look like the chapter already had one.
+  var existing = _tbIsSession() ? '' : ((state.bookMeta && state.bookMeta.built_title_url) || '');
+  if (_tbIsSession()) _tbLoadSession();
   _tbShowResult(existing);
   titleBuildRetouchClose();
   _tbRenderWarn();
@@ -7753,8 +7815,59 @@ function openTitleBuilder() {
 
 // _tbArchiveRow: the archive entry for the title currently on the book, if there is one. Matched on
 // source_url -- the archive records the LIVE url it was taken from, which is exactly this field.
+// _tbLoadSession: ask the server what is on this chapter, then repaint.
+function _tbLoadSession() {
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  fetch('/api/campaigns/' + cid + '/title-read', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody())
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not read this chapter.'); return; }
+    state._tbSessionCur = d.current || {};
+    state._tbSessionWords = d.words || { title: '', subtitle: '' };
+    var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = (d.words && d.words.title) || 'This chapter has no name yet';
+    var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = 'None';
+    var dEl = _tbEl('title-build-desc');
+    if (dEl && !dEl.value && d.current && d.current.prompt) dEl.value = d.current.prompt;
+    _tbShowResult((d.current && d.current.url) || '');
+    _tbRenderWarn();
+  }).catch(function () { _tbErr('Could not read this chapter.'); });
+}
+
+// _tbSave: ONE call site for every write the modal makes.
+//
+// v3.0.641 -- the two targets take different paths ON PURPOSE, and it is not the drift this module
+// exists to avoid. _prepMetaWrite does more than persist: it owns state.bookMeta, chains writes and
+// keeps the value locally until the server confirms, and the whole Prep panel reads that. A chapter
+// has no such local mirror, so it posts to title-write and holds the answer on state for the life of
+// the modal. Same words, same adapter behind both -- different client state to maintain.
+function _tbSave(patch, then) {
+  if (!_tbIsSession()) {
+    var book = {};
+    if (patch.url !== undefined) book.built_title_url = patch.url;
+    if (patch.src !== undefined) book.built_title_src = patch.src;
+    if (patch.text !== undefined) book.built_title_text = patch.text;
+    if (patch.sub !== undefined) book.built_title_sub = patch.sub;
+    if (patch.prompt !== undefined) book.built_title_prompt = patch.prompt;
+    if (patch.prevUrl !== undefined) book.built_title_prev = patch.prevUrl;
+    if (patch.prevSrc !== undefined) book.built_title_prev_src = patch.prevSrc;
+    if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+    if (then) then();
+    return;
+  }
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  fetch('/api/campaigns/' + cid + '/title-write', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(_tbBody({ patch: patch }))
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not save the title.'); return; }
+    state._tbSessionCur = d.current || {};
+    if (then) then();
+  }).catch(function () { _tbErr('Could not save the title.'); });
+}
+
 function _tbArchiveRow() {
-  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  var url = _tbCur().url || '';
   if (!url) return null;
   return (state.archives || []).find(function (a) {
     return a.image_type === 'title' && String(a.source_url || '') === String(url);
@@ -7773,15 +7886,15 @@ function _tbSyncArchivePill() {
 // Returns '' when there is nothing to say. Used by the modal and by the Prep panel note, so the two
 // can never disagree about whether there is a mismatch.
 function _tbWarnText() {
-  var bm = state.bookMeta || {};
-  if (!bm.built_title_url) return '';
+  var bm = _tbCur();
+  if (!bm.url) return '';
   // A title built before v3.0.622 recorded no words, so there is nothing to compare and we say so
   // rather than guessing that it matches.
-  if (!bm.built_title_text) return '';
+  if (!bm.text) return '';
   var nowT = _tbTitle();
   var nowS = _tbSubtitle();
-  var wasT = String(bm.built_title_text || '');
-  var wasS = (bm.built_title_sub == null) ? '' : String(bm.built_title_sub);
+  var wasT = String(bm.text || '');
+  var wasS = (bm.sub == null) ? '' : String(bm.sub);
   var parts = [];
   if (nowT !== wasT) parts.push('the title now reads \u201c' + nowT + '\u201d but the drawing still says \u201c' + wasT + '\u201d');
   if (String(nowS || '') !== wasS) parts.push('the subtitle now reads \u201c' + (nowS || 'nothing') + '\u201d but the drawing still says \u201c' + (wasS || 'nothing') + '\u201d');
@@ -7802,6 +7915,10 @@ function _tbRenderWarn() {
 // loadNovelPreview is the same call the layout controls make after an Apply, so this is the path that
 // already exists rather than a second way to repaint.
 function closeTitleBuilder() {
+  // v3.0.641 -- clear the target, or a chapter builder closed and the Prep panel one reopened would
+  // still be pointed at the chapter. This is the TD-403 fault in a different field.
+  state._tbTarget = null;
+  state._tbSessionCur = null;
   var m = _tbEl('title-build-modal'); if (m) m.classList.add('hidden');
   try { if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); } catch (e) {}
 }
@@ -7822,7 +7939,7 @@ function _tbShowResult(url) {
   _tbSyncArchivePill();
   // The Revert pill exists only when there is something to go back to, like the storyboard.
   var rv = _tbEl('title-build-revert-btn');
-  if (rv) rv.classList.toggle('hidden', !(url && state.bookMeta && state.bookMeta.built_title_prev));
+  if (rv) rv.classList.toggle('hidden', !(url && _tbCur().prevUrl));
   // v3.0.629 -- there is a Replace in BOTH states and only ever one on screen. The empty-state one
   // exists so the Archive is reachable before a token has been spent; hiding it here rather than
   // relying on tb-empty being hidden keeps the two strips from ever showing together if that
@@ -7940,12 +8057,12 @@ function titleBuildGenerate() {
       // separate calls is how a book ends up with a title whose recorded words belong to the last one.
       // The words come from the SERVER's reply, not from the boxes on screen -- the server is what
       // told the model what to draw.
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-        built_title_url: d.image,
-        built_title_src: d.source || '',
-        built_title_text: d.title || '',
-        built_title_sub: (d.subtitle == null ? '' : String(d.subtitle)),
-        built_title_prompt: ((_tbEl('title-build-desc') || {}).value || '')
+      _tbSave({
+        url: d.image,
+        src: d.source || '',
+        text: d.title || '',
+        sub: (d.subtitle == null ? '' : String(d.subtitle)),
+        prompt: ((_tbEl('title-build-desc') || {}).value || '')
       });
       _tbRenderWarn();
       if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
@@ -8001,8 +8118,10 @@ function titleBuildRetouch(instruction) {
       if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not retouch the title.'); return; }
       // THE UNDO IS RECORDED BEFORE THE NEW PICTURE LANDS, from what is on the book right now.
       // Reading it after the write would record the retouch as its own previous state.
-      var _prevUrl = (state.bookMeta && state.bookMeta.built_title_url) || '';
-      var _prevSrc = (state.bookMeta && state.bookMeta.built_title_src) || '';
+      // v3.0.641 -- through the TARGET. Reading bookMeta here would record the BOOK's artwork as a
+      // chapter's previous, so Revert on a chapter would put the cover title onto the chapter.
+      var _prevUrl = _tbCur().url || '';
+      var _prevSrc = _tbCur().src || '';
       _tbShowResult(d.image);
       if (d.cut === false) {
         _tbErr('The background could not be removed -- the edit came back as a scene rather than lettering on a plain ground. Try a simpler instruction, or Generate again.');
@@ -8012,12 +8131,7 @@ function titleBuildRetouch(instruction) {
       // Claiming it now says the book's current title would be a guess printed as a fact -- and the
       // mismatch warning exists precisely so a wrong claim is worse than an out-of-date one. Editing
       // the title text and rebuilding is what sets the words.
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-        built_title_url: d.image,
-        built_title_src: d.source || '',
-        built_title_prev: _prevUrl,
-        built_title_prev_src: _prevSrc
-      });
+      _tbSave({ url: d.image, src: d.source || '', prevUrl: _prevUrl, prevSrc: _prevSrc });
       titleBuildRetouchClose();
       _tbRenderWarn();
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -8035,16 +8149,11 @@ function titleBuildRetouch(instruction) {
 //
 // NO TOKEN. Nothing is drawn here; a picture that was already paid for is put back on the book.
 function titleBuildRevert() {
-  var prev = (state.bookMeta && state.bookMeta.built_title_prev) || '';
+  var prev = _tbCur().prevUrl || '';
   if (!prev) return;
-  var prevSrc = (state.bookMeta && state.bookMeta.built_title_prev_src) || '';
+  var prevSrc = (_tbCur().prevSrc) || '';
   _tbErr('');
-  if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-    built_title_url: prev,
-    built_title_src: prevSrc,
-    built_title_prev: '',
-    built_title_prev_src: ''
-  });
+  _tbSave({ url: prev, src: prevSrc, prevUrl: '', prevSrc: '' });
   _tbShowResult(prev);
   _tbRenderWarn();
 }
@@ -8067,10 +8176,7 @@ function titleBuildRemove() {
     danger: !archived,
     onOk: function () {
       _tbErr('');
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-        built_title_url: '', built_title_src: '', built_title_text: '', built_title_sub: '',
-        built_title_prev: '', built_title_prev_src: ''
-      });
+      _tbSave({ url: '', src: '', text: '', sub: '', prevUrl: '', prevSrc: '' });
       _tbShowResult('');
       titleBuildRetouchClose();
       _tbRenderWarn();
@@ -8082,7 +8188,7 @@ function titleBuildRemove() {
 // TD-402. Archive on, archive off -- the same toggle every other image in the product has.
 function titleBuildArchiveToggle() {
   if (!state.currentCampaign) return;
-  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  var url = _tbCur().url || '';
   if (!url) return;
   var row = _tbArchiveRow();
   _tbErr('');
@@ -10646,6 +10752,12 @@ function renderStoryboard() {
     var regenBtn = m.locked
       ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
       : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
+    // v3.0.641 -- the Title Builder pill, FIRST in the row, and only on the opening image. Ian
+    // marked it there on a screenshot. Hidden while locked for the same reason the others are
+    // disabled: a locked panel is one the reader has decided is finished.
+    var titleBtn = (m.kind === 'establishing' && !m.locked && state.currentSession)
+      ? _tbChapterBtn(state.currentSession.id, 'panel-pill dm-only', 'Title Builder')
+      : '';
     var editPromptBtn = m.locked
       ? '<button class="panel-pill pp-edit dm-only" disabled title="Unlock to edit the prompt">Edit prompt</button>'
       : '<button class="panel-pill pp-edit dm-only" onclick="openImagePrompt(' + m.id + ')" title="Edit the image prompt, then Regenerate to apply">Edit prompt</button>';
@@ -10670,7 +10782,7 @@ function renderStoryboard() {
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
     return '<div class="storyboard-panel' + (m.kind === 'establishing' ? ' is-opening' : '') + '" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + '<div class="panel-img-actions">' + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
+        imgHtml + '<div class="panel-img-actions">' + titleBtn + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +

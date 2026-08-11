@@ -437,6 +437,42 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
 // and the ownership refusal it returned had to be word-identical to the other copy to keep the
 // message consistent -- which is exactly the kind of agreement that stops being true (TD-422).
 
+// POST /:campaignId/title-read -- what title is on this target right now (TD-422).
+//
+// v3.0.641 -- the book's title arrives with the rest of my-book-meta, so the Title Builder never
+// needed to ask for it. A chapter's lives on the establishing moment and nothing sends it, so the
+// modal had no way to know whether a chapter already had artwork.
+//
+// POST, not GET, because the target is a structured thing and belongs in a body rather than smeared
+// across a query string -- and because it is the same shape title-write takes. Two routes over one
+// adapter, reading and writing the same words.
+//
+// NOT PLATINUM GATED, deliberately. Reading what is already on your own chapter tells you nothing
+// you could not see by looking at the page, and a lapsed Platinum still needs the modal to show what
+// is there so they can take it off (TD-421).
+router.post('/:campaignId/title-read', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
+    if (t.error) return res.status(403).json({ error: t.error });
+    return res.json({
+      success: true,
+      kind: t.kind,
+      momentId: t.momentId || null,
+      current: {
+        url: t.current.url, src: t.current.src,
+        text: t.current.text, sub: t.current.sub, prompt: t.current.prompt,
+        prevUrl: t.current.prevUrl
+      },
+      // What this target SHOULD draw, so the modal shows the same words the server will use.
+      words: t.current.words || { title: '', subtitle: '' }
+    });
+  } catch (e) {
+    console.error('title-read error:', e && e.message);
+    return res.json({ error: 'Could not read the title for this.' });
+  }
+});
+
 // POST /:campaignId/title-write -- save a built title onto WHATEVER target is named (TD-422).
 //
 // v3.0.639 -- the client wrote titles through the my-book-meta PUT, which only knows about a book.
