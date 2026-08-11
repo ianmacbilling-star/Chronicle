@@ -214,6 +214,10 @@ function appConfirm(opts) {
   var b = document.getElementById("app-confirm-body");  if (b) b.textContent = o.body || "";
   var n = document.getElementById("app-confirm-note");
   if (n) { n.textContent = o.note || ""; n.style.display = o.note ? "" : "none"; }
+  // v3.0.634 -- notice mode: one button, no Cancel. A "you cannot do this, here is why" has
+  // nothing to cancel, and a Cancel beside a lone OK reads as though something is pending.
+  var cancelBtn = document.querySelector('#app-confirm-modal .modal-footer .btn:not(.btn-primary):not(.btn-danger)');
+  if (cancelBtn) cancelBtn.style.display = o.notice ? 'none' : '';
   var ok = document.getElementById("app-confirm-ok");
   if (ok) { ok.textContent = o.okLabel || "Yes"; ok.className = "btn " + (o.danger ? "btn-danger" : "btn-primary"); }
   var m = document.getElementById("app-confirm-modal"); if (m) m.classList.remove("hidden");
@@ -7652,6 +7656,26 @@ function _tbBookKey() {
 }
 function openTitleBuilder() {
   if (!state.currentCampaign) return;
+  // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
+  // the title builder. When I hit the button I should get a message stating such."
+  //
+  // state.user.tier is the account's OWN tier, which is what "true Platinum" means -- a Gold player
+  // in a Platinum Story Master's campaign gets Platinum art on the book but not Platinum tools. The
+  // six routes behind this modal make the same test server-side; this one only saves a round trip.
+  //
+  // A MODAL, NOT A TOAST. The Custom Art Style gate uses showAlert, which slides in at the top right
+  // for two and a half seconds -- easy to miss when you have just clicked something and are looking
+  // at where you clicked. This one has to be read. Worth aligning the two later.
+  if (!(state && state.user && state.user.tier === 'platinum')) {
+    appConfirm({
+      title: 'The Title Builder is a Platinum feature',
+      body: 'Drawing your title as artwork is available on Platinum.',
+      note: 'The five title styles are available on every plan, and they set the title in a real typeface with your chosen colour, size and placement. Upgrade to Platinum to draw the lettering as artwork instead.',
+      okLabel: 'Got it',
+      notice: true
+    });
+    return;
+  }
   _tbErr('');
   var t = _tbTitle(), sub = _tbSubtitle();
   var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || 'This book has no title yet';

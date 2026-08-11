@@ -3,7 +3,7 @@ const router = express.Router();
 const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
-const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
+const { checkCampaignLimit, getEffectiveTier, isTruePlatinum, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile, archiveCopy, restoreCopy, uploadFile, releaseImage } = require('../storage/storage');
 const { flattenOntoColour } = require('../storage/alpha');
 
@@ -445,6 +445,11 @@ async function titleScope(db, req) {
 // on the internet be fetched and stored into someone else's campaign.
 router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampaignMember, async function (req, res) {
   try {
+    // v3.0.634 -- Platinum only, same as the Title Builder itself. Reached only from that modal,
+    // but a route may not rely on which button opened it.
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
     const db = await getDb();
     const t = await titleScope(db, req);
     if (t.error) return res.status(403).json({ error: t.error });
@@ -502,6 +507,11 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
 // and character replaces do, so archives/ is never pointed at by a living book.
 router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampaignMember, async function (req, res) {
   try {
+    // v3.0.634 -- Platinum only, same as the Title Builder itself. Reached only from that modal,
+    // but a route may not rely on which button opened it.
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
     const db = await getDb();
     const t = await titleScope(db, req);
     if (t.error) return res.status(403).json({ error: t.error });
@@ -548,6 +558,11 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
 // no background and what fal decides to put there is neither ours to choose nor visible to us.
 router.post('/:campaignId/my-book-meta/title-ref-from-archive', requireAuth, verifyCampaignMember, async function (req, res) {
   try {
+    // v3.0.634 -- Platinum only, same as the Title Builder itself. Reached only from that modal,
+    // but a route may not rely on which button opened it.
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
     const db = await getDb();
     const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, req.params.campaignId);
     if (!arch || !arch.image_url) return res.json({ error: 'Archived title not found.' });

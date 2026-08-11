@@ -2,7 +2,7 @@ const express = require('express');
 const genresvc = require('../services/genres');   // v3.0.488 -- stage 4, campaign prompt at GENERATION time
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
-const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
+const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, getForkBookPrefs, bookPrefsScope, ownsBookVersion } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
 const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');   // v3.0.622 -- the title cut, now run as its own step
@@ -1920,6 +1920,11 @@ async function titleModelInput(srcUrl, cutUrl) {
 // (ART_STYLES_HANDOFF 8). Hence commands rather than an evocative paragraph.
 router.post('/title-build', requireAuth, async function (req, res) {
   try {
+    // v3.0.634 -- PLATINUM ONLY, AND CHECKED HERE AS WELL AS ON THE BUTTON. The modal refuses to
+    // open for anyone else, but a button is a courtesy and a route is the rule.
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
     const campaignId = req.body && req.body.campaignId;
     if (!campaignId) return res.json({ error: 'No campaign.' });
     const db = await getDb();
@@ -2048,6 +2053,11 @@ async function imageHasAlpha(url) {
 // this user's token.
 router.post('/title-retouch', requireAuth, async function (req, res) {
   try {
+    // v3.0.634 -- PLATINUM ONLY, AND CHECKED HERE AS WELL AS ON THE BUTTON. The modal refuses to
+    // open for anyone else, but a button is a courtesy and a route is the rule.
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
     const campaignId = req.body && req.body.campaignId;
     if (!campaignId) return res.json({ error: 'No campaign.' });
     const instruction = String((req.body && req.body.instruction) || '').trim();
@@ -2124,6 +2134,11 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
 // No generation, no token: this only persists a file so the generator can look at it.
 router.post('/title-ref', requireAuth, guardUpload(titleRefUpload, 'title-ref'), async function (req, res) {
   try {
+    // v3.0.634 -- PLATINUM ONLY, AND CHECKED HERE AS WELL AS ON THE BUTTON. The modal refuses to
+    // open for anyone else, but a button is a courtesy and a route is the rule.
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
     if (!req.file || !req.file.buffer) return res.json({ error: 'No image received.' });
     const ct = req.file.mimetype || 'image/png';
     const ext = ct.indexOf('jpeg') !== -1 ? 'jpg' : ct.indexOf('webp') !== -1 ? 'webp' : ct.indexOf('gif') !== -1 ? 'gif' : 'png';
