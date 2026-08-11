@@ -7675,8 +7675,14 @@ function _tbTitle() {
 // current -- the Review tab and Storyboard both render rows that outlive a session switch.
 function _tbChapterBtn(sessionId, cls, label) {
   if (!sessionId) return '';
+  // v3.0.642 -- SAY WHICH VERSION OF THE SESSION. Ian: "Make sure you save it onto the correct
+  // version... not the canonical version automatically." Without a fork id, resolveActingFork is
+  // asked for nothing in particular and a Story Master falls through to getDmForkId -- the canonical
+  // fork -- whatever version is on screen. state.currentForkId is what forkQ() already sends
+  // everywhere else on this page; the target simply has to carry it too.
+  var fk = state.currentForkId ? (',forkId:' + state.currentForkId) : '';
   return '<button class="' + cls + '" onclick="openTitleBuilder({kind:\'session\',campaignId:' +
-         ((state.currentCampaign && state.currentCampaign.id) || 0) + ',sessionId:' + sessionId + '})" ' +
+         ((state.currentCampaign && state.currentCampaign.id) || 0) + ',sessionId:' + sessionId + fk + '})" ' +
          'title="Draw this chapter title as artwork instead of a scene. Costs a token.">' + label + '</button>';
 }
 
@@ -7834,6 +7840,28 @@ function _tbLoadSession() {
   }).catch(function () { _tbErr('Could not read this chapter.'); });
 }
 
+// _tbSyncSessionMoment: put what the modal ended with onto the moment the page is holding.
+//
+// Patched rather than re-fetched: the server is already authoritative and title-read has just told
+// us what it holds, so another round trip would only re-answer a question we have the answer to.
+// If the row is not in state.moments -- a chapter opened from a page that never loaded them -- there
+// is nothing to patch and nothing to repaint, which is why every step is guarded.
+function _tbSyncSessionMoment() {
+  try {
+    var t = _tbTarget();
+    var cur = (state && state._tbSessionCur) || null;
+    if (!t || t.kind !== 'session' || !cur) return;
+    var list = (state && state.moments) || [];
+    var m = list.find(function (x) { return x && x.kind === 'establishing'; });
+    if (!m) return;
+    // An empty url means the title was removed; the moment keeps whatever the server left there,
+    // which for a removal is nothing until the reader regenerates the scene.
+    m.image = cur.url || null;
+    if (typeof renderStoryboard === 'function') renderStoryboard();
+    if (typeof renderNovelWithImages === 'function') renderNovelWithImages();
+  } catch (e) {}
+}
+
 // _tbSave: ONE call site for every write the modal makes.
 //
 // v3.0.641 -- the two targets take different paths ON PURPOSE, and it is not the drift this module
@@ -7915,6 +7943,15 @@ function _tbRenderWarn() {
 // loadNovelPreview is the same call the layout controls make after an Apply, so this is the path that
 // already exists rather than a second way to repaint.
 function closeTitleBuilder() {
+  // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
+  // so I left and came back and then the image was there." The save landed; nothing told the page.
+  //
+  // The book path never needed this because _prepMetaWrite owns state.bookMeta and the Prep panel
+  // reads it. A chapter's artwork lives on a moment in state.moments, which title-write updates on
+  // the SERVER and nothing updates here -- so the row on screen kept its old image until the next
+  // load fetched it. The local moment is patched from what the modal ended with, then both surfaces
+  // that draw it are repainted, exactly as the generation path does.
+  if (_tbIsSession()) _tbSyncSessionMoment();
   // v3.0.641 -- clear the target, or a chapter builder closed and the Prep panel one reopened would
   // still be pointed at the chapter. This is the TD-403 fault in a different field.
   state._tbTarget = null;
@@ -8037,8 +8074,17 @@ function titleBuildGenerate() {
   //
   // v3.0.638 claimed TD-413 closed because the ownership check ran BEFORE the fal call. It did. It
   // was answering a question it had never been asked. Order is not the same claim as effect.
+  // v3.0.642 -- THE TARGET RIDES ALONG. Without it the server resolved a BOOK target and drew the
+  // BOOK'S words onto a chapter -- Ian saw the cover's title and subtitle appear on a chapter that
+  // has its own name, and paid a token for it.
+  //
+  // THE SAME SHAPE AS v3.0.640, ONE BUILD LATER. That one forgot to say which VERSION; this one
+  // forgot to say which TARGET. Both times the request was made in the right place, in the right
+  // order, carrying the wrong information -- and both times a check ran and passed on a question it
+  // had never been asked. Every Title Builder request now goes through _tbBody, so there is ONE
+  // place that decides what a route is told about what it is acting on.
   fetch('/api/images/title-build' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody(body))
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -8111,7 +8157,7 @@ function titleBuildRetouch(instruction) {
   showBusyOverlay('title-build-result', 'Retouching', 'Keeping the artwork, changing one thing\u2026');
   fetch('/api/images/title-retouch' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ campaignId: state.currentCampaign.id, instruction: instruction })
+    body: JSON.stringify(_tbBody({ instruction: instruction }))
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -8205,7 +8251,7 @@ function titleBuildArchiveToggle() {
     return;
   }
   fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta/archive-title' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody())
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -10152,7 +10198,7 @@ function applyArchiveToTarget(archiveId) {
   var vq = (typeof bookMetaVersionQ === 'function') ? bookMetaVersionQ('?') : '';
   if (ctx.mode === 'title') {
     fetch('/api/campaigns/' + cid + '/my-book-meta/restore-title' + vq, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody({ archiveId: archiveId }))
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
       closeReplacePicker();
