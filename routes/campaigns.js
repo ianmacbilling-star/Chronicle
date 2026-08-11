@@ -473,7 +473,14 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
     const result = await db.prepare(
       'INSERT INTO campaign_archives (campaign_id, fork_id, image_type, title, image_url, source_url, image_prompt, layout_meta, archived_by, created_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(t.cid, t.sc.fork || null, 'title', t.cur.built_title_text || t.cur.book_title || null,
+    // v3.0.623 -- FORK_ID IS NULL, AND THAT IS NOT A SHORTCUT.
+    // v3.0.622 passed sc.fork here and every archive attempt failed on a foreign key. Two different
+    // things are called a fork in this codebase: bookPrefsScope.fork is a USER id, and
+    // campaign_archives.fork_id REFERENCES session_forks(id). Same word, different kind of number,
+    // and the name matching is exactly why it was never checked against the column it was going into.
+    // A built title belongs to a book version and has no session fork at all, so NULL is also the
+    // true answer -- the archives list LEFT JOINs session_forks, which is built for that.
+    ).run(t.cid, null, 'title', t.cur.built_title_text || t.cur.book_title || null,
           archivedUrl, liveUrl, t.cur.built_title_prompt || null, meta, req.session.userId, now);
     const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
     return res.json({ success: true, archive: row });
