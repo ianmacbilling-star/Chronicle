@@ -22,8 +22,10 @@
 // for long enough that the handoff claims three cover surfaces where there are two. An explicit
 // refusal is honest; a silent one is a trap.
 const {
-  bookPrefsScope, ownsBookVersion, getForkBookPrefs, setForkBookPrefs
+  bookPrefsScope, ownsBookVersion, getForkBookPrefs, setForkBookPrefs,
+  resolveActingFork, requestedForkIdOf, getDmForkId
 } = require('../database/db');
+const { getCampaignRole } = require('../middleware/auth');
 
 const NOT_YOURS = 'You are looking at someone else\u2019s version. Switch to your own version to change the title.';
 
@@ -40,7 +42,8 @@ function targetFromRequest(req, campaignId) {
     kind: kind,
     campaignId: Number(campaignId),
     sessionId: t && t.sessionId ? Number(t.sessionId) : null,
-    momentId: t && t.momentId ? Number(t.momentId) : null
+    // The version of the SESSION being worked on. Absent, the caller's own fork is resolved.
+    forkId: t && t.forkId ? Number(t.forkId) : null
   };
 }
 
@@ -100,9 +103,109 @@ async function resolveTitleTarget(db, req, target) {
     };
   }
 
-  // TD-422 stage two. The session branch reads and writes the establishing MOMENT -- which already
-  // carries fork_id, so nothing new has to be stored to make a chapter title fork with its version.
-  return { error: 'Chapter titles are not built yet. This build only knows how to title a book.' };
+  if (t.kind === 'session') return await sessionTarget(db, req, t);
+
+  return { error: 'Unknown title target.' };
 }
 
-module.exports = { resolveTitleTarget, targetFromRequest, NOT_YOURS };
+// =====================================================================================================
+// THE SESSION TARGET  --  a chapter title, stored on the establishing moment  (TD-422 stage two)
+// =====================================================================================================
+// Ian: chapter titles, "SO they can title their chapters with words instead of a Picture."
+//
+// NOTHING NEW IS STORED. The opening title image is already a moment with kind='establishing', and
+// moments already carry fork_id -- so "tied to the actual fork" is satisfied by writing where the
+// opening image already lives, not by inventing a per-session-per-fork field. The artwork simply
+// BECOMES that moment's image, which is why no renderer changes: every surface that draws a chapter
+// opening already draws this row.
+//
+// THE WORDS ARE DERIVED, NOT COPIED. moments.title on that row is set to session.name when it is
+// created, so a chapter title needs no stored name of its own and cannot drift from the session name
+// the way a second copy would. built.text records only what the drawing actually SPELLED when it was
+// drawn, which is the mismatch warning's question and nobody else's.
+//
+// THE MARKER MATTERS. Nothing else can tell a drawing-of-words from a scene, and the pill row's
+// Retouch goes through the panel webhook path with a scene-shaped prompt. layout_meta.built_title is
+// that marker: free-form JSON already on the row, already parsed for focal and crop_safe, no schema
+// change. Its presence is what will route Retouch to the title path instead.
+//
+// THE SCENE PROMPT IS NEVER DISPLACED. moments.prompt and sessions.establishing_prompt both keep the
+// scene text, so Regenerate draws the scene later if the reader changes their mind. That is the
+// escape hatch, and the reason a chapter title needs no Remove of its own.
+async function sessionTarget(db, req, t) {
+  if (!t.sessionId) return { error: 'No session named for this chapter title.' };
+  const uid = req.session.userId;
+
+  const sess = await db.prepare('SELECT id, campaign_id, name FROM sessions WHERE id = ?').get(t.sessionId);
+  if (!sess) return { error: 'Session not found.' };
+  if (String(sess.campaign_id) !== String(t.campaignId)) return { error: 'That session is not in this campaign.' };
+
+  // OWNERSHIP, through the resolver the generate path already uses. It returns null rather than
+  // falling back, so a version that is not yours is a refusal and never a quiet redirect into
+  // someone else's book -- which is the fault TD-194 was raised for.
+  const role = await getCampaignRole(uid, sess.campaign_id);
+  const asked = t.forkId || requestedForkIdOf(req);
+  let forkId = await resolveActingFork(db, t.sessionId, uid, role, asked);
+  if (!forkId && asked) return { error: 'That version is not yours to change.' };
+  if (!forkId && role === 'dm') forkId = await getDmForkId(db, t.sessionId);
+  if (!forkId) return { error: 'You do not have a version of this session to change.' };
+
+  const est = await db.prepare(
+    "SELECT * FROM moments WHERE session_id = ? AND fork_id = ? AND kind = 'establishing' ORDER BY id LIMIT 1"
+  ).get(t.sessionId, forkId);
+
+  let meta = {};
+  try { meta = est && est.layout_meta ? (typeof est.layout_meta === 'object' ? est.layout_meta : JSON.parse(est.layout_meta)) : {}; }
+  catch (e) { meta = {}; }
+  const built = (meta && meta.built_title) || {};
+
+  return {
+    kind: 'session',
+    campaignId: t.campaignId,
+    sessionId: t.sessionId,
+    forkId: forkId,
+    momentId: est ? est.id : null,
+    scope: { forkId: forkId, moment: est || null },
+    current: {
+      // The artwork IS the opening image -- but only when the marker says this row is a drawn title.
+      // Without that test a scene would be handed to Retouch as though it were lettering.
+      url: (built.url && est) ? (est.image || '') : '',
+      src: built.src || '',
+      text: built.text || '',
+      sub: (built.sub === undefined ? null : built.sub),
+      prompt: built.prompt || '',
+      prevUrl: built.prevUrl || '',
+      prevSrc: built.prevSrc || '',
+      // What the chapter is CALLED, read off the row rather than stored a second time.
+      bookTitle: (est && est.title) || sess.name || ''
+    },
+    write: async function (patch) {
+      if (!est) return { error: 'This chapter has no opening image row yet.' };
+      const next = Object.assign({}, built);
+      ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc'].forEach(function (k) {
+        if (patch[k] === undefined) return;
+        next[k] = (k === 'sub' && patch[k] === '') ? '' : (patch[k] || null);
+      });
+      const cleared = patch.url !== undefined && !patch.url;
+      const nextMeta = Object.assign({}, meta);
+      // CLEARING THE TITLE CLEARS THE MARKER, or the row would go on claiming to be lettering after
+      // Regenerate has put a scene back on it -- and Retouch would keep routing to the title path.
+      if (cleared) delete nextMeta.built_title; else nextMeta.built_title = next;
+      if (patch.url !== undefined) {
+        await db.prepare('UPDATE moments SET image = ?, layout_meta = ? WHERE id = ?')
+          .run(patch.url || null, JSON.stringify(nextMeta), est.id);
+      } else {
+        await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(nextMeta), est.id);
+      }
+      return {
+        url: cleared ? '' : (next.url || ''),
+        src: next.src || '',
+        text: next.text || '',
+        sub: (next.sub === undefined ? null : next.sub),
+        prompt: next.prompt || ''
+      };
+    }
+  };
+}
+
+module.exports = { resolveTitleTarget, targetFromRequest, sessionTarget, NOT_YOURS };
