@@ -2232,82 +2232,35 @@ var COVER_TITLE_FACE = { chronicle: null, engraved: null, pulp: null, manuscript
 // a cover. The Campaignia logo is currently written three times across them (TD-394) and that is
 // exactly how a thing ends up on screen and missing in print. This is a function.
 var BUILT_TITLE_BASE_PCT = 76;   // of the caption width at medium; the caption is already inset
-var BUILT_TITLE_CAP_PX = 739;    // 8.5in page less 0.4in caption padding each side, at 96 CSS px/in
-// v3.0.624 -- THE SCRIM NOW BELONGS TO THE TITLE ART, NOT TO THE CAPTION.
+// v3.0.631 -- THE HALO IS GONE, AND SO IS THE SPECIAL CASE.
 //
-// Ian: "Make the Caption Scrim / Cover art Fade (the darker area behind the title image) just
-// slightly bigger than the image... So if the image/title art is resized it should resize with it."
+// Ian, after seeing it on every surface: "The OVAL is actually on all of them... I would just get
+// rid of the oval... there is another fade on there that looks fine. Just go with it."
 //
-// The caption scrim is a fixed 52 percent band with a gradient, so it could not follow a title that
-// changes width with titleSize. This halo is drawn on a wrapper that IS the artwork box, so its
-// size is the artwork size by construction rather than by a second number kept in step.
+// THREE ATTEMPTS AT ONE THING IS THE SIGNAL. v3.0.624 drew a solid ellipse and blurred its rim,
+// which read as an oval. v3.0.625 pulled the core under the lettering and lengthened the falloff.
+// v3.0.628 bounded the blurs to the artwork width. Each fixed what was reported and each left an
+// ellipse visible, because a filled shape has an edge and no amount of blur removes it -- only
+// moves it. The thing that was actually wanted already existed.
 //
-// BOX-SHADOW, NOT A GRADIENT, AND THAT IS MEASURED RATHER THAN PREFERRED. On 2026-08-11 the caption
-// gradient was found absent from the optimized render while cover-art-fade -- an inset box-shadow on
-// the element beside it -- survived in the same picture (edge/centre 0.292 before, 0.320 after; the
-// title band went 0.385 to 1.246 of mid-art). Whatever TD-406 turns out to be, box-shadow is the
-// primitive that was watched surviving that path and a gradient is the one that was not.
+// WHAT REPLACES IT IS NOTHING, DELIBERATELY. A built title now sits in exactly the scrim a text
+// title sits in: .cover-art-caption carries the gradient, coverPlaceCss points it, and this file
+// stops overriding it. One code path for both kinds of title, no second fade to keep in step, and
+// TD-406 now applies to both equally rather than being hidden for one of them.
 //
-// THE BLUR AND SPREAD SCALE WITH r, the same ratio that sets the width. One number decides how big
-// the artwork is and how big its shadow is, so Large cannot end up with a Medium halo.
-//
-// AND THE CAPTION GRADIENT IS SWITCHED OFF while a built title is showing. Leaving it would stack
-// two scrims in the preview and one in print, which is the inconsistency Ian reported in the first
-// place. One title, one shadow, and the two views agree.
+// BUILT_TITLE_CAP_PX went with the blurs it existed to scale. A constant kept past the last thing
+// that read it is the same fault as a comment outliving its code.
 function builtTitleCss(size) {
   var r = Object.prototype.hasOwnProperty.call(COVER_SIZE_RATIO, String(size || 'medium'))
     ? COVER_SIZE_RATIO[String(size || 'medium')] : 1;
   // Capped at 96 so Large cannot push the artwork past the caption and into the frame.
   var pct = Math.min(96, Math.round(BUILT_TITLE_BASE_PCT * r));
-  // v3.0.625 -- IT WAS AN OVAL, NOT A FADE, AND THE NUMBERS SAY WHY. Ian: "This fade doesnt look
-  // like a fade at all... it looks like an oval around the image." v3.0.624 painted a SOLID ellipse
-  // at 0.85 slightly LARGER than the artwork, then ringed it with 30px of spread at the same alpha
-  // and blurred only the last 56px. Modelled across the artwork that is eleven cells flat at 0.85
-  // and then a single 0.75 step to nothing: a hard shape with a soft rim, which is exactly what it
-  // looked like. The blur was decorating an edge instead of being the edge.
-  //
-  // THE SOLID CORE NOW SITS UNDER THE LETTERING. A filled shape always halves its alpha at its own
-  // boundary, so that boundary cannot be made to disappear -- it can only be put where the artwork
-  // covers it. Inset 30 percent vertical and 18 percent horizontal puts it beneath the words, and
-  // everything visible past it is falloff. Same model now reads 0.50 held under the type and then
-  // 0.30, 0.16, 0.07, 0.04 outward, no plateau and no step over 0.20.
-  //
-  // TWO SHADOWS, NO SPREAD. Spread is what built the hard ring; it is zero here. The long pair gives
-  // a ramp that is still worth 0.04 at the artwork edge, so lettering near the ends keeps some cover.
-  //
-  // A RADIAL GRADIENT WOULD DO THIS IN ONE DECLARATION AND DO IT BETTER. It is not used because of
-  // TD-406: a gradient measurably stopped painting on the optimized render while the box-shadow on
-  // the element beside it survived. Until that is understood, the fade is built from the primitive
-  // that was watched surviving. If this still does not read as a fade, settle TD-406 first.
-  // v3.0.628 -- THE HALO OVERSHOT THE ARTWORK SIDEWAYS, AND THE NUMBERS WERE PICKED AGAINST A SIZE
-  // THAT DOES NOT EXIST. Ian, with the spill circled: "The fade shouldnt go too far past the image
-  // on the left or right." v3.0.625 used flat 220 and 480 pixel blurs, chosen from a model built on
-  // a 900px-wide title. The real artwork is 562px at Medium, so the wide shadow reached 139px past
-  // the edge -- 108 at Small, 196 at Large. Absolute pixels against an assumed width.
-  //
-  // BOTH BLURS NOW COME FROM THE ARTWORK ITSELF. The reach of a box-shadow is (core edge + blur/2),
-  // the core edge is 0.64 of the half-width, so a blur of 0.62 lands at 0.95 -- inside the artwork
-  // at every size, by arithmetic rather than by taste.
-  //
-  // ONE WIDTH CONSTANT, NOT THREE. The interior caption is 8.5in less its 0.4in padding either side;
-  // the printed wrap front panel is 8.625in, within two percent of it. Deriving this separately per
-  // surface would be three numbers to keep in step for a two percent difference, and the failure
-  // mode of the smaller number is a fade that stops slightly early, which nobody can see.
-  var halfPx = (BUILT_TITLE_CAP_PX * pct) / 200;
-  var b1 = Math.round(0.30 * halfPx), b2 = Math.round(0.62 * halfPx);
-  return '.cover-art-caption { background:none; }' +
-         ' .cover-built-wrap { position:relative; display:block; width:' + pct + '%; margin:0 auto; }' +
-         ' .cover-built-wrap::before { content:""; position:absolute; inset:30% 18%; border-radius:50%;' +
-         ' background:rgba(10,6,4,0.50);' +
-         ' box-shadow:0 0 ' + b1 + 'px rgba(10,6,4,0.50), 0 0 ' + b2 + 'px rgba(10,6,4,0.30);' +
-         ' -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
-         ' .cover-built-title { position:relative; display:block; width:100%; height:auto;' +
+  return '.cover-built-title { display:block; margin:0 auto; width:' + pct + '%; height:auto;' +
          ' object-fit:contain; }';
 }
 function builtTitleHtml(url) {
   if (!url) return '';
-  return '<div class="cover-built-wrap"><img class="cover-built-title" src="' +
-         String(url).replace(/"/g, '&quot;') + '" alt="" /></div>';
+  return '<img class="cover-built-title" src="' + String(url).replace(/"/g, '&quot;') + '" alt="" />';
 }
 function coverTitleFaceCss(key) {
   var k = String(key || 'chronicle');
