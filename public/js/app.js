@@ -7697,6 +7697,21 @@ function openTitleBuilder() {
   // A MODAL, NOT A TOAST. The Custom Art Style gate uses showAlert, which slides in at the top right
   // for two and a half seconds -- easy to miss when you have just clicked something and are looking
   // at where you clicked. This one has to be read. Worth aligning the two later.
+  // v3.0.640 -- THE SAME QUESTION THE REST OF THE PANEL ASKS. The button is disabled by
+  // prepApplyOwnershipLock now, but a disabled button says nothing about why, and the modal is
+  // reachable from elsewhere. TD-423 may well change this rule for Story Masters -- when it does,
+  // this and the six routes move together, because both read ownsBookVersion, which has been one
+  // function since v3.0.622.
+  if (typeof novelOwnView === 'function' && !novelOwnView()) {
+    appConfirm({
+      title: 'This version is not yours',
+      body: 'You are looking at someone else\u2019s version of this book, so its cover cannot be changed from here.',
+      note: 'Switch to your own version to use the Title Builder.',
+      okLabel: 'Got it',
+      cancelLabel: 'Close'
+    });
+    return;
+  }
   if (!(state && state.user && state.user.tier === 'platinum')) {
     platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen colour, size and placement.');
     return;
@@ -7897,7 +7912,15 @@ function titleBuildGenerate() {
     description: (_tbEl('title-build-desc') || {}).value || '',
     referenceUrl: (_tbEl('title-build-ref') || {}).value || ''
   };
-  fetch('/api/images/title-build', {
+  // v3.0.640 -- SEND THE VERSION. This line read `fetch('/api/images/title-build', {` and Retouch
+  // beside it already appended bookMetaVersionQ. Without it bookPrefsScope finds no version scope,
+  // ownsBookVersion is handed a null id, and its `if (!bookVersionId) return true` -- correct for a
+  // campaign that has no versions -- let a draw through on someone else's book. Ian paid a token for
+  // one: the picture was drawn, then the save refused, so it never reached a cover.
+  //
+  // v3.0.638 claimed TD-413 closed because the ownership check ran BEFORE the fal call. It did. It
+  // was answering a question it had never been asked. Order is not the same claim as effect.
+  fetch('/api/images/title-build' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   })
     .then(function (r) { return r.json(); })
@@ -15071,7 +15094,10 @@ function prepSyncCastNpc(){
 //
 // The plain controls have no other gate, so they take `disabled = !own` outright and come back when
 // the reader switches to a version of their own.
-var PREP_LOCK_PLAIN = ['pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
+// v3.0.640 -- title-build-open joins the list. Ian, on someone else's version: "I can't fill
+// anything out on the rest of Prep and Preview tab... but it does open the Title builder." Every
+// other control greyed out and this one stayed live, because it was never a member.
+var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc'];
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
