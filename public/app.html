@@ -1878,7 +1878,11 @@
         <button class="panel-pill is-static-shown" id="title-build-empty-replace" onclick="openTitleReplacePicker()" title="Put an archived title on the book without generating">Replace from Archive</button>
       </div>
       <div class="tb-imgwrap hidden" id="title-build-imgwrap">
-        <img id="title-build-img" alt="Built title" />
+        <!-- v3.0.633 -- Ian: "make it so if you click the generated image for the title it pops out
+             bigger. the Click to enlarge option." Same openLightbox every other image in the product
+             uses -- the panels, the character reference, the assets -- rather than a second viewer. -->
+        <img id="title-build-img" alt="Built title" style="cursor:zoom-in;"
+             onclick="openLightbox(this.src, 'Built title')" title="Click to enlarge" />
         <div class="panel-img-actions">
           <button class="panel-pill" id="title-build-retouch-btn" onclick="titleBuildRetouchOpen()" title="Keep this title and change just one thing. Costs a token.">Retouch</button>
           <!-- v3.0.624 -- Revert, shown only when there is something to go back to, exactly as the

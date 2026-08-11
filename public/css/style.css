@@ -2629,8 +2629,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    reveal them the way every other pill host does. Fifth hover rule; the pattern is per-wrapper. */
 .tb-drop { position:relative; }
 .tb-drop:hover .panel-pill { opacity:1; }
-.tb-drop .panel-img-actions { top:0; left:0; right:0; gap:3px; justify-content:flex-end; }
-.tb-drop .panel-pill { padding:2px 6px; font-size:9px; border-top-left-radius:0; border-top-right-radius:0; }
+.tb-drop .panel-img-actions { justify-content:flex-end; }   /* v3.0.633 -- position from the shared rule */
 /* Generate above the result. The row is right-aligned so the button lands where the eye already
    goes after typing the description. */
 .tb-gen-row { display:flex; justify-content:flex-end; margin:10px 0 0; }
@@ -2643,7 +2642,10 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 /* THE FOURTH HOVER RULE. .panel-pill is opacity:0 and each wrapper reveals its own; the three others
    are .storyboard-panel, .char-ref-imgwrap and .sc-review-imgwrap. Without this line every pill on a
    built title is present, wired, and permanently invisible. */
-.tb-imgwrap { position:relative; display:inline-block; max-width:100%; }
+/* v3.0.633 -- one rule for this class. overflow:hidden came off with the reason for it: the busy
+   overlay moved to .tb-result in v3.0.629, and clipping the wrapper was what made a pill sitting
+   at top:0 look shorn. */
+.tb-imgwrap { position:relative; display:inline-block; max-width:100%; border-radius:6px; }
 .tb-imgwrap:hover .panel-pill { opacity:1; }
 .tb-imgwrap img { max-width:100%; height:auto; display:block; }
 /* v3.0.624 -- ITEM 4. Ian: "Push the buttons closer to the top of the generated image Just like the
@@ -2651,13 +2653,14 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    flex box with 10px of padding and a 120px min-height, so on a short wide title the pills sit well
    inside the picture rather than on its edge. Tightened to 3px here only -- the storyboard keeps its
    own 8px, because a full panel is tall enough that 8px still reads as the top corner. */
-/* v3.0.628 -- Ian: they are still too much on top the picture. Flush to the corner now, and the
-   pills themselves are tightened, because a built title is a short wide strip where 3px of inset
-   is a real fraction of the height. */
-.tb-imgwrap .panel-img-actions { top:0; left:0; right:0; gap:3px; }
-.tb-imgwrap .panel-pill { padding:2px 6px; font-size:9px; border-top-left-radius:0; border-top-right-radius:0; }
-/* The busy overlay needs the wrapper to clip it to the artwork, not to the checkerboard box. */
-.tb-imgwrap { overflow:hidden; border-radius:6px; }
+/* v3.0.633 -- THE OVERRIDES COME OFF. Ian: "I want the buttons on the images on the title builder
+   to look like these buttons... the button tops are cut off." Both halves of that were mine:
+   v3.0.628 squared the top corners and pushed the row to top:0, which reads as sheared, and shrank
+   the pills to 9px so they did not match the storyboard ones beside them.
+
+   There is now NO title-builder pill styling at all -- .panel-pill and .panel-img-actions apply
+   unmodified, exactly as they do on a storyboard panel. Chasing "closer to the top edge" with a
+   local override was the wrong move; the shared rule was already right. */
 /* Warnings, not blocks: gold rather than red, because nothing here is broken and nothing is refused.
    v3.0.625 -- .prep-title-note dropped with the element it styled; leaving the rule behind is the
    kind of text that outlives what it describes. */
