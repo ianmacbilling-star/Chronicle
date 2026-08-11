@@ -6,6 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Campaignia</title>
   <meta name="description" content="Campaignia — TTRPG Session Graphic Novel Generator" />
+  <!-- v3.0.630 -- THE ONE PAGE THAT WAS MISSING THIS. /css/fonts.css is generated from the SAME
+       table services/printing/fonts.js inlines into every PDF, and index, login, library, terms,
+       invite, privacy, reset-password, offline and 404 all link it. app.html -- the page with the
+       font picker ON it -- did not, so the browser had none of the nine book faces available and
+       styling the options in them would have silently done nothing. -->
+  <link rel="stylesheet" href="/css/fonts.css">
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
   <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
 <link rel="stylesheet" href="/css/style.css">
@@ -297,10 +303,7 @@
               <input type="text" id="prep-title" maxlength="200" onchange="prepSaveTitle()" placeholder="e.g. The Shattered Crown" class="prep-input" title="The title printed on the cover, the title page and the spine. Starts as the campaign name; change it and it is saved with this version." />
               <div class="prep-field-label">Subtitle</div>
               <input type="text" id="prep-subtitle" maxlength="200" onchange="prepSaveSubtitle()" placeholder="No subtitle" class="prep-input" title="Sits under the title on the cover. Leave it empty for no subtitle at all." />
-              <div class="prep-color-row">
-                <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
-                <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
-              </div>
+
               <!-- v3.0.625 -- THE STANDING NOTE IS GONE. Ian, mid-test: "Get rid of this message...
                    We will figure out a better way to explain this than a big message like this."
                    What replaces it for now is the tooltip prepApplyTitleModeLock already writes onto
@@ -313,8 +316,13 @@
                    style dropdown -- Ian: "they can use one or the other" -- but that switching is
                    stage two, along with composing the overlay onto the cover. This stage only builds
                    and stores the image, so the lettering can be judged before anything is built on it. -->
+              <!-- v3.0.630 -- Ian: "Put the title color picker right next to the Title Style Drop
+                   down box. Get rid of the (stands out against the cover image) text on the label."
+                   The swatch belongs beside the style it colours; the explanation was describing
+                   what a colour picker is. -->
               <div class="prep-title-style-row">
                 <div class="prep-field-label" style="margin:0;">Title style</div>
+                <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" title="Colour of the cover title and subtitle. Switched off while a drawn title from the Title Builder is on the cover." />
                 <!-- v3.0.620 -- Ian: make it look like the Optimize button above it. Same gold fill,
                      same display face, same letter-spacing -- these are the two controls on this panel
                      that SPEND A TOKEN, so they should read as the same kind of thing. -->
@@ -398,15 +406,15 @@
                 </label>
                 <label class="cl-field" title="Typeface used for the narrative / body text"><span>Body font</span>
                   <select id="pcl-font">
-                    <option value="classic">Classic serif (Crimson)</option>
-                    <option value="garamond">Elegant (EB Garamond)</option>
-                    <option value="lora">Modern serif (Lora)</option>
-                    <option value="merriweather">Bookish (Merriweather)</option>
-                    <option value="sans">Clean sans (Helvetica)</option>
-                    <option value="mono">Typewriter (Courier)</option>
-                    <option value="script">Cursive script (Dancing Script)</option>
-                    <option value="journal">Handwritten journal (Caveat)</option>
-                    <option value="comic">Comic lettering (Comic Neue)</option>
+                    <option value="classic" style="font-family:'Crimson Text',Georgia,serif;font-size:15px;">Classic serif (Crimson)</option>
+                    <option value="garamond" style="font-family:'EB Garamond',Georgia,serif;font-size:15px;">Elegant (EB Garamond)</option>
+                    <option value="lora" style="font-family:'Lora',Georgia,serif;font-size:15px;">Modern serif (Lora)</option>
+                    <option value="merriweather" style="font-family:'Merriweather',Georgia,serif;font-size:15px;">Bookish (Merriweather)</option>
+                    <option value="sans" style="font-family:Helvetica,Arial,sans-serif;font-size:15px;">Clean sans (Helvetica)</option>
+                    <option value="mono" style="font-family:'Courier New',Courier,monospace;font-size:15px;">Typewriter (Courier)</option>
+                    <option value="script" style="font-family:'Dancing Script',cursive;font-size:15px;">Cursive script (Dancing Script)</option>
+                    <option value="journal" style="font-family:'Caveat',cursive;font-size:15px;">Handwritten journal (Caveat)</option>
+                    <option value="comic" style="font-family:'Comic Neue','Comic Sans MS',cursive;font-size:15px;">Comic lettering (Comic Neue)</option>
                   </select>
                 </label>
               </div>
@@ -2585,15 +2593,15 @@
       </label>
       <label class="cl-field" title="Typeface used for the narrative / body text"><span>Body font</span>
         <select id="cl-font">
-          <option value="classic">Classic serif (Crimson)</option>
-          <option value="garamond">Elegant (EB Garamond)</option>
-          <option value="lora">Modern serif (Lora)</option>
-          <option value="merriweather">Bookish (Merriweather)</option>
-          <option value="sans">Clean sans (Helvetica)</option>
-          <option value="mono">Typewriter (Courier)</option>
-          <option value="script">Cursive script (Dancing Script)</option>
-          <option value="journal">Handwritten journal (Caveat)</option>
-          <option value="comic">Comic lettering (Comic Neue)</option>
+          <option value="classic" style="font-family:'Crimson Text',Georgia,serif;font-size:15px;">Classic serif (Crimson)</option>
+          <option value="garamond" style="font-family:'EB Garamond',Georgia,serif;font-size:15px;">Elegant (EB Garamond)</option>
+          <option value="lora" style="font-family:'Lora',Georgia,serif;font-size:15px;">Modern serif (Lora)</option>
+          <option value="merriweather" style="font-family:'Merriweather',Georgia,serif;font-size:15px;">Bookish (Merriweather)</option>
+          <option value="sans" style="font-family:Helvetica,Arial,sans-serif;font-size:15px;">Clean sans (Helvetica)</option>
+          <option value="mono" style="font-family:'Courier New',Courier,monospace;font-size:15px;">Typewriter (Courier)</option>
+          <option value="script" style="font-family:'Dancing Script',cursive;font-size:15px;">Cursive script (Dancing Script)</option>
+          <option value="journal" style="font-family:'Caveat',cursive;font-size:15px;">Handwritten journal (Caveat)</option>
+          <option value="comic" style="font-family:'Comic Neue','Comic Sans MS',cursive;font-size:15px;">Comic lettering (Comic Neue)</option>
         </select>
       </label>
     </div>
