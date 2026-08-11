@@ -1666,9 +1666,26 @@ function coDropcap(html) {
 // cut failed is an opaque rectangle, and it will look like one.
 function estCell(m, opts) {
   if (!lmIsBuiltTitle(m)) return coCell(m, 0, 100, opts || {});
+  // v3.0.645 -- A CEILING, AND IT IS THE RATIO THE ARTWORK WAS ORDERED AT.
+  //
+  // Ian, 2026-08-11: "maybe it should be treated as Panoramic ... I think that is thinner from
+  // top to bottom." It is, and it is also the shape routes/images.js already asks fal for when it
+  // draws a title, so this reads the SAME table rather than carrying a second number that has to
+  // be kept in step. CG_W of column at 21:9 is 2.91in, against the 3.83in a 16:9 box was taking.
+  //
+  // THE ROW IS STILL SHAPED wide AND THAT IS DELIBERATE. moments.shape drives what a REGENERATE
+  // asks fal for, so flipping it to panoramic here would make a later scene come back ultra-wide
+  // in a slot that wants an establishing shot. The marker says this one is lettering; the shape
+  // goes on saying what the slot is. Nothing has to be flipped back when a title is cleared, and
+  // titles already stored need no migration.
+  //
+  // max-width AND max-height, with BOTH dimensions auto. width:100% plus a max-height does NOT
+  // preserve the aspect -- the width stays pinned while the height is clamped, and the lettering
+  // stretches. Two ceilings and no fixed dimension is the only form of this that cannot distort.
+  var _cap = (CG_W / shapeAspect('panoramic')).toFixed(2);
   return '<div style="width:100%;line-height:0;">' +
          '<img src="' + String(m.image || '').replace(/"/g, '&quot;') + '" alt="" ' +
-         'style="display:block;width:100%;height:auto;background:none;" />' +
+         'style="display:block;margin:0 auto;max-width:100%;max-height:' + _cap + 'in;width:auto;height:auto;background:none;" />' +
          '</div>';
 }
 function coCell(m, i, pct, opts) {
@@ -4684,7 +4701,14 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   // first narrative. Additive block above the session content - does NOT touch
   // buildLayout / renderPaired. (Stage 4.1: Session Preview only.)
   var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : session.establishing_image;
-  var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (session.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || session.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || session.establishing_img_h || null };
+  // v3.0.645 -- layout_meta TRAVELS WITH THE ROW.
+  // estCell asks lmIsBuiltTitle whether this opening is lettering or a photograph, and that answer
+  // lives in layout_meta -- so a copy that leaves the column behind can only ever answer
+  // photograph. It did, at BOTH call sites, from v3.0.644 until now: the built-title branch was
+  // unreachable and every preview drew a drawn title inside a cover-fitted 16:9 box, taking equal
+  // bites out of both ends of the words.
+  // The row is read with SELECT *, so the column is already in hand here; nothing new is queried.
+  var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (session.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || session.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || session.establishing_img_h || null, layout_meta: (_estMoment && _estMoment.layout_meta) || null };
   var titleImageHTML = _estImg
     ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + estCell(_estM, co || {}) + '</div>'
     : '';
@@ -5426,7 +5450,14 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     // NOT touch buildLayout / renderPaired. Flows through preview, print, publish,
     // and the public story page (snapshot carries establishing_image). (Stage 4.2)
     var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : s.establishing_image;
-    var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (s.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || s.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || s.establishing_img_h || null };
+    // v3.0.645 -- layout_meta TRAVELS WITH THE ROW.
+    // estCell asks lmIsBuiltTitle whether this opening is lettering or a photograph, and that answer
+    // lives in layout_meta -- so a copy that leaves the column behind can only ever answer
+    // photograph. It did, at BOTH call sites, from v3.0.644 until now: the built-title branch was
+    // unreachable and every preview drew a drawn title inside a cover-fitted 16:9 box, taking equal
+    // bites out of both ends of the words.
+    // The row is read with SELECT *, so the column is already in hand here; nothing new is queried.
+    var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (s.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || s.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || s.establishing_img_h || null, layout_meta: (_estMoment && _estMoment.layout_meta) || null };
     var titleImageHTML = _estImg
       ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + estCell(_estM, co || {}) + '</div>'
       : '';
