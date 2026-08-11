@@ -329,18 +329,31 @@
                 <option value="manuscript">Manuscript &mdash; wide, restrained, ruled</option>
                 <option value="quill">Quill &mdash; a flowing hand</option>
               </select>
-              <div class="prep-field-label">Title placement</div>
-              <select id="pcl-titlePlace" class="prep-input" title="Where the title and subtitle sit on the cover. The dark scrim behind the type and the framing of the artwork both follow this, so the title stays readable and never covers the part of the picture worth keeping.">
-                <option value="bottom">Bottom</option>
-                <option value="middle">Middle</option>
-                <option value="top">Top</option>
-              </select>
-              <div class="prep-field-label">Title size</div>
-              <select id="pcl-titleSize" class="prep-input" title="How large the title and subtitle are drawn. Both cover layouts scale by the same ratio, so each keeps its own proportions.">
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
-              </select>
+              <!-- v3.0.627 -- Ian: "Put Title Placement Drop down and Title Size Dropdown boxes next
+                   to each other on the same row. They are small and take up too much vertical space."
+                   Paired because they are the same KIND of choice -- both adjust the same type on the
+                   same cover -- where Title style above them picks the look and belongs on its own.
+                   The ids, classes and handlers are untouched: prepApplyOwnershipLock and
+                   prepApplyTitleModeLock both find these by id, and a rename here would have quietly
+                   unhooked the built-title lock. -->
+              <div class="prep-field-pair">
+                <div class="prep-field-col">
+                  <div class="prep-field-label">Title placement</div>
+                  <select id="pcl-titlePlace" class="prep-input" title="Where the title and subtitle sit on the cover. The dark scrim behind the type and the framing of the artwork both follow this, so the title stays readable and never covers the part of the picture worth keeping.">
+                    <option value="bottom">Bottom</option>
+                    <option value="middle">Middle</option>
+                    <option value="top">Top</option>
+                  </select>
+                </div>
+                <div class="prep-field-col">
+                  <div class="prep-field-label">Title size</div>
+                  <select id="pcl-titleSize" class="prep-input" title="How large the title and subtitle are drawn. Both cover layouts scale by the same ratio, so each keeps its own proportions.">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                </div>
+              </div>
               <div class="prep-field-label">Cover, Back &amp; Title images</div>
               <div class="prep-img-slots">
                 <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-cover" onclick="openPrepImagePicker('cover')"></div><div class="prep-img-cap">Cover</div></div>
