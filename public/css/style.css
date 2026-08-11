@@ -2608,12 +2608,12 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    the panel -- on a plain dark background a white rectangle and a clean cut look identical, which is
    precisely the failure the alpha cut exists to prevent. */
 .prep-title-style-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 6px; }
-/* v3.0.630 -- the colour swatch joined this row, which is space-between with three children now:
-   label, swatch, Title Builder button. Without this the swatch would float to the middle. auto
-   margin keeps it beside the label it belongs to and holds the button out on the right.
-   .prep-color-row / .prep-color-label came out with the element they styled -- a rule that outlives
-   its markup is the same class of fault as a comment that outlives the code it describes. */
-.prep-title-style-row .prep-color-input { margin-right:auto; }
+/* v3.0.632 -- the swatch sits on the row with the SELECT now, not the row with the label, so the
+   auto-margin rule that held it beside the label came out with it. The select carries the bottom
+   margin for the pair; leaving it on both would double the gap under this control. */
+.prep-style-color-row { display:flex; align-items:center; gap:8px; margin:0 0 14px; }
+.prep-style-color-row .prep-input { flex:1 1 auto; min-width:0; margin-bottom:0; }
+.prep-style-color-row .prep-color-input { flex:0 0 auto; }
 .tb-readonly { background:rgba(20,12,4,0.85); border:1px solid rgba(201,168,76,0.3); border-radius:8px;
   padding:8px 10px; font-size:14px; color:var(--gold); min-height:38px; display:flex; align-items:center; }
 .tb-ref-row { display:flex; gap:8px; align-items:center; }

@@ -316,13 +316,11 @@
                    style dropdown -- Ian: "they can use one or the other" -- but that switching is
                    stage two, along with composing the overlay onto the cover. This stage only builds
                    and stores the image, so the lettering can be judged before anything is built on it. -->
-              <!-- v3.0.630 -- Ian: "Put the title color picker right next to the Title Style Drop
-                   down box. Get rid of the (stands out against the cover image) text on the label."
-                   The swatch belongs beside the style it colours; the explanation was describing
-                   what a colour picker is. -->
+              <!-- v3.0.630 -- the "(stands out against the cover image)" label text came off here:
+                   it was describing what a colour picker is. The swatch itself moved down to the
+                   select row in v3.0.632 -- see the note there. -->
               <div class="prep-title-style-row">
                 <div class="prep-field-label" style="margin:0;">Title style</div>
-                <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" title="Colour of the cover title and subtitle. Switched off while a drawn title from the Title Builder is on the cover." />
                 <!-- v3.0.620 -- Ian: make it look like the Optimize button above it. Same gold fill,
                      same display face, same letter-spacing -- these are the two controls on this panel
                      that SPEND A TOKEN, so they should read as the same kind of thing. -->
@@ -330,13 +328,19 @@
                         style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;font-size:12px;"
                         title="Draw the title and subtitle as artwork instead of setting them in a typeface. Costs a token each time you generate.">Title Builder</button>
               </div>
-              <select id="pcl-titleStyle" class="prep-input" title="One named look for the cover title and subtitle: the font, weight, spacing and shading together. Applies to both cover layouts.">
-                <option value="chronicle">Chronicle &mdash; the classic Campaignia cover</option>
-                <option value="engraved">Engraved &mdash; heavy, cut into stone</option>
-                <option value="pulp">Pulp &mdash; bold outline, poster energy</option>
-                <option value="manuscript">Manuscript &mdash; wide, restrained, ruled</option>
-                <option value="quill">Quill &mdash; a flowing hand</option>
-              </select>
+              <!-- v3.0.632 -- ON THE ROW WITH THE DROPDOWN, not the row with the label. v3.0.630 put
+                   the swatch beside the words "Title style"; Ian marked the select itself. The two
+                   set the same thing, so they belong on the same line. -->
+              <div class="prep-style-color-row">
+                <select id="pcl-titleStyle" class="prep-input" title="One named look for the cover title and subtitle: the font, weight, spacing and shading together. Applies to both cover layouts.">
+                  <option value="chronicle">Chronicle &mdash; the classic Campaignia cover</option>
+                  <option value="engraved">Engraved &mdash; heavy, cut into stone</option>
+                  <option value="pulp">Pulp &mdash; bold outline, poster energy</option>
+                  <option value="manuscript">Manuscript &mdash; wide, restrained, ruled</option>
+                  <option value="quill">Quill &mdash; a flowing hand</option>
+                </select>
+                <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" title="Colour of the cover title and subtitle. Switched off while a drawn title from the Title Builder is on the cover." />
+              </div>
               <!-- v3.0.627 -- Ian: "Put Title Placement Drop down and Title Size Dropdown boxes next
                    to each other on the same row. They are small and take up too much vertical space."
                    Paired because they are the same KIND of choice -- both adjust the same type on the
