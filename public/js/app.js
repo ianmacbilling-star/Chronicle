@@ -15065,16 +15065,10 @@ function prepApplyTitleModeLock() {
         ? 'Your title is drawn artwork right now, so the title styles and colour do not apply. Remove the drawn title in the Title Builder to use them again.'
         : (el.getAttribute('data-title-orig') || '');
     });
-    // ONE note slot, TWO possible messages, and the mismatch is the more urgent of the two.
-    var note = document.getElementById('prep-title-note');
-    if (note) {
-      var warn = (typeof _tbWarnText === 'function') ? _tbWarnText() : '';
-      var msg = warn || (built
-        ? 'A drawn title from the Title Builder is on this cover, so Title style and Title color are switched off. Remove it in the Title Builder to go back to the five title styles.'
-        : '');
-      note.textContent = msg;
-      note.classList.toggle('hidden', !msg);
-    }
+    // v3.0.625 -- the note element is gone from the panel; the tooltip written above is what is left
+    // explaining the two dimmed controls. Kept as a call so the Title Builder warning refreshes when
+    // the title text changes while the builder is open.
+    if (typeof _tbRenderWarn === 'function') _tbRenderWarn();
   } catch (e) {}
 }
 function prepLayoutLoad(){

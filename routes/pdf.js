@@ -2258,11 +2258,32 @@ function builtTitleCss(size) {
     ? COVER_SIZE_RATIO[String(size || 'medium')] : 1;
   // Capped at 96 so Large cannot push the artwork past the caption and into the frame.
   var pct = Math.min(96, Math.round(BUILT_TITLE_BASE_PCT * r));
-  var blur = Math.round(56 * r), spread = Math.round(30 * r);
+  // v3.0.625 -- IT WAS AN OVAL, NOT A FADE, AND THE NUMBERS SAY WHY. Ian: "This fade doesnt look
+  // like a fade at all... it looks like an oval around the image." v3.0.624 painted a SOLID ellipse
+  // at 0.85 slightly LARGER than the artwork, then ringed it with 30px of spread at the same alpha
+  // and blurred only the last 56px. Modelled across the artwork that is eleven cells flat at 0.85
+  // and then a single 0.75 step to nothing: a hard shape with a soft rim, which is exactly what it
+  // looked like. The blur was decorating an edge instead of being the edge.
+  //
+  // THE SOLID CORE NOW SITS UNDER THE LETTERING. A filled shape always halves its alpha at its own
+  // boundary, so that boundary cannot be made to disappear -- it can only be put where the artwork
+  // covers it. Inset 30 percent vertical and 18 percent horizontal puts it beneath the words, and
+  // everything visible past it is falloff. Same model now reads 0.50 held under the type and then
+  // 0.30, 0.16, 0.07, 0.04 outward, no plateau and no step over 0.20.
+  //
+  // TWO SHADOWS, NO SPREAD. Spread is what built the hard ring; it is zero here. The long pair gives
+  // a ramp that is still worth 0.04 at the artwork edge, so lettering near the ends keeps some cover.
+  //
+  // A RADIAL GRADIENT WOULD DO THIS IN ONE DECLARATION AND DO IT BETTER. It is not used because of
+  // TD-406: a gradient measurably stopped painting on the optimized render while the box-shadow on
+  // the element beside it survived. Until that is understood, the fade is built from the primitive
+  // that was watched surviving. If this still does not read as a fade, settle TD-406 first.
+  var b1 = Math.round(220 * r), b2 = Math.round(480 * r);
   return '.cover-art-caption { background:none; }' +
          ' .cover-built-wrap { position:relative; display:block; width:' + pct + '%; margin:0 auto; }' +
-         ' .cover-built-wrap::before { content:""; position:absolute; inset:-3% -4%; border-radius:50%;' +
-         ' background:rgba(10,6,4,0.85); box-shadow:0 0 ' + blur + 'px ' + spread + 'px rgba(10,6,4,0.85);' +
+         ' .cover-built-wrap::before { content:""; position:absolute; inset:30% 18%; border-radius:50%;' +
+         ' background:rgba(10,6,4,0.50);' +
+         ' box-shadow:0 0 ' + b1 + 'px rgba(10,6,4,0.50), 0 0 ' + b2 + 'px rgba(10,6,4,0.30);' +
          ' -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
          ' .cover-built-title { position:relative; display:block; width:100%; height:auto;' +
          ' object-fit:contain; }';

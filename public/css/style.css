@@ -2628,10 +2628,11 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .tb-imgwrap .panel-img-actions { top:3px; left:3px; right:3px; gap:4px; }
 /* The busy overlay needs the wrapper to clip it to the artwork, not to the checkerboard box. */
 .tb-imgwrap { overflow:hidden; border-radius:6px; }
-/* Warnings, not blocks: gold rather than red, because nothing here is broken and nothing is refused. */
-.tb-warn, .prep-title-note { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
+/* Warnings, not blocks: gold rather than red, because nothing here is broken and nothing is refused.
+   v3.0.625 -- .prep-title-note dropped with the element it styled; leaving the rule behind is the
+   kind of text that outlives what it describes. */
+.tb-warn { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
   color:var(--gold-light); border-radius:8px; padding:8px 10px; font-size:12px; line-height:1.4; margin-top:8px; }
-.prep-title-note { margin:6px 0 2px; }
 .tb-result { margin-top:6px; border:1px solid rgba(201,168,76,0.25); border-radius:8px; min-height:120px;
   display:flex; align-items:center; justify-content:center; padding:10px;
   background-color:#2a2018;

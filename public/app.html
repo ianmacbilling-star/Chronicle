@@ -301,12 +301,13 @@
                 <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
                 <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
               </div>
-              <!-- v3.0.622 -- TD-357(2) and TD-401. Two different notes, one slot. The first says the
-                   style and colour controls are asleep because a drawn title is in charge, which is
-                   the honest answer to a control that looks live and does nothing. The second says the
-                   drawn title still spells the OLD words. Never a block, always a warning: Ian's rule
-                   is that changing the title text must not invalidate artwork you paid for. -->
-              <div class="prep-title-note hidden" id="prep-title-note"></div>
+              <!-- v3.0.625 -- THE STANDING NOTE IS GONE. Ian, mid-test: "Get rid of this message...
+                   We will figure out a better way to explain this than a big message like this."
+                   What replaces it for now is the tooltip prepApplyTitleModeLock already writes onto
+                   the two disabled controls, plus their dimmed state. THE MISMATCH WARNING IS NOT
+                   LOST -- it still shows inside the Title Builder on title-build-warn, which is where
+                   you can act on it. It no longer appears on this panel at the moment you type, so
+                   the better explanation still owes us something here. -->
               <!-- v3.0.617 -- TITLE BUILDER, STAGE ONE. Ian: "it should be triggered from a button that
                    sits to the side of our current Title styles." The built title is EITHER/OR with the
                    style dropdown -- Ian: "they can use one or the other" -- but that switching is
