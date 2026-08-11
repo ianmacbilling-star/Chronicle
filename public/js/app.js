@@ -7465,7 +7465,20 @@ function _prepMetaWrite(patch, cb) {
   var url = '/api/campaigns/' + c.id + '/my-book-meta' + bookMetaVersionQ('?');
   var run = function () {
     return fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      // v3.0.626 -- A REFUSED SAVE USED TO BE COMPLETELY SILENT.  threw the
+      // server's reason away, so a 403 here looked exactly like nothing happening: the built title
+      // appeared in the modal, never reached the book, and no message said why. Ian hit this and had
+      // to read it out of the browser console. The two 403s this route can return say different
+      // things -- wrong fork versus wrong version owner -- and neither was reaching the screen.
+      .then(function (r) {
+        if (r.ok) return r.json();
+        return r.json().catch(function () { return null; }).then(function (e) {
+          var msg = (e && (e.error || e.message)) || ('The server refused that change (' + r.status + ').');
+          try { console.error('my-book-meta ' + r.status + ': ' + msg); } catch (_c) {}
+          if (typeof showAlert === 'function') showAlert(msg);
+          return null;
+        });
+      })
       .then(function (m) {
         // Clear the keys this write owned, and only where nothing newer has queued behind us with a
         // different value for the same field.
