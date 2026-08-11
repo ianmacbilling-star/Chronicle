@@ -214,10 +214,16 @@ function appConfirm(opts) {
   var b = document.getElementById("app-confirm-body");  if (b) b.textContent = o.body || "";
   var n = document.getElementById("app-confirm-note");
   if (n) { n.textContent = o.note || ""; n.style.display = o.note ? "" : "none"; }
-  // v3.0.634 -- notice mode: one button, no Cancel. A "you cannot do this, here is why" has
-  // nothing to cancel, and a Cancel beside a lone OK reads as though something is pending.
-  var cancelBtn = document.querySelector('#app-confirm-modal .modal-footer .btn:not(.btn-primary):not(.btn-danger)');
-  if (cancelBtn) cancelBtn.style.display = o.notice ? 'none' : '';
+  // v3.0.635 -- NOTICE MODE IS GONE, REPLACED BY A LABELLED CANCEL. v3.0.634 hid the second button
+  // on the theory that a refusal has nothing to cancel. Ian: "Put an Upgrade My Plan button and
+  // take them to the plans on the My Account page." A refusal that offers a way forward needs BOTH
+  // buttons -- the way forward and the way out -- so the one-button mode had no user left.
+  //
+  // Found by id now rather than by a :not() chain on the footer. That selector picked the button by
+  // what it was NOT, so giving the cancel a danger class or adding a third button would have
+  // silently matched something else.
+  var cancelBtn = document.getElementById('app-confirm-cancel');
+  if (cancelBtn) cancelBtn.textContent = o.cancelLabel || 'Cancel';
   var ok = document.getElementById("app-confirm-ok");
   if (ok) { ok.textContent = o.okLabel || "Yes"; ok.className = "btn " + (o.danger ? "btn-danger" : "btn-primary"); }
   var m = document.getElementById("app-confirm-modal"); if (m) m.classList.remove("hidden");
@@ -3793,7 +3799,7 @@ function resetCustomStyleForm() {
 }
 function openCustomStylesView() {
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    showAlert('Custom Art Styles are a Platinum feature. Upgrade to Platinum to build and use your own art styles.');
+    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.');
     return;
   }
   showView('custom-styles');
@@ -3803,7 +3809,7 @@ function openCustomStylesView() {
 }
 function openCustomStyles() {
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    showAlert('Custom Art Styles are a Platinum feature. Upgrade to Platinum to build and use your own art styles.');
+    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.');
     return;
   }
   resetCustomStyleForm();
@@ -7654,6 +7660,31 @@ function _tbBookKey() {
   var v = (typeof bookMetaVersionId === 'function') ? (bookMetaVersionId() || '') : '';
   return String(c) + '/' + String(v);
 }
+// platinumGate: the refusal every Platinum-only tool shows, in ONE place.
+//
+// v3.0.635 -- Ian: "Put an Upgrade My Plan button and take them to the plans on the My Account
+// page. Create a similar Message for the Custom Art Styles... Right now it just gives a Toast
+// saying you cant use them."
+//
+// goToPlans ALREADY EXISTS and its own note says a later See Plans gate should reuse it -- it
+// switches to the account view and re-scrolls five times over a second, because that page fills
+// its panels in asynchronously and a single scroll lands short. Writing a second navigation here
+// would have been a second thing to keep in step with that page.
+//
+// A MODAL, NOT A TOAST. showAlert slides in at the top right for two and a half seconds, which is
+// easy to miss right after clicking, when you are looking at where you clicked -- and it has
+// nowhere to put an Upgrade button.
+function platinumGate(what, why) {
+  appConfirm({
+    title: what + ' is a Platinum feature',
+    body: why,
+    note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
+    okLabel: 'Upgrade My Plan',
+    cancelLabel: 'Not now',
+    onOk: function () { if (typeof goToPlans === 'function') goToPlans(); }
+  });
+}
+
 function openTitleBuilder() {
   if (!state.currentCampaign) return;
   // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
@@ -7667,13 +7698,7 @@ function openTitleBuilder() {
   // for two and a half seconds -- easy to miss when you have just clicked something and are looking
   // at where you clicked. This one has to be read. Worth aligning the two later.
   if (!(state && state.user && state.user.tier === 'platinum')) {
-    appConfirm({
-      title: 'The Title Builder is a Platinum feature',
-      body: 'Drawing your title as artwork is available on Platinum.',
-      note: 'The five title styles are available on every plan, and they set the title in a real typeface with your chosen colour, size and placement. Upgrade to Platinum to draw the lettering as artwork instead.',
-      okLabel: 'Got it',
-      notice: true
-    });
+    platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen colour, size and placement.');
     return;
   }
   _tbErr('');
