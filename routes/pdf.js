@@ -157,6 +157,23 @@ function lmMeta(m) {
   if (typeof v === 'object') return v;
   try { var o = JSON.parse(v); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
 }
+// v3.0.644 -- IS THIS MOMENT A DRAWN TITLE RATHER THAN A PICTURE?
+//
+// Ian: "if it's a Title builder we don't want the frame on it and we want it to be transparent in
+// all the previews through publish."
+//
+// The marker was already on the row -- services/titleTarget.js writes layout_meta.built_title when a
+// chapter title is drawn -- and lmMeta already parses that column for prominence and focal. So this
+// is a reader, not a new field: nothing extra is stored and no query changes.
+//
+// A DRAWN TITLE IS NOT A PHOTOGRAPH, and almost everything coCell does assumes it is: a frame, a
+// caption from moments.title (which for an establishing row is the session name, so the chapter
+// would print its own name twice), and an aspect box with overflow:hidden that crops or letterboxes.
+// All three are wrong for lettering, so the built-title branch skips the lot.
+function lmIsBuiltTitle(m) {
+  var b = lmMeta(m).built_title;
+  return !!(b && b.url);
+}
 function lmProminence(m) { var n = Number(lmMeta(m).prominence); return (n >= 1 && n <= 5) ? Math.round(n) : 3; }
 // Three-tier size from prominence: Minimize (1-2) / Default (3) / Maximize (4-5).
 function lmSizeTier(m) { var p = lmProminence(m); return p >= 4 ? 'max' : (p <= 2 ? 'min' : 'def'); }
@@ -1632,6 +1649,28 @@ function coDropcap(html) {
   });
 }
 
+// estCell: the chapter opening -- a scene goes through coCell as it always has; a DRAWN TITLE does
+// not (v3.0.644).
+//
+// NO DECORATION AT ALL, per Ian: "all decorations should be off." No frame, no caption, no mat, no
+// vignette -- those are book-wide choices about how a PICTURE is presented, and this is lettering.
+//
+// NO ASPECT BOX. coMedia routes everything through momentImgAspectBox, which sets a fixed
+// aspect-ratio with overflow:hidden -- that is what crops a wide title or letterboxes it. Ian:
+// "The image shouldn't crop at all or shrink." A plain img at width:100% with height:auto keeps the
+// artwork's own proportions and its full width.
+//
+// NOTHING BEHIND IT. The PNG is transparent and Ian wants the page to show through: "Just make it
+// transparent with nothing behind it... It's not sitting on top a picture this time." So no
+// background is painted here -- which is also why the ground cut has to have worked. A title whose
+// cut failed is an opaque rectangle, and it will look like one.
+function estCell(m, opts) {
+  if (!lmIsBuiltTitle(m)) return coCell(m, 0, 100, opts || {});
+  return '<div style="width:100%;line-height:0;">' +
+         '<img src="' + String(m.image || '').replace(/"/g, '&quot;') + '" alt="" ' +
+         'style="display:block;width:100%;height:auto;background:none;" />' +
+         '</div>';
+}
 function coCell(m, i, pct, opts) {
   var overlay = coCaptionOverlay(m, opts.caption, opts.border);
   var media = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>';
@@ -4647,7 +4686,7 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : session.establishing_image;
   var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (session.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || session.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || session.establishing_img_h || null };
   var titleImageHTML = _estImg
-    ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
+    ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + estCell(_estM, co || {}) + '</div>'
     : '';
 
   return `<!DOCTYPE html>
@@ -5389,7 +5428,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : s.establishing_image;
     var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (s.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || s.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || s.establishing_img_h || null };
     var titleImageHTML = _estImg
-      ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
+      ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + estCell(_estM, co || {}) + '</div>'
       : '';
 
     // Session dividers now also show in Quick View (removed the `paginated` suppression) so
