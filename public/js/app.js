@@ -7780,8 +7780,11 @@ function openTitleBuilder(target) {
     return;
   }
   _tbErr('');
-  var t = _tbTitle(), sub = _tbSubtitle();
-  var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || 'This book has no title yet';
+  // For a chapter these fill in when title-read answers; showing the book's words meanwhile would
+  // be the same mismatch on screen for a moment.
+  var _w0 = _tbWords();
+  var t = _w0.title, sub = _w0.subtitle;
+  var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || (_tbIsSession() ? 'This chapter has no name yet' : 'This book has no title yet');
   var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
 
   // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
@@ -7913,22 +7916,42 @@ function _tbSyncArchivePill() {
 // _tbWarnText: the ONE place that decides whether the drawn title still says what the book says.
 // Returns '' when there is nothing to say. Used by the modal and by the Prep panel note, so the two
 // can never disagree about whether there is a mismatch.
+// _tbWords: what the target on screen SHOULD say. The book reads its own fields; a chapter's
+// arrive with title-read, which reads moments.title -- the session name.
+//
+// v3.0.643 -- Ian, seeing the warning on a chapter that had just been drawn correctly: "that
+// message shouldn't be there... It's checking the title of the book vs the title of the session."
+// _tbCur() already followed the target; _tbTitle() and _tbSubtitle() still read state.bookMeta. So
+// the comparison was the chapter's drawn words against the BOOK'S title, which differ almost
+// always. Half a pair following the target and half not -- the third time in three builds, and the
+// reason both halves now come from one place.
+function _tbWords() {
+  if (_tbIsSession()) {
+    var w = (state && state._tbSessionWords) || {};
+    return { title: w.title || '', subtitle: w.subtitle || '' };
+  }
+  return { title: _tbTitle(), subtitle: _tbSubtitle() };
+}
+
 function _tbWarnText() {
   var bm = _tbCur();
   if (!bm.url) return '';
   // A title built before v3.0.622 recorded no words, so there is nothing to compare and we say so
   // rather than guessing that it matches.
   if (!bm.text) return '';
-  var nowT = _tbTitle();
-  var nowS = _tbSubtitle();
+  var _w = _tbWords();
+  var nowT = _w.title;
+  var nowS = _w.subtitle;
   var wasT = String(bm.text || '');
   var wasS = (bm.sub == null) ? '' : String(bm.sub);
   var parts = [];
   if (nowT !== wasT) parts.push('the title now reads \u201c' + nowT + '\u201d but the drawing still says \u201c' + wasT + '\u201d');
   if (String(nowS || '') !== wasS) parts.push('the subtitle now reads \u201c' + (nowS || 'nothing') + '\u201d but the drawing still says \u201c' + (wasS || 'nothing') + '\u201d');
   if (!parts.length) return '';
-  return 'Your drawn title is out of step with the book: ' + parts.join(', and ') +
-         '. The cover will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to the title styles.';
+  return 'Your drawn title is out of step with ' + (_tbIsSession() ? 'this chapter' : 'the book') + ': ' + parts.join(', and ') +
+         (_tbIsSession()
+           ? '. The chapter opening will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to a scene.'
+           : '. The cover will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to the title styles.');
 }
 function _tbRenderWarn() {
   var el = _tbEl('title-build-warn');
