@@ -2232,6 +2232,7 @@ var COVER_TITLE_FACE = { chronicle: null, engraved: null, pulp: null, manuscript
 // a cover. The Campaignia logo is currently written three times across them (TD-394) and that is
 // exactly how a thing ends up on screen and missing in print. This is a function.
 var BUILT_TITLE_BASE_PCT = 76;   // of the caption width at medium; the caption is already inset
+var BUILT_TITLE_CAP_PX = 739;    // 8.5in page less 0.4in caption padding each side, at 96 CSS px/in
 // v3.0.624 -- THE SCRIM NOW BELONGS TO THE TITLE ART, NOT TO THE CAPTION.
 //
 // Ian: "Make the Caption Scrim / Cover art Fade (the darker area behind the title image) just
@@ -2278,7 +2279,22 @@ function builtTitleCss(size) {
   // TD-406: a gradient measurably stopped painting on the optimized render while the box-shadow on
   // the element beside it survived. Until that is understood, the fade is built from the primitive
   // that was watched surviving. If this still does not read as a fade, settle TD-406 first.
-  var b1 = Math.round(220 * r), b2 = Math.round(480 * r);
+  // v3.0.628 -- THE HALO OVERSHOT THE ARTWORK SIDEWAYS, AND THE NUMBERS WERE PICKED AGAINST A SIZE
+  // THAT DOES NOT EXIST. Ian, with the spill circled: "The fade shouldnt go too far past the image
+  // on the left or right." v3.0.625 used flat 220 and 480 pixel blurs, chosen from a model built on
+  // a 900px-wide title. The real artwork is 562px at Medium, so the wide shadow reached 139px past
+  // the edge -- 108 at Small, 196 at Large. Absolute pixels against an assumed width.
+  //
+  // BOTH BLURS NOW COME FROM THE ARTWORK ITSELF. The reach of a box-shadow is (core edge + blur/2),
+  // the core edge is 0.64 of the half-width, so a blur of 0.62 lands at 0.95 -- inside the artwork
+  // at every size, by arithmetic rather than by taste.
+  //
+  // ONE WIDTH CONSTANT, NOT THREE. The interior caption is 8.5in less its 0.4in padding either side;
+  // the printed wrap front panel is 8.625in, within two percent of it. Deriving this separately per
+  // surface would be three numbers to keep in step for a two percent difference, and the failure
+  // mode of the smaller number is a fade that stops slightly early, which nobody can see.
+  var halfPx = (BUILT_TITLE_CAP_PX * pct) / 200;
+  var b1 = Math.round(0.30 * halfPx), b2 = Math.round(0.62 * halfPx);
   return '.cover-art-caption { background:none; }' +
          ' .cover-built-wrap { position:relative; display:block; width:' + pct + '%; margin:0 auto; }' +
          ' .cover-built-wrap::before { content:""; position:absolute; inset:30% 18%; border-radius:50%;' +

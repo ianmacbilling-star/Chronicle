@@ -19777,7 +19777,20 @@ function optimizeShowBusy(j) {
   var btn = document.getElementById('layoutai-run-btn');
   if (j && j.running) {
     if (btn) { btn.disabled = true; btn.textContent = 'Optimize running...'; btn.classList.remove('has-token'); }
-    if (host) { host.textContent = optimizeBusyText(j); host.style.color = 'var(--gold)'; }
+    // v3.0.628 -- ORANGE, because it is a warning and not a status line. Ian: "lets make that orange
+    // so it is more like a warning." The colours are the .panel-dark .alert-warning pair already in
+    // the stylesheet rather than a new orange invented here.
+    //
+    // AND IT IS MARKED WITH A FLAG, NOT RECOGNISED BY ITS COLOUR. The clear path below used to test
+    // `host.style.color === 'var(--gold)'` to decide whether the message was its own to remove --
+    // so changing the colour here would have left the warning on screen forever after the run
+    // finished, and the bug would have looked like the run never ending. A thing that writes a
+    // message should say so, not be identified by how it looks.
+    if (host) {
+      host.textContent = optimizeBusyText(j);
+      host.style.color = 'var(--warn-text)';
+      host.dataset.optimizeBusy = '1';
+    }
     // Ask again while it runs, so the tab clears itself when the run finishes rather than needing
     // a refresh -- which is the habit that caused the double runs in the first place.
     try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
@@ -19788,7 +19801,16 @@ function optimizeShowBusy(j) {
   }
   try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
   window._optimizeBusyTimer = null;
-  if (host && host.style.color === 'var(--gold)') { host.textContent = ''; host.style.color = ''; }
+  // Clears on the flag this function set, whatever colour it happens to be wearing.
+  if (host && host.dataset && host.dataset.optimizeBusy === '1') {
+    host.textContent = '';
+    host.style.color = '';
+    delete host.dataset.optimizeBusy;
+    // v3.0.628 -- SAY THAT IT FINISHED. Ian: "Will it tell me when it ends?" The message used to
+    // simply vanish on the next five-second poll, which is indistinguishable from not having
+    // noticed. Only announced when a run was actually seen running, so a fresh tab stays quiet.
+    if (typeof showAlert === 'function') showAlert('The background Optimize run has finished. You can start another now.');
+  }
   if (btn && btn.textContent === 'Optimize running...' && !window._aiLoopRunning && !window._aiPreloop && !window._aiFinishing) {
     btn.disabled = false; btn.textContent = 'Optimize layout'; btn.classList.add('has-token');
   }

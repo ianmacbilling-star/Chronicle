@@ -68,6 +68,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .panel-dark .alert-error{background:rgba(139,26,26,0.35);border-color:rgba(240,149,149,0.4);color:#f09595;}
 .panel-dark .alert-success{background:rgba(15,110,86,0.3);border-color:rgba(134,212,186,0.4);color:#86d4ba;}
 .panel-dark .alert-warning{background:rgba(120,80,0,0.32);border-color:rgba(230,190,120,0.4);color:#e6be78;}
+/* v3.0.628 -- the warning text colour as a token, so the Optimize busy line and the alert it
+   belongs with cannot drift to two different oranges. Same value as the rule above. */
+:root{--warn-text:#e6be78;}
 .panel-dark .alert-info{background:rgba(40,60,80,0.4);border-color:rgba(150,180,200,0.4);color:#a8c4d6;}
 /* v3.0.493 -- A WARNING IN THE OPTIMIZE PROGRESS LIST SHOULD LOOK LIKE ONE.
    The stale-layout notice was written into #optimize-progress as an ordinary bullet,
@@ -2633,7 +2636,11 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    flex box with 10px of padding and a 120px min-height, so on a short wide title the pills sit well
    inside the picture rather than on its edge. Tightened to 3px here only -- the storyboard keeps its
    own 8px, because a full panel is tall enough that 8px still reads as the top corner. */
-.tb-imgwrap .panel-img-actions { top:3px; left:3px; right:3px; gap:4px; }
+/* v3.0.628 -- Ian: they are still too much on top the picture. Flush to the corner now, and the
+   pills themselves are tightened, because a built title is a short wide strip where 3px of inset
+   is a real fraction of the height. */
+.tb-imgwrap .panel-img-actions { top:0; left:0; right:0; gap:3px; }
+.tb-imgwrap .panel-pill { padding:2px 6px; font-size:9px; border-top-left-radius:0; border-top-right-radius:0; }
 /* The busy overlay needs the wrapper to clip it to the artwork, not to the checkerboard box. */
 .tb-imgwrap { overflow:hidden; border-radius:6px; }
 /* Warnings, not blocks: gold rather than red, because nothing here is broken and nothing is refused.
