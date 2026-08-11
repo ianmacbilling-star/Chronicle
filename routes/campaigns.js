@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, versionOwnerUserId } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
-const { deleteFile } = require('../storage/storage');
+const { deleteFile, archiveCopy, restoreCopy, uploadFile, releaseImage } = require('../storage/storage');
+const { flattenOntoColour } = require('../storage/alpha');
 
 // List campaigns the user is a member of (any role — DM or player). This
 // is the entry point users hit after login, and Phase 2 makes it
@@ -277,6 +278,19 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     back_cover_image_url: cur.back_cover_image_url || '',
     title_image_url: cur.title_image_url || '',
     built_title_url: cur.built_title_url || '',
+    // v3.0.622 -- TD-357(2). The WORDS the built title actually has drawn on it, recorded at build
+    // time. Without them "has the title changed since it was drawn?" cannot be asked at all: the
+    // artwork is a URL and a URL does not spell anything. built_title_sub follows subtitle's own
+    // three-state convention (null = never set) so the two can be compared like with like.
+    // v3.0.622 -- the UNCUT generation. What goes on the cover is built_title_url (cut, transparent);
+    // this is the same picture before the ground came off, and it is what Retouch and Reference are
+    // handed. Empty for titles built before v3.0.622, which fall back to a repaint (TB_REF_BACK).
+    built_title_src: cur.built_title_src || '',
+    // The description that drew it, kept so an archived title can show its prompt like every other
+    // archived image does, and so reopening the builder is not a blank Description box.
+    built_title_prompt: cur.built_title_prompt || '',
+    built_title_text: cur.built_title_text || '',
+    built_title_sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub)),
     book_title: cur.book_title || '',
     // v3.0.552 -- null is sent as null, NOT coerced to empty. The client needs to tell "never set"
     // from "cleared" so it knows whether to seed the field with the dates.
@@ -314,6 +328,13 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // Ian saw his own title-page image appear in the builder and said so before anything overwrote it.
   // The prefs blob takes new keys with no schema change, which is exactly what it is for.
   if (b.built_title_url !== undefined) patch.built_title_url = b.built_title_url || null;
+  // v3.0.622 -- TD-357(2). Written in the same call as the URL, never on their own, so the artwork
+  // and the record of what it says cannot drift apart. Empty is preserved for the subtitle for the
+  // same reason it is on `subtitle` above -- a title drawn with no subtitle is a real state.
+  if (b.built_title_src !== undefined) patch.built_title_src = b.built_title_src || null;
+  if (b.built_title_prompt !== undefined) patch.built_title_prompt = b.built_title_prompt || null;
+  if (b.built_title_text !== undefined) patch.built_title_text = b.built_title_text || null;
+  if (b.built_title_sub !== undefined) patch.built_title_sub = (b.built_title_sub === '' ? '' : (b.built_title_sub || null));
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
   // v3.0.552 -- THE EMPTY STRING IS PRESERVED, DELIBERATELY. `b.subtitle || null` would collapse ''
   // back to null, and null and empty are now DIFFERENT states: null means the book has never had a
@@ -348,14 +369,9 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // where a stamped column would leave the new Story Master locked out of their own book and would
   // go NULL again if the old owner's account were deleted (TD-248). Ian asked for the row to be
   // stamped; the derivation gives the same answer and cannot go stale, so it is used instead.
-  if (_scP.bookVersionId) {
-    const _vw = await db.prepare('SELECT id, campaign_id, user_id, is_canonical FROM campaign_versions WHERE id = ?').get(_scP.bookVersionId);
-    let _owner = null;
-    try { _owner = _vw ? await versionOwnerUserId(db, _vw) : null; } catch (e) { _owner = null; }
-    const _mine = _owner != null && String(_owner) === String(uid);
-    if (!_mine) {
-      return res.status(403).json({ error: 'You are looking at someone else\u2019s version. Switch to your own version to change the cover or the layout.' });
-    }
+  // v3.0.622 -- the same test, now shared with the three title routes below (see ownsBookVersion).
+  if (!(await ownsBookVersion(db, uid, _scP.bookVersionId))) {
+    return res.status(403).json({ error: 'You are looking at someone else\u2019s version. Switch to your own version to change the cover or the layout.' });
   }
   // v3.0.578 -- fill_only: write these values only where nothing is stored yet. Used by the Prep
   // panel's first-load materialise, which must establish defaults without ever overwriting an edit
@@ -370,6 +386,10 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     back_cover_image_url: merged.back_cover_image_url || '',
     title_image_url: merged.title_image_url || '',
     built_title_url: merged.built_title_url || '',
+    built_title_src: merged.built_title_src || '',
+    built_title_prompt: merged.built_title_prompt || '',
+    built_title_text: merged.built_title_text || '',
+    built_title_sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub)),
     book_title: merged.book_title || '',
     // v3.0.575 -- THE PUT NOW ANSWERS IN THE SAME SHAPE AS THE GET. It omitted the subtitle, so a
     // client assigning this response onto state.bookMeta (the image picker does, and the new
@@ -380,6 +400,164 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     layout_opts: merged.layout_opts || '',
     own_cover: merged.cover_image_url || '', own_back: merged.back_cover_image_url || '', own_title: merged.title_image_url || ''
   });
+});
+
+// =============================================================================================
+// BUILT TITLE: ARCHIVE, RESTORE, AND REUSE AS A REFERENCE  (TD-401, TD-402)
+// =============================================================================================
+// Ian, 2026-08-10: "we need to be able to remove it once it is on there", "allow them to Archive the
+// title and allow them to pull it back in as the title reference image", and a new archive type
+// called title.
+//
+// REMOVE IS NOT A ROUTE. Clearing a built title is `built_title_url: ''` through the my-book-meta PUT
+// that already exists and already refuses a cross-version write. A second way to write the same field
+// would be a second place for that refusal to be got wrong.
+//
+// THESE THREE ARE ROUTES because each does something the client cannot: copy bytes into the protected
+// archives/ prefix, copy them back out into a live object, or repaint a transparent PNG.
+//
+// NONE OF THEM CALLS FAL, so none of them costs a token. Ian's rule is one token per fal call; these
+// move pictures that have already been paid for.
+//
+// WHY THE WORDS ARE STORED WITH THE PICTURE. A built title has its subtitle DRAWN INTO it, so an
+// archive that says only "a title" is six identical thumbnails. `title` holds the book title and
+// layout_meta holds the subtitle and the uncut original -- layout_meta is already the free-form
+// per-image column (it carries focal/crop_safe for panels), so no schema change is needed.
+
+// Shared by all three: resolve the book scope, prove ownership, and hand back the prefs.
+async function titleScope(db, req) {
+  const cid = req.params.campaignId;
+  const sc = await bookPrefsScope(db, req, Number(cid));
+  if (!(await ownsBookVersion(db, req.session.userId, sc.bookVersionId))) return { error: 'You are looking at someone else\u2019s version. Switch to your own version to change the title.' };
+  const cur = await getForkBookPrefs(db, req.session.userId, sc.fork, cid, { inherit: true, versionId: sc.versionId });
+  return { sc: sc, cur: cur, cid: cid };
+}
+
+// POST /:campaignId/my-book-meta/archive-title -- save the built title into the campaign Archive.
+// The URL is READ FROM THE VERSION, never taken from the body: a client-named URL would let anything
+// on the internet be fetched and stored into someone else's campaign.
+router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const t = await titleScope(db, req);
+    if (t.error) return res.status(403).json({ error: t.error });
+    const liveUrl = t.cur.built_title_url || '';
+    if (!liveUrl) return res.json({ error: 'There is no built title to archive yet.' });
+
+    // Same cap, same message, same tier as every other archive. Ian: "Fine for the count too."
+    try {
+      const effName = await getEffectiveTier(req.session.userId, t.cid);
+      const effTier = getTier(effName);
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(t.cid);
+        if (cnt && cnt.c >= cap) {
+          return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
+        }
+      }
+    } catch (capErr) { console.error('archive cap check error:', capErr.message); }
+
+    const archivedUrl = await archiveCopy(liveUrl);
+    // The uncut original is archived TOO when there is one, because it is the picture a later Retouch
+    // or Reference wants and the live copy it points at is not protected from cleanup.
+    let archivedSrc = '';
+    if (t.cur.built_title_src) {
+      try { archivedSrc = await archiveCopy(t.cur.built_title_src); }
+      catch (e) { console.error('archive built-title source failed (keeping the cut copy):', e.message); }
+    }
+    const meta = JSON.stringify({
+      subtitle: (t.cur.built_title_sub == null ? null : String(t.cur.built_title_sub)),
+      src: archivedSrc || null
+    });
+    const now = new Date().toISOString();
+    const result = await db.prepare(
+      'INSERT INTO campaign_archives (campaign_id, fork_id, image_type, title, image_url, source_url, image_prompt, layout_meta, archived_by, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(t.cid, t.sc.fork || null, 'title', t.cur.built_title_text || t.cur.book_title || null,
+          archivedUrl, liveUrl, t.cur.built_title_prompt || null, meta, req.session.userId, now);
+    const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
+    return res.json({ success: true, archive: row });
+  } catch (e) {
+    console.error('archive-title error:', e && e.message);
+    return res.json({ error: 'Could not archive the title. Please try again.' });
+  }
+});
+
+// POST /:campaignId/my-book-meta/restore-title -- put an archived title back on the cover.
+// Body: { archiveId }. The archived bytes are copied into a FRESH live object exactly as the panel
+// and character replaces do, so archives/ is never pointed at by a living book.
+router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const t = await titleScope(db, req);
+    if (t.error) return res.status(403).json({ error: t.error });
+    const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, t.cid);
+    if (!arch || !arch.image_url) return res.json({ error: 'Archived title not found.' });
+    if (arch.image_type !== 'title') return res.json({ error: 'That archived image is not a title.' });
+
+    const freshUrl = await restoreCopy(arch.image_url);
+    let meta = {};
+    try { meta = arch.layout_meta ? (typeof arch.layout_meta === 'object' ? arch.layout_meta : JSON.parse(arch.layout_meta)) : {}; } catch (e) { meta = {}; }
+    let freshSrc = '';
+    if (meta && meta.src) { try { freshSrc = await restoreCopy(meta.src); } catch (e) { console.error('restore built-title source failed:', e.message); } }
+
+    const prevUrl = t.cur.built_title_url, prevSrc = t.cur.built_title_src;
+    // The WORDS travel with the picture. Without them the mismatch warning would compare the book's
+    // title against whatever the PREVIOUS title had drawn on it, and quietly say the wrong thing.
+    const patch = {
+      built_title_url: freshUrl,
+      built_title_src: freshSrc || null,
+      built_title_text: arch.title || null,
+      built_title_sub: (meta && meta.subtitle !== undefined) ? meta.subtitle : null
+    };
+    const merged = await setForkBookPrefs(db, req.session.userId, t.sc.fork, t.cid, patch, t.sc.versionId);
+    if (prevUrl && prevUrl !== freshUrl) { try { await releaseImage(db, prevUrl); } catch (e) {} }
+    if (prevSrc && prevSrc !== freshSrc) { try { await releaseImage(db, prevSrc); } catch (e) {} }
+    return res.json({
+      success: true,
+      built_title_url: merged.built_title_url || '',
+      built_title_src: merged.built_title_src || '',
+      built_title_text: merged.built_title_text || '',
+      built_title_sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub))
+    });
+  } catch (e) {
+    console.error('restore-title error:', e && e.message);
+    return res.json({ error: 'Could not put that title back on the cover. Please try again.' });
+  }
+});
+
+// POST /:campaignId/my-book-meta/title-ref-from-archive -- hand an archived title back as a REFERENCE.
+// Body: { archiveId }. Returns { url } for the Title Builder's reference slot.
+//
+// The archived UNCUT original is preferred. Where there isn't one -- every title archived before
+// v3.0.622 -- the cut copy is repainted onto TB_REF_BACK, because a transparent PNG handed to fal has
+// no background and what fal decides to put there is neither ours to choose nor visible to us.
+router.post('/:campaignId/my-book-meta/title-ref-from-archive', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, req.params.campaignId);
+    if (!arch || !arch.image_url) return res.json({ error: 'Archived title not found.' });
+    if (arch.image_type !== 'title') return res.json({ error: 'That archived image is not a title.' });
+
+    let meta = {};
+    try { meta = arch.layout_meta ? (typeof arch.layout_meta === 'object' ? arch.layout_meta : JSON.parse(arch.layout_meta)) : {}; } catch (e) { meta = {}; }
+    if (meta && meta.src) return res.json({ url: await restoreCopy(meta.src) });
+
+    const axios = require('axios');
+    const https = require('https');
+    const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+    const resp = await axios.get(arch.image_url, { responseType: 'arraybuffer', httpsAgent: agent, timeout: 60000, maxContentLength: Infinity, maxBodyLength: Infinity });
+    const buf = Buffer.from(resp.data);
+    // TB_REF_BACK is black -- see the note in routes/images.js. Black is not a guess here: the
+    // generate prompt demands a flat solid black field, so black is exactly what the cut removed.
+    const out = flattenOntoColour(buf, 0, 0, 0);
+    if (out === buf) return res.json({ url: await restoreCopy(arch.image_url) });   // opaque already
+    const name = 'titleflat-' + Date.now() + '-' + Math.random().toString(16).slice(2, 10) + '.png';
+    return res.json({ url: await uploadFile(out, name, 'image/png') });
+  } catch (e) {
+    console.error('title-ref-from-archive error:', e && e.message);
+    return res.json({ error: 'Could not use that archived title as a reference.' });
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -7485,6 +7485,9 @@ function prepSaveSubtitle() {
   var _was = (state.bookMeta && state.bookMeta.subtitle != null) ? String(state.bookMeta.subtitle) : '';
   if (_now === _was) return;
   _prepMetaWrite({ subtitle: _now });   // v3.0.578 -- chained, and kept locally until confirmed
+  // v3.0.622 -- TD-357(2). The drawn title still spells the old subtitle, and this is the instant it
+  // stopped being true. Nothing is invalidated; the note simply appears.
+  if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
 }
 // v3.0.575 -- THE TITLE IS SAVED. IT NEVER WAS.
 // The one and only client write of book_title lived inside publishStory(), so a title existed as
@@ -7511,6 +7514,8 @@ function prepSaveTitle() {
   _prepMetaWrite({ book_title: _t });   // v3.0.578 -- sets state.bookMeta itself, chained, kept until confirmed
   // Keep the Order tab's mirror in step immediately, for the case where it has already been drawn.
   var _pt = document.getElementById('print-book-title'); if (_pt) _pt.value = _t;
+  // v3.0.622 -- TD-357(2), same reason as prepSaveSubtitle above.
+  if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
 }
 // v3.0.575 -- MATERIALISE THE BOOK SETTINGS INTO THE VERSION THE FIRST TIME PREP OPENS IT.
 // Ian, 2026-08-09: "save the title and really all the other layout settings the moment the main
@@ -7599,19 +7604,94 @@ function _tbTitle() {
   if (!t && state.currentCampaign) t = String(state.currentCampaign.name || '').trim();
   return t;
 }
+// _tbBookKey: which book the modal is currently showing. Campaign AND version, because switching
+// either one puts a different book on screen.
+function _tbBookKey() {
+  var c = state.currentCampaign ? state.currentCampaign.id : '';
+  var v = (typeof bookMetaVersionId === 'function') ? (bookMetaVersionId() || '') : '';
+  return String(c) + '/' + String(v);
+}
 function openTitleBuilder() {
   if (!state.currentCampaign) return;
   _tbErr('');
   var t = _tbTitle(), sub = _tbSubtitle();
   var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || 'This book has no title yet';
   var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
+
+  // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
+  // that nothing ever cleared, so a reference chosen on one book stayed selected across version
+  // switches, campaign switches and reloads -- DOM state impersonating book state. Ian found it.
+  //
+  // It is stamped with the book it was chosen under rather than blanked on every open: clearing
+  // unconditionally would also throw the reference away when you close the modal to check a subtitle
+  // and come straight back, which is a thing you do far more often than you switch books.
+  var key = _tbBookKey();
+  if (state._tbRefKey !== key) { titleBuildClearRef(); state._tbRefKey = key; }
+
+  // Seed the description from what actually drew this title, so reopening shows the words that
+  // produced the picture on screen instead of an empty box.
+  var dEl = _tbEl('title-build-desc');
+  if (dEl && !dEl.value && state.bookMeta && state.bookMeta.built_title_prompt) dEl.value = state.bookMeta.built_title_prompt;
+
   // Show whatever this version already has, so reopening is not a blank slate.
   // v3.0.618 -- built_title_url, NOT title_image_url. That one is the book title PAGE artwork, the
   // third image in the Prep panel, and v3.0.617 both displayed it here and would have overwritten
   // it on the first Generate. Ian spotted it before it cost him anything.
   var existing = (state.bookMeta && state.bookMeta.built_title_url) || '';
   _tbShowResult(existing);
+  titleBuildRetouchClose();
+  _tbRenderWarn();
   var m = _tbEl('title-build-modal'); if (m) m.classList.remove('hidden');
+  // The Archive pill has to know whether THIS picture is already in the chest, and that answer lives
+  // in the archive list rather than on the book. Loaded after the modal is shown so the panel is not
+  // held back by a fetch; the pill settles a moment later.
+  if (existing && typeof ensureArchivesLoaded === 'function') ensureArchivesLoaded(_tbSyncArchivePill);
+}
+
+// _tbArchiveRow: the archive entry for the title currently on the book, if there is one. Matched on
+// source_url -- the archive records the LIVE url it was taken from, which is exactly this field.
+function _tbArchiveRow() {
+  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  if (!url) return null;
+  return (state.archives || []).find(function (a) {
+    return a.image_type === 'title' && String(a.source_url || '') === String(url);
+  }) || null;
+}
+function _tbSyncArchivePill() {
+  var btn = _tbEl('title-build-archive-btn');
+  if (!btn) return;
+  var row = _tbArchiveRow();
+  btn.className = 'panel-pill' + (row ? ' is-on' : '');
+  btn.textContent = row ? 'Archived' : 'Archive';
+  btn.title = row ? 'In your Archive - click to remove it from the Archive' : 'Save this title to your Archive';
+}
+
+// _tbWarnText: the ONE place that decides whether the drawn title still says what the book says.
+// Returns '' when there is nothing to say. Used by the modal and by the Prep panel note, so the two
+// can never disagree about whether there is a mismatch.
+function _tbWarnText() {
+  var bm = state.bookMeta || {};
+  if (!bm.built_title_url) return '';
+  // A title built before v3.0.622 recorded no words, so there is nothing to compare and we say so
+  // rather than guessing that it matches.
+  if (!bm.built_title_text) return '';
+  var nowT = _tbTitle();
+  var nowS = _tbSubtitle();
+  var wasT = String(bm.built_title_text || '');
+  var wasS = (bm.built_title_sub == null) ? '' : String(bm.built_title_sub);
+  var parts = [];
+  if (nowT !== wasT) parts.push('the title now reads \u201c' + nowT + '\u201d but the drawing still says \u201c' + wasT + '\u201d');
+  if (String(nowS || '') !== wasS) parts.push('the subtitle now reads \u201c' + (nowS || 'nothing') + '\u201d but the drawing still says \u201c' + (wasS || 'nothing') + '\u201d');
+  if (!parts.length) return '';
+  return 'Your drawn title is out of step with the book: ' + parts.join(', and ') +
+         '. The cover will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to the title styles.';
+}
+function _tbRenderWarn() {
+  var el = _tbEl('title-build-warn');
+  if (!el) return;
+  var msg = _tbWarnText();
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
 }
 // v3.0.620 -- DONE REPAINTS THE BOOK. Ian: "when you hit done it should refresh and have the new
 // title picture on the book based on those other attributes." The preview is an iframe whose src
@@ -7623,34 +7703,80 @@ function closeTitleBuilder() {
   try { if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); } catch (e) {}
 }
 function _tbShowResult(url) {
-  var img = _tbEl('title-build-img'), empty = _tbEl('title-build-empty');
+  // v3.0.622 -- the wrapper carries hidden now, not the image. The pills are children of the wrapper
+  // and are positioned against it, so hiding the img alone would leave four buttons floating over an
+  // empty box.
+  var img = _tbEl('title-build-img'), wrap = _tbEl('title-build-imgwrap'), empty = _tbEl('title-build-empty');
+  if (url) {
+    if (img) img.src = url;
+    if (wrap) wrap.classList.remove('hidden');
+    if (empty) empty.classList.add('hidden');
+  } else {
+    if (img) img.removeAttribute('src');
+    if (wrap) wrap.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+  }
+  _tbSyncArchivePill();
+}
+
+// _tbSetRef: the ONE writer of the reference. Everything that chooses a reference -- upload, drop,
+// From Archive, Clear -- comes through here, so the hidden input, the preview and the Clear button
+// cannot end up describing three different states.
+function _tbSetRef(url) {
+  var ref = _tbEl('title-build-ref'); if (ref) ref.value = url || '';
+  var img = _tbEl('title-build-ref-img');
+  var empty = _tbEl('title-build-drop-empty');
+  var clear = _tbEl('title-build-ref-clear');
   if (url) {
     if (img) { img.src = url; img.classList.remove('hidden'); }
     if (empty) empty.classList.add('hidden');
+    if (clear) clear.classList.remove('hidden');
   } else {
     if (img) { img.removeAttribute('src'); img.classList.add('hidden'); }
     if (empty) empty.classList.remove('hidden');
+    if (clear) clear.classList.add('hidden');
   }
+}
+function titleBuildClearRef() { _tbSetRef(''); }
+function titleBuildPickFile() { var f = _tbEl('title-build-file'); if (f) f.click(); }
+
+// Drag and drop, mirroring handleAssetDragOver/Leave/Drop exactly. Ian: "make it so you can drag and
+// drop a picture in as the reference like other areas."
+function handleTitleRefDragOver(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = _tbEl('title-build-drop'); if (z) z.classList.add('drag-over');
+}
+function handleTitleRefDragLeave(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = _tbEl('title-build-drop'); if (z) z.classList.remove('drag-over');
+}
+function handleTitleRefDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  var z = _tbEl('title-build-drop'); if (z) z.classList.remove('drag-over');
+  var files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files[0]) _tbSendRefFile(files[0]);
 }
 // v3.0.618 -- UPLOAD A REFERENCE. Ian wants to drop in a sheet of lettering he likes, so the file goes
 // to R2 first and the generator is handed the URL. Nothing is charged: this only stores a picture.
 function titleBuildUpload(input) {
   var f = input && input.files && input.files[0];
   if (!f) return;
+  _tbSendRefFile(f);
+  try { input.value = ''; } catch (e) {}
+}
+// One sender for both the file picker and the drop zone, so a dropped file and a chosen file cannot
+// take different paths to the same field.
+function _tbSendRefFile(file) {
   _tbErr('');
   var fd = new FormData();
-  fd.append('image', f);
+  fd.append('image', file);
   fetch('/api/images/title-ref', { method: 'POST', body: fd })
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d || d.error || !d.url) { _tbErr((d && (d.message || d.error)) || 'Could not store that image.'); return; }
-      var ref = _tbEl('title-build-ref');
-      if (ref) ref.value = d.url;
-      var th = _tbEl('title-build-ref-thumb');
-      if (th) { th.innerHTML = '<img src="' + d.url + '" alt="" />'; th.classList.remove('hidden'); }
+      _tbSetRef(d.url);
     })
-    .catch(function () { _tbErr('Could not store that image.'); })
-    .then(function () { try { input.value = ''; } catch (e) {} });
+    .catch(function () { _tbErr('Could not store that image.'); });
 }
 function titleBuildGenerate() {
   if (!state.currentCampaign) return;
@@ -7681,12 +7807,144 @@ function titleBuildGenerate() {
       }
       // Stored on the VERSION, through the same endpoint the cover images use, so it forks with the
       // book rather than following the browser.
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({ built_title_url: d.image });
+      // v3.0.622 -- FIVE FIELDS, ONE WRITE. The artwork, the uncut original behind it, the words it
+      // has drawn on it and the description that drew them all describe one picture; writing them in
+      // separate calls is how a book ends up with a title whose recorded words belong to the last one.
+      // The words come from the SERVER's reply, not from the boxes on screen -- the server is what
+      // told the model what to draw.
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+        built_title_url: d.image,
+        built_title_src: d.source || '',
+        built_title_text: d.title || '',
+        built_title_sub: (d.subtitle == null ? '' : String(d.subtitle)),
+        built_title_prompt: ((_tbEl('title-build-desc') || {}).value || '')
+      });
+      _tbRenderWarn();
+      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not build the title.'); })
     .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
 }
+// =====================================================================================================
+// RETOUCH, REMOVE, ARCHIVE AND REPLACE FOR A BUILT TITLE  (TD-401, TD-402, TD-405)
+// =====================================================================================================
+
+function titleBuildRetouchOpen() {
+  var row = _tbEl('title-build-retouch-row'); if (row) row.classList.remove('hidden');
+  var ta = _tbEl('title-build-retouch-text'); if (ta) setTimeout(function () { ta.focus(); }, 30);
+}
+function titleBuildRetouchClose() {
+  var row = _tbEl('title-build-retouch-row'); if (row) row.classList.add('hidden');
+  var ta = _tbEl('title-build-retouch-text'); if (ta) ta.value = '';
+}
+
+// Ian: "Add the Retouch to it as well! That's how we get the new lettering for the subtitle."
+// Synchronous, like Generate above it and unlike every other Retouch in the product -- see the note
+// on the route. Costs a token, because it is a call to fal.
+function titleBuildRetouch() {
+  if (!state.currentCampaign) return;
+  var ta = _tbEl('title-build-retouch-text');
+  var instruction = ta ? String(ta.value || '').trim() : '';
+  if (!instruction) { if (ta) ta.focus(); return; }
+  _tbErr('');
+  var btn = _tbEl('title-build-retouch-go');
+  if (btn) { btn.disabled = true; btn.textContent = 'Drawing...'; }
+  fetch('/api/images/title-retouch' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaignId: state.currentCampaign.id, instruction: instruction })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not retouch the title.'); return; }
+      _tbShowResult(d.image);
+      if (d.cut === false) {
+        _tbErr('The background could not be removed -- the edit came back as a scene rather than lettering on a plain ground. Try a simpler instruction, or Generate again.');
+      }
+      // THE WORDS ARE NOT UPDATED HERE, and that is deliberate. A retouch changes the picture by an
+      // instruction in English; nothing in this exchange knows what the new artwork actually spells.
+      // Claiming it now says the book's current title would be a guess printed as a fact -- and the
+      // mismatch warning exists precisely so a wrong claim is worse than an out-of-date one. Editing
+      // the title text and rebuilding is what sets the words.
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+        built_title_url: d.image,
+        built_title_src: d.source || ''
+      });
+      titleBuildRetouchClose();
+      _tbRenderWarn();
+      if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+    })
+    .catch(function () { _tbErr('Could not retouch the title.'); })
+    .then(function () { if (btn) { btn.disabled = false; btn.textContent = 'Apply change'; } });
+}
+
+// TD-401. Take the drawn title off the book. The five presets come back to life the moment it is gone
+// -- that is the whole point, and it is what prepApplyTitleModeLock decides from.
+function titleBuildRemove() {
+  if (!state.currentCampaign) return;
+  var archived = !!_tbArchiveRow();
+  var msg = archived
+    ? 'Take this drawn title off the book? It stays in your Archive, so you can put it back later.'
+    : 'Take this drawn title off the book?\n\nThis one is NOT in your Archive, so it will be gone for good and rebuilding it costs another token. Cancel and press Archive first if you might want it back.';
+  if (!confirm(msg)) return;
+  _tbErr('');
+  if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
+    built_title_url: '', built_title_src: '', built_title_text: '', built_title_sub: ''
+  });
+  _tbShowResult('');
+  titleBuildRetouchClose();
+  _tbRenderWarn();
+  if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+}
+
+// TD-402. Archive on, archive off -- the same toggle every other image in the product has.
+function titleBuildArchiveToggle() {
+  if (!state.currentCampaign) return;
+  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  if (!url) return;
+  var row = _tbArchiveRow();
+  _tbErr('');
+  if (row) {
+    fetch('/api/campaigns/' + state.currentCampaign.id + '/archives/' + row.id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.error) { _tbErr(d.message || d.error); return; }
+        state.archives = (state.archives || []).filter(function (a) { return a.id !== row.id; });
+        _tbSyncArchivePill();
+        if (typeof showAlert === 'function') showAlert('Removed from your Archive.');
+      })
+      .catch(function () { _tbErr('Could not update the Archive.'); });
+    return;
+  }
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta/archive-title' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || d.error || !d.archive) { _tbErr((d && (d.message || d.error)) || 'Could not archive the title.'); return; }
+      state.archives = (state.archives || []).concat([d.archive]);
+      _tbSyncArchivePill();
+      if (typeof showAlert === 'function') showAlert('Title saved to your Archive.');
+    })
+    .catch(function () { _tbErr('Could not archive the title.'); });
+}
+
+// Two pickers, one grid. Ian: "You should be able to pull in a reference image from the archive. And
+// even Pull in an actual title from the archive. For pulling in an archive only pull in Archived items
+// with the type Title." Both filter to type 'title' and neither costs a token -- no fal call is made.
+function openTitleReplacePicker() { _tbOpenPicker('title', 'Replace the title from your Archive'); }
+function openTitleRefPicker()     { _tbOpenPicker('titleref', 'Steer the look from an archived title'); }
+function _tbOpenPicker(mode, heading) {
+  if (!state.currentCampaign) return;
+  state.pickerCtx = { mode: mode };
+  state.pickerFilters = { session:'', moment:'', creator:'', type:'title', style:'', version:'', character:'', sort:'newest' };
+  var tEl = document.getElementById('replace-picker-title');
+  if (tEl) tEl.textContent = heading;
+  var modal = document.getElementById('replace-picker-modal');
+  if (modal) modal.classList.remove('hidden');
+  ensureArchivesLoaded(renderPicker);
+}
+
 function prepSaveTitleColor() {
   var el = document.getElementById('print-title-color');
   if (!el || !state.currentCampaign) return;
@@ -9141,6 +9399,29 @@ function archiveMomentLabel(a) {
   return null;
 }
 
+// v3.0.622 -- ONE place that turns an image_type into a word, and one that turns an archive row into
+// its caption. Both were written inline at their two call sites as `=== 'character' ? ... : 'Panel'`,
+// which is a two-type answer to what is now a three-type question.
+function archiveTypeLabel(t) {
+  if (t === 'character') return 'Character';
+  if (t === 'title') return 'Title';
+  return 'Panel';
+}
+function archiveTypeCaption(a) {
+  if (!a) return 'Panel';
+  if (a.image_type === 'character') return a.character_name || 'Character';
+  if (a.image_type === 'title') {
+    var t = a.title || 'Built title';
+    var sub = '';
+    try {
+      var m = a.layout_meta ? (typeof a.layout_meta === 'object' ? a.layout_meta : JSON.parse(a.layout_meta)) : null;
+      if (m && m.subtitle) sub = String(m.subtitle);
+    } catch (e) { sub = ''; }
+    return sub ? (t + ' \u00b7 ' + sub) : t;
+  }
+  return archiveMomentLabel(a) || 'Panel';
+}
+
 function setArchiveFilter(key, val) {
   if (!state.archiveFilters) state.archiveFilters = {};
   state.archiveFilters[key] = val;
@@ -9193,7 +9474,8 @@ function renderArchiveFilters() {
     '<select class="archive-filter" onchange="setArchiveFilter(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'type\', this.value)"><option value="">All types</option>' +
       '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
-      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option></select>' +
+      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option>' +
+      '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
     '<select class="archive-filter" onchange="setArchiveFilter(\'sort\', this.value)">' +
       '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
@@ -9239,7 +9521,8 @@ function archiveFilterBarHTML(f, onchange) {
     '<select class="archive-filter" onchange="' + onchange + '(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'type\', this.value)"><option value="">All types</option>' +
       '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
-      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option></select>' +
+      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option>' +
+      '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'sort\', this.value)">' +
       '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
@@ -9541,7 +9824,10 @@ function renderPickerGrid() {
   var rows = getFilteredArchives(state.pickerFilters);
   if (!rows.length) { grid.innerHTML = '<div class="archive-pick-empty">No archived images match these filters. Widen them to pull from another version, session, or character.</div>'; return; }
   grid.innerHTML = rows.map(function(a){
-    var cap = '<b>' + escapeHtml(a.image_type === 'character' ? (a.character_name || 'Character') : (archiveMomentLabel(a) || 'Panel')) + '</b>';
+    // v3.0.622 -- three types now, so "not a character" is no longer "a panel". An archived title is
+    // labelled with the words it has DRAWN on it, because six thumbnails of lettering are otherwise
+    // indistinguishable -- which is exactly the case Ian described (Episode 1 vs Episode 2).
+    var cap = '<b>' + escapeHtml(archiveTypeCaption(a)) + '</b>';
     if (a.session_title) cap += '<br>' + escapeHtml(a.session_title);
     var ver = (!a.fork_id || a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
     cap += '<br>' + escapeHtml(ver);
@@ -9558,6 +9844,39 @@ function applyArchiveToTarget(archiveId) {
   var ctx = state.pickerCtx || {};
   var cid = state.currentCampaign && state.currentCampaign.id;
   if (!cid) return;
+
+  // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
+  // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
+  // blob and a reference is not stored on the book at all, so neither fits that shape.
+  var vq = (typeof bookMetaVersionQ === 'function') ? bookMetaVersionQ('?') : '';
+  if (ctx.mode === 'title') {
+    fetch('/api/campaigns/' + cid + '/my-book-meta/restore-title' + vq, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
+      closeReplacePicker();
+      state.bookMeta = state.bookMeta || {};
+      state.bookMeta.built_title_url = d.built_title_url || '';
+      state.bookMeta.built_title_src = d.built_title_src || '';
+      state.bookMeta.built_title_text = d.built_title_text || '';
+      state.bookMeta.built_title_sub = d.built_title_sub;
+      _tbShowResult(d.built_title_url || '');
+      _tbRenderWarn();
+      if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    }).catch(function (e) { alert('Could not put that title on the book: ' + e.message); });
+    return;
+  }
+  if (ctx.mode === 'titleref') {
+    fetch('/api/campaigns/' + cid + '/my-book-meta/title-ref-from-archive', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || d.error || !d.url) { alert((d && (d.message || d.error)) || 'Could not use that as a reference.'); return; }
+      closeReplacePicker();
+      _tbSetRef(d.url);
+    }).catch(function (e) { alert('Could not use that as a reference: ' + e.message); });
+    return;
+  }
+
   var body;
   if (ctx.mode === 'moment') {
     body = { target_type: 'moment', target_moment_id: ctx.momentId };
@@ -9633,7 +9952,7 @@ function renderArchiveGrid() {
   grid.innerHTML = rows.map(function(a){
     var canDelete = isDM || (meId && a.archived_by === meId);
     var when = a.created_at ? new Date(a.created_at).toLocaleDateString() : '';
-    var typeLabel = a.image_type === 'character' ? 'Character' : 'Panel';
+    var typeLabel = archiveTypeLabel(a.image_type);
     var ver = archiveVersionLabel(a);
     var mom = archiveMomentLabel(a);
     var meta = '<div class="archive-row"><span>Type</span><b>' + typeLabel + '</b></div>';
@@ -14609,6 +14928,53 @@ function prepApplyOwnershipLock() {
     });
     var note = document.getElementById('prep-readonly-note');
     if (note) note.style.display = own ? 'none' : '';
+  } catch (e) {}
+  // v3.0.622 -- CALLED LAST, AND IT ONLY EVER TIGHTENS.
+  //
+  // This is not tidiness, it is the whole reason the built-title lock is a function rather than four
+  // lines somewhere else. pcl-titleStyle is a member of PREP_LOCK_PLAIN, and the loop above sets
+  // `el.disabled = !own` on every member unconditionally -- so ANY disabling done elsewhere is
+  // switched back on the next time this runs, which is on load, on every version switch, and at the
+  // end of prepLayoutLoad. Two reasons to disable one control, written in two places, and the last
+  // writer wins. Running here means ownership decides first and the title mode can only add to it.
+  prepApplyTitleModeLock();
+}
+
+// TD-357(1). A drawn title is EITHER/OR with the five presets -- Ian: "they can use one or the other".
+// While one is on the book the style dropdown and the colour picker change nothing at all, so they are
+// disabled and the reason is said out loud. Ian's TD-401 Remove is what makes this safe to do: without
+// a way back to the presets this would be a one-way door.
+//
+// NOT the size or the placement controls, which DO still apply -- builtTitleCss scales the artwork by
+// titleSize and the overlay is placed by titlePlace, so disabling them would be a lie in the other
+// direction.
+function prepApplyTitleModeLock() {
+  try {
+    var built = !!(state.bookMeta && state.bookMeta.built_title_url);
+    var own = (typeof novelOwnView === 'function') ? novelOwnView() : true;
+    // Only ever tightens: a control already disabled because this is not your version stays disabled.
+    ['pcl-titleStyle', 'print-title-color'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (built || !own) el.disabled = true;
+      el.style.opacity = (built || !own) ? '0.55' : '';
+      // Capture the authored tooltip ONCE, before anything overwrites it -- otherwise the second run
+      // would 'restore' the explanation this function itself put there.
+      if (el.getAttribute('data-title-orig') === null) el.setAttribute('data-title-orig', el.title || '');
+      el.title = built
+        ? 'Your title is drawn artwork right now, so the title styles and colour do not apply. Remove the drawn title in the Title Builder to use them again.'
+        : (el.getAttribute('data-title-orig') || '');
+    });
+    // ONE note slot, TWO possible messages, and the mismatch is the more urgent of the two.
+    var note = document.getElementById('prep-title-note');
+    if (note) {
+      var warn = (typeof _tbWarnText === 'function') ? _tbWarnText() : '';
+      var msg = warn || (built
+        ? 'A drawn title from the Title Builder is on this cover, so Title style and Title color are switched off. Remove it in the Title Builder to go back to the five title styles.'
+        : '');
+      note.textContent = msg;
+      note.classList.toggle('hidden', !msg);
+    }
   } catch (e) {}
 }
 function prepLayoutLoad(){

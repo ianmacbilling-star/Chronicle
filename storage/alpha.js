@@ -291,4 +291,83 @@ function cutGroundToAlpha(buf) {
   }
 }
 
-module.exports = { cutWhiteToAlpha, cutGroundToAlpha, CUT_HI, CUT_LO, GROUND_NEAR, GROUND_FAR };
+// =====================================================================================================
+// FLATTEN A TRANSPARENT PNG ONTO A SOLID COLOUR  (TD-402)
+// =====================================================================================================
+// The inverse of the two cuts above, and it exists for ONE caller: handing an archived built title back
+// to the image model as a REFERENCE.
+//
+// A built title is stored CUT -- real alpha where the ground used to be. A reference image is fetched by
+// fal and decoded by fal, and what it paints behind the alpha is not ours to decide: it may be black,
+// white, or nothing at all. So the reference we would be handing over is not the picture we can see.
+//
+// WHY NOT BLACK, which is what our own prompt asks the model to draw on. Because the LETTERING may be
+// dark. Ian's PETALS OF BLOOD reference is black letterforms with yellow patterning: paint black behind
+// a title drawn like that and the letters go with the ground. The backing has to be a colour that no
+// lettering ever is, so every part of the artwork survives it -- and then the prompt is told to ignore
+// the colour it is looking at. See TB_REF_BACK in routes/images.js, which owns both halves of that.
+//
+// EMITS COLOUR TYPE 2 (RGB, no alpha), deliberately: after this there is nothing left to be transparent,
+// and an opaque image is the thing the model is being asked to look at.
+//
+// FAIL-SOFT, like its siblings -- and the caller can TELL, because failure returns the very buffer it was
+// given. `out === buf` means no colour was laid down, which is what routes/images.js keys the prompt
+// sentence off. A claim in a prompt that the picture does not bear is worse than no claim at all.
+function flattenOntoColour(buf, fr, fg, fb) {
+  try {
+    if (!Buffer.isBuffer(buf) || buf.length < 8 || !buf.slice(0, 8).equals(PNG_SIG)) return buf;
+
+    let p = 8, width = 0, height = 0, depth = 0, ctype = -1, interlace = 0;
+    const idat = [];
+    while (p + 8 <= buf.length) {
+      const len = buf.readUInt32BE(p);
+      const type = buf.slice(p + 4, p + 8).toString('ascii');
+      const data = buf.slice(p + 8, p + 8 + len);
+      if (type === 'IHDR') {
+        width = data.readUInt32BE(0); height = data.readUInt32BE(4);
+        depth = data[8]; ctype = data[9]; interlace = data[12];
+      } else if (type === 'IDAT') idat.push(data);
+      else if (type === 'IEND') break;
+      p += 12 + len;
+    }
+
+    if (depth !== 8 || interlace !== 0) return buf;
+    if (ctype !== 6) return buf;              // type 2 has no alpha: there is nothing to flatten
+    if (!width || !height || !idat.length) return buf;
+    if (width * height > 40e6) return buf;
+
+    const raw = unfilter(zlib.inflateSync(Buffer.concat(idat)), width, height, 4);
+    if (!raw) return buf;
+
+    const stride = width * 3;
+    const out = Buffer.alloc(height * (stride + 1));
+    for (let y = 0; y < height; y++) {
+      const so = y * width * 4, doff = y * (stride + 1);
+      out[doff] = 0;                          // filter type 0, same as the cuts: simplest to verify
+      for (let x = 0; x < width; x++) {
+        const s = so + x * 4, d = doff + 1 + x * 3;
+        const a = raw[s + 3] / 255;
+        // Source-over onto an opaque backing. The stored pixels are NOT premultiplied -- the cuts
+        // above write colour and alpha independently -- so this is the straight lerp, not a divide.
+        out[d]     = Math.round(raw[s]     * a + fr * (1 - a));
+        out[d + 1] = Math.round(raw[s + 1] * a + fg * (1 - a));
+        out[d + 2] = Math.round(raw[s + 2] * a + fb * (1 - a));
+      }
+    }
+
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
+    ihdr[8] = 8; ihdr[9] = 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+    return Buffer.concat([
+      PNG_SIG,
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(out, { level: 9 })),
+      chunk('IEND', Buffer.alloc(0))
+    ]);
+  } catch (e) {
+    console.error('flattenOntoColour failed, keeping the original image:', e.message);
+    return buf;
+  }
+}
+
+module.exports = { cutWhiteToAlpha, cutGroundToAlpha, flattenOntoColour, CUT_HI, CUT_LO, GROUND_NEAR, GROUND_FAR };

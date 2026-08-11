@@ -3,8 +3,9 @@ const genresvc = require('../services/genres');   // v3.0.488 -- stage 4, campai
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
-const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');
+const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, getForkBookPrefs, bookPrefsScope, ownsBookVersion } = require('../database/db');
 const { releaseImage, persistToR2 } = require('../storage/storage');
+const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
@@ -1786,6 +1787,114 @@ router.post('/custom-style-preview', requireAuth, async function(req, res) {
 });
 
 // =================================================================================================
+// =====================================================================================================
+// TITLE BUILDER SHARED PARTS (TD-357, TD-401, TD-402)
+// =====================================================================================================
+
+// TB_REF_BACK -- the colour painted behind a CUT title when we have no uncut original to hand back.
+// Titles built before v3.0.622 have no original, so they get one reconstructed here.
+//
+// BLACK, and this is the one place that decides it. The generate prompt below demands a flat solid
+// black field, so black is exactly what the cut removed: repainting it restores the picture rather
+// than inventing one. A distinctive colour (green was considered) would make every part of the
+// artwork visible against the backing, but the cut RAMPS alpha across letter edges -- so those pixels
+// are part-ground by construction and a green backing would tint the soft edge of every letterform,
+// which is the thing that makes lettering read as drawn rather than stamped.
+//
+// The `name` is here so the prompt sentence and the pixels come from ONE declaration. Two places that
+// must agree about a colour will eventually disagree about a colour.
+const TB_REF_BACK = { r: 0, g: 0, b: 0, name: 'flat solid black' };
+
+// cutStoredTitle: fetch a stored title, run the ground cut, and store the RESULT as its own object.
+//
+// Returns { url, cut }. When the cut declines -- a photographic result, an interlaced PNG, anything it
+// cannot safely handle -- cutGroundToAlpha hands back THE SAME BUFFER, so nothing is uploaded and the
+// original URL is returned unchanged. Identity is the signal; there is no second guess about it.
+async function cutStoredTitle(sourceUrl) {
+  const axios = require('axios');
+  const https = require('https');
+  const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+  const resp = await axios.get(sourceUrl, { responseType: 'arraybuffer', httpsAgent: agent, timeout: 60000, maxContentLength: Infinity, maxBodyLength: Infinity });
+  const buf = Buffer.from(resp.data);
+  const out = cutGroundToAlpha(buf);
+  if (out === buf) return { url: sourceUrl, cut: false };
+  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + '.png';
+  const url = await uploadFile(out, name, 'image/png');
+  return { url: url, cut: true };
+}
+
+// chargeForTitleCall: one token per fal call, and a failed charge is LOUD.
+//
+// Ian, 2026-08-10: "every call to FAL should cost the user a token." By the time this runs the call
+// has been made and the picture exists, so throwing here would take the artwork away and STILL not
+// charge for it. What it does instead is refuse to be quiet: a spend that throws is written to the
+// debug log the admin screen reads, not just to a console line on Railway. TD-400 exists because
+// nobody had ever watched a real balance move; this is what makes the failure case discoverable.
+async function chargeForTitleCall(req, cost, modelKey, source) {
+  let spendOk = true;
+  try {
+    await spendTokens(req.session.userId, cost, { source: source, event_type: 'generation_spend' });
+  } catch (e) {
+    spendOk = false;
+    console.error(source + ' spend FAILED (image was delivered free):', e && e.message);
+    try {
+      await logDebug(req.session.userId, { level: 'error', source: 'generation', page: 'Title Builder', fn: source,
+        message: 'Token spend FAILED after a fal call succeeded -- the user received an image without being charged.',
+        detail: { cost: cost, model: modelKey, error: (e && e.message) || String(e) } });
+    } catch (_le) {}
+  }
+  try {
+    await recordGeneration(req.session.userId, { event_type: source, tokens_redeemed: spendOk ? cost : 0, quantity: 1, unit: 'images', model: modelKey });
+  } catch (e) {}
+  return spendOk;
+}
+
+// resolveOwnBuiltTitle: read the built title off the version ON SCREEN, and only if the caller owns it.
+//
+// A retouch edits a picture, so the picture has to be named. Naming it in the request body would let
+// any URL be fed to the model on the user's token, so it is read here from the same prefs blob every
+// render path reads -- with the SAME ownership test the my-book-meta PUT uses, derived rather than
+// copied: are you the owner of the version on screen.
+async function resolveOwnBuiltTitle(db, req, campaignId) {
+  const sc = await bookPrefsScope(db, req, Number(campaignId));
+  if (!(await ownsBookVersion(db, req.session.userId, sc.bookVersionId))) {
+    return { error: 'You are looking at someone else\u2019s version. Switch to your own version to change the title.' };
+  }
+  const cur = await getForkBookPrefs(db, req.session.userId, sc.fork, campaignId, { inherit: true, versionId: sc.versionId });
+  return {
+    cutUrl: cur.built_title_url || '',
+    srcUrl: cur.built_title_src || '',
+    text: cur.built_title_text || '',
+    sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub))
+  };
+}
+
+// titleModelInput: the picture the MODEL should look at, which is not always the picture we store.
+//
+// Prefers the uncut original kept since v3.0.622. Falls back to painting TB_REF_BACK behind the cut
+// one for titles built before that, uploading the flattened copy as its own object so the model is
+// handed a plain URL like any other. Returns { url, painted } -- painted is FALSE when the flatten
+// declined, and the caller must not then tell the model about a backing that was never laid down.
+async function titleModelInput(srcUrl, cutUrl) {
+  if (srcUrl) return { url: srcUrl, painted: false };
+  if (!cutUrl) return { url: '', painted: false };
+  try {
+    const axios = require('axios');
+    const https = require('https');
+    const agent = new https.Agent({ minVersion: 'TLSv1.2', rejectUnauthorized: false });
+    const resp = await axios.get(cutUrl, { responseType: 'arraybuffer', httpsAgent: agent, timeout: 60000, maxContentLength: Infinity, maxBodyLength: Infinity });
+    const buf = Buffer.from(resp.data);
+    const out = flattenOntoColour(buf, TB_REF_BACK.r, TB_REF_BACK.g, TB_REF_BACK.b);
+    if (out === buf) return { url: cutUrl, painted: false };   // nothing transparent, or it declined
+    const name = 'titleflat-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + '.png';
+    const url = await uploadFile(out, name, 'image/png');
+    return { url: url, painted: true };
+  } catch (e) {
+    console.error('titleModelInput flatten failed, using the cut image as-is:', e && e.message);
+    return { url: cutUrl, painted: false };
+  }
+}
+
 // POST /api/images/title-build -- TITLE BUILDER, STAGE ONE (TD-357).
 //
 // Ian, 2026-08-10: a modal like the Assets one. A label with the title and another with the subtitle,
@@ -1864,19 +1973,46 @@ router.post('/title-build', requireAuth, async function (req, res) {
 
     // PANORAMIC, because a title band is far wider than it is tall and the model has no ratio closer.
     // Generating square and cropping later would waste most of the pixels the print size needs.
-    const url = await generateImage(prompt, '', fal_key, refBlock, seed, modelKey, 'panoramic', null, false, null, { cutGround: true });
+    // v3.0.622 -- THE UNCUT ORIGINAL IS KEPT, and the cut is now a SECOND step rather than a flag
+    // handed to persistToR2. Ian asked for Retouch on a built title, and a retouch has to show the
+    // model the picture it is editing -- but what we store is CUT, and a transparent PNG has no
+    // background at all. Whatever fal paints behind the alpha is not ours to choose or to see.
+    //
+    // Reconstructing the ground was the alternative and it is very nearly exact -- the prompt above
+    // demands a flat black field, so black is provably what the cut removed. Very nearly is the
+    // problem: the cut RAMPS alpha across the letter edges, so those pixels are part ground by
+    // construction and any repaint is an approximation of the thing we could simply have kept.
+    //
+    // So the generation is persisted UNCUT and cut afterwards into a second object. The cut one goes
+    // on the cover; the original is what Retouch and Reference are handed. One extra stored file per
+    // title, and persistToR2 -- which every image in the product goes through -- is not touched.
+    const srcUrl = await generateImage(prompt, '', fal_key, refBlock, seed, modelKey, 'panoramic', null, false, null, {});
+    const cutRes = await cutStoredTitle(srcUrl);
 
-    try { await spendTokens(req.session.userId, cost, { source: 'title_build', event_type: 'generation_spend' }); } catch (e) { console.error('title-build spend failed:', e.message); }
-    try { await recordGeneration(req.session.userId, { event_type: 'title_build', tokens_redeemed: cost, quantity: 1, unit: 'images', model: modelKey }); } catch (e) {}
+    // v3.0.622 -- Ian: "every call to FAL should cost the user a token." The call has been made by
+    // this line, so refusing to answer would take the picture away AND still not charge for it. The
+    // fix is therefore not to fail the request but to make a failed spend IMPOSSIBLE TO MISS: it goes
+    // to the debug log the admin screen reads, not only to a Railway line nobody is watching. A free
+    // image is a bug; a free image nobody ever hears about is the bug that lasts (TD-400).
+    await chargeForTitleCall(req, cost, modelKey, 'title_build');
 
     // v3.0.619 -- SAY WHETHER THE GROUND CAME OFF. cutGroundToAlpha returns the ORIGINAL bytes when
     // it cannot find a ground -- which is right, but means a photographic reference yields an opaque
     // rectangle that looks exactly like every other result. The stored file is re-encoded as RGBA
     // only when the cut ran, so the colour type IS the answer, read back from the bytes rather than
     // inferred from what we asked for.
+    // v3.0.622 -- TWO ANSWERS TO ONE QUESTION, AND BOTH ARE ASKED. cutStoredTitle knows whether the
+    // cut function rewrote the buffer; imageHasAlpha reads the colour type back off the object that
+    // was actually STORED. The first is what we authored, the second is what is painted, and the
+    // second is the one a reader will meet. They are ANDed: a disagreement means something between
+    // the cut and the bucket lost the alpha, and that is a failure, not a success.
     let cutOk = null;
-    try { cutOk = await imageHasAlpha(url); } catch (e) {}
-    return res.json({ image: url, title: bookTitle, subtitle: subtitle, cut: cutOk });
+    try { cutOk = await imageHasAlpha(cutRes.url); } catch (e) {}
+    if (cutRes.cut && cutOk === false) {
+      console.error('title-build: cut ran but the stored object has no alpha channel -- ' + cutRes.url);
+    }
+    const cutFinal = (cutOk === null) ? cutRes.cut : (cutRes.cut && cutOk);
+    return res.json({ image: cutRes.url, source: srcUrl, title: bookTitle, subtitle: subtitle, cut: cutFinal });
   } catch (e) {
     console.error('title-build error:', e && e.message);
     return res.json({ error: friendlyImageError(e) });
@@ -1895,6 +2031,93 @@ async function imageHasAlpha(url) {
     return b[25] === 6 || b[25] === 4;                                  // IHDR colour type byte
   } catch (e) { return null; }
 }
+// POST /api/images/title-retouch -- CHANGE ONE THING ABOUT A BUILT TITLE (TD-405).
+//
+// Ian, 2026-08-10: "Add the Retouch to it as well! That's how we get the new lettering for the
+// subtitle." The case is THE ANOMALIES / Episode 1 becoming THE ANOMALIES / Episode 2 -- and a
+// reference cannot do that job, because a reference carries the LOOK and this needs the artwork.
+//
+// SYNCHRONOUS, unlike every other Retouch in the product. Panel, character and asset retouches go to
+// fal's queue and come back through the webhook with an image_jobs row, because a panel edit is slow
+// enough to time out a request. This one matches its own neighbour instead: Generate in this modal
+// already blocks and returns the picture, and making Retouch behave differently from the button next
+// to it would be a worse answer than the plumbing it saves.
+//
+// THE PICTURE IS NOT NAMED BY THE CALLER. It is read from the version on screen, by the owner of that
+// version, through resolveOwnBuiltTitle -- otherwise any URL at all could be pushed through fal on
+// this user's token.
+router.post('/title-retouch', requireAuth, async function (req, res) {
+  try {
+    const campaignId = req.body && req.body.campaignId;
+    if (!campaignId) return res.json({ error: 'No campaign.' });
+    const instruction = String((req.body && req.body.instruction) || '').trim();
+    if (!instruction) return res.json({ error: 'Describe the change you want.' });
+
+    const db = await getDb();
+    const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+    if (!campaign) return res.json({ error: 'Campaign not found.' });
+
+    const own = await resolveOwnBuiltTitle(db, req, campaignId);
+    if (own.error) return res.status(403).json({ error: own.error });
+    if (!own.cutUrl && !own.srcUrl) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
+
+    const fal_key = process.env.FAL_API_KEY;
+    if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
+    const modelKey = await getSelectedModel(db);
+    const cost = await getTokenCost(modelKey);
+    if (!(await canAfford(req.session.userId, cost))) {
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'You are out of tokens. Add more to retouch a title.' });
+    }
+
+    // The uncut original when we have one, else the cut image with its ground painted back on.
+    const input = await titleModelInput(own.srcUrl, own.cutUrl);
+    if (!input.url) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
+
+    // IMPERATIVE AND ABSOLUTE, the same register the generate prompt uses. The ground instruction is
+    // repeated because the cut that follows depends on it: an edit that quietly returns a scene, a
+    // gradient or a vignette is an edit whose ground cannot be found, and the result is an opaque
+    // rectangle on the cover.
+    const editPrompt = [
+      'You are editing an EXISTING book title logo, provided as Image 1.',
+      'Reproduce it EXACTLY -- identical lettering style, letterforms, weight, palette, ornament, texture and layout -- and change ONLY the following, leaving everything else untouched:',
+      instruction,
+      'Keep the background a ' + TB_REF_BACK.name + ' field, evenly lit, with nothing else on it at all.',
+      'Add no other text, no signature, no border, no frame and no page edges.'
+    ].join(' ');
+
+    fal.config({ credentials: fal_key });
+    const result = await fal.subscribe(IMAGE_EDIT_MODELS.nano2, {
+      input: {
+        prompt: editPrompt,
+        image_urls: [input.url],
+        num_images: 1,
+        aspect_ratio: shapeAspectRatio('panoramic'),
+        output_format: 'png',
+        safety_tolerance: '5',
+        resolution: '1K'
+      }
+    });
+    if (!result.data || !result.data.images || !result.data.images[0]) {
+      throw new Error('No image returned from fal.ai');
+    }
+    const srcUrl = await persistToR2(result.data.images[0].url, {});
+    const cutRes = await cutStoredTitle(srcUrl);
+
+    await chargeForTitleCall(req, cost, modelKey, 'title_retouch');
+
+    let cutOk = null;
+    try { cutOk = await imageHasAlpha(cutRes.url); } catch (e) {}
+    if (cutRes.cut && cutOk === false) {
+      console.error('title-retouch: cut ran but the stored object has no alpha channel -- ' + cutRes.url);
+    }
+    const cutFinal = (cutOk === null) ? cutRes.cut : (cutRes.cut && cutOk);
+    return res.json({ image: cutRes.url, source: srcUrl, cut: cutFinal });
+  } catch (e) {
+    console.error('title-retouch error:', e && e.message);
+    return res.json({ error: friendlyImageError(e) });
+  }
+});
+
 // POST /api/images/title-ref -- store ONE reference image for the Title Builder and return its URL.
 // Ian: "the plan would be to drop an image in there that had lettering similar to what I want my title
 // to look like." A URL field alone could not serve that -- the images he wants to use are on his disk.

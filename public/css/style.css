@@ -2605,6 +2605,26 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .tb-ref-row { display:flex; gap:8px; align-items:center; }
 .tb-ref-row .form-input { flex:1 1 auto; min-width:0; }
 .tb-ref-thumb img { max-height:70px; border-radius:6px; border:1px solid rgba(201,168,76,0.3); margin-top:8px; }
+/* v3.0.622 -- Title Builder reference drop zone. Deliberately the same shape, border and drag-over
+   treatment as .asset-drop, because it is the same gesture doing the same job. */
+.tb-drop { border:2px dashed rgba(201,168,76,0.3); border-radius:var(--radius); padding:12px; cursor:pointer;
+  min-height:96px; display:flex; align-items:center; justify-content:center; transition:border-color 0.15s, background 0.15s; }
+.tb-drop:hover { border-color:rgba(201,168,76,0.55); }
+.tb-drop.drag-over { border-color:var(--gold); background:rgba(201,168,76,0.1); }
+.tb-drop-empty { display:flex; flex-direction:column; align-items:center; gap:6px; color:var(--text-muted); font-size:12px; text-align:center; }
+.tb-drop-preview { max-width:100%; max-height:120px; border-radius:6px; display:block; }
+.tb-ref-row { margin-top:8px; }
+/* THE FOURTH HOVER RULE. .panel-pill is opacity:0 and each wrapper reveals its own; the three others
+   are .storyboard-panel, .char-ref-imgwrap and .sc-review-imgwrap. Without this line every pill on a
+   built title is present, wired, and permanently invisible. */
+.tb-imgwrap { position:relative; display:inline-block; max-width:100%; }
+.tb-imgwrap:hover .panel-pill { opacity:1; }
+.tb-imgwrap img { max-width:100%; height:auto; display:block; }
+.tb-retouch { margin-top:10px; border:1px solid rgba(201,168,76,0.25); border-radius:8px; padding:10px; }
+/* Warnings, not blocks: gold rather than red, because nothing here is broken and nothing is refused. */
+.tb-warn, .prep-title-note { border:1px solid rgba(201,168,76,0.45); background:rgba(201,168,76,0.08);
+  color:var(--gold-light); border-radius:8px; padding:8px 10px; font-size:12px; line-height:1.4; margin-top:8px; }
+.prep-title-note { margin:6px 0 2px; }
 .tb-result { margin-top:6px; border:1px solid rgba(201,168,76,0.25); border-radius:8px; min-height:120px;
   display:flex; align-items:center; justify-content:center; padding:10px;
   background-color:#2a2018;

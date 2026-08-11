@@ -301,6 +301,12 @@
                 <input id="print-title-color" type="color" value="#f0d98a" onchange="prepSaveTitleColor()" class="prep-color-input" />
                 <label for="print-title-color" class="prep-color-label">Title color <span>(stands out against the cover image)</span></label>
               </div>
+              <!-- v3.0.622 -- TD-357(2) and TD-401. Two different notes, one slot. The first says the
+                   style and colour controls are asleep because a drawn title is in charge, which is
+                   the honest answer to a control that looks live and does nothing. The second says the
+                   drawn title still spells the OLD words. Never a block, always a warning: Ian's rule
+                   is that changing the title text must not invalidate artwork you paid for. -->
+              <div class="prep-title-note hidden" id="prep-title-note"></div>
               <!-- v3.0.617 -- TITLE BUILDER, STAGE ONE. Ian: "it should be triggered from a button that
                    sits to the side of our current Title styles." The built title is EITHER/OR with the
                    style dropdown -- Ian: "they can use one or the other" -- but that switching is
@@ -1792,19 +1798,57 @@
     </div>
     <div class="form-group">
       <label class="form-label">Reference image <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">optional, steers the look</span></label>
-      <div class="tb-ref-row">
-        <input class="form-input" id="title-build-ref" placeholder="Paste an image URL, or upload one" />
-        <input type="file" id="title-build-file" accept="image/*" style="display:none;" onchange="titleBuildUpload(this)" />
-        <!-- v3.0.618 -- A REAL UPLOAD, and Use cover is gone. Ian: "the plan would be to drop an image in
-             there that had lettering similar to what I want my title to look like." The cover is ART, not
-             lettering, so offering it was the wrong affordance -- the references he wants are on his disk. -->
-        <button type="button" class="btn btn-sm" onclick="document.getElementById('title-build-file').click()">Upload</button>
+      <!-- v3.0.622 -- THE URL BOX IS GONE FROM VIEW, not from the page. Ian: "we don't need to see the
+           Reference URL field." It stays as a hidden input because it is the one place the chosen
+           reference lives, and Generate reads it -- moving that into a variable would put the same
+           value in two places. Drag and drop mirrors the Assets modal exactly (asset-drop), including
+           the drag-over class, rather than inventing a second feel for the same gesture. -->
+      <input type="hidden" id="title-build-ref" />
+      <input type="file" id="title-build-file" accept="image/*" style="display:none;" onchange="titleBuildUpload(this)" />
+      <div class="tb-drop" id="title-build-drop" onclick="titleBuildPickFile()"
+           ondragover="handleTitleRefDragOver(event)" ondragleave="handleTitleRefDragLeave(event)" ondrop="handleTitleRefDrop(event)">
+        <div class="tb-drop-empty" id="title-build-drop-empty">
+          <div style="font-size:24px;line-height:1;">&#8681;</div>
+          <div>Drop an image here, or click to choose one</div>
+        </div>
+        <img class="tb-drop-preview hidden" id="title-build-ref-img" alt="Reference image" />
       </div>
-      <div class="tb-ref-thumb hidden" id="title-build-ref-thumb"></div>
+      <div class="tb-ref-row">
+        <button type="button" class="btn btn-sm" onclick="titleBuildPickFile()">Upload</button>
+        <button type="button" class="btn btn-sm" onclick="openTitleRefPicker()" title="Steer this from a title you have already archived">From Archive</button>
+        <button type="button" class="btn btn-sm hidden" id="title-build-ref-clear" onclick="titleBuildClearRef()">Clear</button>
+      </div>
     </div>
+    <div class="tb-warn hidden" id="title-build-warn"></div>
+    <!-- v3.0.622 -- THE PILLS SIT ON THE PICTURE, like everywhere else. Ian: "Put the Archive button on
+         the rendered image just like we do elsewhere. When you mouse over the button appears."
+         .panel-pill is opacity:0 by default and is revealed by a hover rule written once PER WRAPPER
+         -- there are three in the stylesheet and this needed a fourth. Without it every one of these
+         buttons exists, works, and is invisible forever. -->
     <div class="tb-result" id="title-build-result">
       <div class="tb-empty" id="title-build-empty">Nothing built yet. Generate to draw your title as artwork.</div>
-      <img id="title-build-img" class="hidden" alt="Built title" />
+      <div class="tb-imgwrap hidden" id="title-build-imgwrap">
+        <img id="title-build-img" alt="Built title" />
+        <div class="panel-img-actions">
+          <button class="panel-pill" id="title-build-retouch-btn" onclick="titleBuildRetouchOpen()" title="Keep this title and change just one thing. Costs a token.">Retouch</button>
+          <button class="panel-pill" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
+          <button class="panel-pill" id="title-build-archive-btn" onclick="titleBuildArchiveToggle()" title="Save this title to your Archive">Archive</button>
+          <button class="panel-pill" onclick="titleBuildRemove()" title="Take the drawn title off the book and go back to the title styles">Remove</button>
+        </div>
+      </div>
+    </div>
+    <!-- Retouch keeps its own instruction box rather than borrowing the shared Retouch modal. Every
+         branch of that modal submits to fal's QUEUE and polls a job; this one returns the picture
+         directly, like Generate beside it. A fifth branch shaped unlike the other four, plus a target
+         flag that all four existing openers would have to remember to clear, is a worse trade than
+         one textarea. -->
+    <div class="tb-retouch hidden" id="title-build-retouch-row">
+      <label class="form-label">Change one thing</label>
+      <textarea class="form-input" id="title-build-retouch-text" rows="2" placeholder="e.g. change the subtitle to read Episode 2"></textarea>
+      <div class="tb-ref-row">
+        <button class="btn btn-primary btn-sm has-token" id="title-build-retouch-go" onclick="titleBuildRetouch()">Apply change</button>
+        <button class="btn btn-sm" onclick="titleBuildRetouchClose()">Cancel</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
