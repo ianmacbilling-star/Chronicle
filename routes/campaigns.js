@@ -437,6 +437,45 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
 // and the ownership refusal it returned had to be word-identical to the other copy to keep the
 // message consistent -- which is exactly the kind of agreement that stops being true (TD-422).
 
+// POST /:campaignId/title-write -- save a built title onto WHATEVER target is named (TD-422).
+//
+// v3.0.639 -- the client wrote titles through the my-book-meta PUT, which only knows about a book.
+// A chapter title lives on the establishing moment, so a second writer was needed -- and a second
+// writer is how the two drift. This is ONE route for both, and the adapter decides where the bytes
+// land: prefs for a book, the moment for a chapter.
+//
+// THE KEYS ARE WHITELISTED. The patch goes into a prefs blob or a layout_meta blob, both free-form
+// JSON, so an unfiltered body would let a caller write anything it liked into either -- including
+// keys the layout engine reads. Only the seven the Title Builder owns are copied across.
+//
+// REMOVE STILL WORKS WITHOUT PLATINUM ON A BOOK, deliberately: it goes through the my-book-meta PUT,
+// which is ungated, so a lapsed Platinum can still take a drawn title off their own cover (TD-421).
+// This route IS gated, because everything reaching it is a Title Builder action.
+router.post('/:campaignId/title-write', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
+    const db = await getDb();
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
+    if (t.error) return res.status(403).json({ error: t.error });
+
+    const body = (req.body && req.body.patch) || {};
+    const patch = {};
+    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc'].forEach(function (k) {
+      if (body[k] !== undefined) patch[k] = body[k];
+    });
+    if (!Object.keys(patch).length) return res.json({ error: 'Nothing to save.' });
+
+    const out = await t.write(patch);
+    if (out && out.error) return res.json({ error: out.error });
+    return res.json({ success: true, kind: t.kind, momentId: t.momentId || null, current: out });
+  } catch (e) {
+    console.error('title-write error:', e && e.message);
+    return res.json({ error: 'Could not save the title. Please try again.' });
+  }
+});
+
 // POST /:campaignId/my-book-meta/archive-title -- save the built title into the campaign Archive.
 // The URL is READ FROM THE VERSION, never taken from the body: a client-named URL would let anything
 // on the internet be fetched and stored into someone else's campaign.

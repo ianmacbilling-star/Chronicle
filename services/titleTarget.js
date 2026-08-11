@@ -189,7 +189,35 @@ async function sessionTarget(db, req, t) {
       words: { title: (est && est.title) || sess.name || '', subtitle: '' }
     },
     write: async function (patch) {
-      if (!est) return { error: 'This chapter has no opening image row yet.' };
+      // v3.0.639 -- BUILD A TITLE BEFORE ANY IMAGES EXIST, and the row is created here.
+      //
+      // Ian: "If they hit the button and make a title picture before they have generated any images...
+      // then use that new image as the Opening scene image." Until the story is extracted there IS no
+      // establishing moment, so the write had nowhere to land and refused.
+      //
+      // THE ROW IS BUILT FROM THE SAME COLUMNS routes/extract.js writes, in the same order and with
+      // the same layout_meta shape -- prominence 5, centre focal, crop-safe, no group break -- so a
+      // row created here and a row created by the pipeline are indistinguishable to every renderer.
+      // A second shape for the same kind of row is how one of them ends up laid out differently.
+      //
+      // panel_order 0 and kind 'establishing' are what make it the OPENING. The scene prompt is left
+      // NULL rather than invented: extract fills it when the story is generated, and a made-up prompt
+      // here would be a scene description nobody wrote (see the Regenerate note above).
+      let row = est;
+      if (!row) {
+        if (patch.url === undefined || !patch.url) return { error: 'There is nothing to put on this chapter yet.' };
+        const now = new Date().toISOString();
+        const created = await db.prepare(
+          'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, panel_order, created_at, created_by) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(t.sessionId, forkId, (sess.name || 'Title Image'), '', null, null, null, 'wide',
+              JSON.stringify({ prominence: 5, focal: 'center', crop_safe: true, group_break: false }),
+              'establishing', 0, now, uid);
+        row = await db.prepare('SELECT * FROM moments WHERE id = ?').get(created.lastInsertRowid);
+        if (!row) return { error: 'Could not create the opening image row.' };
+        try { meta = row.layout_meta ? (typeof row.layout_meta === 'object' ? row.layout_meta : JSON.parse(row.layout_meta)) : {}; }
+        catch (e) { meta = {}; }
+      }
       const next = Object.assign({}, built);
       ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc'].forEach(function (k) {
         if (patch[k] === undefined) return;
@@ -202,9 +230,9 @@ async function sessionTarget(db, req, t) {
       if (cleared) delete nextMeta.built_title; else nextMeta.built_title = next;
       if (patch.url !== undefined) {
         await db.prepare('UPDATE moments SET image = ?, layout_meta = ? WHERE id = ?')
-          .run(patch.url || null, JSON.stringify(nextMeta), est.id);
+          .run(patch.url || null, JSON.stringify(nextMeta), row.id);
       } else {
-        await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(nextMeta), est.id);
+        await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(nextMeta), row.id);
       }
       return {
         url: cleared ? '' : (next.url || ''),
