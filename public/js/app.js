@@ -7759,6 +7759,12 @@ function _tbShowResult(url) {
   // The Revert pill exists only when there is something to go back to, like the storyboard.
   var rv = _tbEl('title-build-revert-btn');
   if (rv) rv.classList.toggle('hidden', !(url && state.bookMeta && state.bookMeta.built_title_prev));
+  // v3.0.629 -- there is a Replace in BOTH states and only ever one on screen. The empty-state one
+  // exists so the Archive is reachable before a token has been spent; hiding it here rather than
+  // relying on tb-empty being hidden keeps the two strips from ever showing together if that
+  // toggling changes.
+  var er = _tbEl('title-build-empty-replace');
+  if (er) er.classList.toggle('hidden', !!url);
 }
 
 // _tbSetRef: the ONE writer of the reference. Everything that chooses a reference -- upload, drop,
@@ -7827,10 +7833,14 @@ function titleBuildGenerate() {
   _tbErr('');
   var btn = _tbEl('title-build-go');
   if (btn) { btn.disabled = true; btn.textContent = 'Drawing...'; }
-  // Only when there is already artwork to cover; on an empty panel the button label is the signal.
-  if ((state.bookMeta && state.bookMeta.built_title_url) || '') {
-    showBusyOverlay('title-build-imgwrap', 'Regenerating', 'Drawing your title\u2026');
-  }
+  // v3.0.629 -- ALWAYS, AND ON THE RESULT BOX. Ian: "make it so when you hit generate it does the
+  // same progress circling the retouch does." v3.0.624 gated this on artwork already existing AND
+  // anchored it to title-build-imgwrap -- which is the element that is HIDDEN until there is
+  // artwork. So on the first Generate, the one time you most want to see something happening, the
+  // overlay was skipped; and had it not been, it would have been mounted on a hidden div anyway.
+  // Two faults agreeing to look like one working feature. title-build-result is on screen in both
+  // states, which is the only requirement an overlay actually has.
+  showBusyOverlay('title-build-result', 'Generating', 'Drawing your title\u2026');
   var body = {
     campaignId: state.currentCampaign.id,
     bookTitle: t,
@@ -7870,7 +7880,7 @@ function titleBuildGenerate() {
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not build the title.'); })
-    .then(function () { hideBusyOverlay('title-build-imgwrap'); if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
+    .then(function () { hideBusyOverlay('title-build-result'); if (btn) { btn.disabled = false; btn.textContent = 'Generate'; } });
 }
 // =====================================================================================================
 // RETOUCH, REMOVE, ARCHIVE AND REPLACE FOR A BUILT TITLE  (TD-401, TD-402, TD-405)
@@ -7909,7 +7919,7 @@ function titleBuildRetouch(instruction) {
   _tbErr('');
   // v3.0.624 -- the same overlay the storyboard uses, on the artwork itself. Ian: "put the
   // Regenerating Spinner over the image... Just like the Storyboard Tab."
-  showBusyOverlay('title-build-imgwrap', 'Retouching', 'Keeping the artwork, changing one thing\u2026');
+  showBusyOverlay('title-build-result', 'Retouching', 'Keeping the artwork, changing one thing\u2026');
   fetch('/api/images/title-retouch' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ campaignId: state.currentCampaign.id, instruction: instruction })
@@ -7941,7 +7951,7 @@ function titleBuildRetouch(instruction) {
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
     })
     .catch(function () { _tbErr('Could not retouch the title.'); })
-    .then(function () { hideBusyOverlay('title-build-imgwrap'); });
+    .then(function () { hideBusyOverlay('title-build-result'); });
 }
 
 // v3.0.624. Undo the last retouch. Ian: "After a Retouch make sure you show the Revert button. So if

@@ -1819,19 +1819,27 @@
            the drag-over class, rather than inventing a second feel for the same gesture. -->
       <input type="hidden" id="title-build-ref" />
       <input type="file" id="title-build-file" accept="image/*" style="display:none;" onchange="titleBuildUpload(this)" />
+      <!-- v3.0.629 -- UPLOAD IS GONE BECAUSE THE BOX ALREADY IS THE UPLOAD. Ian: "Get rid of the
+           Upload button.. it is redundant." Clicking anywhere on this zone opens the file picker,
+           which is exactly what that button did. From Archive moves onto the box as a pill, like the
+           buttons on the artwork below it.
+
+           THE PILLS MUST STOP THE CLICK. They sit inside a div whose own onclick opens the file
+           picker, so without stopPropagation, choosing From Archive would open the archive picker AND
+           the operating system file dialog on top of it. -->
       <div class="tb-drop" id="title-build-drop" onclick="titleBuildPickFile()"
            ondragover="handleTitleRefDragOver(event)" ondragleave="handleTitleRefDragLeave(event)" ondrop="handleTitleRefDrop(event)">
+        <div class="panel-img-actions">
+          <button class="panel-pill" onclick="event.stopPropagation();openTitleRefPicker()" title="Steer this from a title you have already archived">From Archive</button>
+          <button class="panel-pill hidden" id="title-build-ref-clear" onclick="event.stopPropagation();titleBuildClearRef()" title="Remove this reference image">Clear</button>
+        </div>
         <div class="tb-drop-empty" id="title-build-drop-empty">
           <div style="font-size:24px;line-height:1;">&#8681;</div>
           <div>Drop an image here, or click to choose one</div>
         </div>
         <img class="tb-drop-preview hidden" id="title-build-ref-img" alt="Reference image" />
       </div>
-      <div class="tb-ref-row">
-        <button type="button" class="btn btn-sm" onclick="titleBuildPickFile()">Upload</button>
-        <button type="button" class="btn btn-sm" onclick="openTitleRefPicker()" title="Steer this from a title you have already archived">From Archive</button>
-        <button type="button" class="btn btn-sm hidden" id="title-build-ref-clear" onclick="titleBuildClearRef()">Clear</button>
-      </div>
+
     </div>
     <div class="tb-warn hidden" id="title-build-warn"></div>
     <!-- v3.0.622 -- THE PILLS SIT ON THE PICTURE, like everywhere else. Ian: "Put the Archive button on
@@ -1839,8 +1847,24 @@
          .panel-pill is opacity:0 by default and is revealed by a hover rule written once PER WRAPPER
          -- there are three in the stylesheet and this needed a fourth. Without it every one of these
          buttons exists, works, and is invisible forever. -->
+    <!-- v3.0.629 -- Generate sits with the description and the reference that feed it, above the
+         result it produces, rather than in the footer beside Done. Ian marked the move on a
+         screenshot. Done stays in the footer, where a close button belongs. -->
+    <div class="tb-gen-row">
+      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
+    </div>
     <div class="tb-result" id="title-build-result">
-      <div class="tb-empty" id="title-build-empty">Nothing built yet. Generate to draw your title as artwork.</div>
+      <!-- v3.0.629 -- Ian: "make it so when you open the Title builder the Replace button is there
+           before you ever hit generate... So you can pull something in from the Archive right away
+           without generating." Replace lived only on the artwork, so an empty builder could not reach
+           the Archive at all -- you had to spend a token drawing something you did not want first.
+
+           TWO STRIPS, NEVER BOTH: _tbShowResult toggles this one against the artwork strip, so there
+           is exactly one Replace on screen in either state. -->
+      <div class="tb-empty" id="title-build-empty">
+        <div>Nothing built yet. Generate to draw your title as artwork.</div>
+        <button class="panel-pill is-static-shown" id="title-build-empty-replace" onclick="openTitleReplacePicker()" title="Put an archived title on the book without generating">Replace from Archive</button>
+      </div>
       <div class="tb-imgwrap hidden" id="title-build-imgwrap">
         <img id="title-build-img" alt="Built title" />
         <div class="panel-img-actions">
@@ -1859,7 +1883,6 @@
          It opens a modal where you type your description." A second way to say the same thing, two
          keystrokes from a control that already had one, is a worse cost than the shared branch. -->
     <div class="modal-footer">
-      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate</button>
       <button class="btn" onclick="closeTitleBuilder()">Done</button>
     </div>
   </div>

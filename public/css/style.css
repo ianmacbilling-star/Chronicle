@@ -2622,6 +2622,18 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
   min-height:96px; display:flex; align-items:center; justify-content:center; transition:border-color 0.15s, background 0.15s; }
 .tb-drop:hover { border-color:rgba(201,168,76,0.55); }
 .tb-drop.drag-over { border-color:var(--gold); background:rgba(201,168,76,0.1); }
+/* v3.0.629 -- the drop zone now carries pills, so it needs to be a positioned ancestor and to
+   reveal them the way every other pill host does. Fifth hover rule; the pattern is per-wrapper. */
+.tb-drop { position:relative; }
+.tb-drop:hover .panel-pill { opacity:1; }
+.tb-drop .panel-img-actions { top:0; left:0; right:0; gap:3px; justify-content:flex-end; }
+.tb-drop .panel-pill { padding:2px 6px; font-size:9px; border-top-left-radius:0; border-top-right-radius:0; }
+/* Generate above the result. The row is right-aligned so the button lands where the eye already
+   goes after typing the description. */
+.tb-gen-row { display:flex; justify-content:flex-end; margin:10px 0 0; }
+/* The empty-state Replace is always visible -- there is no artwork for it to obscure, and a
+   hover-only control on an empty box is a control nobody finds. */
+.panel-pill.is-static-shown { opacity:1; }
 .tb-drop-empty { display:flex; flex-direction:column; align-items:center; gap:6px; color:var(--text-muted); font-size:12px; text-align:center; }
 .tb-drop-preview { max-width:100%; max-height:120px; border-radius:6px; display:block; }
 .tb-ref-row { margin-top:8px; }
@@ -2655,4 +2667,5 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
                    linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%);
   background-size:16px 16px; background-position:0 0, 8px 8px; }
 .tb-result img { max-width:100%; height:auto; display:block; }
-.tb-empty { color:var(--text-muted); font-size:13px; text-align:center; }
+.tb-empty { color:var(--text-muted); font-size:13px; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:10px; }   /* v3.0.629 -- holds the Replace pill */
