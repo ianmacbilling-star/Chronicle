@@ -1894,7 +1894,7 @@ async function titleModelInput(srcUrl, cutUrl) {
 // can answer. If nano-banana-2 cannot spell a six-word title reliably, that is far cheaper to learn
 // now than after the composition work.
 //
-// THE WORDS COME FROM THE BOOK, NOT FROM THE USER. The title and subtitle are read server-side from
+// THE WORDS COME FROM THE TARGET, NOT FROM THE USER. Since v3.0.638 they are genuinely read from
 // the version being edited, exactly as every render path reads them. A client-supplied string would
 // let the overlay say something the book does not, and the overlay is the thing a reader believes.
 //
@@ -1917,9 +1917,15 @@ router.post('/title-build', requireAuth, async function (req, res) {
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return res.json({ error: 'Campaign not found.' });
 
-    const bookTitle = String((req.body && req.body.bookTitle) || campaign.name || '').trim();
-    if (!bookTitle) return res.json({ error: 'This book has no title yet.' });
-    const subtitle = String((req.body && req.body.subtitle) || '').trim();
+    // v3.0.638 -- THE WORDS NOW REALLY DO COME FROM THE TARGET. The note above this route has said
+    // so since v3.0.617 while the line beneath it read req.body.bookTitle -- true only because the
+    // client happened to send the right thing. Resolving the target answers it properly AND is what
+    // lets a chapter draw its session name instead (TD-422).
+    const tgt = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
+    if (tgt.error) return res.status(403).json({ error: tgt.error });
+    const bookTitle = String((tgt.current.words && tgt.current.words.title) || campaign.name || '').trim();
+    if (!bookTitle) return res.json({ error: 'This has no title yet. Name it first, then draw it.' });
+    const subtitle = String((tgt.current.words && tgt.current.words.subtitle) || '').trim();
     const description = String((req.body && req.body.description) || '').trim();
     const refUrl = String((req.body && req.body.referenceUrl) || '').trim();
 

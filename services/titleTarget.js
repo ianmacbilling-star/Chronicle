@@ -74,6 +74,12 @@ async function resolveTitleTarget(db, req, target) {
         text: cur.built_title_text || '',
         sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub)),
         prompt: cur.built_title_prompt || '',
+        // WHAT THIS TARGET SHOULD DRAW, resolved here so /title-build stops trusting the body.
+        // The comment above that route has claimed since v3.0.617 that the words are read
+        // server-side; it read req.body.bookTitle. Harmless while the client was the only caller
+        // and the client sent the right thing -- but it was never the guarantee it claimed, and a
+        // chapter's words come from somewhere else entirely.
+        words: { title: cur.book_title || '', subtitle: cur.subtitle || '' },
         prevUrl: cur.built_title_prev || '',
         prevSrc: cur.built_title_prev_src || '',
         bookTitle: cur.book_title || ''
@@ -177,7 +183,10 @@ async function sessionTarget(db, req, t) {
       prevUrl: built.prevUrl || '',
       prevSrc: built.prevSrc || '',
       // What the chapter is CALLED, read off the row rather than stored a second time.
-      bookTitle: (est && est.title) || sess.name || ''
+      bookTitle: (est && est.title) || sess.name || '',
+      // Ian: "use the Session Title as the title and leave the sub title blank." Read off the row
+      // rather than stored, so renaming the session is the only way to change what a rebuild draws.
+      words: { title: (est && est.title) || sess.name || '', subtitle: '' }
     },
     write: async function (patch) {
       if (!est) return { error: 'This chapter has no opening image row yet.' };
