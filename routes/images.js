@@ -1343,8 +1343,19 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
   try {
     const current = moment.image;
     const now = new Date().toISOString();
-    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, now, req.session.userId, moment.id);
+    // v3.0.656 -- REVERT RESTORES THE PAIR. An image and its marker are one previous state; putting
+    // back the pixels alone returns a chapter title to the panel dressed as a scene, with a frame, a
+    // caption and full column width. prev_built_title is consumed here whether or not it is set --
+    // absent means the previous state was an ordinary picture, and the marker must go.
+    var _rMeta = null;
+    try {
+      _rMeta = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {};
+      var _prevBT = _rMeta.prev_built_title || null;
+      if (_prevBT) _rMeta.built_title = _prevBT; else delete _rMeta.built_title;
+      delete _rMeta.prev_built_title;
+    } catch (e) { _rMeta = null; }
+    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, _rMeta ? JSON.stringify(_rMeta) : null, now, req.session.userId, moment.id);
     if (current && current !== moment.revert_image) await releaseImage(db, current);
     res.json({ success: true, image: moment.revert_image });
   } catch (e) {
@@ -1672,14 +1683,38 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           // titleTarget -- so nothing this clears was ever set by the title path itself.
           await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, job.style || null, imgW, imgH, now, job.user_id, job.moment_id);
+          // v3.0.656 -- STASHED, NOT DELETED. THIS CORRECTS v3.0.653.
+          //
+          // Ian, 2026-08-12: "I had chapter text in the panel... I regenerated and got an actual
+          // picture... Then I opened up the title builder... and my text picture was gone."
+          //
+          // v3.0.653 was right that the row must stop claiming to be lettering, and wrong about what
+          // to do with the claim. It deleted built_title -- and with it the uncut source, the words
+          // the drawing spelled and the prompt that drew it. The ARTWORK survived, because the same
+          // webhook arms revert_image with it. So Revert restored the pixels and nothing else, and
+          // the lettering came back rendered as an ordinary framed, captioned scene. I split one
+          // thing into two and only undid half of it.
+          //
+          // THE UNDO SLOT IS A PAIR. revert_image and prev_built_title describe the same previous
+          // state, so they are written together, always, and read together in revert-moment. Storing
+          // the marker anywhere else would let the two drift -- which is the whole fault above, in a
+          // different field.
+          //
+          // AND IT IS OVERWRITTEN EVERY TIME, INCLUDING WITH NOTHING. Regenerate twice and the undo
+          // slot holds the intermediate SCENE, not the title -- so the marker must be cleared on the
+          // second pass or Revert would flag a photograph as lettering. Absent is a value here.
           try {
             var _pm = await db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(job.moment_id);
             var _pmeta = (_pm && _pm.layout_meta) ? (typeof _pm.layout_meta === 'object' ? _pm.layout_meta : JSON.parse(_pm.layout_meta)) : null;
-            if (_pmeta && _pmeta.built_title) {
-              delete _pmeta.built_title;
-              await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_pmeta), job.moment_id);
+            if (_pmeta) {
+              var _wasTitle = _pmeta.built_title || null;
+              if (_wasTitle) delete _pmeta.built_title;
+              if (_wasTitle) _pmeta.prev_built_title = _wasTitle; else delete _pmeta.prev_built_title;
+              if (_wasTitle || _pm.layout_meta !== JSON.stringify(_pmeta)) {
+                await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_pmeta), job.moment_id);
+              }
             }
-          } catch (e) { console.error('clearing built_title after regenerate failed:', e && e.message); }
+          } catch (e) { console.error('stashing built_title after regenerate failed:', e && e.message); }
         }
         try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image ready for moment ' + job.moment_id + ' (' + job.kind + ')', detail: { moment_id: job.moment_id, kind: job.kind, shape: _priorM ? (_priorM.shape || null) : null, img_w: imgW, img_h: imgH, dims: dimsSource, file_size: (falImg && falImg.file_size) || null, nsfw: (payload && payload.has_nsfw_concepts) || null, style: job.style || null } }); } catch (_le) {}
         // Revert undo-slot (one-deep): retouch + single regenerate retain the prior
