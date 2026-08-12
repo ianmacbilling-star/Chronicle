@@ -87,7 +87,52 @@ async function resolveTitleTarget(db, req, target) {
       // THE ONLY PLACE THAT KNOWS THE STORAGE NAMES. Undefined keys are left alone rather than
       // nulled, so a caller writing only the artwork cannot silently erase the words beside it.
       write: async function (patch) {
+        // v3.0.657 -- TD-451. THE BOOK TARGET LEARNS THE DRAFT TOO.
+        //
+        // v3.0.656 taught only the session target, and the client covered the book by writing draft
+        // keys itself. That was enough for the modal and NOT enough for restore-title, which calls
+        // this write directly -- so pulling a title from the archive onto a BOOK would still have
+        // applied it to the cover while the same act on a chapter went to the draft. One feature,
+        // two behaviours, decided by which target you happened to be on.
         const p = {};
+        if (patch.draft) {
+          if (patch.url !== undefined) p.built_title_draft_url = patch.url || null;
+          if (patch.src !== undefined) p.built_title_draft_src = patch.src || null;
+          if (patch.text !== undefined) p.built_title_draft_text = patch.text || null;
+          if (patch.sub !== undefined) p.built_title_draft_sub = (patch.sub === '' ? '' : (patch.sub || null));
+          if (patch.prompt !== undefined) p.built_title_draft_prompt = patch.prompt || null;
+          const dm = await setForkBookPrefs(db, req.session.userId, sc.fork, t.campaignId, p, sc.versionId);
+          return {
+            url: dm.built_title_url || '', src: dm.built_title_src || '', text: dm.built_title_text || '',
+            sub: (dm.built_title_sub == null ? null : String(dm.built_title_sub)),
+            prompt: dm.built_title_prompt || '',
+            draft: {
+              url: dm.built_title_draft_url || '', src: dm.built_title_draft_src || '',
+              text: dm.built_title_draft_text || '',
+              sub: (dm.built_title_draft_sub == null ? null : String(dm.built_title_draft_sub)),
+              prompt: dm.built_title_draft_prompt || ''
+            }
+          };
+        }
+        if (patch.promote) {
+          const cur0 = await getForkBookPrefs(db, req.session.userId, sc.fork, t.campaignId, { inherit: true, versionId: sc.versionId });
+          if (!cur0 || !cur0.built_title_draft_url) return { error: 'There is nothing drawn to use yet.' };
+          p.built_title_url = cur0.built_title_draft_url;
+          p.built_title_src = cur0.built_title_draft_src || '';
+          p.built_title_text = cur0.built_title_draft_text || '';
+          p.built_title_sub = (cur0.built_title_draft_sub == null ? null : cur0.built_title_draft_sub);
+          p.built_title_prompt = cur0.built_title_draft_prompt || '';
+          p.built_title_prev = cur0.built_title_url || '';
+          p.built_title_prev_src = cur0.built_title_src || '';
+          p.built_title_draft_url = null; p.built_title_draft_src = null;
+          p.built_title_draft_text = null; p.built_title_draft_prompt = null;
+          const pm = await setForkBookPrefs(db, req.session.userId, sc.fork, t.campaignId, p, sc.versionId);
+          return {
+            url: pm.built_title_url || '', src: pm.built_title_src || '', text: pm.built_title_text || '',
+            sub: (pm.built_title_sub == null ? null : String(pm.built_title_sub)),
+            prompt: pm.built_title_prompt || '', draft: null
+          };
+        }
         if (patch.url !== undefined) p.built_title_url = patch.url || null;
         if (patch.src !== undefined) p.built_title_src = patch.src || null;
         if (patch.text !== undefined) p.built_title_text = patch.text || null;
@@ -103,7 +148,13 @@ async function resolveTitleTarget(db, req, target) {
           src: merged.built_title_src || '',
           text: merged.built_title_text || '',
           sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub)),
-          prompt: merged.built_title_prompt || ''
+          prompt: merged.built_title_prompt || '',
+          draft: merged.built_title_draft_url ? {
+            url: merged.built_title_draft_url || '', src: merged.built_title_draft_src || '',
+            text: merged.built_title_draft_text || '',
+            sub: (merged.built_title_draft_sub == null ? null : String(merged.built_title_draft_sub)),
+            prompt: merged.built_title_draft_prompt || ''
+          } : null
         };
       }
     };

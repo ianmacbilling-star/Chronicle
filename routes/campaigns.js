@@ -584,11 +584,26 @@ router.post('/:campaignId/title-write', requireAuth, verifyCampaignMember, async
     const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
     if (t.error) return res.status(403).json({ error: t.error });
 
+    // v3.0.657 -- TD-451. THE ALLOWLIST STRIPPED THE TWO KEYS v3.0.656 ADDED.
+    //
+    // Ian, 2026-08-12: Done and Use did not close the modal, and the message he could not see at the
+    // top of it read "Nothing to save."
+    //
+    // A promote body carries ONLY `promote`, so every key was filtered out and the empty-patch guard
+    // refused before titleTarget was ever reached. Worse and quieter: a DRAFT build carries url, src,
+    // text, sub and prompt as well, so its patch was NOT empty -- it went through, `draft` had been
+    // stripped on the way, and titleTarget applied it to the panel immediately. **The draft model
+    // was not merely broken, it was silently doing the old thing.**
+    //
+    // The v3.0.656 guard ran titleTarget.write DIRECTLY and never sent anything through this filter,
+    // which is the same fault as v3.0.645: a check that exercises the function and not the wire.
     const body = (req.body && req.body.patch) || {};
     const patch = {};
-    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc'].forEach(function (k) {
+    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc', 'draft', 'promote'].forEach(function (k) {
       if (body[k] !== undefined) patch[k] = body[k];
     });
+    // A promote names no fields on purpose -- it uses the draft already on the row -- so it is a
+    // valid write with nothing else in it.
     if (!Object.keys(patch).length) return res.json({ error: 'Nothing to save.' });
 
     const out = await t.write(patch);
@@ -688,16 +703,36 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
     const prevUrl = t.current.url, prevSrc = t.current.src;
     // The WORDS travel with the picture. Without them the mismatch warning would compare the book's
     // title against whatever the PREVIOUS title had drawn on it, and quietly say the wrong thing.
+    // v3.0.657 -- TD-451. PULLING FROM THE ARCHIVE IS A BUILD, NOT AN APPLY.
+    //
+    // Ian: "when I pull something from the archive without hitting generate... that needs to go into
+    // the draft."
+    //
+    // It is the same act as drawing one: something arrives in the modal and the reader has not said
+    // to use it yet. Writing it live would make Cancel meaningless for the one path that costs no
+    // token, and would leave Done and Use with nothing to promote.
+    //
+    // NOTHING IS RELEASED ANY MORE ON THIS PATH. The live title is still on the book -- it has not
+    // been displaced by anything -- so releasing its bytes would delete the artwork the cover is
+    // still pointing at. That release was correct while this route applied immediately and is
+    // exactly wrong now.
     const merged = await t.write({
+      draft: 1,
       url: freshUrl,
       src: freshSrc || '',
       text: arch.title || '',
       sub: (meta && meta.subtitle !== undefined) ? meta.subtitle : null
     });
-    if (prevUrl && prevUrl !== freshUrl) { try { await releaseImage(db, prevUrl); } catch (e) {} }
-    if (prevSrc && prevSrc !== freshSrc) { try { await releaseImage(db, prevSrc); } catch (e) {} }
+    // v3.0.657 -- the answer describes the DRAFT, because that is what just changed. The live keys
+    // are still reported so a caller assigning this onto state.bookMeta keeps a truthful record of
+    // both.
+    var _d = merged.draft || {};
     return res.json({
       success: true,
+      built_title_draft_url: _d.url || '',
+      built_title_draft_src: _d.src || '',
+      built_title_draft_text: _d.text || '',
+      built_title_draft_sub: (_d.sub === undefined ? null : _d.sub),
       built_title_url: merged.url,
       built_title_src: merged.src,
       built_title_text: merged.text,
