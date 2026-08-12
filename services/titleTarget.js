@@ -345,9 +345,33 @@ async function sessionTarget(db, req, t) {
       // keeping, which is why an existing revert_image is never overwritten here.
       // Clearing a title restores nothing by itself: Revert is the control that does that, and it
       // is the reader who decides.
-      var _displaced = (row.image && !row.revert_image && patch.url) ? row.image : null;
+      // v3.0.659 -- TD-453. THE UNDO SLOT HOLDS WHAT WAS THERE LAST. THIS REPLACES THE v3.0.653 RULE.
+      //
+      // Ian, 2026-08-12: "any time anything changes on that Title Storyboard panel... that revert
+      // button needs to be smart enough to pull what was there last."
+      //
+      // WHAT v3.0.653 DID AND WHY IT WAS WRONG. It armed only on the FIRST displacement --
+      // `!row.revert_image` -- to stop a second title build pushing the original picture out of the
+      // slot. The cost was worse than the thing it prevented: once that column held ANYTHING, no
+      // later title write ever refreshed it. A panel that had been through any earlier operation
+      // kept a stale slot, so Ian pulled a title from the archive onto a photograph, used it, hit
+      // Revert -- and got a title from an earlier round instead of his picture.
+      //
+      // It also made this path behave differently from every other image path in the product: the
+      // fal webhook arms revert_image with the prior image on EVERY retouch and regenerate. One-deep
+      // and most-recent is the rule everywhere else, and a control that means something different
+      // depending on which button last touched the panel is not a control anyone can use.
+      //
+      // ARMED WHENEVER THE IMAGE COLUMN IS WRITTEN, including a Remove -- clearing a title is a
+      // change like any other, and what was there last is the title.
+      // AND THE MARKER TRAVELS WITH IT (v3.0.655 pair rule): revert_image and prev_built_title
+      // describe ONE previous state, so reverting from a title to a picture drops the marker and
+      // reverting from one title to another restores the right one. Written together, read together.
+      var _displaced = (patch.url !== undefined && row.image) ? row.image : null;
+      var _displacedBT = (built && built.url) ? built : null;
       if (patch.url !== undefined) {
         if (_displaced) {
+          if (_displacedBT) nextMeta.prev_built_title = _displacedBT; else delete nextMeta.prev_built_title;
           await db.prepare('UPDATE moments SET image = ?, layout_meta = ?, revert_image = ?, revert_img_w = ?, revert_img_h = ? WHERE id = ?')
             .run(patch.url || null, JSON.stringify(nextMeta), _displaced, row.img_w || null, row.img_h || null, row.id);
         } else {
