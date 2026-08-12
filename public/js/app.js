@@ -6658,9 +6658,25 @@ function novelAsUserQ(prefix) {
 // v3.0.457 -- answered from the VERSION when one is selected. The canonical is publishable by the
 // Story Master; a named version by the person who owns it. Falls back to the old as_user reading
 // when no version list has loaded, so the guard is never accidentally permissive.
+// v3.0.650 -- THE STORY MASTER MAY CURATE A MEMBER BOOK WHEN MEMBERS CANNOT PUBLISH.
+//
+// Put HERE rather than at the twelve call sites, because novelOwnView is already the one question
+// the Prep tiles, the layout save, the title controls and the cover picker all ask. Twelve places
+// asking a question two different ways is how TD-194 took thirteen builds to close.
+//
+// THE SERVER DECIDES. my-book-meta carries the same condition and refuses regardless of what this
+// returns; this only stops a control looking live while the route would answer with an apology.
+function smMayCurateBook() {
+  var c = state.currentCampaign || {};
+  if (c.my_role !== 'dm') return false;
+  var allow = (c.allow_player_novel_access === true || c.allow_player_novel_access === 1 ||
+              c.allow_player_novel_access === 't' || c.allow_player_novel_access === 'true');
+  return !allow;
+}
 function novelOwnView() {
   var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
   var myId = (state.user && state.user.id) || null;
+  if (smMayCurateBook()) return true;
   var v = novelVersionOnScreen();
   if (v) {
     if (!v.is_canonical) return !!v.is_mine;

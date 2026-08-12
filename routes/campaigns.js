@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion, getVersionRow, versionOwnerUserId } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, isTruePlatinum, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
@@ -310,6 +310,34 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   });
 });
 
+// v3.0.650 -- WHEN MEMBERS CANNOT PUBLISH, THE STORY MASTER BUILDS THE BOOK FOR THEM.
+//
+// Ian, 2026-08-12: "When the setting is off... This is a feature that the SM then takes control
+// over for the Member... and likely charges money for. Then the SM alone can hit the publish
+// button change covers, titles etc and still use the other layout selections the member made."
+//
+// THIS REOPENS SOMETHING v3.0.575 DELIBERATELY CLOSED, and only under the condition that makes it
+// coherent. 575 removed a blanket Story Master exemption because versions had made it redundant:
+// a Story Master wanting a member to have a different-looking book could simply make them a
+// version. That reasoning holds while the member can publish. It stops holding when they cannot,
+// because then nobody but the Story Master can finish the book at all.
+//
+// SO THE GATE IS THE PUBLISH FLAG ITSELF. Setting on: 575 stands, untouched, and a member owns
+// their book completely. Setting off: the Story Master may set the presentation of a member book
+// in this campaign -- and only in this campaign, and only over its members.
+//
+// SCOPE FALLS OUT OF THE ROUTE. Cover, back cover, title page image, built title, book title,
+// subtitle, title colour and layout_opts all arrive here. Art style and narrative voice do not --
+// they live per-fork on the session side. Ian: "They should not be changing Art Style or narrative
+// style. Those are really the users." Nothing had to be excluded to honour that; the boundary he
+// described and the boundary of this route are the same line.
+function smCurationOpen(req) {
+  if (!req || req.campaignRole !== 'dm') return false;
+  var c = req.campaign || {};
+  var allow = (c.allow_player_novel_access === true || c.allow_player_novel_access === 1 ||
+              c.allow_player_novel_access === 't' || c.allow_player_novel_access === 'true');
+  return !allow;
+}
 router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const uid = req.session.userId, cid = req.params.campaignId, b = req.body || {};
@@ -322,7 +350,22 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // A Story Master who wants a member to have a different-looking book creates a VERSION for them,
   // which carries the layout, the art style and the narrative too -- where this overlay only ever
   // carried the cover and the title, so the book it produced was half curated.
-  if (fork !== uid) return res.status(403).json({ error: 'You can only edit your own book. Switch to your own version to change the cover or the layout.' });
+  // v3.0.650 -- the 575 rule, with the publish-flag exemption. A refusal here still reads exactly
+  // as it did when the setting is on.
+  var _curating = false;
+  if (fork !== uid) {
+    if (!smCurationOpen(req)) {
+      return res.status(403).json({ error: 'You can only edit your own book. Switch to your own version to change the cover or the layout.' });
+    }
+    // The target has to be a member of THIS campaign. campaignRole proves who is asking; it says
+    // nothing about who is being written to, and a campaign id in the path is not a licence over
+    // an arbitrary user id in the body.
+    var _isMember = await db.prepare('SELECT 1 AS ok FROM campaign_members WHERE campaign_id = ? AND user_id = ?').get(cid, fork);
+    if (!_isMember) {
+      return res.status(403).json({ error: 'That person is not a member of this campaign.' });
+    }
+    _curating = true;
+  }
   const patch = {};
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
@@ -376,7 +419,20 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // go NULL again if the old owner's account were deleted (TD-248). Ian asked for the row to be
   // stamped; the derivation gives the same answer and cannot go stale, so it is used instead.
   // v3.0.622 -- the same test, now shared with the three title routes below (see ownsBookVersion).
-  if (!(await ownsBookVersion(db, uid, _scP.bookVersionId))) {
+  // v3.0.650 -- a curating Story Master is answering a different question, so it is asked here
+  // rather than skipped: the version on screen must belong to the person being written to, and to
+  // this campaign. Without that, a stale or hand-edited as_version would write one member settings
+  // into another member book -- the same class of fault as the (chooser, fork) inversion the
+  // v3.0.481 note below describes, and just as silent.
+  if (_curating) {
+    if (_scP.bookVersionId) {
+      var _vrow = await getVersionRow(db, _scP.bookVersionId);
+      var _vowner = _vrow ? await versionOwnerUserId(db, _vrow) : null;
+      if (!_vrow || String(_vrow.campaign_id) !== String(cid) || String(_vowner) !== String(fork)) {
+        return res.status(403).json({ error: 'That version does not belong to the member whose book you are editing.' });
+      }
+    }
+  } else if (!(await ownsBookVersion(db, uid, _scP.bookVersionId))) {
     return res.status(403).json({ error: 'You are looking at someone else\u2019s version. Switch to your own version to change the cover or the layout.' });
   }
   // v3.0.578 -- fill_only: write these values only where nothing is stored yet. Used by the Prep
@@ -384,7 +440,20 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // the reader has already made. See the note on setForkBookPrefs: this route can have two writes
   // in flight at once, and fill-only is safe under every interleaving rather than under most.
   const _fillOnly = !!(b && b.fill_only);
-  const merged = await setForkBookPrefs(db, uid, fork, cid, patch, _scP.versionId, { fillOnly: _fillOnly });
+  // v3.0.650 -- THE CHOOSER IS THE OWNER WHEN CURATING, AND THAT IS THE WHOLE DIFFERENCE BETWEEN
+  // AN OVERWRITE AND A PRIVATE OVERLAY.
+  //
+  // fork_book_prefs is keyed (chooser_user_id, fork_user_id, campaign_id, version_id). Writing as
+  // the Story Master would land in (SM, member) -- a row only the Story Master ever reads back,
+  // which is precisely the overlay v3.0.575 removed and precisely what Ian rejected when asked:
+  // "I think a real overwrite... They are the STORY MASTER so when this is the case they have more
+  // control over that users settings."
+  //
+  // So a curating write goes to (member, member) -- the row the member reads themselves. What the
+  // Story Master publishes is what the member would see. It is not reversible and the member is
+  // not told; that is the deal the setting describes.
+  var _chooser = _curating ? fork : uid;
+  const merged = await setForkBookPrefs(db, _chooser, fork, cid, patch, _scP.versionId, { fillOnly: _fillOnly });
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
     campaign_id: Number(cid),
