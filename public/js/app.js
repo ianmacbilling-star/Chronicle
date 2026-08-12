@@ -7762,6 +7762,9 @@ function platinumGate(what, why) {
 function openTitleBuilder(target) {
   state._tbTarget = (target && target.kind) ? target : { kind: 'book' };
   state._tbSessionCur = null;
+  // v3.0.652 -- TD-443. A MODAL THAT HAS WRITTEN NOTHING MUST CHANGE NOTHING.
+  // Cleared on open rather than on close, so an abandoned modal cannot leave the next one dirty.
+  state._tbDirty = false;
   if (!state.currentCampaign) return;
   // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
   // the title builder. When I hit the button I should get a message stating such."
@@ -7889,6 +7892,20 @@ function _tbSyncSessionMoment() {
 // has no such local mirror, so it posts to title-write and holds the answer on state for the life of
 // the modal. Same words, same adapter behind both -- different client state to maintain.
 function _tbSave(patch, then) {
+  // v3.0.652 -- TD-443. THE ONE PLACE THAT KNOWS A WRITE HAPPENED.
+  //
+  // Ian, 2026-08-12: "If I have a regular picture there... open up the title builder... do nothing
+  // and just close it... I lose the picture."
+  //
+  // WHY IT WENT. title-read answers correctly for a scene: no built_title marker, so current.url is
+  // the empty string -- "this chapter has no drawn title". closeTitleBuilder then ran the sync
+  // unconditionally and it reads `m.image = cur.url || null`, whose comment says an empty url means
+  // the title was REMOVED. Empty had two meanings -- removed, and never there -- and one line was
+  // answering both. The picture was only ever lost on screen; nothing was written to the server.
+  //
+  // _tbSave is the single call site for every write the modal makes, book or chapter, which is what
+  // makes this one flag sufficient rather than a flag per button.
+  state._tbDirty = true;
   if (!_tbIsSession()) {
     var book = {};
     if (patch.url !== undefined) book.built_title_url = patch.url;
@@ -7990,7 +8007,10 @@ function closeTitleBuilder() {
   // the SERVER and nothing updates here -- so the row on screen kept its old image until the next
   // load fetched it. The local moment is patched from what the modal ended with, then both surfaces
   // that draw it are repainted, exactly as the generation path does.
-  if (_tbIsSession()) _tbSyncSessionMoment();
+  // v3.0.652 -- TD-443. Only a modal that wrote something may repaint the moment. A close with no
+  // write leaves whatever was on the row exactly where it was -- scene, title or nothing.
+  if (_tbIsSession() && state._tbDirty) _tbSyncSessionMoment();
+  state._tbDirty = false;
   // v3.0.641 -- clear the target, or a chapter builder closed and the Prep panel one reopened would
   // still be pointed at the chapter. This is the TD-403 fault in a different field.
   state._tbTarget = null;
