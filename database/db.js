@@ -2204,14 +2204,41 @@ async function getForkBookPrefs(db, chooserId, forkId, campaignId, opts) {
   async function at(ch, fk, v) {
     return parse(await db.prepare('SELECT prefs FROM fork_book_prefs WHERE chooser_user_id = ? AND fork_user_id = ? AND campaign_id = ? AND version_id = ?').get(ch, fk, campaignId, v));
   }
-  let p = await at(chooserId, forkId, vid);
-  if (p) return p;
-  if (vid !== 0) { p = await at(chooserId, forkId, 0); if (p) return p; }
+  // v3.0.651 -- TD-440. A CROSS-USER READ GOES STRAIGHT TO THE OWNER, AND SKIPS THE OVERLAY.
+  //
+  // Ian, 2026-08-12, as Story Master on a member version with everything deliberately switched off:
+  // "It is not loading up that Members layout options... Stuff was selected that should not have
+  // been."
+  //
+  // WHAT IT WAS FINDING. The chain used to try (viewer, owner) FIRST, and only fall through to
+  // (owner, owner) when nothing was there. A (viewer, owner) row is the OVERLAY that a Story Master
+  // could write before v3.0.575 -- cover and title only, never the layout. 575 removed the ability to
+  // WRITE one and deleted none of the rows already written, so every such row has been shadowing its
+  // owner settings ever since, for every reader that inherits.
+  //
+  // NOTHING CAN CREATE ONE ANY MORE. v3.0.575 refuses a cross-fork write, and the v3.0.650 curation
+  // carve-out deliberately writes as the OWNER so the Story Master edits land in the row the member
+  // reads. So a (viewer, owner) row can now only be legacy, and reading one is always wrong.
+  //
+  // AND IT HAD TO BE FIXED HERE. Fourteen call sites read these prefs and every one passes the viewer
+  // as chooser and the owner as fork -- the novel render, the print interior, the cover, publish, the
+  // title target, the member prefs route and the book-meta GET. Fourteen patches would have been
+  // fourteen chances to miss one; this is the question they are all asking, so this is where it is
+  // answered.
+  //
+  // inherit:false IS UNTOUCHED, deliberately. Those callers -- the optimize save and its readers --
+  // are not asking "what are this book settings", they are addressing one specific (chooser, fork)
+  // slot on purpose. Whether the approved layout should follow the owner under curation is a real
+  // question and a separate one; it is logged rather than answered inside a read fix.
+  let p;
   if (opts.inherit && chooserId !== forkId) {
     if (vid !== 0) { p = await at(forkId, forkId, vid); if (p) return p; }
     p = await at(forkId, forkId, 0);
-    if (p) return p;
+    return p || {};
   }
+  p = await at(chooserId, forkId, vid);
+  if (p) return p;
+  if (vid !== 0) { p = await at(chooserId, forkId, 0); if (p) return p; }
   return {};
 }
 // v3.0.578 -- opts.fillOnly INVERTS THE MERGE, and it exists because of a bug this function's
