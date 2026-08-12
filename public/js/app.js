@@ -14173,9 +14173,31 @@ function loadSessionForks(sessionId) {
       // picks its default, because that default is `state.currentForkId || the canonical` and
       // selectSession has just nulled it. Falls through to the canonical when this version has no
       // fork on the destination -- the same rule the book uses.
+      // v3.0.647 -- TD-431. SETTING THE FORK IS NOT LOADING IT.
+      //
+      // Ian, 2026-08-11: arrowing from a non-canonical version to the next session "keeps the
+      // version you were on in the drop box... but loads up the Canonical pictures."
+      //
+      // selectSession sets state.currentForkId = null and THEN fetches, so forkQ() sends no fork
+      // and the server answers with the canonical. Everything is painted from that. This block
+      // runs afterwards and only corrects the SELECTION, which is why the label and the pictures
+      // disagreed. The Phase 4 default twenty lines below has always done both -- it sets the fork
+      // and calls reloadSessionForFork -- and this did not.
+      //
+      // It gets worse than an omission: Phase 4 is gated on !state.currentForkId, so the line above
+      // that sets the fork is exactly what switches off the one path that would have reloaded.
+      //
+      // ARRIVING BY ARROW NOW MEANS THE SAME AS PICKING THE VERSION FROM THE DROPDOWN, per Ian, so
+      // this goes through mpLoadAndApply the way onForkChange does: that member layout preferences
+      // are applied first and the per-fork reload then overrides art and narrative. Calling the
+      // reload bare would leave the previous session layout on screen.
+      var _navSetFork = false;
       if (state._sessNavVersionId) {
         var _want = (forks || []).filter(function (f) { return String(f.version_id) === String(state._sessNavVersionId); })[0];
-        if (_want) state.currentForkId = _want.fork_id;
+        // NO MATCH IS NOT A FAILURE. A session where this version has no fork keeps the canonical,
+        // which is already loaded -- so nothing is set and nothing is reloaded. Same rule the book
+        // uses in bookForkForSession.
+        if (_want) { state.currentForkId = _want.fork_id; _navSetFork = true; }
         state._sessNavVersionId = null;
       }
       if (state._sessNavTab) {
@@ -14265,7 +14287,16 @@ function loadSessionForks(sessionId) {
         _defaultedToOwn = true;
       }
       updateForkEditability();
-      if (_defaultedToOwn && typeof reloadSessionForFork === 'function') reloadSessionForFork();
+      // ONE reload, whichever of the two moved the fork. Both cannot fire: Phase 4 is gated on
+      // !state.currentForkId and _navSetFork can only be true when it has just been set.
+      if (_navSetFork) {
+        if (typeof resetOptimizeLogForSwitch === 'function') resetOptimizeLogForSwitch();
+        if (typeof mpLoadAndApply === 'function') mpLoadAndApply('session', function () {
+          if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+        });
+        else if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+        if (typeof loadCampaignLayoutOpts === 'function') loadCampaignLayoutOpts('session');
+      } else if (_defaultedToOwn && typeof reloadSessionForFork === 'function') reloadSessionForFork();
     })
     .catch(function() {});
 }
