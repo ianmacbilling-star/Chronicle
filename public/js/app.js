@@ -7829,7 +7829,9 @@ function openTitleBuilder(target) {
   // it on the first Generate. Ian spotted it before it cost him anything.
   // v3.0.641 -- for a chapter the modal opens empty and fills in when title-read answers, rather
   // than showing the BOOK's title while it waits, which would look like the chapter already had one.
-  var existing = _tbIsSession() ? '' : ((state.bookMeta && state.bookMeta.built_title_url) || '');
+  // v3.0.656 -- THE DRAFT WINS ON REOPEN. Ian: "when they open it back up again the text image
+  // they just generated will be there. It just did not get used."
+  var existing = _tbIsSession() ? '' : ((state.bookMeta && (state.bookMeta.built_title_draft_url || state.bookMeta.built_title_url)) || '');
   if (_tbIsSession()) _tbLoadSession();
   _tbShowResult(existing);
   titleBuildRetouchClose();
@@ -7857,7 +7859,7 @@ function _tbLoadSession() {
     var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = 'None';
     var dEl = _tbEl('title-build-desc');
     if (dEl && !dEl.value && d.current && d.current.prompt) dEl.value = d.current.prompt;
-    _tbShowResult((d.current && d.current.url) || '');
+    _tbShowResult((d.current && ((d.current.draft && d.current.draft.url) || d.current.url)) || '');   // v3.0.656 -- the draft wins
     _tbRenderWarn();
   }).catch(function () { _tbErr('Could not read this chapter.'); });
 }
@@ -7912,6 +7914,38 @@ function _tbSave(patch, then) {
   state._tbDirty = true;
   if (!_tbIsSession()) {
     var book = {};
+    // v3.0.656 -- TD-448. A DRAFT PATCH WRITES THE DRAFT KEYS AND NOTHING ELSE, so the cover goes
+    // on drawing whatever it drew before -- a canned title style, or an earlier built title.
+    if (patch.draft) {
+      if (patch.url !== undefined) book.built_title_draft_url = patch.url;
+      if (patch.src !== undefined) book.built_title_draft_src = patch.src;
+      if (patch.text !== undefined) book.built_title_draft_text = patch.text;
+      if (patch.sub !== undefined) book.built_title_draft_sub = patch.sub;
+      if (patch.prompt !== undefined) book.built_title_draft_prompt = patch.prompt;
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+      if (then) then();
+      return;
+    }
+    // PROMOTE: the draft becomes the title, and is spent. Written in ONE call so a cover cannot
+    // end up carrying artwork whose recorded words belong to a different drawing.
+    if (patch.promote) {
+      var _bm = state.bookMeta || {};
+      if (!_bm.built_title_draft_url) { _tbErr('There is nothing drawn to use yet.'); return; }
+      book.built_title_url = _bm.built_title_draft_url;
+      book.built_title_src = _bm.built_title_draft_src || '';
+      book.built_title_text = _bm.built_title_draft_text || '';
+      book.built_title_sub = (_bm.built_title_draft_sub == null ? null : _bm.built_title_draft_sub);
+      book.built_title_prompt = _bm.built_title_draft_prompt || '';
+      book.built_title_prev = _bm.built_title_url || '';
+      book.built_title_prev_src = _bm.built_title_src || '';
+      book.built_title_draft_url = '';
+      book.built_title_draft_src = '';
+      book.built_title_draft_text = '';
+      book.built_title_draft_prompt = '';
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+      if (then) then();
+      return;
+    }
     if (patch.url !== undefined) book.built_title_url = patch.url;
     if (patch.src !== undefined) book.built_title_src = patch.src;
     if (patch.text !== undefined) book.built_title_text = patch.text;
@@ -8002,6 +8036,17 @@ function _tbRenderWarn() {
 // carries the book query, so it does not know the version gained a built title until it is reloaded.
 // loadNovelPreview is the same call the layout controls make after an Apply, so this is the path that
 // already exists rather than a second way to repaint.
+// v3.0.656 -- TD-448. DONE AND USE IS THE ONLY THING THAT APPLIES A TITLE.
+//
+// Cancel and the X both land in closeTitleBuilder, which since v3.0.652 leaves the panel alone
+// unless the modal wrote something -- and a draft write does not touch the live title. So the two
+// controls need no special casing to behave identically: they already do.
+function titleBuilderUse() {
+  // ONE CALL, BOTH TARGETS. This was written as two identical branches and a mutation test walked
+  // straight through it: deleting one left the other satisfying the check. _tbSave already routes
+  // book and chapter; there was never a second thing to say here.
+  _tbSave({ promote: 1 }, function () { closeTitleBuilder(); });
+}
 function closeTitleBuilder() {
   // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
   // so I left and came back and then the image was there." The save landed; nothing told the page.
@@ -8166,7 +8211,10 @@ function titleBuildGenerate() {
       // separate calls is how a book ends up with a title whose recorded words belong to the last one.
       // The words come from the SERVER's reply, not from the boxes on screen -- the server is what
       // told the model what to draw.
+      // v3.0.656 -- TD-448. A BUILD IS A DRAFT. It is persisted, so nothing paid for is lost, and
+      // it does not reach the book until Done and Use.
       _tbSave({
+        draft: 1,
         url: d.image,
         src: d.source || '',
         text: d.title || '',
@@ -8240,7 +8288,7 @@ function titleBuildRetouch(instruction) {
       // Claiming it now says the book's current title would be a guess printed as a fact -- and the
       // mismatch warning exists precisely so a wrong claim is worse than an out-of-date one. Editing
       // the title text and rebuilding is what sets the words.
-      _tbSave({ url: d.image, src: d.source || '', prevUrl: _prevUrl, prevSrc: _prevSrc });
+      _tbSave({ draft: 1, url: d.image, src: d.source || '' });   // v3.0.656 -- refines the draft, not the book
       titleBuildRetouchClose();
       _tbRenderWarn();
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();

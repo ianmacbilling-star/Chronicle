@@ -181,6 +181,10 @@ async function sessionTarget(db, req, t) {
       sub: (built.sub === undefined ? null : built.sub),
       prompt: built.prompt || '',
       prevUrl: built.prevUrl || '',
+      // v3.0.656 -- THE DRAFT. Artwork that has been built and paid for but not accepted. It is
+      // reported alongside the live title so reopening the builder shows what you last drew,
+      // whether or not you used it.
+      draft: (meta && meta.built_title_draft) || null,
       prevSrc: built.prevSrc || '',
       // What the chapter is CALLED, read off the row rather than stored a second time.
       bookTitle: (est && est.title) || sess.name || '',
@@ -218,6 +222,46 @@ async function sessionTarget(db, req, t) {
         try { meta = row.layout_meta ? (typeof row.layout_meta === 'object' ? row.layout_meta : JSON.parse(row.layout_meta)) : {}; }
         catch (e) { meta = {}; }
       }
+      // v3.0.656 -- BUILD DOES NOT APPLY. TD-448.
+      //
+      // Ian, 2026-08-12: "Hold the write... if we do it this way when they open it back up again
+      // the text image they just generated will be there. It just did not get used."
+      //
+      // A build used to land on the panel the instant it returned, so Cancel had nothing left to
+      // cancel. Holding the write ENTIRELY would have been worse: a cancelled build would vanish
+      // and the token with it. So the artwork is persisted -- as a DRAFT on the row -- and only
+      // Done and Use promotes it. Nothing you paid for is lost; nothing reaches the book until
+      // you say so.
+      //
+      // ONE DRAFT PER TARGET, deliberately. A second build replaces the first. Keeping every
+      // attempt would be inventing a second archive beside the one that already exists.
+      if (patch.draft) {
+        const dNext = Object.assign({}, (meta && meta.built_title_draft) || {});
+        ['url', 'src', 'text', 'sub', 'prompt'].forEach(function (k) {
+          if (patch[k] === undefined) return;
+          dNext[k] = (k === 'sub' && patch[k] === '') ? '' : (patch[k] || null);
+        });
+        const dMeta = Object.assign({}, meta);
+        dMeta.built_title_draft = dNext;
+        await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(dMeta), row.id);
+        // The LIVE title is returned unchanged, because nothing about it moved.
+        return {
+          url: built.url || '', src: built.src || '', text: built.text || '',
+          sub: (built.sub === undefined ? null : built.sub),
+          prompt: built.prompt || '', draft: dNext
+        };
+      }
+      // PROMOTE reuses the ordinary write below rather than repeating it. The draft becomes the
+      // patch, so the marker, the image, the displaced-picture undo slot and the returned shape
+      // are all produced by one path -- the path that is already tested.
+      var _promoted = false;
+      if (patch.promote) {
+        const d = (meta && meta.built_title_draft) || null;
+        if (!d || !d.url) return { error: 'There is nothing drawn to use yet.' };
+        patch = { url: d.url, src: d.src, text: d.text, sub: d.sub, prompt: d.prompt,
+                  prevUrl: built.url || '', prevSrc: built.src || '' };
+        _promoted = true;
+      }
       const next = Object.assign({}, built);
       ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc'].forEach(function (k) {
         if (patch[k] === undefined) return;
@@ -228,6 +272,10 @@ async function sessionTarget(db, req, t) {
       // CLEARING THE TITLE CLEARS THE MARKER, or the row would go on claiming to be lettering after
       // Regenerate has put a scene back on it -- and Retouch would keep routing to the title path.
       if (cleared) delete nextMeta.built_title; else nextMeta.built_title = next;
+      // A promoted draft is spent. Clearing the title clears any draft with it -- the panel is
+      // being emptied, and leaving a draft behind would make Remove look as though it had failed
+      // the next time the modal opened.
+      if (_promoted || cleared) delete nextMeta.built_title_draft;
       // v3.0.653 -- TD-445. ARM REVERT WITH WHATEVER THE TITLE DISPLACED.
       //
       // Ian, 2026-08-12, on v3.0.652: "it just pulled down a picture from the title builder and I

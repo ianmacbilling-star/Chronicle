@@ -293,6 +293,11 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     // v3.0.624 -- the one-step undo behind Revert. Same shape as revert_image_url on a moment.
     built_title_prev: cur.built_title_prev || '',
     built_title_prev_src: cur.built_title_prev_src || '',
+    built_title_draft_url: cur.built_title_draft_url || '',
+    built_title_draft_src: cur.built_title_draft_src || '',
+    built_title_draft_text: cur.built_title_draft_text || '',
+    built_title_draft_sub: (cur.built_title_draft_sub == null ? null : String(cur.built_title_draft_sub)),
+    built_title_draft_prompt: cur.built_title_draft_prompt || '',
     built_title_text: cur.built_title_text || '',
     built_title_sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub)),
     book_title: cur.book_title || '',
@@ -382,6 +387,15 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   if (b.built_title_prompt !== undefined) patch.built_title_prompt = b.built_title_prompt || null;
   if (b.built_title_prev !== undefined) patch.built_title_prev = b.built_title_prev || null;
   if (b.built_title_prev_src !== undefined) patch.built_title_prev_src = b.built_title_prev_src || null;
+  // v3.0.656 -- TD-448. THE BOOK DRAFT. Same rule as a chapter: a build is persisted here and only
+  // Done and Use moves it onto built_title_url. Until then the cover goes on drawing whatever it
+  // drew before -- a canned title style, or an earlier built title. The prefs blob takes new keys
+  // with no schema change, which is the same reason built_title_url itself lives here.
+  if (b.built_title_draft_url !== undefined) patch.built_title_draft_url = b.built_title_draft_url || null;
+  if (b.built_title_draft_src !== undefined) patch.built_title_draft_src = b.built_title_draft_src || null;
+  if (b.built_title_draft_text !== undefined) patch.built_title_draft_text = b.built_title_draft_text || null;
+  if (b.built_title_draft_sub !== undefined) patch.built_title_draft_sub = (b.built_title_draft_sub === '' ? '' : (b.built_title_draft_sub || null));
+  if (b.built_title_draft_prompt !== undefined) patch.built_title_draft_prompt = b.built_title_draft_prompt || null;
   if (b.built_title_text !== undefined) patch.built_title_text = b.built_title_text || null;
   if (b.built_title_sub !== undefined) patch.built_title_sub = (b.built_title_sub === '' ? '' : (b.built_title_sub || null));
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
@@ -465,6 +479,11 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     built_title_prompt: merged.built_title_prompt || '',
     built_title_prev: merged.built_title_prev || '',
     built_title_prev_src: merged.built_title_prev_src || '',
+    built_title_draft_url: merged.built_title_draft_url || '',
+    built_title_draft_src: merged.built_title_draft_src || '',
+    built_title_draft_text: merged.built_title_draft_text || '',
+    built_title_draft_sub: (merged.built_title_draft_sub == null ? null : String(merged.built_title_draft_sub)),
+    built_title_draft_prompt: merged.built_title_draft_prompt || '',
     built_title_text: merged.built_title_text || '',
     built_title_sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub)),
     book_title: merged.book_title || '',
