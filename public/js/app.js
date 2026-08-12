@@ -7938,10 +7938,9 @@ function _tbSave(patch, then) {
       book.built_title_prompt = _bm.built_title_draft_prompt || '';
       book.built_title_prev = _bm.built_title_url || '';
       book.built_title_prev_src = _bm.built_title_src || '';
-      book.built_title_draft_url = '';
-      book.built_title_draft_src = '';
-      book.built_title_draft_text = '';
-      book.built_title_draft_prompt = '';
+      // v3.0.661 -- TD-455. The draft is NOT cleared by using it. Ian: "Leave it there until I make
+      // another one." The server no longer clears it either; sending empty strings from here would
+      // have quietly re-imposed the old rule from the client side.
       if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
       if (then) then();
       return;

@@ -124,8 +124,7 @@ async function resolveTitleTarget(db, req, target) {
           p.built_title_prompt = cur0.built_title_draft_prompt || '';
           p.built_title_prev = cur0.built_title_url || '';
           p.built_title_prev_src = cur0.built_title_src || '';
-          p.built_title_draft_url = null; p.built_title_draft_src = null;
-          p.built_title_draft_text = null; p.built_title_draft_prompt = null;
+          // v3.0.661 -- the draft survives promotion here too; see the note in the session write.
           const pm = await setForkBookPrefs(db, req.session.userId, sc.fork, t.campaignId, p, sc.versionId);
           return {
             url: pm.built_title_url || '', src: pm.built_title_src || '', text: pm.built_title_text || '',
@@ -331,9 +330,20 @@ async function sessionTarget(db, req, t) {
       // A promoted draft is spent. Clearing the title clears any draft with it -- the panel is
       // being emptied, and leaving a draft behind would make Remove look as though it had failed
       // the next time the modal opened.
-      // Only a PROMOTED draft is spent -- it is the live title now. A cleared one has just been
-      // filled by the demote above and must survive.
-      if (_promoted) delete nextMeta.built_title_draft;
+      // v3.0.661 -- TD-455. THE DRAFT IS STICKY. IT IS NOT A PENDING ACTION, IT IS THE LAST TITLE DRAWN.
+      //
+      // Ian, 2026-08-12: "Do not clear the draft if it has been used. Or not used. Either way leave the
+      // draft there in the title builder... Leave it there until I make another one."
+      //
+      // v3.0.656 read the slot as "artwork awaiting a decision", so using it spent it. That is wrong for
+      // what this actually is: the chapter has ONE title picture the reader is working with, and using it
+      // on the panel does not stop it being that. Under the old reading, pulling a title from the archive,
+      // using it, then reverting the panel to the photograph left the builder EMPTY -- the reader had done
+      // nothing to discard it and it was gone.
+      //
+      // ONLY AN EXPLICIT ACT OF DRAWING OR CHOOSING REPLACES IT: a build, a retouch, an archive pull.
+      // Promote does not. Remove does not (v3.0.660). Revert, Regenerate and Replace only FILL it when it
+      // is empty, which is what keeps a displaced title referenced and out of the reach of releaseImage.
       // v3.0.653 -- TD-445. ARM REVERT WITH WHATEVER THE TITLE DISPLACED.
       //
       // Ian, 2026-08-12, on v3.0.652: "it just pulled down a picture from the title builder and I
