@@ -547,11 +547,21 @@ router.post('/:campaignId/title-read', requireAuth, verifyCampaignMember, async 
       success: true,
       kind: t.kind,
       momentId: t.momentId || null,
-      current: {
-        url: t.current.url, src: t.current.src,
-        text: t.current.text, sub: t.current.sub, prompt: t.current.prompt,
-        prevUrl: t.current.prevUrl
-      },
+      // v3.0.662 -- TD-456. A SECOND ALLOWLIST, AND IT DROPPED THE DRAFT.
+      //
+      // Ian, 2026-08-12, after v3.0.661: "neither time did the Chapter Title Image show up." The
+      // server had his title the whole time. This object is hand-copied field by field and `draft`
+      // was never one of the fields, so it was thrown away between titleTarget and the browser.
+      //
+      // title-write does not do this -- it answers `current: out`, passing the whole object through.
+      // Which is why a title showed up when BUILT and vanished on reopening: two routes describing
+      // the same object, one of them by hand. Exactly the fault v3.0.657 fixed on the write side,
+      // found again on the read side because I patched titleTarget and never asked what the route
+      // did with its answer.
+      //
+      // Spread, so this cannot happen a third time: a field added to the read is a field the modal
+      // receives, with nothing to keep in step.
+      current: Object.assign({}, t.current, { words: undefined }),
       // What this target SHOULD draw, so the modal shows the same words the server will use.
       words: t.current.words || { title: '', subtitle: '' }
     });
