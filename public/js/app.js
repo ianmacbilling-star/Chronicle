@@ -20084,9 +20084,46 @@ function optimizeShowBusy(j) {
     // finished, and the bug would have looked like the run never ending. A thing that writes a
     // message should say so, not be identified by how it looks.
     if (host) {
-      host.textContent = optimizeBusyText(j);
+      // v3.0.649 -- THE WAY OUT IS ON THE MESSAGE THAT BLOCKS YOU.
+      //
+      // Ian: "The user should be able to kill it right there and start over." Cancel was the only
+      // control that could free a claim, and Cancel is only shown while YOUR OWN loop is running in
+      // THIS tab -- which is the one case where nobody is stuck. The reader who needed it was the
+      // reader who could not see it.
+      //
+      // No confirmation dialog beyond the one sentence on the button: one run per user means the
+      // thing being stopped is the reader's own, and there is no third party to protect.
+      host.textContent = '';
       host.style.color = 'var(--warn-text)';
       host.dataset.optimizeBusy = '1';
+      var _bw = document.createElement('div');
+      _bw.textContent = optimizeBusyText(j);
+      host.appendChild(_bw);
+      var _kb = document.createElement('button');
+      _kb.className = 'btn btn-sm';
+      _kb.id = 'layoutai-stop-stale-btn';
+      _kb.type = 'button';
+      _kb.style.marginTop = '8px';
+      _kb.textContent = 'Stop that run and start over';
+      _kb.onclick = function () {
+        _kb.disabled = true; _kb.textContent = 'Stopping...';
+        fetch('/api/pdf/optimize-stop', { method: 'POST', credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function () {
+            window._optimizeRunId = null;
+            try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
+            window._optimizeBusyTimer = null;
+            host.textContent = ''; host.style.color = ''; delete host.dataset.optimizeBusy;
+            var _rb3 = document.getElementById('layoutai-run-btn');
+            if (_rb3) { _rb3.disabled = false; _rb3.textContent = 'Optimize layout'; _rb3.classList.add('has-token'); }
+            if (typeof showAlert === 'function') showAlert('That run has been stopped. You can start a new Optimize now.');
+          })
+          .catch(function () {
+            _kb.disabled = false; _kb.textContent = 'Stop that run and start over';
+            if (typeof showAlert === 'function') showAlert('Could not stop that run. Try again in a moment.');
+          });
+      };
+      host.appendChild(_kb);
     }
     // Ask again while it runs, so the tab clears itself when the run finishes rather than needing
     // a refresh -- which is the habit that caused the double runs in the first place.
@@ -20429,9 +20466,24 @@ function _runLayoutAiOptimize() {
         loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
         aiLog('Pass ' + roundNum + ': reviewing the layout...');
         optimizeProgress('AI Loop ' + roundNum + ': reviewing the layout&hellip;');
-        return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
+        // v3.0.649 -- the run id goes with every pass so a stop can actually reach this loop.
+        var _runQ = window._optimizeRunId ? ((_q.indexOf('?') === -1 ? '?' : '&') + 'run=' + encodeURIComponent(window._optimizeRunId)) : '';
+        return fetch('/api/pdf/layout-review/' + _cid + _q + _runQ, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
+            // A run that has been stopped stops HERE, and says so rather than dying quietly. The
+            // reader who pressed the button is usually in another tab; this one is the tab that
+            // was left behind, and it needs to explain itself before it goes.
+            if (j && j.error === 'optimize_revoked') {
+              window._optimizeCancelled = true;
+              window._aiLoopRunning = false;
+              aiLog('This run was stopped from another tab. Nothing further will be saved from it.');
+              optimizeProgress('This Optimize run was stopped.', { done: true });
+              var _rb2 = document.getElementById('layoutai-run-btn');
+              if (_rb2) { _rb2.disabled = false; _rb2.textContent = 'Optimize layout'; _rb2.classList.add('has-token'); }
+              var _cb2 = document.getElementById('layoutai-cancel-btn'); if (_cb2) _cb2.style.display = 'none';
+              return { done: true, applied: 0, report: null };
+            }
             try {
               if (window._optimizeCapture) {
                 var _pt = window._optimizeCapture.passTimes;
@@ -21220,6 +21272,11 @@ function renderPdfInto(url, containerId, isBefore) {
       try {
         var _ot = r.headers && r.headers.get && r.headers.get('X-Optimize-Tokens');
         if (_ot) window._optimizeTokensSpent = (window._optimizeTokensSpent || 0) + (parseInt(_ot, 10) || 0);
+        // v3.0.649 -- the run id rides back the same way. Held on window rather than in the loop
+        // closure because the STOP button lives outside the run, and a run nobody can name is a
+        // run nobody can stop.
+        var _or = r.headers && r.headers.get && r.headers.get('X-Optimize-Run');
+        if (_or) window._optimizeRunId = _or;
       } catch (e) {}
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
       // v3.0.333 -- same-origin, so these headers are readable. Only the Before pane is the source of
@@ -21322,6 +21379,12 @@ function renderPdfInto(url, containerId, isBefore) {
     // Mark done on failure too, or anything waiting on this pane would spin forever.
     if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;
     if (!isBefore && typeof _finalizeAfterOnDone === 'function') { var _cbE = _finalizeAfterOnDone; _finalizeAfterOnDone = null; try { _cbE(); } catch (e2) {} }
+    // v3.0.649 -- TD-434. A COMPOSE THAT DIES GIVES THE CLAIM BACK.
+    // The lock was taken at compose and released only on save, on Cancel, or by the fifteen minute
+    // timeout. A render that failed did none of the three, so it left a claim with no loop behind
+    // it -- which is exactly what locked Ian out on 2026-08-12. The run is over either way; the
+    // only question was whether the server found out now or in a quarter of an hour.
+    try { if (String(url).indexOf('compose=1') !== -1) fetch('/api/pdf/optimize-release', { method: 'POST', credentials: 'same-origin' }).catch(function () {}); } catch (e2) {}
     if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
   });
 }

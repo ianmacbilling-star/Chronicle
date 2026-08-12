@@ -10969,6 +10969,14 @@ function _parseOpsArray(raw) {
 // pack-render route has always relied on -- removing requireAdmin opens no new surface.
 router.get('/layout-review/:campaignId', requireAuth, async function (req, res) {
   try {
+    // v3.0.649 -- A STOPPED RUN STOPS HERE. This is the route the loop calls once per pass, so it
+    // is where a revoked run finds out, and it is checked BEFORE the token check so a stopped run
+    // cannot spend another one on its way down.
+    if (optimizeRunIsRevoked(req.query.run)) {
+      return res.status(409).json({ error: 'optimize_revoked',
+        message: 'This Optimize run was stopped from another tab or window, so it has stopped here too.' });
+    }
+    try { optimizeRunBeat(req.session.userId, 'pass'); } catch (e) {}
     var key = process.env.ANTHROPIC_API_KEY;
     if (!key) return res.status(500).json({ error: 'Layout review is not configured (no ANTHROPIC_API_KEY).' });
     if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
@@ -12964,9 +12972,54 @@ function optimizeRunGet(userId) {
   if (Date.now() - (r.beat || r.startedAt) > OPTIMIZE_LOCK_STALE_MS) { _optimizeRuns.delete(userId); return null; }
   return r;
 }
+// v3.0.649 -- A RUN HAS AN IDENTITY, SO IT CAN BE TOLD TO STOP.
+//
+// Ian, 2026-08-12, after a dead claim locked him out of his own book for the better part of an
+// hour: "If that error comes back and says another one is running... The user should be able to
+// kill it right there and start over. It should totally kill the stale run."
+//
+// RELEASING THE CLAIM IS NOT KILLING THE RUN, and that distinction is the whole of this change.
+// optimize-release only deletes the Map entry. If a loop really was alive in another tab it goes
+// on working -- against the same composed cache and the same move and grow keys as the new run,
+// which is precisely the corruption v3.0.610 exists to prevent. A free-the-lock button on its own
+// would hand every user a way to cause it.
+//
+// So a stop writes a TOMBSTONE against the run id, and every route the loop calls checks it. The
+// old run gets a 409 on its next step, stops itself, and says why. That is what makes the button
+// honest: the run is stopped, not merely disowned.
+//
+// NO STALENESS TEST, at Ian instruction. One run per user means the person blocked is the person
+// who owns the thing blocking them -- there is no third party whose work needs protecting, so
+// there is nothing for a heuristic to decide. A three minute "probably dead" rule was drafted and
+// thrown away: it could only ever be wrong in one direction or the other, and it would have made
+// the fast path slower for no one's benefit.
+var _optimizeRevoked = new Map();            // runId -> revokedAt
+var OPTIMIZE_REVOKED_KEEP_MS = 60 * 60 * 1000;
+function optimizeRevokedPrune() {
+  var cut = Date.now() - OPTIMIZE_REVOKED_KEEP_MS;
+  _optimizeRevoked.forEach(function (at, id) { if (at < cut) _optimizeRevoked.delete(id); });
+}
+function optimizeRunIsRevoked(runId) {
+  if (!runId) return false;
+  optimizeRevokedPrune();
+  return _optimizeRevoked.has(String(runId));
+}
+// Returns the id it stopped, or null when there was nothing to stop -- which is NOT an error. A
+// second click, or a run that ended between the banner and the button, both land here and both
+// mean the same thing to the reader: you may start now.
+function optimizeRunStop(userId) {
+  var r = _optimizeRuns.get(userId);
+  _optimizeRuns.delete(userId);
+  if (!r || !r.runId) return null;
+  optimizeRevokedPrune();
+  _optimizeRevoked.set(String(r.runId), Date.now());
+  return r.runId;
+}
 function optimizeRunStart(userId, campaignId, campaignName) {
+  var runId = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   _optimizeRuns.set(userId, { campaignId: String(campaignId), campaignName: campaignName || '',
-                              startedAt: Date.now(), beat: Date.now(), step: 'compose' });
+                              startedAt: Date.now(), beat: Date.now(), step: 'compose', runId: runId });
+  return runId;
 }
 function optimizeRunBeat(userId, step) {
   var r = optimizeRunGet(userId);
@@ -12981,23 +13034,50 @@ router.get('/optimize-status', requireAuth, function (req, res) {
   try {
     var r = optimizeRunGet(req.session.userId);
     if (!r) return res.json({ running: false });
+    // v3.0.649 -- sinceBeatMs and runId. Chasing a stuck run on 2026-08-12 was slow because this
+    // route reported startedAt and step and nothing else: elapsedMs counts up whether or not the
+    // run is alive, and step is only ever whatever the last heartbeat wrote. beat is the one field
+    // that can tell them apart, and it was the one field not exposed.
     return res.json({ running: true, campaignId: r.campaignId, campaignName: r.campaignName,
-                      startedAt: r.startedAt, elapsedMs: Date.now() - r.startedAt, step: r.step || '' });
+                      startedAt: r.startedAt, elapsedMs: Date.now() - r.startedAt, step: r.step || '',
+                      runId: r.runId || '', sinceBeatMs: Date.now() - (r.beat || r.startedAt) });
   } catch (e) {
     return res.json({ running: false });
   }
 });
 // Best effort, from the client, when a loop ends without a save (cancelled, or failed). The stale
 // timeout is the real safety net; this only makes the common case immediate rather than a wait.
+// v3.0.649 -- STOP THE RUN I ALREADY HAVE. The escape hatch for the reader who is blocked by
+// their own claim, which release could not be: release quietly frees the lock and leaves a live
+// loop running underneath. This revokes the id as well, so the old run stops at its next step.
+router.post('/optimize-stop', requireAuth, function (req, res) {
+  try {
+    var stopped = optimizeRunStop(req.session.userId);
+    return res.json({ ok: true, stoppedRunId: stopped || null });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'stop_failed' });
+  }
+});
 router.post('/optimize-release', requireAuth, function (req, res) {
   try { optimizeRunEnd(req.session.userId); } catch (e) {}
   return res.json({ ok: true });
 });
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
-    // v3.0.610 -- HEARTBEAT FIRST, and on EVERY pack-render, not only the composing one. The loop
-    // calls this route once per pass, so a live run keeps its claim without a timer of its own.
-    try { optimizeRunBeat(req.session.userId, 'pass'); } catch (e) {}
+    // v3.0.649 -- THE HEARTBEAT MOVED BELOW THE REFUSAL, and that is a bug fix, not tidying.
+    //
+    // It used to run FIRST, on every call. optimizeRunBeat refreshes beat, and beat is what the
+    // stale timeout measures from -- so a request REFUSED with 409 was extending the very claim
+    // that refused it. On 2026-08-12 that turned one dead run into an unbounded lockout: every
+    // retry pushed the fifteen minute expiry out another fifteen minutes, so the one action a
+    // blocked person naturally takes was the one action guaranteeing it would never clear.
+    //
+    // A refused request is evidence of a blocked user, not of a living run. Only work that got
+    // through counts as a heartbeat now.
+    if (optimizeRunIsRevoked(req.query.run)) {
+      return res.status(409).json({ error: 'optimize_revoked',
+        message: 'This Optimize run was stopped, so it has been asked to stand down. Start a new one when you are ready.' });
+    }
     if (req.query.compose === '1' || req.query.compose === 'true') {
       // v3.0.610 -- ONE RUN PER USER. Refused BEFORE the token check, so a blocked attempt cannot
       // cost anybody a token, and before runGrowsClear below -- which is the line that makes this
@@ -13021,11 +13101,16 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       // The campaign row is not loaded this early in the route -- checked, because node --check
       // would have passed a reference to it and the name is only used for a message. The client
       // knows which book it asked for, so it can name it; the server records the id.
-      try { optimizeRunStart(req.session.userId, req.params.campaignId, ''); } catch (e) {}
+      var _runId = null;
+      try { _runId = optimizeRunStart(req.session.userId, req.params.campaignId, ''); } catch (e) {}
+      // The loop sends this back on every step so a stop can be enforced. Same channel the token
+      // charge already uses, for the same reason: the body is a PDF.
+      try { res.set('X-Optimize-Run', String(_runId || '')); res.set('Access-Control-Expose-Headers', 'X-Optimize-Tokens, X-Optimize-Run'); } catch (e) {}
       // A new Optimize run: clear this book's run-scoped grows so we start from the NATURAL images.
       // Grows recorded during this run's loop passes are keyed the same way and carry across passes for
       // convergence, but never persist to the DB -- so the layout is deterministic and never degrades.
       try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); runRefusalsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
+      try { optimizeRunBeat(req.session.userId, 'compose'); } catch (e) {}
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
       if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
         var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
