@@ -2162,8 +2162,27 @@ function renderSessions() {
 
   list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
+    // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
+    //
+    // The card thumbnail is a fixed box filled with object-fit:cover, which is right for a scene and
+    // takes equal bites out of both ends of LETTERING -- "TO THE FROZ / RDEN OF DEA". The same
+    // centre-crop the previews had before v3.0.645, on the sixth surface to be told the difference
+    // between a drawing of words and a photograph.
+    //
+    // The test is the marker, as everywhere else: layout_meta.built_title on the establishing moment.
+    // The sessions list already returns every moment with SELECT *, so nothing new is fetched.
+    var _cardTitle = false;
+    try {
+      var _ms = s.moments || [];
+      for (var _mi = 0; _mi < _ms.length; _mi++) {
+        if (_ms[_mi].kind !== 'establishing' || !_ms[_mi].image) continue;
+        var _cm = _ms[_mi].layout_meta ? (typeof _ms[_mi].layout_meta === 'object' ? _ms[_mi].layout_meta : JSON.parse(_ms[_mi].layout_meta)) : null;
+        if (_cm && _cm.built_title && _cm.built_title.url && _ms[_mi].image === thumbSrc) _cardTitle = true;
+        break;
+      }
+    } catch (e) { _cardTitle = false; }
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" alt="" loading="lazy" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
@@ -7938,9 +7957,10 @@ function _tbSave(patch, then) {
       book.built_title_prompt = _bm.built_title_draft_prompt || '';
       book.built_title_prev = _bm.built_title_url || '';
       book.built_title_prev_src = _bm.built_title_src || '';
-      // v3.0.661 -- TD-455. The draft is NOT cleared by using it. Ian: "Leave it there until I make
-      // another one." The server no longer clears it either; sending empty strings from here would
-      // have quietly re-imposed the old rule from the client side.
+      book.built_title_draft_url = '';
+      book.built_title_draft_src = '';
+      book.built_title_draft_text = '';
+      book.built_title_draft_prompt = '';
       if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
       if (then) then();
       return;
@@ -11504,8 +11524,27 @@ function renderSessions() {
 
   list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
+    // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
+    //
+    // The card thumbnail is a fixed box filled with object-fit:cover, which is right for a scene and
+    // takes equal bites out of both ends of LETTERING -- "TO THE FROZ / RDEN OF DEA". The same
+    // centre-crop the previews had before v3.0.645, on the sixth surface to be told the difference
+    // between a drawing of words and a photograph.
+    //
+    // The test is the marker, as everywhere else: layout_meta.built_title on the establishing moment.
+    // The sessions list already returns every moment with SELECT *, so nothing new is fetched.
+    var _cardTitle = false;
+    try {
+      var _ms = s.moments || [];
+      for (var _mi = 0; _mi < _ms.length; _mi++) {
+        if (_ms[_mi].kind !== 'establishing' || !_ms[_mi].image) continue;
+        var _cm = _ms[_mi].layout_meta ? (typeof _ms[_mi].layout_meta === 'object' ? _ms[_mi].layout_meta : JSON.parse(_ms[_mi].layout_meta)) : null;
+        if (_cm && _cm.built_title && _cm.built_title.url && _ms[_mi].image === thumbSrc) _cardTitle = true;
+        break;
+      }
+    } catch (e) { _cardTitle = false; }
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" alt="" loading="lazy" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
