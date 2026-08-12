@@ -10313,12 +10313,36 @@ function applyArchiveToTarget(archiveId) {
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
       closeReplacePicker();
+      // v3.0.658 -- TD-452. THE READER STILL DESCRIBED THE OLD CONTRACT.
+      //
+      // Ian, 2026-08-12 on v3.0.657: "when I open the archive to pull a title picture into the title
+      // builder... It closes the archive modal but does not bring anything into the picture or the
+      // draft."
+      //
+      // v3.0.657 made restore-title write the DRAFT instead of applying immediately -- which is what
+      // was asked for -- so built_title_url in the answer is now the UNCHANGED live title, and often
+      // empty. This handler stored that over state.bookMeta and called _tbShowResult with it, so the
+      // picker closed and the modal showed nothing. The server moved and its reader did not.
+      //
+      // The draft is shown, and the live keys are still recorded, because both are true and a caller
+      // assigning this onto state.bookMeta needs a truthful record of each.
       state.bookMeta = state.bookMeta || {};
       state.bookMeta.built_title_url = d.built_title_url || '';
       state.bookMeta.built_title_src = d.built_title_src || '';
       state.bookMeta.built_title_text = d.built_title_text || '';
       state.bookMeta.built_title_sub = d.built_title_sub;
-      _tbShowResult(d.built_title_url || '');
+      state.bookMeta.built_title_draft_url = d.built_title_draft_url || '';
+      state.bookMeta.built_title_draft_src = d.built_title_draft_src || '';
+      state.bookMeta.built_title_draft_text = d.built_title_draft_text || '';
+      state.bookMeta.built_title_draft_sub = d.built_title_draft_sub;
+      // A chapter keeps no local mirror of its own, so the modal holds the answer for its lifetime
+      // -- the same reason _tbSave does it for a chapter write.
+      if (_tbIsSession()) {
+        state._tbSessionCur = state._tbSessionCur || {};
+        state._tbSessionCur.draft = { url: d.built_title_draft_url || '', src: d.built_title_draft_src || '',
+                                     text: d.built_title_draft_text || '', sub: d.built_title_draft_sub };
+      }
+      _tbShowResult(d.built_title_draft_url || d.built_title_url || '');
       _tbRenderWarn();
       if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
     }).catch(function (e) { alert('Could not put that title on the book: ' + e.message); });
