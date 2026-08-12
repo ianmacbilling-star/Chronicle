@@ -61,13 +61,51 @@ router.post('/', requireAuth, verifyCampaignMember, async function(req, res) {
           } catch (e) { console.error('archive style-name resolve error:', e.message); }
         }
       }
+      // v3.0.654 -- A CHAPTER TITLE ARCHIVED FROM A PANEL IS ARCHIVED AS A TITLE.
+//
+      // Ian, 2026-08-12: "If you Archive a title chapter text picture from the story panel.. it
+      // needs to know it was a title too and save it that way. And then the same for pulling it
+      // from the archive... the flag needs to be set. going and coming."
+      //
+      // WHAT WENT OUT BEFORE. The row carried built_title inside its copied layout_meta and was
+      // still stamped image_type=moment. Every title consumer gates on image_type === title -- the
+      // From Archive picker, the reference restore, the Title Builder replace -- so an archived
+      // chapter title was correctly described inside its own JSON and invisible to every feature
+      // that wanted it.
+      //
+      // ONE SHAPE FOR A TITLE ARCHIVE, whichever door it came through. The Title Builder path
+      // writes { subtitle, src } and the consumers read exactly that, so this writes the same --
+      // rather than teaching four readers a second format. The UNCUT SOURCE is archived too, for
+      // the same reason that path does it: Retouch and Reference are handed the source, and a
+      // title restored without one can only be repainted onto a guessed background.
+      var _mMeta = null;
+      try { _mMeta = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : null; } catch (e) { _mMeta = null; }
+      var _mBuilt = (_mMeta && _mMeta.built_title) || null;
       const archivedUrl = await archiveCopy(moment.image);
+      var _archType = imageType || 'moment';
+      var _archMeta = moment.layout_meta || null;
+      var _archTitle = moment.title || null;
+      var _archPrompt = moment.prompt || null;
+      if (_mBuilt && _mBuilt.url) {
+        _archType = 'title';
+        var _archSrc = null;
+        if (_mBuilt.src) {
+          try { _archSrc = await archiveCopy(_mBuilt.src); }
+          catch (e) { console.error('archive built-title source failed (keeping the cut copy):', e.message); }
+        }
+        _archMeta = JSON.stringify({
+          subtitle: (_mBuilt.sub === undefined ? null : _mBuilt.sub),
+          src: _archSrc || null
+        });
+        _archTitle = _mBuilt.text || moment.title || null;
+        _archPrompt = _mBuilt.prompt || moment.prompt || null;
+      }
       const now = new Date().toISOString();
       const result = await db.prepare(
         'INSERT INTO campaign_archives (campaign_id, session_id, fork_id, moment_id, image_type, title, image_url, source_url, image_prompt, art_style, art_style_name, img_w, img_h, shape, layout_meta, archived_by, created_at) ' +
         'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(req.params.campaignId, moment.session_id, moment.fork_id, moment.id, 'moment',
-            moment.title || null, archivedUrl, moment.image, moment.prompt || null, artStyle, artStyleName, moment.img_w || null, moment.img_h || null, moment.shape || null, moment.layout_meta || null, req.session.userId, now);
+      ).run(req.params.campaignId, moment.session_id, moment.fork_id, moment.id, _archType,
+            _archTitle, archivedUrl, moment.image, _archPrompt, artStyle, artStyleName, moment.img_w || null, moment.img_h || null, moment.shape || null, _archMeta, req.session.userId, now);
       const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
       return res.json({ success: true, archive: row });
     }
@@ -273,7 +311,10 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
 
     if (targetType === 'moment') {
       const moment = await db.prepare(
-        'SELECT m.id, m.image, m.locked, m.layout_meta, sf.user_id AS fork_owner ' +
+        // v3.0.654 -- img_w and img_h are selected because the revert slot below records them.
+        // They were not in this list and node --check is perfectly happy with moment.img_w being
+        // undefined -- it would have stored null dimensions and nothing would have said so.
+        'SELECT m.id, m.image, m.locked, m.layout_meta, m.img_w, m.img_h, sf.user_id AS fork_owner ' +
         'FROM moments m JOIN session_forks sf ON sf.id = m.fork_id ' +
         'JOIN sessions s ON s.id = m.session_id ' +
         'WHERE m.id = ? AND s.campaign_id = ?'
@@ -287,18 +328,57 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
       // Merge the archived image's image-specific layout hints (focal / crop_safe) into the
       // target panel's layout_meta, preserving the panel's own prominence / group_break.
       // mergedMeta stays null when the archive carries neither, so COALESCE keeps the panel's meta.
+      // v3.0.654 -- THE MARKER IS SET COMING IN, AND CLEARED WHEN IT SHOULD BE.
+      //
+      // Replace was the third door into a row that lies about itself. It merged focal and
+      // crop_safe and left built_title exactly as the panel had it -- so dropping a photograph
+      // onto a chapter title left the row still claiming to be lettering (half column, no frame,
+      // no caption, letterboxed) and dropping a title onto an ordinary panel produced a
+      // transparent PNG inside a frame with a caption under it. Retouch and Regenerate were fixed
+      // in v3.0.653; this is the same fault reached by a different button.
+      //
+      // THE ARCHIVE TYPE DECIDES, because it is the one field that describes the artwork rather
+      // than the panel it is landing on.
       let mergedMeta = null;
+      let _freshSrc = null;
       try {
         const _am = archive.layout_meta ? (typeof archive.layout_meta === 'object' ? archive.layout_meta : JSON.parse(archive.layout_meta)) : null;
-        if (_am && (_am.focal !== undefined || _am.crop_safe !== undefined)) {
-          const _pm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {};
-          if (_am.focal !== undefined) _pm.focal = _am.focal;
-          if (_am.crop_safe !== undefined) _pm.crop_safe = _am.crop_safe;
-          mergedMeta = JSON.stringify(_pm);
+        const _pm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {};
+        let _touched = false;
+        if (_am && _am.focal !== undefined) { _pm.focal = _am.focal; _touched = true; }
+        if (_am && _am.crop_safe !== undefined) { _pm.crop_safe = _am.crop_safe; _touched = true; }
+        if (archive.image_type === 'title') {
+          // The uncut source comes back into the live prefix, or Retouch would be handed a URL in
+          // the protected archives area.
+          if (_am && _am.src) {
+            try { _freshSrc = await restoreCopy(_am.src); }
+            catch (e) { console.error('restore built-title source failed:', e.message); }
+          }
+          _pm.built_title = {
+            url: freshUrl,
+            src: _freshSrc || '',
+            text: archive.title || '',
+            sub: (_am && _am.subtitle !== undefined) ? _am.subtitle : null,
+            prompt: archive.image_prompt || ''
+          };
+          _touched = true;
+        } else if (_pm.built_title) {
+          // An ordinary picture has landed. The row stops being a chapter title.
+          delete _pm.built_title;
+          _touched = true;
         }
+        if (_touched) mergedMeta = JSON.stringify(_pm);
       } catch (e) { mergedMeta = null; }
-      await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, shape = COALESCE(?, shape), layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
-        .run(freshUrl, archive.art_style || null, archive.img_w || null, archive.img_h || null, archive.shape || null, mergedMeta, now, req.session.userId, moment.id);
+      // v3.0.654 -- REPLACE ARMS REVERT, like every other path that displaces a panel image.
+      // Retouch and Regenerate both keep the previous image in the undo slot; Replace released it
+      // instead, which for a built title meant the artwork was gone for good -- it cannot be
+      // redrawn from the scene prompt the way a photograph can. releaseImage now counts the undo
+      // slot as a reference, so the call below simply declines to delete rather than needing a
+      // condition here.
+      await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, shape = COALESCE(?, shape), layout_meta = COALESCE(?, layout_meta), revert_image = ?, revert_img_w = ?, revert_img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
+        .run(freshUrl, archive.art_style || null, archive.img_w || null, archive.img_h || null, archive.shape || null, mergedMeta,
+             (prevImg && prevImg !== freshUrl) ? prevImg : null, moment.img_w || null, moment.img_h || null,
+             now, req.session.userId, moment.id);
       if (prevImg && prevImg !== freshUrl) await releaseImage(db, prevImg);
       return res.json({ success: true, image_url: freshUrl });
     }

@@ -238,6 +238,12 @@ async function releaseImage(db, fileUrl) {
       ['SELECT 1 FROM characters WHERE image = ? OR image_portrait = ? OR image_fullbody = ? OR image_action = ? OR image_other = ? OR canonical_reference_url = ? LIMIT 1',
         [fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl]],
       ['SELECT 1 FROM campaign_assets WHERE image_url = ? LIMIT 1', [fileUrl]],
+      // v3.0.654 -- THE UNDO SLOT IS A REFERENCE. moments.revert_image was not among the tables
+      // checked, so releasing an image a panel could still be reverted to would DELETE THE FILE
+      // AND LEAVE THE BUTTON -- a Revert that restores a 404, discovered only by pressing it.
+      // The one caller that releases a displaced panel image is Replace, which now arms Revert;
+      // adding the slot here is what lets it do that safely instead of needing a special case.
+      ['SELECT 1 FROM moments WHERE revert_image = ? LIMIT 1', [fileUrl]],
       ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]],
       ['SELECT 1 FROM public_story_images WHERE image_url = ? LIMIT 1', [fileUrl]]
     ];
