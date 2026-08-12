@@ -1664,6 +1664,9 @@ function coDropcap(html) {
 // transparent with nothing behind it... It's not sitting on top a picture this time." So no
 // background is painted here -- which is also why the ground cut has to have worked. A title whose
 // cut failed is an opaque rectangle, and it will look like one.
+// EST_HEAD_PCT: how much of the text column a drawn chapter title is allowed. One number, and the
+// only one to touch if these want to be smaller or larger.
+var EST_HEAD_PCT = 50;
 function estCell(m, opts) {
   if (!lmIsBuiltTitle(m)) return coCell(m, 0, 100, opts || {});
   // v3.0.646 -- THE HEIGHT MUST BE DECIDED BY CSS, BECAUSE THE MEASURE PASS NEVER SEES THE PICTURE.
@@ -1697,7 +1700,29 @@ function estCell(m, opts) {
   // asks fal for, so flipping it to panoramic here would make a later scene come back ultra-wide
   // in a slot that wants an establishing shot. The marker says this one is lettering; the shape
   // goes on saying what the slot is.
-  return '<div style="width:100%;aspect-ratio:' + shapeRatioCSS('panoramic') + ';line-height:0;">' +
+  // v3.0.648 -- A CHAPTER HEAD, NOT A TITLE PAGE.
+  //
+  // Ian, 2026-08-11: session titles "are almost like a small pic or title at the top of a chapter in
+  // a book. Not like a full Title on a page" -- the full-page treatment belongs to the cover.
+  //
+  // So the artwork is drawn at HALF the column and centred. Measured on his two real titles, once
+  // trimmed: the gold one lands at 1.30in and the emerald at 0.92in, against the 2.91in a full width
+  // panoramic box was taking and the 3.83in before that.
+  //
+  // THE SHAPE COMES OFF THE NAME. storage/alpha.js trims the cut to its ink and routes/images.js
+  // writes the result into the object name, so the aspect is known here without fetching a byte --
+  // which is the whole point, because the measure pass has no images. Anything built before v3.0.648
+  // has no size in its name and falls back to the canvas ratio, which is exactly what it renders at
+  // today. The match is anchored and bounded, and the query string is dropped first so a signed or
+  // cache-busted URL cannot smuggle digits into it.
+  //
+  // THE CEILING IS THE SAME RULE AT THE SAME SCALE: half a column at 21:9. A title squarer than
+  // panoramic is scaled down to fit rather than growing, so no chapter head is ever taller than
+  // 1.46in whatever the model returns. Both values are CSS, so the height stays determinate.
+  var _tdim = String(m.image || '').split('?')[0].match(/-([0-9]{2,5})x([0-9]{2,5})\.png$/);
+  var _tar = _tdim ? (_tdim[1] + ' / ' + _tdim[2]) : shapeRatioCSS('panoramic');
+  var _tcap = ((CG_W * EST_HEAD_PCT / 100) / shapeAspect('panoramic')).toFixed(2);
+  return '<div style="width:' + EST_HEAD_PCT + '%;margin:0 auto;aspect-ratio:' + _tar + ';max-height:' + _tcap + 'in;line-height:0;">' +
          '<img src="' + String(m.image || '').replace(/"/g, '&quot;') + '" alt="" ' +
          'style="display:block;width:100%;height:100%;object-fit:contain;background:none;" />' +
          '</div>';

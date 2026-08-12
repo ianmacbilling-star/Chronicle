@@ -5,7 +5,7 @@ const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/au
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
 const { releaseImage, persistToR2 } = require('../storage/storage');
-const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');
+const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
@@ -1819,9 +1819,28 @@ async function cutStoredTitle(sourceUrl) {
   const buf = Buffer.from(resp.data);
   const out = cutGroundToAlpha(buf);
   if (out === buf) return { url: sourceUrl, cut: false };
-  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + '.png';
-  const url = await uploadFile(out, name, 'image/png');
-  return { url: url, cut: true };
+
+  // v3.0.648 -- TRIM, AND THEN PUT THE SIZE IN THE NAME.
+  //
+  // The renderer has to know the shape of this artwork WITHOUT LOADING IT.
+  // services/printing/measureLayout.js aborts every image request so layout never waits on R2, so
+  // an element sized from an image measures zero during the measure pass and full size in the
+  // render -- which is what pushed pictures off the page in v3.0.645.
+  //
+  // WHY THE FILENAME AND NOT THE DATABASE. The alternative was to carry the numbers back through
+  // the JSON response, into the modal, into title-write, into titleTarget and onto the moment row.
+  // Four hand-offs. Every fault in this run of builds -- 640, 642, 643, 644 -- has been a value that
+  // went missing between hand-offs while every individual step still looked correct. This has one
+  // writer and one reader, and the URL is something the renderer already holds. The cover reads the
+  // same object, so it gets the same answer for free.
+  //
+  // A title stored before this simply does not match the pattern, and the renderer falls back to
+  // the canvas ratio it used before. No migration, and nothing to backfill.
+  const t = trimToInk(out);
+  const dims = (t.width > 0 && t.height > 0) ? ('-' + t.width + 'x' + t.height) : '';
+  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + dims + '.png';
+  const url = await uploadFile(t.buf, name, 'image/png');
+  return { url: url, cut: true, trimmed: t.trimmed, width: t.width, height: t.height };
 }
 
 // chargeForTitleCall: one token per fal call, and a failed charge is LOUD.
