@@ -244,6 +244,12 @@ async function releaseImage(db, fileUrl) {
       // The one caller that releases a displaced panel image is Replace, which now arms Revert;
       // adding the slot here is what lets it do that safely instead of needing a special case.
       ['SELECT 1 FROM moments WHERE revert_image = ? LIMIT 1', [fileUrl]],
+      // v3.0.660 -- TD-454. layout_meta HOLDS REFERENCES TOO and none of the checks above could
+      // see them: built_title, built_title_draft and prev_built_title all carry urls, and so does
+      // built_title.src. A LIKE is crude and it is the right kind of crude here -- this function
+      // exists to DECLINE to delete, so a false positive costs storage while a false negative
+      // destroys artwork that cannot be redrawn. It over-retains, deliberately.
+      ['SELECT 1 FROM moments WHERE layout_meta LIKE ? LIMIT 1', ['%' + String(fileUrl).replace(/[%_]/g, '') + '%']],
       ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]],
       ['SELECT 1 FROM public_story_images WHERE image_url = ? LIMIT 1', [fileUrl]]
     ];

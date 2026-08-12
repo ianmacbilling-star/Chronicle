@@ -5,8 +5,8 @@ const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/au
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
 const { releaseImage, persistToR2 } = require('../storage/storage');
-const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');
-const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
+const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
+const { resolveTitleTarget, targetFromRequest, demoteBuiltTitle } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
@@ -1351,7 +1351,9 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
     try {
       _rMeta = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {};
       var _prevBT = _rMeta.prev_built_title || null;
-      if (_prevBT) _rMeta.built_title = _prevBT; else delete _rMeta.built_title;
+      // v3.0.660 -- reverting TO a picture demotes the title that was live rather than dropping
+      // it, so it stays in the builder and its bytes stay referenced.
+      if (_prevBT) _rMeta.built_title = _prevBT; else demoteBuiltTitle(_rMeta);
       delete _rMeta.prev_built_title;
     } catch (e) { _rMeta = null; }
     await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
@@ -1708,7 +1710,9 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
             var _pmeta = (_pm && _pm.layout_meta) ? (typeof _pm.layout_meta === 'object' ? _pm.layout_meta : JSON.parse(_pm.layout_meta)) : null;
             if (_pmeta) {
               var _wasTitle = _pmeta.built_title || null;
-              if (_wasTitle) delete _pmeta.built_title;
+              // v3.0.660 -- demote rather than delete: prev_built_title is the ONE-DEEP undo and
+              // is consumed by the next Revert, so on its own it is not somewhere a title lives.
+              if (_wasTitle) demoteBuiltTitle(_pmeta);
               if (_wasTitle) _pmeta.prev_built_title = _wasTitle; else delete _pmeta.prev_built_title;
               if (_wasTitle || _pm.layout_meta !== JSON.stringify(_pmeta)) {
                 await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_pmeta), job.moment_id);
@@ -1894,9 +1898,30 @@ async function cutStoredTitle(sourceUrl) {
   const buf = Buffer.from(resp.data);
   const out = cutGroundToAlpha(buf);
   if (out === buf) return { url: sourceUrl, cut: false };
-  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + '.png';
-  const url = await uploadFile(out, name, 'image/png');
-  return { url: url, cut: true };
+  // v3.0.660 -- RESTORED. v3.0.653 was built from a pre-648 copy of this file and silently
+  // reverted the trim: every title built between 653 and 660 is untrimmed and carries no size in
+  // its name, so estCell cannot read its shape and falls back to the canvas ratio.
+  // v3.0.648 -- TRIM, AND THEN PUT THE SIZE IN THE NAME.
+  //
+  // The renderer has to know the shape of this artwork WITHOUT LOADING IT.
+  // services/printing/measureLayout.js aborts every image request so layout never waits on R2, so
+  // an element sized from an image measures zero during the measure pass and full size in the
+  // render -- which is what pushed pictures off the page in v3.0.645.
+  //
+  // WHY THE FILENAME AND NOT THE DATABASE. The alternative was to carry the numbers back through
+  // the JSON response, into the modal, into title-write, into titleTarget and onto the moment row.
+  // Four hand-offs. Every fault in this run of builds -- 640, 642, 643, 644 -- has been a value that
+  // went missing between hand-offs while every individual step still looked correct. This has one
+  // writer and one reader, and the URL is something the renderer already holds. The cover reads the
+  // same object, so it gets the same answer for free.
+  //
+  // A title stored before this simply does not match the pattern, and the renderer falls back to
+  // the canvas ratio it used before. No migration, and nothing to backfill.
+  const t = trimToInk(out);
+  const dims = (t.width > 0 && t.height > 0) ? ('-' + t.width + 'x' + t.height) : '';
+  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + dims + '.png';
+  const url = await uploadFile(t.buf, name, 'image/png');
+  return { url: url, cut: true, trimmed: t.trimmed, width: t.width, height: t.height };
 }
 
 // chargeForTitleCall: one token per fal call, and a failed charge is LOUD.

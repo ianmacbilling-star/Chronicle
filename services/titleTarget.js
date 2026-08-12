@@ -322,11 +322,18 @@ async function sessionTarget(db, req, t) {
       const nextMeta = Object.assign({}, meta);
       // CLEARING THE TITLE CLEARS THE MARKER, or the row would go on claiming to be lettering after
       // Regenerate has put a scene back on it -- and Retouch would keep routing to the title path.
-      if (cleared) delete nextMeta.built_title; else nextMeta.built_title = next;
+      // v3.0.660 -- Remove DEMOTES: the title it clears becomes the draft, so the builder still
+      // has it and its bytes stay referenced. A deliberate change to the v3.0.656 rule, which
+      // cleared both so Remove would not look as though it had failed on reopening. Showing the
+      // last title as a DRAFT is not Remove having failed -- the panel really is empty and the
+      // drawing really is still available.
+      if (cleared) demoteBuiltTitle(nextMeta); else nextMeta.built_title = next;
       // A promoted draft is spent. Clearing the title clears any draft with it -- the panel is
       // being emptied, and leaving a draft behind would make Remove look as though it had failed
       // the next time the modal opened.
-      if (_promoted || cleared) delete nextMeta.built_title_draft;
+      // Only a PROMOTED draft is spent -- it is the live title now. A cleared one has just been
+      // filled by the demote above and must survive.
+      if (_promoted) delete nextMeta.built_title_draft;
       // v3.0.653 -- TD-445. ARM REVERT WITH WHATEVER THE TITLE DISPLACED.
       //
       // Ian, 2026-08-12, on v3.0.652: "it just pulled down a picture from the title builder and I
@@ -396,4 +403,34 @@ async function sessionTarget(db, req, t) {
   };
 }
 
-module.exports = { resolveTitleTarget, targetFromRequest, sessionTarget, NOT_YOURS };
+// v3.0.660 -- TD-454. A TITLE THAT STOPS BEING LIVE IS NOT THROWN AWAY.
+//
+// Ian, 2026-08-12: "Is there any way that the Version / Chapter Text title that was last used on
+// that Session can always stay in the title builder as a draft?"
+//
+// It was not merely inconvenient. releaseImage reads seven tables and NONE of them is layout_meta,
+// so the moment a title stopped being referenced by image or revert_image its bytes were DELETED
+// FROM R2 -- the cut and, through built_title.src, the uncut original with it. Reverting off a
+// title, regenerating over one, replacing one or removing one all reached that state. The answer
+// to "can I get my chapter title back" was no.
+//
+// Keeping it in the draft slot fixes both halves at once: the builder always opens with the last
+// title this chapter used, and the draft is a REFERENCE, so the artwork stops being garbage.
+//
+// AN UNUSED DRAFT IS PROTECTED -- Ian, asked directly: "an unused draft is protected! Definitely!"
+// So a displacement fills the slot only when it is EMPTY. A drawing built and not used is the one
+// place a paid-for build lives, and losing it to an action about a different picture is exactly
+// the kind of quiet loss this session has been full of.
+//
+// FOUR CALLERS, ONE RULE. Revert, Regenerate, Replace and Remove each displace a title and each
+// said "delete meta.built_title" in its own words. Five paths writing this marker their own way
+// is what produced TD-444, TD-446 and TD-447.
+function demoteBuiltTitle(meta) {
+  if (!meta || !meta.built_title || !meta.built_title.url) return false;
+  var d = meta.built_title_draft;
+  if (!d || !d.url) meta.built_title_draft = meta.built_title;
+  delete meta.built_title;
+  return true;
+}
+
+module.exports = { resolveTitleTarget, targetFromRequest, sessionTarget, demoteBuiltTitle, NOT_YOURS };

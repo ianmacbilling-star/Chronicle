@@ -4,6 +4,7 @@ const { getDb, getDmForkId } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const { archiveCopy, releaseImage, restoreCopy } = require('../storage/storage');
+const { demoteBuiltTitle } = require('../services/titleTarget');
 const { getEffectiveTier, getTier } = require('../middleware/tiers');
 
 // POST /api/campaigns/:campaignId/archives
@@ -363,8 +364,9 @@ router.post('/:archiveId/apply', requireAuth, verifyCampaignMember, async functi
           };
           _touched = true;
         } else if (_pm.built_title) {
-          // An ordinary picture has landed. The row stops being a chapter title.
-          delete _pm.built_title;
+          // An ordinary picture has landed. The row stops being a chapter title -- and v3.0.660
+          // keeps the title it displaced in the draft rather than stranding its bytes.
+          demoteBuiltTitle(_pm);
           _touched = true;
         }
         if (_touched) mergedMeta = JSON.stringify(_pm);
