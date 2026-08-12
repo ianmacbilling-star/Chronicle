@@ -228,9 +228,33 @@ async function sessionTarget(db, req, t) {
       // CLEARING THE TITLE CLEARS THE MARKER, or the row would go on claiming to be lettering after
       // Regenerate has put a scene back on it -- and Retouch would keep routing to the title path.
       if (cleared) delete nextMeta.built_title; else nextMeta.built_title = next;
+      // v3.0.653 -- TD-445. ARM REVERT WITH WHATEVER THE TITLE DISPLACED.
+      //
+      // Ian, 2026-08-12, on v3.0.652: "it just pulled down a picture from the title builder and I
+      // did not get the revert button on the panel."
+      //
+      // moments.revert_image is the one-deep undo every other image path arms -- retouch and
+      // single regenerate both do it in the fal webhook. The title write never did, so building a
+      // title over an opening picture overwrote the ONLY reference to that picture and left the
+      // panel with nothing to go back to. The scene PROMPT survives, so Regenerate could redraw
+      // something similar, but that costs a token and returns a different picture. This returns
+      // the actual one.
+      //
+      // ARMED ONLY WHEN SOMETHING IS ACTUALLY DISPLACED. Rebuilding a title over a title would
+      // otherwise push the scene out of the undo slot and replace it with the previous title, so
+      // the row would forget the picture after two builds. The FIRST displacement is the one worth
+      // keeping, which is why an existing revert_image is never overwritten here.
+      // Clearing a title restores nothing by itself: Revert is the control that does that, and it
+      // is the reader who decides.
+      var _displaced = (row.image && !row.revert_image && patch.url) ? row.image : null;
       if (patch.url !== undefined) {
-        await db.prepare('UPDATE moments SET image = ?, layout_meta = ? WHERE id = ?')
-          .run(patch.url || null, JSON.stringify(nextMeta), row.id);
+        if (_displaced) {
+          await db.prepare('UPDATE moments SET image = ?, layout_meta = ?, revert_image = ?, revert_img_w = ?, revert_img_h = ? WHERE id = ?')
+            .run(patch.url || null, JSON.stringify(nextMeta), _displaced, row.img_w || null, row.img_h || null, row.id);
+        } else {
+          await db.prepare('UPDATE moments SET image = ?, layout_meta = ? WHERE id = ?')
+            .run(patch.url || null, JSON.stringify(nextMeta), row.id);
+        }
       } else {
         await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(nextMeta), row.id);
       }
@@ -239,7 +263,11 @@ async function sessionTarget(db, req, t) {
         src: next.src || '',
         text: next.text || '',
         sub: (next.sub === undefined ? null : next.sub),
-        prompt: next.prompt || ''
+        prompt: next.prompt || '',
+        // v3.0.653 -- what the panel Revert pill will restore, if anything. The client patches the
+        // moment it is holding rather than re-fetching, so without this the pill would not appear
+        // until the next load even though the slot was armed correctly.
+        revertImage: _displaced || row.revert_image || ''
       };
     }
   };

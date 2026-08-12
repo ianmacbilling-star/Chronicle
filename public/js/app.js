@@ -7879,6 +7879,10 @@ function _tbSyncSessionMoment() {
     // An empty url means the title was removed; the moment keeps whatever the server left there,
     // which for a removal is nothing until the reader regenerates the scene.
     m.image = cur.url || null;
+    // v3.0.653 -- TD-445. The undo slot the server just armed, so the Revert pill appears now
+    // rather than after the next load. The pill is drawn from m.revert_image; patching the image
+    // and not this is why Ian saw a title land with no way back from it.
+    if (cur.revertImage !== undefined) m.revert_image = cur.revertImage || null;
     if (typeof renderStoryboard === 'function') renderStoryboard();
     if (typeof renderNovelWithImages === 'function') renderNovelWithImages();
   } catch (e) {}
@@ -10866,9 +10870,17 @@ function renderStoryboard() {
     var editPromptBtn = m.locked
       ? '<button class="panel-pill pp-edit dm-only" disabled title="Unlock to edit the prompt">Edit prompt</button>'
       : '<button class="panel-pill pp-edit dm-only" onclick="openImagePrompt(' + m.id + ')" title="Edit the image prompt, then Regenerate to apply">Edit prompt</button>';
-    var retouchBtn = m.locked
+    // v3.0.653 -- TD-444. NO RETOUCH ON A DRAWN TITLE, AND IT IS ABSENT RATHER THAN DISABLED.
+    // A greyed pill invites a hover to find out why; this panel simply has a different set of
+    // controls, and Title Builder is already sitting beside it. The route refuses regardless.
+    var _isDrawnTitle = false;
+    try {
+      var _mlm = m.layout_meta ? (typeof m.layout_meta === 'object' ? m.layout_meta : JSON.parse(m.layout_meta)) : null;
+      _isDrawnTitle = !!(_mlm && _mlm.built_title && _mlm.built_title.url);
+    } catch (e) { _isDrawnTitle = false; }
+    var retouchBtn = _isDrawnTitle ? '' : (m.locked
       ? '<button class="panel-pill pp-retouch dm-only" disabled title="Unlock to retouch">Retouch</button>'
-      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>';
+      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>');
     var revertBtn = (m.revert_image && !m.locked)
       ? '<button class="panel-pill dm-only" onclick="revertMoment(' + m.id + ')" title="Undo the last retouch or regenerate - restore the previous image">Revert</button>'
       : '';

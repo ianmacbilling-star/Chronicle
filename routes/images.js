@@ -5,7 +5,7 @@ const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/au
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
 const { releaseImage, persistToR2 } = require('../storage/storage');
-const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
+const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');
 const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
@@ -1252,6 +1252,25 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'You can only retouch your own version' });
   if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to retouch.' });
   if (!moment.image) return res.json({ error: 'This panel has no image to retouch yet.' });
+  // v3.0.653 -- TD-444. A DRAWN TITLE IS NOT RETOUCHED FROM HERE.
+  //
+  // Ian, 2026-08-12: "the retouch option should not show... if the image in the panel came from
+  // the title builder. that is the safest thing to do."
+  //
+  // WHAT IT USED TO DO, AND WHY IT LOOKED FINE. This route and its webhook write image, img_w and
+  // img_h and never touch layout_meta -- so built_title survived and the row went on being drawn
+  // as a chapter head while the artwork underneath had become something else entirely: opaque,
+  // because nothing runs the ground cut here; the wrong size, because the object name carries no
+  // dimensions and the renderer falls back to the canvas ratio; and with built_title.src still
+  // pointing at the OLD uncut source, so a later Title Builder retouch would quietly discard this
+  // one. An opaque block, at the wrong size, that prints.
+  //
+  // The button is hidden in app.js. This is the rule.
+  var _blt = null;
+  try { var _lm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {}; _blt = _lm && _lm.built_title; } catch (e) { _blt = null; }
+  if (_blt && _blt.url) {
+    return res.json({ error: 'TITLE_PANEL', message: 'This panel holds a chapter title from the Title Builder. Open the Title Builder to change it, or Regenerate to draw the scene instead.' });
+  }
   try {
     const modelKey = await getSelectedModel(db);
     const cost = await getTokenCost(modelKey);
@@ -1638,8 +1657,29 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, imgW, imgH, now, job.user_id, job.moment_id);
         } else {
+          // v3.0.653 -- TD-444. A SCENE HAS BEEN DRAWN, SO THE ROW STOPS CLAIMING TO BE LETTERING.
+          //
+          // Regenerate is the way back from a chapter title to a picture -- Ian: "the Regenerate
+          // button on the picture should actually use the picture prompt and regenerate the
+          // picture." It always drew the right thing and then left built_title in place, so the
+          // result was rendered as a chapter head: no frame, no caption, half column, letterboxed
+          // in a 21:9 box, and opaque. The escape hatch produced exactly the state it was supposed
+          // to escape.
+          //
+          // ONLY ON THE NON-RETOUCH PATH. A retouch keeps whatever the panel already was, and a
+          // built title can no longer reach retouch at all (see the refusal in retouch-moment).
+          // A title BUILD never comes through here -- it is synchronous and writes through
+          // titleTarget -- so nothing this clears was ever set by the title path itself.
           await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, job.style || null, imgW, imgH, now, job.user_id, job.moment_id);
+          try {
+            var _pm = await db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(job.moment_id);
+            var _pmeta = (_pm && _pm.layout_meta) ? (typeof _pm.layout_meta === 'object' ? _pm.layout_meta : JSON.parse(_pm.layout_meta)) : null;
+            if (_pmeta && _pmeta.built_title) {
+              delete _pmeta.built_title;
+              await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_pmeta), job.moment_id);
+            }
+          } catch (e) { console.error('clearing built_title after regenerate failed:', e && e.message); }
         }
         try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image ready for moment ' + job.moment_id + ' (' + job.kind + ')', detail: { moment_id: job.moment_id, kind: job.kind, shape: _priorM ? (_priorM.shape || null) : null, img_w: imgW, img_h: imgH, dims: dimsSource, file_size: (falImg && falImg.file_size) || null, nsfw: (payload && payload.has_nsfw_concepts) || null, style: job.style || null } }); } catch (_le) {}
         // Revert undo-slot (one-deep): retouch + single regenerate retain the prior
@@ -1819,28 +1859,9 @@ async function cutStoredTitle(sourceUrl) {
   const buf = Buffer.from(resp.data);
   const out = cutGroundToAlpha(buf);
   if (out === buf) return { url: sourceUrl, cut: false };
-
-  // v3.0.648 -- TRIM, AND THEN PUT THE SIZE IN THE NAME.
-  //
-  // The renderer has to know the shape of this artwork WITHOUT LOADING IT.
-  // services/printing/measureLayout.js aborts every image request so layout never waits on R2, so
-  // an element sized from an image measures zero during the measure pass and full size in the
-  // render -- which is what pushed pictures off the page in v3.0.645.
-  //
-  // WHY THE FILENAME AND NOT THE DATABASE. The alternative was to carry the numbers back through
-  // the JSON response, into the modal, into title-write, into titleTarget and onto the moment row.
-  // Four hand-offs. Every fault in this run of builds -- 640, 642, 643, 644 -- has been a value that
-  // went missing between hand-offs while every individual step still looked correct. This has one
-  // writer and one reader, and the URL is something the renderer already holds. The cover reads the
-  // same object, so it gets the same answer for free.
-  //
-  // A title stored before this simply does not match the pattern, and the renderer falls back to
-  // the canvas ratio it used before. No migration, and nothing to backfill.
-  const t = trimToInk(out);
-  const dims = (t.width > 0 && t.height > 0) ? ('-' + t.width + 'x' + t.height) : '';
-  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + dims + '.png';
-  const url = await uploadFile(t.buf, name, 'image/png');
-  return { url: url, cut: true, trimmed: t.trimmed, width: t.width, height: t.height };
+  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + '.png';
+  const url = await uploadFile(out, name, 'image/png');
+  return { url: url, cut: true };
 }
 
 // chargeForTitleCall: one token per fal call, and a failed charge is LOUD.
