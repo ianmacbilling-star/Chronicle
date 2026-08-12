@@ -1666,26 +1666,40 @@ function coDropcap(html) {
 // cut failed is an opaque rectangle, and it will look like one.
 function estCell(m, opts) {
   if (!lmIsBuiltTitle(m)) return coCell(m, 0, 100, opts || {});
-  // v3.0.645 -- A CEILING, AND IT IS THE RATIO THE ARTWORK WAS ORDERED AT.
+  // v3.0.646 -- THE HEIGHT MUST BE DECIDED BY CSS, BECAUSE THE MEASURE PASS NEVER SEES THE PICTURE.
   //
-  // Ian, 2026-08-11: "maybe it should be treated as Panoramic ... I think that is thinner from
-  // top to bottom." It is, and it is also the shape routes/images.js already asks fal for when it
-  // draws a title, so this reads the SAME table rather than carrying a second number that has to
-  // be kept in step. CG_W of column at 21:9 is 2.91in, against the 3.83in a 16:9 box was taking.
+  // WHAT v3.0.645 GOT WRONG, and it broke pagination on live books. It emitted a bare img sized
+  // width:auto / height:auto under a max-height. That renders correctly in a browser -- Ian saw an
+  // uncropped title at the intended height -- but services/printing/measureLayout.js ABORTS every
+  // image and media request before it measures ("layout is instant and never waits on R2"), so in
+  // the measure pass that img has no intrinsic size and the band measured about zero. The packer
+  // was told a chapter title costs nothing, filled the page behind it, and the render then put
+  // 2.91in of lettering back. Ian: "it thinks it can fit more on the page."
+  //
+  // The 16:9 box this replaced never had that problem, and not by luck: an aspect-ratio on a DIV is
+  // pure CSS, so measure and render agreed whether the artwork arrived or not. The v3.0.645 fault
+  // was not the ratio, it was moving the height decision onto the image.
+  //
+  // SO: the box comes back, at the PANORAMIC ratio -- the shape routes/images.js already asks fal
+  // for, read from the same table rather than written down a second time -- and the artwork is
+  // fitted inside it with object-fit:contain. Contain never crops, which is the whole point of the
+  // branch, and it cannot overflow, so no clipping is needed to hold it in.
+  //
+  // NOTHING ON THE IMG MAY DEPEND ON ITS INTRINSIC SIZE. width and height are both 100 percent of
+  // a box whose height is already known; no auto, no max-height. That is the invariant the apply
+  // script asserts, and it is the one v3.0.645 violated.
+  //
+  // STILL TOO TALL, AND KNOWN TO BE. 2.91in of band for lettering that may only ink 1.5in of it is
+  // the padding baked into the PNG, not the layout. Trimming the artwork to its ink and recording
+  // its true dimensions is TD-429; this branch is what that will size against.
   //
   // THE ROW IS STILL SHAPED wide AND THAT IS DELIBERATE. moments.shape drives what a REGENERATE
   // asks fal for, so flipping it to panoramic here would make a later scene come back ultra-wide
   // in a slot that wants an establishing shot. The marker says this one is lettering; the shape
-  // goes on saying what the slot is. Nothing has to be flipped back when a title is cleared, and
-  // titles already stored need no migration.
-  //
-  // max-width AND max-height, with BOTH dimensions auto. width:100% plus a max-height does NOT
-  // preserve the aspect -- the width stays pinned while the height is clamped, and the lettering
-  // stretches. Two ceilings and no fixed dimension is the only form of this that cannot distort.
-  var _cap = (CG_W / shapeAspect('panoramic')).toFixed(2);
-  return '<div style="width:100%;line-height:0;">' +
+  // goes on saying what the slot is.
+  return '<div style="width:100%;aspect-ratio:' + shapeRatioCSS('panoramic') + ';line-height:0;">' +
          '<img src="' + String(m.image || '').replace(/"/g, '&quot;') + '" alt="" ' +
-         'style="display:block;margin:0 auto;max-width:100%;max-height:' + _cap + 'in;width:auto;height:auto;background:none;" />' +
+         'style="display:block;width:100%;height:100%;object-fit:contain;background:none;" />' +
          '</div>';
 }
 function coCell(m, i, pct, opts) {
