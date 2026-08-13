@@ -2129,6 +2129,24 @@ function loadSessions() {
     });
 }
 
+// v3.0.664 -- TD-460. IS THIS THUMBNAIL A DRAWING OF WORDS, OR A PHOTOGRAPH?
+//
+// The seventh surface to need this distinction, and the first to get it as ONE function. The test
+// is the marker it has always been -- layout_meta.built_title -- and the input is title_layout_meta,
+// which both session routes now return FROM THE MOMENT THAT PRODUCED THE THUMBNAIL. There is no
+// second equality checking that the meta belongs to the picture, because it cannot not: no chosen
+// moment means no meta.
+//
+// v3.0.663 tried this inline by scanning s.moments. The sessions-list route does not return
+// moments and never has, so it read undefined and the contain rule never fired once.
+function thumbIsBuiltTitle(meta) {
+  try {
+    if (!meta) return false;
+    var m = (typeof meta === 'object') ? meta : JSON.parse(meta);
+    return !!(m && m.built_title && m.built_title.url);
+  } catch (e) { return false; }
+}
+
 function renderSessions() {
   var list = document.getElementById('sessions-list');
 
@@ -2163,24 +2181,10 @@ function renderSessions() {
   list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
-    //
-    // The card thumbnail is a fixed box filled with object-fit:cover, which is right for a scene and
-    // takes equal bites out of both ends of LETTERING -- "TO THE FROZ / RDEN OF DEA". The same
-    // centre-crop the previews had before v3.0.645, on the sixth surface to be told the difference
-    // between a drawing of words and a photograph.
-    //
-    // The test is the marker, as everywhere else: layout_meta.built_title on the establishing moment.
-    // The sessions list already returns every moment with SELECT *, so nothing new is fetched.
-    var _cardTitle = false;
-    try {
-      var _ms = s.moments || [];
-      for (var _mi = 0; _mi < _ms.length; _mi++) {
-        if (_ms[_mi].kind !== 'establishing' || !_ms[_mi].image) continue;
-        var _cm = _ms[_mi].layout_meta ? (typeof _ms[_mi].layout_meta === 'object' ? _ms[_mi].layout_meta : JSON.parse(_ms[_mi].layout_meta)) : null;
-        if (_cm && _cm.built_title && _cm.built_title.url && _ms[_mi].image === thumbSrc) _cardTitle = true;
-        break;
-      }
-    } catch (e) { _cardTitle = false; }
+    // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
+    // route has never sent; the route now sends title_layout_meta instead, taken from the very
+    // moment that produced thumbSrc.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
       ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
@@ -9093,8 +9097,13 @@ function renderNovelSummary(sessions) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
+    // v3.0.664 -- TD-460. THE GRAPHIC NOVEL TILE GETS THE SAME RULE AS THE SESSION CARD.
+    // Same helper, same marker, same field name -- /novel/all resolves title_layout_meta from the
+    // moment whose image IS this thumbnail, so the two screens cannot disagree about what a
+    // drawn title looks like.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" loading="lazy" alt="" />'
       : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
     // v3.0.464 -- THE VERSION NAME, not the owner (TD-263). Rule-based over BOTH copies of this
     // block, because app.js duplicates on purpose and the one hand-anchored edit in the TD-194 work
@@ -11491,6 +11500,24 @@ function loadSessions() {
     });
 }
 
+// v3.0.664 -- TD-460. IS THIS THUMBNAIL A DRAWING OF WORDS, OR A PHOTOGRAPH?
+//
+// The seventh surface to need this distinction, and the first to get it as ONE function. The test
+// is the marker it has always been -- layout_meta.built_title -- and the input is title_layout_meta,
+// which both session routes now return FROM THE MOMENT THAT PRODUCED THE THUMBNAIL. There is no
+// second equality checking that the meta belongs to the picture, because it cannot not: no chosen
+// moment means no meta.
+//
+// v3.0.663 tried this inline by scanning s.moments. The sessions-list route does not return
+// moments and never has, so it read undefined and the contain rule never fired once.
+function thumbIsBuiltTitle(meta) {
+  try {
+    if (!meta) return false;
+    var m = (typeof meta === 'object') ? meta : JSON.parse(meta);
+    return !!(m && m.built_title && m.built_title.url);
+  } catch (e) { return false; }
+}
+
 function renderSessions() {
   var list = document.getElementById('sessions-list');
 
@@ -11525,24 +11552,10 @@ function renderSessions() {
   list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
-    //
-    // The card thumbnail is a fixed box filled with object-fit:cover, which is right for a scene and
-    // takes equal bites out of both ends of LETTERING -- "TO THE FROZ / RDEN OF DEA". The same
-    // centre-crop the previews had before v3.0.645, on the sixth surface to be told the difference
-    // between a drawing of words and a photograph.
-    //
-    // The test is the marker, as everywhere else: layout_meta.built_title on the establishing moment.
-    // The sessions list already returns every moment with SELECT *, so nothing new is fetched.
-    var _cardTitle = false;
-    try {
-      var _ms = s.moments || [];
-      for (var _mi = 0; _mi < _ms.length; _mi++) {
-        if (_ms[_mi].kind !== 'establishing' || !_ms[_mi].image) continue;
-        var _cm = _ms[_mi].layout_meta ? (typeof _ms[_mi].layout_meta === 'object' ? _ms[_mi].layout_meta : JSON.parse(_ms[_mi].layout_meta)) : null;
-        if (_cm && _cm.built_title && _cm.built_title.url && _ms[_mi].image === thumbSrc) _cardTitle = true;
-        break;
-      }
-    } catch (e) { _cardTitle = false; }
+    // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
+    // route has never sent; the route now sends title_layout_meta instead, taken from the very
+    // moment that produced thumbSrc.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
       ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
@@ -12731,8 +12744,13 @@ function renderNovelSummary(sessions) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
+    // v3.0.664 -- TD-460. THE GRAPHIC NOVEL TILE GETS THE SAME RULE AS THE SESSION CARD.
+    // Same helper, same marker, same field name -- /novel/all resolves title_layout_meta from the
+    // moment whose image IS this thumbnail, so the two screens cannot disagree about what a
+    // drawn title looks like.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" loading="lazy" alt="" />'
       : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
     // v3.0.464 -- THE VERSION NAME, not the owner (TD-263). Rule-based over BOTH copies of this
     // block, because app.js duplicates on purpose and the one hand-anchored edit in the TD-194 work
