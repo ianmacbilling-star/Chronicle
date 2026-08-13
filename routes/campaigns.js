@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion } = require('../database/db');
+const { getDb, getForkBookPrefs, setForkBookPrefs, bookPrefsScope, versionsForCampaign, ownsBookVersion, getVersionRow, versionOwnerUserId } = require('../database/db');
 const { requireAuth, verifyCampaignMember } = require('../middleware/auth');
 const genres = require('../services/genres');   // v3.0.485 -- TD-217/TD-189, single source of truth
 const { checkCampaignLimit, getEffectiveTier, isTruePlatinum, tierRank, accessRank, getTier, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK } = require('../middleware/tiers');
 const { deleteFile, archiveCopy, restoreCopy, uploadFile, releaseImage } = require('../storage/storage');
 const { flattenOntoColour } = require('../storage/alpha');
+const { resolveTitleTarget, targetFromRequest } = require('../services/titleTarget');   // v3.0.636 -- TD-422
 
 // List campaigns the user is a member of (any role — DM or player). This
 // is the entry point users hit after login, and Phase 2 makes it
@@ -292,6 +293,11 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     // v3.0.624 -- the one-step undo behind Revert. Same shape as revert_image_url on a moment.
     built_title_prev: cur.built_title_prev || '',
     built_title_prev_src: cur.built_title_prev_src || '',
+    built_title_draft_url: cur.built_title_draft_url || '',
+    built_title_draft_src: cur.built_title_draft_src || '',
+    built_title_draft_text: cur.built_title_draft_text || '',
+    built_title_draft_sub: (cur.built_title_draft_sub == null ? null : String(cur.built_title_draft_sub)),
+    built_title_draft_prompt: cur.built_title_draft_prompt || '',
     built_title_text: cur.built_title_text || '',
     built_title_sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub)),
     book_title: cur.book_title || '',
@@ -309,6 +315,34 @@ router.get('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   });
 });
 
+// v3.0.650 -- WHEN MEMBERS CANNOT PUBLISH, THE STORY MASTER BUILDS THE BOOK FOR THEM.
+//
+// Ian, 2026-08-12: "When the setting is off... This is a feature that the SM then takes control
+// over for the Member... and likely charges money for. Then the SM alone can hit the publish
+// button change covers, titles etc and still use the other layout selections the member made."
+//
+// THIS REOPENS SOMETHING v3.0.575 DELIBERATELY CLOSED, and only under the condition that makes it
+// coherent. 575 removed a blanket Story Master exemption because versions had made it redundant:
+// a Story Master wanting a member to have a different-looking book could simply make them a
+// version. That reasoning holds while the member can publish. It stops holding when they cannot,
+// because then nobody but the Story Master can finish the book at all.
+//
+// SO THE GATE IS THE PUBLISH FLAG ITSELF. Setting on: 575 stands, untouched, and a member owns
+// their book completely. Setting off: the Story Master may set the presentation of a member book
+// in this campaign -- and only in this campaign, and only over its members.
+//
+// SCOPE FALLS OUT OF THE ROUTE. Cover, back cover, title page image, built title, book title,
+// subtitle, title colour and layout_opts all arrive here. Art style and narrative voice do not --
+// they live per-fork on the session side. Ian: "They should not be changing Art Style or narrative
+// style. Those are really the users." Nothing had to be excluded to honour that; the boundary he
+// described and the boundary of this route are the same line.
+function smCurationOpen(req) {
+  if (!req || req.campaignRole !== 'dm') return false;
+  var c = req.campaign || {};
+  var allow = (c.allow_player_novel_access === true || c.allow_player_novel_access === 1 ||
+              c.allow_player_novel_access === 't' || c.allow_player_novel_access === 'true');
+  return !allow;
+}
 router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const uid = req.session.userId, cid = req.params.campaignId, b = req.body || {};
@@ -321,7 +355,22 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // A Story Master who wants a member to have a different-looking book creates a VERSION for them,
   // which carries the layout, the art style and the narrative too -- where this overlay only ever
   // carried the cover and the title, so the book it produced was half curated.
-  if (fork !== uid) return res.status(403).json({ error: 'You can only edit your own book. Switch to your own version to change the cover or the layout.' });
+  // v3.0.650 -- the 575 rule, with the publish-flag exemption. A refusal here still reads exactly
+  // as it did when the setting is on.
+  var _curating = false;
+  if (fork !== uid) {
+    if (!smCurationOpen(req)) {
+      return res.status(403).json({ error: 'You can only edit your own book. Switch to your own version to change the cover or the layout.' });
+    }
+    // The target has to be a member of THIS campaign. campaignRole proves who is asking; it says
+    // nothing about who is being written to, and a campaign id in the path is not a licence over
+    // an arbitrary user id in the body.
+    var _isMember = await db.prepare('SELECT 1 AS ok FROM campaign_members WHERE campaign_id = ? AND user_id = ?').get(cid, fork);
+    if (!_isMember) {
+      return res.status(403).json({ error: 'That person is not a member of this campaign.' });
+    }
+    _curating = true;
+  }
   const patch = {};
   if (b.cover_image_url !== undefined) patch.cover_image_url = b.cover_image_url || null;
   if (b.back_cover_image_url !== undefined) patch.back_cover_image_url = b.back_cover_image_url || null;
@@ -338,6 +387,15 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   if (b.built_title_prompt !== undefined) patch.built_title_prompt = b.built_title_prompt || null;
   if (b.built_title_prev !== undefined) patch.built_title_prev = b.built_title_prev || null;
   if (b.built_title_prev_src !== undefined) patch.built_title_prev_src = b.built_title_prev_src || null;
+  // v3.0.656 -- TD-448. THE BOOK DRAFT. Same rule as a chapter: a build is persisted here and only
+  // Done and Use moves it onto built_title_url. Until then the cover goes on drawing whatever it
+  // drew before -- a canned title style, or an earlier built title. The prefs blob takes new keys
+  // with no schema change, which is the same reason built_title_url itself lives here.
+  if (b.built_title_draft_url !== undefined) patch.built_title_draft_url = b.built_title_draft_url || null;
+  if (b.built_title_draft_src !== undefined) patch.built_title_draft_src = b.built_title_draft_src || null;
+  if (b.built_title_draft_text !== undefined) patch.built_title_draft_text = b.built_title_draft_text || null;
+  if (b.built_title_draft_sub !== undefined) patch.built_title_draft_sub = (b.built_title_draft_sub === '' ? '' : (b.built_title_draft_sub || null));
+  if (b.built_title_draft_prompt !== undefined) patch.built_title_draft_prompt = b.built_title_draft_prompt || null;
   if (b.built_title_text !== undefined) patch.built_title_text = b.built_title_text || null;
   if (b.built_title_sub !== undefined) patch.built_title_sub = (b.built_title_sub === '' ? '' : (b.built_title_sub || null));
   if (b.book_title !== undefined) patch.book_title = b.book_title || null;
@@ -375,7 +433,20 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // go NULL again if the old owner's account were deleted (TD-248). Ian asked for the row to be
   // stamped; the derivation gives the same answer and cannot go stale, so it is used instead.
   // v3.0.622 -- the same test, now shared with the three title routes below (see ownsBookVersion).
-  if (!(await ownsBookVersion(db, uid, _scP.bookVersionId))) {
+  // v3.0.650 -- a curating Story Master is answering a different question, so it is asked here
+  // rather than skipped: the version on screen must belong to the person being written to, and to
+  // this campaign. Without that, a stale or hand-edited as_version would write one member settings
+  // into another member book -- the same class of fault as the (chooser, fork) inversion the
+  // v3.0.481 note below describes, and just as silent.
+  if (_curating) {
+    if (_scP.bookVersionId) {
+      var _vrow = await getVersionRow(db, _scP.bookVersionId);
+      var _vowner = _vrow ? await versionOwnerUserId(db, _vrow) : null;
+      if (!_vrow || String(_vrow.campaign_id) !== String(cid) || String(_vowner) !== String(fork)) {
+        return res.status(403).json({ error: 'That version does not belong to the member whose book you are editing.' });
+      }
+    }
+  } else if (!(await ownsBookVersion(db, uid, _scP.bookVersionId))) {
     return res.status(403).json({ error: 'You are looking at someone else\u2019s version. Switch to your own version to change the cover or the layout.' });
   }
   // v3.0.578 -- fill_only: write these values only where nothing is stored yet. Used by the Prep
@@ -383,7 +454,20 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
   // the reader has already made. See the note on setForkBookPrefs: this route can have two writes
   // in flight at once, and fill-only is safe under every interleaving rather than under most.
   const _fillOnly = !!(b && b.fill_only);
-  const merged = await setForkBookPrefs(db, uid, fork, cid, patch, _scP.versionId, { fillOnly: _fillOnly });
+  // v3.0.650 -- THE CHOOSER IS THE OWNER WHEN CURATING, AND THAT IS THE WHOLE DIFFERENCE BETWEEN
+  // AN OVERWRITE AND A PRIVATE OVERLAY.
+  //
+  // fork_book_prefs is keyed (chooser_user_id, fork_user_id, campaign_id, version_id). Writing as
+  // the Story Master would land in (SM, member) -- a row only the Story Master ever reads back,
+  // which is precisely the overlay v3.0.575 removed and precisely what Ian rejected when asked:
+  // "I think a real overwrite... They are the STORY MASTER so when this is the case they have more
+  // control over that users settings."
+  //
+  // So a curating write goes to (member, member) -- the row the member reads themselves. What the
+  // Story Master publishes is what the member would see. It is not reversible and the member is
+  // not told; that is the deal the setting describes.
+  var _chooser = _curating ? fork : uid;
+  const merged = await setForkBookPrefs(db, _chooser, fork, cid, patch, _scP.versionId, { fillOnly: _fillOnly });
   const camp = await db.prepare('SELECT campaign_image_url FROM campaigns WHERE id = ?').get(cid);
   res.json({
     campaign_id: Number(cid),
@@ -395,6 +479,11 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
     built_title_prompt: merged.built_title_prompt || '',
     built_title_prev: merged.built_title_prev || '',
     built_title_prev_src: merged.built_title_prev_src || '',
+    built_title_draft_url: merged.built_title_draft_url || '',
+    built_title_draft_src: merged.built_title_draft_src || '',
+    built_title_draft_text: merged.built_title_draft_text || '',
+    built_title_draft_sub: (merged.built_title_draft_sub == null ? null : String(merged.built_title_draft_sub)),
+    built_title_draft_prompt: merged.built_title_draft_prompt || '',
     built_title_text: merged.built_title_text || '',
     built_title_sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub)),
     book_title: merged.book_title || '',
@@ -431,14 +520,110 @@ router.put('/:campaignId/my-book-meta', requireAuth, verifyCampaignMember, async
 // layout_meta holds the subtitle and the uncut original -- layout_meta is already the free-form
 // per-image column (it carries focal/crop_safe for panels), so no schema change is needed.
 
-// Shared by all three: resolve the book scope, prove ownership, and hand back the prefs.
-async function titleScope(db, req) {
-  const cid = req.params.campaignId;
-  const sc = await bookPrefsScope(db, req, Number(cid));
-  if (!(await ownsBookVersion(db, req.session.userId, sc.bookVersionId))) return { error: 'You are looking at someone else\u2019s version. Switch to your own version to change the title.' };
-  const cur = await getForkBookPrefs(db, req.session.userId, sc.fork, cid, { inherit: true, versionId: sc.versionId });
-  return { sc: sc, cur: cur, cid: cid };
-}
+// v3.0.636 -- titleScope is gone; these three routes call resolveTitleTarget, the same adapter
+// routes/images.js uses. It was a second hand-written copy of resolve-scope-prove-ownership-read,
+// and the ownership refusal it returned had to be word-identical to the other copy to keep the
+// message consistent -- which is exactly the kind of agreement that stops being true (TD-422).
+
+// POST /:campaignId/title-read -- what title is on this target right now (TD-422).
+//
+// v3.0.641 -- the book's title arrives with the rest of my-book-meta, so the Title Builder never
+// needed to ask for it. A chapter's lives on the establishing moment and nothing sends it, so the
+// modal had no way to know whether a chapter already had artwork.
+//
+// POST, not GET, because the target is a structured thing and belongs in a body rather than smeared
+// across a query string -- and because it is the same shape title-write takes. Two routes over one
+// adapter, reading and writing the same words.
+//
+// NOT PLATINUM GATED, deliberately. Reading what is already on your own chapter tells you nothing
+// you could not see by looking at the page, and a lapsed Platinum still needs the modal to show what
+// is there so they can take it off (TD-421).
+router.post('/:campaignId/title-read', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
+    if (t.error) return res.status(403).json({ error: t.error });
+    return res.json({
+      success: true,
+      kind: t.kind,
+      momentId: t.momentId || null,
+      // v3.0.662 -- TD-456. A SECOND ALLOWLIST, AND IT DROPPED THE DRAFT.
+      //
+      // Ian, 2026-08-12, after v3.0.661: "neither time did the Chapter Title Image show up." The
+      // server had his title the whole time. This object is hand-copied field by field and `draft`
+      // was never one of the fields, so it was thrown away between titleTarget and the browser.
+      //
+      // title-write does not do this -- it answers `current: out`, passing the whole object through.
+      // Which is why a title showed up when BUILT and vanished on reopening: two routes describing
+      // the same object, one of them by hand. Exactly the fault v3.0.657 fixed on the write side,
+      // found again on the read side because I patched titleTarget and never asked what the route
+      // did with its answer.
+      //
+      // Spread, so this cannot happen a third time: a field added to the read is a field the modal
+      // receives, with nothing to keep in step.
+      current: Object.assign({}, t.current, { words: undefined }),
+      // What this target SHOULD draw, so the modal shows the same words the server will use.
+      words: t.current.words || { title: '', subtitle: '' }
+    });
+  } catch (e) {
+    console.error('title-read error:', e && e.message);
+    return res.json({ error: 'Could not read the title for this.' });
+  }
+});
+
+// POST /:campaignId/title-write -- save a built title onto WHATEVER target is named (TD-422).
+//
+// v3.0.639 -- the client wrote titles through the my-book-meta PUT, which only knows about a book.
+// A chapter title lives on the establishing moment, so a second writer was needed -- and a second
+// writer is how the two drift. This is ONE route for both, and the adapter decides where the bytes
+// land: prefs for a book, the moment for a chapter.
+//
+// THE KEYS ARE WHITELISTED. The patch goes into a prefs blob or a layout_meta blob, both free-form
+// JSON, so an unfiltered body would let a caller write anything it liked into either -- including
+// keys the layout engine reads. Only the seven the Title Builder owns are copied across.
+//
+// REMOVE STILL WORKS WITHOUT PLATINUM ON A BOOK, deliberately: it goes through the my-book-meta PUT,
+// which is ungated, so a lapsed Platinum can still take a drawn title off their own cover (TD-421).
+// This route IS gated, because everything reaching it is a Title Builder action.
+router.post('/:campaignId/title-write', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    if (!(await isTruePlatinum(req.session.userId))) {
+      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    }
+    const db = await getDb();
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
+    if (t.error) return res.status(403).json({ error: t.error });
+
+    // v3.0.657 -- TD-451. THE ALLOWLIST STRIPPED THE TWO KEYS v3.0.656 ADDED.
+    //
+    // Ian, 2026-08-12: Done and Use did not close the modal, and the message he could not see at the
+    // top of it read "Nothing to save."
+    //
+    // A promote body carries ONLY `promote`, so every key was filtered out and the empty-patch guard
+    // refused before titleTarget was ever reached. Worse and quieter: a DRAFT build carries url, src,
+    // text, sub and prompt as well, so its patch was NOT empty -- it went through, `draft` had been
+    // stripped on the way, and titleTarget applied it to the panel immediately. **The draft model
+    // was not merely broken, it was silently doing the old thing.**
+    //
+    // The v3.0.656 guard ran titleTarget.write DIRECTLY and never sent anything through this filter,
+    // which is the same fault as v3.0.645: a check that exercises the function and not the wire.
+    const body = (req.body && req.body.patch) || {};
+    const patch = {};
+    ['url', 'src', 'text', 'sub', 'prompt', 'prevUrl', 'prevSrc', 'draft', 'promote'].forEach(function (k) {
+      if (body[k] !== undefined) patch[k] = body[k];
+    });
+    // A promote names no fields on purpose -- it uses the draft already on the row -- so it is a
+    // valid write with nothing else in it.
+    if (!Object.keys(patch).length) return res.json({ error: 'Nothing to save.' });
+
+    const out = await t.write(patch);
+    if (out && out.error) return res.json({ error: out.error });
+    return res.json({ success: true, kind: t.kind, momentId: t.momentId || null, current: out });
+  } catch (e) {
+    console.error('title-write error:', e && e.message);
+    return res.json({ error: 'Could not save the title. Please try again.' });
+  }
+});
 
 // POST /:campaignId/my-book-meta/archive-title -- save the built title into the campaign Archive.
 // The URL is READ FROM THE VERSION, never taken from the body: a client-named URL would let anything
@@ -451,18 +636,18 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
       return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
     }
     const db = await getDb();
-    const t = await titleScope(db, req);
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
     if (t.error) return res.status(403).json({ error: t.error });
-    const liveUrl = t.cur.built_title_url || '';
+    const liveUrl = t.current.url;
     if (!liveUrl) return res.json({ error: 'There is no built title to archive yet.' });
 
     // Same cap, same message, same tier as every other archive. Ian: "Fine for the count too."
     try {
-      const effName = await getEffectiveTier(req.session.userId, t.cid);
+      const effName = await getEffectiveTier(req.session.userId, t.campaignId);
       const effTier = getTier(effName);
       const cap = effTier ? effTier.max_archives_per_campaign : null;
       if (cap !== null && cap !== undefined) {
-        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(t.cid);
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(t.campaignId);
         if (cnt && cnt.c >= cap) {
           return res.json({ error: 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.' });
         }
@@ -473,12 +658,12 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
     // The uncut original is archived TOO when there is one, because it is the picture a later Retouch
     // or Reference wants and the live copy it points at is not protected from cleanup.
     let archivedSrc = '';
-    if (t.cur.built_title_src) {
-      try { archivedSrc = await archiveCopy(t.cur.built_title_src); }
+    if (t.current.src) {
+      try { archivedSrc = await archiveCopy(t.current.src); }
       catch (e) { console.error('archive built-title source failed (keeping the cut copy):', e.message); }
     }
     const meta = JSON.stringify({
-      subtitle: (t.cur.built_title_sub == null ? null : String(t.cur.built_title_sub)),
+      subtitle: t.current.sub,
       src: archivedSrc || null
     });
     const now = new Date().toISOString();
@@ -492,8 +677,8 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
     // and the name matching is exactly why it was never checked against the column it was going into.
     // A built title belongs to a book version and has no session fork at all, so NULL is also the
     // true answer -- the archives list LEFT JOINs session_forks, which is built for that.
-    ).run(t.cid, null, 'title', t.cur.built_title_text || t.cur.book_title || null,
-          archivedUrl, liveUrl, t.cur.built_title_prompt || null, meta, req.session.userId, now);
+    ).run(t.campaignId, null, 'title', t.current.text || t.current.bookTitle || null,
+          archivedUrl, liveUrl, t.current.prompt || null, meta, req.session.userId, now);
     const row = await db.prepare('SELECT * FROM campaign_archives WHERE id = ?').get(result.lastInsertRowid);
     return res.json({ success: true, archive: row });
   } catch (e) {
@@ -513,9 +698,9 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
       return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
     }
     const db = await getDb();
-    const t = await titleScope(db, req);
+    const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
     if (t.error) return res.status(403).json({ error: t.error });
-    const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, t.cid);
+    const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, t.campaignId);
     if (!arch || !arch.image_url) return res.json({ error: 'Archived title not found.' });
     if (arch.image_type !== 'title') return res.json({ error: 'That archived image is not a title.' });
 
@@ -525,24 +710,43 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
     let freshSrc = '';
     if (meta && meta.src) { try { freshSrc = await restoreCopy(meta.src); } catch (e) { console.error('restore built-title source failed:', e.message); } }
 
-    const prevUrl = t.cur.built_title_url, prevSrc = t.cur.built_title_src;
+    const prevUrl = t.current.url, prevSrc = t.current.src;
     // The WORDS travel with the picture. Without them the mismatch warning would compare the book's
     // title against whatever the PREVIOUS title had drawn on it, and quietly say the wrong thing.
-    const patch = {
-      built_title_url: freshUrl,
-      built_title_src: freshSrc || null,
-      built_title_text: arch.title || null,
-      built_title_sub: (meta && meta.subtitle !== undefined) ? meta.subtitle : null
-    };
-    const merged = await setForkBookPrefs(db, req.session.userId, t.sc.fork, t.cid, patch, t.sc.versionId);
-    if (prevUrl && prevUrl !== freshUrl) { try { await releaseImage(db, prevUrl); } catch (e) {} }
-    if (prevSrc && prevSrc !== freshSrc) { try { await releaseImage(db, prevSrc); } catch (e) {} }
+    // v3.0.657 -- TD-451. PULLING FROM THE ARCHIVE IS A BUILD, NOT AN APPLY.
+    //
+    // Ian: "when I pull something from the archive without hitting generate... that needs to go into
+    // the draft."
+    //
+    // It is the same act as drawing one: something arrives in the modal and the reader has not said
+    // to use it yet. Writing it live would make Cancel meaningless for the one path that costs no
+    // token, and would leave Done and Use with nothing to promote.
+    //
+    // NOTHING IS RELEASED ANY MORE ON THIS PATH. The live title is still on the book -- it has not
+    // been displaced by anything -- so releasing its bytes would delete the artwork the cover is
+    // still pointing at. That release was correct while this route applied immediately and is
+    // exactly wrong now.
+    const merged = await t.write({
+      draft: 1,
+      url: freshUrl,
+      src: freshSrc || '',
+      text: arch.title || '',
+      sub: (meta && meta.subtitle !== undefined) ? meta.subtitle : null
+    });
+    // v3.0.657 -- the answer describes the DRAFT, because that is what just changed. The live keys
+    // are still reported so a caller assigning this onto state.bookMeta keeps a truthful record of
+    // both.
+    var _d = merged.draft || {};
     return res.json({
       success: true,
-      built_title_url: merged.built_title_url || '',
-      built_title_src: merged.built_title_src || '',
-      built_title_text: merged.built_title_text || '',
-      built_title_sub: (merged.built_title_sub == null ? null : String(merged.built_title_sub))
+      built_title_draft_url: _d.url || '',
+      built_title_draft_src: _d.src || '',
+      built_title_draft_text: _d.text || '',
+      built_title_draft_sub: (_d.sub === undefined ? null : _d.sub),
+      built_title_url: merged.url,
+      built_title_src: merged.src,
+      built_title_text: merged.text,
+      built_title_sub: merged.sub
     });
   } catch (e) {
     console.error('restore-title error:', e && e.message);

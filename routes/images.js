@@ -3,9 +3,10 @@ const genresvc = require('../services/genres');   // v3.0.488 -- stage 4, campai
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin } = require('../middleware/auth');
 const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
-const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, getForkBookPrefs, bookPrefsScope, ownsBookVersion } = require('../database/db');
+const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
 const { releaseImage, persistToR2 } = require('../storage/storage');
-const { cutGroundToAlpha, flattenOntoColour } = require('../storage/alpha');   // v3.0.622 -- the title cut, now run as its own step
+const { cutGroundToAlpha, trimToInk, flattenOntoColour } = require('../storage/alpha');
+const { resolveTitleTarget, targetFromRequest, demoteBuiltTitle } = require('../services/titleTarget');   // v3.0.636 -- TD-422   // v3.0.622 -- the title cut, now run as its own step
 const { imageSize } = require('../storage/imageSize');
 const { IMAGE_MODELS, IMAGE_EDIT_MODELS } = require('../config/models');
 const { friendlyImageError, friendlyError } = require('../middleware/friendlyErrors');
@@ -1251,6 +1252,25 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'You can only retouch your own version' });
   if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to retouch.' });
   if (!moment.image) return res.json({ error: 'This panel has no image to retouch yet.' });
+  // v3.0.653 -- TD-444. A DRAWN TITLE IS NOT RETOUCHED FROM HERE.
+  //
+  // Ian, 2026-08-12: "the retouch option should not show... if the image in the panel came from
+  // the title builder. that is the safest thing to do."
+  //
+  // WHAT IT USED TO DO, AND WHY IT LOOKED FINE. This route and its webhook write image, img_w and
+  // img_h and never touch layout_meta -- so built_title survived and the row went on being drawn
+  // as a chapter head while the artwork underneath had become something else entirely: opaque,
+  // because nothing runs the ground cut here; the wrong size, because the object name carries no
+  // dimensions and the renderer falls back to the canvas ratio; and with built_title.src still
+  // pointing at the OLD uncut source, so a later Title Builder retouch would quietly discard this
+  // one. An opaque block, at the wrong size, that prints.
+  //
+  // The button is hidden in app.js. This is the rule.
+  var _blt = null;
+  try { var _lm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {}; _blt = _lm && _lm.built_title; } catch (e) { _blt = null; }
+  if (_blt && _blt.url) {
+    return res.json({ error: 'TITLE_PANEL', message: 'This panel holds a chapter title from the Title Builder. Open the Title Builder to change it, or Regenerate to draw the scene instead.' });
+  }
   try {
     const modelKey = await getSelectedModel(db);
     const cost = await getTokenCost(modelKey);
@@ -1323,8 +1343,21 @@ router.post('/revert-moment', requireAuth, async function(req, res) {
   try {
     const current = moment.image;
     const now = new Date().toISOString();
-    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL, edited_at = ?, edited_by = ? WHERE id = ?')
-      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, now, req.session.userId, moment.id);
+    // v3.0.656 -- REVERT RESTORES THE PAIR. An image and its marker are one previous state; putting
+    // back the pixels alone returns a chapter title to the panel dressed as a scene, with a frame, a
+    // caption and full column width. prev_built_title is consumed here whether or not it is set --
+    // absent means the previous state was an ordinary picture, and the marker must go.
+    var _rMeta = null;
+    try {
+      _rMeta = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {};
+      var _prevBT = _rMeta.prev_built_title || null;
+      // v3.0.660 -- reverting TO a picture demotes the title that was live rather than dropping
+      // it, so it stays in the builder and its bytes stay referenced.
+      if (_prevBT) _rMeta.built_title = _prevBT; else demoteBuiltTitle(_rMeta);
+      delete _rMeta.prev_built_title;
+    } catch (e) { _rMeta = null; }
+    await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, revert_image = NULL, revert_img_w = NULL, revert_img_h = NULL, layout_meta = COALESCE(?, layout_meta), edited_at = ?, edited_by = ? WHERE id = ?')
+      .run(moment.revert_image, moment.revert_img_w || null, moment.revert_img_h || null, _rMeta ? JSON.stringify(_rMeta) : null, now, req.session.userId, moment.id);
     if (current && current !== moment.revert_image) await releaseImage(db, current);
     res.json({ success: true, image: moment.revert_image });
   } catch (e) {
@@ -1637,8 +1670,55 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           await db.prepare('UPDATE moments SET image = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, imgW, imgH, now, job.user_id, job.moment_id);
         } else {
+          // v3.0.653 -- TD-444. A SCENE HAS BEEN DRAWN, SO THE ROW STOPS CLAIMING TO BE LETTERING.
+          //
+          // Regenerate is the way back from a chapter title to a picture -- Ian: "the Regenerate
+          // button on the picture should actually use the picture prompt and regenerate the
+          // picture." It always drew the right thing and then left built_title in place, so the
+          // result was rendered as a chapter head: no frame, no caption, half column, letterboxed
+          // in a 21:9 box, and opaque. The escape hatch produced exactly the state it was supposed
+          // to escape.
+          //
+          // ONLY ON THE NON-RETOUCH PATH. A retouch keeps whatever the panel already was, and a
+          // built title can no longer reach retouch at all (see the refusal in retouch-moment).
+          // A title BUILD never comes through here -- it is synchronous and writes through
+          // titleTarget -- so nothing this clears was ever set by the title path itself.
           await db.prepare('UPDATE moments SET image = ?, style = ?, img_w = ?, img_h = ?, edited_at = ?, edited_by = ? WHERE id = ?')
             .run(imageUrl, job.style || null, imgW, imgH, now, job.user_id, job.moment_id);
+          // v3.0.656 -- STASHED, NOT DELETED. THIS CORRECTS v3.0.653.
+          //
+          // Ian, 2026-08-12: "I had chapter text in the panel... I regenerated and got an actual
+          // picture... Then I opened up the title builder... and my text picture was gone."
+          //
+          // v3.0.653 was right that the row must stop claiming to be lettering, and wrong about what
+          // to do with the claim. It deleted built_title -- and with it the uncut source, the words
+          // the drawing spelled and the prompt that drew it. The ARTWORK survived, because the same
+          // webhook arms revert_image with it. So Revert restored the pixels and nothing else, and
+          // the lettering came back rendered as an ordinary framed, captioned scene. I split one
+          // thing into two and only undid half of it.
+          //
+          // THE UNDO SLOT IS A PAIR. revert_image and prev_built_title describe the same previous
+          // state, so they are written together, always, and read together in revert-moment. Storing
+          // the marker anywhere else would let the two drift -- which is the whole fault above, in a
+          // different field.
+          //
+          // AND IT IS OVERWRITTEN EVERY TIME, INCLUDING WITH NOTHING. Regenerate twice and the undo
+          // slot holds the intermediate SCENE, not the title -- so the marker must be cleared on the
+          // second pass or Revert would flag a photograph as lettering. Absent is a value here.
+          try {
+            var _pm = await db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(job.moment_id);
+            var _pmeta = (_pm && _pm.layout_meta) ? (typeof _pm.layout_meta === 'object' ? _pm.layout_meta : JSON.parse(_pm.layout_meta)) : null;
+            if (_pmeta) {
+              var _wasTitle = _pmeta.built_title || null;
+              // v3.0.660 -- demote rather than delete: prev_built_title is the ONE-DEEP undo and
+              // is consumed by the next Revert, so on its own it is not somewhere a title lives.
+              if (_wasTitle) demoteBuiltTitle(_pmeta);
+              if (_wasTitle) _pmeta.prev_built_title = _wasTitle; else delete _pmeta.prev_built_title;
+              if (_wasTitle || _pm.layout_meta !== JSON.stringify(_pmeta)) {
+                await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_pmeta), job.moment_id);
+              }
+            }
+          } catch (e) { console.error('stashing built_title after regenerate failed:', e && e.message); }
         }
         try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Image result (fal webhook)', fn: 'webhook /webhook/fal', message: 'Image ready for moment ' + job.moment_id + ' (' + job.kind + ')', detail: { moment_id: job.moment_id, kind: job.kind, shape: _priorM ? (_priorM.shape || null) : null, img_w: imgW, img_h: imgH, dims: dimsSource, file_size: (falImg && falImg.file_size) || null, nsfw: (payload && payload.has_nsfw_concepts) || null, style: job.style || null } }); } catch (_le) {}
         // Revert undo-slot (one-deep): retouch + single regenerate retain the prior
@@ -1818,9 +1898,30 @@ async function cutStoredTitle(sourceUrl) {
   const buf = Buffer.from(resp.data);
   const out = cutGroundToAlpha(buf);
   if (out === buf) return { url: sourceUrl, cut: false };
-  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + '.png';
-  const url = await uploadFile(out, name, 'image/png');
-  return { url: url, cut: true };
+  // v3.0.660 -- RESTORED. v3.0.653 was built from a pre-648 copy of this file and silently
+  // reverted the trim: every title built between 653 and 660 is untrimmed and carries no size in
+  // its name, so estCell cannot read its shape and falls back to the canvas ratio.
+  // v3.0.648 -- TRIM, AND THEN PUT THE SIZE IN THE NAME.
+  //
+  // The renderer has to know the shape of this artwork WITHOUT LOADING IT.
+  // services/printing/measureLayout.js aborts every image request so layout never waits on R2, so
+  // an element sized from an image measures zero during the measure pass and full size in the
+  // render -- which is what pushed pictures off the page in v3.0.645.
+  //
+  // WHY THE FILENAME AND NOT THE DATABASE. The alternative was to carry the numbers back through
+  // the JSON response, into the modal, into title-write, into titleTarget and onto the moment row.
+  // Four hand-offs. Every fault in this run of builds -- 640, 642, 643, 644 -- has been a value that
+  // went missing between hand-offs while every individual step still looked correct. This has one
+  // writer and one reader, and the URL is something the renderer already holds. The cover reads the
+  // same object, so it gets the same answer for free.
+  //
+  // A title stored before this simply does not match the pattern, and the renderer falls back to
+  // the canvas ratio it used before. No migration, and nothing to backfill.
+  const t = trimToInk(out);
+  const dims = (t.width > 0 && t.height > 0) ? ('-' + t.width + 'x' + t.height) : '';
+  const name = 'titlecut-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex') + dims + '.png';
+  const url = await uploadFile(t.buf, name, 'image/png');
+  return { url: url, cut: true, trimmed: t.trimmed, width: t.width, height: t.height };
 }
 
 // chargeForTitleCall: one token per fal call, and a failed charge is LOUD.
@@ -1849,25 +1950,10 @@ async function chargeForTitleCall(req, cost, modelKey, source) {
   return spendOk;
 }
 
-// resolveOwnBuiltTitle: read the built title off the version ON SCREEN, and only if the caller owns it.
-//
-// A retouch edits a picture, so the picture has to be named. Naming it in the request body would let
-// any URL be fed to the model on the user's token, so it is read here from the same prefs blob every
-// render path reads -- with the SAME ownership test the my-book-meta PUT uses, derived rather than
-// copied: are you the owner of the version on screen.
-async function resolveOwnBuiltTitle(db, req, campaignId) {
-  const sc = await bookPrefsScope(db, req, Number(campaignId));
-  if (!(await ownsBookVersion(db, req.session.userId, sc.bookVersionId))) {
-    return { error: 'You are looking at someone else\u2019s version. Switch to your own version to change the title.' };
-  }
-  const cur = await getForkBookPrefs(db, req.session.userId, sc.fork, campaignId, { inherit: true, versionId: sc.versionId });
-  return {
-    cutUrl: cur.built_title_url || '',
-    srcUrl: cur.built_title_src || '',
-    text: cur.built_title_text || '',
-    sub: (cur.built_title_sub == null ? null : String(cur.built_title_sub))
-  };
-}
+// v3.0.636 -- resolveOwnBuiltTitle is gone. It and titleScope in routes/campaigns.js did the same
+// three things in their own words -- resolve the scope, prove ownership, read the prefs -- and
+// differed only in the shape they returned. Both now call resolveTitleTarget, which answers in
+// neutral field names so that a chapter title can be stored somewhere else entirely (TD-422).
 
 // titleModelInput: the picture the MODEL should look at, which is not always the picture we store.
 //
@@ -1908,7 +1994,7 @@ async function titleModelInput(srcUrl, cutUrl) {
 // can answer. If nano-banana-2 cannot spell a six-word title reliably, that is far cheaper to learn
 // now than after the composition work.
 //
-// THE WORDS COME FROM THE BOOK, NOT FROM THE USER. The title and subtitle are read server-side from
+// THE WORDS COME FROM THE TARGET, NOT FROM THE USER. Since v3.0.638 they are genuinely read from
 // the version being edited, exactly as every render path reads them. A client-supplied string would
 // let the overlay say something the book does not, and the overlay is the thing a reader believes.
 //
@@ -1931,9 +2017,15 @@ router.post('/title-build', requireAuth, async function (req, res) {
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return res.json({ error: 'Campaign not found.' });
 
-    const bookTitle = String((req.body && req.body.bookTitle) || campaign.name || '').trim();
-    if (!bookTitle) return res.json({ error: 'This book has no title yet.' });
-    const subtitle = String((req.body && req.body.subtitle) || '').trim();
+    // v3.0.638 -- THE WORDS NOW REALLY DO COME FROM THE TARGET. The note above this route has said
+    // so since v3.0.617 while the line beneath it read req.body.bookTitle -- true only because the
+    // client happened to send the right thing. Resolving the target answers it properly AND is what
+    // lets a chapter draw its session name instead (TD-422).
+    const tgt = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
+    if (tgt.error) return res.status(403).json({ error: tgt.error });
+    const bookTitle = String((tgt.current.words && tgt.current.words.title) || campaign.name || '').trim();
+    if (!bookTitle) return res.json({ error: 'This has no title yet. Name it first, then draw it.' });
+    const subtitle = String((tgt.current.words && tgt.current.words.subtitle) || '').trim();
     const description = String((req.body && req.body.description) || '').trim();
     const refUrl = String((req.body && req.body.referenceUrl) || '').trim();
 
@@ -2049,7 +2141,7 @@ async function imageHasAlpha(url) {
 // to it would be a worse answer than the plumbing it saves.
 //
 // THE PICTURE IS NOT NAMED BY THE CALLER. It is read from the version on screen, by the owner of that
-// version, through resolveOwnBuiltTitle -- otherwise any URL at all could be pushed through fal on
+// version, through resolveTitleTarget -- otherwise any URL at all could be pushed through fal on
 // this user's token.
 router.post('/title-retouch', requireAuth, async function (req, res) {
   try {
@@ -2067,9 +2159,9 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return res.json({ error: 'Campaign not found.' });
 
-    const own = await resolveOwnBuiltTitle(db, req, campaignId);
+    const own = await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (own.error) return res.status(403).json({ error: own.error });
-    if (!own.cutUrl && !own.srcUrl) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
+    if (!own.current.url && !own.current.src) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
 
     const fal_key = process.env.FAL_API_KEY;
     if (!fal_key) return res.json({ error: 'Image generation is not configured.' });
@@ -2080,7 +2172,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     }
 
     // The uncut original when we have one, else the cut image with its ground painted back on.
-    const input = await titleModelInput(own.srcUrl, own.cutUrl);
+    const input = await titleModelInput(own.current.src, own.current.url);
     if (!input.url) return res.json({ error: 'There is no built title to retouch yet. Generate one first.' });
 
     // IMPERATIVE AND ABSOLUTE, the same register the generate prompt uses. The ground instruction is

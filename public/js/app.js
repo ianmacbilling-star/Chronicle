@@ -2129,6 +2129,24 @@ function loadSessions() {
     });
 }
 
+// v3.0.664 -- TD-460. IS THIS THUMBNAIL A DRAWING OF WORDS, OR A PHOTOGRAPH?
+//
+// The seventh surface to need this distinction, and the first to get it as ONE function. The test
+// is the marker it has always been -- layout_meta.built_title -- and the input is title_layout_meta,
+// which both session routes now return FROM THE MOMENT THAT PRODUCED THE THUMBNAIL. There is no
+// second equality checking that the meta belongs to the picture, because it cannot not: no chosen
+// moment means no meta.
+//
+// v3.0.663 tried this inline by scanning s.moments. The sessions-list route does not return
+// moments and never has, so it read undefined and the contain rule never fired once.
+function thumbIsBuiltTitle(meta) {
+  try {
+    if (!meta) return false;
+    var m = (typeof meta === 'object') ? meta : JSON.parse(meta);
+    return !!(m && m.built_title && m.built_title.url);
+  } catch (e) { return false; }
+}
+
 function renderSessions() {
   var list = document.getElementById('sessions-list');
 
@@ -2162,8 +2180,13 @@ function renderSessions() {
 
   list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
+    // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
+    // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
+    // route has never sent; the route now sends title_layout_meta instead, taken from the very
+    // moment that produced thumbSrc.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" alt="" loading="lazy" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
@@ -3222,7 +3245,9 @@ function renderReview(data) {
       '<div class="review-panel-head">' +
         '<span class="review-panel-num">' + (_isEstR ? 'Opening' : num) + '</span>' +
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
-        castBadge + resetBtn + '<div class="review-actions-inline">' + pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu +
+        castBadge + resetBtn + '<div class="review-actions-inline">' +
+          (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
+          pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu +
       '</div>' +
       (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(formatOutlineText(pOutText)) + '</div>' : '') +
       changeNote +
@@ -6656,9 +6681,25 @@ function novelAsUserQ(prefix) {
 // v3.0.457 -- answered from the VERSION when one is selected. The canonical is publishable by the
 // Story Master; a named version by the person who owns it. Falls back to the old as_user reading
 // when no version list has loaded, so the guard is never accidentally permissive.
+// v3.0.650 -- THE STORY MASTER MAY CURATE A MEMBER BOOK WHEN MEMBERS CANNOT PUBLISH.
+//
+// Put HERE rather than at the twelve call sites, because novelOwnView is already the one question
+// the Prep tiles, the layout save, the title controls and the cover picker all ask. Twelve places
+// asking a question two different ways is how TD-194 took thirteen builds to close.
+//
+// THE SERVER DECIDES. my-book-meta carries the same condition and refuses regardless of what this
+// returns; this only stops a control looking live while the route would answer with an apology.
+function smMayCurateBook() {
+  var c = state.currentCampaign || {};
+  if (c.my_role !== 'dm') return false;
+  var allow = (c.allow_player_novel_access === true || c.allow_player_novel_access === 1 ||
+              c.allow_player_novel_access === 't' || c.allow_player_novel_access === 'true');
+  return !allow;
+}
 function novelOwnView() {
   var isSM = !!(state.currentCampaign && state.currentCampaign.my_role === 'dm');
   var myId = (state.user && state.user.id) || null;
+  if (smMayCurateBook()) return true;
   var v = novelVersionOnScreen();
   if (v) {
     if (!v.is_canonical) return !!v.is_mine;
@@ -7653,6 +7694,61 @@ function _tbTitle() {
   if (!t && state.currentCampaign) t = String(state.currentCampaign.name || '').trim();
   return t;
 }
+// =====================================================================================================
+// WHAT THE TITLE BUILDER IS POINTED AT  (TD-422 stage 3c)
+// =====================================================================================================
+// Ian: the Title Builder on a chapter's opening image, "SO they can title their chapters with words
+// instead of a Picture."
+//
+// ONE PIECE OF STATE, SET ON OPEN AND CLEARED ON CLOSE. state._tbTarget outliving the modal is
+// exactly the fault Ian found in TD-403, where the reference image survived a version switch because
+// nothing ever cleared it. This is cleared in closeTitleBuilder and defaulted on every read, so a
+// stale chapter target cannot quietly redirect a book title.
+// _tbChapterBtn: the Title Builder button for a chapter's opening image.
+//
+// v3.0.641 -- ONE builder for both surfaces Ian marked (Review tab, and the opening image's pill
+// row). They take different classes, so the markup differs, but the decision of WHEN to offer it
+// and WHERE it points is made once.
+//
+// The session id comes from the moment being rendered, not from whatever session the page thinks is
+// current -- the Review tab and Storyboard both render rows that outlive a session switch.
+function _tbChapterBtn(sessionId, cls, label) {
+  if (!sessionId) return '';
+  // v3.0.642 -- SAY WHICH VERSION OF THE SESSION. Ian: "Make sure you save it onto the correct
+  // version... not the canonical version automatically." Without a fork id, resolveActingFork is
+  // asked for nothing in particular and a Story Master falls through to getDmForkId -- the canonical
+  // fork -- whatever version is on screen. state.currentForkId is what forkQ() already sends
+  // everywhere else on this page; the target simply has to carry it too.
+  var fk = state.currentForkId ? (',forkId:' + state.currentForkId) : '';
+  return '<button class="' + cls + '" onclick="openTitleBuilder({kind:\'session\',campaignId:' +
+         ((state.currentCampaign && state.currentCampaign.id) || 0) + ',sessionId:' + sessionId + fk + '})" ' +
+         'title="Draw this chapter title as artwork instead of a scene. Costs a token.">' + label + '</button>';
+}
+
+function _tbTarget() {
+  return (state && state._tbTarget) || { kind: 'book' };
+}
+function _tbIsSession() { return _tbTarget().kind === 'session'; }
+
+// _tbBody: the target, in the shape every title route reads it. One builder, so a route that gains
+// a field does not need six call sites updated.
+function _tbBody(extra) {
+  var t = _tbTarget();
+  var body = Object.assign({ campaignId: state.currentCampaign && state.currentCampaign.id }, extra || {});
+  if (t.kind !== 'book') body.target = t;
+  return body;
+}
+
+// _tbCur: the title on the target right now. For a book this rides along with bookMeta as it always
+// has; for a chapter it is fetched by title-read and held here for the life of the modal.
+function _tbCur() {
+  if (_tbIsSession()) return (state && state._tbSessionCur) || {};
+  var bm = (state && state.bookMeta) || {};
+  return { url: bm.built_title_url || '', src: bm.built_title_src || '', text: bm.built_title_text || '',
+           sub: (bm.built_title_sub == null ? null : String(bm.built_title_sub)),
+           prompt: bm.built_title_prompt || '', prevUrl: bm.built_title_prev || '' };
+}
+
 // _tbBookKey: which book the modal is currently showing. Campaign AND version, because switching
 // either one puts a different book on screen.
 function _tbBookKey() {
@@ -7685,7 +7781,13 @@ function platinumGate(what, why) {
   });
 }
 
-function openTitleBuilder() {
+// openTitleBuilder(target) -- target defaults to the book, so the Prep panel button is unchanged.
+function openTitleBuilder(target) {
+  state._tbTarget = (target && target.kind) ? target : { kind: 'book' };
+  state._tbSessionCur = null;
+  // v3.0.652 -- TD-443. A MODAL THAT HAS WRITTEN NOTHING MUST CHANGE NOTHING.
+  // Cleared on open rather than on close, so an abandoned modal cannot leave the next one dirty.
+  state._tbDirty = false;
   if (!state.currentCampaign) return;
   // v3.0.634 -- PLATINUM ONLY. Ian: "let's make it so Only Platinum users (True Platinum) can use
   // the title builder. When I hit the button I should get a message stating such."
@@ -7697,13 +7799,34 @@ function openTitleBuilder() {
   // A MODAL, NOT A TOAST. The Custom Art Style gate uses showAlert, which slides in at the top right
   // for two and a half seconds -- easy to miss when you have just clicked something and are looking
   // at where you clicked. This one has to be read. Worth aligning the two later.
+  // v3.0.640 -- THE SAME QUESTION THE REST OF THE PANEL ASKS. The button is disabled by
+  // prepApplyOwnershipLock now, but a disabled button says nothing about why, and the modal is
+  // reachable from elsewhere. TD-423 may well change this rule for Story Masters -- when it does,
+  // this and the six routes move together, because both read ownsBookVersion, which has been one
+  // function since v3.0.622.
+  // v3.0.641 -- a BOOK question only. A chapter's ownership is its session fork, which
+  // resolveTitleTarget answers server-side; novelOwnView here would refuse a chapter you do own
+  // simply because the book version on screen belongs to someone else.
+  if (!_tbIsSession() && typeof novelOwnView === 'function' && !novelOwnView()) {
+    appConfirm({
+      title: 'This version is not yours',
+      body: 'You are looking at someone else\u2019s version of this book, so its cover cannot be changed from here.',
+      note: 'Switch to your own version to use the Title Builder.',
+      okLabel: 'Got it',
+      cancelLabel: 'Close'
+    });
+    return;
+  }
   if (!(state && state.user && state.user.tier === 'platinum')) {
     platinumGate('The Title Builder', 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan -- they set the title in a real typeface with your chosen colour, size and placement.');
     return;
   }
   _tbErr('');
-  var t = _tbTitle(), sub = _tbSubtitle();
-  var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || 'This book has no title yet';
+  // For a chapter these fill in when title-read answers; showing the book's words meanwhile would
+  // be the same mismatch on screen for a moment.
+  var _w0 = _tbWords();
+  var t = _w0.title, sub = _w0.subtitle;
+  var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = t || (_tbIsSession() ? 'This chapter has no name yet' : 'This book has no title yet');
   var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = sub || 'None';
 
   // v3.0.622 -- TD-403. THE REFERENCE USED TO SURVIVE EVERYTHING. title-build-ref was a plain input
@@ -7719,13 +7842,20 @@ function openTitleBuilder() {
   // Seed the description from what actually drew this title, so reopening shows the words that
   // produced the picture on screen instead of an empty box.
   var dEl = _tbEl('title-build-desc');
-  if (dEl && !dEl.value && state.bookMeta && state.bookMeta.built_title_prompt) dEl.value = state.bookMeta.built_title_prompt;
+  // A chapter's description arrives with title-read; seeding from the book here would put the
+  // cover's wording into a chapter's box.
+  if (!_tbIsSession() && dEl && !dEl.value && state.bookMeta && state.bookMeta.built_title_prompt) dEl.value = state.bookMeta.built_title_prompt;
 
   // Show whatever this version already has, so reopening is not a blank slate.
   // v3.0.618 -- built_title_url, NOT title_image_url. That one is the book title PAGE artwork, the
   // third image in the Prep panel, and v3.0.617 both displayed it here and would have overwritten
   // it on the first Generate. Ian spotted it before it cost him anything.
-  var existing = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  // v3.0.641 -- for a chapter the modal opens empty and fills in when title-read answers, rather
+  // than showing the BOOK's title while it waits, which would look like the chapter already had one.
+  // v3.0.656 -- THE DRAFT WINS ON REOPEN. Ian: "when they open it back up again the text image
+  // they just generated will be there. It just did not get used."
+  var existing = _tbIsSession() ? '' : ((state.bookMeta && (state.bookMeta.built_title_draft_url || state.bookMeta.built_title_url)) || '');
+  if (_tbIsSession()) _tbLoadSession();
   _tbShowResult(existing);
   titleBuildRetouchClose();
   _tbRenderWarn();
@@ -7738,8 +7868,131 @@ function openTitleBuilder() {
 
 // _tbArchiveRow: the archive entry for the title currently on the book, if there is one. Matched on
 // source_url -- the archive records the LIVE url it was taken from, which is exactly this field.
+// _tbLoadSession: ask the server what is on this chapter, then repaint.
+function _tbLoadSession() {
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  fetch('/api/campaigns/' + cid + '/title-read', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody())
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not read this chapter.'); return; }
+    state._tbSessionCur = d.current || {};
+    state._tbSessionWords = d.words || { title: '', subtitle: '' };
+    var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = (d.words && d.words.title) || 'This chapter has no name yet';
+    var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = 'None';
+    var dEl = _tbEl('title-build-desc');
+    if (dEl && !dEl.value && d.current && d.current.prompt) dEl.value = d.current.prompt;
+    _tbShowResult((d.current && ((d.current.draft && d.current.draft.url) || d.current.url)) || '');   // v3.0.656 -- the draft wins
+    _tbRenderWarn();
+  }).catch(function () { _tbErr('Could not read this chapter.'); });
+}
+
+// _tbSyncSessionMoment: put what the modal ended with onto the moment the page is holding.
+//
+// Patched rather than re-fetched: the server is already authoritative and title-read has just told
+// us what it holds, so another round trip would only re-answer a question we have the answer to.
+// If the row is not in state.moments -- a chapter opened from a page that never loaded them -- there
+// is nothing to patch and nothing to repaint, which is why every step is guarded.
+function _tbSyncSessionMoment() {
+  try {
+    var t = _tbTarget();
+    var cur = (state && state._tbSessionCur) || null;
+    if (!t || t.kind !== 'session' || !cur) return;
+    var list = (state && state.moments) || [];
+    var m = list.find(function (x) { return x && x.kind === 'establishing'; });
+    if (!m) return;
+    // An empty url means the title was removed; the moment keeps whatever the server left there,
+    // which for a removal is nothing until the reader regenerates the scene.
+    m.image = cur.url || null;
+    // v3.0.653 -- TD-445. The undo slot the server just armed, so the Revert pill appears now
+    // rather than after the next load. The pill is drawn from m.revert_image; patching the image
+    // and not this is why Ian saw a title land with no way back from it.
+    if (cur.revertImage !== undefined) m.revert_image = cur.revertImage || null;
+    if (typeof renderStoryboard === 'function') renderStoryboard();
+    if (typeof renderNovelWithImages === 'function') renderNovelWithImages();
+  } catch (e) {}
+}
+
+// _tbSave: ONE call site for every write the modal makes.
+//
+// v3.0.641 -- the two targets take different paths ON PURPOSE, and it is not the drift this module
+// exists to avoid. _prepMetaWrite does more than persist: it owns state.bookMeta, chains writes and
+// keeps the value locally until the server confirms, and the whole Prep panel reads that. A chapter
+// has no such local mirror, so it posts to title-write and holds the answer on state for the life of
+// the modal. Same words, same adapter behind both -- different client state to maintain.
+function _tbSave(patch, then) {
+  // v3.0.652 -- TD-443. THE ONE PLACE THAT KNOWS A WRITE HAPPENED.
+  //
+  // Ian, 2026-08-12: "If I have a regular picture there... open up the title builder... do nothing
+  // and just close it... I lose the picture."
+  //
+  // WHY IT WENT. title-read answers correctly for a scene: no built_title marker, so current.url is
+  // the empty string -- "this chapter has no drawn title". closeTitleBuilder then ran the sync
+  // unconditionally and it reads `m.image = cur.url || null`, whose comment says an empty url means
+  // the title was REMOVED. Empty had two meanings -- removed, and never there -- and one line was
+  // answering both. The picture was only ever lost on screen; nothing was written to the server.
+  //
+  // _tbSave is the single call site for every write the modal makes, book or chapter, which is what
+  // makes this one flag sufficient rather than a flag per button.
+  state._tbDirty = true;
+  if (!_tbIsSession()) {
+    var book = {};
+    // v3.0.656 -- TD-448. A DRAFT PATCH WRITES THE DRAFT KEYS AND NOTHING ELSE, so the cover goes
+    // on drawing whatever it drew before -- a canned title style, or an earlier built title.
+    if (patch.draft) {
+      if (patch.url !== undefined) book.built_title_draft_url = patch.url;
+      if (patch.src !== undefined) book.built_title_draft_src = patch.src;
+      if (patch.text !== undefined) book.built_title_draft_text = patch.text;
+      if (patch.sub !== undefined) book.built_title_draft_sub = patch.sub;
+      if (patch.prompt !== undefined) book.built_title_draft_prompt = patch.prompt;
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+      if (then) then();
+      return;
+    }
+    // PROMOTE: the draft becomes the title, and is spent. Written in ONE call so a cover cannot
+    // end up carrying artwork whose recorded words belong to a different drawing.
+    if (patch.promote) {
+      var _bm = state.bookMeta || {};
+      if (!_bm.built_title_draft_url) { _tbErr('There is nothing drawn to use yet.'); return; }
+      book.built_title_url = _bm.built_title_draft_url;
+      book.built_title_src = _bm.built_title_draft_src || '';
+      book.built_title_text = _bm.built_title_draft_text || '';
+      book.built_title_sub = (_bm.built_title_draft_sub == null ? null : _bm.built_title_draft_sub);
+      book.built_title_prompt = _bm.built_title_draft_prompt || '';
+      book.built_title_prev = _bm.built_title_url || '';
+      book.built_title_prev_src = _bm.built_title_src || '';
+      book.built_title_draft_url = '';
+      book.built_title_draft_src = '';
+      book.built_title_draft_text = '';
+      book.built_title_draft_prompt = '';
+      if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+      if (then) then();
+      return;
+    }
+    if (patch.url !== undefined) book.built_title_url = patch.url;
+    if (patch.src !== undefined) book.built_title_src = patch.src;
+    if (patch.text !== undefined) book.built_title_text = patch.text;
+    if (patch.sub !== undefined) book.built_title_sub = patch.sub;
+    if (patch.prompt !== undefined) book.built_title_prompt = patch.prompt;
+    if (patch.prevUrl !== undefined) book.built_title_prev = patch.prevUrl;
+    if (patch.prevSrc !== undefined) book.built_title_prev_src = patch.prevSrc;
+    if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
+    if (then) then();
+    return;
+  }
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  fetch('/api/campaigns/' + cid + '/title-write', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(_tbBody({ patch: patch }))
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not save the title.'); return; }
+    state._tbSessionCur = d.current || {};
+    if (then) then();
+  }).catch(function () { _tbErr('Could not save the title.'); });
+}
+
 function _tbArchiveRow() {
-  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  var url = _tbCur().url || '';
   if (!url) return null;
   return (state.archives || []).find(function (a) {
     return a.image_type === 'title' && String(a.source_url || '') === String(url);
@@ -7757,22 +8010,42 @@ function _tbSyncArchivePill() {
 // _tbWarnText: the ONE place that decides whether the drawn title still says what the book says.
 // Returns '' when there is nothing to say. Used by the modal and by the Prep panel note, so the two
 // can never disagree about whether there is a mismatch.
+// _tbWords: what the target on screen SHOULD say. The book reads its own fields; a chapter's
+// arrive with title-read, which reads moments.title -- the session name.
+//
+// v3.0.643 -- Ian, seeing the warning on a chapter that had just been drawn correctly: "that
+// message shouldn't be there... It's checking the title of the book vs the title of the session."
+// _tbCur() already followed the target; _tbTitle() and _tbSubtitle() still read state.bookMeta. So
+// the comparison was the chapter's drawn words against the BOOK'S title, which differ almost
+// always. Half a pair following the target and half not -- the third time in three builds, and the
+// reason both halves now come from one place.
+function _tbWords() {
+  if (_tbIsSession()) {
+    var w = (state && state._tbSessionWords) || {};
+    return { title: w.title || '', subtitle: w.subtitle || '' };
+  }
+  return { title: _tbTitle(), subtitle: _tbSubtitle() };
+}
+
 function _tbWarnText() {
-  var bm = state.bookMeta || {};
-  if (!bm.built_title_url) return '';
+  var bm = _tbCur();
+  if (!bm.url) return '';
   // A title built before v3.0.622 recorded no words, so there is nothing to compare and we say so
   // rather than guessing that it matches.
-  if (!bm.built_title_text) return '';
-  var nowT = _tbTitle();
-  var nowS = _tbSubtitle();
-  var wasT = String(bm.built_title_text || '');
-  var wasS = (bm.built_title_sub == null) ? '' : String(bm.built_title_sub);
+  if (!bm.text) return '';
+  var _w = _tbWords();
+  var nowT = _w.title;
+  var nowS = _w.subtitle;
+  var wasT = String(bm.text || '');
+  var wasS = (bm.sub == null) ? '' : String(bm.sub);
   var parts = [];
   if (nowT !== wasT) parts.push('the title now reads \u201c' + nowT + '\u201d but the drawing still says \u201c' + wasT + '\u201d');
   if (String(nowS || '') !== wasS) parts.push('the subtitle now reads \u201c' + (nowS || 'nothing') + '\u201d but the drawing still says \u201c' + (wasS || 'nothing') + '\u201d');
   if (!parts.length) return '';
-  return 'Your drawn title is out of step with the book: ' + parts.join(', and ') +
-         '. The cover will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to the title styles.';
+  return 'Your drawn title is out of step with ' + (_tbIsSession() ? 'this chapter' : 'the book') + ': ' + parts.join(', and ') +
+         (_tbIsSession()
+           ? '. The chapter opening will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to a scene.'
+           : '. The cover will show the drawing, not the text. Retouch it to change the lettering, or Remove it to go back to the title styles.');
 }
 function _tbRenderWarn() {
   var el = _tbEl('title-build-warn');
@@ -7786,7 +8059,34 @@ function _tbRenderWarn() {
 // carries the book query, so it does not know the version gained a built title until it is reloaded.
 // loadNovelPreview is the same call the layout controls make after an Apply, so this is the path that
 // already exists rather than a second way to repaint.
+// v3.0.656 -- TD-448. DONE AND USE IS THE ONLY THING THAT APPLIES A TITLE.
+//
+// Cancel and the X both land in closeTitleBuilder, which since v3.0.652 leaves the panel alone
+// unless the modal wrote something -- and a draft write does not touch the live title. So the two
+// controls need no special casing to behave identically: they already do.
+function titleBuilderUse() {
+  // ONE CALL, BOTH TARGETS. This was written as two identical branches and a mutation test walked
+  // straight through it: deleting one left the other satisfying the check. _tbSave already routes
+  // book and chapter; there was never a second thing to say here.
+  _tbSave({ promote: 1 }, function () { closeTitleBuilder(); });
+}
 function closeTitleBuilder() {
+  // v3.0.642 -- REPAINT THE PAGE BEHIND. Ian: "when I hit done it didn't put the image in the panel..
+  // so I left and came back and then the image was there." The save landed; nothing told the page.
+  //
+  // The book path never needed this because _prepMetaWrite owns state.bookMeta and the Prep panel
+  // reads it. A chapter's artwork lives on a moment in state.moments, which title-write updates on
+  // the SERVER and nothing updates here -- so the row on screen kept its old image until the next
+  // load fetched it. The local moment is patched from what the modal ended with, then both surfaces
+  // that draw it are repainted, exactly as the generation path does.
+  // v3.0.652 -- TD-443. Only a modal that wrote something may repaint the moment. A close with no
+  // write leaves whatever was on the row exactly where it was -- scene, title or nothing.
+  if (_tbIsSession() && state._tbDirty) _tbSyncSessionMoment();
+  state._tbDirty = false;
+  // v3.0.641 -- clear the target, or a chapter builder closed and the Prep panel one reopened would
+  // still be pointed at the chapter. This is the TD-403 fault in a different field.
+  state._tbTarget = null;
+  state._tbSessionCur = null;
   var m = _tbEl('title-build-modal'); if (m) m.classList.add('hidden');
   try { if (typeof loadNovelPreview === 'function') loadNovelPreview(novelLayoutStyle); } catch (e) {}
 }
@@ -7807,7 +8107,7 @@ function _tbShowResult(url) {
   _tbSyncArchivePill();
   // The Revert pill exists only when there is something to go back to, like the storyboard.
   var rv = _tbEl('title-build-revert-btn');
-  if (rv) rv.classList.toggle('hidden', !(url && state.bookMeta && state.bookMeta.built_title_prev));
+  if (rv) rv.classList.toggle('hidden', !(url && _tbCur().prevUrl));
   // v3.0.629 -- there is a Replace in BOTH states and only ever one on screen. The empty-state one
   // exists so the Archive is reachable before a token has been spent; hiding it here rather than
   // relying on tb-empty being hidden keeps the two strips from ever showing together if that
@@ -7897,8 +8197,25 @@ function titleBuildGenerate() {
     description: (_tbEl('title-build-desc') || {}).value || '',
     referenceUrl: (_tbEl('title-build-ref') || {}).value || ''
   };
-  fetch('/api/images/title-build', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  // v3.0.640 -- SEND THE VERSION. This line read `fetch('/api/images/title-build', {` and Retouch
+  // beside it already appended bookMetaVersionQ. Without it bookPrefsScope finds no version scope,
+  // ownsBookVersion is handed a null id, and its `if (!bookVersionId) return true` -- correct for a
+  // campaign that has no versions -- let a draw through on someone else's book. Ian paid a token for
+  // one: the picture was drawn, then the save refused, so it never reached a cover.
+  //
+  // v3.0.638 claimed TD-413 closed because the ownership check ran BEFORE the fal call. It did. It
+  // was answering a question it had never been asked. Order is not the same claim as effect.
+  // v3.0.642 -- THE TARGET RIDES ALONG. Without it the server resolved a BOOK target and drew the
+  // BOOK'S words onto a chapter -- Ian saw the cover's title and subtitle appear on a chapter that
+  // has its own name, and paid a token for it.
+  //
+  // THE SAME SHAPE AS v3.0.640, ONE BUILD LATER. That one forgot to say which VERSION; this one
+  // forgot to say which TARGET. Both times the request was made in the right place, in the right
+  // order, carrying the wrong information -- and both times a check ran and passed on a question it
+  // had never been asked. Every Title Builder request now goes through _tbBody, so there is ONE
+  // place that decides what a route is told about what it is acting on.
+  fetch('/api/images/title-build' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody(body))
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -7917,12 +8234,15 @@ function titleBuildGenerate() {
       // separate calls is how a book ends up with a title whose recorded words belong to the last one.
       // The words come from the SERVER's reply, not from the boxes on screen -- the server is what
       // told the model what to draw.
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-        built_title_url: d.image,
-        built_title_src: d.source || '',
-        built_title_text: d.title || '',
-        built_title_sub: (d.subtitle == null ? '' : String(d.subtitle)),
-        built_title_prompt: ((_tbEl('title-build-desc') || {}).value || '')
+      // v3.0.656 -- TD-448. A BUILD IS A DRAFT. It is persisted, so nothing paid for is lost, and
+      // it does not reach the book until Done and Use.
+      _tbSave({
+        draft: 1,
+        url: d.image,
+        src: d.source || '',
+        text: d.title || '',
+        sub: (d.subtitle == null ? '' : String(d.subtitle)),
+        prompt: ((_tbEl('title-build-desc') || {}).value || '')
       });
       _tbRenderWarn();
       if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
@@ -7971,15 +8291,17 @@ function titleBuildRetouch(instruction) {
   showBusyOverlay('title-build-result', 'Retouching', 'Keeping the artwork, changing one thing\u2026');
   fetch('/api/images/title-retouch' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ campaignId: state.currentCampaign.id, instruction: instruction })
+    body: JSON.stringify(_tbBody({ instruction: instruction }))
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d || d.error) { _tbErr((d && (d.message || d.error)) || 'Could not retouch the title.'); return; }
       // THE UNDO IS RECORDED BEFORE THE NEW PICTURE LANDS, from what is on the book right now.
       // Reading it after the write would record the retouch as its own previous state.
-      var _prevUrl = (state.bookMeta && state.bookMeta.built_title_url) || '';
-      var _prevSrc = (state.bookMeta && state.bookMeta.built_title_src) || '';
+      // v3.0.641 -- through the TARGET. Reading bookMeta here would record the BOOK's artwork as a
+      // chapter's previous, so Revert on a chapter would put the cover title onto the chapter.
+      var _prevUrl = _tbCur().url || '';
+      var _prevSrc = _tbCur().src || '';
       _tbShowResult(d.image);
       if (d.cut === false) {
         _tbErr('The background could not be removed -- the edit came back as a scene rather than lettering on a plain ground. Try a simpler instruction, or Generate again.');
@@ -7989,12 +8311,7 @@ function titleBuildRetouch(instruction) {
       // Claiming it now says the book's current title would be a guess printed as a fact -- and the
       // mismatch warning exists precisely so a wrong claim is worse than an out-of-date one. Editing
       // the title text and rebuilding is what sets the words.
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-        built_title_url: d.image,
-        built_title_src: d.source || '',
-        built_title_prev: _prevUrl,
-        built_title_prev_src: _prevSrc
-      });
+      _tbSave({ draft: 1, url: d.image, src: d.source || '' });   // v3.0.656 -- refines the draft, not the book
       titleBuildRetouchClose();
       _tbRenderWarn();
       if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
@@ -8012,16 +8329,11 @@ function titleBuildRetouch(instruction) {
 //
 // NO TOKEN. Nothing is drawn here; a picture that was already paid for is put back on the book.
 function titleBuildRevert() {
-  var prev = (state.bookMeta && state.bookMeta.built_title_prev) || '';
+  var prev = _tbCur().prevUrl || '';
   if (!prev) return;
-  var prevSrc = (state.bookMeta && state.bookMeta.built_title_prev_src) || '';
+  var prevSrc = (_tbCur().prevSrc) || '';
   _tbErr('');
-  if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-    built_title_url: prev,
-    built_title_src: prevSrc,
-    built_title_prev: '',
-    built_title_prev_src: ''
-  });
+  _tbSave({ url: prev, src: prevSrc, prevUrl: '', prevSrc: '' });
   _tbShowResult(prev);
   _tbRenderWarn();
 }
@@ -8044,10 +8356,7 @@ function titleBuildRemove() {
     danger: !archived,
     onOk: function () {
       _tbErr('');
-      if (typeof _prepMetaWrite === 'function') _prepMetaWrite({
-        built_title_url: '', built_title_src: '', built_title_text: '', built_title_sub: '',
-        built_title_prev: '', built_title_prev_src: ''
-      });
+      _tbSave({ url: '', src: '', text: '', sub: '', prevUrl: '', prevSrc: '' });
       _tbShowResult('');
       titleBuildRetouchClose();
       _tbRenderWarn();
@@ -8059,7 +8368,7 @@ function titleBuildRemove() {
 // TD-402. Archive on, archive off -- the same toggle every other image in the product has.
 function titleBuildArchiveToggle() {
   if (!state.currentCampaign) return;
-  var url = (state.bookMeta && state.bookMeta.built_title_url) || '';
+  var url = _tbCur().url || '';
   if (!url) return;
   var row = _tbArchiveRow();
   _tbErr('');
@@ -8076,7 +8385,7 @@ function titleBuildArchiveToggle() {
     return;
   }
   fetch('/api/campaigns/' + state.currentCampaign.id + '/my-book-meta/archive-title' + (typeof bookMetaVersionQ === 'function' ? bookMetaVersionQ('?') : ''), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody())
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -8788,8 +9097,13 @@ function renderNovelSummary(sessions) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
+    // v3.0.664 -- TD-460. THE GRAPHIC NOVEL TILE GETS THE SAME RULE AS THE SESSION CARD.
+    // Same helper, same marker, same field name -- /novel/all resolves title_layout_meta from the
+    // moment whose image IS this thumbnail, so the two screens cannot disagree about what a
+    // drawn title looks like.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" loading="lazy" alt="" />'
       : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
     // v3.0.464 -- THE VERSION NAME, not the owner (TD-263). Rule-based over BOTH copies of this
     // block, because app.js duplicates on purpose and the one hand-anchored edit in the TD-194 work
@@ -10023,16 +10337,40 @@ function applyArchiveToTarget(archiveId) {
   var vq = (typeof bookMetaVersionQ === 'function') ? bookMetaVersionQ('?') : '';
   if (ctx.mode === 'title') {
     fetch('/api/campaigns/' + cid + '/my-book-meta/restore-title' + vq, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archiveId: archiveId })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody({ archiveId: archiveId }))
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d || d.error) { alert((d && (d.message || d.error)) || 'Could not put that title on the book.'); return; }
       closeReplacePicker();
+      // v3.0.658 -- TD-452. THE READER STILL DESCRIBED THE OLD CONTRACT.
+      //
+      // Ian, 2026-08-12 on v3.0.657: "when I open the archive to pull a title picture into the title
+      // builder... It closes the archive modal but does not bring anything into the picture or the
+      // draft."
+      //
+      // v3.0.657 made restore-title write the DRAFT instead of applying immediately -- which is what
+      // was asked for -- so built_title_url in the answer is now the UNCHANGED live title, and often
+      // empty. This handler stored that over state.bookMeta and called _tbShowResult with it, so the
+      // picker closed and the modal showed nothing. The server moved and its reader did not.
+      //
+      // The draft is shown, and the live keys are still recorded, because both are true and a caller
+      // assigning this onto state.bookMeta needs a truthful record of each.
       state.bookMeta = state.bookMeta || {};
       state.bookMeta.built_title_url = d.built_title_url || '';
       state.bookMeta.built_title_src = d.built_title_src || '';
       state.bookMeta.built_title_text = d.built_title_text || '';
       state.bookMeta.built_title_sub = d.built_title_sub;
-      _tbShowResult(d.built_title_url || '');
+      state.bookMeta.built_title_draft_url = d.built_title_draft_url || '';
+      state.bookMeta.built_title_draft_src = d.built_title_draft_src || '';
+      state.bookMeta.built_title_draft_text = d.built_title_draft_text || '';
+      state.bookMeta.built_title_draft_sub = d.built_title_draft_sub;
+      // A chapter keeps no local mirror of its own, so the modal holds the answer for its lifetime
+      // -- the same reason _tbSave does it for a chapter write.
+      if (_tbIsSession()) {
+        state._tbSessionCur = state._tbSessionCur || {};
+        state._tbSessionCur.draft = { url: d.built_title_draft_url || '', src: d.built_title_draft_src || '',
+                                     text: d.built_title_draft_text || '', sub: d.built_title_draft_sub };
+      }
+      _tbShowResult(d.built_title_draft_url || d.built_title_url || '');
       _tbRenderWarn();
       if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
     }).catch(function (e) { alert('Could not put that title on the book: ' + e.message); });
@@ -10623,12 +10961,26 @@ function renderStoryboard() {
     var regenBtn = m.locked
       ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">Regenerate</button>'
       : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">Regenerate</button>';
+    // v3.0.641 -- the Title Builder pill, FIRST in the row, and only on the opening image. Ian
+    // marked it there on a screenshot. Hidden while locked for the same reason the others are
+    // disabled: a locked panel is one the reader has decided is finished.
+    var titleBtn = (m.kind === 'establishing' && !m.locked && state.currentSession)
+      ? _tbChapterBtn(state.currentSession.id, 'panel-pill dm-only', 'Title Builder')
+      : '';
     var editPromptBtn = m.locked
       ? '<button class="panel-pill pp-edit dm-only" disabled title="Unlock to edit the prompt">Edit prompt</button>'
       : '<button class="panel-pill pp-edit dm-only" onclick="openImagePrompt(' + m.id + ')" title="Edit the image prompt, then Regenerate to apply">Edit prompt</button>';
-    var retouchBtn = m.locked
+    // v3.0.653 -- TD-444. NO RETOUCH ON A DRAWN TITLE, AND IT IS ABSENT RATHER THAN DISABLED.
+    // A greyed pill invites a hover to find out why; this panel simply has a different set of
+    // controls, and Title Builder is already sitting beside it. The route refuses regardless.
+    var _isDrawnTitle = false;
+    try {
+      var _mlm = m.layout_meta ? (typeof m.layout_meta === 'object' ? m.layout_meta : JSON.parse(m.layout_meta)) : null;
+      _isDrawnTitle = !!(_mlm && _mlm.built_title && _mlm.built_title.url);
+    } catch (e) { _isDrawnTitle = false; }
+    var retouchBtn = _isDrawnTitle ? '' : (m.locked
       ? '<button class="panel-pill pp-retouch dm-only" disabled title="Unlock to retouch">Retouch</button>'
-      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>';
+      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>');
     var revertBtn = (m.revert_image && !m.locked)
       ? '<button class="panel-pill dm-only" onclick="revertMoment(' + m.id + ')" title="Undo the last retouch or regenerate - restore the previous image">Revert</button>'
       : '';
@@ -10647,7 +10999,7 @@ function renderStoryboard() {
     var msection = (narrative.sections || []).find(function(s){ return s.panel_index === i; }) || {};
     return '<div class="storyboard-panel' + (m.kind === 'establishing' ? ' is-opening' : '') + '" id="moment-card-' + m.id + '">' +
       '<div class="storyboard-panel-img">' +
-        imgHtml + '<div class="panel-img-actions">' + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
+        imgHtml + '<div class="panel-img-actions">' + titleBtn + editPromptBtn + regenBtn + retouchBtn + revertBtn + replaceBtn + lockBtn + archiveBtn + '</div>' +
       '</div>' +
       '<div class="storyboard-panel-meta">' +
         '<span class="moment-num">' + (m.kind === 'establishing' ? 'Opening' : ('Panel ' + pNum)) + '</span>' +
@@ -11148,6 +11500,24 @@ function loadSessions() {
     });
 }
 
+// v3.0.664 -- TD-460. IS THIS THUMBNAIL A DRAWING OF WORDS, OR A PHOTOGRAPH?
+//
+// The seventh surface to need this distinction, and the first to get it as ONE function. The test
+// is the marker it has always been -- layout_meta.built_title -- and the input is title_layout_meta,
+// which both session routes now return FROM THE MOMENT THAT PRODUCED THE THUMBNAIL. There is no
+// second equality checking that the meta belongs to the picture, because it cannot not: no chosen
+// moment means no meta.
+//
+// v3.0.663 tried this inline by scanning s.moments. The sessions-list route does not return
+// moments and never has, so it read undefined and the contain rule never fired once.
+function thumbIsBuiltTitle(meta) {
+  try {
+    if (!meta) return false;
+    var m = (typeof meta === 'object') ? meta : JSON.parse(meta);
+    return !!(m && m.built_title && m.built_title.url);
+  } catch (e) { return false; }
+}
+
 function renderSessions() {
   var list = document.getElementById('sessions-list');
 
@@ -11181,8 +11551,13 @@ function renderSessions() {
 
   list.innerHTML = '<div class="session-card-grid">' + ordered.map(function(s) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
+    // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
+    // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
+    // route has never sent; the route now sends title_layout_meta instead, taken from the very
+    // moment that produced thumbSrc.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" alt="" loading="lazy" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" alt="" loading="lazy" />'
       : '<div class="session-card-img session-card-img-empty">&#128203;</div>';
     var readyChip = (s.player_access_status === 'ready')
       ? '<span class="session-badge">Ready</span>'
@@ -12369,8 +12744,13 @@ function renderNovelSummary(sessions) {
     var moments = s.moments || [];
     totalMoments += moments.length;
     var thumbSrc = s.title_image || s.establishing_image || s.first_image_url;
+    // v3.0.664 -- TD-460. THE GRAPHIC NOVEL TILE GETS THE SAME RULE AS THE SESSION CARD.
+    // Same helper, same marker, same field name -- /novel/all resolves title_layout_meta from the
+    // moment whose image IS this thumbnail, so the two screens cannot disagree about what a
+    // drawn title looks like.
+    var _cardTitle = thumbIsBuiltTitle(s.title_layout_meta);
     var thumb = thumbSrc
-      ? '<img class="session-card-img" src="' + thumbSrc + '" loading="lazy" alt="" />'
+      ? '<img class="session-card-img' + (_cardTitle ? ' session-card-img-title' : '') + '" src="' + thumbSrc + '" loading="lazy" alt="" />'
       : '<div class="session-card-img session-card-img-empty">&#128213;</div>';
     // v3.0.464 -- THE VERSION NAME, not the owner (TD-263). Rule-based over BOTH copies of this
     // block, because app.js duplicates on purpose and the one hand-anchored edit in the TD-194 work
@@ -13969,9 +14349,31 @@ function loadSessionForks(sessionId) {
       // picks its default, because that default is `state.currentForkId || the canonical` and
       // selectSession has just nulled it. Falls through to the canonical when this version has no
       // fork on the destination -- the same rule the book uses.
+      // v3.0.647 -- TD-431. SETTING THE FORK IS NOT LOADING IT.
+      //
+      // Ian, 2026-08-11: arrowing from a non-canonical version to the next session "keeps the
+      // version you were on in the drop box... but loads up the Canonical pictures."
+      //
+      // selectSession sets state.currentForkId = null and THEN fetches, so forkQ() sends no fork
+      // and the server answers with the canonical. Everything is painted from that. This block
+      // runs afterwards and only corrects the SELECTION, which is why the label and the pictures
+      // disagreed. The Phase 4 default twenty lines below has always done both -- it sets the fork
+      // and calls reloadSessionForFork -- and this did not.
+      //
+      // It gets worse than an omission: Phase 4 is gated on !state.currentForkId, so the line above
+      // that sets the fork is exactly what switches off the one path that would have reloaded.
+      //
+      // ARRIVING BY ARROW NOW MEANS THE SAME AS PICKING THE VERSION FROM THE DROPDOWN, per Ian, so
+      // this goes through mpLoadAndApply the way onForkChange does: that member layout preferences
+      // are applied first and the per-fork reload then overrides art and narrative. Calling the
+      // reload bare would leave the previous session layout on screen.
+      var _navSetFork = false;
       if (state._sessNavVersionId) {
         var _want = (forks || []).filter(function (f) { return String(f.version_id) === String(state._sessNavVersionId); })[0];
-        if (_want) state.currentForkId = _want.fork_id;
+        // NO MATCH IS NOT A FAILURE. A session where this version has no fork keeps the canonical,
+        // which is already loaded -- so nothing is set and nothing is reloaded. Same rule the book
+        // uses in bookForkForSession.
+        if (_want) { state.currentForkId = _want.fork_id; _navSetFork = true; }
         state._sessNavVersionId = null;
       }
       if (state._sessNavTab) {
@@ -14061,7 +14463,16 @@ function loadSessionForks(sessionId) {
         _defaultedToOwn = true;
       }
       updateForkEditability();
-      if (_defaultedToOwn && typeof reloadSessionForFork === 'function') reloadSessionForFork();
+      // ONE reload, whichever of the two moved the fork. Both cannot fire: Phase 4 is gated on
+      // !state.currentForkId and _navSetFork can only be true when it has just been set.
+      if (_navSetFork) {
+        if (typeof resetOptimizeLogForSwitch === 'function') resetOptimizeLogForSwitch();
+        if (typeof mpLoadAndApply === 'function') mpLoadAndApply('session', function () {
+          if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+        });
+        else if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+        if (typeof loadCampaignLayoutOpts === 'function') loadCampaignLayoutOpts('session');
+      } else if (_defaultedToOwn && typeof reloadSessionForFork === 'function') reloadSessionForFork();
     })
     .catch(function() {});
 }
@@ -15071,7 +15482,10 @@ function prepSyncCastNpc(){
 //
 // The plain controls have no other gate, so they take `disabled = !own` outright and come back when
 // the reader switches to a version of their own.
-var PREP_LOCK_PLAIN = ['pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
+// v3.0.640 -- title-build-open joins the list. Ian, on someone else's version: "I can't fill
+// anything out on the rest of Prep and Preview tab... but it does open the Title builder." Every
+// other control greyed out and this one stayed live, because it was never a member.
+var PREP_LOCK_PLAIN = ['title-build-open', 'pcl-arrange', 'pcl-border', 'pcl-caption', 'pcl-font',
                        'pcl-titleStyle', 'pcl-titlePlace', 'pcl-titleSize',
                        'pcl-dropcap', 'pcl-header', 'pcl-markers', 'pcl-cover', 'pcl-cast', 'pcl-toc', 'pcl-castnpc'];
 var PREP_LOCK_GATED = ['pcl-markerbreak'];   // v3.0.616 -- pcl-hidelogo retired with the control
@@ -19846,9 +20260,46 @@ function optimizeShowBusy(j) {
     // finished, and the bug would have looked like the run never ending. A thing that writes a
     // message should say so, not be identified by how it looks.
     if (host) {
-      host.textContent = optimizeBusyText(j);
+      // v3.0.649 -- THE WAY OUT IS ON THE MESSAGE THAT BLOCKS YOU.
+      //
+      // Ian: "The user should be able to kill it right there and start over." Cancel was the only
+      // control that could free a claim, and Cancel is only shown while YOUR OWN loop is running in
+      // THIS tab -- which is the one case where nobody is stuck. The reader who needed it was the
+      // reader who could not see it.
+      //
+      // No confirmation dialog beyond the one sentence on the button: one run per user means the
+      // thing being stopped is the reader's own, and there is no third party to protect.
+      host.textContent = '';
       host.style.color = 'var(--warn-text)';
       host.dataset.optimizeBusy = '1';
+      var _bw = document.createElement('div');
+      _bw.textContent = optimizeBusyText(j);
+      host.appendChild(_bw);
+      var _kb = document.createElement('button');
+      _kb.className = 'btn btn-sm';
+      _kb.id = 'layoutai-stop-stale-btn';
+      _kb.type = 'button';
+      _kb.style.marginTop = '8px';
+      _kb.textContent = 'Stop that run and start over';
+      _kb.onclick = function () {
+        _kb.disabled = true; _kb.textContent = 'Stopping...';
+        fetch('/api/pdf/optimize-stop', { method: 'POST', credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function () {
+            window._optimizeRunId = null;
+            try { if (window._optimizeBusyTimer) clearTimeout(window._optimizeBusyTimer); } catch (e) {}
+            window._optimizeBusyTimer = null;
+            host.textContent = ''; host.style.color = ''; delete host.dataset.optimizeBusy;
+            var _rb3 = document.getElementById('layoutai-run-btn');
+            if (_rb3) { _rb3.disabled = false; _rb3.textContent = 'Optimize layout'; _rb3.classList.add('has-token'); }
+            if (typeof showAlert === 'function') showAlert('That run has been stopped. You can start a new Optimize now.');
+          })
+          .catch(function () {
+            _kb.disabled = false; _kb.textContent = 'Stop that run and start over';
+            if (typeof showAlert === 'function') showAlert('Could not stop that run. Try again in a moment.');
+          });
+      };
+      host.appendChild(_kb);
     }
     // Ask again while it runs, so the tab clears itself when the run finishes rather than needing
     // a refresh -- which is the habit that caused the double runs in the first place.
@@ -20191,9 +20642,24 @@ function _runLayoutAiOptimize() {
         loopStatus('AI pass ' + roundNum + ' of up to ' + MAX_ROUNDS + ' -- reviewing...');
         aiLog('Pass ' + roundNum + ': reviewing the layout...');
         optimizeProgress('AI Loop ' + roundNum + ': reviewing the layout&hellip;');
-        return fetch('/api/pdf/layout-review/' + _cid + _q, { credentials: 'same-origin' })
+        // v3.0.649 -- the run id goes with every pass so a stop can actually reach this loop.
+        var _runQ = window._optimizeRunId ? ((_q.indexOf('?') === -1 ? '?' : '&') + 'run=' + encodeURIComponent(window._optimizeRunId)) : '';
+        return fetch('/api/pdf/layout-review/' + _cid + _q + _runQ, { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
+            // A run that has been stopped stops HERE, and says so rather than dying quietly. The
+            // reader who pressed the button is usually in another tab; this one is the tab that
+            // was left behind, and it needs to explain itself before it goes.
+            if (j && j.error === 'optimize_revoked') {
+              window._optimizeCancelled = true;
+              window._aiLoopRunning = false;
+              aiLog('This run was stopped from another tab. Nothing further will be saved from it.');
+              optimizeProgress('This Optimize run was stopped.', { done: true });
+              var _rb2 = document.getElementById('layoutai-run-btn');
+              if (_rb2) { _rb2.disabled = false; _rb2.textContent = 'Optimize layout'; _rb2.classList.add('has-token'); }
+              var _cb2 = document.getElementById('layoutai-cancel-btn'); if (_cb2) _cb2.style.display = 'none';
+              return { done: true, applied: 0, report: null };
+            }
             try {
               if (window._optimizeCapture) {
                 var _pt = window._optimizeCapture.passTimes;
@@ -20982,6 +21448,11 @@ function renderPdfInto(url, containerId, isBefore) {
       try {
         var _ot = r.headers && r.headers.get && r.headers.get('X-Optimize-Tokens');
         if (_ot) window._optimizeTokensSpent = (window._optimizeTokensSpent || 0) + (parseInt(_ot, 10) || 0);
+        // v3.0.649 -- the run id rides back the same way. Held on window rather than in the loop
+        // closure because the STOP button lives outside the run, and a run nobody can name is a
+        // run nobody can stop.
+        var _or = r.headers && r.headers.get && r.headers.get('X-Optimize-Run');
+        if (_or) window._optimizeRunId = _or;
       } catch (e) {}
       if (!r.ok) throw new Error('PDF fetch failed (' + r.status + ')');
       // v3.0.333 -- same-origin, so these headers are readable. Only the Before pane is the source of
@@ -21084,6 +21555,12 @@ function renderPdfInto(url, containerId, isBefore) {
     // Mark done on failure too, or anything waiting on this pane would spin forever.
     if (isBefore) _finalizeBeforeDone = true; else _finalizeAfterDone = true;
     if (!isBefore && typeof _finalizeAfterOnDone === 'function') { var _cbE = _finalizeAfterOnDone; _finalizeAfterOnDone = null; try { _cbE(); } catch (e2) {} }
+    // v3.0.649 -- TD-434. A COMPOSE THAT DIES GIVES THE CLAIM BACK.
+    // The lock was taken at compose and released only on save, on Cancel, or by the fifteen minute
+    // timeout. A render that failed did none of the three, so it left a claim with no loop behind
+    // it -- which is exactly what locked Ian out on 2026-08-12. The run is over either way; the
+    // only question was whether the server found out now or in a quarter of an hour.
+    try { if (String(url).indexOf('compose=1') !== -1) fetch('/api/pdf/optimize-release', { method: 'POST', credentials: 'same-origin' }).catch(function () {}); } catch (e2) {}
     if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
   });
 }

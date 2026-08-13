@@ -370,4 +370,101 @@ function flattenOntoColour(buf, fr, fg, fb) {
   }
 }
 
-module.exports = { cutWhiteToAlpha, cutGroundToAlpha, flattenOntoColour, CUT_HI, CUT_LO, GROUND_NEAR, GROUND_FAR };
+
+// =====================================================================================================
+// TRIM A CUT TITLE TO ITS INK  (TD-429)
+// =====================================================================================================
+// Ian, 2026-08-11, looking at two real titles: "can you just trim to the first pixels."
+//
+// A built title is generated on a 21:9 canvas and the model fills as much of it as it feels like.
+// Measured on his two: the gold one carries its vines almost to the edges and keeps 82 percent of
+// its height; the emerald one leaves a real band of nothing and keeps 60. Rendering both in a box
+// sized to the CANVAS therefore spends page on whatever the model declined to draw, and spends a
+// different amount per title, so no single render rule can make them look consistent.
+//
+// ALL FOUR SIDES. Trimming only the top and bottom was considered and is wrong here: the two titles
+// differ by 9 percent in side padding, and since a chapter head is drawn at a FIXED width, that
+// padding would make otherwise identical lettering render at visibly different sizes.
+//
+// NO MARGIN IS ADDED. The chapter head is drawn at half width, which is all the breathing room the
+// page needs; putting a margin back inside the file would just restore what this removes.
+//
+// ALPHA 8 IS THE FLOOR, NOT ZERO. Ian said the first pixels and that is what this is -- but a single
+// stray pixel at alpha 1 is invisible on screen and in print while being perfectly capable of
+// defeating the entire trim from a corner. Nothing a reader can see is discarded by this floor.
+//
+// FAIL-SOFT, like everything else in this file. Any input it cannot safely handle comes back
+// untouched, and the dimensions are still reported whenever the header can be read, because a
+// caller wants the aspect even when there was nothing to trim.
+const TRIM_INK_MIN_ALPHA = 8;
+function trimToInk(buf) {
+  try {
+    if (!Buffer.isBuffer(buf) || buf.length < 8 || !buf.slice(0, 8).equals(PNG_SIG)) return { buf: buf, trimmed: false, width: 0, height: 0 };
+    let p = 8, width = 0, height = 0, depth = 0, ctype = -1, interlace = 0;
+    const idat = [];
+    while (p + 8 <= buf.length) {
+      const len = buf.readUInt32BE(p);
+      const type = buf.slice(p + 4, p + 8).toString('ascii');
+      const data = buf.slice(p + 8, p + 8 + len);
+      if (type === 'IHDR') {
+        width = data.readUInt32BE(0); height = data.readUInt32BE(4);
+        depth = data[8]; ctype = data[9]; interlace = data[12];
+      } else if (type === 'IDAT') idat.push(data);
+      else if (type === 'IEND') break;
+      p += 12 + len;
+    }
+    // Only an RGBA image has had a ground removed, so only an RGBA image has anything to trim. The
+    // size is still handed back for the rest.
+    if (depth !== 8 || interlace !== 0 || ctype !== 6 || !width || !height || !idat.length) {
+      return { buf: buf, trimmed: false, width: width, height: height };
+    }
+    if (width * height > 40e6) return { buf: buf, trimmed: false, width: width, height: height };
+
+    const raw = unfilter(zlib.inflateSync(Buffer.concat(idat)), width, height, 4);
+    if (!raw) return { buf: buf, trimmed: false, width: width, height: height };
+
+    let top = -1, bot = -1, left = width, right = -1;
+    for (let y = 0; y < height; y++) {
+      const o = y * width * 4;
+      let rowHit = false;
+      for (let x = 0; x < width; x++) {
+        if (raw[o + x * 4 + 3] >= TRIM_INK_MIN_ALPHA) {
+          rowHit = true;
+          if (x < left) left = x;
+          if (x > right) right = x;
+        }
+      }
+      if (rowHit) { if (top < 0) top = y; bot = y; }
+    }
+    if (top < 0 || right < left) return { buf: buf, trimmed: false, width: width, height: height };
+
+    const nw = right - left + 1, nh = bot - top + 1;
+    if (nw < 8 || nh < 8) return { buf: buf, trimmed: false, width: width, height: height };
+    // Nothing worth rewriting the file for, and the size is already what it would become.
+    if (nw >= width && nh >= height) return { buf: buf, trimmed: false, width: width, height: height };
+
+    const stride = nw * 4;
+    const out = Buffer.alloc(nh * (stride + 1));
+    for (let y = 0; y < nh; y++) {
+      const doff = y * (stride + 1);
+      out[doff] = 0;
+      const soff = ((top + y) * width + left) * 4;
+      raw.copy(out, doff + 1, soff, soff + stride);
+    }
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(nw, 0); ihdr.writeUInt32BE(nh, 4);
+    ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+    const png = Buffer.concat([
+      PNG_SIG,
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(out, { level: 9 })),
+      chunk('IEND', Buffer.alloc(0))
+    ]);
+    return { buf: png, trimmed: true, width: nw, height: nh };
+  } catch (e) {
+    console.error('trimToInk failed, keeping the original image:', e.message);
+    return { buf: buf, trimmed: false, width: 0, height: 0 };
+  }
+}
+
+module.exports = { cutWhiteToAlpha, cutGroundToAlpha, trimToInk, flattenOntoColour, CUT_HI, CUT_LO, GROUND_NEAR, GROUND_FAR, TRIM_INK_MIN_ALPHA };

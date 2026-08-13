@@ -73,11 +73,22 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
     }
     const first_image_url = firstMomentImg || null;
     const title_image = estImg || s.establishing_image || first_image_url || null;
+    // v3.0.664 -- TD-460. THE MARKER TRAVELS WITH THE PICTURE THAT WAS ACTUALLY CHOSEN.
+    // The Graphic Novel tile crops its thumbnail with object-fit:cover, which is right for a scene
+    // and takes equal bites out of both ends of LETTERING. Deciding otherwise needs to know whether
+    // this thumbnail is a DRAWN TITLE, and that is layout_meta.built_title on the moment behind it.
+    // Found by the URL rather than re-deriving the precedence above: three expressions choose
+    // title_image and a fourth guessing which of them won is the pairing fault this file keeps
+    // paying for. A legacy s.establishing_image matches no moment and correctly yields null.
+    const _titleMoment = title_image
+      ? (moments.filter(function (m) { return m.image === title_image; })[0] || null)
+      : null;
     return Object.assign({}, s, {
       moments,
       fork_status: fk ? fk.player_access_status : 'draft',
       first_image_url: first_image_url,
       title_image: title_image,
+      title_layout_meta: _titleMoment ? _titleMoment.layout_meta : null,
       fork_owner_name: usedPlayerFork ? asUserName : null,
       is_canonical: !usedPlayerFork,
       // v3.0.464 -- NAME THE VERSION THIS TILE IS ACTUALLY READING (TD-263). The owner no longer
@@ -166,18 +177,56 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
       " OR EXISTS (SELECT 1 FROM session_forks fo WHERE fo.session_id = s.id AND fo.user_id = ? AND fo.role = 'player') )";
     listParams.push(req.session.userId);
   }
+  // v3.0.664 -- TD-460 / TD-461. THE TILE READS THE FORK THE CARD WILL OPEN, AND IT CARRIES THE
+  // MARKER FOR THE PICTURE IT CHOSE.
+  //
+  // TWO FAULTS, ONE QUERY. (1) This picked the caller's OWN player fork ahead of the canonical,
+  // but selectSession nulls currentForkId and getViewableForkId then answers with the CANONICAL --
+  // and the Phase 4 default that would move a reader onto their own version is gated
+  // `mineFork.role !== 'dm'`, which never fires for the Story Master because his own fork IS the
+  // canonical. So a Story Master holding named versions had every tile painted from his first
+  // named version while every card opened the canonical. The CASE below is that same client rule,
+  // stated once on the server and PER SESSION: if I own the dm fork here, my named versions do not
+  // enter the choice. A member is untouched -- measured, see the note at the end of this comment.
+  //
+  // (2) v3.0.663 tested `s.moments` for layout_meta.built_title to decide whether the thumbnail is
+  // a DRAWN TITLE rather than a photograph. THIS ROUTE HAS NEVER RETURNED MOMENTS -- that comment
+  // described /novel/all -- so the test read undefined and the contain rule could not fire once.
+  //
+  // The two COALESCE subqueries became ONE lateral that picks the moment a single time and returns
+  // its image AND its layout_meta, so the marker belongs to the picture on screen by construction
+  // rather than by an equality written down twice. Same precedence as before: establishing wins,
+  // else the lowest panel_order, else the legacy session-level column.
+  //
+  // THE ORDER BY IS A CASE AND NOT A BOOLEAN ON PURPOSE. `(m.kind = 'establishing') DESC` puts
+  // NULLS FIRST in Postgres, so a moment with a NULL kind at panel_order 0 outranks the real
+  // establishing moment. Measured against a live Postgres 16: the boolean form returned the
+  // wrong picture for exactly that row.
+  //
+  // Verified on a seeded Postgres before shipping: six sessions covering an SM with his own named
+  // version, a member with one, canonical-only, panels-with-no-establishing, the legacy
+  // establishing_image fallthrough and the NULL-kind ordering trap. The member's six answers are
+  // byte-identical to the query this replaces; only the Story Master's row moved.
+  const _tileForkSql =
+    "COALESCE(" +
+      "CASE WHEN EXISTS (SELECT 1 FROM session_forks dmo WHERE dmo.session_id = s.id AND dmo.role = 'dm' AND dmo.user_id = ?) THEN NULL " +
+           "ELSE (SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' ORDER BY pf.id ASC LIMIT 1) END, " +
+      "(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1))";
   const sessions = await db.prepare(
     'SELECT s.*, ' +
-    "COALESCE(" +
-    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' ORDER BY pf.id ASC LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.kind = 'establishing' AND m.image IS NOT NULL AND m.image <> '' LIMIT 1), " +
-    "(SELECT m.image FROM moments m WHERE m.fork_id = COALESCE((SELECT pf.id FROM session_forks pf WHERE pf.session_id = s.id AND pf.user_id = ? AND pf.role = 'player' ORDER BY pf.id ASC LIMIT 1),(SELECT df.id FROM session_forks df WHERE df.session_id = s.id AND df.role = 'dm' LIMIT 1)) AND m.image IS NOT NULL AND m.image <> '' ORDER BY m.panel_order ASC LIMIT 1), " +
-    "s.establishing_image) AS title_image_url, " +
+    "COALESCE(tm.image, s.establishing_image) AS title_image_url, " +
+    "tm.layout_meta AS title_layout_meta, " +
     '(SELECT m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = s.id AND f.role = \'dm\' AND m.image IS NOT NULL AND m.image <> \'\' ORDER BY m.panel_order ASC LIMIT 1) AS first_image_url, ' +
     // Deploy 4.0 — player_access_status now lives on the DM fork. This
     // aliased column comes AFTER s.* so it wins in the row object,
     // keeping the JSON key identical (frontend session-list untouched).
     "(SELECT f.player_access_status FROM session_forks f WHERE f.session_id = s.id AND f.role = 'dm' LIMIT 1) AS player_access_status " +
     'FROM sessions s ' +
+    "LEFT JOIN LATERAL (" +
+      "SELECT m.image, m.layout_meta FROM moments m " +
+      "WHERE m.fork_id = " + _tileForkSql + " AND m.image IS NOT NULL AND m.image <> '' " +
+      "ORDER BY CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC " +
+      "LIMIT 1) tm ON TRUE " +
     'WHERE s.campaign_id=?' + visFilter + ' ORDER BY s.session_date ASC'
   ).all(...listParams);
   res.json(sessions);

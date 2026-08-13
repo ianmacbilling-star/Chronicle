@@ -238,6 +238,18 @@ async function releaseImage(db, fileUrl) {
       ['SELECT 1 FROM characters WHERE image = ? OR image_portrait = ? OR image_fullbody = ? OR image_action = ? OR image_other = ? OR canonical_reference_url = ? LIMIT 1',
         [fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl]],
       ['SELECT 1 FROM campaign_assets WHERE image_url = ? LIMIT 1', [fileUrl]],
+      // v3.0.654 -- THE UNDO SLOT IS A REFERENCE. moments.revert_image was not among the tables
+      // checked, so releasing an image a panel could still be reverted to would DELETE THE FILE
+      // AND LEAVE THE BUTTON -- a Revert that restores a 404, discovered only by pressing it.
+      // The one caller that releases a displaced panel image is Replace, which now arms Revert;
+      // adding the slot here is what lets it do that safely instead of needing a special case.
+      ['SELECT 1 FROM moments WHERE revert_image = ? LIMIT 1', [fileUrl]],
+      // v3.0.660 -- TD-454. layout_meta HOLDS REFERENCES TOO and none of the checks above could
+      // see them: built_title, built_title_draft and prev_built_title all carry urls, and so does
+      // built_title.src. A LIKE is crude and it is the right kind of crude here -- this function
+      // exists to DECLINE to delete, so a false positive costs storage while a false negative
+      // destroys artwork that cannot be redrawn. It over-retains, deliberately.
+      ['SELECT 1 FROM moments WHERE layout_meta LIKE ? LIMIT 1', ['%' + String(fileUrl).replace(/[%_]/g, '') + '%']],
       ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]],
       ['SELECT 1 FROM public_story_images WHERE image_url = ? LIMIT 1', [fileUrl]]
     ];

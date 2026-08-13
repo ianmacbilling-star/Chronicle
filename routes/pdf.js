@@ -157,6 +157,23 @@ function lmMeta(m) {
   if (typeof v === 'object') return v;
   try { var o = JSON.parse(v); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
 }
+// v3.0.644 -- IS THIS MOMENT A DRAWN TITLE RATHER THAN A PICTURE?
+//
+// Ian: "if it's a Title builder we don't want the frame on it and we want it to be transparent in
+// all the previews through publish."
+//
+// The marker was already on the row -- services/titleTarget.js writes layout_meta.built_title when a
+// chapter title is drawn -- and lmMeta already parses that column for prominence and focal. So this
+// is a reader, not a new field: nothing extra is stored and no query changes.
+//
+// A DRAWN TITLE IS NOT A PHOTOGRAPH, and almost everything coCell does assumes it is: a frame, a
+// caption from moments.title (which for an establishing row is the session name, so the chapter
+// would print its own name twice), and an aspect box with overflow:hidden that crops or letterboxes.
+// All three are wrong for lettering, so the built-title branch skips the lot.
+function lmIsBuiltTitle(m) {
+  var b = lmMeta(m).built_title;
+  return !!(b && b.url);
+}
 function lmProminence(m) { var n = Number(lmMeta(m).prominence); return (n >= 1 && n <= 5) ? Math.round(n) : 3; }
 // Three-tier size from prominence: Minimize (1-2) / Default (3) / Maximize (4-5).
 function lmSizeTier(m) { var p = lmProminence(m); return p >= 4 ? 'max' : (p <= 2 ? 'min' : 'def'); }
@@ -1632,6 +1649,84 @@ function coDropcap(html) {
   });
 }
 
+// estCell: the chapter opening -- a scene goes through coCell as it always has; a DRAWN TITLE does
+// not (v3.0.644).
+//
+// NO DECORATION AT ALL, per Ian: "all decorations should be off." No frame, no caption, no mat, no
+// vignette -- those are book-wide choices about how a PICTURE is presented, and this is lettering.
+//
+// NO ASPECT BOX. coMedia routes everything through momentImgAspectBox, which sets a fixed
+// aspect-ratio with overflow:hidden -- that is what crops a wide title or letterboxes it. Ian:
+// "The image shouldn't crop at all or shrink." A plain img at width:100% with height:auto keeps the
+// artwork's own proportions and its full width.
+//
+// NOTHING BEHIND IT. The PNG is transparent and Ian wants the page to show through: "Just make it
+// transparent with nothing behind it... It's not sitting on top a picture this time." So no
+// background is painted here -- which is also why the ground cut has to have worked. A title whose
+// cut failed is an opaque rectangle, and it will look like one.
+// EST_HEAD_PCT: how much of the text column a drawn chapter title is allowed. One number, and the
+// only one to touch if these want to be smaller or larger.
+var EST_HEAD_PCT = 50;
+function estCell(m, opts) {
+  if (!lmIsBuiltTitle(m)) return coCell(m, 0, 100, opts || {});
+  // v3.0.646 -- THE HEIGHT MUST BE DECIDED BY CSS, BECAUSE THE MEASURE PASS NEVER SEES THE PICTURE.
+  //
+  // WHAT v3.0.645 GOT WRONG, and it broke pagination on live books. It emitted a bare img sized
+  // width:auto / height:auto under a max-height. That renders correctly in a browser -- Ian saw an
+  // uncropped title at the intended height -- but services/printing/measureLayout.js ABORTS every
+  // image and media request before it measures ("layout is instant and never waits on R2"), so in
+  // the measure pass that img has no intrinsic size and the band measured about zero. The packer
+  // was told a chapter title costs nothing, filled the page behind it, and the render then put
+  // 2.91in of lettering back. Ian: "it thinks it can fit more on the page."
+  //
+  // The 16:9 box this replaced never had that problem, and not by luck: an aspect-ratio on a DIV is
+  // pure CSS, so measure and render agreed whether the artwork arrived or not. The v3.0.645 fault
+  // was not the ratio, it was moving the height decision onto the image.
+  //
+  // SO: the box comes back, at the PANORAMIC ratio -- the shape routes/images.js already asks fal
+  // for, read from the same table rather than written down a second time -- and the artwork is
+  // fitted inside it with object-fit:contain. Contain never crops, which is the whole point of the
+  // branch, and it cannot overflow, so no clipping is needed to hold it in.
+  //
+  // NOTHING ON THE IMG MAY DEPEND ON ITS INTRINSIC SIZE. width and height are both 100 percent of
+  // a box whose height is already known; no auto, no max-height. That is the invariant the apply
+  // script asserts, and it is the one v3.0.645 violated.
+  //
+  // STILL TOO TALL, AND KNOWN TO BE. 2.91in of band for lettering that may only ink 1.5in of it is
+  // the padding baked into the PNG, not the layout. Trimming the artwork to its ink and recording
+  // its true dimensions is TD-429; this branch is what that will size against.
+  //
+  // THE ROW IS STILL SHAPED wide AND THAT IS DELIBERATE. moments.shape drives what a REGENERATE
+  // asks fal for, so flipping it to panoramic here would make a later scene come back ultra-wide
+  // in a slot that wants an establishing shot. The marker says this one is lettering; the shape
+  // goes on saying what the slot is.
+  // v3.0.648 -- A CHAPTER HEAD, NOT A TITLE PAGE.
+  //
+  // Ian, 2026-08-11: session titles "are almost like a small pic or title at the top of a chapter in
+  // a book. Not like a full Title on a page" -- the full-page treatment belongs to the cover.
+  //
+  // So the artwork is drawn at HALF the column and centred. Measured on his two real titles, once
+  // trimmed: the gold one lands at 1.30in and the emerald at 0.92in, against the 2.91in a full width
+  // panoramic box was taking and the 3.83in before that.
+  //
+  // THE SHAPE COMES OFF THE NAME. storage/alpha.js trims the cut to its ink and routes/images.js
+  // writes the result into the object name, so the aspect is known here without fetching a byte --
+  // which is the whole point, because the measure pass has no images. Anything built before v3.0.648
+  // has no size in its name and falls back to the canvas ratio, which is exactly what it renders at
+  // today. The match is anchored and bounded, and the query string is dropped first so a signed or
+  // cache-busted URL cannot smuggle digits into it.
+  //
+  // THE CEILING IS THE SAME RULE AT THE SAME SCALE: half a column at 21:9. A title squarer than
+  // panoramic is scaled down to fit rather than growing, so no chapter head is ever taller than
+  // 1.46in whatever the model returns. Both values are CSS, so the height stays determinate.
+  var _tdim = String(m.image || '').split('?')[0].match(/-([0-9]{2,5})x([0-9]{2,5})\.png$/);
+  var _tar = _tdim ? (_tdim[1] + ' / ' + _tdim[2]) : shapeRatioCSS('panoramic');
+  var _tcap = ((CG_W * EST_HEAD_PCT / 100) / shapeAspect('panoramic')).toFixed(2);
+  return '<div style="width:' + EST_HEAD_PCT + '%;margin:0 auto;aspect-ratio:' + _tar + ';max-height:' + _tcap + 'in;line-height:0;">' +
+         '<img src="' + String(m.image || '').replace(/"/g, '&quot;') + '" alt="" ' +
+         'style="display:block;width:100%;height:100%;object-fit:contain;background:none;" />' +
+         '</div>';
+}
 function coCell(m, i, pct, opts) {
   var overlay = coCaptionOverlay(m, opts.caption, opts.border);
   var media = '<div style="position:relative;line-height:0;">' + coMedia(m, opts.border) + overlay + '</div>';
@@ -4645,9 +4740,16 @@ function buildSessionHTML(session, moments, campaign, characters, narrative, opt
   // first narrative. Additive block above the session content - does NOT touch
   // buildLayout / renderPaired. (Stage 4.1: Session Preview only.)
   var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : session.establishing_image;
-  var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (session.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || session.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || session.establishing_img_h || null };
+  // v3.0.645 -- layout_meta TRAVELS WITH THE ROW.
+  // estCell asks lmIsBuiltTitle whether this opening is lettering or a photograph, and that answer
+  // lives in layout_meta -- so a copy that leaves the column behind can only ever answer
+  // photograph. It did, at BOTH call sites, from v3.0.644 until now: the built-title branch was
+  // unreachable and every preview drew a drawn title inside a cover-fitted 16:9 box, taking equal
+  // bites out of both ends of the words.
+  // The row is read with SELECT *, so the column is already in hand here; nothing new is queried.
+  var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (session.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || session.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || session.establishing_img_h || null, layout_meta: (_estMoment && _estMoment.layout_meta) || null };
   var titleImageHTML = _estImg
-    ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
+    ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + estCell(_estM, co || {}) + '</div>'
     : '';
 
   return `<!DOCTYPE html>
@@ -5387,9 +5489,16 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     // NOT touch buildLayout / renderPaired. Flows through preview, print, publish,
     // and the public story page (snapshot carries establishing_image). (Stage 4.2)
     var _estImg = (_estMoment && _estMoment.image) ? _estMoment.image : s.establishing_image;
-    var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (s.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || s.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || s.establishing_img_h || null };
+    // v3.0.645 -- layout_meta TRAVELS WITH THE ROW.
+    // estCell asks lmIsBuiltTitle whether this opening is lettering or a photograph, and that answer
+    // lives in layout_meta -- so a copy that leaves the column behind can only ever answer
+    // photograph. It did, at BOTH call sites, from v3.0.644 until now: the built-title branch was
+    // unreachable and every preview drew a drawn title inside a cover-fitted 16:9 box, taking equal
+    // bites out of both ends of the words.
+    // The row is read with SELECT *, so the column is already in hand here; nothing new is queried.
+    var _estM = { image: _estImg, title: '', shape: (_estMoment && _estMoment.shape) ? _estMoment.shape : (s.establishing_shape || 'wide'), img_w: (_estMoment && _estMoment.img_w) || s.establishing_img_w || null, img_h: (_estMoment && _estMoment.img_h) || s.establishing_img_h || null, layout_meta: (_estMoment && _estMoment.layout_meta) || null };
     var titleImageHTML = _estImg
-      ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + coCell(_estM, 0, 100, co || {}) + '</div>'
+      ? '<div class="session-title-image" style="margin:0 0 0.28in;">' + estCell(_estM, co || {}) + '</div>'
       : '';
 
     // Session dividers now also show in Quick View (removed the `paginated` suppression) so
@@ -10860,6 +10969,14 @@ function _parseOpsArray(raw) {
 // pack-render route has always relied on -- removing requireAdmin opens no new surface.
 router.get('/layout-review/:campaignId', requireAuth, async function (req, res) {
   try {
+    // v3.0.649 -- A STOPPED RUN STOPS HERE. This is the route the loop calls once per pass, so it
+    // is where a revoked run finds out, and it is checked BEFORE the token check so a stopped run
+    // cannot spend another one on its way down.
+    if (optimizeRunIsRevoked(req.query.run)) {
+      return res.status(409).json({ error: 'optimize_revoked',
+        message: 'This Optimize run was stopped from another tab or window, so it has stopped here too.' });
+    }
+    try { optimizeRunBeat(req.session.userId, 'pass'); } catch (e) {}
     var key = process.env.ANTHROPIC_API_KEY;
     if (!key) return res.status(500).json({ error: 'Layout review is not configured (no ANTHROPIC_API_KEY).' });
     if (!(await canAfford(req.session.userId, 1))) return res.status(402).json({ error: 'insufficient_tokens' });
@@ -12855,9 +12972,54 @@ function optimizeRunGet(userId) {
   if (Date.now() - (r.beat || r.startedAt) > OPTIMIZE_LOCK_STALE_MS) { _optimizeRuns.delete(userId); return null; }
   return r;
 }
+// v3.0.649 -- A RUN HAS AN IDENTITY, SO IT CAN BE TOLD TO STOP.
+//
+// Ian, 2026-08-12, after a dead claim locked him out of his own book for the better part of an
+// hour: "If that error comes back and says another one is running... The user should be able to
+// kill it right there and start over. It should totally kill the stale run."
+//
+// RELEASING THE CLAIM IS NOT KILLING THE RUN, and that distinction is the whole of this change.
+// optimize-release only deletes the Map entry. If a loop really was alive in another tab it goes
+// on working -- against the same composed cache and the same move and grow keys as the new run,
+// which is precisely the corruption v3.0.610 exists to prevent. A free-the-lock button on its own
+// would hand every user a way to cause it.
+//
+// So a stop writes a TOMBSTONE against the run id, and every route the loop calls checks it. The
+// old run gets a 409 on its next step, stops itself, and says why. That is what makes the button
+// honest: the run is stopped, not merely disowned.
+//
+// NO STALENESS TEST, at Ian instruction. One run per user means the person blocked is the person
+// who owns the thing blocking them -- there is no third party whose work needs protecting, so
+// there is nothing for a heuristic to decide. A three minute "probably dead" rule was drafted and
+// thrown away: it could only ever be wrong in one direction or the other, and it would have made
+// the fast path slower for no one's benefit.
+var _optimizeRevoked = new Map();            // runId -> revokedAt
+var OPTIMIZE_REVOKED_KEEP_MS = 60 * 60 * 1000;
+function optimizeRevokedPrune() {
+  var cut = Date.now() - OPTIMIZE_REVOKED_KEEP_MS;
+  _optimizeRevoked.forEach(function (at, id) { if (at < cut) _optimizeRevoked.delete(id); });
+}
+function optimizeRunIsRevoked(runId) {
+  if (!runId) return false;
+  optimizeRevokedPrune();
+  return _optimizeRevoked.has(String(runId));
+}
+// Returns the id it stopped, or null when there was nothing to stop -- which is NOT an error. A
+// second click, or a run that ended between the banner and the button, both land here and both
+// mean the same thing to the reader: you may start now.
+function optimizeRunStop(userId) {
+  var r = _optimizeRuns.get(userId);
+  _optimizeRuns.delete(userId);
+  if (!r || !r.runId) return null;
+  optimizeRevokedPrune();
+  _optimizeRevoked.set(String(r.runId), Date.now());
+  return r.runId;
+}
 function optimizeRunStart(userId, campaignId, campaignName) {
+  var runId = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   _optimizeRuns.set(userId, { campaignId: String(campaignId), campaignName: campaignName || '',
-                              startedAt: Date.now(), beat: Date.now(), step: 'compose' });
+                              startedAt: Date.now(), beat: Date.now(), step: 'compose', runId: runId });
+  return runId;
 }
 function optimizeRunBeat(userId, step) {
   var r = optimizeRunGet(userId);
@@ -12872,23 +13034,50 @@ router.get('/optimize-status', requireAuth, function (req, res) {
   try {
     var r = optimizeRunGet(req.session.userId);
     if (!r) return res.json({ running: false });
+    // v3.0.649 -- sinceBeatMs and runId. Chasing a stuck run on 2026-08-12 was slow because this
+    // route reported startedAt and step and nothing else: elapsedMs counts up whether or not the
+    // run is alive, and step is only ever whatever the last heartbeat wrote. beat is the one field
+    // that can tell them apart, and it was the one field not exposed.
     return res.json({ running: true, campaignId: r.campaignId, campaignName: r.campaignName,
-                      startedAt: r.startedAt, elapsedMs: Date.now() - r.startedAt, step: r.step || '' });
+                      startedAt: r.startedAt, elapsedMs: Date.now() - r.startedAt, step: r.step || '',
+                      runId: r.runId || '', sinceBeatMs: Date.now() - (r.beat || r.startedAt) });
   } catch (e) {
     return res.json({ running: false });
   }
 });
 // Best effort, from the client, when a loop ends without a save (cancelled, or failed). The stale
 // timeout is the real safety net; this only makes the common case immediate rather than a wait.
+// v3.0.649 -- STOP THE RUN I ALREADY HAVE. The escape hatch for the reader who is blocked by
+// their own claim, which release could not be: release quietly frees the lock and leaves a live
+// loop running underneath. This revokes the id as well, so the old run stops at its next step.
+router.post('/optimize-stop', requireAuth, function (req, res) {
+  try {
+    var stopped = optimizeRunStop(req.session.userId);
+    return res.json({ ok: true, stoppedRunId: stopped || null });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'stop_failed' });
+  }
+});
 router.post('/optimize-release', requireAuth, function (req, res) {
   try { optimizeRunEnd(req.session.userId); } catch (e) {}
   return res.json({ ok: true });
 });
 router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
   try {
-    // v3.0.610 -- HEARTBEAT FIRST, and on EVERY pack-render, not only the composing one. The loop
-    // calls this route once per pass, so a live run keeps its claim without a timer of its own.
-    try { optimizeRunBeat(req.session.userId, 'pass'); } catch (e) {}
+    // v3.0.649 -- THE HEARTBEAT MOVED BELOW THE REFUSAL, and that is a bug fix, not tidying.
+    //
+    // It used to run FIRST, on every call. optimizeRunBeat refreshes beat, and beat is what the
+    // stale timeout measures from -- so a request REFUSED with 409 was extending the very claim
+    // that refused it. On 2026-08-12 that turned one dead run into an unbounded lockout: every
+    // retry pushed the fifteen minute expiry out another fifteen minutes, so the one action a
+    // blocked person naturally takes was the one action guaranteeing it would never clear.
+    //
+    // A refused request is evidence of a blocked user, not of a living run. Only work that got
+    // through counts as a heartbeat now.
+    if (optimizeRunIsRevoked(req.query.run)) {
+      return res.status(409).json({ error: 'optimize_revoked',
+        message: 'This Optimize run was stopped, so it has been asked to stand down. Start a new one when you are ready.' });
+    }
     if (req.query.compose === '1' || req.query.compose === 'true') {
       // v3.0.610 -- ONE RUN PER USER. Refused BEFORE the token check, so a blocked attempt cannot
       // cost anybody a token, and before runGrowsClear below -- which is the line that makes this
@@ -12912,11 +13101,16 @@ router.get('/pack-render/:campaignId', requireAuth, async function (req, res) {
       // The campaign row is not loaded this early in the route -- checked, because node --check
       // would have passed a reference to it and the name is only used for a message. The client
       // knows which book it asked for, so it can name it; the server records the id.
-      try { optimizeRunStart(req.session.userId, req.params.campaignId, ''); } catch (e) {}
+      var _runId = null;
+      try { _runId = optimizeRunStart(req.session.userId, req.params.campaignId, ''); } catch (e) {}
+      // The loop sends this back on every step so a stop can be enforced. Same channel the token
+      // charge already uses, for the same reason: the body is a PDF.
+      try { res.set('X-Optimize-Run', String(_runId || '')); res.set('Access-Control-Expose-Headers', 'X-Optimize-Tokens, X-Optimize-Run'); } catch (e) {}
       // A new Optimize run: clear this book's run-scoped grows so we start from the NATURAL images.
       // Grows recorded during this run's loop passes are keyed the same way and carry across passes for
       // convergence, but never persist to the DB -- so the layout is deterministic and never degrades.
       try { runGrowsClear(runGrowsKey(req.params.campaignId, req)); runMovesClear(runGrowsKey(req.params.campaignId, req)); runRefusalsClear(runGrowsKey(req.params.campaignId, req)); } catch (e) {}
+      try { optimizeRunBeat(req.session.userId, 'compose'); } catch (e) {}
       var _cco = req.query.co ? parseCustomOpts(req.query.co) : {};
       if (_cco.arrange === 'magazine' || _cco.arrange === 'gazette') {
         var packedM = await computeMagazinePack(req, req.params.campaignId, { pageHeightIn: CO_PACK_PAGE_H_IN });
