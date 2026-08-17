@@ -16392,6 +16392,228 @@ function printProgressDone() {
   if (wrap) wrap.style.display = 'none';
 }
 
+// ============================================================
+// v3.0.665 -- TD-464. REORDER A PAST BOOK.
+//
+// Ian, 2026-08-12: "a button on the prior orders on the My Order screen that takes you back to the
+// Publish page so they can Reorder a book they bought in the past. Populate the cover and interior
+// pdfs. Just take them right to the publish page / Order tab with the pdf's prepopulated."
+//
+// WHAT MAKES THIS SAFE TO DO AT ALL: a past order is the only thing in the product that is already
+// a complete, accepted print job. print_orders keeps interior_pdf_url, cover_pdf_url, binding,
+// color_tier, cover_finish, page_count, quantity and the whole shipping block on the row, and
+// NOTHING in the codebase deletes those two objects -- deleteFile is called for assets, campaign
+// covers, unpublished stories and superseded optimize artifacts, never for an order's print files.
+// (Checked 2026-08-12. R2 bucket lifecycle rules live in Cloudflare, outside the repo, so they are
+// still Ian's to confirm; see TD-464.) So a reorder hands the printer THE SAME BYTES the customer
+// already approved and received, which is both faster -- no render, no 100s flatten -- and more
+// faithful than rebuilding a book that may have been edited since.
+//
+// THREE THINGS THIS DELIBERATELY DOES NOT DO:
+//
+// 1. IT DOES NOT CARRY THE PRICE. v3.0.425's own comment: a quote is only true at the moment it was
+//    taken. customer_charge on the row is history, not an offer. Every reorder is re-quoted live and
+//    the old total is shown beside the new one so the difference is visible rather than discovered.
+// 2. IT DOES NOT TOUCH THE PREPARE PATH. reviewPrintOrder, renderPrintReview and submitPrintOrder
+//    are unchanged apart from ONE delegating line, so the worst case here is "the reorder button
+//    does not work", never "ordering broke". The quote fetch below is a near-duplicate of the one
+//    inside reviewPrintOrder and that is the deliberate trade: restructuring the money path to share
+//    it is the larger risk of the two.
+// 3. IT DOES NOT GUESS AT A FORMAT IT CANNOT HONOUR. If the printer no longer offers this book's
+//    binding, colour tier or finish at this page count, the reorder ABORTS AND SAYS SO rather than
+//    quietly ordering something adjacent. Silently ordering a different physical object than the one
+//    on the card would be the worst outcome available here.
+// ============================================================
+
+// Where a reorder in flight lives. Null whenever there isn't one -- every exit path clears it.
+// .applied flips true only once the format selects have actually accepted the stored values, which
+// is what reviewPrintOrder tests before delegating: a half-restored reorder must fall through to the
+// ordinary Prepare rather than price files against a format that never landed.
+
+function reorderClear() {
+  if (!state._reorder) return;
+  state._reorder = null;
+  var b = document.getElementById('print-place-btn');
+  if (b) b.textContent = 'Prepare Your Order';
+}
+
+function reorderAbort(msg) {
+  reorderClear();
+  preparedInteriorUrl = '';
+  preparedCoverUrl = '';
+  preparedSignature = '';
+  if (typeof showPrintBtnMsg === 'function') showPrintBtnMsg(msg, null);
+  if (typeof printProgressDone === 'function') printProgressDone();
+}
+
+// Entry point from the My Orders card.
+function reorderFromOrder(id) {
+  var o = (state._orders || []).filter(function (x) { return String(x.id) === String(id); })[0];
+  if (!o) return;
+  if (!o.campaign_id) {
+    showAlert('The campaign this book belonged to has been deleted, so it cannot be reordered.');
+    return;
+  }
+  if (!o.interior_pdf_url || !o.cover_pdf_url) {
+    showAlert('This order did not keep both print files, so it cannot be reordered directly. You can build a fresh order from the Publish page.');
+    return;
+  }
+  state._reorder = {
+    id: o.id,
+    label: o.external_id || ('po-' + o.id),
+    interior: o.interior_pdf_url,
+    cover: o.cover_pdf_url,
+    pageCount: parseInt(o.page_count, 10) || 0,
+    binding: o.binding || '',
+    colorTier: o.color_tier || '',
+    coverFinish: o.cover_finish || '',
+    quantity: parseInt(o.quantity, 10) || 1,
+    bookTitle: o.book_title || '',
+    orderName: o.order_name || '',
+    // The reprint's provenance is the ORIGINAL's provenance, because the bytes are the original's
+    // bytes. state.novelAsUser is reset by the novel view on entry, so it cannot be relied on to
+    // carry this -- printSelectionBody reads it from here instead while a reorder is applied.
+    sourceUserId: o.source_user_id || null,
+    shipTo: {
+      name: o.ship_name || '', street1: o.ship_street1 || '', street2: o.ship_street2 || '',
+      city: o.ship_city || '', state: o.ship_state || '', postcode: o.ship_postcode || '',
+      country: o.ship_country || '', phone: o.ship_phone || ''
+    },
+    shippingLevel: o.shipping_level || 'cheapest',
+    oldCharge: (o.customer_charge != null) ? Number(o.customer_charge) : null,
+    oldCurrency: o.currency || 'USD',
+    when: o.created_at || null,
+    applied: false
+  };
+  reorderGoToOrderTab(o.campaign_id);
+}
+
+// The campaign list may be stale or unloaded on the My Orders screen, so fetch it if the id is not
+// already known rather than failing on a page the reader reached legitimately.
+function reorderGoToOrderTab(campaignId) {
+  function have() {
+    return (state.campaigns || []).filter(function (c) { return String(c.id) === String(campaignId); })[0];
+  }
+  function go() {
+    var c = have();
+    if (!c) { reorderClear(); showAlert('Could not open that campaign.'); return; }
+    selectCampaignNovel(c.id);
+    switchNovelTab('order');
+  }
+  if (have()) { go(); return; }
+  fetch('/api/campaigns')
+    .then(function (r) { return r.json(); })
+    .then(function (data) { state.campaigns = Array.isArray(data) ? data : []; go(); })
+    .catch(function () { reorderClear(); showAlert('Could not open that campaign.'); });
+}
+
+// Called at the END of refreshPrintOptions, once the binding/colour/finish lists exist and the
+// defaults have been applied -- which is exactly what would otherwise overwrite these values. The
+// page count that produced those lists is the ORDER's, not an estimate, because
+// finalizeSeedPrintPageCount hands a pending reorder's count straight through.
+function reorderApplySelections() {
+  var R = state._reorder;
+  if (!R || R.applied) return;
+  function set(id, v) { var el = document.getElementById(id); if (el && v != null) el.value = v; }
+  function pick(id, want, what) {
+    var el = document.getElementById(id);
+    if (!el || !want) return true;
+    for (var i = 0; i < el.options.length; i++) {
+      if (el.options[i].value === want) { el.value = want; return true; }
+    }
+    reorderAbort('The printer no longer offers ' + what + ' "' + want + '" for a book this size, so this order cannot be repeated exactly. Build a new order below and it will be priced on what is available today.');
+    return false;
+  }
+  if (!pick('print-binding', R.binding, 'the binding')) return;
+  if (!pick('print-color', R.colorTier, 'the colour option')) return;
+  if (!pick('print-finish', R.coverFinish, 'the cover finish')) return;
+  set('print-book-title', R.bookTitle);
+  set('print-order-name', R.orderName);
+  set('print-qty', String(R.quantity || 1));
+  set('print-ship-name', R.shipTo.name);
+  set('print-ship-street1', R.shipTo.street1);
+  set('print-ship-street2', R.shipTo.street2);
+  set('print-ship-city', R.shipTo.city);
+  set('print-ship-state', R.shipTo.state);
+  set('print-ship-postcode', R.shipTo.postcode);
+  set('print-ship-country', R.shipTo.country);
+  set('print-ship-phone', R.shipTo.phone);
+  pick('print-ship-level', R.shippingLevel, 'that shipping speed');
+  R.applied = true;
+  var b = document.getElementById('print-place-btn');
+  if (b) b.textContent = 'Reorder \u2014 review & price';
+  var when = '';
+  try { if (R.when) when = ' from ' + new Date(R.when).toLocaleDateString(); } catch (e) {}
+  showPrintBtnMsg('Reordering order ' + R.label + when + '. Your original interior and cover files are ready, so nothing has to be rebuilt \u2014 press Reorder to price it at today\u2019s rates. Changing anything above cancels the reorder and starts a fresh one.', null);
+}
+
+// The reorder's own review step. Same review panel, same confirm button, same submit -- only the
+// two files come from the order instead of from a render.
+function reorderReviewAndPrice() {
+  var R = state._reorder;
+  if (!R || !R.applied) return;
+  var body = printSelectionBody();
+  if (!body || !body.selection.binding) { showPrintBtnMsg('Pick your format first.', null); return; }
+  if (!body.shipTo.name || !body.shipTo.street1 || !body.shipTo.city || !body.shipTo.postcode) {
+    showPrintBtnMsg('Please complete the shipping address.', null);
+    return;
+  }
+  var btn = document.getElementById('print-place-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Pricing your reorder...'; }
+  showPrintBtnMsg('', null);
+  printProgress(35);
+  // The files are the order's, and so is the page count they were printed at -- pricing a reorder
+  // off a fresh estimate would quote a different book than the one being sent.
+  preparedInteriorUrl = R.interior;
+  preparedCoverUrl = R.cover;
+  if (R.pageCount > 0) {
+    printActualPages = R.pageCount;
+    body.pageCount = R.pageCount;
+    updatePrintPageDisplay(R.pageCount, true);
+  }
+  fetch('/api/print/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Reorder \u2014 review & price'; }
+      if (!res.ok || !res.j) {
+        printProgressDone();
+        var msg = (res.j && res.j.error) ? res.j.error : 'Could not price this reorder.';
+        if (res.j && res.j.details && res.j.details.join) msg += ' (' + res.j.details.join('; ') + ')';
+        else if (res.j && res.j.detail) msg += ' (' + res.j.detail + ')';
+        showPrintBtnMsg(msg, null);
+        return;
+      }
+      printProgress(100);
+      showPrintBtnMsg('', null);
+      renderPrintReview(body, res.j);
+      reorderNoteInReview(R, res.j);
+      setTimeout(printProgressDone, 450);
+    })
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Reorder \u2014 review & price'; }
+      printProgressDone();
+      showPrintBtnMsg((e && e.message) ? e.message : 'Could not price this reorder.', null);
+    });
+}
+
+// Appended AFTER renderPrintReview writes the summary, so the reader sees what they paid last time
+// beside what this one costs. Printing costs and shipping both move; a reorder that quietly charged
+// a different number than the card they clicked from would be the complaint this prevents.
+function reorderNoteInReview(R, quote) {
+  var sum = document.getElementById('print-review-summary');
+  if (!sum) return;
+  var when = '';
+  try { if (R.when) when = ' on ' + new Date(R.when).toLocaleDateString(); } catch (e) {}
+  var html = '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;font-size:12px;color:rgba(245,232,200,0.75);">' +
+    'Reprint of order ' + escapeHtmlPrint(R.label) + ' using the original print files.';
+  if (R.oldCharge != null) {
+    html += ' You paid $' + R.oldCharge.toFixed(2) + ' ' + escapeHtmlPrint(R.oldCurrency) + when +
+      '; today\u2019s price is $' + Number(quote.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(quote.currency || 'USD') + '.';
+  }
+  html += '</div>';
+  sum.insertAdjacentHTML('beforeend', html);
+}
+
 function loadPrintTab() {
   // The book title is set on the Preview & Export tab and is read-only here.
   // v3.0.575 -- READ THE STORED TITLE FIRST, not the other tab's input box.
@@ -16449,6 +16671,16 @@ function loadPrintTab() {
 // Never blocks: if the lookup fails or the book predates the stored cover counts, the estimate is
 // used exactly as before, and prepareInteriorCount still corrects it once the interior exists.
 function finalizeSeedPrintPageCount(estimate) {
+  // v3.0.665 -- TD-464. A REORDER ALREADY KNOWS ITS PAGE COUNT: the files exist and were printed
+  // at it. Seeding from the estimate or from last-optimized would derive the binding list from a
+  // DIFFERENT book than the one about to be sent, and the binding list is what reorderApplySelections
+  // then has to find the stored binding in.
+  if (state._reorder && !state._reorder.applied && state._reorder.pageCount > 0) {
+    printActualPages = state._reorder.pageCount;
+    updatePrintPageDisplay(state._reorder.pageCount, true);
+    refreshPrintOptions(state._reorder.pageCount);
+    return;
+  }
   var used = false;
   function apply(n, exact) {
     if (used) return; used = true;
@@ -16530,6 +16762,10 @@ function refreshPrintOptions(pageCount) {
         if (f && o.default.coverFinish) f.value = o.default.coverFinish;
         if (pp && o.default.paper) pp.value = o.default.paper;
       }
+      // v3.0.665 -- TD-464. LAST, because these lists were just rebuilt and the defaults above are
+      // exactly what would overwrite a restored selection. Setting .value in script fires no change
+      // event, so invalidatePreparedOrder does not see this and wipe the reorder it is restoring.
+      if (typeof reorderApplySelections === 'function') reorderApplySelections();
     })
     .catch(function () {});
 }
@@ -16541,7 +16777,10 @@ function printSelectionBody() {
     campaignId: state.currentCampaign.id,
     orderName: val('print-order-name'),
     bookTitle: val('print-book-title'),
-    sourceUserId: state.novelAsUser || null,
+    // v3.0.665 -- TD-464. A REPRINT'S PROVENANCE IS THE ORIGINAL'S, because the bytes are the
+    // original's. state.novelAsUser is reset to null for a Story Master on entry to the novel view,
+    // so a member's book reordered by the SM would otherwise be recorded as canonical.
+    sourceUserId: (state._reorder && state._reorder.applied) ? (state._reorder.sourceUserId || null) : (state.novelAsUser || null),
     pageCount: currentPageCount(),
     quantity: parseInt(val('print-qty'), 10) || 1,
     selection: {
@@ -16622,6 +16861,14 @@ function printOrderSignature() {
 function invalidatePreparedOrder() {
   var panel = document.getElementById('print-review');
   var reviewOpen = !!(panel && panel.style.display === 'block');
+  // v3.0.665 -- TD-464. BEFORE THE EARLY RETURN, NOT AFTER IT.
+  // A reorder holds its files in state._reorder and does not write preparedInteriorUrl until the
+  // reader presses Reorder, so between arriving and pricing, all three conditions below are false
+  // and this function returns having done nothing. Written after the guard, the reorder survived an
+  // edit to the binding -- and the stored PDFs were printed at the OLD binding, so it would then
+  // have priced and ordered files that no longer matched the form on screen. Found by a jsdom test
+  // driving the real page, not by reading.
+  if (typeof reorderClear === 'function') reorderClear();
   if (!preparedInteriorUrl && !preparedCoverUrl && !reviewOpen) { preparedSignature = ''; return; }
   preparedInteriorUrl = '';
   preparedCoverUrl = '';
@@ -16698,6 +16945,11 @@ function printCoverUrl() {
 }
 
 function reviewPrintOrder() {
+  // v3.0.665 -- TD-464. A REORDER PRICES THE FILES IT ALREADY HAS. One delegating line rather than a
+  // reuse branch threaded through the render, the cover build and the dimension check below: this
+  // path ends at a payment, and the smallest possible edit is the right size of edit for it.
+  // Gated on .applied, so a reorder whose format never landed falls through to an ordinary Prepare.
+  if (state._reorder && state._reorder.applied) { reorderReviewAndPrice(); return; }
   var body = printSelectionBody();
   if (!body || !body.selection.binding) { showPrintBtnMsg('Pick your format first.', null); return; }
   if (!body.shipTo.name || !body.shipTo.street1 || !body.shipTo.city || !body.shipTo.postcode) {
@@ -16830,6 +17082,7 @@ function renderPrintReview(body, quote) {
 function cancelPrintReview() {
   var panel = document.getElementById('print-review');
   if (panel) panel.style.display = 'none';
+  if (typeof reorderClear === 'function') reorderClear();
   var place = document.getElementById('print-place-btn');
   if (place) place.style.display = '';
   preparedSignature = '';
@@ -17025,6 +17278,9 @@ function renderOrders(orders) {
     list.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;text-align:center;color:var(--text-muted);">You have not placed any print orders yet.</div>';
     return;
   }
+  // v3.0.665 -- TD-464. The Reorder button needs the ROW, not the card. Kept here so the button
+  // does not have to re-fetch, and so it reads exactly what was rendered.
+  state._orders = orders;
   list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">' + orders.map(function (o) { return orderCardHtml(o); }).join('') + '</div>';
 }
 
@@ -17046,6 +17302,13 @@ function orderCardHtml(o) {
   if (o.interior_pdf_url) links += '<a href="' + esc(o.interior_pdf_url) + '" target="_blank" rel="noopener" style="' + linkBase + 'margin-right:14px;">Interior PDF</a>';
   if (o.cover_pdf_url) links += '<a href="' + esc(o.cover_pdf_url) + '" target="_blank" rel="noopener" style="' + linkBase + 'margin-right:14px;">Cover PDF</a>';
   if (o.tracking_url) links += '<a href="' + esc(o.tracking_url) + '" target="_blank" rel="noopener" style="' + linkBase + '">Track shipment</a>';
+  // v3.0.665 -- TD-464. REORDER. Offered only when both print files and the campaign are still
+  // there: deleting a campaign NULLs campaign_id on the order rather than deleting the row, and
+  // without both PDFs there is nothing to reprint. Shown on any order that has them, including a
+  // failed or refunded one -- those are exactly the ones someone wants to try again.
+  var reorderBtn = (o.campaign_id && o.interior_pdf_url && o.cover_pdf_url)
+    ? '<button class="btn btn-sm" style="margin-top:10px;" onclick="reorderFromOrder(' + o.id + ')">Reorder this book</button>'
+    : '';
   var html = '';
   html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 14px;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
@@ -17069,6 +17332,7 @@ function orderCardHtml(o) {
   }
   html += row('Status', orderStatusLabel(o));
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
+  if (reorderBtn) html += reorderBtn;
   html += '</div>';
   return html;
 }
