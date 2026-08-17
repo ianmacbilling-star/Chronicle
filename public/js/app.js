@@ -222,11 +222,40 @@ function appConfirm(opts) {
   // Found by id now rather than by a :not() chain on the footer. That selector picked the button by
   // what it was NOT, so giving the cancel a danger class or adding a third button would have
   // silently matched something else.
+  // v3.0.687 -- ONE-BUTTON NOTICE MODE IS BACK, AND THIS TIME IT HAS A USER.
+  // v3.0.634 added it, v3.0.635 removed it, and the note above says why: THAT refusal offered a
+  // way forward (Upgrade My Plan) so it needed both buttons. A refusal with nowhere to go is a
+  // different thing -- 'you cannot do this right now, here is why' has nothing to cancel, and a
+  // Cancel beside an OK on such a box invites the reader to look for the difference.
   var cancelBtn = document.getElementById('app-confirm-cancel');
-  if (cancelBtn) cancelBtn.textContent = o.cancelLabel || 'Cancel';
+  if (cancelBtn) {
+    cancelBtn.textContent = o.cancelLabel || 'Cancel';
+    cancelBtn.classList.toggle('hidden', !!o.okOnly);
+  }
   var ok = document.getElementById("app-confirm-ok");
   if (ok) { ok.textContent = o.okLabel || "Yes"; ok.className = "btn " + (o.danger ? "btn-danger" : "btn-primary"); }
   var m = document.getElementById("app-confirm-modal"); if (m) m.classList.remove("hidden");
+}
+// v3.0.687 -- A REFUSAL MUST LAND IN FRONT OF THE READER.
+//
+// Ian, 2026-08-17, after half an hour lost to a control that appeared to do nothing: "Put them in
+// the MIDDLE OF THE SCREEN... Most of the time you never see them... If they have scrolled down at
+// all you never see them."
+//
+// showAlert slides in at the top right for a couple of seconds. That is fine for 'that worked' --
+// missing a Saved toast costs nothing. It is the wrong device entirely for 'that did NOT happen',
+// because the reader is looking at the control they just clicked, which is often nowhere near the
+// top of the page, and the only evidence of the refusal expires before they look up.
+//
+// THE LINE, so this does not turn into 133 modals: a toast confirms, a modal refuses. Six call
+// sites in this file tell the reader an action was declined; all six come through here.
+//
+// THE COST OF GETTING THIS WRONG IS MEASURED, NOT IMAGINED: a print order in review freezes every
+// layout control through blockLayoutChangeIfOrdering, which is called from FOUR places and
+// silently returned after a toast. Title placement and title size 'stopped working' and were
+// diagnosed as a rendering regression before anybody found the refusal.
+function appNotice(title, body, note) {
+  appConfirm({ title: title, body: body, note: note || '', okOnly: true, okLabel: 'OK' });
 }
 function closeAppConfirm() {
   state._appConfirmFn = null;
@@ -8065,6 +8094,13 @@ function _tbSave(patch, then) {
       if (then) then();
       return;
     }
+    // v3.0.687 -- the stash keys ride the SAME patch as the clear, so the cover and the held copy
+    // can never disagree about which drawing this is.
+    if (patch.stashUrl !== undefined) book.built_title_draft_url = patch.stashUrl;
+    if (patch.stashSrc !== undefined) book.built_title_draft_src = patch.stashSrc;
+    if (patch.stashText !== undefined) book.built_title_draft_text = patch.stashText;
+    if (patch.stashSub !== undefined) book.built_title_draft_sub = patch.stashSub;
+    if (patch.stashPrompt !== undefined) book.built_title_draft_prompt = patch.stashPrompt;
     if (patch.url !== undefined) book.built_title_url = patch.url;
     if (patch.src !== undefined) book.built_title_src = patch.src;
     if (patch.text !== undefined) book.built_title_text = patch.text;
@@ -8436,6 +8472,41 @@ function titleBuildRevert() {
 
 // TD-401. Take the drawn title off the book. The five presets come back to life the moment it is gone
 // -- that is the whole point, and it is what prepApplyTitleModeLock decides from.
+// v3.0.687 -- DONE & STASH. TD-494.
+//
+// Ian, 2026-08-17: "I have no way to Not use what's in the title builder and get back to the
+// Regular title styles... It should leave the draft image in there but not use it on the cover."
+// Remove did get there, and it is worded and shaped as a deletion -- Archive first or lose the
+// token -- so the only exit from a drawn title was a door marked permanent. Remove is hidden now.
+//
+// IT COPIES THE LIVE ARTWORK INTO THE DRAFT ON THE WAY OUT, rather than trusting a draft to be
+// sitting there. It cannot: the client's promote branch clears built_title_draft_* while the
+// SERVER's promote deliberately keeps it (v3.0.661), and the client branch is the one that runs
+// for a book. So after Done & Use there is no draft left to hold, and a Stash that assumed one
+// would quietly throw the picture away -- which is the exact failure this button exists to end.
+// The divergence itself is TD-495; this does not depend on which way it is settled.
+//
+// ONE WRITE, not two. Live and draft move in a single patch so there is no instant where the
+// artwork is off the cover and not yet held anywhere.
+function titleBuildStash() {
+  if (!state.currentCampaign) return;
+  var cur = _tbCur();
+  if (!cur.url) { closeTitleBuilder(); return; }   // nothing in charge; Stash has nothing to do
+  _tbErr('');
+  _tbSave({
+    url: '', src: '', prevUrl: '', prevSrc: '',
+    stashUrl: cur.url, stashSrc: cur.src || '', stashText: cur.text || '',
+    stashSub: (cur.sub == null ? null : cur.sub), stashPrompt: cur.prompt || ''
+  }, function () {
+    // The five canned styles are decided by prepApplyTitleModeLock from whether a drawn title is
+    // in charge. Nothing is in charge now, so they must come back -- Ian: "when hit it should free
+    // up lock so you can use the canned title styles."
+    if (typeof prepApplyTitleModeLock === 'function') prepApplyTitleModeLock();
+    if (typeof showAlert === 'function') showAlert('Stashed. The title styles are back in charge; press Done & Use to put the drawing back.');
+    closeTitleBuilder();
+  });
+}
+// TD-401. Kept and reachable, but no longer on the toolbar -- see titleBuildStash above.
 function titleBuildRemove() {
   if (!state.currentCampaign) return;
   var archived = !!_tbArchiveRow();
@@ -10623,7 +10694,9 @@ function applyArchiveToTarget(archiveId) {
   // checked by their own handler. Everything else still needs a campaign on screen, because /apply
   // is scoped to it -- and now says so rather than shrugging.
   var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid && !ctx.prepKind) { showAlert('No campaign is open, so that image cannot be applied. Open the campaign and try again.'); return; }
+  if (!cid && !ctx.prepKind) { appNotice('No campaign is open.',
+    'That image cannot be applied because no campaign is on screen.',
+    'Open the campaign and try again.'); return; }
 
   // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
   // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
@@ -15106,7 +15179,9 @@ async function deleteMyVersion() {
   }
   if (!forkOwnNonCanonical()) {
     if (forkOnScreenIsCanonical()) {
-      showAlert('This is the original version of the session, so it cannot be deleted -- everything else is built from it. You can rename it, or delete one of your other versions.');
+      appNotice('That version cannot be deleted.',
+        'This is the original version of the session, so it cannot be deleted -- everything else is built from it.',
+        'You can rename it, or delete one of your other versions.');
     } else {
       showAlert('You can only remove a session from your own versions.');
     }
@@ -15664,7 +15739,9 @@ function saveCampaignLayoutOpts(ctx){
     // gets the same rule the cover already had -- prepUseMember gates the images, this gates the
     // layout, and they now agree.
     if (ctx !== 'session' && typeof novelOwnView === 'function' && !novelOwnView()) {
-      if (typeof showAlert === 'function') showAlert('You are looking at someone else\u2019s version. Switch to your own version to change the layout.');
+      if (typeof appNotice === 'function') appNotice('That is not your version.',
+        'You are looking at someone else\u2019s version, so the layout cannot be changed here.',
+        'Switch to your own version and the layout controls come back.');
       return;
     }
     var fork = null;
@@ -16977,11 +17054,14 @@ function reorderFromOrder(id) {
   var o = (state._orders || []).filter(function (x) { return String(x.id) === String(id); })[0];
   if (!o) return;
   if (!o.campaign_id) {
-    showAlert('The campaign this book belonged to has been deleted, so it cannot be reordered.');
+    appNotice('This book cannot be reordered.',
+      'The campaign this book belonged to has been deleted, so there is nothing left to reorder from.');
     return;
   }
   if (!o.interior_pdf_url || !o.cover_pdf_url) {
-    showAlert('This order did not keep both print files, so it cannot be reordered directly. You can build a fresh order from the Publish page.');
+    appNotice('This order cannot be reordered directly.',
+      'This order did not keep both print files, so there is nothing to send to the printer a second time.',
+      'You can build a fresh order from the Publish page.');
     return;
   }
   // v3.0.667 -- TD-465. SAY WHY IT FAILED BEFORE THEY SEND THE SAME FILES AGAIN.
@@ -17490,8 +17570,10 @@ function orderInProgress() {
 // blocked the change (caller should return without applying it).
 function blockLayoutChangeIfOrdering() {
   if (!orderInProgress()) return false;
-  if (typeof showAlert === 'function') {
-    showAlert('You have a print order in review. Open the Order tab and click Back to cancel it before changing the layout, or the book you order will not match what you see here.');
+  if (typeof appNotice === 'function') {
+    appNotice('Your layout is locked while an order is in review.',
+      'You have a print order in review, so the layout cannot be changed -- otherwise the book you receive would not match the one you are looking at.',
+      'Open the Order tab and click Back to cancel the order, then change the layout.');
   }
   return true;
 }

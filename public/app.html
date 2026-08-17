@@ -1919,7 +1919,10 @@
           <button class="panel-pill hidden" id="title-build-revert-btn" onclick="titleBuildRevert()" title="Undo the last retouch - restore the previous title">Revert</button>
           <button class="panel-pill" onclick="openTitleReplacePicker()" title="Put an archived title on the book instead">Replace</button>
           <button class="panel-pill" id="title-build-archive-btn" onclick="titleBuildArchiveToggle()" title="Save this title to your Archive">Archive</button>
-          <button class="panel-pill" onclick="titleBuildRemove()" title="Take the drawn title off the book and go back to the title styles">Remove</button>
+          <!-- v3.0.687 -- REMOVE IS OFF THE TOOLBAR. It was the only exit from a drawn title and it is
+               a deletion: Archive first or the token is gone. Done &amp; Stash is the non-destructive
+               exit and takes its place. The handler is kept and still works if this is unhidden. -->
+          <button class="panel-pill hidden" onclick="titleBuildRemove()" title="Take the drawn title off the book and go back to the title styles">Remove</button>
         </div>
       </div>
     </div>
@@ -1928,6 +1931,10 @@
          keystrokes from a control that already had one, is a worse cost than the shared branch. -->
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeTitleBuilder()">Cancel</button>
+      <!-- v3.0.687 -- LEFT OF Done &amp; Use, on Ian's instruction. The pair reads as one choice with
+           two outcomes: same grammar, same shape, one verb apart. Stash holds the drawing and puts
+           the five title styles back in charge; Use puts the drawing on the cover. -->
+      <button class="btn" id="title-build-stash" onclick="titleBuildStash()" title="Keep this drawing but take it off the cover, and go back to the title styles">Done &amp; Stash</button>
       <button class="btn" onclick="titleBuilderUse()">Done &amp; Use</button>
     </div>
   </div>
