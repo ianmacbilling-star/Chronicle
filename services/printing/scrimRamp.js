@@ -132,6 +132,98 @@ function rampPng(stops) {
   ]);
 }
 
+// =====================================================================================================
+// v3.0.688 -- THE HAZE. TD-490.
+//
+// Ian, 2026-08-17, with a marked-up screenshot showing the runes and the staff at the far edges of
+// the band: "I would like the areas inside the red circles to Not be faded... it should go past the
+// lettering but not much... I don't want the Plate." And: "it should be automatic."
+//
+// So the scrim stops being a full-width band and becomes a soft cloud around the TYPE. The four
+// directional ramps above are retired by this: a haze that surrounds the lettering needs no
+// direction, so top / middle / bottom now share ONE image instead of three that could drift.
+//
+// THIS IS THE OVAL, ATTEMPT FOUR, AND IT IS A DIFFERENT MECHANISM. v3.0.624 drew an ellipse, 625
+// pulled the core under the lettering, 628 bounded the blurs to the artwork width. All three read
+// as a visible shape and v3.0.631 removed the lot at Ian's request, with the reason recorded: a
+// filled shape has an edge, and blur only MOVES an edge. Those were CSS primitives, which always
+// have a boundary. This is a bitmap: alpha reaches EXACTLY ZERO at the image border AND arrives
+// there with zero slope, because (1-d^2)^p has derivative 0 at d=1. There is no edge to move.
+//
+// THE SHAPE IS "B", CHOSEN BY EYE. Three bleeds were composited onto Ian's real cover -- 1.10x,
+// 1.30x and 1.55x the lettering width -- and he picked the middle one. rx and ry below are the
+// semi-axes as a multiple of the TITLE BOX half-width and half-height, and PAD_X / PAD_Y are
+// derived from them so the ellipse lands exactly on the image border. Change rx/ry and the padding
+// follows; the two cannot disagree.
+//
+// IT SIZES ITSELF, WITH NO TEXT METRICS ANYWHERE. The haze is painted on a box that wraps the title
+// and subtitle, and that box is shrink-to-fit for lettering and takes the built title's own width
+// for a drawing. So Small gets a small haze and Large a large one because the BOX is smaller or
+// larger -- nothing reads the size setting, and there is no second number to keep in step with
+// COVER_SIZE_RATIO.
+//
+// KNOWN LIMIT, STATED RATHER THAN DISCOVERED: this measures the title BOX. A built title is a PNG
+// whose lettering need not fill its own width, so a drawing with wide transparent margins gets a
+// haze wider than its words. The fix is an ink bounding box computed at build time (TD-491),
+// deliberately a separate build. Plain text titles are exact already, because the box IS the text.
+const HAZE_RX = 1.30;      // semi-axis / title-box half-width
+const HAZE_RY = 2.10;      // semi-axis / title-box half-height
+const HAZE_PEAK = 0.94;    // alpha at the centre
+const HAZE_POWER = 1.5;    // falloff shape; >1 keeps the core dense and the rim long
+const HAZE_W = 192;
+const HAZE_H = 192;
+
+// The insets that put the ellipse exactly on the image border, DERIVED from the semi-axes above.
+// A box of width W has half-width W/2; the ellipse wants HAZE_RX * (W/2), so the image must overhang
+// each side by (HAZE_RX - 1) / 2 of the box width.
+function hazeInsetPct(r) { return Math.round((r - 1) / 2 * 1000) / 10; }
+
+function hazePng() {
+  const raw = Buffer.alloc((HAZE_W * 4 + 1) * HAZE_H);
+  let o = 0;
+  for (let y = 0; y < HAZE_H; y++) {
+    raw[o++] = 0;
+    const dy = (y / (HAZE_H - 1)) * 2 - 1;
+    for (let x = 0; x < HAZE_W; x++) {
+      const dx = (x / (HAZE_W - 1)) * 2 - 1;
+      const d2 = dx * dx + dy * dy;
+      const a = d2 >= 1 ? 0 : Math.pow(1 - d2, HAZE_POWER) * HAZE_PEAK;
+      raw[o++] = SCRIM_RGB[0];
+      raw[o++] = SCRIM_RGB[1];
+      raw[o++] = SCRIM_RGB[2];
+      raw[o++] = Math.round(255 * a);
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(HAZE_W, 0);
+  ihdr.writeUInt32BE(HAZE_H, 4);
+  ihdr[8] = 8; ihdr[9] = 6;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
+// THE WHOLE RULE SET, emitted from here so all three cover builders get one haze and not three.
+//
+// NO NEGATIVE z-index, on purpose. The nearest stacking context above the caption is
+// `.cover-content.cover-image-layout` (position:absolute, z-index:1), so a z-index:-1 pseudo-element
+// would sink to the bottom of THAT context -- behind the cover artwork -- and vanish completely.
+// Instead the haze is a positioned element FIRST in tree order and the type is position:relative,
+// so both are positioned with z-index auto and paint in document order: haze, then words.
+function hazeCss() {
+  const uri = 'data:image/png;base64,' + hazePng().toString('base64');
+  const px = hazeInsetPct(HAZE_RX), py = hazeInsetPct(HAZE_RY);
+  return '.cover-title-haze { position:relative; display:inline-block; max-width:100%; }' +
+    ' .cover-title-haze-fx { position:absolute; left:-' + px + '%; right:-' + px + '%;' +
+    ' top:-' + py + '%; bottom:-' + py + '%; pointer-events:none;' +
+    ' background-image:url(' + uri + '); background-size:100% 100%; background-repeat:no-repeat; }' +
+    ' .cover-title-haze .cover-art-title, .cover-title-haze .cover-art-dates,' +
+    ' .cover-title-haze .cover-built-title { position:relative; }';
+}
+
 // The full CSS declaration, so every call site emits the same three properties. background-size
 // stretches the 8x512 ramp to the caption box; no-repeat because a stretched image that tiles
 // after a rounding error draws a seam.
@@ -147,4 +239,7 @@ const scrimCss = {
   wrap: scrimDecl('wrap')
 };
 
-module.exports = { scrimCss, STOPS, SCRIM_RGB, rampPng };
+const coverHazeCss = hazeCss();
+module.exports = { scrimCss, coverHazeCss, STOPS, SCRIM_RGB, rampPng, hazePng,
+                   HAZE_RX, HAZE_RY, HAZE_PEAK, HAZE_POWER, hazeInsetPct };
+
