@@ -2090,8 +2090,13 @@ function selectCampaignNovel(id) {
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
   var _scn=document.getElementById('sidebar-campaign-name'); if(_scn)_scn.textContent=state.currentCampaign.name;
-  showView('campaign-detail');
-  showCampaignTab('novel');
+  // v3.0.678 -- TD-479. THIS FUNCTION WAS BROKEN AND HAD NO CALLERS LEFT.
+  // showCampaignTab does not exist anywhere in the product, and 'campaign-detail' is not one of
+  // the view ids in app.html -- so this threw a ReferenceError on every call. It went unnoticed
+  // because nothing called it, until v3.0.665's Reorder navigation picked it by name.
+  // Routed through showCampaignSection, the documented choke point, so if anything reaches for
+  // it again it works rather than throws. Found by ESLint no-undef, which node --check cannot do.
+  showCampaignSection('novel');
 }
 
 function openCampaignModal(editId) {
@@ -11684,8 +11689,13 @@ function selectCampaignNovel(id) {
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
   var _scn=document.getElementById('sidebar-campaign-name'); if(_scn)_scn.textContent=state.currentCampaign.name;
-  showView('campaign-detail');
-  showCampaignTab('novel');
+  // v3.0.678 -- TD-479. THIS FUNCTION WAS BROKEN AND HAD NO CALLERS LEFT.
+  // showCampaignTab does not exist anywhere in the product, and 'campaign-detail' is not one of
+  // the view ids in app.html -- so this threw a ReferenceError on every call. It went unnoticed
+  // because nothing called it, until v3.0.665's Reorder navigation picked it by name.
+  // Routed through showCampaignSection, the documented choke point, so if anything reaches for
+  // it again it works rather than throws. Found by ESLint no-undef, which node --check cannot do.
+  showCampaignSection('novel');
 }
 
 function openCampaignModal(editId) {
@@ -16438,6 +16448,17 @@ function csCommitCampaignSettings() {
       // the exclusive rule, so screen and database cannot disagree.
       var _gSaved = (data && data.genres !== undefined) ? data.genres : JSON.stringify(_genreVal);
       var _cpSaved = (data && data.campaign_prompt !== undefined) ? data.campaign_prompt : _cpVal;
+      // v3.0.678 -- TD-478. THE DECLARATIONS THESE TWO LINES NEEDED, which v3.0.677 shipped without.
+      // The edit that added them aborted before writing; the edit that added their USES did not, and
+      // `node --check` is perfectly happy with a reference to a variable that does not exist. Section
+      // 0 records exactly this and names the tool that finds it -- ESLint no-undef -- which now runs
+      // over the payload in the guards.
+      //
+      // Same reasoning as the v3.0.485 note above: the modal AND the campaign header read state, so
+      // a saved name that is not mirrored shows the old one until a reload. The SERVER's echo wins
+      // where we have it.
+      var _nmSaved = (data && data.name !== undefined) ? data.name : (_nmVal || undefined);
+      var _dsSaved = (data && data.description !== undefined) ? data.description : _dsVal;
       (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) x.name = _nmSaved; if (_dsSaved !== undefined) x.description = _dsSaved; } });
       if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) state.currentCampaign.name = _nmSaved; if (_dsSaved !== undefined) state.currentCampaign.description = _dsSaved; if (typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay(); if (typeof renderCampaigns === 'function') renderCampaigns(); }
       // An edit that arrived while this PUT was in flight has not been written yet. Replay it,
@@ -16902,7 +16923,24 @@ function reorderGoToOrderTab(campaignId) {
   function go() {
     var c = have();
     if (!c) { reorderClear(); showAlert('Could not open that campaign.'); return; }
-    selectCampaignNovel(c.id);
+    // v3.0.678 -- TD-464 / TD-479. THROUGH THE CHOKE POINT, NOT AROUND IT.
+    //
+    // v3.0.665 navigated with selectCampaignNovel, and ESLint no-undef found out why that was a bad
+    // idea: that function calls showCampaignTab('novel'), WHICH DOES NOT EXIST, and showView with a
+    // view id that is not in app.html. It is legacy code whose only caller was this line. The
+    // ReferenceError aborted the navigation before switchNovelTab ever ran, so Reorder landed
+    // somewhere other than the Order tab.
+    //
+    // The jsdom test did not catch it because it STUBBED selectCampaignNovel -- third time tonight a
+    // stub has hidden the thing it was standing in for (TD-477). It is not stubbed any more.
+    //
+    // showCampaignSection is the documented choke point: "ONE CHOKE POINT. All three Publish entry
+    // points route through here" (v3.0.350). It also applies the player-access gate, which the
+    // legacy path skipped entirely.
+    state.currentCampaign = c;
+    if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
+    setCampaignElements();
+    showCampaignSection('novel');
     switchNovelTab('order');
   }
   if (have()) { go(); return; }
