@@ -174,20 +174,35 @@ function rampPng(stops) {
 // deliberately a separate build. Plain text titles are exact already, because the box IS the text.
 const HAZE_RX = 1.55;      // semi-axis / title-box half-width
 const HAZE_RY = 2.30;      // semi-axis / title-box half-height
-const HAZE_PEAK = 0.94;    // alpha at the centre
-// v3.0.690 -- THE EXPONENT IS THE SIZE CONTROL NOBODY WAS USING.
-// Ian, 2026-08-17: "I think the size of the fade is correct. It's just too dark too far out on
-// the edges. So make it fade more drastic from the center. So the edges are barely even there."
-// Measured along the horizontal, alpha at the box edge / 25% / 50% / 75% of the way out:
-//     power 1.5 (v3.0.689)   239  218  156   70   <- still 60% of peak HALFWAY out
-//     power 4.5 (this)       234  177   65    6
-// The box edge barely moves, so the lettering keeps its cover; everything past it collapses.
-// RX, RY and PEAK are DELIBERATELY UNCHANGED -- Ian said the size was right, and v3.0.689
-// overshot precisely because two things moved at once.
+// v3.0.691 -- HALVED. Ian: "Cut the overall strength of the fade by 50%."
+// 0.94 was never a plateau value: it was the PEAK of a gradient that touched full strength at a
+// single edge and averaged far lighter across the type. Carrying it onto a flat core is what
+// made the fade a slab you can see the outline of.
+const HAZE_PEAK = 0.47;    // alpha at the centre
+// v3.0.691 -- STEEPER AGAIN. Ian: "And then cut the outer edges by another 50%."
+// SOLVED, NOT GUESSED, AND NOT STACKED. Halving the peak, steepening the exponent and shrinking
+// the core all cut the same numbers, so applying all three at their face value took the text
+// box edge from 240 to 14 -- it would have stripped the lettering. The three constants were
+// instead solved together against the measured target. The exponent did not need to move:
+// shrinking the flat core does most of the outer-field work on its own.
+//     690        centre 240  box 240  25% 174  50% 55  75% 5
+//     asked for  centre 120  box ~110  25% ~43  50% ~14  75% ~1
+//     691        centre 120  box  97  25%  52  50% 15  75% 1
 const HAZE_POWER = 4.5;    // falloff shape; higher = the rim dies off much faster
 // Where the title box sits inside the image, derived from the semi-axes rather than named twice.
-const INNER_X = 1 / HAZE_RX;
-const INNER_Y = 1 / HAZE_RY;
+// v3.0.691 -- THE FLAT CORE SHRINKS, BECAUSE THE SHAPE WAS THE COMPLAINT.
+// Ian, looking at a rendered plain-text title: "it looks like a rectangle around the letters...
+// it was pretty good before it just didn't go out far enough from the center."
+//
+// A full-box plateau makes the iso-alpha contours a rounded RECTANGLE -- which is what he can
+// see. Shrinking the flat core to a fraction of the box pulls the contours back toward the
+// ellipse he liked in v3.0.688, while the far larger extents and the steep exponent give it the
+// reach v3.0.688 lacked. The core is still centred on the type, so the words keep the densest
+// part; the ends now sit a little below peak instead of on a flat top, which at HALF strength
+// is a shading rather than a plate.
+const PLATEAU = 0.85;      // flat core as a fraction of the title box
+const INNER_X = PLATEAU / HAZE_RX;
+const INNER_Y = PLATEAU / HAZE_RY;
 const HAZE_W = 192;
 const HAZE_H = 192;
 
@@ -272,5 +287,5 @@ const scrimCss = {
 
 const coverHazeCss = hazeCss();
 module.exports = { scrimCss, coverHazeCss, STOPS, SCRIM_RGB, rampPng, hazePng,
-                   HAZE_RX, HAZE_RY, HAZE_PEAK, HAZE_POWER, hazeInsetPct, INNER_X, INNER_Y };
+                   HAZE_RX, HAZE_RY, HAZE_PEAK, HAZE_POWER, hazeInsetPct, INNER_X, INNER_Y, PLATEAU };
 
