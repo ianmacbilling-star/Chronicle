@@ -4559,7 +4559,25 @@ function renderCampaignHeaderDisplay() {
   }
 }
 
+// v3.0.677 -- TD-478. THE PENCIL OPENS THE DIALOG NOW.
+//
+// Ian: "The edit pencil on the Campaign page... should pull up the edit dialog box instead of doing
+// the inline edit on the page. Pull up the same dialog that shows when you hit the details button
+// on the campaign tile."
+//
+// One editor for a campaign instead of two. The inline one could only reach name and description;
+// the dialog reaches those plus lore, the campaign prompt, genres, the image and the permissions --
+// and it autosaves, so there is no half-saved state to reason about.
+//
+// The body below is left in place rather than deleted: it is the ONLY caller and the button now
+// points elsewhere, but a stale cached app.html (TD-146) could still call it, and a function that
+// quietly does nothing is worse than one that still works.
 function startCampaignEdit() {
+  var _c = state.currentCampaign;
+  if (_c && _c.id) { openCampaignSettings(_c.id, null); return; }
+  return _startCampaignEditInline();
+}
+function _startCampaignEditInline() {
   var c = state.currentCampaign;
   if (!c) return;
   if (document.getElementById('camp-edit-name-input')) return; // already editing
@@ -7392,7 +7410,13 @@ function exportNovelPDF() {
 // Owner-only on the server; here we just drive the button. We send the SAME
 // layout + custom options the preview is showing so the published book matches.
 // Pre-Publish Prep panel: seed the title + reflect the chosen cover/back/title images.
+// v3.0.677 -- TD-478. `campaign` is NOT a book-meta field like the three below it: it lives on
+// campaigns.campaign_image_url and is written by setCampaignImage through PUT /api/campaigns/:id.
+// It rides in this table anyway so the shared picker has one place to look up a label and a
+// current value, and selectPrepImage routes it to its own setter. Marked with `campaignField` so
+// nothing can mistake it for book meta -- v3.0.618 is the reminder of what that costs.
 var PREP_IMG_KINDS = {
+  campaign: { label: 'Choose a Campaign image', field: 'campaign_image_url', campaignField: true },
   cover: { label: 'Choose a Cover image', field: 'cover_image_url' },
   back:  { label: 'Choose a Back Cover image', field: 'back_cover_image_url' },
   title: { label: 'Choose a Title image', field: 'title_image_url' }
@@ -8902,13 +8926,18 @@ function _prepEnsureArchives(cb) {
 function openPrepImagePicker(kind) {
   var cfg = PREP_IMG_KINDS[kind];
   if (!cfg || !state.currentCampaign) return;
-  // The gate the old picker had and the replace picker did not. Carried across deliberately: a
-  // control that accepts a click and discards it is indistinguishable from a bug (v3.0.579).
-  if (!(typeof prepUseMember === 'function' && prepUseMember())) {
+  // v3.0.677 -- TD-478. TWO DIFFERENT OWNERSHIP QUESTIONS. The three book images belong to a
+  // VERSION, so prepUseMember decides. The campaign image belongs to the CAMPAIGN, so being the
+  // Story Master decides -- and Ian asked for it DM-only. Using the version test on a campaign image
+  // would refuse a Story Master looking at somebody else's version of their own campaign.
+  if (PREP_IMG_KINDS[kind].campaignField) {
+    var _c = state.currentCampaign;
+    if (!_c || _c.my_role !== 'dm') { showAlert('Only the Story Master can change the campaign image.'); return; }
+  } else if (!(typeof prepUseMember === 'function' && prepUseMember())) {
     showAlert('Switch to your own version to change the cover, back, or title image.');
     return;
   }
-  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind };
+  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: state.currentCampaign && state.currentCampaign.id };
   // v3.0.671 -- TD-474. NO SHAPE PREFILTER ON THE COVERS. Ian, on seeing v3.0.670: "remove the
   // shape filtering... and give the faint line showing how the pictures would be cropped."
   //
@@ -8978,12 +9007,34 @@ function pickCropOverlay(img) {
 
 function pickerCurrentUrl() {
   var ctx = state.pickerCtx || {};
-  if (!ctx.prepKind || !PREP_IMG_KINDS[ctx.prepKind]) return '';
-  return ((state.bookMeta || {})[PREP_IMG_KINDS[ctx.prepKind].field]) || '';
+  var cfg = ctx.prepKind ? PREP_IMG_KINDS[ctx.prepKind] : null;
+  if (!cfg) return '';
+  // v3.0.677 -- the campaign image is on the CAMPAIGN row, not in book meta. Reading it from
+  // bookMeta would silently return '' and the current picture would never be marked.
+  if (cfg.campaignField) {
+    var c = (state.campaigns || []).filter(function (x) { return String(x.id) === String(ctx.campaignId); })[0];
+    return (c && c[cfg.field]) || '';
+  }
+  return ((state.bookMeta || {})[cfg.field]) || '';
 }
 
 function selectPrepImage(kind, archiveId) {
   closePrepImagePicker();
+  // v3.0.677 -- TD-478. Its own table, its own route, its own setter -- which already fans the new
+  // url out to state.campaigns, state.currentCampaign and the tile grid.
+  if (PREP_IMG_KINDS[kind] && PREP_IMG_KINDS[kind].campaignField) {
+    var _cid = (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id);
+    if (!_cid) return;
+    var _cc = (state.campaigns || []).filter(function (x) { return String(x.id) === String(_cid); })[0];
+    var _a = (state.archives || []).filter(function (x) { return x.id === archiveId; })[0];
+    if (!_a) return;
+    // Clicking the picture already on the tile REMOVES it, exactly as the retired picker did.
+    var _cur = (_cc && _cc.campaign_image_url) || '';
+    setCampaignImage(_cid, (_cur === _a.image_url) ? '' : _a.image_url, function () {
+      if (typeof renderCampaignSettingsThumb === 'function') renderCampaignSettingsThumb();
+    });
+    return;
+  }
   if (prepUseMember()) {
     var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
     if (!a) return;
@@ -16017,7 +16068,19 @@ function setCampaignImage(campaignId, newUrl, cb) {
 // Archive picker for the campaign image. Same look as the Pre-Publish Prep
 // picker (shared CSS classes), but self-contained: it loads the target
 // campaign's own archives so it works from the home grid for any campaign.
+// v3.0.677 -- TD-478. RETIRED. Ian: "You can use the new Archive Modal picker for that too... get
+// rid of the current one used on the campaign tile image." This built its own modal with no
+// filters, no captions, no versions, no art styles and square crops -- the same second-rate picker
+// v3.0.670 retired for covers, still standing here.
+//
+// It now forwards. The body is kept rather than deleted for the reason the inline campaign editor's
+// is: a cached app.html (TD-146) can still hold the old onclick, and a function that quietly does
+// nothing is worse than one that still works.
 function openCampaignImagePicker(campaignId) {
+  if (campaignId && typeof openPrepImagePicker === 'function') { openPrepImagePicker('campaign'); return; }
+  return _openCampaignImagePickerLegacy(campaignId);
+}
+function _openCampaignImagePickerLegacy(campaignId) {
   if (!campaignId) return;
   fetch('/api/campaigns/' + campaignId + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
@@ -16242,6 +16305,17 @@ function openCampaignSettings(id, ev) {
   if (loreEl) { loreEl.value = (c && c.lore) ? c.lore : ''; loreCount(loreEl, 'cs-lore-count'); }
   var cpEl = document.getElementById('cs-cprompt-input');
   if (cpEl) { cpEl.value = (c && c.campaign_prompt) ? c.campaign_prompt : ''; }
+  // v3.0.677 -- TD-478. Populated HERE, above the _csReady = true below, for the reason v3.0.492
+  // wrote that flag in the first place: every assignment in this function fires the same event a
+  // user edit does, so a field populated after the arm would be written straight back -- and a name
+  // that failed to populate would be written back EMPTY. These two are the worst possible fields to
+  // get that wrong on, which is why they went in the middle of the block rather than the end.
+  var nmEl = document.getElementById('cs-name-input');
+  if (nmEl) nmEl.value = (c && c.name) ? c.name : '';
+  var dsEl = document.getElementById('cs-desc-input');
+  if (dsEl) dsEl.value = (c && c.description) ? c.description : '';
+  var nmWarn = document.getElementById('cs-name-warn');
+  if (nmWarn) nmWarn.style.display = 'none';
   _csGenres = csGenresFrom(c && c.genres);
   if (cpEl) cpromptCount(cpEl); else csGenreRender();
   var err = document.getElementById('campaign-settings-error');
@@ -16318,12 +16392,34 @@ function csCommitCampaignSettings() {
   var _cpEl = document.getElementById('cs-cprompt-input');
   var _cpVal = _cpEl ? _cpEl.value.slice(0, 500) : undefined;
   var _genreVal = csGenresFrom(_csGenres);
+  // v3.0.677 -- TD-478. THE NAME IS NEVER SAVED EMPTY.
+  // The inline editor this replaces had that rule explicitly ("never blanks the name"); the modal
+  // had no such guard because it never held the field. An empty box is not an instruction to erase
+  // the campaign's name -- it is almost always a populate that failed or a selection deleted while
+  // thinking. The stored name is left alone and the reader is told why, rather than the save being
+  // silently dropped, which is the behaviour v3.0.579 records as indistinguishable from a bug.
+  var _nmEl = document.getElementById('cs-name-input');
+  var _nmVal = _nmEl ? _nmEl.value.trim().slice(0, 120) : '';
+  var _nmWarn = document.getElementById('cs-name-warn');
+  if (_nmEl && !_nmVal) {
+    if (_nmWarn) _nmWarn.style.display = 'block';
+  } else if (_nmWarn) {
+    _nmWarn.style.display = 'none';
+  }
+  var _dsEl = document.getElementById('cs-desc-input');
+  var _dsVal = _dsEl ? _dsEl.value.slice(0, 2000) : undefined;
   var err = document.getElementById('campaign-settings-error');
   _csSaving = true;
   fetch('/api/campaigns/' + saveId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal, genres: _genreVal, campaign_prompt: _cpVal })
+    body: JSON.stringify(Object.assign(
+      { allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal, genres: _genreVal, campaign_prompt: _cpVal },
+      // Omitted entirely when blank, rather than sent as '' -- the route treats an absent key as
+      // "leave it" and a present one as "set it to this".
+      _nmVal ? { name: _nmVal } : {},
+      (_dsVal !== undefined) ? { description: _dsVal } : {}
+    ))
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -16342,8 +16438,8 @@ function csCommitCampaignSettings() {
       // the exclusive rule, so screen and database cannot disagree.
       var _gSaved = (data && data.genres !== undefined) ? data.genres : JSON.stringify(_genreVal);
       var _cpSaved = (data && data.campaign_prompt !== undefined) ? data.campaign_prompt : _cpVal;
-      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; } });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; }
+      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) x.name = _nmSaved; if (_dsSaved !== undefined) x.description = _dsSaved; } });
+      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) state.currentCampaign.name = _nmSaved; if (_dsSaved !== undefined) state.currentCampaign.description = _dsSaved; if (typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay(); if (typeof renderCampaigns === 'function') renderCampaigns(); }
       // An edit that arrived while this PUT was in flight has not been written yet. Replay it,
       // but only while the modal is still the same campaign -- if it has been closed, the close
       // already flushed and there is nothing owed.

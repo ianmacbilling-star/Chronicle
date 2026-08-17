@@ -2541,6 +2541,18 @@
       <button class="modal-close" onclick="closeCampaignSettings()">&times;</button>
     </div>
     <div id="campaign-settings-error" class="alert alert-error hidden"></div>
+    <!-- v3.0.677 -- TD-478. Ian: the campaign-page pencil should open THIS dialog rather than
+         editing in place, "and I think you will need to add the Campaign Name and Description to
+         the dialog box as well." First, because they are what the pencil was for. -->
+    <div class="cs-section" style="margin-bottom:16px;">
+      <label class="form-label" for="cs-name-input">Campaign name</label>
+      <input class="form-input" id="cs-name-input" type="text" maxlength="120" oninput="csDirty(true)"
+             placeholder="Name your campaign" />
+      <div id="cs-name-warn" class="settings-section-desc" style="display:none;color:#e08a6a;margin-top:4px;">A campaign needs a name &mdash; this will not be saved empty.</div>
+      <label class="form-label" for="cs-desc-input" style="margin-top:12px;">Description</label>
+      <textarea class="form-textarea" id="cs-desc-input" rows="3" maxlength="2000" oninput="csDirty(true)"
+                placeholder="What is this campaign about?"></textarea>
+    </div>
     <label class="cs-toggle">
       <input type="checkbox" id="cs-allow-novel" onchange="csDirty(true)" />
       <span>Allow Members to Publish</span>
@@ -2554,7 +2566,7 @@
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:10px;">Campaign image</div>
       <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div style="flex:0 0 96px;"><div class="prep-img-thumb" id="cs-image-thumb" onclick="openCampaignImagePicker(_csCampaignId)"><span class="prep-thumb-plus">+</span></div></div>
+        <div style="flex:0 0 96px;"><div class="prep-img-thumb" id="cs-image-thumb" onclick="openPrepImagePicker('campaign')"><span class="prep-thumb-plus">+</span></div></div>
         <div class="settings-section-desc" style="margin:0;">Shown on this campaign's tile, and used as the default cover when you publish if no cover has been chosen.</div>
       </div>
     </div>
