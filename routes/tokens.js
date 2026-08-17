@@ -906,16 +906,30 @@ async function syncSubscriptionToUser(subscription) {
   const customerId = (subscription.customer && typeof subscription.customer === 'object') ? subscription.customer.id : (subscription.customer || null);
   const status = subscription.status || '';
   const metaUserId = (subscription.metadata && subscription.metadata.user_id) ? parseInt(subscription.metadata.user_id, 10) : null;
-  let user = await db.prepare('SELECT id, tier FROM users WHERE stripe_subscription_id = ?').get(subId);
-  if (!user && metaUserId) user = await db.prepare('SELECT id, tier FROM users WHERE id = ?').get(metaUserId);
-  if (!user && customerId) user = await db.prepare('SELECT id, tier FROM users WHERE stripe_customer_id = ?').get(customerId);
+  // v3.0.673 -- TD-475. `email` added to all three lookups here: the tester test below needs it and
+  // none of them selected it. node --check is perfectly happy with user.email being undefined, which
+  // would have made every tester look like a non-tester and the new guard a silent no-op.
+  let user = await db.prepare('SELECT id, tier, email FROM users WHERE stripe_subscription_id = ?').get(subId);
+  if (!user && metaUserId) user = await db.prepare('SELECT id, tier, email FROM users WHERE id = ?').get(metaUserId);
+  if (!user && customerId) user = await db.prepare('SELECT id, tier, email FROM users WHERE stripe_customer_id = ?').get(customerId);
   if (!user) return { skipped: true, reason: 'no_user' };
   const priceTier = stripeProvider.tierForPrice(subscriptionPriceId(subscription));
   let nextTier = user.tier; // default: leave unchanged
   if (status === 'active' || status === 'trialing') {
     if (priceTier) nextTier = priceTier;
   } else if (status === 'canceled' || status === 'incomplete_expired' || status === 'paused' || status === 'unpaid') {
-    nextTier = 'copper';
+    // v3.0.673 -- TD-475. A TESTER IS NOT DOWNGRADED BY THEIR OWN CANCELLATION.
+    //
+    // Setting someone up as a tester means cancelling whatever subscription they had -- and that
+    // fires customer.subscription.deleted, which lands HERE and drops them to copper. v3.0.672 made
+    // the /api/auth/me reconciliation tester-aware and missed this path, so onboarding a tester
+    // knocked them down at the exact moment they were being set up: recoverable in one click on the
+    // User Testing tab, and a surprise every single time.
+    //
+    // Only the TIER is left alone. The subscription's real status is still written below, so a
+    // tester who later comes off the list reconciles against a status that is TRUE rather than one
+    // this branch declined to record.
+    if (!isTesterEmail(user.email)) nextTier = 'copper';
   } // past_due / incomplete -> keep current tier (grace period)
   //
   // v3.0.669 -- TD-473. `unpaid` MOVED FROM THE GRACE BRANCH TO THE DOWNGRADE BRANCH.
