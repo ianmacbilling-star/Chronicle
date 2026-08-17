@@ -16757,13 +16757,69 @@ function updatePrintPageDisplay(n, exact) {
 
 // Resolve the interior PDF, reusing a cached render when params are unchanged.
 // Resolves to { url, pages }.
+// v3.0.681 -- TD-390. TAKE A NUMBER. One helper for both render calls.
+//
+// A print URL used to be fetched and waited on. Rendering, flattening and uploading a book runs past
+// the ~100-second proxy ceiling on a large one, and the reader saw a failure for work that had
+// usually finished. This posts the same URL to the job wrapper, gets a ticket back, and polls --
+// returning THE SAME {ok, j} shape the direct fetch returned, so both call sites are unchanged in
+// what they receive.
+//
+// IT FALLS BACK TO THE OLD BEHAVIOUR ON ANYTHING UNEXPECTED. If the server answers 200 instead of
+// 202 -- an older build, a route not converted, a proxy that swallowed the wrapper -- the answer is
+// passed straight through. During a deploy the two halves are briefly mismatched, and this is the
+// half that has to tolerate it.
+//
+// UNKNOWN RESTARTS RATHER THAN FAILS. The job store is in memory (TD-435), so a redeploy mid-render
+// loses the ticket. That is not "your book failed"; it is "ask again", and the reader is told it is
+// still working rather than shown an error for something that may well have succeeded.
+function runRenderJob(url, kind, onTick) {
+  var jobUrl = url.replace(/^\/api\/pdf\/(print-interior|print-cover)\//, '/api/pdf/render-job/$1/');
+  if (jobUrl === url) {
+    // Not a URL this wrapper knows -- fetch it the old way rather than guessing.
+    return fetch(url).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+  }
+  var started = Date.now();
+  var restarts = 0;
+  function poll(jobId) {
+    return new Promise(function (resolve) { setTimeout(resolve, 1500); })
+      .then(function () { return fetch('/api/pdf/render-status/' + encodeURIComponent(jobId)); })
+      .then(function (r) { return r.json(); })
+      .then(function (st) {
+        if (!st) throw new Error('Lost contact with the print builder.');
+        if (st.state === 'done') return { ok: true, j: st.body };
+        if (st.state === 'error') return { ok: false, j: st.body || { error: 'render_failed' } };
+        if (st.state === 'unknown') {
+          // The process that held the ticket is gone. Start over ONCE; twice means something is
+          // wrong that retrying will not fix, and a silent retry loop is worse than an error.
+          if (restarts >= 1) return { ok: false, j: { error: 'render_lost', message: 'The print builder restarted while your book was being made. Please try again.' } };
+          restarts++;
+          return start();
+        }
+        if (typeof onTick === 'function') { try { onTick(Math.round((Date.now() - started) / 1000)); } catch (e) {} }
+        return poll(jobId);
+      });
+  }
+  function start() {
+    return fetch(jobUrl, { method: 'POST' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+      .then(function (res) {
+        if (res.status !== 202 || !res.j || !res.j.jobId) return { ok: res.ok, j: res.j };
+        return poll(res.j.jobId);
+      });
+  }
+  return start();
+}
+
 function ensureInterior() {
   var key = printInteriorUrl();
   if (printInteriorCache.key === key && printInteriorCache.url) {
     return Promise.resolve({ url: printInteriorCache.url, pages: printInteriorCache.pages });
   }
-  return fetch(key)
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+  return runRenderJob(key, 'print-interior', function (secs) {
+    // The reader is told it is still working, which is the whole point of a ticket.
+    try { showPrintBtnMsg('Building your interior file\u2026 ' + secs + 's', null); } catch (e) {}
+  })
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) {
         throw new Error(res.j && (res.j.message || res.j.error) ? (res.j.message || res.j.error) : 'Could not build the interior file.');
@@ -17494,8 +17550,12 @@ function reviewPrintOrder() {
         body.pageCount = intr.pages;
         updatePrintPageDisplay(intr.pages, true);
       }
-      return fetch(printCoverUrl())
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+      // v3.0.681 -- TD-390. The cover goes through the same ticket. It is the smaller of the two
+      // renders but it still flattens, and it runs AFTER the interior -- so it starts its clock
+      // with most of the ceiling already spent.
+      return runRenderJob(printCoverUrl(), 'print-cover', function (secs) {
+        try { showPrintBtnMsg('Building your cover file\u2026 ' + secs + 's', null); } catch (e) {}
+      });
     })
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.url) {

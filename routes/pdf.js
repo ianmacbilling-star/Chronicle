@@ -6231,7 +6231,130 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
 // Phase 1 renders at the document's native 8.5x11 trim; Lulu pads bleed. True
 // full-bleed 8.75x11.25 geometry + high-res panel regen come in Phase 2.
 // ============================================================
-router.get('/print-interior/:campaignId', requireAuth, async function(req, res) {
+// =================================================================================================
+// v3.0.681 -- TD-390. TAKE A NUMBER INSTEAD OF STANDING AT THE COUNTER.
+//
+// print-interior and print-cover rendered, flattened and uploaded WHILE THE BROWSER WAITED. There is
+// roughly a 100-second ceiling between the customer and this server that belongs to the proxy, not
+// to us: past it the connection is cut and the reader sees a failure -- for work that usually
+// FINISHED. Ghostscript alone measured 42 seconds on a 49-page book, and the flatten runs on every
+// path, including the fast subtraction path that skips rendering entirely. The page cap is 400.
+//
+// Same shape as the save-optimized job (v3.0.605) on purpose, because a second pattern for the same
+// problem is how two things that must agree start to drift. One store, one status route, one client
+// helper -- and this store is shared by both routes rather than each growing its own.
+//
+// ALWAYS ASYNC, EVEN FOR A TEN-PAGE BOOK. Making it conditional on size would mean the slow path
+// only ever runs for the rare large book -- which is to say it would be the path nobody tests and
+// everybody depends on. Ian's largest book today is 90 pages, so a size-gated version would never
+// have run at all before a customer found it.
+//
+// IN MEMORY, WITH EYES OPEN, exactly as the save job is: the failure mode is what matters. An
+// unknown job id answers state=unknown rather than an error, and the client re-issues the request.
+// It is the same TD-435 constraint as everything else in this file and does not make it worse.
+var _renderJobs = new Map();
+var RENDER_JOB_TTL_MS = 30 * 60 * 1000;
+var RENDER_JOB_MAX = 60;
+function renderJobPrune() {
+  try {
+    var now = Date.now();
+    _renderJobs.forEach(function (j, id) {
+      if (now - (j.finishedAt || j.startedAt || now) > RENDER_JOB_TTL_MS) _renderJobs.delete(id);
+    });
+    while (_renderJobs.size > RENDER_JOB_MAX) {
+      var oldest = _renderJobs.keys().next();
+      if (oldest.done) break;
+      _renderJobs.delete(oldest.value);
+    }
+  } catch (e) {}
+}
+// Hand the ticket over and get out of the way. Everything before this call is cheap -- a database
+// read and some string work -- so validation failures still come back immediately and unchanged.
+function renderJobStart(req, res, kind) {
+  var id = PROC_ID + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  var job = { id: id, kind: kind, userId: req.session.userId, state: 'running',
+              startedAt: Date.now(), finishedAt: 0, result: null, status: 0, body: null };
+  renderJobPrune();
+  _renderJobs.set(id, job);
+  res.status(202).json({ ok: true, async: true, jobId: id, kind: kind, startedAt: job.startedAt });
+  return job;
+}
+// The work reports through the job because the response has already gone. Both routes answered with
+// res.json(payload) or res.status(n).json(err); these two record exactly that, so the client sees
+// the same payloads it always did.
+function renderJobDone(job, body) {
+  if (!job) return;
+  job.state = 'done'; job.status = 200; job.body = body; job.finishedAt = Date.now();
+}
+function renderJobFail(job, status, body) {
+  if (!job) return;
+  job.state = 'error'; job.status = status || 500; job.body = body; job.finishedAt = Date.now();
+}
+// The wrapper. It drives the SAME handler through a captured response, so every status code, every
+// error body and the ordering of the checks are whatever the synchronous route does -- there is no
+// second implementation to keep in step, which is the whole reason it is built this way.
+//
+// ?download= is deliberately NOT routed through here: that path streams raw PDF bytes to a browser
+// that navigated to the URL, and a navigating browser cannot poll. It stays synchronous and keeps
+// its exposure to the ceiling; it is a preview, not the money path. Recorded rather than hidden.
+function renderJobCaptureRes(job) {
+  var _status = 200;
+  return {
+    status: function (n) { _status = n; return this; },
+    set: function () { return this; },
+    type: function () { return this; },
+    json: function (body) {
+      if (_status >= 400) renderJobFail(job, _status, body); else renderJobDone(job, body);
+      return this;
+    },
+    // A handler that reaches res.send here asked for ?download=, which the wrapper refuses above.
+    // Recorded as an error rather than silently dropped, so it cannot become a job that never ends.
+    send: function () {
+      renderJobFail(job, 500, { error: 'render_job_stream', message: 'That request streams a file and cannot be run as a job.' });
+      return this;
+    },
+    get headersSent() { return job.state !== 'running'; }
+  };
+}
+var RENDER_JOB_KINDS = { 'print-interior': true, 'print-cover': true };
+router.post('/render-job/:kind/:campaignId', requireAuth, async function (req, res) {
+  var kind = String(req.params.kind || '');
+  if (!RENDER_JOB_KINDS[kind]) return res.status(400).json({ error: 'unknown_render_kind' });
+  if (req.query.download) return res.status(400).json({ error: 'download_is_synchronous' });
+  var job = renderJobStart(req, res, kind);
+  try {
+    var sink = renderJobCaptureRes(job);
+    if (kind === 'print-interior') await printInteriorHandler(req, sink);
+    else await printCoverHandler(req, sink);
+    // A handler that returned without answering would leave the job running forever. It cannot
+    // happen today -- every path ends in a res call -- so this is the belt, and it is loud.
+    if (job.state === 'running') {
+      renderJobFail(job, 500, { error: 'render_job_no_answer', message: 'The render finished without producing a result.' });
+    }
+  } catch (e) {
+    console.error('[render-job] ' + kind + ' failed:', e && e.message ? e.message : e);
+    renderJobFail(job, 500, { error: 'render_failed', message: (e && e.message) || 'render failed' });
+  }
+});
+router.get('/render-status/:jobId', requireAuth, function (req, res) {
+  try {
+    var job = _renderJobs.get(String(req.params.jobId || ''));
+    // UNKNOWN IS NOT AN ERROR -- a restart, a redeploy or an aged-out job all land here, and none of
+    // them means the render failed. The client starts again rather than being told a lie.
+    if (!job) return res.json({ state: 'unknown', proc: PROC_ID, up: Math.round(process.uptime()) });
+    if (job.userId !== req.session.userId) return res.status(403).json({ state: 'error', error: 'not_yours' });
+    if (job.state === 'done') return res.json({ state: 'done', status: 200, body: job.body });
+    if (job.state === 'error') return res.json({ state: 'error', status: job.status, body: job.body });
+    return res.json({ state: 'running', elapsedMs: Date.now() - job.startedAt, kind: job.kind });
+  } catch (e) {
+    return res.status(500).json({ state: 'error', status: 500, body: { error: 'status_failed' } });
+  }
+});
+
+router.get('/print-interior/:campaignId', requireAuth, printInteriorHandler);
+// v3.0.681 -- TD-390. Named, so the async wrapper can drive THE SAME function. The body below is
+// untouched: one code path, two entry points, rather than a second copy that has to be kept in step.
+async function printInteriorHandler(req, res) {
   const db = await getDb();
 
   const campaign = await db.prepare(
@@ -6503,7 +6626,7 @@ router.get('/print-interior/:campaignId', requireAuth, async function(req, res) 
     console.error('[print-interior] upload failed:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'PDF upload failed', detail: friendlyError(e, '') });
   }
-});
+}
 
 // ============================================================
 // PRINT COVER (Phase 3) -- one-piece wrap PDF: back | spine | front.
@@ -6779,7 +6902,9 @@ router.get('/cover-dims-probe/:campaignId', requireAuth, async function (req, re
     return res.status(500).json({ error: (e && e.message) || 'cover-dims-probe failed' });
   }
 });
-router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
+router.get('/print-cover/:campaignId', requireAuth, printCoverHandler);
+// v3.0.681 -- TD-390. Named for the same reason as printInteriorHandler above.
+async function printCoverHandler(req, res) {
   try {
     const db = await getDb();
     const campaign = await db.prepare(
@@ -6883,7 +7008,7 @@ router.get('/print-cover/:campaignId', requireAuth, async function(req, res) {
     console.error('[print-cover] error:', e && e.message ? e.message : e);
     return res.status(500).json({ error: 'Server error', detail: friendlyError(e, '') });
   }
-});
+}
 
 // ============================================================
 // PUBLISH TO PUBLIC LIBRARY (Stories tab)
