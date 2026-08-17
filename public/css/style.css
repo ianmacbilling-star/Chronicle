@@ -2388,6 +2388,10 @@ html.staging-env .app-logo-text{color:#2b1400;}
    with the campaign-settings thumb (app.html #cs-image-thumb, sized inside a 96px box) and
    with the picker grid, and neither of those is a book cover. */
 .prep-img-slots .prep-img-thumb { aspect-ratio:8.5/11; }
+/* v3.0.679 -- TD-480. The campaign-settings thumbnail cropped the same way, and at 96px a centre
+   crop of a title card is unreadable -- Ian's screenshot shows it reading "OMAL". */
+.prep-img-thumb { background-size:contain!important; background-repeat:no-repeat!important;
+  background-position:center!important; }
 .prep-img-thumb { width:100%; aspect-ratio:1/1; border:1px dashed rgba(201,168,76,0.4); border-radius:8px; background-size:cover; background-position:center; background-color:rgba(20,12,4,0.6); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:border-color 0.15s; }
 .prep-img-thumb:hover { border-color:var(--gold); }
 .prep-img-thumb.has-img { border-style:solid; border-color:rgba(201,168,76,0.5); }
@@ -2494,7 +2498,13 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 
 /* Campaign cards now match the session-card layout: image band on top, solid
    body below (no more faded background image behind the text). */
-.campaign-card-img{width:100%;aspect-ratio:16/10;object-fit:cover;display:block;background:rgba(15,10,5,0.5);}
+/* v3.0.679 -- TD-480. THE WHOLE PICTURE, NOT THE MIDDLE OF IT. Ian: "I thought we made it so the
+   images always fit on the tile?" v3.0.670 gave the PICKER true aspect; the tile it feeds still
+   cropped to 16:10, so a portrait title card lost its top and bottom -- the reader chose a
+   picture they could see whole and got a slice of it. contain letterboxes a tall image against
+   the tile background, which is the honest trade: empty space beside the picture, rather than
+   picture missing off the edges. */
+.campaign-card-img{width:100%;aspect-ratio:16/10;object-fit:contain;display:block;background:rgba(15,10,5,0.5);}
 .campaign-card-img-empty{display:flex;align-items:center;justify-content:center;background:rgba(15,10,5,0.5);}
 .campaign-card-img-empty img{width:56px;height:56px;object-fit:contain;opacity:0.7;}
 .campaign-card-body{padding:12px 14px;display:flex;flex-direction:column;gap:6px;}

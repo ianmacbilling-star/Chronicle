@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');   // v3.0.679 -- TD-146, for the version-stamped app.html
 const session = require('express-session');
 const rateLimit = require('express-rate-limit');
 const { getDb } = require('./database/db');
@@ -163,6 +164,44 @@ app.get('/robots.txt', function(req, res) {
     ? 'User-agent: *\r\nDisallow: /api/\r\nSitemap: ' + (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '') + '/sitemap.xml\r\n'
     : 'User-agent: *\r\nDisallow: /\r\n';
   res.send(body);
+});
+
+// v3.0.679 -- TD-146. THE APP BUNDLE MUST NOT BE SERVED STALE.
+//
+// public/js/app.js was served by express.static under a filename that never changes, so Cloudflare
+// could hand out an old bundle indefinitely. The corner version stamp comes from version-info.json,
+// a DIFFERENT file -- so a reader could see a new version number while running old code, and a fix
+// that shipped correctly would look like it had not worked at all.
+//
+// TWO LAYERS, because either alone leaves a gap:
+//   1. app.html asks for /js/app.js?v=<version>, stamped at serve time from version-info.json. Each
+//      push is a URL the edge has never seen, so there is nothing stale to serve.
+//   2. no-cache on the path itself, which protects every copy already sitting in a cache from
+//      BEFORE this build -- the readers layer 1 cannot reach, because their app.html is the old one.
+//
+// no-cache does not mean "do not cache"; it means revalidate before use. The ETag express.static
+// already sends still makes an unchanged bundle a 304, so this costs a round trip, not a download.
+//
+// Declared before express.static so these headers win, exactly as the service worker below does.
+app.get('/js/app.js', function (req, res) {
+  res.set('Cache-Control', 'no-cache');
+  res.type('application/javascript');
+  res.sendFile(path.join(__dirname, 'public', 'js', 'app.js'));
+});
+
+// app.html is rewritten on the way out to stamp the bundle URL. Read from disk each time rather
+// than cached in memory: this file is edited by every apply script, and a cached copy would serve
+// the previous deploy's markup until a restart -- the same fault this whole block exists to fix.
+app.get(['/app.html', '/app'], function (req, res) {
+  var _v = '';
+  try { _v = String(require('./version-info.json').version || ''); } catch (e) { _v = ''; }
+  fs.readFile(path.join(__dirname, 'public', 'app.html'), 'utf8', function (err, html) {
+    if (err) return res.status(404).send('Not found');
+    if (_v) html = html.replace('src="/js/app.js"', 'src="/js/app.js?v=' + encodeURIComponent(_v) + '"');
+    res.set('Cache-Control', 'no-cache');
+    res.type('html');
+    res.send(html);
+  });
 });
 
 // Service worker: served from root scope with no-cache so updates always

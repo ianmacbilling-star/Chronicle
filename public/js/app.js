@@ -8505,7 +8505,9 @@ function _tbOpenPicker(mode, heading) {
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.remove('hidden');
+  // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
+  // modal, which is the same collision the campaign settings modal hit.
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   ensureArchivesLoaded(renderPicker);
 }
 
@@ -8928,21 +8930,32 @@ function _prepEnsureArchives(cb) {
 // artwork inside the Title Builder and would have overwritten it on the first Generate. Merging the
 // two pickers puts both names in one dispatcher, so 'prep-title' is spelled out rather than sharing
 // a word that was taken.
-function openPrepImagePicker(kind) {
+// v3.0.679 -- TD-480. THE CAMPAIGN IS AN ARGUMENT NOW, NOT AN ASSUMPTION.
+//
+// v3.0.677 read state.currentCampaign for both the ownership test and the id. From the Publish page
+// that is right. From the campaign SETTINGS modal it is not: openCampaignSettings is reached from
+// the tile grid on My Campaigns and sets _csCampaignId WITHOUT setting state.currentCampaign -- so
+// the picker either tested the wrong campaign's role or, with none selected at all, refused and
+// showed nothing. Ian saw exactly that: it opened once and then never again.
+function openPrepImagePicker(kind, campaignId) {
   var cfg = PREP_IMG_KINDS[kind];
-  if (!cfg || !state.currentCampaign) return;
+  if (!cfg) return;
+  var _campId = campaignId || (state.currentCampaign && state.currentCampaign.id);
+  var _camp = (state.campaigns || []).filter(function (x) { return String(x.id) === String(_campId); })[0]
+    || (state.currentCampaign && String(state.currentCampaign.id) === String(_campId) ? state.currentCampaign : null);
+  if (!_campId) return;
   // v3.0.677 -- TD-478. TWO DIFFERENT OWNERSHIP QUESTIONS. The three book images belong to a
   // VERSION, so prepUseMember decides. The campaign image belongs to the CAMPAIGN, so being the
   // Story Master decides -- and Ian asked for it DM-only. Using the version test on a campaign image
   // would refuse a Story Master looking at somebody else's version of their own campaign.
   if (PREP_IMG_KINDS[kind].campaignField) {
-    var _c = state.currentCampaign;
-    if (!_c || _c.my_role !== 'dm') { showAlert('Only the Story Master can change the campaign image.'); return; }
+    // The role of the campaign being EDITED, which is not necessarily the one on screen.
+    if (!_camp || _camp.my_role !== 'dm') { showAlert('Only the Story Master can change the campaign image.'); return; }
   } else if (!(typeof prepUseMember === 'function' && prepUseMember())) {
     showAlert('Switch to your own version to change the cover, back, or title image.');
     return;
   }
-  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: state.currentCampaign && state.currentCampaign.id };
+  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId };
   // v3.0.671 -- TD-474. NO SHAPE PREFILTER ON THE COVERS. Ian, on seeing v3.0.670: "remove the
   // shape filtering... and give the faint line showing how the pictures would be cropped."
   //
@@ -8956,8 +8969,25 @@ function openPrepImagePicker(kind) {
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = cfg.label;
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.remove('hidden');
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   ensureArchivesLoaded(renderPicker);
+}
+
+// v3.0.679 -- TD-480. A PICKER OPENED FROM A MODAL HAS TO OUTRANK IT.
+//
+// Every .modal-overlay shares z-index:100, so the one LATER IN THE DOCUMENT wins -- and the picker's
+// markup sits ten lines above the campaign settings modal. It opened behind it and looked like
+// nothing happened. The retired picker never had this problem because it was built with
+// z-index:100001; inheriting the shared modal styling is what lost it.
+//
+// Raised on open and released on close rather than pinned in the stylesheet, so the picker does not
+// permanently outrank things like the impersonation banner (99999) that are meant to sit above
+// ordinary modals.
+function pickerRaise(modal) {
+  try { modal.style.zIndex = '100002'; } catch (e) {}
+}
+function pickerRelease(modal) {
+  try { modal.style.zIndex = ''; } catch (e) {}
 }
 
 // pickerCurrentUrl: what is on the book right now for whatever this picker is choosing, so the tile
@@ -10469,13 +10499,15 @@ function openReplacePicker(mode, id) {
   }
   state.pickerFilters = f;
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.remove('hidden');
+  // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
+  // modal, which is the same collision the campaign settings modal hit.
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   ensureArchivesLoaded(renderPicker);
 }
 
 function closeReplacePicker() {
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) { modal.classList.add('hidden'); pickerRelease(modal); }
 }
 
 function setPickerFilter(key, val) {
