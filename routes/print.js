@@ -412,10 +412,21 @@ router.get('/orders', requireSession, async function (req, res) {
   try {
     const db = await getDb();
     const rows = await db.prepare(
+      // v3.0.665 -- TD-464. THE COLUMNS A REORDER NEEDS, and no more.
+      // Reorder restores a past order's FORMAT, SHIPPING and PRINT FILES onto the Order tab. All of
+      // it is already on the row; the list simply was not sending it. Everything added here is the
+      // caller's own data about their own order -- the WHERE clause is user_id -- and ship_name was
+      // already going out, so the address is not a new category of thing to leak.
+      // campaign_id is the one that decides whether Reorder can be offered at all: deleting a
+      // campaign NULLs it (routes/campaigns.js) rather than deleting the order, so a NULL here means
+      // the book behind this order is gone.
       `SELECT id, external_id, provider_order_id, order_name, book_title, campaign_name,
-              source_kind, source_user_name, binding, color_tier, cover_finish,
+              campaign_id, session_id, source_kind, source_user_id, source_user_name,
+              binding, color_tier, cover_finish,
               page_count, quantity, customer_charge, currency, payment_status,
-              status, tracking_url, tracking_number, carrier, card_brand, card_last4, ship_name,
+              status, tracking_url, tracking_number, carrier, card_brand, card_last4,
+              ship_name, ship_street1, ship_street2, ship_city, ship_state, ship_postcode,
+              ship_country, ship_phone, shipping_level,
               interior_pdf_url, cover_pdf_url, created_at, updated_at
          FROM print_orders WHERE user_id = ? ORDER BY id DESC`
     ).all(req.session.userId);
