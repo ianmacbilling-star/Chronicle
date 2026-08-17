@@ -8454,7 +8454,8 @@ function openTitleRefPicker()     { _tbOpenPicker('titleref', 'Steer the look fr
 function _tbOpenPicker(mode, heading) {
   if (!state.currentCampaign) return;
   state.pickerCtx = { mode: mode };
-  state.pickerFilters = { session:'', moment:'', creator:'', type:'title', style:'', version:'', character:'', sort:'newest' };
+  state.pickerFilters = Object.assign(emptyArchiveFilters(), { type: 'title' });
+  state.pickerPrefilled = false;
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
   var modal = document.getElementById('replace-picker-modal');
@@ -8867,48 +8868,55 @@ function _prepEnsureArchives(cb) {
     .then(function(rows){ state.archives = Array.isArray(rows) ? rows : []; state.archivesCid = state.currentCampaign && state.currentCampaign.id; if (cb) cb(); })
     .catch(function(){ state.archives = state.archives || []; if (cb) cb(); });
 }
+// v3.0.670 -- TD-474. ONE ARCHIVE PICKER, FOR EVERYTHING.
+//
+// Ian: "Have 1 Archive Modal Dialog box used to Replace Panel images and also used to Pick cover
+// and title images." This built its own modal in JavaScript on every open -- no filters, no
+// captions, no art style, no version -- while the replace picker beside it had all four. Two
+// pickers, and only one of them was any good.
+//
+// THE MODE NAMES ARE PREFIXED ON PURPOSE. openReplacePicker ALREADY has a mode called 'title', and
+// it means the Title Builder's DRAWN LETTERING. PREP_IMG_KINDS also has a kind called 'title', and
+// it means title_image_url, the title-PAGE artwork. Different image, different field, different
+// route -- and that exact collision already cost a build once: v3.0.618 displayed the title-page
+// artwork inside the Title Builder and would have overwritten it on the first Generate. Merging the
+// two pickers puts both names in one dispatcher, so 'prep-title' is spelled out rather than sharing
+// a word that was taken.
 function openPrepImagePicker(kind) {
-  var cfg = PREP_IMG_KINDS[kind]; if (!cfg || !state.currentCampaign) return;
-  if (!(typeof prepUseMember === 'function' && prepUseMember())) { showAlert('Switch to your own version to change the cover, back, or title image.'); return; }
-  _prepEnsureArchives(function(){
-    closePrepImagePicker();
-    var c = state.currentCampaign;
-    var curUrl = ((state.bookMeta || {})[cfg.field]) || '';
-    var rows = (state.archives || []).filter(function(a){ return a && a.image_url; });
-    var overlay = document.createElement('div');
-    overlay.id = 'prep-img-modal'; overlay.className = 'prep-img-modal';
-    overlay.addEventListener('click', function(e){ if (e.target === overlay) closePrepImagePicker(); });
-    var box = document.createElement('div'); box.className = 'prep-img-modal-box';
-    var head = document.createElement('div'); head.className = 'prep-img-modal-head';
-    var h = document.createElement('div'); h.className = 'prep-img-modal-title'; h.textContent = cfg.label;
-    var x = document.createElement('button'); x.type = 'button'; x.className = 'prep-img-modal-x'; x.innerHTML = '&times;';
-    x.addEventListener('click', closePrepImagePicker);
-    head.appendChild(h); head.appendChild(x);
-    var grid = document.createElement('div'); grid.className = 'prep-img-grid prep-img-grid-cover';   // v3.0.482 -- the COVER picker only. openCampaignImagePicker and _buildCastPicker build the
-    // same grid for a campaign image and for character portraits, and neither is a book cover.
-    if (!rows.length) {
-      var empty = document.createElement('div'); empty.className = 'prep-img-empty';
-      empty.textContent = 'No archived images yet. Lock or archive images from the Storyboard, then choose one here.';
-      grid.appendChild(empty);
-    } else {
-      rows.forEach(function(a){
-        var btn = document.createElement('button'); btn.type = 'button';
-        btn.className = 'prep-img-pick' + (a.image_url === curUrl ? ' selected' : '');
-        btn.style.backgroundImage = 'url("' + encodeURI(a.image_url) + '")';
-        if (a.title) btn.title = a.title;
-        btn.addEventListener('click', function(){ selectPrepImage(kind, a.id); });
-        grid.appendChild(btn);
-      });
-    }
-    box.appendChild(head); box.appendChild(grid);
-    if (curUrl) {
-      var foot = document.createElement('div'); foot.className = 'prep-img-modal-foot';
-      foot.textContent = 'Tip: click the highlighted image to remove it.';
-      box.appendChild(foot);
-    }
-    overlay.appendChild(box); document.body.appendChild(overlay);
-  });
+  var cfg = PREP_IMG_KINDS[kind];
+  if (!cfg || !state.currentCampaign) return;
+  // The gate the old picker had and the replace picker did not. Carried across deliberately: a
+  // control that accepts a click and discards it is indistinguishable from a bug (v3.0.579).
+  if (!(typeof prepUseMember === 'function' && prepUseMember())) {
+    showAlert('Switch to your own version to change the cover, back, or title image.');
+    return;
+  }
+  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind };
+  // v3.0.670 -- TD-474. PREFILTERED, NOT RESTRICTED. Ian: "I think we prefilter for them but don't
+  // stop them from refiltering." A cover wants a full-page picture and a title page can be any
+  // shape at all, so only the two cover kinds are narrowed.
+  var f = emptyArchiveFilters();
+  if (kind === 'cover' || kind === 'back') f.shape = 'fullpage';
+  state.pickerPrefilled = (kind === 'cover' || kind === 'back');
+  state.pickerFilters = f;
+  var tEl = document.getElementById('replace-picker-title');
+  if (tEl) tEl.textContent = cfg.label;
+  var modal = document.getElementById('replace-picker-modal');
+  if (modal) modal.classList.remove('hidden');
+  ensureArchivesLoaded(renderPicker);
 }
+
+// pickerCurrentUrl: what is on the book right now for whatever this picker is choosing, so the tile
+// showing it can be marked -- and its button can offer to REMOVE rather than re-apply. Clicking the
+// current image to clear the field was the only way to take a cover off, and the old modal
+// explained it in a footnote nobody reads. Empty for every non-prep mode, which is why the badge
+// never appears when replacing a panel.
+function pickerCurrentUrl() {
+  var ctx = state.pickerCtx || {};
+  if (!ctx.prepKind || !PREP_IMG_KINDS[ctx.prepKind]) return '';
+  return ((state.bookMeta || {})[PREP_IMG_KINDS[ctx.prepKind].field]) || '';
+}
+
 function selectPrepImage(kind, archiveId) {
   closePrepImagePicker();
   if (prepUseMember()) {
@@ -8925,6 +8933,9 @@ function selectPrepImage(kind, archiveId) {
   else if (kind === 'title') setCampaignTitleImage(archiveId, cb);
 }
 function closePrepImagePicker() {
+  // v3.0.670 -- TD-474. The prep modal is gone; this closes the one picker instead. Kept as a name
+  // rather than chased through every caller, because it still means exactly what it said.
+  closeReplacePicker();
   var m = document.getElementById('prep-img-modal');
   if (m && m.parentNode) m.parentNode.removeChild(m);
 }
@@ -9950,6 +9961,29 @@ function setArchiveFilter(key, val) {
   if (key === 'moment') { renderArchiveGrid(); } else { renderArchives(); }
 }
 
+// v3.0.670 -- TD-474. The empty filter set, written once. It was a literal in three places, and a
+// new key added to two of them is a filter that silently does nothing on the third.
+function emptyArchiveFilters() {
+  return { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', shape:'', sort:'newest' };
+}
+// v3.0.670 -- TD-474. THE SHAPE VOCABULARY, in one place, in the order a reader thinks in.
+// Anything not on this list is 'standard', which is the same rule the storyboard shape picker
+// applies -- so an archive with a null shape (every legacy row, and every character archive,
+// which comes through a different insert entirely) reads as Standard rather than blank.
+var ARCHIVE_SHAPES = [
+  ['standard', 'Standard'], ['fullpage', 'Full page'], ['wide', 'Wide'], ['tall', 'Tall'],
+  ['tower', 'Tower'], ['square', 'Square'], ['panoramic', 'Panoramic']
+];
+function archiveShapeKey(a) {
+  var v = a && a.shape ? String(a.shape) : '';
+  for (var i = 0; i < ARCHIVE_SHAPES.length; i++) if (ARCHIVE_SHAPES[i][0] === v) return v;
+  return 'standard';
+}
+function archiveShapeLabel(a) {
+  var k = archiveShapeKey(a);
+  for (var i = 0; i < ARCHIVE_SHAPES.length; i++) if (ARCHIVE_SHAPES[i][0] === k) return ARCHIVE_SHAPES[i][1];
+  return 'Standard';
+}
 function getFilteredArchives(f) {
   f = f || state.archiveFilters || {};
   var rows = (state.archives || []).slice();
@@ -9960,6 +9994,10 @@ function getFilteredArchives(f) {
   if (f.style) rows = rows.filter(function(a){ return String(a.art_style) === String(f.style); });
   if (f.version) rows = rows.filter(function(a){ return archiveVersionLabel(a) === f.version; });
   if (f.character) rows = rows.filter(function(a){ return String(a.character_id) === String(f.character); });
+  // v3.0.670 -- TD-474. Compared through archiveShapeKey rather than against a.shape directly, so
+  // filtering for Standard also finds the legacy rows whose shape was never recorded -- which is
+  // most of them, and all character archives.
+  if (f.shape) rows = rows.filter(function(a){ return archiveShapeKey(a) === String(f.shape); });
   rows.sort(function(a,b){
     var ta = new Date(a.created_at || 0).getTime();
     var tb = new Date(b.created_at || 0).getTime();
@@ -9968,45 +10006,23 @@ function getFilteredArchives(f) {
   return rows;
 }
 
+// v3.0.670 -- TD-474. ONE FILTER BAR, NOT TWO.
+//
+// This function rebuilt the same seven selects the picker's archiveFilterBarHTML builds, inline,
+// differing only in the handler name it wired them to. Adding the Shape filter would have meant
+// writing it twice -- and the moment it is written twice, the Archives screen and the picker
+// start offering different filters. Derive, don't pair: the handler name is now a parameter,
+// which is what it always was in substance.
 function renderArchiveFilters() {
   var host = document.getElementById('archives-filters');
   if (!host) return;
-  var rows = state.archives || [];
-  if (!state.archiveFilters) state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
-  var f = state.archiveFilters;
-  var sessions = {}, moments = {}, creators = {}, styles = {}, versions = {}, characters = {};
-  rows.forEach(function(a){
-    if (a.session_id && a.session_title) sessions[a.session_id] = a.session_title;
-    if (a.moment_id) moments[a.moment_id] = archiveMomentLabel(a) || ('Moment #' + a.moment_id);
-    if (a.archived_by) creators[a.archived_by] = a.archived_by_name || ('User #' + a.archived_by);
-    if (a.art_style) styles[a.art_style] = artStyleLabel(a.art_style, a.art_style_name);
-    var _vl = archiveVersionLabel(a); if (_vl) versions[_vl] = _vl;
-    if (a.character_id && a.character_name) characters[a.character_id] = a.character_name;
-  });
-  function opts(map, sel) {
-    return Object.keys(map).map(function(k){
-      return '<option value="' + escapeHtml(k) + '"' + (String(sel) === String(k) ? ' selected' : '') + '>' + escapeHtml(map[k]) + '</option>';
-    }).join('');
-  }
-  host.innerHTML =
-    '<select class="archive-filter" onchange="setArchiveFilter(\'session\', this.value)"><option value="">All sessions</option>' + opts(sessions, f.session) + '</select>' +
-    '<select class="archive-filter" onchange="setArchiveFilter(\'version\', this.value)"><option value="">All versions</option>' + opts(versions, f.version) + '</select>' +
-    '<input type="text" class="archive-filter archive-filter-search" placeholder="Search moments" value="' + escapeHtml(f.moment || '') + '" oninput="setArchiveFilter(\'moment\', this.value)" />' +
-    '<select class="archive-filter" onchange="setArchiveFilter(\'character\', this.value)"><option value="">All characters</option>' + opts(characters, f.character) + '</select>' +
-    '<select class="archive-filter" onchange="setArchiveFilter(\'creator\', this.value)"><option value="">Anyone</option>' + opts(creators, f.creator) + '</select>' +
-    '<select class="archive-filter" onchange="setArchiveFilter(\'type\', this.value)"><option value="">All types</option>' +
-      '<option value="moment"' + (f.type === 'moment' ? ' selected' : '') + '>Panels</option>' +
-      '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option>' +
-      '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>' +
-    '<select class="archive-filter" onchange="setArchiveFilter(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
-    '<select class="archive-filter" onchange="setArchiveFilter(\'sort\', this.value)">' +
-      '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
-      '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>' +
+  if (!state.archiveFilters) state.archiveFilters = emptyArchiveFilters();
+  host.innerHTML = archiveFilterBarHTML(state.archiveFilters, 'setArchiveFilter') +
     '<button class="archive-filter archive-clear" onclick="clearArchiveFilters()">Clear filters</button>';
 }
 
 function clearArchiveFilters() {
-  state.archiveFilters = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
+  state.archiveFilters = emptyArchiveFilters();
   renderArchives();
 }
 
@@ -10046,6 +10062,12 @@ function archiveFilterBarHTML(f, onchange) {
       '<option value="character"' + (f.type === 'character' ? ' selected' : '') + '>Characters</option>' +
       '<option value="title"' + (f.type === 'title' ? ' selected' : '') + '>Titles</option></select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'style\', this.value)"><option value="">All styles</option>' + opts(styles, f.style) + '</select>' +
+    // v3.0.670 -- TD-474. Ian: "You can add picture shape to the Archive screen and modal... so
+    // someone could filter for, tall, tower, wide, full page, standard etc."
+    '<select class="archive-filter" onchange="' + onchange + '(\'shape\', this.value)"><option value="">All shapes</option>' +
+      ARCHIVE_SHAPES.map(function (sh) {
+        return '<option value="' + sh[0] + '"' + (f.shape === sh[0] ? ' selected' : '') + '>' + sh[1] + '</option>';
+      }).join('') + '</select>' +
     '<select class="archive-filter" onchange="' + onchange + '(\'sort\', this.value)">' +
       '<option value="newest"' + (f.sort !== 'oldest' ? ' selected' : '') + '>Newest first</option>' +
       '<option value="oldest"' + (f.sort === 'oldest' ? ' selected' : '') + '>Oldest first</option></select>';
@@ -10292,7 +10314,7 @@ function submitRetouch() {
 
 function openReplacePicker(mode, id) {
   state.pickerCtx = { mode: mode };
-  var f = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
+  var f = emptyArchiveFilters();
   var tEl = document.getElementById('replace-picker-title');
   if (mode === 'moment') {
     state.pickerCtx.momentId = id;
@@ -10325,6 +10347,7 @@ function openReplacePicker(mode, id) {
     if (tEl) tEl.textContent = 'Replace character image from Archive';
   }
   state.pickerFilters = f;
+  state.pickerPrefilled = false;
   var modal = document.getElementById('replace-picker-modal');
   if (modal) modal.classList.remove('hidden');
   ensureArchivesLoaded(renderPicker);
@@ -10342,7 +10365,7 @@ function setPickerFilter(key, val) {
 }
 
 function clearPickerFilters() {
-  state.pickerFilters = { session:'', moment:'', creator:'', type:'', style:'', version:'', character:'', sort:'newest' };
+  state.pickerFilters = emptyArchiveFilters();
   renderPicker();
 }
 
@@ -10357,8 +10380,27 @@ function renderPickerGrid() {
   var grid = document.getElementById('replace-picker-grid');
   if (!grid) return;
   var rows = getFilteredArchives(state.pickerFilters);
+  // v3.0.670 -- TD-474. A PREFILTER THAT EMPTIES THE GRID UNDOES ITSELF AND SAYS SO.
+  //
+  // The cover kinds open on shape=fullpage, and `shape` is null on every archive made before the
+  // column existed AND on every character archive, which comes through a different insert. So the
+  // helpful default can land on nothing -- and an empty picker reads as broken, not as filtered.
+  // Only the prefilter is dropped, and only when it is the thing emptying the grid: a filter the
+  // reader chose themselves is left exactly where they put it.
+  var note = '';
+  if (!rows.length && state.pickerPrefilled && state.pickerFilters && state.pickerFilters.shape) {
+    state.pickerFilters.shape = '';
+    state.pickerPrefilled = false;
+    rows = getFilteredArchives(state.pickerFilters);
+    if (rows.length) {
+      note = '<div class="archive-pick-note">Nothing full-page is archived yet, so every image is shown. Use the Shape filter to narrow it.</div>';
+      renderPicker();
+      grid = document.getElementById('replace-picker-grid');
+      if (!grid) return;
+    }
+  }
   if (!rows.length) { grid.innerHTML = '<div class="archive-pick-empty">No archived images match these filters. Widen them to pull from another version, session, or character.</div>'; return; }
-  grid.innerHTML = rows.map(function(a){
+  grid.innerHTML = note + rows.map(function(a){
     // v3.0.622 -- three types now, so "not a character" is no longer "a panel". An archived title is
     // labelled with the words it has DRAWN on it, because six thumbnails of lettering are otherwise
     // indistinguishable -- which is exactly the case Ian described (Episode 1 vs Episode 2).
@@ -10367,10 +10409,27 @@ function renderPickerGrid() {
     var ver = (!a.fork_id || a.fork_role === 'dm') ? 'Canonical' : ((a.fork_owner_name || 'Player') + "'s version");
     cap += '<br>' + escapeHtml(ver);
     if (a.art_style) cap += '<br>' + escapeHtml(artStyleLabel(a.art_style, a.art_style_name));
-    return '<div class="archive-pick-item">' +
-      '<img src="' + escapeHtml(a.image_url) + '" loading="lazy" onclick="applyArchiveToTarget(' + a.id + ')">' +
+    // v3.0.670 -- TD-474. THE PICTURE AT ITS OWN SHAPE, AND A WORD FOR THAT SHAPE.
+    //
+    // Ian: "It is hard to know when you are trying to pick a cover picture if it is the right shape
+    // for the cover." The thumbnail was a fixed 130px box with object-fit:cover, so every image --
+    // tower, panorama, square -- arrived as the same rectangle with the difference cropped away.
+    // The one thing the reader is trying to judge was the one thing the tile removed.
+    //
+    // The ASPECT COMES FROM THE FILE, not from img_w/img_h: those are null on every legacy row and
+    // on every character archive, so a layout that depended on them would work for recent panels and
+    // collapse for everything else. They are used only to RESERVE the box before the image loads,
+    // which is a nicety when present and absent without consequence when not.
+    var _ar = (a.img_w > 0 && a.img_h > 0) ? (' style="aspect-ratio:' + a.img_w + '/' + a.img_h + ';"') : '';
+    var _selCls = (typeof pickerCurrentUrl === 'function' && pickerCurrentUrl() === a.image_url) ? ' is-current' : '';
+    return '<div class="archive-pick-item' + _selCls + '">' +
+      '<div class="archive-pick-shot">' +
+        '<img src="' + escapeHtml(a.image_url) + '" loading="lazy"' + _ar + ' onclick="applyArchiveToTarget(' + a.id + ')">' +
+        '<span class="archive-pick-shape">' + escapeHtml(archiveShapeLabel(a)) + '</span>' +
+      '</div>' +
       '<div class="archive-pick-cap">' + cap + '</div>' +
-      '<button class="archive-pick-use" onclick="applyArchiveToTarget(' + a.id + ')">Use this image</button>' +
+      '<button class="archive-pick-use" onclick="applyArchiveToTarget(' + a.id + ')">' +
+        (_selCls ? 'Remove this image' : 'Use this image') + '</button>' +
     '</div>';
   }).join('');
 }
@@ -10384,6 +10443,13 @@ function applyArchiveToTarget(archiveId) {
   // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
   // blob and a reference is not stored on the book at all, so neither fits that shape.
   var vq = (typeof bookMetaVersionQ === 'function') ? bookMetaVersionQ('?') : '';
+  // v3.0.670 -- TD-474. The cover, back and title-page picks leave here: they are campaign/book-meta
+  // fields, not an image on a row, so /apply does not fit them any more than it fits a built title.
+  if (ctx.prepKind) {
+    closeReplacePicker();
+    selectPrepImage(ctx.prepKind, archiveId);
+    return;
+  }
   if (ctx.mode === 'title') {
     fetch('/api/campaigns/' + cid + '/my-book-meta/restore-title' + vq, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_tbBody({ archiveId: archiveId }))
@@ -10519,6 +10585,8 @@ function renderArchiveGrid() {
     if (ver) meta += '<div class="archive-row"><span>Version</span><b>' + escapeHtml(ver) + '</b></div>';
     if (mom) meta += '<div class="archive-row"><span>Moment</span><b>' + escapeHtml(mom) + '</b></div>';
     if (a.art_style) meta += '<div class="archive-row"><span>Style</span><b>' + escapeHtml(artStyleLabel(a.art_style, a.art_style_name)) + '</b></div>';
+    // v3.0.670 -- TD-474. Same label the picker badges each thumbnail with, from the same function.
+    meta += '<div class="archive-row"><span>Shape</span><b>' + escapeHtml(archiveShapeLabel(a)) + '</b></div>';
     if (a.character_name) meta += '<div class="archive-row"><span>Character</span><b>' + escapeHtml(a.character_name) + '</b></div>';
     meta += '<div class="archive-row"><span>Archived by</span><b>' + escapeHtml(a.archived_by_name || 'someone') + (when ? ' &middot; ' + when : '') + '</b></div>';
     var promptBtn = a.image_prompt ? '<button class="archive-prompt-btn" onclick="viewArchivePrompt(' + a.id + ')" title="View the prompt for this image">&#128196; View Prompt</button>' : '';
