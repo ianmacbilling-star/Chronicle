@@ -17,6 +17,7 @@ const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/ti
 const { getPack, listPacks } = require('../services/billing/packs');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { logDebug } = require('./debug');
+const { isTesterEmail } = require('../middleware/auth');   // v3.0.672 -- TD-475
 
 // Pull the diagnostic fields Stripe hangs off a thrown error so the debug log
 // captures WHY a billing call failed (bad price vs. bad customer, mode mismatch,
@@ -215,6 +216,18 @@ function requireSession(req, res) {
   return true;
 }
 
+// v3.0.672 -- TD-475. The tester twin of the local requireAdmin below. Local because this file
+// already has its own boolean-returning gate rather than middleware, and one file with two
+// calling conventions for the same question is how a gate gets called and its answer ignored.
+async function requireAdminOrTesterLocal(req, res) {
+  const db = await getDb();
+  const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+  if (user && (adminEmails.includes(user.email) || isTesterEmail(user.email))) return true;
+  res.status(403).json({ error: 'Admin access required' });
+  return false;
+}
+
 async function requireAdmin(req, res) {
   const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
   const db = await getDb();
@@ -264,7 +277,10 @@ router.get('/ledger', async function(req, res) {
 // Stripe billing goes live.
 router.post('/dev-credit', async function(req, res) {
   if (!requireSession(req, res)) return;
-  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
+  // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: this route credits req.session.userId and
+  // takes no target from the body. /admin/credit and /admin/set-balance, which DO take a
+  // user_id, are deliberately left admin-only.
+  if (!(await requireAdminOrTesterLocal(req, res))) return;
   const amt = parseInt((req.body || {}).amount, 10);
   if (!Number.isFinite(amt) || amt <= 0) {
     return res.status(400).json({ error: 'Provide a positive amount' });
@@ -291,7 +307,10 @@ router.post('/dev-credit', async function(req, res) {
 // (cron or login hook) is decided.
 router.post('/dev-grant-monthly', async function(req, res) {
   if (!requireSession(req, res)) return;
-  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
+  // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: this route credits req.session.userId and
+  // takes no target from the body. /admin/credit and /admin/set-balance, which DO take a
+  // user_id, are deliberately left admin-only.
+  if (!(await requireAdminOrTesterLocal(req, res))) return;
   try {
     const db = await getDb();
     const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
@@ -320,7 +339,10 @@ router.post('/dev-grant-monthly', async function(req, res) {
 // in precise trial states. REMOVE with the other testing controls before prod.
 router.post('/dev-set-balance', async function(req, res) {
   if (!requireSession(req, res)) return;
-  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
+  // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: this route credits req.session.userId and
+  // takes no target from the body. /admin/credit and /admin/set-balance, which DO take a
+  // user_id, are deliberately left admin-only.
+  if (!(await requireAdminOrTesterLocal(req, res))) return;
   const body = req.body || {};
   const cot = parseInt(body.cot, 10);
   const utlt = parseInt(body.utlt, 10);
@@ -884,16 +906,30 @@ async function syncSubscriptionToUser(subscription) {
   const customerId = (subscription.customer && typeof subscription.customer === 'object') ? subscription.customer.id : (subscription.customer || null);
   const status = subscription.status || '';
   const metaUserId = (subscription.metadata && subscription.metadata.user_id) ? parseInt(subscription.metadata.user_id, 10) : null;
-  let user = await db.prepare('SELECT id, tier FROM users WHERE stripe_subscription_id = ?').get(subId);
-  if (!user && metaUserId) user = await db.prepare('SELECT id, tier FROM users WHERE id = ?').get(metaUserId);
-  if (!user && customerId) user = await db.prepare('SELECT id, tier FROM users WHERE stripe_customer_id = ?').get(customerId);
+  // v3.0.673 -- TD-475. `email` added to all three lookups here: the tester test below needs it and
+  // none of them selected it. node --check is perfectly happy with user.email being undefined, which
+  // would have made every tester look like a non-tester and the new guard a silent no-op.
+  let user = await db.prepare('SELECT id, tier, email FROM users WHERE stripe_subscription_id = ?').get(subId);
+  if (!user && metaUserId) user = await db.prepare('SELECT id, tier, email FROM users WHERE id = ?').get(metaUserId);
+  if (!user && customerId) user = await db.prepare('SELECT id, tier, email FROM users WHERE stripe_customer_id = ?').get(customerId);
   if (!user) return { skipped: true, reason: 'no_user' };
   const priceTier = stripeProvider.tierForPrice(subscriptionPriceId(subscription));
   let nextTier = user.tier; // default: leave unchanged
   if (status === 'active' || status === 'trialing') {
     if (priceTier) nextTier = priceTier;
   } else if (status === 'canceled' || status === 'incomplete_expired' || status === 'paused' || status === 'unpaid') {
-    nextTier = 'copper';
+    // v3.0.673 -- TD-475. A TESTER IS NOT DOWNGRADED BY THEIR OWN CANCELLATION.
+    //
+    // Setting someone up as a tester means cancelling whatever subscription they had -- and that
+    // fires customer.subscription.deleted, which lands HERE and drops them to copper. v3.0.672 made
+    // the /api/auth/me reconciliation tester-aware and missed this path, so onboarding a tester
+    // knocked them down at the exact moment they were being set up: recoverable in one click on the
+    // User Testing tab, and a surprise every single time.
+    //
+    // Only the TIER is left alone. The subscription's real status is still written below, so a
+    // tester who later comes off the list reconciles against a status that is TRUE rather than one
+    // this branch declined to record.
+    if (!isTesterEmail(user.email)) nextTier = 'copper';
   } // past_due / incomplete -> keep current tier (grace period)
   //
   // v3.0.669 -- TD-473. `unpaid` MOVED FROM THE GRACE BRANCH TO THE DOWNGRADE BRANCH.

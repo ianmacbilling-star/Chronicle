@@ -1297,12 +1297,48 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 .archive-picker-filters{display:flex;flex-wrap:wrap;gap:8px;}
 .archive-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:14px;max-height:60vh;overflow-y:auto;}
 .archive-pick-item{border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.25);display:flex;flex-direction:column;}
-.archive-pick-item img{width:100%;height:130px;object-fit:cover;display:block;cursor:pointer;}
+/* v3.0.670 -- TD-474. THE PICTURE AT ITS OWN SHAPE.
+   Was: a fixed 130px box with object-fit:cover, so a tower, a panorama and a square all arrived as
+   the same rectangle with the difference cropped off -- and the shape was the one thing the reader
+   was trying to judge. Ian: "show the pictures at their existing aspect ratio... small, but their
+   correct aspect ratio and not cropped."
+
+   width:auto WITH max-width AND max-height is what keeps it undistorted. width:100% + max-height
+   clamps the height while the width stays full, which squashes a tall image -- the shape lie again,
+   in a new form. Letting both axes be auto and capping both is the only combination where the
+   browser is free to honour the aspect. */
+.archive-pick-shot{position:relative;display:flex;align-items:center;justify-content:center;
+  min-height:96px;max-height:190px;padding:6px;background:rgba(0,0,0,0.35);}
+.archive-pick-imgwrap{position:relative;display:inline-block;line-height:0;}
+/* v3.0.672 -- TD-475. The tester badge reads as a state, not a button: it is the one badge in this
+   row that says something is switched OFF (billing), so it borrows the warning palette the Support
+   Access panel uses rather than the gold everything else here wears. */
+.tier-badge-tester{border-color:rgba(251,146,60,0.55)!important;color:#fb923c!important;
+  background:rgba(194,65,12,0.12)!important;}
+.archive-pick-item img{max-width:100%;max-height:178px;width:auto;height:auto;display:block;
+  cursor:pointer;border-radius:4px;}
+/* v3.0.671 -- TD-474. The part of the picture the cover keeps. Faint on purpose: it is a guide over
+   the artwork, not a frame around it, and it has to stay readable on both a dark and a bright
+   image -- hence the white line with a dark companion shadow rather than one colour that
+   disappears against half the archive. Positioned in percentages by pickCropOverlay, which is why
+   it starts hidden: an unpositioned box would flash across the whole thumbnail on first paint. */
+.archive-pick-crop{position:absolute;display:none;box-sizing:border-box;pointer-events:none;
+  border:1px dashed rgba(255,255,255,0.85);box-shadow:0 0 0 1px rgba(0,0,0,0.45);border-radius:2px;}
+/* The shape in a word, because "is that tall enough for a cover" should not be a squint. */
+.archive-pick-shape{position:absolute;left:6px;bottom:6px;padding:2px 7px;border-radius:10px;
+  font-size:10px;font-weight:600;letter-spacing:0.03em;color:#1a1410;background:rgba(201,168,76,0.92);
+  pointer-events:none;}
+/* The image already on the book. The old cover picker explained "click the highlighted image to
+   remove it" in a footnote; the button now says so itself. */
+.archive-pick-item.is-current{border-color:var(--gold);box-shadow:0 0 0 2px rgba(201,168,76,0.35);}
+.archive-pick-item.is-current .archive-pick-use{background:transparent;color:var(--gold-light);
+  border:1px solid rgba(201,168,76,0.5);}
 .archive-pick-cap{padding:6px 8px;font-size:11px;color:var(--gold-dim);line-height:1.35;flex:1;}
 .archive-pick-cap b{color:var(--gold-light);font-weight:600;}
 .archive-pick-use{margin:0 8px 8px;padding:5px;font-size:11px;cursor:pointer;background:var(--gold);color:#1a1410;border:none;border-radius:6px;font-weight:600;}
 .archive-pick-use:hover{filter:brightness(1.08);}
 .archive-pick-empty{padding:24px;text-align:center;color:var(--gold-dim);font-size:13px;}
+.archive-pick-note{grid-column:1/-1;padding:8px 10px;margin-bottom:2px;border-radius:6px;background:rgba(201,168,76,0.10);border:1px solid rgba(201,168,76,0.25);color:var(--gold-light);font-size:12px;}
 #view-archives .page-header { margin-bottom: 10px; }
 #view-archives .page-subtitle { margin-top: 2px; }
 .prompt-modal-box { max-width: 640px; width: 90%; max-height: 80vh; overflow: auto; background: #1b1b20; border: 1px solid rgba(201,168,76,0.3); border-radius: 12px; padding: 20px 22px; }
