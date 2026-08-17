@@ -150,8 +150,14 @@ function rampPng(stops) {
 // have a boundary. This is a bitmap: alpha reaches EXACTLY ZERO at the image border AND arrives
 // there with zero slope, because (1-d^2)^p has derivative 0 at d=1. There is no edge to move.
 //
-// THE SHAPE IS "B", CHOSEN BY EYE. Three bleeds were composited onto Ian's real cover -- 1.10x,
-// 1.30x and 1.55x the lettering width -- and he picked the middle one. rx and ry below are the
+// THE SHAPE WAS CHOSEN BY EYE, TWICE. Three bleeds were composited onto Ian's real cover -- 1.10x,
+// 1.30x and 1.55x the lettering width -- and he picked the middle. Seeing it rendered he asked for
+// more: "The fade isn't big enough, it needs to be wider and a just a little taller." (v3.0.689).
+// Width went to the widest of the three; height up by a tenth, because "a little" was the word.
+// A COMPOSITE IS NOT A RENDER: the preview was drawn with numpy over a rasterised cover, which is
+// the right way to choose a shape and NOT the same as Chromium painting it at print scale. Expect
+// to move these twice; that is why they are two constants with everything derived from them.
+// rx and ry below are the
 // semi-axes as a multiple of the TITLE BOX half-width and half-height, and PAD_X / PAD_Y are
 // derived from them so the ellipse lands exactly on the image border. Change rx/ry and the padding
 // follows; the two cannot disagree.
@@ -166,10 +172,13 @@ function rampPng(stops) {
 // whose lettering need not fill its own width, so a drawing with wide transparent margins gets a
 // haze wider than its words. The fix is an ink bounding box computed at build time (TD-491),
 // deliberately a separate build. Plain text titles are exact already, because the box IS the text.
-const HAZE_RX = 1.30;      // semi-axis / title-box half-width
-const HAZE_RY = 2.10;      // semi-axis / title-box half-height
+const HAZE_RX = 1.55;      // semi-axis / title-box half-width
+const HAZE_RY = 2.30;      // semi-axis / title-box half-height
 const HAZE_PEAK = 0.94;    // alpha at the centre
 const HAZE_POWER = 1.5;    // falloff shape; >1 keeps the core dense and the rim long
+// Where the title box sits inside the image, derived from the semi-axes rather than named twice.
+const INNER_X = 1 / HAZE_RX;
+const INNER_Y = 1 / HAZE_RY;
 const HAZE_W = 192;
 const HAZE_H = 192;
 
@@ -183,11 +192,24 @@ function hazePng() {
   let o = 0;
   for (let y = 0; y < HAZE_H; y++) {
     raw[o++] = 0;
-    const dy = (y / (HAZE_H - 1)) * 2 - 1;
+    const py2 = (y / (HAZE_H - 1)) * 2 - 1;
     for (let x = 0; x < HAZE_W; x++) {
-      const dx = (x / (HAZE_W - 1)) * 2 - 1;
-      const d2 = dx * dx + dy * dy;
-      const a = d2 >= 1 ? 0 : Math.pow(1 - d2, HAZE_POWER) * HAZE_PEAK;
+      const px2 = (x / (HAZE_W - 1)) * 2 - 1;
+      // PLATEAU, NOT AN ELLIPSE. v3.0.688 used a plain radial falloff and Ian's report was exact:
+      // "It's just not getting the outer edges of the text... it really should go a little past the
+      // text in all cases." An ellipse falls away from its CENTRE, so the ends of a line of type sit
+      // far out on the curve -- at the text box's own left and right extremes the alpha was down to
+      // roughly a QUARTER of peak. Widening it only spreads a weak rim further out; the shape was
+      // the fault, not the size.
+      //
+      // So: full opacity across the whole title box, and the falloff begins OUTSIDE it. INNER_X and
+      // INNER_Y are where that box sits inside this image and are DERIVED from the same two
+      // semi-axis constants the CSS insets come from, so the plateau is the title box by
+      // construction and the two cannot drift.
+      const ox = Math.max(0, Math.abs(px2) - INNER_X) / (1 - INNER_X);
+      const oy = Math.max(0, Math.abs(py2) - INNER_Y) / (1 - INNER_Y);
+      const t = Math.min(1, Math.sqrt(ox * ox + oy * oy));
+      const a = Math.pow(1 - t * t, HAZE_POWER) * HAZE_PEAK;
       raw[o++] = SCRIM_RGB[0];
       raw[o++] = SCRIM_RGB[1];
       raw[o++] = SCRIM_RGB[2];
@@ -241,5 +263,5 @@ const scrimCss = {
 
 const coverHazeCss = hazeCss();
 module.exports = { scrimCss, coverHazeCss, STOPS, SCRIM_RGB, rampPng, hazePng,
-                   HAZE_RX, HAZE_RY, HAZE_PEAK, HAZE_POWER, hazeInsetPct };
+                   HAZE_RX, HAZE_RY, HAZE_PEAK, HAZE_POWER, hazeInsetPct, INNER_X, INNER_Y };
 

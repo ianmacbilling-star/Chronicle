@@ -8078,7 +8078,31 @@ function _tbSave(patch, then) {
     // end up carrying artwork whose recorded words belong to a different drawing.
     if (patch.promote) {
       var _bm = state.bookMeta || {};
-      if (!_bm.built_title_draft_url) { _tbErr('There is nothing drawn to use yet.'); return; }
+      // v3.0.689 -- TD-495. THE ONLY PATH IN THIS FUNCTION THAT RETURNED WITHOUT CALLING `then`,
+      // AND `then` IS closeTitleBuilder. So Done & Use did nothing AND left the modal open.
+      //
+      // Ian, 2026-08-17: "Sometimes the Done and Use button doesn't work... You have to do it a
+      // couple times... then it works... Sometimes it just doesn't close the form."
+      //
+      // WHY IT WAS INTERMITTENT: the promote below used to clear built_title_draft_* locally, so
+      // the instant a title was used the client believed there was no draft left and the NEXT
+      // press hit this line. Reopening the modal re-read the server -- which had kept the draft
+      // all along -- and the button worked again. Hence 'do it a couple of times'.
+      //
+      // TWO FIXES, and the second is the real one:
+      //   1. nothing to promote is no longer a dead button. If a drawn title is ALREADY in charge
+      //      there is genuinely nothing to do, so Done & Use closes, which is what the reader
+      //      asked for. Only a truly empty builder refuses, and it now does so in a MODAL.
+      //   2. the local draft clear is gone -- see below.
+      if (!_bm.built_title_draft_url) {
+        if (_bm.built_title_url) { if (then) then(); return; }   // already in charge; nothing to promote
+        if (typeof appNotice === 'function') {
+          appNotice('There is nothing drawn yet.',
+            'Nothing has been drawn for this title, so there is nothing to put on the cover.',
+            'Press Generate, or use Replace to take one from your Archive.');
+        } else { _tbErr('There is nothing drawn to use yet.'); }
+        return;
+      }
       book.built_title_url = _bm.built_title_draft_url;
       book.built_title_src = _bm.built_title_draft_src || '';
       book.built_title_text = _bm.built_title_draft_text || '';
@@ -8086,10 +8110,13 @@ function _tbSave(patch, then) {
       book.built_title_prompt = _bm.built_title_draft_prompt || '';
       book.built_title_prev = _bm.built_title_url || '';
       book.built_title_prev_src = _bm.built_title_src || '';
-      book.built_title_draft_url = '';
-      book.built_title_draft_src = '';
-      book.built_title_draft_text = '';
-      book.built_title_draft_prompt = '';
+      // v3.0.689 -- TD-495. THE DRAFT IS NO LONGER SPENT BY USING IT, and that closes a real
+      // split: services/titleTarget.js has kept the draft through a promote since v3.0.661, and
+      // this branch -- the one that actually runs for a book -- threw it away. One feature, two
+      // behaviours, decided by which target you were on. The client now agrees with the server.
+      //
+      // It is also what makes Done & Stash reversible: Use then Stash then Use has to be able to
+      // go round more than once, and it could not while the first Use emptied the drawer.
       if (typeof _prepMetaWrite === 'function') _prepMetaWrite(book);
       if (then) then();
       return;
