@@ -1388,8 +1388,11 @@ function checkAuth() {
         }
       }
       // Lone-copper pill: copper account with no paid Story Master coverage.
+      // v3.0.676 -- TD-475. The lone-copper badge is retired; the tier badge says Copper and carries
+      // its warning in the tooltip. Kept as a defensive hide rather than deleted wiring, so a cached
+      // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
-      if (loneBadge) loneBadge.style.display = data.loneCopper ? 'inline-flex' : 'none';
+      if (loneBadge) loneBadge.style.display = 'none';
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -2087,8 +2090,13 @@ function selectCampaignNovel(id) {
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
   var _scn=document.getElementById('sidebar-campaign-name'); if(_scn)_scn.textContent=state.currentCampaign.name;
-  showView('campaign-detail');
-  showCampaignTab('novel');
+  // v3.0.678 -- TD-479. THIS FUNCTION WAS BROKEN AND HAD NO CALLERS LEFT.
+  // showCampaignTab does not exist anywhere in the product, and 'campaign-detail' is not one of
+  // the view ids in app.html -- so this threw a ReferenceError on every call. It went unnoticed
+  // because nothing called it, until v3.0.665's Reorder navigation picked it by name.
+  // Routed through showCampaignSection, the documented choke point, so if anything reaches for
+  // it again it works rather than throws. Found by ESLint no-undef, which node --check cannot do.
+  showCampaignSection('novel');
 }
 
 function openCampaignModal(editId) {
@@ -4556,7 +4564,25 @@ function renderCampaignHeaderDisplay() {
   }
 }
 
+// v3.0.677 -- TD-478. THE PENCIL OPENS THE DIALOG NOW.
+//
+// Ian: "The edit pencil on the Campaign page... should pull up the edit dialog box instead of doing
+// the inline edit on the page. Pull up the same dialog that shows when you hit the details button
+// on the campaign tile."
+//
+// One editor for a campaign instead of two. The inline one could only reach name and description;
+// the dialog reaches those plus lore, the campaign prompt, genres, the image and the permissions --
+// and it autosaves, so there is no half-saved state to reason about.
+//
+// The body below is left in place rather than deleted: it is the ONLY caller and the button now
+// points elsewhere, but a stale cached app.html (TD-146) could still call it, and a function that
+// quietly does nothing is worse than one that still works.
 function startCampaignEdit() {
+  var _c = state.currentCampaign;
+  if (_c && _c.id) { openCampaignSettings(_c.id, null); return; }
+  return _startCampaignEditInline();
+}
+function _startCampaignEditInline() {
   var c = state.currentCampaign;
   if (!c) return;
   if (document.getElementById('camp-edit-name-input')) return; // already editing
@@ -7389,7 +7415,13 @@ function exportNovelPDF() {
 // Owner-only on the server; here we just drive the button. We send the SAME
 // layout + custom options the preview is showing so the published book matches.
 // Pre-Publish Prep panel: seed the title + reflect the chosen cover/back/title images.
+// v3.0.677 -- TD-478. `campaign` is NOT a book-meta field like the three below it: it lives on
+// campaigns.campaign_image_url and is written by setCampaignImage through PUT /api/campaigns/:id.
+// It rides in this table anyway so the shared picker has one place to look up a label and a
+// current value, and selectPrepImage routes it to its own setter. Marked with `campaignField` so
+// nothing can mistake it for book meta -- v3.0.618 is the reminder of what that costs.
 var PREP_IMG_KINDS = {
+  campaign: { label: 'Choose a Campaign image', field: 'campaign_image_url', campaignField: true },
   cover: { label: 'Choose a Cover image', field: 'cover_image_url' },
   back:  { label: 'Choose a Back Cover image', field: 'back_cover_image_url' },
   title: { label: 'Choose a Title image', field: 'title_image_url' }
@@ -8473,7 +8505,9 @@ function _tbOpenPicker(mode, heading) {
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.remove('hidden');
+  // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
+  // modal, which is the same collision the campaign settings modal hit.
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   ensureArchivesLoaded(renderPicker);
 }
 
@@ -8896,16 +8930,32 @@ function _prepEnsureArchives(cb) {
 // artwork inside the Title Builder and would have overwritten it on the first Generate. Merging the
 // two pickers puts both names in one dispatcher, so 'prep-title' is spelled out rather than sharing
 // a word that was taken.
-function openPrepImagePicker(kind) {
+// v3.0.679 -- TD-480. THE CAMPAIGN IS AN ARGUMENT NOW, NOT AN ASSUMPTION.
+//
+// v3.0.677 read state.currentCampaign for both the ownership test and the id. From the Publish page
+// that is right. From the campaign SETTINGS modal it is not: openCampaignSettings is reached from
+// the tile grid on My Campaigns and sets _csCampaignId WITHOUT setting state.currentCampaign -- so
+// the picker either tested the wrong campaign's role or, with none selected at all, refused and
+// showed nothing. Ian saw exactly that: it opened once and then never again.
+function openPrepImagePicker(kind, campaignId) {
   var cfg = PREP_IMG_KINDS[kind];
-  if (!cfg || !state.currentCampaign) return;
-  // The gate the old picker had and the replace picker did not. Carried across deliberately: a
-  // control that accepts a click and discards it is indistinguishable from a bug (v3.0.579).
-  if (!(typeof prepUseMember === 'function' && prepUseMember())) {
+  if (!cfg) return;
+  var _campId = campaignId || (state.currentCampaign && state.currentCampaign.id);
+  var _camp = (state.campaigns || []).filter(function (x) { return String(x.id) === String(_campId); })[0]
+    || (state.currentCampaign && String(state.currentCampaign.id) === String(_campId) ? state.currentCampaign : null);
+  if (!_campId) return;
+  // v3.0.677 -- TD-478. TWO DIFFERENT OWNERSHIP QUESTIONS. The three book images belong to a
+  // VERSION, so prepUseMember decides. The campaign image belongs to the CAMPAIGN, so being the
+  // Story Master decides -- and Ian asked for it DM-only. Using the version test on a campaign image
+  // would refuse a Story Master looking at somebody else's version of their own campaign.
+  if (PREP_IMG_KINDS[kind].campaignField) {
+    // The role of the campaign being EDITED, which is not necessarily the one on screen.
+    if (!_camp || _camp.my_role !== 'dm') { showAlert('Only the Story Master can change the campaign image.'); return; }
+  } else if (!(typeof prepUseMember === 'function' && prepUseMember())) {
     showAlert('Switch to your own version to change the cover, back, or title image.');
     return;
   }
-  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind };
+  state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind, campaignId: _campId };
   // v3.0.671 -- TD-474. NO SHAPE PREFILTER ON THE COVERS. Ian, on seeing v3.0.670: "remove the
   // shape filtering... and give the faint line showing how the pictures would be cropped."
   //
@@ -8919,8 +8969,26 @@ function openPrepImagePicker(kind) {
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = cfg.label;
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.remove('hidden');
-  ensureArchivesLoaded(renderPicker);
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
+  // v3.0.680 -- TD-481. The archives of the campaign being EDITED, not of whatever is on screen.
+  ensureArchivesLoaded(renderPicker, _campId);
+}
+
+// v3.0.679 -- TD-480. A PICKER OPENED FROM A MODAL HAS TO OUTRANK IT.
+//
+// Every .modal-overlay shares z-index:100, so the one LATER IN THE DOCUMENT wins -- and the picker's
+// markup sits ten lines above the campaign settings modal. It opened behind it and looked like
+// nothing happened. The retired picker never had this problem because it was built with
+// z-index:100001; inheriting the shared modal styling is what lost it.
+//
+// Raised on open and released on close rather than pinned in the stylesheet, so the picker does not
+// permanently outrank things like the impersonation banner (99999) that are meant to sit above
+// ordinary modals.
+function pickerRaise(modal) {
+  try { modal.style.zIndex = '100002'; } catch (e) {}
+}
+function pickerRelease(modal) {
+  try { modal.style.zIndex = ''; } catch (e) {}
 }
 
 // pickerCurrentUrl: what is on the book right now for whatever this picker is choosing, so the tile
@@ -8975,12 +9043,44 @@ function pickCropOverlay(img) {
 
 function pickerCurrentUrl() {
   var ctx = state.pickerCtx || {};
-  if (!ctx.prepKind || !PREP_IMG_KINDS[ctx.prepKind]) return '';
-  return ((state.bookMeta || {})[PREP_IMG_KINDS[ctx.prepKind].field]) || '';
+  var cfg = ctx.prepKind ? PREP_IMG_KINDS[ctx.prepKind] : null;
+  if (!cfg) return '';
+  // v3.0.677 -- the campaign image is on the CAMPAIGN row, not in book meta. Reading it from
+  // bookMeta would silently return '' and the current picture would never be marked.
+  if (cfg.campaignField) {
+    var c = (state.campaigns || []).filter(function (x) { return String(x.id) === String(ctx.campaignId); })[0];
+    return (c && c[cfg.field]) || '';
+  }
+  return ((state.bookMeta || {})[cfg.field]) || '';
 }
 
 function selectPrepImage(kind, archiveId) {
   closePrepImagePicker();
+  // v3.0.677 -- TD-478. Its own table, its own route, its own setter -- which already fans the new
+  // url out to state.campaigns, state.currentCampaign and the tile grid.
+  if (PREP_IMG_KINDS[kind] && PREP_IMG_KINDS[kind].campaignField) {
+    // v3.0.680 -- TD-481. FAILURES HERE ARE LOUD NOW.
+    //
+    // Ian: "sometimes I open the archive modal to pick the campaign tile image and when I hit Use
+    // this Image, nothing happens." Three separate `return`s with no message: no campaign id, no
+    // archive row, no match. Each of them closed the modal and did nothing, which is
+    // indistinguishable from a bug because it IS one -- the same swallowed-failure shape as TD-411,
+    // and the reason that item is on the list at all.
+    //
+    // The causes are fixed above -- the campaign is carried through and the archives belong to it --
+    // so these should not fire. If they ever do, they say so instead of shrugging.
+    var _cid = (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id);
+    if (!_cid) { showAlert('Could not tell which campaign that image was for. Close this and open the campaign again.'); return; }
+    var _cc = (state.campaigns || []).filter(function (x) { return String(x.id) === String(_cid); })[0];
+    var _a = (state.archives || []).filter(function (x) { return x.id === archiveId; })[0];
+    if (!_a) { showAlert('That image is no longer in this campaign\u2019s Archive. Reopen the picker to see the current list.'); return; }
+    // Clicking the picture already on the tile REMOVES it, exactly as the retired picker did.
+    var _cur = (_cc && _cc.campaign_image_url) || '';
+    setCampaignImage(_cid, (_cur === _a.image_url) ? '' : _a.image_url, function () {
+      if (typeof renderCampaignSettingsThumb === 'function') renderCampaignSettingsThumb();
+    });
+    return;
+  }
   if (prepUseMember()) {
     var a = (state.archives || []).find(function(x){ return x.id === archiveId; });
     if (!a) return;
@@ -10088,9 +10188,25 @@ function clearArchiveFilters() {
   renderArchives();
 }
 
-function ensureArchivesLoaded(cb) {
-  var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid) { cb(); return; }
+// v3.0.680 -- TD-481. THE CAMPAIGN IS AN ARGUMENT HERE TOO.
+//
+// Ian: "when I hit the button to open up the archive images for the campaign tile... I just had it
+// bring up images from another campaign."
+//
+// TWO faults in three lines, and the second is the dangerous one:
+//
+//   1. The id came from state.currentCampaign. v3.0.679 taught the PICKER to take the campaign as
+//      an argument -- for the ownership test and for the setter -- and left the FETCH still reading
+//      whatever campaign the app happened to be sitting on. The checks were fixed and the data was
+//      not.
+//
+//   2. With no campaign selected it called cb() IMMEDIATELY, leaving state.archives holding the
+//      LAST campaign's rows -- so the picker opened full of another campaign's pictures, every one
+//      of them clickable. Cleared now: a stale cache that answers the wrong question confidently is
+//      worse than an empty one, because an empty one is visibly empty.
+function ensureArchivesLoaded(cb, campaignId) {
+  var cid = campaignId || (state.currentCampaign && state.currentCampaign.id);
+  if (!cid) { state.archives = []; state.archivesCid = null; cb(); return; }
   fetch('/api/campaigns/' + cid + '/archives', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(rows){
     state.archives = Array.isArray(rows) ? rows : [];
     state.archivesCid = cid;
@@ -10410,13 +10526,15 @@ function openReplacePicker(mode, id) {
   }
   state.pickerFilters = f;
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.remove('hidden');
+  // v3.0.679 -- TD-480. Raised here too: the Title Builder opens this picker from INSIDE its own
+  // modal, which is the same collision the campaign settings modal hit.
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   ensureArchivesLoaded(renderPicker);
 }
 
 function closeReplacePicker() {
   var modal = document.getElementById('replace-picker-modal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) { modal.classList.add('hidden'); pickerRelease(modal); }
 }
 
 function setPickerFilter(key, val) {
@@ -10493,8 +10611,19 @@ function renderPickerGrid() {
 
 function applyArchiveToTarget(archiveId) {
   var ctx = state.pickerCtx || {};
+  // v3.0.680 -- TD-481. THE REAL CAUSE OF "NOTHING HAPPENS", AND IT IS THREE LINES ABOVE THE
+  // BRANCH I WENT LOOKING IN.
+  //
+  // This guard is older than the prep kinds and reads state.currentCampaign, which is not set when
+  // the picker is opened from the campaign SETTINGS modal on the tile grid. So Use this image
+  // returned here -- before the prepKind dispatch below could route it anywhere -- and closed
+  // nothing, said nothing, did nothing.
+  //
+  // The prep kinds carry their own campaign id and do not need this one, so they are let past and
+  // checked by their own handler. Everything else still needs a campaign on screen, because /apply
+  // is scoped to it -- and now says so rather than shrugging.
   var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid) return;
+  if (!cid && !ctx.prepKind) { showAlert('No campaign is open, so that image cannot be applied. Open the campaign and try again.'); return; }
 
   // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
   // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
@@ -11372,8 +11501,11 @@ function checkAuth() {
         }
       }
       // Lone-copper pill: copper account with no paid Story Master coverage.
+      // v3.0.676 -- TD-475. The lone-copper badge is retired; the tier badge says Copper and carries
+      // its warning in the tooltip. Kept as a defensive hide rather than deleted wiring, so a cached
+      // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
-      if (loneBadge) loneBadge.style.display = data.loneCopper ? 'inline-flex' : 'none';
+      if (loneBadge) loneBadge.style.display = 'none';
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -11627,8 +11759,13 @@ function selectCampaignNovel(id) {
   setCampaignElements();
   var _cs=document.getElementById('campaign-subnav'); if(_cs)_cs.style.display='block';
   var _scn=document.getElementById('sidebar-campaign-name'); if(_scn)_scn.textContent=state.currentCampaign.name;
-  showView('campaign-detail');
-  showCampaignTab('novel');
+  // v3.0.678 -- TD-479. THIS FUNCTION WAS BROKEN AND HAD NO CALLERS LEFT.
+  // showCampaignTab does not exist anywhere in the product, and 'campaign-detail' is not one of
+  // the view ids in app.html -- so this threw a ReferenceError on every call. It went unnoticed
+  // because nothing called it, until v3.0.665's Reorder navigation picked it by name.
+  // Routed through showCampaignSection, the documented choke point, so if anything reaches for
+  // it again it works rather than throws. Found by ESLint no-undef, which node --check cannot do.
+  showCampaignSection('novel');
 }
 
 function openCampaignModal(editId) {
@@ -15120,6 +15257,11 @@ function renderTierBadge(me) {
   me = me || state.user || {};
   var tier = String(me.tier || '');
   if (!tier) { el.style.display = 'none'; return; }
+  // v3.0.676 -- TD-475. The TRIAL badge beside this one keeps its own place: it carries a countdown
+  // and a limits tooltip that a tier name cannot. The LONE-COPPER badge used to sit here too, saying
+  // COPPER in copper-orange next to this one saying Copper -- Ian caught the pair in a screenshot.
+  // It is gone, and its warning moved into the tooltip below rather than being dropped: "nobody is
+  // covering you" is the whole reason that badge existed.
   if (tier === 'trial' && !me.isTester) { el.style.display = 'none'; return; }
   var label = tier.charAt(0).toUpperCase() + tier.slice(1);
   el.textContent = me.isTester ? (label + ', Test Account (Not Billed)') : label;
@@ -15133,6 +15275,12 @@ function renderTierBadge(me) {
     el.title = 'You are on the tester list: this account is not billed. Click to open your testing controls.';
     el.style.cursor = 'pointer';
     el.onclick = function () { showView('settings'); switchSettingsTab('usertesting'); };
+  } else if (me.loneCopper) {
+    // The retired badge's exact warning, on the badge that replaced it.
+    el.title = 'You are on Copper with no active Story Master coverage. Consider upgrading to Silver.';
+    el.className = 'btn btn-sm tier-badge-lone';
+    el.style.cursor = 'pointer';
+    el.onclick = function () { goToPlans(); };
   } else {
     el.title = 'Your current plan \u2014 click to see plans and billing';
     el.style.cursor = 'pointer';
@@ -16000,7 +16148,19 @@ function setCampaignImage(campaignId, newUrl, cb) {
 // Archive picker for the campaign image. Same look as the Pre-Publish Prep
 // picker (shared CSS classes), but self-contained: it loads the target
 // campaign's own archives so it works from the home grid for any campaign.
+// v3.0.677 -- TD-478. RETIRED. Ian: "You can use the new Archive Modal picker for that too... get
+// rid of the current one used on the campaign tile image." This built its own modal with no
+// filters, no captions, no versions, no art styles and square crops -- the same second-rate picker
+// v3.0.670 retired for covers, still standing here.
+//
+// It now forwards. The body is kept rather than deleted for the reason the inline campaign editor's
+// is: a cached app.html (TD-146) can still hold the old onclick, and a function that quietly does
+// nothing is worse than one that still works.
 function openCampaignImagePicker(campaignId) {
+  if (campaignId && typeof openPrepImagePicker === 'function') { openPrepImagePicker('campaign'); return; }
+  return _openCampaignImagePickerLegacy(campaignId);
+}
+function _openCampaignImagePickerLegacy(campaignId) {
   if (!campaignId) return;
   fetch('/api/campaigns/' + campaignId + '/archives', { cache: 'no-store' })
     .then(function(r){ return r.json(); })
@@ -16225,6 +16385,17 @@ function openCampaignSettings(id, ev) {
   if (loreEl) { loreEl.value = (c && c.lore) ? c.lore : ''; loreCount(loreEl, 'cs-lore-count'); }
   var cpEl = document.getElementById('cs-cprompt-input');
   if (cpEl) { cpEl.value = (c && c.campaign_prompt) ? c.campaign_prompt : ''; }
+  // v3.0.677 -- TD-478. Populated HERE, above the _csReady = true below, for the reason v3.0.492
+  // wrote that flag in the first place: every assignment in this function fires the same event a
+  // user edit does, so a field populated after the arm would be written straight back -- and a name
+  // that failed to populate would be written back EMPTY. These two are the worst possible fields to
+  // get that wrong on, which is why they went in the middle of the block rather than the end.
+  var nmEl = document.getElementById('cs-name-input');
+  if (nmEl) nmEl.value = (c && c.name) ? c.name : '';
+  var dsEl = document.getElementById('cs-desc-input');
+  if (dsEl) dsEl.value = (c && c.description) ? c.description : '';
+  var nmWarn = document.getElementById('cs-name-warn');
+  if (nmWarn) nmWarn.style.display = 'none';
   _csGenres = csGenresFrom(c && c.genres);
   if (cpEl) cpromptCount(cpEl); else csGenreRender();
   var err = document.getElementById('campaign-settings-error');
@@ -16301,12 +16472,34 @@ function csCommitCampaignSettings() {
   var _cpEl = document.getElementById('cs-cprompt-input');
   var _cpVal = _cpEl ? _cpEl.value.slice(0, 500) : undefined;
   var _genreVal = csGenresFrom(_csGenres);
+  // v3.0.677 -- TD-478. THE NAME IS NEVER SAVED EMPTY.
+  // The inline editor this replaces had that rule explicitly ("never blanks the name"); the modal
+  // had no such guard because it never held the field. An empty box is not an instruction to erase
+  // the campaign's name -- it is almost always a populate that failed or a selection deleted while
+  // thinking. The stored name is left alone and the reader is told why, rather than the save being
+  // silently dropped, which is the behaviour v3.0.579 records as indistinguishable from a bug.
+  var _nmEl = document.getElementById('cs-name-input');
+  var _nmVal = _nmEl ? _nmEl.value.trim().slice(0, 120) : '';
+  var _nmWarn = document.getElementById('cs-name-warn');
+  if (_nmEl && !_nmVal) {
+    if (_nmWarn) _nmWarn.style.display = 'block';
+  } else if (_nmWarn) {
+    _nmWarn.style.display = 'none';
+  }
+  var _dsEl = document.getElementById('cs-desc-input');
+  var _dsVal = _dsEl ? _dsEl.value.slice(0, 2000) : undefined;
   var err = document.getElementById('campaign-settings-error');
   _csSaving = true;
   fetch('/api/campaigns/' + saveId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal, genres: _genreVal, campaign_prompt: _cpVal })
+    body: JSON.stringify(Object.assign(
+      { allow_player_novel_access: allow, allow_member_assets: allowAssets, lore: _loreVal, genres: _genreVal, campaign_prompt: _cpVal },
+      // Omitted entirely when blank, rather than sent as '' -- the route treats an absent key as
+      // "leave it" and a present one as "set it to this".
+      _nmVal ? { name: _nmVal } : {},
+      (_dsVal !== undefined) ? { description: _dsVal } : {}
+    ))
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -16325,8 +16518,26 @@ function csCommitCampaignSettings() {
       // the exclusive rule, so screen and database cannot disagree.
       var _gSaved = (data && data.genres !== undefined) ? data.genres : JSON.stringify(_genreVal);
       var _cpSaved = (data && data.campaign_prompt !== undefined) ? data.campaign_prompt : _cpVal;
-      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; } });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; }
+      // v3.0.678 -- TD-478. THE DECLARATIONS THESE TWO LINES NEEDED, which v3.0.677 shipped without.
+      // The edit that added them aborted before writing; the edit that added their USES did not, and
+      // `node --check` is perfectly happy with a reference to a variable that does not exist. Section
+      // 0 records exactly this and names the tool that finds it -- ESLint no-undef -- which now runs
+      // over the payload in the guards.
+      //
+      // Same reasoning as the v3.0.485 note above: the modal AND the campaign header read state, so
+      // a saved name that is not mirrored shows the old one until a reload. The SERVER's echo wins
+      // where we have it.
+      var _nmSaved = (data && data.name !== undefined) ? data.name : (_nmVal || undefined);
+      var _dsSaved = (data && data.description !== undefined) ? data.description : _dsVal;
+      (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) x.name = _nmSaved; if (_dsSaved !== undefined) x.description = _dsSaved; } });
+      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) state.currentCampaign.name = _nmSaved; if (_dsSaved !== undefined) state.currentCampaign.description = _dsSaved; if (typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay(); }
+      // v3.0.680 -- TD-481. REPAINT OUTSIDE THE currentCampaign BRANCH.
+      // v3.0.677 put this inside it, so editing a campaign from the TILE GRID -- where
+      // openCampaignSettings never sets currentCampaign -- updated state.campaigns and repainted
+      // nothing: the row was right and the screen stale until a reload. Same assumption as TD-480,
+      // one line further down. state.campaigns is what the grid reads, and it was already updated
+      // on the line above, unconditionally.
+      if (typeof renderCampaigns === 'function') renderCampaigns();
       // An edit that arrived while this PUT was in flight has not been written yet. Replay it,
       // but only while the modal is still the same campaign -- if it has been closed, the close
       // already flushed and there is nothing owed.
@@ -16789,7 +17000,24 @@ function reorderGoToOrderTab(campaignId) {
   function go() {
     var c = have();
     if (!c) { reorderClear(); showAlert('Could not open that campaign.'); return; }
-    selectCampaignNovel(c.id);
+    // v3.0.678 -- TD-464 / TD-479. THROUGH THE CHOKE POINT, NOT AROUND IT.
+    //
+    // v3.0.665 navigated with selectCampaignNovel, and ESLint no-undef found out why that was a bad
+    // idea: that function calls showCampaignTab('novel'), WHICH DOES NOT EXIST, and showView with a
+    // view id that is not in app.html. It is legacy code whose only caller was this line. The
+    // ReferenceError aborted the navigation before switchNovelTab ever ran, so Reorder landed
+    // somewhere other than the Order tab.
+    //
+    // The jsdom test did not catch it because it STUBBED selectCampaignNovel -- third time tonight a
+    // stub has hidden the thing it was standing in for (TD-477). It is not stubbed any more.
+    //
+    // showCampaignSection is the documented choke point: "ONE CHOKE POINT. All three Publish entry
+    // points route through here" (v3.0.350). It also applies the player-access gate, which the
+    // legacy path skipped entirely.
+    state.currentCampaign = c;
+    if (typeof resetPublishForCampaignSwitch === 'function') resetPublishForCampaignSwitch();
+    setCampaignElements();
+    showCampaignSection('novel');
     switchNovelTab('order');
   }
   if (have()) { go(); return; }
