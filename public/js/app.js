@@ -8455,7 +8455,6 @@ function _tbOpenPicker(mode, heading) {
   if (!state.currentCampaign) return;
   state.pickerCtx = { mode: mode };
   state.pickerFilters = Object.assign(emptyArchiveFilters(), { type: 'title' });
-  state.pickerPrefilled = false;
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = heading;
   var modal = document.getElementById('replace-picker-modal');
@@ -8892,12 +8891,15 @@ function openPrepImagePicker(kind) {
     return;
   }
   state.pickerCtx = { mode: 'prep-' + kind, prepKind: kind };
-  // v3.0.670 -- TD-474. PREFILTERED, NOT RESTRICTED. Ian: "I think we prefilter for them but don't
-  // stop them from refiltering." A cover wants a full-page picture and a title page can be any
-  // shape at all, so only the two cover kinds are narrowed.
+  // v3.0.671 -- TD-474. NO SHAPE PREFILTER ON THE COVERS. Ian, on seeing v3.0.670: "remove the
+  // shape filtering... and give the faint line showing how the pictures would be cropped."
+  //
+  // The prefilter answered the question indirectly -- narrow to the shape that usually fits -- when
+  // the outline answers it directly, for EVERY picture, including the wide one that would still have
+  // worked. It also hid every legacy archive, since `shape` is null on all of them. The soft
+  // fallback that undid an empty prefilter went with it: nothing sets that flag now, and dead
+  // machinery is a liability rather than an option held open.
   var f = emptyArchiveFilters();
-  if (kind === 'cover' || kind === 'back') f.shape = 'fullpage';
-  state.pickerPrefilled = (kind === 'cover' || kind === 'back');
   state.pickerFilters = f;
   var tEl = document.getElementById('replace-picker-title');
   if (tEl) tEl.textContent = cfg.label;
@@ -8911,6 +8913,51 @@ function openPrepImagePicker(kind) {
 // current image to clear the field was the only way to take a cover off, and the old modal
 // explained it in a footnote nobody reads. Empty for every non-prep mode, which is why the badge
 // never appears when replacing a panel.
+// v3.0.671 -- TD-474. HOW MUCH OF THIS PICTURE SURVIVES ON THE COVER.
+//
+// MEASURED FROM THE COVER RENDERER, NOT ASSUMED. routes/pdf.js prints the art into
+// .cover-art-frame, which sits inside .cover-image-layout at padding:0.7in on an 8.5x11 page --
+// 8.5 - 1.4 = 7.1in wide -- and the print rule pins it to height:9.6in. The frame is therefore
+// 7.1 x 9.6, NOT the 8.5/11 the old cover picker drew its tiles at. The image fills it with
+// object-fit:cover, so anything that does not fit that ratio is cut off.
+var COVER_CROP_ASPECT = 7.1 / 9.6;
+
+// WHICH END GETS CUT DEPENDS ON WHERE THE TITLE SITS. coverPlaceCss moves object-position with the
+// titlePlace option: bottom (the default) anchors the art to `center top`, so the BOTTOM of a tall
+// picture is lost; `top` anchors to center bottom; `middle` centres it. An outline that ignored this
+// would be confidently wrong for two of the three settings.
+function coverCropAnchor() {
+  var p = '';
+  try { p = (typeof customOpts === 'object' && customOpts) ? String(customOpts.titlePlace || '') : ''; } catch (e) {}
+  return (p === 'top' || p === 'middle') ? p : 'bottom';
+}
+
+// Called on load, because the aspect has to come from the FILE: img_w/img_h are null on every legacy
+// archive and on every character archive, so a box derived from them would be right for recent
+// panels and silently absent everywhere else.
+function pickCropOverlay(img) {
+  try {
+    var wrap = img && img.parentNode;
+    var box = (wrap && wrap.querySelector) ? wrap.querySelector('.archive-pick-crop') : null;
+    if (!box) return;
+    var w = img.naturalWidth || 0, h = img.naturalHeight || 0;
+    if (!w || !h) return;
+    var a = w / h, t = COVER_CROP_ASPECT;
+    var wp = Math.min(1, t / a) * 100;
+    var hp = Math.min(1, a / t) * 100;
+    var anchor = coverCropAnchor();
+    var top = (anchor === 'top') ? (100 - hp) : (anchor === 'middle' ? (100 - hp) / 2 : 0);
+    box.style.left = ((100 - wp) / 2) + '%';
+    box.style.width = wp + '%';
+    box.style.top = top + '%';
+    box.style.height = hp + '%';
+    box.style.display = 'block';
+    // Nothing to say when the whole picture survives: an outline tracing the entire edge reads as a
+    // border, not as information.
+    if (wp > 99.5 && hp > 99.5) box.style.display = 'none';
+  } catch (e) {}
+}
+
 function pickerCurrentUrl() {
   var ctx = state.pickerCtx || {};
   if (!ctx.prepKind || !PREP_IMG_KINDS[ctx.prepKind]) return '';
@@ -10347,7 +10394,6 @@ function openReplacePicker(mode, id) {
     if (tEl) tEl.textContent = 'Replace character image from Archive';
   }
   state.pickerFilters = f;
-  state.pickerPrefilled = false;
   var modal = document.getElementById('replace-picker-modal');
   if (modal) modal.classList.remove('hidden');
   ensureArchivesLoaded(renderPicker);
@@ -10380,26 +10426,13 @@ function renderPickerGrid() {
   var grid = document.getElementById('replace-picker-grid');
   if (!grid) return;
   var rows = getFilteredArchives(state.pickerFilters);
-  // v3.0.670 -- TD-474. A PREFILTER THAT EMPTIES THE GRID UNDOES ITSELF AND SAYS SO.
-  //
-  // The cover kinds open on shape=fullpage, and `shape` is null on every archive made before the
-  // column existed AND on every character archive, which comes through a different insert. So the
-  // helpful default can land on nothing -- and an empty picker reads as broken, not as filtered.
-  // Only the prefilter is dropped, and only when it is the thing emptying the grid: a filter the
-  // reader chose themselves is left exactly where they put it.
   var note = '';
-  if (!rows.length && state.pickerPrefilled && state.pickerFilters && state.pickerFilters.shape) {
-    state.pickerFilters.shape = '';
-    state.pickerPrefilled = false;
-    rows = getFilteredArchives(state.pickerFilters);
-    if (rows.length) {
-      note = '<div class="archive-pick-note">Nothing full-page is archived yet, so every image is shown. Use the Shape filter to narrow it.</div>';
-      renderPicker();
-      grid = document.getElementById('replace-picker-grid');
-      if (!grid) return;
-    }
-  }
   if (!rows.length) { grid.innerHTML = '<div class="archive-pick-empty">No archived images match these filters. Widen them to pull from another version, session, or character.</div>'; return; }
+  // v3.0.671 -- TD-474. Say what the line means, once, rather than hoping it is self-evident.
+  var _pkNote = (state.pickerCtx || {}).prepKind;
+  if (_pkNote === 'cover' || _pkNote === 'back') {
+    note = '<div class="archive-pick-note">The faint outline shows the part of each picture that will appear on the cover. Anything outside it is trimmed off.</div>' + note;
+  }
   grid.innerHTML = note + rows.map(function(a){
     // v3.0.622 -- three types now, so "not a character" is no longer "a panel". An archived title is
     // labelled with the words it has DRAWN on it, because six thumbnails of lettering are otherwise
@@ -10422,9 +10455,18 @@ function renderPickerGrid() {
     // which is a nicety when present and absent without consequence when not.
     var _ar = (a.img_w > 0 && a.img_h > 0) ? (' style="aspect-ratio:' + a.img_w + '/' + a.img_h + ';"') : '';
     var _selCls = (typeof pickerCurrentUrl === 'function' && pickerCurrentUrl() === a.image_url) ? ' is-current' : '';
+    // v3.0.671 -- TD-474. THE COVER KINDS ONLY. A panel is placed by the layout engine and a title
+    // page is not cropped to the cover frame at all, so an outline there would describe a crop that
+    // never happens -- worse than none, because it would be believed.
+    var _pk = (state.pickerCtx || {}).prepKind;
+    var _crop = (_pk === 'cover' || _pk === 'back') ? '<span class="archive-pick-crop"></span>' : '';
+    var _onload = _crop ? ' onload="pickCropOverlay(this)"' : '';
     return '<div class="archive-pick-item' + _selCls + '">' +
       '<div class="archive-pick-shot">' +
-        '<img src="' + escapeHtml(a.image_url) + '" loading="lazy"' + _ar + ' onclick="applyArchiveToTarget(' + a.id + ')">' +
+        '<span class="archive-pick-imgwrap">' +
+          '<img src="' + escapeHtml(a.image_url) + '" loading="lazy"' + _ar + _onload + ' onclick="applyArchiveToTarget(' + a.id + ')">' +
+          _crop +
+        '</span>' +
         '<span class="archive-pick-shape">' + escapeHtml(archiveShapeLabel(a)) + '</span>' +
       '</div>' +
       '<div class="archive-pick-cap">' + cap + '</div>' +
