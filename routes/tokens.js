@@ -718,6 +718,16 @@ async function stripeWebhook(req, res) {
         await fulfillCheckout(s, event.id);
       }
       try { await recordAndGrantPromo(s, event.id); } catch (promoErr) { console.error('promo grant failed (non-fatal):', promoErr.message); }
+    } else if (event.type === 'invoice.payment_failed') {
+      // v3.0.669 -- TD-473. WRITE DOWN THAT A CARD FAILED, at the moment it failed.
+      // Fires on EVERY attempt, not once per subscription, which is the point: attempt 3 of 4 with
+      // a next_attempt date is a different support conversation from attempt 1.
+      await recordPaymentFailure(event.data.object, event.id);
+    } else if (event.type === 'checkout.session.expired') {
+      // v3.0.669 -- TD-473. THE ONLY RELIABLE SIGNAL THAT A BOOK CHECKOUT WAS ABANDONED.
+      // ?order=cancel fires only if the reader clicks back from Stripe; closing the tab, switching
+      // apps or simply walking away produces nothing at all. This one always arrives.
+      await markCheckoutExpired(event.data.object);
     } else if (event.type === 'invoice.paid') {
       // Subscription renewal (and first charge): disseminate the monthly tokens.
       await fulfillSubscriptionInvoice(event.data.object, event.id);
@@ -882,9 +892,22 @@ async function syncSubscriptionToUser(subscription) {
   let nextTier = user.tier; // default: leave unchanged
   if (status === 'active' || status === 'trialing') {
     if (priceTier) nextTier = priceTier;
-  } else if (status === 'canceled' || status === 'incomplete_expired' || status === 'paused') {
+  } else if (status === 'canceled' || status === 'incomplete_expired' || status === 'paused' || status === 'unpaid') {
     nextTier = 'copper';
-  } // past_due / unpaid / incomplete -> keep current tier (grace period)
+  } // past_due / incomplete -> keep current tier (grace period)
+  //
+  // v3.0.669 -- TD-473. `unpaid` MOVED FROM THE GRACE BRANCH TO THE DOWNGRADE BRANCH.
+  //
+  // past_due means Stripe is still trying: the retry schedule is running and the reader has a card
+  // to fix. That is a grace period and Ian set it at two weeks, which is Stripe's default retry
+  // window -- decided rather than implied, 2026-08-17.
+  //
+  // `unpaid` is the OPPOSITE state. It is where Stripe parks a subscription once every retry has
+  // been exhausted, IF the dashboard is configured to mark rather than cancel. It was sitting in the
+  // grace branch, so a subscription that had definitively stopped paying kept its paid tier forever.
+  // Whether anyone was exposed depended entirely on one dashboard setting (TD-472), which is a
+  // dependency on a toggle staying where it was left -- the same pairing fault as any two numbers
+  // written down twice. Setting the dashboard to CANCEL is still right; this makes it not matter.
   let periodEnd = subscriptionPeriodEnd(subscription);
   const cancelAtEnd = subscriptionPendingCancel(subscription);
   // If the renewal date wasn't on the object but a cancel_at is, use it as the
@@ -896,6 +919,83 @@ async function syncSubscriptionToUser(subscription) {
     "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = ?, subscription_status = ?, current_period_end = ?, cancel_at_period_end = ?, tier = ? WHERE id = ?"
   ).run(customerId, subId, status, periodEnd, cancelAtEnd, nextTier, user.id);
   return { skipped: false, userId: user.id, status: status, tier: nextTier, cancelAtPeriodEnd: cancelAtEnd, currentPeriodEnd: periodEnd };
+}
+
+// ------------------------------------------------------------
+// v3.0.669 -- TD-473. Failed subscription payments, and abandoned book checkouts.
+// ------------------------------------------------------------
+// recordPaymentFailure: one row per Stripe EVENT id.
+//
+// IDEMPOTENT ON THE EVENT, NOT THE INVOICE. Stripe delivers at least once and retries on any
+// non-2xx, so a duplicate delivery must not become a duplicate row -- but a SECOND genuine failure
+// on the same invoice is a different event and must be recorded, because the attempt count is the
+// whole value of the record. Keying on the invoice would collapse a four-attempt dunning sequence
+// into one row and lose exactly the history this exists to keep.
+//
+// IT DOES NOT TOUCH THE TIER. The subscription's own status transition does that, through
+// customer.subscription.updated -> syncSubscriptionToUser, which is the authority on access.
+// Downgrading from here would be a second opinion about the same question, arriving in a different
+// order depending on which webhook Stripe delivered first.
+//
+// NON-FATAL BY DESIGN: a failure to record a failure must not 500 the webhook, because Stripe would
+// then retry the whole event and re-run everything else in the dispatcher alongside it.
+async function recordPaymentFailure(invoice, eventId) {
+  if (!invoice) return;
+  try {
+    const db = await getDb();
+    const subId = invoiceSubscriptionId(invoice);
+    const customerId = (invoice.customer && typeof invoice.customer === 'object')
+      ? invoice.customer.id : (invoice.customer || null);
+    let user = null;
+    if (subId) user = await db.prepare('SELECT id FROM users WHERE stripe_subscription_id = ?').get(subId);
+    if (!user && customerId) user = await db.prepare('SELECT id FROM users WHERE stripe_customer_id = ?').get(customerId);
+    // The decline reason lives on the payment intent's last error, not on the invoice itself.
+    let code = null, message = null;
+    try {
+      const pi = invoice.payment_intent;
+      const err = (pi && typeof pi === 'object') ? pi.last_payment_error : null;
+      if (err) { code = err.code || err.decline_code || null; message = err.message || null; }
+    } catch (e) {}
+    let nextAt = null;
+    try { if (invoice.next_payment_attempt) nextAt = new Date(invoice.next_payment_attempt * 1000).toISOString(); } catch (e) {}
+    await db.prepare(
+      `INSERT INTO billing_failures
+         (user_id, stripe_event_id, stripe_invoice_id, stripe_subscription_id, stripe_customer_id,
+          amount_due, currency, attempt_count, next_attempt_at, failure_code, failure_message, billing_reason)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT (stripe_event_id) DO NOTHING`
+    ).run(
+      user ? user.id : null, eventId || null, invoice.id || null, subId, customerId,
+      (invoice.amount_due != null ? invoice.amount_due / 100 : null), invoice.currency || null,
+      (invoice.attempt_count != null ? invoice.attempt_count : null), nextAt,
+      code, message, invoice.billing_reason || null
+    );
+  } catch (e) {
+    console.error('recordPaymentFailure failed (non-fatal):', e && e.message);
+  }
+}
+
+// markCheckoutExpired: a book order whose Checkout session timed out was never paid and never will
+// be. Say so on the row, so My Orders can stop calling it 'pending_payment' -- which reads like
+// something still in progress that might complete on its own.
+//
+// GUARDED ON THE PAYMENT, NOT THE STATUS. A paid order must never be relabelled by a late or
+// re-delivered expiry event, and webhook ordering is not guaranteed.
+async function markCheckoutExpired(session) {
+  if (!session) return;
+  try {
+    const md = session.metadata || {};
+    if (md.kind !== 'print_order') return;   // token packs and subscriptions have no order row
+    const orderId = parseInt(md.order_id, 10);
+    if (!Number.isFinite(orderId)) return;
+    const db = await getDb();
+    await db.prepare(
+      "UPDATE print_orders SET status = 'abandoned', updated_at = CURRENT_TIMESTAMP " +
+      "WHERE id = ? AND payment_status NOT IN ('paid','refunded')"
+    ).run(orderId);
+  } catch (e) {
+    console.error('markCheckoutExpired failed (non-fatal):', e && e.message);
+  }
 }
 
 // ------------------------------------------------------------

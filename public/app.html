@@ -1149,6 +1149,13 @@
         <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
           <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;">Manage subscription &amp; billing</button>
+          <!-- v3.0.669 -- TD-473. Ian: "If there is a way to put a link in Campaignia to be able to
+               take them to their payment history in stripe, that would be great." It is the SAME
+               portal the button above opens -- Stripe puts invoices and receipts on it once
+               Customer portal -> Invoice history is enabled in the dashboard (TD-472). A second
+               labelled door rather than a second destination: "Manage subscription" is not where
+               anyone looks for a receipt. -->
+          <button class="btn btn-sm" id="account-payment-history-btn" onclick="openBillingPortal()" style="display:none;">View payment history</button>
           <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
         </div>
         <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);"></div>

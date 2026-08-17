@@ -1870,6 +1870,11 @@ function renderAccountPlans(me) {
 
   var mb = document.getElementById('account-manage-billing-btn');
   if (mb) mb.style.display = (me && me.hasBilling) ? 'inline-block' : 'none';
+  // v3.0.669 -- TD-473. Shown on exactly the same condition, because it is the same portal: a
+  // reader with no billing record has no payment history to look at, and a door to an empty room is
+  // worse than no door.
+  var ph = document.getElementById('account-payment-history-btn');
+  if (ph) ph.style.display = (me && me.hasBilling) ? 'inline-block' : 'none';
 }
 
 // Get API key — prefer settings field, fall back to nothing
@@ -16502,16 +16507,49 @@ function reorderFromOrder(id) {
     showAlert('This order did not keep both print files, so it cannot be reordered directly. You can build a fresh order from the Publish page.');
     return;
   }
+  // v3.0.667 -- TD-465. SAY WHY IT FAILED BEFORE THEY SEND THE SAME FILES AGAIN.
+  // Ian, 2026-08-17: "on rejected order we warn but let them try to reorder again." A rejection is
+  // often ABOUT the files -- a cover whose spine did not fit, a page count outside the binding's
+  // range -- and those reproduce exactly. The reason is on the row; showing it is the difference
+  // between trying again and walking into it blind, and the charge happens either way.
+  var _failed = (o.status === 'rejected' || o.status === 'order_failed');
+  if (_failed && !state._reorderWarned) {
+    var _why = (o.error ? String(o.error).slice(0, 300) : '');
+    appConfirm({
+      title: 'That order was rejected by the printer',
+      body: (_why ? 'The printer said: \u201c' + _why + '\u201d' : 'The printer did not accept this order.') +
+            ' Reordering sends the SAME print files, so if the files were the problem it will be rejected again.',
+      note: 'You will be shown the price before anything is charged.',
+      okLabel: 'Reorder anyway',
+      cancelLabel: 'Cancel',
+      // onOk, NOT a second argument. appConfirm takes one options object and calls opts.onOk with
+      // nothing; a callback passed positionally is silently dropped, and the button would have done
+      // nothing at all. node --check cannot see this, and the jsdom test is what did.
+      onOk: function () {
+        state._reorderWarned = true;
+        try { reorderFromOrder(id); } finally { state._reorderWarned = false; }
+      }
+    });
+    return;
+  }
+  // v3.0.667 -- TD-465. THE SNAPSHOT FIRST, THE COLUMNS AS THE FALLBACK.
+  // An order placed before v3.0.667 has no order_spec, and reorders from its columns exactly as it
+  // did in v3.0.665 -- minus paper, which was never recorded and cannot be recovered for those rows.
+  var _spec = null;
+  try { _spec = o.order_spec ? JSON.parse(o.order_spec) : null; } catch (e) { _spec = null; }
+  var _sel = (_spec && _spec.selection) || {};
   state._reorder = {
     id: o.id,
     label: o.external_id || ('po-' + o.id),
     interior: o.interior_pdf_url,
     cover: o.cover_pdf_url,
-    pageCount: parseInt(o.page_count, 10) || 0,
-    binding: o.binding || '',
-    colorTier: o.color_tier || '',
-    coverFinish: o.cover_finish || '',
-    quantity: parseInt(o.quantity, 10) || 1,
+    pageCount: parseInt(_sel.pageCount || o.page_count, 10) || 0,
+    binding: _sel.binding || o.binding || '',
+    colorTier: _sel.colorTier || o.color_tier || '',
+    coverFinish: _sel.coverFinish || o.cover_finish || '',
+    // The reason this build exists: paper changes the vendor SKU and the price.
+    paper: _sel.paper || o.paper || '',
+    quantity: parseInt(_sel.quantity || o.quantity, 10) || 1,
     bookTitle: o.book_title || '',
     orderName: o.order_name || '',
     // The reprint's provenance is the ORIGINAL's provenance, because the bytes are the original's
@@ -16523,7 +16561,7 @@ function reorderFromOrder(id) {
       city: o.ship_city || '', state: o.ship_state || '', postcode: o.ship_postcode || '',
       country: o.ship_country || '', phone: o.ship_phone || ''
     },
-    shippingLevel: o.shipping_level || 'cheapest',
+    shippingLevel: _sel.shippingLevel || o.shipping_level || 'cheapest',
     oldCharge: (o.customer_charge != null) ? Number(o.customer_charge) : null,
     oldCurrency: o.currency || 'USD',
     when: o.created_at || null,
@@ -16571,6 +16609,9 @@ function reorderApplySelections() {
   if (!pick('print-binding', R.binding, 'the binding')) return;
   if (!pick('print-color', R.colorTier, 'the colour option')) return;
   if (!pick('print-finish', R.coverFinish, 'the cover finish')) return;
+  // v3.0.667 -- TD-465. Only when the order recorded one: an order placed before the paper column
+  // existed must keep the page default rather than be told cream is unavailable.
+  if (R.paper && !pick('print-paper', R.paper, 'the paper')) return;
   set('print-book-title', R.bookTitle);
   set('print-order-name', R.orderName);
   set('print-qty', String(R.quantity || 1));
@@ -17309,10 +17350,49 @@ function formatOrderDate(v) {
   } catch (e) { return String(v); }
 }
 
+// v3.0.668 -- TD-470. SAY WHAT AN UNPAID ORDER ACTUALLY IS.
+// 'pending_payment / unpaid' is the machine's words for a checkout that was abandoned, and it reads
+// like something still in progress that might yet complete on its own. It will not: the row is
+// written before the Stripe session and nothing ever finishes it. Whether Stripe was ever reached is
+// invisible from here -- the cancel return fires only if the reader clicks back, not if they close
+// the tab -- so the wording claims only what is certainly true.
+function orderNeverPaid(o) {
+  var p = o.payment_status || '';
+  return p !== 'paid' && p !== 'refunded' && p !== 'stubbed';
+}
 function orderStatusLabel(o) {
   var p = o.payment_status || 'pending';
   if (p === 'stubbed') p = 'test payment';
+  if (orderNeverPaid(o)) return 'Not completed \u2014 never paid for';
   return (o.status || 'pending') + ' / ' + p;
+}
+
+// v3.0.668 -- TD-470. Delete an order that was never paid for, and its two print files with it.
+function deleteOrder(id) {
+  var o = (state._orders || []).filter(function (x) { return String(x.id) === String(id); })[0];
+  if (!o) return;
+  var what = o.book_title || o.order_name || ('order ' + (o.external_id || o.id));
+  appConfirm({
+    title: 'Delete this order?',
+    body: 'This removes \u201c' + what + '\u201d and the print files that were built for it. It was never paid for, so nothing is refunded and nothing was printed.',
+    note: 'This cannot be undone.',
+    okLabel: 'Delete',
+    cancelLabel: 'Keep it',
+    onOk: function () {
+      fetch('/api/print/orders/' + id, { method: 'DELETE' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.j || res.j.error) {
+            showAlert((res.j && res.j.error) ? res.j.error : 'Could not delete that order.');
+            return;
+          }
+          // Re-read rather than splice the card out: the list is the server's answer, and a local
+          // edit that disagrees with it is how a deleted row reappears on the next load.
+          if (typeof loadOrders === 'function') loadOrders();
+        })
+        .catch(function () { showAlert('Could not reach the server. Please try again.'); });
+    }
+  });
 }
 
 function renderOrders(orders) {
@@ -17350,8 +17430,21 @@ function orderCardHtml(o) {
   // there: deleting a campaign NULLs campaign_id on the order rather than deleting the row, and
   // without both PDFs there is nothing to reprint. Shown on any order that has them, including a
   // failed or refunded one -- those are exactly the ones someone wants to try again.
-  var reorderBtn = (o.campaign_id && o.interior_pdf_url && o.cover_pdf_url)
+  //
+  // v3.0.667 -- BUT NOT ON A BOOK NOBODY BOUGHT. The row is written BEFORE Stripe, at
+  // payment_status 'unpaid' / status 'pending_payment', so every abandoned checkout is already
+  // sitting in this list. v3.0.665 offered those "Reorder this book" -- the wrong word and the wrong
+  // act for a book that was never ordered once. Introduced in 665, caught before it met a customer.
+  var _everPaid = (o.payment_status === 'paid' || o.payment_status === 'refunded');
+  var reorderBtn = (_everPaid && o.campaign_id && o.interior_pdf_url && o.cover_pdf_url)
     ? '<button class="btn btn-sm" style="margin-top:10px;" onclick="reorderFromOrder(' + o.id + ')">Reorder this book</button>'
+    : '';
+  // v3.0.668 -- TD-470. DELETE, and only on an order nobody ever paid for. A paid or refunded order
+  // is a financial record: it holds the tax columns v3.0.425 kept on purpose and the order_spec from
+  // TD-465 that says what was sold. The server refuses those independently -- this only decides
+  // whether the button is worth showing.
+  var deleteBtn = orderNeverPaid(o)
+    ? '<button class="btn btn-sm" style="margin-top:10px;margin-left:8px;" onclick="deleteOrder(' + o.id + ')">Delete</button>'
     : '';
   var html = '';
   html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 14px;">';
@@ -17377,6 +17470,7 @@ function orderCardHtml(o) {
   html += row('Status', orderStatusLabel(o));
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
   if (reorderBtn) html += reorderBtn;
+  if (deleteBtn) html += deleteBtn;
   html += '</div>';
   return html;
 }
