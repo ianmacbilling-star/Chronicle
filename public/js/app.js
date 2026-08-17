@@ -1870,6 +1870,11 @@ function renderAccountPlans(me) {
 
   var mb = document.getElementById('account-manage-billing-btn');
   if (mb) mb.style.display = (me && me.hasBilling) ? 'inline-block' : 'none';
+  // v3.0.669 -- TD-473. Shown on exactly the same condition, because it is the same portal: a
+  // reader with no billing record has no payment history to look at, and a door to an empty room is
+  // worse than no door.
+  var ph = document.getElementById('account-payment-history-btn');
+  if (ph) ph.style.display = (me && me.hasBilling) ? 'inline-block' : 'none';
 }
 
 // Get API key — prefer settings field, fall back to nothing

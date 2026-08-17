@@ -1694,6 +1694,41 @@ async function migrateCasting(pool) {
   // a trap for the next person. Nothing queries inside it -- paper has its own column for that.
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS paper TEXT');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS order_spec TEXT');
+
+  // v3.0.669 -- TD-473. THE FAILED PAYMENTS NOBODY WAS WRITING DOWN.
+  //
+  // invoice.payment_failed was not handled at all, so a declined card was learned only INDIRECTLY,
+  // when Stripe later flipped the subscription to past_due and customer.subscription.updated fired.
+  // That tells you a subscription is in trouble; it does not tell you WHICH invoice failed, WHY, or
+  // WHEN, and by the time support is asked the attempts have rolled on. Stripe holds all of it, but
+  // behind a dashboard nobody has open during a support conversation.
+  //
+  // ONE ROW PER STRIPE EVENT ID, which is what makes it idempotent under Stripe's at-least-once
+  // delivery -- the same shape token_purchases uses for checkout sessions. Stripe retries webhooks,
+  // and a duplicate delivery must not become a duplicate record.
+  //
+  // NOTHING IS EMAILED FROM THIS TABLE. Stripe's own dunning is configured in the dashboard
+  // (TD-472); a second copy of the retry schedule living here would drift from theirs within a
+  // release. This is a record, not a mechanism.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS billing_failures (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      stripe_event_id TEXT UNIQUE,
+      stripe_invoice_id TEXT,
+      stripe_subscription_id TEXT,
+      stripe_customer_id TEXT,
+      amount_due NUMERIC,
+      currency TEXT,
+      attempt_count INTEGER,
+      next_attempt_at TIMESTAMP,
+      failure_code TEXT,
+      failure_message TEXT,
+      billing_reason TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_billing_failures_user ON billing_failures(user_id, created_at DESC)');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for
