@@ -175,7 +175,16 @@ function rampPng(stops) {
 const HAZE_RX = 1.55;      // semi-axis / title-box half-width
 const HAZE_RY = 2.30;      // semi-axis / title-box half-height
 const HAZE_PEAK = 0.94;    // alpha at the centre
-const HAZE_POWER = 1.5;    // falloff shape; >1 keeps the core dense and the rim long
+// v3.0.690 -- THE EXPONENT IS THE SIZE CONTROL NOBODY WAS USING.
+// Ian, 2026-08-17: "I think the size of the fade is correct. It's just too dark too far out on
+// the edges. So make it fade more drastic from the center. So the edges are barely even there."
+// Measured along the horizontal, alpha at the box edge / 25% / 50% / 75% of the way out:
+//     power 1.5 (v3.0.689)   239  218  156   70   <- still 60% of peak HALFWAY out
+//     power 4.5 (this)       234  177   65    6
+// The box edge barely moves, so the lettering keeps its cover; everything past it collapses.
+// RX, RY and PEAK are DELIBERATELY UNCHANGED -- Ian said the size was right, and v3.0.689
+// overshot precisely because two things moved at once.
+const HAZE_POWER = 4.5;    // falloff shape; higher = the rim dies off much faster
 // Where the title box sits inside the image, derived from the semi-axes rather than named twice.
 const INNER_X = 1 / HAZE_RX;
 const INNER_Y = 1 / HAZE_RY;
