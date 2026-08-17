@@ -8970,7 +8970,8 @@ function openPrepImagePicker(kind, campaignId) {
   if (tEl) tEl.textContent = cfg.label;
   var modal = document.getElementById('replace-picker-modal');
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
-  ensureArchivesLoaded(renderPicker);
+  // v3.0.680 -- TD-481. The archives of the campaign being EDITED, not of whatever is on screen.
+  ensureArchivesLoaded(renderPicker, _campId);
 }
 
 // v3.0.679 -- TD-480. A PICKER OPENED FROM A MODAL HAS TO OUTRANK IT.
@@ -9058,11 +9059,21 @@ function selectPrepImage(kind, archiveId) {
   // v3.0.677 -- TD-478. Its own table, its own route, its own setter -- which already fans the new
   // url out to state.campaigns, state.currentCampaign and the tile grid.
   if (PREP_IMG_KINDS[kind] && PREP_IMG_KINDS[kind].campaignField) {
+    // v3.0.680 -- TD-481. FAILURES HERE ARE LOUD NOW.
+    //
+    // Ian: "sometimes I open the archive modal to pick the campaign tile image and when I hit Use
+    // this Image, nothing happens." Three separate `return`s with no message: no campaign id, no
+    // archive row, no match. Each of them closed the modal and did nothing, which is
+    // indistinguishable from a bug because it IS one -- the same swallowed-failure shape as TD-411,
+    // and the reason that item is on the list at all.
+    //
+    // The causes are fixed above -- the campaign is carried through and the archives belong to it --
+    // so these should not fire. If they ever do, they say so instead of shrugging.
     var _cid = (state.pickerCtx && state.pickerCtx.campaignId) || (state.currentCampaign && state.currentCampaign.id);
-    if (!_cid) return;
+    if (!_cid) { showAlert('Could not tell which campaign that image was for. Close this and open the campaign again.'); return; }
     var _cc = (state.campaigns || []).filter(function (x) { return String(x.id) === String(_cid); })[0];
     var _a = (state.archives || []).filter(function (x) { return x.id === archiveId; })[0];
-    if (!_a) return;
+    if (!_a) { showAlert('That image is no longer in this campaign\u2019s Archive. Reopen the picker to see the current list.'); return; }
     // Clicking the picture already on the tile REMOVES it, exactly as the retired picker did.
     var _cur = (_cc && _cc.campaign_image_url) || '';
     setCampaignImage(_cid, (_cur === _a.image_url) ? '' : _a.image_url, function () {
@@ -10177,9 +10188,25 @@ function clearArchiveFilters() {
   renderArchives();
 }
 
-function ensureArchivesLoaded(cb) {
-  var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid) { cb(); return; }
+// v3.0.680 -- TD-481. THE CAMPAIGN IS AN ARGUMENT HERE TOO.
+//
+// Ian: "when I hit the button to open up the archive images for the campaign tile... I just had it
+// bring up images from another campaign."
+//
+// TWO faults in three lines, and the second is the dangerous one:
+//
+//   1. The id came from state.currentCampaign. v3.0.679 taught the PICKER to take the campaign as
+//      an argument -- for the ownership test and for the setter -- and left the FETCH still reading
+//      whatever campaign the app happened to be sitting on. The checks were fixed and the data was
+//      not.
+//
+//   2. With no campaign selected it called cb() IMMEDIATELY, leaving state.archives holding the
+//      LAST campaign's rows -- so the picker opened full of another campaign's pictures, every one
+//      of them clickable. Cleared now: a stale cache that answers the wrong question confidently is
+//      worse than an empty one, because an empty one is visibly empty.
+function ensureArchivesLoaded(cb, campaignId) {
+  var cid = campaignId || (state.currentCampaign && state.currentCampaign.id);
+  if (!cid) { state.archives = []; state.archivesCid = null; cb(); return; }
   fetch('/api/campaigns/' + cid + '/archives', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(rows){
     state.archives = Array.isArray(rows) ? rows : [];
     state.archivesCid = cid;
@@ -10584,8 +10611,19 @@ function renderPickerGrid() {
 
 function applyArchiveToTarget(archiveId) {
   var ctx = state.pickerCtx || {};
+  // v3.0.680 -- TD-481. THE REAL CAUSE OF "NOTHING HAPPENS", AND IT IS THREE LINES ABOVE THE
+  // BRANCH I WENT LOOKING IN.
+  //
+  // This guard is older than the prep kinds and reads state.currentCampaign, which is not set when
+  // the picker is opened from the campaign SETTINGS modal on the tile grid. So Use this image
+  // returned here -- before the prepKind dispatch below could route it anywhere -- and closed
+  // nothing, said nothing, did nothing.
+  //
+  // The prep kinds carry their own campaign id and do not need this one, so they are let past and
+  // checked by their own handler. Everything else still needs a campaign on screen, because /apply
+  // is scoped to it -- and now says so rather than shrugging.
   var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid) return;
+  if (!cid && !ctx.prepKind) { showAlert('No campaign is open, so that image cannot be applied. Open the campaign and try again.'); return; }
 
   // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
   // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
@@ -16492,7 +16530,14 @@ function csCommitCampaignSettings() {
       var _nmSaved = (data && data.name !== undefined) ? data.name : (_nmVal || undefined);
       var _dsSaved = (data && data.description !== undefined) ? data.description : _dsVal;
       (state.campaigns || []).forEach(function (x) { if (x.id === saveId) { x.allow_player_novel_access = allow; x.allow_member_assets = allowAssets; if (_loreVal !== undefined) x.lore = _loreVal; x.genres = _gSaved; if (_cpVal !== undefined) x.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) x.name = _nmSaved; if (_dsSaved !== undefined) x.description = _dsSaved; } });
-      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) state.currentCampaign.name = _nmSaved; if (_dsSaved !== undefined) state.currentCampaign.description = _dsSaved; if (typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay(); if (typeof renderCampaigns === 'function') renderCampaigns(); }
+      if (state.currentCampaign && state.currentCampaign.id === saveId) { state.currentCampaign.allow_player_novel_access = allow; state.currentCampaign.allow_member_assets = allowAssets; if (_loreVal !== undefined) state.currentCampaign.lore = _loreVal; state.currentCampaign.genres = _gSaved; if (_cpVal !== undefined) state.currentCampaign.campaign_prompt = _cpSaved; if (_nmSaved !== undefined) state.currentCampaign.name = _nmSaved; if (_dsSaved !== undefined) state.currentCampaign.description = _dsSaved; if (typeof renderCampaignHeaderDisplay === 'function') renderCampaignHeaderDisplay(); }
+      // v3.0.680 -- TD-481. REPAINT OUTSIDE THE currentCampaign BRANCH.
+      // v3.0.677 put this inside it, so editing a campaign from the TILE GRID -- where
+      // openCampaignSettings never sets currentCampaign -- updated state.campaigns and repainted
+      // nothing: the row was right and the screen stale until a reload. Same assumption as TD-480,
+      // one line further down. state.campaigns is what the grid reads, and it was already updated
+      // on the line above, unconditionally.
+      if (typeof renderCampaigns === 'function') renderCampaigns();
       // An edit that arrived while this PUT was in flight has not been written yet. Replay it,
       // but only while the modal is still the same campaign -- if it has been closed, the close
       // already flushed and there is nothing owed.
