@@ -6808,6 +6808,35 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // the two-day stuck-pack hang. So the printed cover was rendering in Georgia.
     baseFontCss() + titleFaceCss +
     "body { font-family: 'Cinzel','Georgia',serif; background:#0a0604; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact; }" +
+    // v3.0.684 -- TD-406. THE SCRIM IS A BACKGROUND, AND ONLY THIS BUILDER NEVER SAID IT MAY PRINT.
+    //
+    // THREE BUILDERS DRAW A COVER. buildSessionHTML and buildNovelHTML each emit
+    //     @media print { * { print-color-adjust:exact; } }
+    // and their caption gradient prints. This one set the property on BODY ALONE and never opened
+    // an @media print block at all, and its caption gradient did not print. That is the whole of
+    // TD-406: not the Puppeteer path, not Ghostscript, ONE BUILDER OUT OF THREE.
+    //
+    // THE CONTROL IS ON THE SAME PAGE. wc-fade -- the soft darkening around the artwork edge -- is
+    // an inset box-shadow, and it prints on every cover including the broken one. A shadow is not a
+    // background, so print-color-adjust does not govern it. Backgrounds vanished and shadows
+    // survived, which is exactly what TD-406 measured and then attributed to the wrong cause.
+    //
+    // MEASURED, NOT REASONED: Ghostscript was ruled out by running the exact flatten command from
+    // flattenPdf.js over gradients built four different ways -- axial shading through a luminosity
+    // soft mask, constant alpha, stepped solid bands, and an image alpha ramp, plain and nested
+    // inside a clipped transparency group. All eight survived unchanged. -dCompatibilityLevel=1.3
+    // composites transparency; it does not discard it. And printBackground is true in renderPdf.js,
+    // the one renderer every PDF in this product goes through.
+    //
+    // WHY BODY WAS NOT ENOUGH is not established. The property is specified as inherited and it
+    // should have been. What IS established is that the two builders carrying the * rule print the
+    // gradient and the one carrying only the body rule does not. This copies the declaration that
+    // demonstrably works rather than inventing a second way to say it.
+    //
+    // v3.0.682 IS WHY THIS IS ADDITIVE. That build replaced the gradient with an inset box-shadow on
+    // the caption box -- a 52 percent tall element -- so the shadow was clipped to its own edge and
+    // drew a hard line across the artwork. Nothing here touches a declaration that already works.
+    '@media print { * { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }' +
     '.wrap { position:relative; width:' + W + 'in; height:' + H + 'in; background:#0a0604; overflow:hidden; }' +
     '.wc-panel { position:absolute; top:0; height:' + H + 'in; overflow:hidden; }' +
     '.wc-back  { left:0; width:' + sideW + 'in; }' +
