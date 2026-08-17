@@ -1676,6 +1676,24 @@ async function migrateCasting(pool) {
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS provider_tax NUMERIC');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS provider_cost_excl_tax NUMERIC');
   await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS markup_pct NUMERIC');
+
+  // v3.0.667 -- TD-465. WHAT WAS ACTUALLY SOLD.
+  //
+  // paper reaches the vendor SKU -- luluProvider swaps 060UW444 for 060UC444 on cream -- so it is
+  // part of the physical product and part of the price. It was never written down. A cream book was
+  // recorded as nothing: unreconstructable for a reorder, and indefensible in a dispute.
+  //
+  // order_spec is the whole selection as it stood, written ONCE at order-create and never edited.
+  // Same argument as the v3.0.425 tax columns and the same one that closed TD-214: none of this can
+  // be rebuilt later. Lulu prices move, covers get replaced, layouts get re-optimized. A column that
+  // was never written cannot be backfilled, so every order placed before this ships is an order that
+  // can never be described. That is why it went in first.
+  //
+  // TEXT and not JSONB deliberately: every other JSON store in this schema (layout_meta, prefs,
+  // narrative_sections) is TEXT, and one row shape that reads differently from all its neighbours is
+  // a trap for the next person. Nothing queries inside it -- paper has its own column for that.
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS paper TEXT');
+  await pool.query('ALTER TABLE print_orders ADD COLUMN IF NOT EXISTS order_spec TEXT');
 }
 
 // migratePerfIndexes: idempotent (runs every boot). Performance indexes for

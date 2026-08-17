@@ -16502,16 +16502,49 @@ function reorderFromOrder(id) {
     showAlert('This order did not keep both print files, so it cannot be reordered directly. You can build a fresh order from the Publish page.');
     return;
   }
+  // v3.0.667 -- TD-465. SAY WHY IT FAILED BEFORE THEY SEND THE SAME FILES AGAIN.
+  // Ian, 2026-08-17: "on rejected order we warn but let them try to reorder again." A rejection is
+  // often ABOUT the files -- a cover whose spine did not fit, a page count outside the binding's
+  // range -- and those reproduce exactly. The reason is on the row; showing it is the difference
+  // between trying again and walking into it blind, and the charge happens either way.
+  var _failed = (o.status === 'rejected' || o.status === 'order_failed');
+  if (_failed && !state._reorderWarned) {
+    var _why = (o.error ? String(o.error).slice(0, 300) : '');
+    appConfirm({
+      title: 'That order was rejected by the printer',
+      body: (_why ? 'The printer said: \u201c' + _why + '\u201d' : 'The printer did not accept this order.') +
+            ' Reordering sends the SAME print files, so if the files were the problem it will be rejected again.',
+      note: 'You will be shown the price before anything is charged.',
+      okLabel: 'Reorder anyway',
+      cancelLabel: 'Cancel',
+      // onOk, NOT a second argument. appConfirm takes one options object and calls opts.onOk with
+      // nothing; a callback passed positionally is silently dropped, and the button would have done
+      // nothing at all. node --check cannot see this, and the jsdom test is what did.
+      onOk: function () {
+        state._reorderWarned = true;
+        try { reorderFromOrder(id); } finally { state._reorderWarned = false; }
+      }
+    });
+    return;
+  }
+  // v3.0.667 -- TD-465. THE SNAPSHOT FIRST, THE COLUMNS AS THE FALLBACK.
+  // An order placed before v3.0.667 has no order_spec, and reorders from its columns exactly as it
+  // did in v3.0.665 -- minus paper, which was never recorded and cannot be recovered for those rows.
+  var _spec = null;
+  try { _spec = o.order_spec ? JSON.parse(o.order_spec) : null; } catch (e) { _spec = null; }
+  var _sel = (_spec && _spec.selection) || {};
   state._reorder = {
     id: o.id,
     label: o.external_id || ('po-' + o.id),
     interior: o.interior_pdf_url,
     cover: o.cover_pdf_url,
-    pageCount: parseInt(o.page_count, 10) || 0,
-    binding: o.binding || '',
-    colorTier: o.color_tier || '',
-    coverFinish: o.cover_finish || '',
-    quantity: parseInt(o.quantity, 10) || 1,
+    pageCount: parseInt(_sel.pageCount || o.page_count, 10) || 0,
+    binding: _sel.binding || o.binding || '',
+    colorTier: _sel.colorTier || o.color_tier || '',
+    coverFinish: _sel.coverFinish || o.cover_finish || '',
+    // The reason this build exists: paper changes the vendor SKU and the price.
+    paper: _sel.paper || o.paper || '',
+    quantity: parseInt(_sel.quantity || o.quantity, 10) || 1,
     bookTitle: o.book_title || '',
     orderName: o.order_name || '',
     // The reprint's provenance is the ORIGINAL's provenance, because the bytes are the original's
@@ -16523,7 +16556,7 @@ function reorderFromOrder(id) {
       city: o.ship_city || '', state: o.ship_state || '', postcode: o.ship_postcode || '',
       country: o.ship_country || '', phone: o.ship_phone || ''
     },
-    shippingLevel: o.shipping_level || 'cheapest',
+    shippingLevel: _sel.shippingLevel || o.shipping_level || 'cheapest',
     oldCharge: (o.customer_charge != null) ? Number(o.customer_charge) : null,
     oldCurrency: o.currency || 'USD',
     when: o.created_at || null,
@@ -16571,6 +16604,9 @@ function reorderApplySelections() {
   if (!pick('print-binding', R.binding, 'the binding')) return;
   if (!pick('print-color', R.colorTier, 'the colour option')) return;
   if (!pick('print-finish', R.coverFinish, 'the cover finish')) return;
+  // v3.0.667 -- TD-465. Only when the order recorded one: an order placed before the paper column
+  // existed must keep the page default rather than be told cream is unavailable.
+  if (R.paper && !pick('print-paper', R.paper, 'the paper')) return;
   set('print-book-title', R.bookTitle);
   set('print-order-name', R.orderName);
   set('print-qty', String(R.quantity || 1));
@@ -17350,7 +17386,13 @@ function orderCardHtml(o) {
   // there: deleting a campaign NULLs campaign_id on the order rather than deleting the row, and
   // without both PDFs there is nothing to reprint. Shown on any order that has them, including a
   // failed or refunded one -- those are exactly the ones someone wants to try again.
-  var reorderBtn = (o.campaign_id && o.interior_pdf_url && o.cover_pdf_url)
+  //
+  // v3.0.667 -- BUT NOT ON A BOOK NOBODY BOUGHT. The row is written BEFORE Stripe, at
+  // payment_status 'unpaid' / status 'pending_payment', so every abandoned checkout is already
+  // sitting in this list. v3.0.665 offered those "Reorder this book" -- the wrong word and the wrong
+  // act for a book that was never ordered once. Introduced in 665, caught before it met a customer.
+  var _everPaid = (o.payment_status === 'paid' || o.payment_status === 'refunded');
+  var reorderBtn = (_everPaid && o.campaign_id && o.interior_pdf_url && o.cover_pdf_url)
     ? '<button class="btn btn-sm" style="margin-top:10px;" onclick="reorderFromOrder(' + o.id + ')">Reorder this book</button>'
     : '';
   var html = '';

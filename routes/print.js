@@ -320,20 +320,67 @@ router.post('/order', requireSession, async function (req, res) {
       const su = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(sourceUserId);
       sourceUserName = su ? (su.name || su.email || null) : null;
     }
+    // v3.0.667 -- TD-465. THE SNAPSHOT OF WHAT WAS SOLD.
+    //
+    // Ian, 2026-08-17: "if we need to store orders differently to begin with that is fine.... Maybe
+    // a JSON field in the db if that would help holding all the details."
+    //
+    // Taken from built.spec and the request AT THIS MOMENT, because this is the only moment it is
+    // all true at once. paper is the one that forced this: it swaps the vendor SKU and had no
+    // column, so a cream book was recorded as nothing.
+    //
+    // coverImageUrl is the DISPLAY cover, not cover_pdf_url -- that one is the print wrap, back and
+    // spine and front as a PDF, which no card can show. Captured here so My Orders can one day show
+    // the book AS IT WAS SOLD; showing today's cover against an old order would be the same lie this
+    // snapshot exists to prevent.
+    //
+    // NOTHING READS INTO THIS BLOB. Reorder prefers it and falls back to the columns, so an order
+    // placed before today still reorders -- just without paper, which is unrecoverable for those.
+    let _orderSpec = null;
+    try {
+      _orderSpec = JSON.stringify({
+        v: 1,
+        at: new Date().toISOString(),
+        selection: {
+          binding: built.spec.binding,
+          colorTier: (body.selection || {}).colorTier || null,
+          coverFinish: built.spec.coverFinish,
+          paper: built.spec.paper || null,
+          pageCount: built.spec.pageCount,
+          quantity: quoteReq.quantity,
+          shippingLevel: quoteReq.shippingLevel
+        },
+        book: {
+          title: bookTitle,
+          orderName: orderName,
+          campaignId: body.campaignId || null,
+          sessionId: body.sessionId || null,
+          sourceUserId: sourceUserId,
+          sourceKind: sourceKind,
+          coverImageUrl: body.coverImageUrl || null,
+          layoutStyle: body.layoutStyle || null,
+          customOpts: body.customOpts || null
+        },
+        files: { interior: body.interiorPdfUrl, cover: body.coverPdfUrl },
+        podPackageId: podPackageId
+      });
+    } catch (e) { _orderSpec = null; }
+
     const ins = await db.prepare(
       `INSERT INTO print_orders
         (user_id, campaign_id, session_id, provider, pod_package_id,
-         binding, color_tier, cover_finish, page_count, quantity,
+         binding, color_tier, cover_finish, paper, order_spec, page_count, quantity,
          interior_pdf_url, cover_pdf_url,
          ship_name, ship_street1, ship_street2, ship_city, ship_state,
          ship_postcode, ship_country, ship_phone, shipping_level,
          provider_cost, currency, customer_charge, payment_status, status,
          order_name, book_title, campaign_name, source_kind, source_user_id, source_user_name,
          provider_tax, provider_cost_excl_tax, markup_pct)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       userId, body.campaignId || null, body.sessionId || null, provider.name, podPackageId,
       built.spec.binding, (body.selection || {}).colorTier, built.spec.coverFinish,
+      built.spec.paper || null, _orderSpec,
       built.spec.pageCount, quoteReq.quantity,
       body.interiorPdfUrl, body.coverPdfUrl,
       s.name || null, s.street1 || null, s.street2 || null, s.city || null, s.stateCode || null,
@@ -422,7 +469,7 @@ router.get('/orders', requireSession, async function (req, res) {
       // the book behind this order is gone.
       `SELECT id, external_id, provider_order_id, order_name, book_title, campaign_name,
               campaign_id, session_id, source_kind, source_user_id, source_user_name,
-              binding, color_tier, cover_finish,
+              binding, color_tier, cover_finish, paper, order_spec, error,
               page_count, quantity, customer_charge, currency, payment_status,
               status, tracking_url, tracking_number, carrier, card_brand, card_last4,
               ship_name, ship_street1, ship_street2, ship_city, ship_state, ship_postcode,
