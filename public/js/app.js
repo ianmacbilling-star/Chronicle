@@ -7756,6 +7756,17 @@ function _tbBookKey() {
   var v = (typeof bookMetaVersionId === 'function') ? (bookMetaVersionId() || '') : '';
   return String(c) + '/' + String(v);
 }
+// v3.0.666 -- TD-468. THE SAME KEY, AT THE GRANULARITY THE MODAL ACTUALLY MOVES AT.
+//
+// _tbBookKey is campaign + version, which is the right scope for a BOOK-level choice and too coarse
+// for anything else: a chapter title and the book title are different targets INSIDE one key, and
+// moving from chapter 3 to chapter 7 does not change it at all. TD-403 fixed the reference field
+// against version and campaign switches and left the chapter-to-chapter hole open, because at
+// v3.0.622 there were no chapter titles yet.
+function _tbTargetKey() {
+  var t = _tbTarget();
+  return _tbBookKey() + '/' + String(t.kind || 'book') + '/' + String(t.sessionId || '') + '/' + String(t.forkId || '');
+}
 // platinumGate: the refusal every Platinum-only tool shows, in ONE place.
 //
 // v3.0.635 -- Ian: "Put an Upgrade My Plan button and take them to the plans on the My Account
@@ -7836,15 +7847,44 @@ function openTitleBuilder(target) {
   // It is stamped with the book it was chosen under rather than blanked on every open: clearing
   // unconditionally would also throw the reference away when you close the modal to check a subtitle
   // and come straight back, which is a thing you do far more often than you switch books.
-  var key = _tbBookKey();
-  if (state._tbRefKey !== key) { titleBuildClearRef(); state._tbRefKey = key; }
+  // v3.0.666 -- TD-468. THE DESCRIPTION WAS THE REFERENCE FAULT AGAIN, IN THE SAME MODAL.
+  //
+  // Ian, 2026-08-17: "The title builder description is cached and the last one you used shows up no
+  // matter what campaign or session you are on." Exactly TD-403's shape -- a plain field nothing
+  // ever cleared, DOM state impersonating book state -- and found the same way, in testing.
+  //
+  // WHY IT WAS WORSE THAN STICKY TEXT. Both seeds below are gated on the box being EMPTY, so the
+  // first description ever typed did not merely persist: it BLOCKED the stored description of every
+  // title opened afterwards. The words that drew the picture on screen could never appear.
+  //
+  // BOTH FIELDS MOVE TO THE TARGET KEY TOGETHER. Clearing the description per target while the
+  // reference stayed per book would leave two fields in one modal disagreeing about which title they
+  // belong to -- a new inconsistency traded for the old one. Reopening the SAME target still keeps
+  // both, which is the case TD-403 was protecting: closing to check a subtitle and coming straight
+  // back is far more common than switching books.
+  var key = _tbTargetKey();
+  if (state._tbRefKey !== key) {
+    titleBuildClearRef();
+    var _dClr = _tbEl('title-build-desc'); if (_dClr) _dClr.value = '';
+    state._tbRefKey = key;
+  }
 
   // Seed the description from what actually drew this title, so reopening shows the words that
   // produced the picture on screen instead of an empty box.
   var dEl = _tbEl('title-build-desc');
   // A chapter's description arrives with title-read; seeding from the book here would put the
   // cover's wording into a chapter's box.
-  if (!_tbIsSession() && dEl && !dEl.value && state.bookMeta && state.bookMeta.built_title_prompt) dEl.value = state.bookMeta.built_title_prompt;
+  // v3.0.666 -- TD-468. THE DRAFT'S WORDS, TO MATCH THE DRAFT'S PICTURE.
+  // v3.0.656 made the IMAGE prefer the draft on reopen; the description did not follow, so a reopened
+  // builder could show the draft artwork beside the live title's description -- words that did not
+  // draw what is on screen. built_title_draft_prompt is already stored, already returned, and was
+  // simply never read back.
+  //
+  // The empty-box gate stays: with the clear above, a new target arrives empty and seeds correctly,
+  // while a reader who has typed something and reopened the same target keeps their own words.
+  if (!_tbIsSession() && dEl && !dEl.value && state.bookMeta) {
+    dEl.value = state.bookMeta.built_title_draft_prompt || state.bookMeta.built_title_prompt || '';
+  }
 
   // Show whatever this version already has, so reopening is not a blank slate.
   // v3.0.618 -- built_title_url, NOT title_image_url. That one is the book title PAGE artwork, the
@@ -7881,7 +7921,11 @@ function _tbLoadSession() {
     var tEl = _tbEl('title-build-title'); if (tEl) tEl.textContent = (d.words && d.words.title) || 'This chapter has no name yet';
     var sEl = _tbEl('title-build-sub');   if (sEl) sEl.textContent = 'None';
     var dEl = _tbEl('title-build-desc');
-    if (dEl && !dEl.value && d.current && d.current.prompt) dEl.value = d.current.prompt;
+    // v3.0.666 -- TD-468. Same rule as the book: the draft's prompt wins, because _tbShowResult on
+    // the next line shows the draft's picture.
+    if (dEl && !dEl.value && d.current) {
+      dEl.value = (d.current.draft && d.current.draft.prompt) || d.current.prompt || '';
+    }
     _tbShowResult((d.current && ((d.current.draft && d.current.draft.url) || d.current.url)) || '');   // v3.0.656 -- the draft wins
     _tbRenderWarn();
   }).catch(function () { _tbErr('Could not read this chapter.'); });
