@@ -17345,10 +17345,49 @@ function formatOrderDate(v) {
   } catch (e) { return String(v); }
 }
 
+// v3.0.668 -- TD-470. SAY WHAT AN UNPAID ORDER ACTUALLY IS.
+// 'pending_payment / unpaid' is the machine's words for a checkout that was abandoned, and it reads
+// like something still in progress that might yet complete on its own. It will not: the row is
+// written before the Stripe session and nothing ever finishes it. Whether Stripe was ever reached is
+// invisible from here -- the cancel return fires only if the reader clicks back, not if they close
+// the tab -- so the wording claims only what is certainly true.
+function orderNeverPaid(o) {
+  var p = o.payment_status || '';
+  return p !== 'paid' && p !== 'refunded' && p !== 'stubbed';
+}
 function orderStatusLabel(o) {
   var p = o.payment_status || 'pending';
   if (p === 'stubbed') p = 'test payment';
+  if (orderNeverPaid(o)) return 'Not completed \u2014 never paid for';
   return (o.status || 'pending') + ' / ' + p;
+}
+
+// v3.0.668 -- TD-470. Delete an order that was never paid for, and its two print files with it.
+function deleteOrder(id) {
+  var o = (state._orders || []).filter(function (x) { return String(x.id) === String(id); })[0];
+  if (!o) return;
+  var what = o.book_title || o.order_name || ('order ' + (o.external_id || o.id));
+  appConfirm({
+    title: 'Delete this order?',
+    body: 'This removes \u201c' + what + '\u201d and the print files that were built for it. It was never paid for, so nothing is refunded and nothing was printed.',
+    note: 'This cannot be undone.',
+    okLabel: 'Delete',
+    cancelLabel: 'Keep it',
+    onOk: function () {
+      fetch('/api/print/orders/' + id, { method: 'DELETE' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.j || res.j.error) {
+            showAlert((res.j && res.j.error) ? res.j.error : 'Could not delete that order.');
+            return;
+          }
+          // Re-read rather than splice the card out: the list is the server's answer, and a local
+          // edit that disagrees with it is how a deleted row reappears on the next load.
+          if (typeof loadOrders === 'function') loadOrders();
+        })
+        .catch(function () { showAlert('Could not reach the server. Please try again.'); });
+    }
+  });
 }
 
 function renderOrders(orders) {
@@ -17395,6 +17434,13 @@ function orderCardHtml(o) {
   var reorderBtn = (_everPaid && o.campaign_id && o.interior_pdf_url && o.cover_pdf_url)
     ? '<button class="btn btn-sm" style="margin-top:10px;" onclick="reorderFromOrder(' + o.id + ')">Reorder this book</button>'
     : '';
+  // v3.0.668 -- TD-470. DELETE, and only on an order nobody ever paid for. A paid or refunded order
+  // is a financial record: it holds the tax columns v3.0.425 kept on purpose and the order_spec from
+  // TD-465 that says what was sold. The server refuses those independently -- this only decides
+  // whether the button is worth showing.
+  var deleteBtn = orderNeverPaid(o)
+    ? '<button class="btn btn-sm" style="margin-top:10px;margin-left:8px;" onclick="deleteOrder(' + o.id + ')">Delete</button>'
+    : '';
   var html = '';
   html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 14px;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
@@ -17419,6 +17465,7 @@ function orderCardHtml(o) {
   html += row('Status', orderStatusLabel(o));
   if (links) html += '<div style="margin-top:10px;">' + links + '</div>';
   if (reorderBtn) html += reorderBtn;
+  if (deleteBtn) html += deleteBtn;
   html += '</div>';
   return html;
 }

@@ -484,6 +484,52 @@ router.get('/orders', requireSession, async function (req, res) {
 });
 
 // ------------------------------------------------------------
+// DELETE /orders/:id -- remove an order that was never paid for, and its two print files.
+//
+// v3.0.668 -- TD-470. Ian, 2026-08-17: "On Abandoned orders we should give them a delete button...
+// I don't want a bunch of stuff to pile up here."
+//
+// THE PILE-UP IS ALREADY REAL. The order row is written BEFORE the Stripe session so the webhook has
+// something to attach payment to, and nothing has ever aged one out -- so every abandoned checkout,
+// including every test one, is sitting in My Orders labelled pending_payment forever, holding two
+// PDFs in the bucket.
+//
+// NEVER PAID, AND NEVER PAID FOR. The test is payment_status, not status: a refunded order WAS paid
+// for and is a financial record that must not be deletable from the UI, however cancelled it looks.
+// Deleting a paid order would also destroy the only record of what was sold (order_spec, TD-465) and
+// the tax columns v3.0.425 exists to preserve.
+//
+// THE FILES GO WITH IT, WHICH IS THE WHOLE POINT. keyFromUrl did not know the 'print' prefix until
+// this same build (see storage.js) -- written before that fix, this route would have deleted the row
+// and left both PDFs in the bucket, doing the reverse of what it is for. The releases are
+// best-effort and logged: a bucket that refuses must not strand the row the reader asked to remove.
+router.delete('/orders/:id', requireSession, async function (req, res) {
+  const userId = req.session.userId;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad order id' });
+  try {
+    const db = await getDb();
+    const row = await db.prepare(
+      'SELECT id, user_id, payment_status, interior_pdf_url, cover_pdf_url FROM print_orders WHERE id = ?'
+    ).get(id);
+    if (!row || row.user_id !== userId) return res.status(404).json({ error: 'Order not found' });
+    if (row.payment_status === 'paid' || row.payment_status === 'refunded') {
+      return res.status(409).json({ error: 'This order was paid for, so it stays on your record. It cannot be deleted.' });
+    }
+    const storage = require('../storage/storage');
+    for (const u of [row.interior_pdf_url, row.cover_pdf_url]) {
+      if (!u) continue;
+      try { await storage.deleteFile(u); }
+      catch (e) { console.error('order delete: could not release', u, e && e.message); }
+    }
+    await db.prepare('DELETE FROM print_orders WHERE id = ? AND user_id = ?').run(id, userId);
+    return res.json({ success: true, id: id });
+  } catch (e) {
+    console.error('order delete error:', e && e.message);
+    return res.status(500).json({ error: 'Could not delete that order.' });
+  }
+});
+
 // fulfillPrintOrder(session) -- webhook fulfillment for a paid book order
 // (checkout.session.completed with metadata.kind === 'print_order'). Payment
 // has cleared, so NOW submit the job to the vendor. Idempotent: a duplicate

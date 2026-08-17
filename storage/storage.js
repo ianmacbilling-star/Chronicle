@@ -110,7 +110,21 @@ function keyFromUrl(fileUrl) {
   // v3.0.341) and this derivation did not know it, so a published book could not be resolved
   // back to a key unless R2_PUBLIC_URL matched the URL. Keep this list in step with every
   // prefix uploadFile is ever called with.
-  const m = fileUrl.match(/\/((?:uploads|archives|optimized|story)\/[^?#]+)$/);
+  //
+  // v3.0.668 -- `print` added, and THE SAME OMISSION AS v3.0.492, three prefixes later. The two
+  // order PDFs are uploaded under 'print' (routes/pdf.js, print-interior and print-cover), so this
+  // could not resolve either of them back to a key: deleting an abandoned order would have removed
+  // the row and left both files in the bucket forever, which is the opposite of the storage cleanup
+  // the delete button exists for. Found by grepping every uploadFile call site rather than trusting
+  // the list -- 'uploads' is the default and never passed explicitly, so the four real prefixes are
+  // archives, optimized, print and story.
+  //
+  // A LIST THAT MUST BE KEPT IN STEP HAS NOW DRIFTED TWICE. The comment above asks the next person
+  // to remember; it has not worked either time. The durable fix is to derive this from one exported
+  // set that uploadFile also validates against, so an unknown prefix cannot be written in the first
+  // place -- filed as TD-469 rather than done here, because widening the regex is the whole of
+  // tonight's bug and a shared constant touches every upload path in the product.
+  const m = fileUrl.match(/\/((?:uploads|archives|optimized|print|story)\/[^?#]+)$/);
   return m ? m[1] : null;
 }
 // Read an object back OUT of the bucket. The bucket is private -- uploads are AWS-signed PUTs -- so a
