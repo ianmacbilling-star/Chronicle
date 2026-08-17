@@ -1907,7 +1907,19 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
+  // v3.0.675 -- TD-475. TESTERS TOO. showView has redirected 'settings' to 'account' for any
+  // non-admin since long before the tester list existed, so a tester clicking their badge was
+  // bounced to My Account and the Dashboard was unreachable for them -- the badge did exactly
+  // what it was told and something older undid it one call earlier.
+  //
+  // This is the THIRD admin gate on the same journey: the nav menu entry, this redirect, and
+  // the tab strip. v3.0.672 found two of them. The lesson is the one section 0 already records
+  // about following the wiring: a feature reached through four hops needs all four checked,
+  // and grepping for the ones you thought of is not the same as walking the path.
+  //
+  // It stays a redirect for everyone else. Only the tab strip decides WHICH tabs open, and a
+  // tester gets exactly one.
+  if (view === 'settings' && !(state.user && (state.user.is_admin || state.user.isTester))) { view = 'account'; }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
@@ -11435,7 +11447,19 @@ function setBreadcrumb(items) {
 // VIEW MANAGEMENT
 // ============================================================
 function showView(view) {
-  if (view === 'settings' && !(state.user && state.user.is_admin)) { view = 'account'; }
+  // v3.0.675 -- TD-475. TESTERS TOO. showView has redirected 'settings' to 'account' for any
+  // non-admin since long before the tester list existed, so a tester clicking their badge was
+  // bounced to My Account and the Dashboard was unreachable for them -- the badge did exactly
+  // what it was told and something older undid it one call earlier.
+  //
+  // This is the THIRD admin gate on the same journey: the nav menu entry, this redirect, and
+  // the tab strip. v3.0.672 found two of them. The lesson is the one section 0 already records
+  // about following the wiring: a feature reached through four hops needs all four checked,
+  // and grepping for the ones you thought of is not the same as walking the path.
+  //
+  // It stays a redirect for everyone else. Only the tab strip decides WHICH tabs open, and a
+  // tester gets exactly one.
+  if (view === 'settings' && !(state.user && (state.user.is_admin || state.user.isTester))) { view = 'account'; }
   var views = ['campaigns','sessions','characters','assets','novel','session-detail','account','settings','members','archives','orders','custom-styles','feedback'];
   views.forEach(function(v) {
     var el = document.getElementById('view-' + v);
