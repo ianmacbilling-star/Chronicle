@@ -1313,6 +1313,10 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 /* v3.0.672 -- TD-475. The tester badge reads as a state, not a button: it is the one badge in this
    row that says something is switched OFF (billing), so it borrows the warning palette the Support
    Access panel uses rather than the gold everything else here wears. */
+/* v3.0.676 -- a lone Copper user keeps the copper-orange the retired badge used, so the warning
+   still reads as a warning rather than as an ordinary plan label. */
+.tier-badge-lone{border-color:rgba(184,115,51,0.7)!important;color:#fff!important;
+  background:#b87333!important;font-weight:700!important;}
 .tier-badge-tester{border-color:rgba(251,146,60,0.55)!important;color:#fb923c!important;
   background:rgba(194,65,12,0.12)!important;}
 .archive-pick-item img{max-width:100%;max-height:178px;width:auto;height:auto;display:block;

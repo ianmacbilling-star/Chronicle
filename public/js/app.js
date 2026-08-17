@@ -1388,8 +1388,11 @@ function checkAuth() {
         }
       }
       // Lone-copper pill: copper account with no paid Story Master coverage.
+      // v3.0.676 -- TD-475. The lone-copper badge is retired; the tier badge says Copper and carries
+      // its warning in the tooltip. Kept as a defensive hide rather than deleted wiring, so a cached
+      // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
-      if (loneBadge) loneBadge.style.display = data.loneCopper ? 'inline-flex' : 'none';
+      if (loneBadge) loneBadge.style.display = 'none';
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -11372,8 +11375,11 @@ function checkAuth() {
         }
       }
       // Lone-copper pill: copper account with no paid Story Master coverage.
+      // v3.0.676 -- TD-475. The lone-copper badge is retired; the tier badge says Copper and carries
+      // its warning in the tooltip. Kept as a defensive hide rather than deleted wiring, so a cached
+      // app.html from before this build cannot leave the old badge stranded on screen.
       var loneBadge = document.getElementById('lone-badge');
-      if (loneBadge) loneBadge.style.display = data.loneCopper ? 'inline-flex' : 'none';
+      if (loneBadge) loneBadge.style.display = 'none';
       document.getElementById('user-name').textContent = data.name;
       document.getElementById('user-menu-email').textContent = data.email;
       var initials = data.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
@@ -15120,6 +15126,11 @@ function renderTierBadge(me) {
   me = me || state.user || {};
   var tier = String(me.tier || '');
   if (!tier) { el.style.display = 'none'; return; }
+  // v3.0.676 -- TD-475. The TRIAL badge beside this one keeps its own place: it carries a countdown
+  // and a limits tooltip that a tier name cannot. The LONE-COPPER badge used to sit here too, saying
+  // COPPER in copper-orange next to this one saying Copper -- Ian caught the pair in a screenshot.
+  // It is gone, and its warning moved into the tooltip below rather than being dropped: "nobody is
+  // covering you" is the whole reason that badge existed.
   if (tier === 'trial' && !me.isTester) { el.style.display = 'none'; return; }
   var label = tier.charAt(0).toUpperCase() + tier.slice(1);
   el.textContent = me.isTester ? (label + ', Test Account (Not Billed)') : label;
@@ -15133,6 +15144,12 @@ function renderTierBadge(me) {
     el.title = 'You are on the tester list: this account is not billed. Click to open your testing controls.';
     el.style.cursor = 'pointer';
     el.onclick = function () { showView('settings'); switchSettingsTab('usertesting'); };
+  } else if (me.loneCopper) {
+    // The retired badge's exact warning, on the badge that replaced it.
+    el.title = 'You are on Copper with no active Story Master coverage. Consider upgrading to Silver.';
+    el.className = 'btn btn-sm tier-badge-lone';
+    el.style.cursor = 'pointer';
+    el.onclick = function () { goToPlans(); };
   } else {
     el.title = 'Your current plan \u2014 click to see plans and billing';
     el.style.cursor = 'pointer';
