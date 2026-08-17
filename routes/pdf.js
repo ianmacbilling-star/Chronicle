@@ -2407,40 +2407,14 @@ function coverSizeCss(size) {
     ' .cover-title { font-size:' + pt(COVER_PT.plainTitle) + '; }' +
     ' .cover-dates { font-size:' + pt(COVER_PT.plainSub) + '; }';
 }
-// v3.0.682 -- TD-406. THE SCRIM IS A BLURRED EDGE NOW, NOT A PAINTED FILL.
-//
-// Ian: "This was working. I'm almost positive we had this working." He was right, and the code says
-// why: v3.0.624-628 drew a dark OVAL behind built titles, which painted correctly and MASKED this --
-// and v3.0.631 removed the oval at his own request, noting "TD-406 now applies to both equally
-// rather than being hidden for one of them." Nothing regressed; the mask came off.
-//
-// TD-406 measured the fault rather than guessing at it: on full covers the artwork is exposed
-// IDENTICALLY before and after optimize, while the title band goes from 0.385 of mid-art brightness
-// to 1.246. The band is simply absent. And the sibling `cover-art-fade` -- an inset box-shadow --
-// SURVIVES in both (0.292 vs 0.320). Same builder, same page: box-shadow paints in the Puppeteer
-// print path, linear-gradient does not, whatever print-color-adjust:exact is supposed to promise.
-//
-// SO IT IS THE SAME DEVICE THAT ALREADY WORKS ON EVERY COVER. cover-art-fade is the soft darkening
-// around the outside of every book Ian has ever made, and it is an inset box-shadow. This points the
-// same thing at the title band instead of the border.
-//
-// NO SPREAD, ON PURPOSE. Ian: "It can't have lines or clear borders." A filled shape has an edge and
-// blur only moves it -- which is exactly why three attempts at the oval failed. An inset shadow with
-// SPREAD is a ring of that thickness (recorded here already: `inset 0 0 0 Npx` is a ring N pixels
-// thick, not a hairline N pixels in). Offset plus blur and zero spread is a wash with no boundary.
-// Two stacked shadows: a long soft rise, and a shorter denser one right under the lettering.
-//
-// THE NUMBERS ARE THE ADJUSTABLE PART, and they are inches because everything in this builder is.
-// The shape of the fix is settled by measurement; the exact density is a look, and a look needs
-// eyes on it.
 var COVER_PLACE = {
   bottom: '',
   top: '.cover-art-caption { top:0; bottom:auto; justify-content:flex-start; padding:0.5in 0.4in 0;' +
-    ' box-shadow:inset 0 1.15in 2.30in rgba(10,6,4,0.95), inset 0 0.35in 1.10in rgba(10,6,4,0.55); }' +
+    ' background:linear-gradient(to bottom, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }' +
     ' .cover-art-img { object-position:center bottom; }',
   middle: '.cover-art-caption { top:50%; bottom:auto; height:46%; transform:translateY(-50%);' +
     ' justify-content:center; padding:0 0.4in;' +
-    ' box-shadow:inset 0 1.30in 1.60in -0.60in rgba(10,6,4,0.92), inset 0 -1.30in 1.60in -0.60in rgba(10,6,4,0.92); }' +
+    ' background:linear-gradient(to bottom, rgba(10,6,4,0) 0%, rgba(10,6,4,0.6) 18%, rgba(10,6,4,0.95) 50%, rgba(10,6,4,0.6) 82%, rgba(10,6,4,0) 100%); }' +
     ' .cover-art-img { object-position:center center; }'
 };
 function coverPlaceCss(place) {
@@ -5051,7 +5025,7 @@ ${previewScrollbarCss()}
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
-  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;box-shadow:inset 0 -1.15in 2.30in rgba(10,6,4,0.95), inset 0 -0.35in 1.10in rgba(10,6,4,0.55);  /* v3.0.682 -- TD-406 */ }
+  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   /* v3.0.616 -- THE LOGO IS NOT ON THIS COVER ANY MORE. It moved to the BACK cover at Ian request
@@ -5665,7 +5639,7 @@ ${previewScrollbarCss()}
   .cover-art-frame { position:relative;flex:1;width:100%;border:2px solid rgba(201,168,76,0.55);border-radius:8px;overflow:hidden;background:#0a0604;box-shadow:0 4px 24px rgba(0,0,0,0.5); }
   .cover-art-img { width:calc(100% + 2px);height:calc(100% + 2px);object-fit:cover;object-position:center top;display:block;margin:-1px; }
   .cover-art-fade { position:absolute;inset:0;box-shadow:inset 0 0 70px 34px rgba(10,6,4,0.85);pointer-events:none; }
-  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;box-shadow:inset 0 -1.15in 2.30in rgba(10,6,4,0.95), inset 0 -0.35in 1.10in rgba(10,6,4,0.55);  /* v3.0.682 -- TD-406 */ }
+  .cover-art-caption { position:absolute;left:0;right:0;bottom:0;height:52%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 0.4in 0.5in;background:linear-gradient(to top, rgba(10,6,4,0.95) 22%, rgba(10,6,4,0.6) 58%, rgba(10,6,4,0) 100%); }
   .cover-art-title { font-family:'Cinzel',serif;font-size:${COVER_PT.artTitle}pt;font-weight:700;color:#f0d98a;letter-spacing:0.04em;line-height:1.15;text-shadow:0 2px 16px rgba(0,0,0,0.95);margin-bottom:0.12in; }
   .cover-art-dates { font-family:'Cinzel',serif;font-size:${COVER_PT.artSub}pt;color:rgba(240,217,138,0.78);letter-spacing:0.08em;text-shadow:0 1px 8px rgba(0,0,0,0.9);margin-bottom:0.2in; }
   /* v3.0.616 -- THE LOGO IS NOT ON THIS COVER ANY MORE. It moved to the BACK cover at Ian request
