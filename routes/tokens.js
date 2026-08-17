@@ -17,6 +17,7 @@ const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/ti
 const { getPack, listPacks } = require('../services/billing/packs');
 const stripeProvider = require('../services/billing/stripeProvider');
 const { logDebug } = require('./debug');
+const { isTesterEmail } = require('../middleware/auth');   // v3.0.672 -- TD-475
 
 // Pull the diagnostic fields Stripe hangs off a thrown error so the debug log
 // captures WHY a billing call failed (bad price vs. bad customer, mode mismatch,
@@ -215,6 +216,18 @@ function requireSession(req, res) {
   return true;
 }
 
+// v3.0.672 -- TD-475. The tester twin of the local requireAdmin below. Local because this file
+// already has its own boolean-returning gate rather than middleware, and one file with two
+// calling conventions for the same question is how a gate gets called and its answer ignored.
+async function requireAdminOrTesterLocal(req, res) {
+  const db = await getDb();
+  const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+  if (user && (adminEmails.includes(user.email) || isTesterEmail(user.email))) return true;
+  res.status(403).json({ error: 'Admin access required' });
+  return false;
+}
+
 async function requireAdmin(req, res) {
   const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
   const db = await getDb();
@@ -264,7 +277,10 @@ router.get('/ledger', async function(req, res) {
 // Stripe billing goes live.
 router.post('/dev-credit', async function(req, res) {
   if (!requireSession(req, res)) return;
-  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
+  // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: this route credits req.session.userId and
+  // takes no target from the body. /admin/credit and /admin/set-balance, which DO take a
+  // user_id, are deliberately left admin-only.
+  if (!(await requireAdminOrTesterLocal(req, res))) return;
   const amt = parseInt((req.body || {}).amount, 10);
   if (!Number.isFinite(amt) || amt <= 0) {
     return res.status(400).json({ error: 'Provide a positive amount' });
@@ -291,7 +307,10 @@ router.post('/dev-credit', async function(req, res) {
 // (cron or login hook) is decided.
 router.post('/dev-grant-monthly', async function(req, res) {
   if (!requireSession(req, res)) return;
-  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
+  // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: this route credits req.session.userId and
+  // takes no target from the body. /admin/credit and /admin/set-balance, which DO take a
+  // user_id, are deliberately left admin-only.
+  if (!(await requireAdminOrTesterLocal(req, res))) return;
   try {
     const db = await getDb();
     const u = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
@@ -320,7 +339,10 @@ router.post('/dev-grant-monthly', async function(req, res) {
 // in precise trial states. REMOVE with the other testing controls before prod.
 router.post('/dev-set-balance', async function(req, res) {
   if (!requireSession(req, res)) return;
-  if (!(await requireAdmin(req, res))) return;   // TF-02: admin only (testing control)
+  // v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: this route credits req.session.userId and
+  // takes no target from the body. /admin/credit and /admin/set-balance, which DO take a
+  // user_id, are deliberately left admin-only.
+  if (!(await requireAdminOrTesterLocal(req, res))) return;
   const body = req.body || {};
   const cot = parseInt(body.cot, 10);
   const utlt = parseInt(body.utlt, 10);

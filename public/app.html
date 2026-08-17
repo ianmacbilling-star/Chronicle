@@ -60,6 +60,10 @@
   <div class="app-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /><span class="app-logo-text">Campaignia</span><span id="build-stamp" style="display:none;margin-left:7px;font:11px/1 ui-monospace,Menlo,Consolas,monospace;color:#9a8a68;opacity:0.75;letter-spacing:0.02em;align-self:center;"></span></div>
   <div class="app-header-right">
     <button class="btn btn-sm" id="header-campaigns-btn" onclick="showView('campaigns')">My Campaigns</button>
+    <!-- v3.0.672 -- TD-475. The tier, always visible. For a tester it also says they are not being
+         billed, and it is their way in to the Dashboard: they get no menu entry (Ian: "You can let
+         the badge itself be the way in. No Dashboard."). -->
+    <span id="tier-badge" style="display:none;"></span>
     <a href="/library?from=app" class="btn btn-sm" id="header-library-btn" title="Browse the public Library" style="text-decoration:none;">Library</a>
     <span id="trial-badge" title="You are on the Free Trial plan (1 campaign, 1 session, character limit, watermark)" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#c9a84c;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;">&#9733; FREE TRIAL <span id="trial-badge-days" style="font-weight:600;opacity:0.8;"></span></span>
     <span id="lone-badge" onclick="goToPlans()" title="You are on Copper with no active Story Master coverage. Consider upgrading to Silver." style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#fff;background:#b87333;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;cursor:pointer;">COPPER</span>
@@ -1231,6 +1235,9 @@
         <button class="settings-tab" id="settings-tab-trends" onclick="switchSettingsTab('trends')">Trends</button>
         <button class="settings-tab" id="settings-tab-financial" onclick="switchSettingsTab('financial')">Financial</button>
         <button class="settings-tab" id="settings-tab-promos" onclick="switchSettingsTab('promos')">Promo Codes</button>
+        <!-- v3.0.672 -- TD-475. Support Access moves off the User Testing tab, because that tab is
+             now reachable by testers and impersonation must never be. -->
+        <button class="settings-tab" id="settings-tab-support" onclick="switchSettingsTab('support')">Support</button>
       </div>
 
       <div class="settings-pane" id="settings-pane-general">
@@ -1565,11 +1572,10 @@
           <div id="promo-codes-list" class="settings-section-desc">Loading...</div>
         </div>
       </div>
-      <div class="settings-pane" id="settings-pane-usertesting" style="display:none;">
-        <div class="settings-section" style="border:1px solid rgba(201,168,76,0.45);background:rgba(201,168,76,0.06);">
-          <div class="settings-section-title" style="color:#c9a84c;">User Testing</div>
-          <div class="settings-section-desc">These controls affect ONLY your own signed-in account &mdash; never other users. (Other Dashboard tools may act across all users; these do not.)</div>
-        </div>
+      <!-- v3.0.672 -- TD-475. SUPPORT, ADMIN ONLY. Impersonation carries an audit trail and a
+           privacy-policy clause (TD-179); it sat on User Testing because that tab used to be
+           admin-only, and it no longer is. -->
+      <div class="settings-pane" id="settings-pane-support" style="display:none;">
       <!-- ============================================================================
            SUPPORT ACCESS (impersonation) -- TD-179 stage 4, v3.0.590.
            Ian, 2026-08-09: "Put the impersonate option on the User Testing tab in the
@@ -1594,6 +1600,13 @@
         <div style="margin-top:14px;">
           <button class="btn btn-sm" onclick="impersonateLoadLog()">Recent support sessions</button>
           <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
+        </div>
+      </div>
+
+      <div class="settings-pane" id="settings-pane-usertesting" style="display:none;">
+        <div class="settings-section" style="border:1px solid rgba(201,168,76,0.45);background:rgba(201,168,76,0.06);">
+          <div class="settings-section-title" style="color:#c9a84c;">User Testing</div>
+          <div class="settings-section-desc">These controls affect ONLY your own signed-in account &mdash; never other users. (Other Dashboard tools may act across all users; these do not.)</div>
         </div>
       </div>
 

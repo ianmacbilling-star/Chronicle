@@ -285,8 +285,56 @@ async function verifyForkOwnerOrDm(req, res, next) {
   next();
 }
 
+// v3.0.672 -- TD-475. THE TESTER LIST.
+//
+// Ian, 2026-08-17: "I have and will always need a few people testing the application. Right now
+// there is no way to not charge these testers as they use the system."
+//
+// Same shape as ADMIN_EMAILS on purpose: an env var, read fresh on every call, never cached and
+// never stored on the user row. Two consequences that are the whole point -- adding someone takes
+// effect on their next request, and REMOVING someone takes effect just as fast, with no row to go
+// and clean up afterwards.
+//
+// WHAT BEING ON THIS LIST DOES: it exempts nobody from anything automatically. It unlocks the three
+// self-only testing controls (set-tier, dev-credit, dev-grant-monthly) that were admin-only, so a
+// tester can put themselves on any tier and top up their own tokens. Their tier is then whatever
+// they set it to and no Stripe subscription is required to hold it.
+//
+// WHAT IT DOES NOT DO: book orders. Those charge a real card for real paper, and a tester ordering a
+// book pays for it -- which is also the only way the order pipeline ever gets tested (TD-471).
+function testerEmails() {
+  return (process.env.TESTER_EMAILS || '').split(',').map(function (e) { return e.trim().toLowerCase(); }).filter(Boolean);
+}
+function isTesterEmail(email) {
+  if (!email) return false;
+  return testerEmails().indexOf(String(email).trim().toLowerCase()) >= 0;
+}
+
 // Admin gate. Source of truth = ADMIN_EMAILS env var (comma-separated
 // list of emails). Express middleware for admin-only routes.
+// v3.0.672 -- TD-475. ADMIN OR TESTER, for the three SELF-ONLY testing controls.
+//
+// Deliberately a separate function rather than a flag on requireAdmin: everything else behind the
+// Dashboard acts across ALL users, and widening the wrong gate by one character would hand a tester
+// the tier editor, the promo codes and the impersonation trail. The three routes this guards write
+// to req.session.userId and nothing else -- verified, not assumed -- so the worst a tester can do
+// with them is change their own account, which is the entire intent.
+async function requireAdminOrTester(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  try {
+    const db = await getDb();
+    const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+    if (!user) return res.status(403).json({ error: 'Admin access required' });
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function (e) { return e.trim(); }).filter(Boolean);
+    if (adminEmails.includes(user.email) || isTesterEmail(user.email)) return next();
+    return res.status(403).json({ error: 'Admin access required' });
+  } catch (e) {
+    return res.status(500).json({ error: 'Admin check failed' });
+  }
+}
+
 async function requireAdmin(req, res, next) {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -307,6 +355,8 @@ async function requireAdmin(req, res, next) {
 module.exports = {
   requireAuth,
   requireAdmin,
+  requireAdminOrTester,
+  isTesterEmail,
   getCampaignRole,
   verifyCampaignMember,
   verifyCampaignDM,

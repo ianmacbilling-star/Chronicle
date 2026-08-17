@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const { getDb, getAppSettingInt } = require('../database/db');
 const { getTier, isTrialExpired, lapseTrialIfExpired, isPaidTier, isLoneCopper, TIERS } = require('../middleware/tiers');
 const stripeProvider = require('../services/billing/stripeProvider');
-const { requireAdmin } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins
+const { requireAdmin, requireAdminOrTester, isTesterEmail } = require('../middleware/auth');   // TF-02: gate testing endpoints to admins; v3.0.672 TD-475 adds the tester list
 const { ensureMonthlyGrant, grantSignupBonus, grantTierSignupBonus } = require('./tokens');
 const { sendJoinNotificationEmail, sendPlayerJoinedWelcomeEmail, sendWelcomeEmail } = require('./email');
 
@@ -339,6 +339,32 @@ router.get('/me', async function(req, res) {
     // gating server-side; this is just for UI.
     const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
     const isAdmin = adminEmails.includes(user.email);
+    // v3.0.672 -- TD-475. Same contract as isAdmin: a hint for the UI, never a capability. Every
+    // route this unlocks re-reads the env var itself, so a forged response buys nothing.
+    const isTester = isTesterEmail(user.email);
+
+    // v3.0.672 -- TD-475. COMING OFF THE LIST PUTS THEM BACK ON THEIR SUBSCRIPTION.
+    //
+    // Ian: "if they have a subscription with Stripe we know what they are and can put them back to
+    // it." The tester list is an env var, so removal leaves no event and no row to clean up -- the
+    // only place it can be noticed is a read, and this is the read every session makes.
+    //
+    // GATED ON A SUBSCRIPTION THAT ACTUALLY ENDED, not on the absence of one. If it fired whenever
+    // subscription_status was empty it would drop every account on an environment where Stripe was
+    // never configured -- which is staging today, where a hundred accounts have a null status and a
+    // tier set by hand. So: they must HAVE a subscription, and it must be in a state Stripe considers
+    // finished. past_due and incomplete are excluded on purpose; those are the grace states TD-473
+    // decided to honour.
+    let _tierNow = user.tier || 'copper';
+    if (!isTester && user.stripe_subscription_id &&
+        ['canceled', 'unpaid', 'incomplete_expired', 'paused'].indexOf(user.subscription_status || '') >= 0 &&
+        ['silver', 'gold', 'platinum'].indexOf(_tierNow) >= 0) {
+      try {
+        await db.prepare("UPDATE users SET tier = 'copper' WHERE id = ?").run(user.id);
+        _tierNow = 'copper';
+        user.tier = 'copper';
+      } catch (e) { console.error('tester reconcile failed (non-fatal):', e && e.message); }
+    }
 
     // v3.0.358 -- the Optimize estimate is computed client-side and has to divide by the same
     // cents-per-loop the SERVER will charge with, or the number quoted drifts from the number
@@ -355,6 +381,7 @@ router.get('/me', async function(req, res) {
       id: user.id,
       tier: user.tier || 'copper',
       tierName: tier.name,
+      isTester: isTester,
       tierFeatures: tier,
       trialExpired: trialExpired,
       trialDaysLeft: trialDaysLeft,
@@ -432,7 +459,8 @@ router.post('/suspend', async function(req, res) {
 // their OWN tier so we can exercise tier-gated features (style locking,
 // archive caps, effective tier). NOT a real upgrade path -- remove before
 // production (paid tiers will be Stripe-gated). Grep 'set-tier' to find it.
-router.post('/set-tier', requireAdmin, async function(req, res) {
+// v3.0.672 -- TD-475. ADMIN OR TESTER. Self-only: every write below names req.session.userId.
+router.post('/set-tier', requireAdminOrTester, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const tier = (req.body && typeof req.body.tier === 'string') ? req.body.tier.trim().toLowerCase() : '';
   if (!TIERS[tier]) return res.status(400).json({ error: 'Unknown tier' });
@@ -530,7 +558,8 @@ router.put('/render-settings', async function(req, res) {
 // TESTING ONLY: put the signed-in account in/out of the free trial so we can
 // exercise the trial watermark. Sets subscription_status + trial_started_at.
 // Self only. REMOVE with the other testing controls before production.
-router.put('/trial-testing', requireAdmin, async function(req, res) {
+// v3.0.672 -- TD-475. Self-only (writes req.session.userId), so admin OR tester.
+router.put('/trial-testing', requireAdminOrTester, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const db = await getDb();
@@ -744,7 +773,8 @@ router.put('/preferences', async function(req, res) {
   }
 });
 
-router.post('/tour-reset', requireAdmin, async function(req, res) {
+// v3.0.672 -- TD-475. Self-only (writes req.session.userId), so admin OR tester.
+router.post('/tour-reset', requireAdminOrTester, async function(req, res) {
   if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const db = await getDb();

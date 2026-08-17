@@ -1400,7 +1400,10 @@ function checkAuth() {
       var libModBox = document.getElementById('admin-library-section');
       if (libModBox) libModBox.style.display = data.is_admin ? 'block' : 'none';
       var navSettingsItem = document.getElementById('nav-settings-item');
+      // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
+      // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
 
@@ -11369,7 +11372,10 @@ function checkAuth() {
       var libModBox = document.getElementById('admin-library-section');
       if (libModBox) libModBox.style.display = data.is_admin ? 'block' : 'none';
       var navSettingsItem = document.getElementById('nav-settings-item');
+      // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
+      // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
 
@@ -15045,11 +15051,68 @@ var TIER_FIELD_LABELS = {
   max_moments_epic: 'Max moments \u2014 epic (10k+)'
 };
 
+// v3.0.672 -- TD-475. WHICH TABS THIS PERSON MAY SEE.
+// A tester gets exactly one. Everything else on this screen acts across ALL users -- tiers, promo
+// codes, financials, impersonation -- and the tab strip is decoration: hiding six buttons does not
+// stop anyone typing switchSettingsTab('financial') into a console. The refusal below is the second
+// line, and every endpoint behind those panes is requireAdmin server-side, which is the first.
+var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support'];
+function settingsTabsAllowed() {
+  var me = state.user || {};
+  if (me.isAdmin) return SETTINGS_TABS_ALL.slice();
+  if (me.isTester) return ['usertesting'];
+  return [];
+}
+function syncSettingsTabs() {
+  var allowed = settingsTabsAllowed();
+  SETTINGS_TABS_ALL.forEach(function (t) {
+    var btn = document.getElementById('settings-tab-' + t);
+    if (btn) btn.style.display = (allowed.indexOf(t) >= 0) ? '' : 'none';
+  });
+}
+// v3.0.672 -- TD-475. THE TIER, ALWAYS ON SCREEN.
+//
+// Ian: "put what tier a user is on in the top banner next to the My Campaigns button. And if they
+// are on the tester list then say Platinum, Test Account (Not Billed)."
+//
+// The tier comes FIRST either way, because a tester switching themselves to Copper to check a member
+// view and forgetting is exactly how a working feature gets reported broken a week later.
+//
+// The TRIAL badge beside this one is left alone: it carries a tooltip about the trial's limits that
+// a plain tier name does not, and two badges both saying "Free Trial" would be noise. So this one
+// stays quiet for trial accounts unless they are also testers.
+function renderTierBadge(me) {
+  var el = document.getElementById('tier-badge');
+  if (!el) return;
+  me = me || state.user || {};
+  var tier = String(me.tier || '');
+  if (!tier) { el.style.display = 'none'; return; }
+  if (tier === 'trial' && !me.isTester) { el.style.display = 'none'; return; }
+  var label = tier.charAt(0).toUpperCase() + tier.slice(1);
+  el.textContent = me.isTester ? (label + ', Test Account (Not Billed)') : label;
+  el.className = 'btn btn-sm' + (me.isTester ? ' tier-badge-tester' : '');
+  el.style.display = 'inline-flex';
+  if (me.isTester) {
+    el.title = 'You are on the tester list: this account is not billed. Click to open your testing controls.';
+    el.style.cursor = 'pointer';
+    el.onclick = function () { showView('settings'); switchSettingsTab('usertesting'); };
+  } else {
+    el.title = 'Your current plan';
+    el.style.cursor = 'default';
+    el.onclick = null;
+  }
+}
+
 function switchSettingsTab(tab) {
+  // The gate, not the paint. A tab nobody is allowed to open does not open.
+  var allowed = settingsTabsAllowed();
+  if (allowed.indexOf(tab) < 0) tab = allowed[0];
+  if (!tab) return;
+  syncSettingsTabs();
   // v3.0.590 -- TD-179. The orange Support Access panel is admin-only, and hidden while a
   // support session is already running (you cannot start a second one from inside the first).
   try { impersonateRefresh(function () { impersonateSyncAdminPanel(); }); } catch (e) {}
-  ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos'].forEach(function (t) {
+  SETTINGS_TABS_ALL.forEach(function (t) {
     var pane = document.getElementById('settings-pane-' + t);
     var btn = document.getElementById('settings-tab-' + t);
     if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
