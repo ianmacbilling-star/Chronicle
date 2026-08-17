@@ -1572,11 +1572,16 @@
           <div id="promo-codes-list" class="settings-section-desc">Loading...</div>
         </div>
       </div>
-      <!-- v3.0.672 -- TD-475. SUPPORT, ADMIN ONLY. Impersonation carries an audit trail and a
+      <!-- v3.0.674 -- TD-475. SUPPORT, ADMIN ONLY. Impersonation carries an audit trail and a
            privacy-policy clause (TD-179); it sat on User Testing because that tab used to be
-           admin-only, and it no longer is. -->
+           admin-only, and it no longer is.
+
+           v3.0.672 moved this by slicing lines to "the next </div>", which closed the wrong
+           element and dragged every User Testing control in here with it -- leaving that tab
+           blank. The div COUNT stayed balanced, which is why the check passed: moving a closing
+           tag does not change how many there are. This move was made by walking tag depth. -->
       <div class="settings-pane" id="settings-pane-support" style="display:none;">
-      <!-- ============================================================================
+<!-- ============================================================================
            SUPPORT ACCESS (impersonation) -- TD-179 stage 4, v3.0.590.
            Ian, 2026-08-09: "Put the impersonate option on the User Testing tab in the
            dashboard. In a ORANGE panel." Orange, and deliberately not the gold palette
@@ -1602,13 +1607,14 @@
           <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
         </div>
       </div>
+      </div>
 
       <div class="settings-pane" id="settings-pane-usertesting" style="display:none;">
         <div class="settings-section" style="border:1px solid rgba(201,168,76,0.45);background:rgba(201,168,76,0.06);">
           <div class="settings-section-title" style="color:#c9a84c;">User Testing</div>
           <div class="settings-section-desc">These controls affect ONLY your own signed-in account &mdash; never other users. (Other Dashboard tools may act across all users; these do not.)</div>
         </div>
-      </div>
+      
 
       <!-- TESTING ONLY: self-service add tokens for ANY signed-in user while
            we test before Stripe. Backed by /api/tokens/dev-credit (session-

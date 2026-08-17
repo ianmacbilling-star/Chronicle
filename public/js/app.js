@@ -15059,7 +15059,16 @@ var TIER_FIELD_LABELS = {
 var SETTINGS_TABS_ALL = ['general', 'tiers', 'stats', 'trends', 'financial', 'usertesting', 'promos', 'support'];
 function settingsTabsAllowed() {
   var me = state.user || {};
-  if (me.isAdmin) return SETTINGS_TABS_ALL.slice();
+  // v3.0.674 -- TD-475. `is_admin`, NOT `isAdmin`. The /api/auth/me response mixes conventions --
+  // is_admin is snake_case while hasBilling, trialExpired and isTester beside it are camelCase --
+  // and v3.0.672 read the camel spelling of the one field that is snake. It is not undefined-safe in
+  // any useful sense: undefined is falsy, so an ADMIN fell straight through to the tester branch and
+  // got a single tab. Ian, who is on both lists, saw exactly that.
+  //
+  // The v3.0.672 test did not catch it because the test set `isAdmin` too -- the check was built from
+  // the same assumption as the code, which is the fault section 0 records six times over. The test
+  // now uses the field names the SERVER sends.
+  if (me.is_admin) return SETTINGS_TABS_ALL.slice();
   if (me.isTester) return ['usertesting'];
   return [];
 }
@@ -15092,14 +15101,18 @@ function renderTierBadge(me) {
   el.textContent = me.isTester ? (label + ', Test Account (Not Billed)') : label;
   el.className = 'btn btn-sm' + (me.isTester ? ' tier-badge-tester' : '');
   el.style.display = 'inline-flex';
+  // v3.0.674 -- TD-475. TWO BADGES, TWO DESTINATIONS.
+  // A tester's badge is their only door to the Dashboard, and it opens on the one tab they may use.
+  // Everybody else's badge is about their PLAN, so it goes where a plan is changed: My Account, at
+  // the Plans and Subscription panel rather than the top of the page.
   if (me.isTester) {
     el.title = 'You are on the tester list: this account is not billed. Click to open your testing controls.';
     el.style.cursor = 'pointer';
     el.onclick = function () { showView('settings'); switchSettingsTab('usertesting'); };
   } else {
-    el.title = 'Your current plan';
-    el.style.cursor = 'default';
-    el.onclick = null;
+    el.title = 'Your current plan \u2014 click to see plans and billing';
+    el.style.cursor = 'pointer';
+    el.onclick = function () { goToPlans(); };
   }
 }
 
