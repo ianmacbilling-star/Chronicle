@@ -267,7 +267,44 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
     (outlineEdited(gapOutlines['closing']) ? 'REQUIRED CONTENT for the outro (you MUST cover these facts, in your own prose): ' + outlineText(gapOutlines['closing']) + '\n' : '') +
     (gapDirections['closing'] ? 'DIRECTOR STEERING for the outro (you MUST follow this): ' + gapDirections['closing'] + '\n' : '') +
     '\n' +
-    (directorNotes ? 'Overall narrative direction (these may include instructions that informed the panel sequence above; honor the chronology of the panels regardless):\n' + directorNotes + '\n\n' : '') +
+    // =====================================================================================================
+    // v3.0.703 -- TD-506. THE SESSION INSTRUCTIONS WERE ADVISORY HERE AND MANDATORY EVERYWHERE ELSE.
+    // =====================================================================================================
+    //
+    // Ian, 2026-08-18: "In the session instructions I put write the narrative in spanish... and it
+    // wrote the captions in spanish but not the narratives."
+    //
+    // THE FIELD WAS FINE. THE FRAMING WAS NOT. extract.js hands the SAME text to the model under
+    // "DIRECTOR'S INSTRUCTIONS -- FOLLOW THESE EXACTLY" and tells it the instructions are mandatory
+    // and take priority over its own judgment. This path said the notes "MAY include instructions"
+    // and then gave exactly one actual order, about chronology. So the model read "write it in
+    // Spanish" as background on how the panels came to be chosen, and wrote English.
+    //
+    // AND LANGUAGE WAS NEVER THE ONLY CASUALTY. Tone, tense, formality, how a character is named --
+    // anything written in the session-wide field and expected to shape the PROSE arrived here as
+    // context rather than instruction. It fails silently: the prose comes back good and simply does
+    // not do what was asked, which is why it survived this long unreported.
+    //
+    // WHAT WAS ALREADY WORKING, so this is not overstated: the five per-beat channels -- DIRECTOR
+    // STEERING per moment, per bridge, and for the intro and outro -- have always said "you MUST
+    // follow this". Only the session-wide field was weak.
+    //
+    // THE CHRONOLOGY GUARD IS KEPT, AND IT IS NOT BOILERPLATE. The narrative runs AFTER the
+    // storyboard, so a note like "open with the ambush" has ALREADY moved the panels. Obeyed a
+    // second time here it would reorder the prose against the pictures it is describing. Mandatory
+    // for everything about HOW the story is told; the panel ORDER is settled and stays settled.
+    (directorNotes ?
+      '## DIRECTOR\'S INSTRUCTIONS -- FOLLOW THESE EXACTLY:\n' + directorNotes + '\n\n' +
+      'IMPORTANT: the director\'s instructions above are mandatory and take priority over your own ' +
+      'judgment about how this should read. They apply to the PROSE ITSELF: if they specify a ' +
+      'LANGUAGE, write every block -- intro, moments, bridges and outro -- entirely in that ' +
+      'language. If they specify tone, tense, formality, or how a character is named or addressed, ' +
+      'apply it throughout. Follow them even where they conflict with the style and verbosity ' +
+      'settings below.\n' +
+      'THE ONE EXCEPTION IS ORDER: these instructions have already shaped the panel sequence above, ' +
+      'so honor the chronology of the panels regardless -- do not reorder events to follow them a ' +
+      'second time.\n\n'
+      : '') +
     'Full session transcript (reference for what actually happened — but the panel sequence above is the authoritative ORDER of events):\n' + session.transcript + '\n\n' +
     'Style:\n' +
     (isDialogue
